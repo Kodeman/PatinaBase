@@ -1,0 +1,1572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Start to Signature</title>
+<style>
+/* ------------------------------------------------------------------
+   Tokens. Bare :root is the light "paper" palette and the only place
+   a colour is born; the two dark blocks redefine the same names.
+   ------------------------------------------------------------------ */
+:root{
+  --paper:#F6F2EA;
+  --ink:#211D18;
+  --faint:#6F665B;
+  --hairline:color-mix(in srgb, var(--ink) 14%, transparent);
+  --hairline-strong:color-mix(in srgb, var(--ink) 26%, transparent);
+  --red:#9E2B25;
+  --red-wash:color-mix(in srgb, var(--red) 10%, transparent);
+  --tint:color-mix(in srgb, var(--ink) 4%, transparent);
+  --tint-2:color-mix(in srgb, var(--ink) 7%, transparent);
+  --focus:var(--red);
+
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+
+  --rail:210px;
+  --measure:72ch;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#171310;
+    --ink:#EAE2D6;
+    --faint:#9A8F82;
+    --hairline:color-mix(in srgb, var(--ink) 20%, transparent);
+    --hairline-strong:color-mix(in srgb, var(--ink) 34%, transparent);
+    --red:#D2695E;
+    --red-wash:color-mix(in srgb, var(--red) 14%, transparent);
+    --tint:color-mix(in srgb, var(--ink) 6%, transparent);
+    --tint-2:color-mix(in srgb, var(--ink) 10%, transparent);
+    --focus:var(--red);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#171310;
+  --ink:#EAE2D6;
+  --faint:#9A8F82;
+  --hairline:color-mix(in srgb, var(--ink) 20%, transparent);
+  --hairline-strong:color-mix(in srgb, var(--ink) 34%, transparent);
+  --red:#D2695E;
+  --red-wash:color-mix(in srgb, var(--red) 14%, transparent);
+  --tint:color-mix(in srgb, var(--ink) 6%, transparent);
+  --tint-2:color-mix(in srgb, var(--ink) 10%, transparent);
+  --focus:var(--red);
+}
+
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.65;
+  font-kerning:normal;
+  font-variant-numeric:oldstyle-nums;
+}
+:focus-visible{
+  outline:2px solid var(--focus);
+  outline-offset:3px;
+}
+
+/* ---------------- spine (left rail) ---------------- */
+.spine{display:none;}
+@media (min-width:1100px){
+  .spine{
+    display:block;
+    position:fixed;
+    inset:0 auto 0 0;
+    width:var(--rail);
+    padding:2.6rem 1.1rem 2rem 1.6rem;
+    border-right:1px solid var(--hairline);
+    overflow-y:auto;
+    background:var(--paper);
+    z-index:5;
+  }
+  .page{margin-left:var(--rail);}
+}
+.spine-mark{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--faint);
+  margin:0 0 1.4rem;
+}
+.spine-list{list-style:none;margin:0;padding:0;}
+.spine-list li{margin:0 0 .1rem;}
+.spine-link{
+  display:grid;
+  grid-template-columns:12px 1fr;
+  align-items:baseline;
+  gap:.45rem;
+  padding:.28rem 0;
+  font-family:var(--mono);
+  font-size:10.5px;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  color:var(--faint);
+  text-decoration:none;
+  border:0;
+}
+.spine-link .dot{
+  width:5px;height:5px;border-radius:50%;
+  background:transparent;
+  border:1px solid var(--hairline-strong);
+  transform:translateY(-2px);
+}
+.spine-link:hover{color:var(--ink);}
+.spine-link[aria-current="true"]{color:var(--ink);}
+.spine-link[aria-current="true"] .dot{background:var(--ink);border-color:var(--ink);}
+@media (prefers-reduced-motion: no-preference){
+  .spine-link,.spine-link .dot{transition:color .25s ease, background-color .25s ease, border-color .25s ease;}
+}
+.spine-foot{
+  margin-top:1.6rem;
+  padding-top:.8rem;
+  border-top:1px solid var(--hairline);
+  font-family:var(--mono);
+  font-size:9.5px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--faint);
+  line-height:1.7;
+}
+
+/* ---------------- page frame ---------------- */
+.page{
+  max-width:calc(var(--measure) + 8rem);
+  margin:0 auto;
+  padding:0 1.5rem 6rem;
+}
+main{display:block;}
+section{padding:3.2rem 0 1rem;scroll-margin-top:1.5rem;}
+@media (prefers-reduced-motion: no-preference){
+  section.reveal{opacity:0;transform:translateY(10px);transition:opacity .5s ease, transform .5s ease;}
+  section.reveal.is-in{opacity:1;transform:none;}
+}
+
+/* ---------------- type ---------------- */
+h1,h2,h3,h4{text-wrap:balance;font-weight:600;line-height:1.18;margin:0 0 .6rem;}
+h1{font-size:clamp(2.6rem,6vw,4.1rem);letter-spacing:-.015em;}
+h2{font-size:clamp(1.7rem,3.4vw,2.3rem);margin-top:.2rem;}
+h3{font-size:1.22rem;margin-top:2rem;}
+h4{font-size:1.02rem;margin-top:1.4rem;}
+p{margin:0 0 1.05rem;max-width:var(--measure);}
+ul,ol{max-width:var(--measure);padding-left:1.15rem;margin:0 0 1.1rem;}
+li{margin:0 0 .45rem;}
+strong{font-weight:600;}
+em{font-style:italic;}
+
+.eyebrow{
+  font-family:var(--mono);
+  font-size:10.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--faint);
+  margin:0 0 .55rem;
+}
+.rule-break{
+  border:0;
+  border-top:1px solid var(--hairline-strong);
+  margin:0 0 1.1rem;
+}
+.lede{font-size:1.16rem;color:var(--ink);max-width:66ch;}
+.faint{color:var(--faint);}
+.chip{
+  font-family:var(--mono);
+  font-size:10.5px;
+  letter-spacing:.03em;
+  color:var(--faint);
+  border:1px solid var(--hairline);
+  border-radius:2px;
+  padding:.06em .38em;
+  white-space:nowrap;
+}
+.red{color:var(--red);}
+.tally{font-family:var(--mono);letter-spacing:.12em;font-size:13px;}
+.tally-before{color:var(--red);}
+.tally-after{color:var(--ink);}
+.num{font-variant-numeric:tabular-nums lining-nums;}
+
+/* ---------------- cover ---------------- */
+.cover{padding-top:clamp(3rem,12vh,8rem);border-bottom:1px solid var(--hairline-strong);padding-bottom:3rem;}
+.cover .sub{font-size:1.32rem;color:var(--ink);max-width:44ch;margin-top:.4rem;}
+.cover-meta{
+  margin-top:2.4rem;
+  display:flex;
+  flex-wrap:wrap;
+  gap:.6rem 2.2rem;
+  font-family:var(--mono);
+  font-size:10.5px;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+  color:var(--faint);
+}
+.cover-firm{
+  margin-top:2rem;
+  padding-top:1.1rem;
+  border-top:1px solid var(--hairline);
+  max-width:60ch;
+  color:var(--faint);
+  font-size:.98rem;
+}
+
+/* inline index (below 1100px) */
+.inline-index{display:block;margin:2.2rem 0 0;padding:1.1rem 0 0;border-top:1px solid var(--hairline);}
+@media (min-width:1100px){.inline-index{display:none;}}
+.inline-index ol{list-style:none;padding:0;margin:0;columns:2;column-gap:2rem;}
+.inline-index a{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--faint);text-decoration:none;display:block;padding:.22rem 0;
+}
+.inline-index a:hover{color:var(--ink);}
+
+/* ---------------- tables ---------------- */
+.scroller{overflow-x:auto;margin:0 0 1.4rem;-webkit-overflow-scrolling:touch;}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:.95rem;}
+caption{
+  caption-side:top;text-align:left;
+  font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);padding-bottom:.5rem;
+}
+th,td{
+  text-align:left;vertical-align:top;
+  padding:.55rem .8rem .55rem 0;
+  border-bottom:1px solid var(--hairline);
+}
+thead th{
+  font-family:var(--mono);font-size:10px;letter-spacing:.11em;text-transform:uppercase;
+  font-weight:400;color:var(--faint);
+  border-bottom:1px solid var(--hairline-strong);
+}
+td.cost,th.cost,td.count,th.count{font-variant-numeric:tabular-nums lining-nums;white-space:nowrap;}
+tbody tr:last-child td{border-bottom:1px solid var(--hairline-strong);}
+tr.total td{font-weight:600;border-bottom:0;}
+
+/* ---------------- anatomy figure ---------------- */
+.anatomy{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:2rem;
+  margin:1.6rem 0 2rem;
+  padding:1.4rem 0 0;
+  border-top:1px solid var(--hairline);
+}
+@media (min-width:820px){
+  .anatomy{grid-template-columns:1.15fr .85fr;gap:2.6rem;}
+}
+.anatomy h4{margin-top:0;}
+.stack{list-style:none;margin:0;padding:0;border-left:1px solid var(--hairline-strong);}
+.stack li{
+  position:relative;
+  margin:0;
+  padding:.62rem 0 .62rem 1rem;
+  border-bottom:1px solid var(--hairline);
+  font-size:.95rem;
+}
+.stack li:first-child{border-top:1px solid var(--hairline);}
+.stack .slot{
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+  display:block;margin-bottom:.12rem;
+}
+.stack .note{
+  display:block;margin-top:.2rem;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;line-height:1.5;
+  color:var(--red);
+}
+.stack li.flag{background:var(--red-wash);}
+.stack li.flag::before{
+  content:"";position:absolute;left:-1px;top:0;bottom:0;width:2px;background:var(--red);
+}
+.stack li.dupe .name{border-bottom:2px solid var(--red);}
+.arc{list-style:none;margin:0;padding:0;}
+.arc li{
+  padding:.62rem 0 .62rem 1rem;
+  border-left:1px solid var(--hairline-strong);
+  border-bottom:1px solid var(--hairline);
+  font-size:.95rem;
+}
+.arc li:first-child{border-top:1px solid var(--hairline);}
+.arc .slot{
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+  display:block;margin-bottom:.12rem;
+}
+.arc-offset{margin-top:0;}
+@media (min-width:820px){
+  .arc-offset{margin-top:4.6rem;}
+}
+.figcap{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;line-height:1.6;
+  color:var(--faint);max-width:64ch;margin:.4rem 0 0;
+}
+
+/* ---------------- findings / planks ---------------- */
+.ledger{list-style:none;margin:1.2rem 0 1.4rem;padding:0;}
+.ledger > li{
+  display:grid;grid-template-columns:2.6rem 1fr;gap:.2rem 1rem;
+  padding:.85rem 0;border-top:1px solid var(--hairline);max-width:var(--measure);
+}
+.ledger > li:last-child{border-bottom:1px solid var(--hairline);}
+.ledger .tag{
+  font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--red);padding-top:.2rem;
+}
+.ledger .body{margin:0;}
+.ledger .body p{margin:0 0 .4rem;}
+.ledger .body p:last-child{margin-bottom:0;}
+
+/* ---------------- paper column (Direction A centrepiece) ---------------- */
+.paper-column{
+  margin:1.4rem 0 1.6rem;
+  border:1px solid var(--hairline-strong);
+  background:var(--tint);
+  padding:1.2rem 1.2rem .4rem;
+  max-width:var(--measure);
+}
+.paper-column ol{list-style:none;margin:0;padding:0;counter-reset:pos;}
+.paper-column li{
+  display:grid;grid-template-columns:2.1rem 1fr;gap:.9rem;
+  padding:.75rem 0;border-bottom:1px solid var(--hairline);
+}
+.paper-column li:last-child{border-bottom:0;}
+.paper-column .pos{
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--faint);
+  font-variant-numeric:tabular-nums lining-nums;padding-top:.24rem;
+}
+.paper-column .title{font-size:1.05rem;display:block;margin-bottom:.15rem;}
+.paper-column .why{margin:0;font-size:.93rem;color:var(--faint);}
+.paper-column li.spine-row{background:var(--tint-2);margin:0 -1.2rem;padding-left:1.2rem;padding-right:1.2rem;}
+.arc-legend{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--faint);margin:.9rem 0 1.4rem;
+}
+
+/* ---------------- table cards (Direction B) ---------------- */
+.tablecards{display:grid;gap:1.2rem;margin:1.4rem 0 1.6rem;}
+@media (min-width:900px){.tablecards{grid-template-columns:1fr 1fr;}}
+.tablecard{
+  border:1px solid var(--hairline-strong);
+  background:var(--tint);
+  padding:1.1rem 1.15rem 1rem;
+}
+.tablecard .card-eyebrow{
+  font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+  display:block;margin-bottom:.25rem;
+}
+.tablecard h4{margin:0 0 .5rem;font-size:1.1rem;}
+.tablecard dl{margin:0;}
+.tablecard dt{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
+  margin-top:.75rem;
+}
+.tablecard dd{margin:.15rem 0 0;font-size:.93rem;}
+.tablecard .leader{border-left:2px solid var(--ink);padding-left:.6rem;}
+
+.plank{
+  border-top:1px solid var(--hairline);
+  padding:.8rem 0;
+  display:grid;grid-template-columns:3.4rem 1fr;gap:1rem;
+  max-width:var(--measure);
+}
+.plank:last-of-type{border-bottom:1px solid var(--hairline);}
+.plank .tag{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--faint);padding-top:.15rem;}
+.plank p{margin:0;}
+
+.amendments{list-style:none;margin:1rem 0 1.4rem;padding:0;}
+.amendments li{
+  display:grid;grid-template-columns:2.4rem 1fr;gap:.9rem;
+  padding:.6rem 0;border-top:1px solid var(--hairline);max-width:var(--measure);
+}
+.amendments li:last-child{border-bottom:1px solid var(--hairline);}
+.amendments .tag{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--faint);}
+
+.callout{
+  border-left:2px solid var(--red);
+  background:var(--red-wash);
+  padding:.9rem 1rem;
+  margin:1.2rem 0 1.4rem;
+  max-width:var(--measure);
+}
+.callout p:last-child{margin-bottom:0;}
+.readbox{
+  border:1px solid var(--hairline-strong);
+  padding:1.1rem 1.2rem;
+  background:var(--tint);
+  max-width:var(--measure);
+  margin:1.4rem 0;
+}
+.readbox p:last-child{margin-bottom:0;}
+
+/* ---------------- questions ---------------- */
+.question{
+  border-top:1px solid var(--hairline-strong);
+  padding:1.2rem 0 1.5rem;
+  max-width:var(--measure);
+}
+.question:last-of-type{border-bottom:1px solid var(--hairline-strong);}
+.question .qtag{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--red);
+  display:block;margin-bottom:.3rem;
+}
+.question p{margin:0 0 .9rem;}
+.ruled{
+  margin-top:.6rem;
+  background-image:repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 1.75rem,
+    var(--hairline) 1.75rem,
+    var(--hairline) calc(1.75rem + 1px)
+  );
+  height:5.25rem;
+}
+
+/* ---------------- colophon ---------------- */
+.sources{list-style:none;margin:.6rem 0 1.2rem;padding:0;}
+.sources li{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.01em;line-height:1.75;
+  color:var(--faint);word-break:break-all;margin:0;
+}
+.endmark{
+  margin-top:2.4rem;padding-top:1rem;border-top:1px solid var(--hairline);
+  font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+}
+</style>
+</head>
+<body>
+
+<nav class="spine" id="spine" aria-label="Deck index">
+  <p class="spine-mark">Start to Signature</p>
+  <ol class="spine-list" id="spine-list"></ol>
+  <p class="spine-foot">Index generated<br />from paper order</p>
+</nav>
+
+<div class="page">
+<main>
+
+<!-- ============================= COVER ============================= -->
+<section id="cover" data-index-title="Cover" data-unnumbered="true" class="cover" aria-labelledby="cover-h">
+  <p class="eyebrow">A UX consultation for Patina</p>
+  <h1 id="cover-h">Start to Signature</h1>
+  <p class="sub">Two directions for the flow of The Document.</p>
+  <div class="cover-meta">
+    <span>2026 &middot; 08 &middot; 15</span>
+    <span>Prepared for the Patina studio team</span>
+    <span>Verified against main@70ce2eb2</span>
+  </div>
+  <p class="cover-firm">
+    We are an outside user-experience studio, engaged by Patina to review one thing closely:
+    how a designer starts a job, specs it loosely, firms it up, and signs it — and whether The
+    Document&rsquo;s paper reads in that order. We have read the code, the decision record, and
+    Patina&rsquo;s own audits. What follows is a diagnosis, two directions, a recommendation, and
+    seven questions we need answered before anyone builds.
+  </p>
+
+  <nav class="inline-index" id="inline-index" aria-label="Contents">
+    <p class="eyebrow">Contents</p>
+    <ol id="inline-index-list"></ol>
+  </nav>
+</section>
+
+<!-- ============================= 01 ENGAGEMENT ============================= -->
+<section id="engagement" data-index-title="The engagement" aria-labelledby="engagement-h">
+  <hr class="rule-break" />
+  <p class="eyebrow" data-eyebrow>The engagement</p>
+  <h2 id="engagement-h">What was asked, and how we read the paper</h2>
+
+  <p class="lede">
+    Patina&rsquo;s brief to us, verbatim: <em>&ldquo;Review how a designer starts a job, loosely
+    specs things, and progresses through finalizing the spec. Review the order of this flow in The
+    Document. It is not intuitive; designers have to hunt for things. Propose two ways to make this
+    a natural flow — designers should be able to accomplish what they need, when they need
+    it.&rdquo;</em>
+  </p>
+
+  <h3>Method</h3>
+  <p>
+    We walked three records and let them argue with each other.
+  </p>
+  <ul>
+    <li><strong>The paper as it actually renders</strong> — the DOM order in
+      <span class="chip">doc/[id]/page.tsx</span>, not the order anyone intended.</li>
+    <li><strong>The decision record</strong> — <span class="chip">DECISIONS I114</span>,
+      <span class="chip">I135</span>, <span class="chip">I136</span> — including what those rulings
+      left explicitly open.</li>
+    <li><strong>Patina&rsquo;s own prior audits</strong> — the July discoverability review, in which
+      the pilot designer fled to the legacy portal twice, and the August audits and journey walks.</li>
+  </ul>
+  <p>
+    Every finding below carries its citation. Both directions were then handed to a second reading
+    and adversarially verified against the code; several claims did not survive. The numbers in this
+    deck are the ones that did. Where a direction still says &ldquo;kept, not built,&rdquo; that is
+    deliberate honesty about what Patina already shipped, not a proposal in disguise.
+  </p>
+</section>
+
+<!-- ============================= 02 WHAT WORKS ============================= -->
+<section id="credit" data-index-title="What already works" aria-labelledby="credit-h">
+  <hr class="rule-break" />
+  <p class="eyebrow" data-eyebrow>What already works</p>
+  <h2 id="credit-h">Credit where it is due</h2>
+
+  <p class="lede">
+    <span class="chip">I135</span> &ldquo;The Project, Composed&rdquo; and
+    <span class="chip">I136</span> &ldquo;The Shelved Spine&rdquo; — shipped 14 and 15 August —
+    already fixed real friction, and we are not here to relitigate them.
+  </p>
+  <p>
+    One inked leader per region head. Always-visible row verbs. Fold seams. The red-letter needs
+    zone. Reference material moved out to the shelves. The schedule editor folded by default. The
+    guide sitting directly under the letterhead and activating in place rather than throwing the
+    reader somewhere else. Each of those removed a hunt we would otherwise be reporting to you today.
+  </p>
+  <p>
+    The remaining problem is narrower and deeper, and it is not a problem of components:
+    <strong>the order of the paper, the number of clocks, and where the spec tools live relative to
+    the work.</strong>
+  </p>
+</section>
+
+<!-- ============================= 03 DIAGNOSIS ============================= -->
+<section id="diagnosis" data-index-title="The diagnosis" aria-labelledby="diagnosis-h">
+  <hr class="rule-break" />
+  <p class="eyebrow" data-eyebrow>The diagnosis</p>
+  <h2 id="diagnosis-h">Eight findings</h2>
+
+  <p class="lede">
+    The paper is honest. It is also shuffled. Read down the render order beside the arc of the job
+    and the misalignment is the whole diagnosis.
+  </p>
+
+  <figure class="anatomy">
+    <div>
+      <h4>The paper, top to bottom (today)</h4>
+      <ol class="stack">
+        <li><span class="slot">Position 1</span><span class="name">Letterhead</span></li>
+        <li><span class="slot">Position 2</span><span class="name">Guide line &mdash; &ldquo;next up&rdquo;</span></li>
+        <li class="flag"><span class="slot">Position 3</span><span class="name">Client approvals</span>
+          <span class="note">Above the ledger &mdash; but the running index says approvals come after schedule. Index and paper disagree. (F2)</span>
+        </li>
+        <li class="flag"><span class="slot">Position 4</span><span class="name">Previous work &mdash; settled Brief / Discovery / Direction / Proposal bars</span>
+          <span class="note">History sits between the guide and the live work. You scroll past the record to reach the job. (F1)</span>
+        </li>
+        <li class="flag dupe"><span class="slot">Position 5</span><span class="name">Schedule &mdash; the date editor, folded</span>
+          <span class="note">Name collision, first instance. Fold key <code>schedule-rule</code>. (F3)</span>
+        </li>
+        <li class="flag dupe"><span class="slot">Position 6</span><span class="name">Active section &mdash; Schedule (the phase ledger) / FF&amp;E / Money / Care</span>
+          <span class="note">Name collision, second instance. Fold key <code>schedule</code>. Two regions, one page, one name. (F3)</span>
+        </li>
+        <li><span class="slot">Position 7</span><span class="name">Account band</span>
+          <span class="note">Migrates by section rather than holding a fixed slot.</span>
+        </li>
+        <li><span class="slot">Position 8</span><span class="name">Colophon</span></li>
+      </ol>
+    </div>
+    <div class="arc-offset">
+      <h4>The designer&rsquo;s arc</h4>
+      <ol class="arc">
+        <li><span class="slot">Step 1</span>Start the job</li>
+        <li><span class="slot">Step 2</span>Spec loosely &mdash; rooms, scheme, boards</li>
+        <li><span class="slot">Step 3</span>Firm the spec &mdash; quantities, pricing, terms</li>
+        <li><span class="slot">Step 4</span>Finalize &mdash; send, answer, sign</li>
+        <li><span class="slot">Step 5</span>Record &mdash; what is settled</li>
+      </ol>
+      <p class="figcap">
+        The two columns never line up. The record lands in the middle of the left column and at the
+        end of the right. Speccing &mdash; the arc&rsquo;s widest step &mdash; is a single line on the
+        paper, with its tools a route or a viewport away.
+      </p>
+    </div>
+  </figure>
+
+  <ol class="ledger">
+    <li>
+      <span class="tag">F1</span>
+      <div class="body">
+        <p><strong>History sits between the guide and the work.</strong> PreviousWork &mdash; the
+        settled Brief / Discovery / Direction / Proposal bars &mdash; renders above the schedule and
+        above the active section <span class="chip">page.tsx ~1049</span>, so the designer scrolls
+        past the record to reach the live work.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">F2</span>
+      <div class="body">
+        <p><strong>The index and the paper disagree.</strong> The spine&rsquo;s running index declares
+        its order as &ldquo;Reading order down the paper&rdquo;: schedule &rarr; approvals &rarr; ffe
+        &rarr; money <span class="chip">document-index.ts:18&ndash;23</span>. The DOM mounts approvals
+        <span class="chip">page.tsx:1035</span> <em>above</em> the schedule ledger
+        <span class="chip">~1256</span>. The document&rsquo;s own table of contents contradicts its body.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">F3</span>
+      <div class="body">
+        <p><strong>Two regions on one page are named &ldquo;Schedule.&rdquo;</strong> ScheduleRuleRegion
+        (the date editor at the top of the paper, fold key <code>schedule-rule</code>) and ScheduleSpine
+        (the phase ledger inside the Project section, fold key <code>schedule</code>). I136 had to mint
+        distinct fold keys precisely because they collide.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">F4</span>
+      <div class="body">
+        <p><strong>Three clocks tell different times.</strong> Seven spine sections, eleven residential
+        workflow stages (a thin sub-label), and <code>project_phases</code> (the schedule).
+        <span class="chip">DECISIONS I114</span> left the section&harr;stage mapping explicitly
+        unresolved: &ldquo;Direction (a section that seals) and stage 05 (a stage that completes)
+        overlap without agreeing.&rdquo; A project doc&rsquo;s spine advances only on
+        <code>current_phase &isin; (installation, final_walkthrough)</code>
+        <span class="chip">00327:98&ndash;102</span> &mdash; stage completion never moves it.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">F5</span>
+      <div class="body">
+        <p><strong>&ldquo;Begin the Direction&rdquo; skips the Direction section.</strong> The verb
+        hard-jumps to the Drafting Room route <span class="chip">/drafting/[proposalId]</span>; the
+        Direction section that exists on the doc is never landed on; and the relationship&rsquo;s
+        <span class="chip">/doc/[id]</span> stops resolving once the proposal is minted &mdash; the one
+        verified dead bookmark in the flow.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">F6</span>
+      <div class="body">
+        <p><strong>Loose speccing&rsquo;s tools are a route or a viewport away.</strong> Empty
+        FF&amp;E&rsquo;s only verb is &ldquo;Open the spec book&rdquo; &mdash; a route off the paper.
+        Mood boards live only in a &ge;1440px shelf leaf. The spine&rsquo;s running index, rooms list,
+        and shelves do not exist below 1440px; the room lens self-releases below 1440px. And a piece
+        can enter the schedule through four different doors: the Add-a-line sheet, Library placement,
+        the spec book, and capture/scan.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">F7</span>
+      <div class="body">
+        <p><strong>&ldquo;Add a room&rdquo; was demoted by mechanism, not by ruling.</strong>
+        I135&rsquo;s one-inked-leader rule mechanically pushed it to a secondary verb; DECISIONS flags
+        it &ldquo;for a design ruling&rdquo; &mdash; still open.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">F8</span>
+      <div class="body">
+        <p><strong>Finalize&rsquo;s verbs are scattered and the wall is silent.</strong> Proposal
+        authoring lives in a separate eight-facet room while the doc shows a read-only preview.
+        Approvals draft / publish / supersede were demoted to secondary entries. The
+        release-for-authorization ceremony hides inside the FF&amp;E region head. Verdict state is a
+        9px whisper. And after Send there is no stated designer-side path &mdash; no printed
+        &ldquo;Nudge / Revise / awaiting countersign.&rdquo;</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- ============================= 04 SHARED PLANKS ============================= -->
+<section id="planks" data-index-title="Shared planks" aria-labelledby="planks-h">
+  <hr class="rule-break" />
+  <p class="eyebrow" data-eyebrow>Shared planks</p>
+  <h2 id="planks-h">Five things both directions agree on</h2>
+
+  <p class="lede">
+    These are not differentiators, and we refuse to price them as such.
+    <strong>Adopt them regardless of which direction you choose &mdash; or of whether you choose
+    either.</strong>
+  </p>
+
+  <div class="plank">
+    <span class="tag">SP1</span>
+    <p><strong>&ldquo;Begin the Direction&rdquo; lands on the Direction section of the doc.</strong>
+    The Drafting Room &mdash; while it exists &mdash; is reached from there and returns there.</p>
+  </div>
+  <div class="plank">
+    <span class="tag">SP2</span>
+    <p><strong>No doc id ever 404s.</strong> A relationship-id alias, so the one verified dead
+    bookmark dies. The seal-side alias (the R6 redirect) already exists; only the relationship leg is
+    new work.</p>
+  </div>
+  <div class="plank">
+    <span class="tag">SP3</span>
+    <p><strong>A stated verb at the send wall.</strong> Printed lifecycle state &mdash; &ldquo;Sent 3
+    days ago &mdash; nudge / revise / awaiting countersign&rdquo; &mdash; instead of silence.</p>
+  </div>
+  <div class="plank">
+    <span class="tag">SP4</span>
+    <p><strong>The add-room ruling.</strong> An empty region&rsquo;s leader is its constructive verb;
+    with rooms present, &ldquo;Add a room&rdquo; prints in flow. This answers I135&rsquo;s open flag.</p>
+  </div>
+  <div class="plank">
+    <span class="tag">SP5</span>
+    <p><strong>The boards question.</strong> Both directions want board content touchable from the
+    paper during speccing. Both acknowledge that this reverses I136&rsquo;s same-day transplant, and
+    both put it to the team as an <em>explicit amendment</em> &mdash; not a silent change. See Q1.</p>
+  </div>
+</section>
+
+<!-- ============================= 05 DIRECTION A ============================= -->
+<section id="direction-a" data-index-title="A &mdash; The Work Order" aria-labelledby="dir-a-h">
+  <hr class="rule-break" />
+  <p class="eyebrow" data-eyebrow>Direction A</p>
+  <h2 id="dir-a-h">The Work Order</h2>
+  <p class="eyebrow">Structural &middot; conservative</p>
+
+  <h3>Thesis</h3>
+  <p class="lede">
+    A document is not a filing cabinet; it is a work order. The paper Patina prints today is honest
+    but shuffled &mdash; the record sits above the work, two instruments claim the name Schedule, and
+    the verb a designer needs next is often printed on a page she hasn&rsquo;t reached or a route she
+    hasn&rsquo;t guessed.
+  </p>
+  <p>
+    We do not propose a cleverer surface. We propose <strong>the same surface, collated</strong>. One
+    fixed canonical order that reads the way the job runs &mdash; begin, spec loosely, firm, sign,
+    file &mdash; with one progression instrument instead of three, and a guarantee held as doctrine:
+    <strong>at every stage of the job, the next verb is inked where the eye already rests.</strong>
+    The paper stays paper. It simply gets put in order.
+  </p>
+
+  <h3>Principles</h3>
+  <ul>
+    <li><strong>P1 &mdash; The paper reads in work order.</strong> Top to bottom is start &rarr; loose
+      spec &rarr; firm spec &rarr; finalize &rarr; record. What&rsquo;s live rises; what&rsquo;s
+      settled sinks. History is an appendix, never a preamble.</li>
+    <li><strong>P2 &mdash; One instrument tells time.</strong> Seven sections, eleven stages, and
+      <code>project_phases</code> are three readings of one clock. They collapse into a single visible
+      device &mdash; the Rule &mdash; and every other progress display (spine rail, sub-labels, date
+      editor) is a reflection of it, never a second opinion.</li>
+    <li><strong>P3 &mdash; The next verb is printed in place.</strong> No region may state a need whose
+      verb lives elsewhere. An empty region&rsquo;s inked leader is its constructive verb. Routes away
+      from the paper are reached <em>from</em> the section they serve, and return to it.</li>
+    <li><strong>P4 &mdash; Signatures at the foot.</strong> Letters are signed at the bottom.
+      Approvals, publish, supersede, and release-for-authorization form one signature block at the
+      foot of the live work &mdash; not scattered above the schedule and inside the FF&amp;E head.</li>
+    <li><strong>P5 &mdash; The address never changes.</strong> <span class="chip">/doc/[id]</span> is
+      the job&rsquo;s address for its whole life. Sections seal, proposals bind, the paper reorders
+      itself by settling &mdash; the URL does not.</li>
+  </ul>
+
+  <h3>The canonical paper order</h3>
+  <p>
+    Fixed. Not adaptive. <strong>One array in code drives both the paper and the spine&rsquo;s running
+    index</strong>, so they can never disagree again &mdash; F2 becomes structurally impossible rather
+    than merely fixed.
+  </p>
+
+  <div class="paper-column">
+    <ol>
+      <li class="spine-row">
+        <span class="pos">&mdash;</span>
+        <div>
+          <span class="title">The spine (left edge)</span>
+          <p class="why">Orientation and memory only, per doctrine. Its index is now generated from
+          the paper order below: index order = paper order, by construction.</p>
+        </div>
+      </li>
+      <li>
+        <span class="pos">1</span>
+        <div>
+          <span class="title">Letterhead</span>
+          <p class="why">Who, what, where &mdash; and the job&rsquo;s begin leader. Scoped to
+          <em>per-document</em> begin leaders: a lead doc prints <em>Accept</em>, a discovery doc
+          prints <em>Begin discovery</em>, a proposal-eligible doc prints <em>Draft the
+          agreement</em>. The Desk-level triplicate capture doors create engagements before a
+          document exists, so a letterhead cannot host them &mdash; that consolidation is real, and it
+          is Desk work, recommended separately.</p>
+        </div>
+      </li>
+      <li>
+        <span class="pos">2</span>
+        <div>
+          <span class="title">Guide line &mdash; &ldquo;next up&rdquo;</span>
+          <p class="why">The printed next verb, directly under the letterhead where the eye lands.
+          <strong>Kept, not built</strong> &mdash; it already renders there and activates in place
+          <span class="chip">page.tsx:984&ndash;991</span>.</p>
+        </div>
+      </li>
+      <li>
+        <span class="pos">3</span>
+        <div>
+          <span class="title">The Rule &mdash; the unified progression instrument</span>
+          <p class="why">One graduated device: where the job stands, and when. First real content,
+          because &ldquo;where am I&rdquo; precedes &ldquo;what do I touch.&rdquo;</p>
+        </div>
+      </li>
+      <li>
+        <span class="pos">4</span>
+        <div>
+          <span class="title">The active section &mdash; the work</span>
+          <p class="why">Brief, Discovery, Direction, Proposal, or Project/FF&amp;E, printed
+          immediately after the Rule. Loose spec &rarr; firm spec happens <em>here</em>: Add-a-line in
+          place, rooms in flow, row verbs surfaced. The Money region rides inside, as today.</p>
+        </div>
+      </li>
+      <li>
+        <span class="pos">5</span>
+        <div>
+          <span class="title">The signature block &mdash; approvals + release</span>
+          <p class="why">Finalize. Client approvals draft / publish / supersede and the
+          release-for-authorization ceremony, promoted to inked leaders at the foot of the work they
+          gate. A document is signed at its foot.</p>
+        </div>
+      </li>
+      <li>
+        <span class="pos">6</span>
+        <div>
+          <span class="title">Account band &mdash; pinned</span>
+          <p class="why">Always here: every section, every stage. The running account is the
+          paper&rsquo;s footer rule; it stops migrating. Requires extracting AccountBand out of
+          MoneyRegion into a fixed slot &mdash; an unconditional pin would otherwise double-print the
+          account <span class="chip">money-region.tsx:39</span>.</p>
+        </div>
+      </li>
+      <li>
+        <span class="pos">7</span>
+        <div>
+          <span class="title">The Record (formerly PreviousWork), and the Care band when unsealed care work exists</span>
+          <p class="why">Settled Brief / Discovery / Direction / Proposal bars sink to the bottom as
+          the job&rsquo;s appendix. Memory belongs after work, not between the guide and the work.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+  <p class="arc-legend">1&ndash;2 start &middot; 3 orient &middot; 4 spec (loose &rarr; firm) &middot; 5 finalize &middot; 7 record</p>
+
+  <h3>The Rule</h3>
+  <p>
+    <strong>The problem:</strong> three layered models &mdash; seven spine sections, eleven residential
+    stages (a thin sub-label), and <code>project_phases</code> &mdash; plus an explicitly unresolved
+    conflict (I114: does Direction seal, or does stage 05 complete?), and two regions both named
+    Schedule.
+  </p>
+  <p>
+    <strong>The resolution &mdash; stages are the ledger of record; sections and phases are readings of
+    it:</strong>
+  </p>
+  <ul>
+    <li><strong>The eleven stages become the single ledger.</strong> Each stage row carries its dates
+      (absorbed from <code>project_phases</code>) and its completing act.</li>
+    <li><strong>Sections are chapters</strong> &mdash; bindings over contiguous stage runs. A section
+      <em>seals when its last mapped stage completes, by definition.</em> Sealing stops being a
+      separate act and becomes derived, ceremonial ink. I114 dissolves: &ldquo;Direction seals&rdquo;
+      and &ldquo;stage 05 completes&rdquo; are the same event, stated once, in the mapping printed on
+      the Rule itself.</li>
+    <li><strong><code>project_phases</code> becomes the calendar column of the ledger</strong>, not a
+      third model. The date editor survives as a fold seam under the Rule, folded by default, exactly
+      as the shipped ScheduleRuleRegion behaves &mdash; you unfold the Rule to touch dates.</li>
+  </ul>
+  <p>
+    <strong>The device:</strong> one horizontal graduated rule at position 3 &mdash; seven major
+    graduations (sections), eleven minor ticks (stages), dates printed beneath, today&rsquo;s mark
+    inked. The spine&rsquo;s rail mirrors the major graduations only.
+  </p>
+  <p>
+    <strong>Naming:</strong> the instrument is <strong>the Rule</strong>; its date fold is <strong>the
+    Calendar</strong>; the stage listing inside the project section is <strong>the Ledger</strong>.
+    Nothing on the paper is named &ldquo;Schedule&rdquo; twice &mdash; nothing is named Schedule at all.
+  </p>
+
+  <div class="callout">
+    <p><strong>Phasing, stated plainly.</strong> The Rule is two large pieces of work, not one.
+    <strong>L-a, the UI merge</strong>: ScheduleRuleRegion + ScheduleSpine + the stage sub-label become
+    one instrument that <em>reads</em> the existing models side by side. <strong>L-b, the
+    sealing-semantics migration</strong>: moving section sealing from <code>active_section</code> (a
+    derived column, <span class="chip">00191/00327</span>, consumed by the Desk, the D13 mobile sheet,
+    and the client mirror) to stage completion, additive per D7.
+    <strong>This direction ships L-a only.</strong> <code>active_section</code> remains the sealing
+    authority. The I114 resolution stands as the <em>target</em> semantics &mdash; gated on the team
+    ruling the stage&harr;phase classification&rsquo;s recorded unclassified cases.</p>
+  </div>
+
+  <h3>Fix ledger, mapped to evidence</h3>
+  <div class="scroller">
+    <table>
+      <caption>Verified friction &rarr; fix &rarr; cost</caption>
+      <thead>
+        <tr><th scope="col">Friction (verified)</th><th scope="col">Fix</th><th scope="col" class="cost">Cost</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PreviousWork sits between guide and live work</td><td>Moves to position 7 as <strong>the Record</strong> &mdash; history is an appendix</td><td class="cost">S</td></tr>
+        <tr><td>Spine index order &ne; paper order</td><td>One canonical-order array drives both paper and index; disagreement becomes impossible</td><td class="cost">S</td></tr>
+        <tr><td>Add room demoted by the one-inked-leader rule (flagged, unruled)</td><td>The ruling: an empty region&rsquo;s leader is its constructive verb; when rooms exist, &ldquo;Add a room&rdquo; prints as a scored-ink line at the foot of the room list. RegionHead&rsquo;s one-leader contract polices the head only, so the foot line does not violate it</td><td class="cost">S</td></tr>
+        <tr><td>Decisions only in the right margin</td><td>Unchanged &mdash; margin = attention is doctrine; the Guide line cites the open-decision count so the margin is summoned, not hunted</td><td class="cost">S</td></tr>
+        <tr><td>Triplicate entry doors</td><td>Per-document begin leaders; Desk consolidation recommended separately</td><td class="cost">M</td></tr>
+        <tr><td>&ldquo;Begin the Direction&rdquo; hard-jumps to /drafting, skipping the Direction section</td><td>Lands on the Direction section on the doc; the Drafting Room is reached by an inked leader in Direction&rsquo;s RegionHead and returns there</td><td class="cost">M</td></tr>
+        <tr><td>Doc URL rebinds; bookmarks die</td><td><strong>No doc id ever 404s</strong> &mdash; an alias/redirect table so every historical /doc/[id] resolves to the current canonical doc</td><td class="cost">M</td></tr>
+        <tr><td>Project spine ignores stage completion</td><td>Project-side spine state derives from ledger stage completion &mdash; a view-derivation change with Desk and mirror consumers</td><td class="cost">M</td></tr>
+        <tr><td>Empty FF&amp;E: the only verb is &ldquo;Open the spec book,&rdquo; a route away</td><td>The empty region&rsquo;s inked leader becomes <strong>&ldquo;Add a line,&rdquo; in place</strong>; the spec-book route is kept as the &lt;1440 form, with the shelf reference at &ge;1440</td><td class="cost">M</td></tr>
+        <tr><td>Spine index / rooms / shelves exist only &ge;1440px</td><td>Below 1440, the running index prints as a one-line strip under the letterhead</td><td class="cost">M</td></tr>
+        <tr><td>AccountBand migrates by section</td><td>Pinned to position 6, via extraction from MoneyRegion into the fixed slot</td><td class="cost">M</td></tr>
+        <tr><td>Approvals verbs demoted; release ceremony buried in the FF&amp;E head; no path past the send wall</td><td>All consolidated into the <strong>signature block</strong> at position 5: inked draft/publish leaders, the release ceremony, and a printed state line at the wall</td><td class="cost">M</td></tr>
+        <tr><td>Two regions named &ldquo;Schedule&rdquo;</td><td>Merged into <strong>the Rule</strong> (with its Calendar fold) and <strong>the Ledger</strong></td><td class="cost">L (L-a)</td></tr>
+        <tr><td>Three phase models; I114 unresolved</td><td>Stages = ledger of record; section seal = last stage completing</td><td class="cost">L, deferred &amp; gated (L-b)</td></tr>
+        <tr><td>Mood boards exiled to a shelf leaf</td><td>A boards fold-seam on the paper &mdash; reclassified as an explicit doctrine amendment reversing I136, and <strong>cut from this direction</strong>. If the team declines it, the shelf leaf stands and nothing else here depends on it</td><td class="cost">amendment</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>The journey, re-walked</h3>
+  <div class="scroller">
+    <table>
+      <caption>Same job, against current main (I135/I136 shipped)</caption>
+      <thead>
+        <tr>
+          <th scope="col">Before &mdash; current main</th>
+          <th scope="col" class="count">Hunts</th>
+          <th scope="col">After &mdash; The Work Order</th>
+          <th scope="col" class="count">Hunts</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Desk: Capture a lead (primary affordance)</td><td class="count"><span class="tally tally-before">&bull;</span></td>
+          <td>Same &mdash; the Desk is untouched here</td><td class="count"><span class="tally tally-after">&bull;</span></td>
+        </tr>
+        <tr>
+          <td>Doc opens: guide under the letterhead &mdash; but the Record sits between the guide and the live work; scroll past history</td><td class="count"><span class="tally tally-before">&bull;</span></td>
+          <td>Guide &rarr; Rule &rarr; active section, contiguous; the Record at the foot</td><td class="count"><span class="tally tally-after">&mdash;</span></td>
+        </tr>
+        <tr>
+          <td>Spec a living room: FF&amp;E empty, sole verb &ldquo;Open the spec book&rdquo; &mdash; route out, add pieces, route back (2 surfaces)</td><td class="count"><span class="tally tally-before">&bull;&bull;&bull;</span></td>
+          <td>&ldquo;Add a line&rdquo; inked in place; the spec book optional, route kept &lt;1440</td><td class="count"><span class="tally tally-after">&bull;</span></td>
+        </tr>
+        <tr>
+          <td>Add a room from a secondary position; boards via the shelf leaf (one press &ge;1440, stranded &lt;1440)</td><td class="count"><span class="tally tally-before">&bull;&bull;</span></td>
+          <td>Add-a-room in flow at the room-list foot; boards unchanged (amendment cut)</td><td class="count"><span class="tally tally-after">&bull;</span></td>
+        </tr>
+        <tr>
+          <td>Firm rows via the always-visible &middot;&middot;&middot; (I135)</td><td class="count"><span class="tally tally-before">&bull;</span></td>
+          <td>Kept as-is</td><td class="count"><span class="tally tally-after">&bull;</span></td>
+        </tr>
+        <tr>
+          <td>Begin the Direction: hard-jump to /drafting, Direction skipped, URL rebinds &mdash; bookmark dead (2 surfaces, 1 dead bookmark)</td><td class="count"><span class="tally tally-before">&bull;&bull;</span></td>
+          <td>Lands on Direction on the doc; the Drafting Room entered and exited from its RegionHead; aliases guarantee no 404</td><td class="count"><span class="tally tally-after">&bull;</span></td>
+        </tr>
+        <tr>
+          <td>Approval arrives: approvals above the ledger while the index says otherwise; release ceremony inside the FF&amp;E head; the project spine doesn&rsquo;t move on stage completion</td><td class="count"><span class="tally tally-before">&bull;&bull;&bull;</span></td>
+          <td>Signature block at the foot: publish, wall state, release in one place; the spine derives from the Ledger</td><td class="count"><span class="tally tally-after">&bull;</span></td>
+        </tr>
+        <tr class="total">
+          <td>&asymp; 13 hunts, 5&ndash;6 surfaces, 1 dead bookmark</td><td class="count red">13</td>
+          <td>&asymp; 6 hunts, 3&ndash;4 surfaces, 0 dead bookmarks</td><td class="count">6</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The honest delta is roughly <strong>half the hunts, not two-thirds</strong> &mdash; the shipped
+    I135/I136 work already removed real friction. The case rests less on the count than on <em>where</em>
+    the remaining hunts live: every one of them is an ordering or naming defect (history above work,
+    two Schedules, signatures above the ledger, index &ne; DOM), and those are exactly what a fixed
+    canonical order eliminates by construction.
+  </p>
+
+  <h3>Scope honesty, risks, cost</h3>
+  <p><strong>Deliberately not doing:</strong> no adaptive or mode-switching surface; no merging the
+  Drafting Room onto the paper; no right-margin redesign; no client-portal changes; no rewrite of the
+  stage data model (additive per D7); no mobile-first rework beyond the index strip; and no Desk-level
+  entry-door consolidation &mdash; that is recommended as separate work.</p>
+  <p><strong>Risks.</strong> (1) The Rule is the load-bearing change; merging two shipped regions risks
+  regression in date editing &mdash; mitigate by keeping the Calendar fold&rsquo;s internals intact
+  behind the new head. (2) &ldquo;Section seal = stage completion&rdquo; must be socialized and is
+  gated on ruling I114&rsquo;s unclassified cases. (3) Moving the Record down changes muscle memory; it
+  is also the cheapest change and the easiest to explain.</p>
+
+  <div class="scroller">
+    <table>
+      <caption>Cost line</caption>
+      <thead><tr><th scope="col">Band</th><th scope="col" class="count">Count</th><th scope="col">Items</th></tr></thead>
+      <tbody>
+        <tr><td>S</td><td class="count">3</td><td>Record repositioning &middot; index-from-order &middot; add-room ruling</td></tr>
+        <tr><td>M</td><td class="count">8</td><td>Per-doc begin leaders &middot; Direction landing &middot; no-404 aliases &middot; FF&amp;E add-in-place with the spec-book route kept &middot; &lt;1440 index strip &middot; signature block &middot; AccountBand extraction &middot; project-spine derivation</td></tr>
+        <tr><td>L (shipping)</td><td class="count">1</td><td>The Rule, UI merge (L-a)</td></tr>
+        <tr><td>L (deferred, gated)</td><td class="count">2</td><td>Sealing semantics (L-b) &middot; full URL identity stabilization</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>First slice &mdash; the S set:</strong> the Record to the foot, index-from-order, and the
+  add-room ruling. Days, not sprints. It ships first as proof.</p>
+
+  <p class="figcap">
+    Critical files: <span class="chip">apps/designer-portal/src/app/(document)/doc/[id]/page.tsx</span>
+    <span class="chip">apps/designer-portal/src/lib/document/document-index.ts</span>
+    <span class="chip">apps/designer-portal/src/components/document/schedule/schedule-rule-region.tsx</span>
+    <span class="chip">apps/designer-portal/src/components/document/commercial/money-region.tsx</span>
+    <span class="chip">docs/design/the-document/DECISIONS.md</span>
+  </p>
+</section>
+
+<!-- ============================= 06 DIRECTION B ============================= -->
+<section id="direction-b" data-index-title="B &mdash; The Worktable" aria-labelledby="dir-b-h">
+  <hr class="rule-break" />
+  <p class="eyebrow" data-eyebrow>Direction B</p>
+  <h2 id="dir-b-h">The Worktable</h2>
+  <p class="eyebrow">Stage-adaptive</p>
+
+  <h3>Thesis</h3>
+  <p class="lede">
+    The document already knows what week it is. <code>document_state</code> names the active section;
+    the gate derivations name the one act the studio owes; <code>selectActivePhase</code> names where
+    today falls in the schedule &mdash; and then the paper prints everything at equal weight anyway,
+    and asks the designer to find the work herself.
+  </p>
+  <p>
+    The Worktable ends that. The paper composes itself around the stage: the active stage&rsquo;s work
+    spreads out at the top of the paper with its tools <em>on</em> it &mdash; the boards strip beside
+    the loose scheme, the library within reach of the empty line, the drafting facets under the send
+    verb &mdash; while every other domain compresses to one scored line that unfolds in place. The
+    spine stays the fixed geography; the letterhead stays the fixed name; only the middle of the paper
+    re-weights. A designer never hunts, because the surface she lands on <em>is</em> the work she came
+    to do &mdash; and everything she is not doing today is one seam away, exactly where it always is.
+  </p>
+
+  <h3>Principles</h3>
+  <ol>
+    <li><strong>The stage composes the paper; the spine never moves.</strong> Region order and weight
+      are stage-derived, the way sections already are (<code>deriveSections</code>). The seven-section
+      spine, the letterhead, the margin, and the colophon are the fixed skeleton. The paper re-weights;
+      the document never changes shape.</li>
+    <li><strong>Tools live on the table, not a route away.</strong> If a stage&rsquo;s work needs a
+      tool &mdash; boards, capture, library, drafting facets &mdash; the tool mounts on the active
+      region for the duration of that stage. The shelves remain the tools&rsquo; <em>home</em>; the
+      table <em>borrows</em> them.</li>
+    <li><strong>Everything else is one seam.</strong> Any domain not on the table compresses to a
+      scored one-line summary (the settled-bar primitive, generalized) that unfolds in place. Nothing
+      is removed; everything is one press away. This is a re-weighting argument, not new machinery
+      &mdash; fold seams and settled bars already exist.</li>
+    <li><strong>One inked leader per table.</strong> The RegionHead doctrine, applied at table scale.
+      Tables I&ndash;III derive their leader from their own stores; Table IV alone speaks gate.</li>
+    <li><strong>Transitions are ceremonies, not surprises.</strong> A table never reshuffles under the
+      designer&rsquo;s hands. Tables turn only at moments the system already marks &mdash; a lead
+      accepted, a proposal sealed, an install window committed &mdash; and the turn is announced on the
+      paper, never silently.</li>
+  </ol>
+
+  <h3>Four tables across the job arc</h3>
+  <p>
+    The table is selected by the existing derivation chain: <code>row.active_section</code>
+    (<code>deriveSections</code>&rsquo; order: brief &rarr; discovery &rarr; direction &rarr; proposal
+    &rarr; project &rarr; install &rarr; care), refined by proposal lifecycle
+    (<code>liveProposal.status</code>) and, inside the Delivery table, by
+    <code>selectActivePhase</code> over the resolved schedule. <strong>No new phase model</strong>
+    &mdash; this consumes the three that exist: stages pick the table&rsquo;s setting, sections pick
+    the table.
+  </p>
+
+  <div class="tablecards">
+
+    <article class="tablecard">
+      <span class="card-eyebrow">Table I</span>
+      <h4>The Intake Table</h4>
+      <p class="figcap"><code>active_section: brief | discovery</code></p>
+      <dl>
+        <dt>On the table</dt>
+        <dd>The lead record and the Discovery capture spread; the household chip promoted.</dd>
+        <dt>Seams</dt>
+        <dd><strong>Honest seams</strong> downstream: each future domain prints its scored line naming
+        what it will become and when its first verb arrives &mdash; &ldquo;Boards &mdash; open with the
+        Direction.&rdquo; Leads and Discovery have no folio store and no board home, so nothing is
+        promised here that the stores cannot keep. The override promise is scoped to domains whose
+        stores exist.</dd>
+        <dt>Inked leader</dt>
+        <dd class="leader">&ldquo;Accept &amp; open Discovery&rdquo; (brief) &rarr; &ldquo;Begin the Direction&rdquo; (discovery complete).</dd>
+        <dt>Turns when</dt>
+        <dd>The lead is accepted; and when Discovery&rsquo;s readiness reports complete.</dd>
+      </dl>
+    </article>
+
+    <article class="tablecard">
+      <span class="card-eyebrow">Table II</span>
+      <h4>The Speccing Table</h4>
+      <p class="figcap"><code>active_section: direction</code>, and <code>proposal</code> while draft</p>
+      <dl>
+        <dt>On the table</dt>
+        <dd>The table the complaint is really about, in order: <strong>(a) the rooms rail</strong>
+        &mdash; Add room first-class on the table head, a proposal-keyed room lens as a segmented row
+        at every width; <strong>(b) the loose scheme</strong> &mdash; the Drafting Room&rsquo;s FF&amp;E
+        facet (FFEScheduleBuilder + ScheduleLineUnfold) mounted <em>on</em> the paper as sketch-grade
+        lines, composer inline; <strong>(c) the boards strip</strong> &mdash; a new proposal-keyed strip
+        wrapping BoardsBuilder&rsquo;s read, drag from board to scheme line; <strong>(d) the library
+        reach-in</strong> &mdash; a search field on the table reaching the Library in place, so a piece
+        enters the scheme through one door instead of four; <strong>(e) the capture drop</strong>
+        (proposal folio).</dd>
+        <dt>Seams</dt>
+        <dd>Money, schedule, delivery: one scored line each, unfolding in place.</dd>
+        <dt>Inked leader</dt>
+        <dd class="leader">&ldquo;Add to the scheme&rdquo; &rarr; &ldquo;Draft the proposal,&rdquo; flipped by <code>useDraftingState</code> gaps.</dd>
+        <dt>Turns when</dt>
+        <dd>The proposal is sent.</dd>
+      </dl>
+    </article>
+
+    <article class="tablecard">
+      <span class="card-eyebrow">Table III</span>
+      <h4>The Finalize Table</h4>
+      <p class="figcap">proposal sent &rarr; signed</p>
+      <dl>
+        <dt>On the table</dt>
+        <dd>What a sent proposal actually owns: the ProposalWatch view promoted to the table&rsquo;s
+        spread, the <strong>verdict roll-up as the headline sentence</strong>, the Offer-movement
+        facets (Phases &middot; Exclusions &middot; Payments &middot; Terms) folding open under the
+        spread, send / nudge / revise as the table head, and a Decisions strip.</dd>
+        <dt>Seams</dt>
+        <dd>The Offer facets in their FacetSection seam form; the Decisions strip is a <em>read</em> of
+        the margin &mdash; actions still resolve through the margin.</dd>
+        <dt>Inked leader</dt>
+        <dd class="leader">Derived from proposal lifecycle &times; verdict roll-up: &ldquo;Finish the
+        draft&rdquo; &rarr; &ldquo;Send the proposal&rdquo; &rarr; &ldquo;Answer the flags&rdquo; &rarr;
+        &ldquo;Nudge {client}&rdquo; &rarr; &ldquo;Revise &amp; supersede.&rdquo; Gate verbs do not
+        appear here &mdash; a pre-signing proposal has no gates.</dd>
+        <dt>Turns when</dt>
+        <dd>At the seal &mdash; announced on-paper.</dd>
+      </dl>
+    </article>
+
+    <article class="tablecard">
+      <span class="card-eyebrow">Table IV</span>
+      <h4>The Delivery Table</h4>
+      <p class="figcap"><code>active_section: project | install</code> &mdash; two settings</p>
+      <dl>
+        <dt>On the table &mdash; Procurement (default)</dt>
+        <dd>The ScheduleSpine phase ledger, FF&amp;E in procurement grade, and &ldquo;Release for
+        authorization&rdquo; lifted onto the table head as the inked leader when releasable lines exist.
+        ProjectApprovalDocumentMount lives here (and on post-signing change-order proposals only).</dd>
+        <dt>On the table &mdash; Install</dt>
+        <dd>Turns when <code>selectActivePhase</code> lands on installation, or the
+        InstallWindowCeremony commits a window &mdash; making Install a real mode at last: FF&amp;E flips
+        to install grade; InstallWindowCeremony and CareBand spread open; procurement detail seams.</dd>
+        <dt>Seams</dt>
+        <dd>MoneyRegion compresses to a seam &mdash; &ldquo;<span class="num">$62,400</span> committed of
+        <span class="num">$80,000</span> authority&rdquo; &mdash; that unfolds in full.</dd>
+        <dt>Inked leader</dt>
+        <dd class="leader">The gate verb (<code>deriveGates</code>, overdue-first), falling back to
+        &ldquo;Release for authorization&rdquo; / &ldquo;Commit the install window.&rdquo;</dd>
+        <dt>Turns when</dt>
+        <dd>The active phase reaches installation, or a window is committed.</dd>
+      </dl>
+    </article>
+  </div>
+
+  <h3>The Drafting Room retires along its own movements</h3>
+  <p>
+    Authoring comes onto the paper. The room&rsquo;s real eight facets
+    <span class="chip">drafting-room.tsx:465&ndash;660</span> are Rooms &middot; FF&amp;E &middot;
+    Palette &middot; Boards &middot; Phases &middot; Exclusions &middot; Payments &middot; Terms,
+    grouped Scope / Vision / Offer. We split them along those groupings, not against them:
+  </p>
+  <ul>
+    <li><strong>Scope + Vision</strong> (Rooms, FF&amp;E, Palette, Boards) <strong>become the Speccing
+      table itself.</strong> FF&amp;E&rsquo;s facet already wraps the same builder, so
+      &ldquo;authoring on the paper&rdquo; is literal, not metaphorical.</li>
+    <li><strong>Offer</strong> (Phases, Exclusions, Payments, Terms) <strong>folds open on the Finalize
+      table</strong> in its existing FacetSection seam form.</li>
+    <li><strong>Nothing needs a full-bleed sheet.</strong> The one width-hungry piece &mdash; the
+      &ge;1440 live client-copy rail (ProposalPreviewRail) &mdash; becomes a shelf leaf,
+      &ldquo;Sarah&rsquo;s copy&rdquo;; below 1440 the existing &ldquo;Preview client copy&rdquo;
+      overlay act remains.</li>
+    <li>The <span class="chip">/drafting</span> route redirects for one release, then retires.</li>
+  </ul>
+  <p>
+    <strong>The Direction skip, fixed.</strong> &ldquo;Begin the Direction&rdquo; performs the act whose
+    <em>outcome</em> the derivation reads &mdash; proposal creation against the relationship &mdash; and
+    the section flips because the view says so. <code>active_section</code> is a derived view column
+    <span class="chip">00191/00327</span> and is never mutated, so keeping the designer on the same
+    <span class="chip">/doc/[id]</span> through the flip requires the <strong>relationship-id
+    alias</strong>, built as part of this fix (M). The Direction section is no longer skipped because
+    the Direction table <em>is</em> the destination.
+  </p>
+  <p>
+    <strong>The URL rebind.</strong> The seal-side alias already exists
+    <span class="chip">page.tsx:466&ndash;468</span>; the new work is the relationship-id leg. The first
+    paint after the seal prints a one-line note above the Delivery table: &ldquo;This proposal was
+    signed March 4 and continued as the project document.&rdquo;
+  </p>
+
+  <h3>Continuity &amp; trust</h3>
+  <p>
+    A shapeshifting paper is a trust problem, and we treat it as the direction&rsquo;s central risk
+    rather than a footnote.
+  </p>
+  <ul>
+    <li><strong>Stale-table pinning.</strong> The page snapshots the table key
+      (<code>active_section</code> + lifecycle refinement) into local state at mount. Derivations that
+      would change the key <em>do not re-compose the paper</em> &mdash; they arm a one-line note above
+      the current spread: &ldquo;The table is ready to turn &mdash; turn it.&rdquo; Pressing it, or
+      re-opening the document, adopts the new key. Data inside regions stays live; only the composition
+      is pinned. Cost: S.</li>
+    <li><strong>Working ahead, looking back.</strong> Spine markers unfold any domain that exists on
+      this document in full working grade, with a quiet dateline: &ldquo;Money &middot; unfolded out of
+      turn.&rdquo; Future seams focus and state their opening condition.</li>
+    <li><strong>The fixed skeleton.</strong> Letterhead (title, household chip, vitals, red-letter
+      zone), the spine with all seven sections, the margin rail, the guide sentence, the colophon,
+      Esc-puts-down. The spine always tells you which table is set before you scroll a pixel.</li>
+    <li><strong>Nothing unreachable below 1440px.</strong> Every table tool has a compact form;
+      <code>display:none</code> is forbidden for table tools.</li>
+  </ul>
+
+  <h3>The seven doctrine amendments</h3>
+  <p>This direction changes doctrine. We state each change plainly rather than smuggling it in a spec.</p>
+  <ol class="amendments">
+    <li><span class="tag">A1</span><div>Region order and weight become stage-derived.</div></li>
+    <li><span class="tag">A2</span><div>Shelf content may mount on the paper as a table tool. <strong>This is a reversal of I136&rsquo;s same-day boards transplant</strong> &mdash; stated as such, not implied.</div></li>
+    <li><span class="tag">A3</span><div>Proposal authoring happens on the paper; the Drafting Room retires via redirect.</div></li>
+    <li><span class="tag">A4</span><div>Compact forms are required below 1440px; <code>display:none</code> is forbidden for table tools.</div></li>
+    <li><span class="tag">A5</span><div><strong>The section grammar itself.</strong> Retiring &ldquo;exactly one active section at full grade&rdquo; amends the seven-section <code>deriveSections</code> grammar <span class="chip">section-derivation.ts:59&ndash;67</span> as consumed by spine states, Desk need lines, <code>deriveFillState</code>, and the D13 mobile sheet. The derivation survives; its consumers gain a table layer. This is the deepest amendment in either direction.</div></li>
+    <li><span class="tag">A6</span><div>A narrow margin carve-out: the Decisions strip is a <em>read</em> of the margin. Actions still resolve through the margin; the doctrine holds for state and is carved only for placement.</div></li>
+    <li><span class="tag">A7</span><div>Table-head lenses persist at all widths. The below-1440 self-release rule applies to shelf-resident lenses; a lens on the table head persists because its subject is on-screen at all widths.</div></li>
+  </ol>
+
+  <h3>The journey, re-walked</h3>
+  <div class="scroller">
+    <table>
+      <caption>Same job, today versus The Worktable</caption>
+      <thead>
+        <tr>
+          <th scope="col">Step</th>
+          <th scope="col">Today &mdash; surfaces / hunts</th>
+          <th scope="col" class="count">Count</th>
+          <th scope="col">The Worktable</th>
+          <th scope="col" class="count">Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>New lead arrives</td>
+          <td>Desk &rarr; doc, brief section; capture at /rooms if needed</td><td class="count"><span class="tally tally-before">&bull;&bull;&bull;</span></td>
+          <td>Desk &rarr; doc: the Intake spread; downstream futures as honest seams</td><td class="count"><span class="tally tally-after">&bull;&bull;</span></td>
+        </tr>
+        <tr>
+          <td>Accept, open Discovery</td>
+          <td>Guide action &rarr; Discovery</td><td class="count"><span class="tally tally-before">&bull;</span></td>
+          <td>Same</td><td class="count"><span class="tally tally-after">&bull;</span></td>
+        </tr>
+        <tr>
+          <td>Spec a living room, loosely</td>
+          <td>&ldquo;Begin the Direction&rdquo; &rarr; Drafting Room, Direction skipped, the relationship URL dead-ends; FF&amp;E empty &rarr; spec-book route; boards on a &ge;1440 shelf; Library at /library</td><td class="count"><span class="tally tally-before">&bull;&bull;&bull;&bull;&bull;</span></td>
+          <td>The leader lands on the Speccing table at the aliased /doc/[id]: rooms rail, inline scheme on paper, boards strip, library reach-in &mdash; one surface, no routes <span class="chip">shared plank: landing fix</span></td><td class="count"><span class="tally tally-after">&bull;</span></td>
+        </tr>
+        <tr>
+          <td>Firm it up</td>
+          <td>Drafting Room, eight facets; the doc read-only</td><td class="count"><span class="tally tally-before">&bull;&bull;</span></td>
+          <td>Scope + Vision already on Table II; Offer facets fold open on Table III; the client copy on a shelf leaf</td><td class="count"><span class="tally tally-after">&bull;</span></td>
+        </tr>
+        <tr>
+          <td>Send the proposal</td>
+          <td>Drafting Room &rarr; send; back to the doc</td><td class="count"><span class="tally tally-before">&bull;&bull;</span></td>
+          <td>&ldquo;Send the proposal&rdquo; &mdash; lifecycle-derived leader, gaps-clear flip <span class="chip">shared plank: send-wall instrument</span></td><td class="count"><span class="tally tally-after">&bull;</span></td>
+        </tr>
+        <tr>
+          <td>Client responds</td>
+          <td>Verdicts a 9px whisper; no stated path at the wall</td><td class="count"><span class="tally tally-before">&bull;</span></td>
+          <td>Table III&rsquo;s headline <em>is</em> the verdict roll-up; the leader is a proposal-derived verb (&ldquo;Answer the flags&rdquo; / &ldquo;Nudge Sarah&rdquo;)</td><td class="count"><span class="tally tally-after">&mdash;</span></td>
+        </tr>
+        <tr>
+          <td>Approval &rarr; release</td>
+          <td>Signed &rarr; R6 rebind (the link survives, the turn goes unannounced); release ceremony inside the FF&amp;E head</td><td class="count"><span class="tally tally-before">&bull;</span></td>
+          <td>The turn is announced at the seal; Table IV&rsquo;s leader is the first gate verb, &ldquo;Release for authorization&rdquo; when releasable</td><td class="count"><span class="tally tally-after">&mdash;</span></td>
+        </tr>
+        <tr class="total">
+          <td>Tally</td>
+          <td>&asymp; 13 surfaces, 1 verified dead end</td><td class="count red">13</td>
+          <td>&asymp; 6&ndash;7 presses on one paper, 0 dead ends</td><td class="count">6&ndash;7</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Only one dead end verifies &mdash; <span class="chip">/doc/&lt;relationshipId&gt;</span> after Begin
+    the Direction. The post-signing proposal bookmark is alive via the R6 redirect. These are the counts
+    that survive the code; an earlier draft overclaimed both sides.
+  </p>
+
+  <h3>Risks, cost, first slice</h3>
+  <p>
+    <strong>Risks.</strong> The trust risk &mdash; a paper that shapeshifts &mdash; is real, and is
+    answered by stale-table pinning plus announced turns; if the team does not believe that answer, the
+    direction should not be chosen. The scope risk concentrates in Tables II and III, where authoring
+    genuinely moves onto the paper. A5 is the deepest amendment in this deck and touches four consumers
+    of the section grammar.
+  </p>
+  <div class="scroller">
+    <table>
+      <caption>Cost line, across four tables</caption>
+      <thead><tr><th scope="col">Band</th><th scope="col" class="count">Count</th><th scope="col">Notes</th></tr></thead>
+      <tbody>
+        <tr><td>S</td><td class="count">3&ndash;4</td><td>Inline composer, stale-table pinning, rooms rail (S&ndash;M), seam generalization</td></tr>
+        <tr><td>M</td><td class="count">5</td><td>Direction landing + relationship alias, library reach-in, boards strip (a new proposal-keyed surface), facet re-homing, announced turns</td></tr>
+        <tr><td>L</td><td class="count">1</td><td>The Finalize table</td></tr>
+        <tr><td>Optional, priced separately</td><td class="count">1</td><td>An additive relationship-keyed intake-attachment store &mdash; migration + hook + strip, M. Slice 2&rsquo;s headline only if intake capture proves a real complaint (see Q6)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    <strong>First slice &mdash; the Speccing table: 3&ndash;4 sprints, not 2.</strong> Direction landing
+    plus the relationship alias (M), the inline composer (S), the library reach-in (M), the boards strip
+    (M), the rooms rail (S&ndash;M). <strong>If it must shrink, the boards strip drops to slice 2 before
+    the library reach-in does</strong> &mdash; the reach-in kills four doors; the strip kills one shelf
+    cliff.
+  </p>
+
+  <p class="figcap">
+    Critical files: <span class="chip">apps/designer-portal/src/app/(document)/doc/[id]/page.tsx</span>
+    <span class="chip">apps/designer-portal/src/components/document/rooms/drafting/drafting-room.tsx</span>
+    <span class="chip">apps/designer-portal/src/components/document/proposal-instruments.tsx</span>
+    <span class="chip">apps/designer-portal/src/lib/document/section-derivation.ts</span>
+    <span class="chip">apps/designer-portal/src/lib/document/workflow-gate.ts</span>
+  </p>
+</section>
+
+<!-- ============================= 07 SIDE BY SIDE ============================= -->
+<section id="side-by-side" data-index-title="Side by side" aria-labelledby="sbs-h">
+  <hr class="rule-break" />
+  <p class="eyebrow" data-eyebrow>Side by side</p>
+  <h2 id="sbs-h">The two directions, compared</h2>
+
+  <div class="scroller">
+    <table>
+      <caption>A &mdash; The Work Order &middot; B &mdash; The Worktable</caption>
+      <thead>
+        <tr><th scope="col"></th><th scope="col">A &mdash; The Work Order</th><th scope="col">B &mdash; The Worktable</th></tr>
+      </thead>
+      <tbody>
+        <tr><th scope="row">Thesis</th><td>Same surface, collated: one fixed canonical order</td><td>The stage composes the paper: four tables, tools on the table</td></tr>
+        <tr><th scope="row">What moves</th><td>Regions reorder once, for everyone, forever</td><td>Region weight re-composes per stage; order stable within a table</td></tr>
+        <tr><th scope="row">The three clocks</th><td>Merged into one instrument (the Rule); sealing semantics as a gated follow-up</td><td>Consumed as-is: sections pick the table, stages pick the setting; forces the I114 resolution</td></tr>
+        <tr><th scope="row">Drafting Room</th><td>Kept as a room, reached from the Direction section</td><td>Retired along its own Scope / Vision / Offer movements onto Tables II and III</td></tr>
+        <tr><th scope="row">Doctrine</th><td>Compliant except one cut amendment (the boards seam)</td><td>Seven explicit amendments, including the section-grammar rewrite (A5) &mdash; the deepest change</td></tr>
+        <tr><th scope="row">Risk profile</th><td>Regression risk concentrated in the Rule UI merge</td><td>Trust risk (shapeshifting), mitigated by stale-table pinning and announced turns; scope risk in Tables II and III</td></tr>
+        <tr><th scope="row">Journey (same job)</th><td class="count">&asymp;13 hunts &rarr; &asymp;6; 1 dead bookmark &rarr; 0</td><td class="count">&asymp;13 surfaces &rarr; &asymp;6&ndash;7 presses; 1 dead end &rarr; 0</td></tr>
+        <tr><th scope="row">First slice</th><td>The S set: Record to the foot, index-from-order, add-room ruling &mdash; days, not sprints</td><td>The Speccing table: landing fix + alias, inline composer, library reach-in, rooms rail &mdash; 3&ndash;4 sprints</td></tr>
+        <tr><th scope="row">Total cost</th><td class="cost">S&times;3 &middot; M&times;8 &middot; L&times;1 (+ L&times;2 gated / deferred)</td><td class="cost">S&times;3&ndash;4 &middot; M&times;5 &middot; L&times;1 (the Finalize table), across 4 tables</td></tr>
+        <tr><th scope="row">Ships value fastest</th><td>Yes &mdash; the first slice is days</td><td>No &mdash; but the first slice attacks the loudest complaint hardest</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="readbox">
+    <p class="eyebrow">The firm&rsquo;s read &mdash; our recommendation, yours to accept or reject</p>
+    <p>
+      <strong>These are not exclusive.</strong> A&rsquo;s canonical order and index-from-order are the
+      substrate B&rsquo;s tables would compose on; A&rsquo;s S-set could ship while B&rsquo;s Speccing
+      table is being designed.
+    </p>
+    <p>
+      If forced to one: <strong>A de-risks the whole surface for every stage; B transforms the stage the
+      complaint names.</strong>
+    </p>
+    <p>
+      The honest sequencing is <strong>A&rsquo;s S-set first &mdash; days &mdash; then decide whether the
+      next investment is A&rsquo;s Rule or B&rsquo;s Speccing table.</strong> That decision does not have
+      to be made this week. The S-set does.
+    </p>
+  </div>
+</section>
+
+<!-- ============================= 08 QUESTIONS ============================= -->
+<section id="questions" data-index-title="Questions for the team" aria-labelledby="q-h">
+  <hr class="rule-break" />
+  <p class="eyebrow" data-eyebrow>Questions for the Patina team</p>
+  <h2 id="q-h">Seven things we need from you</h2>
+  <p class="lede">
+    We can build neither direction honestly without these answers. Rule on paper; the ruled space is
+    yours.
+  </p>
+
+  <div class="question">
+    <span class="qtag">Q1 &mdash; Boards on the paper (SP5)</span>
+    <p>I136 moved boards to the shelves yesterday; both directions want them touchable during speccing.
+    Reverse for the direction stage, or hold the shelf line?</p>
+    <div class="ruled" aria-hidden="true"></div>
+  </div>
+  <div class="question">
+    <span class="qtag">Q2 &mdash; The clocks</span>
+    <p>Is the team ready to rule the I114 section&harr;stage mapping? A&rsquo;s sealing semantics needs
+    it; B&rsquo;s table selector forces a smaller version of it. Who owns that ruling?</p>
+    <div class="ruled" aria-hidden="true"></div>
+  </div>
+  <div class="question">
+    <span class="qtag">Q3 &mdash; Fixed order vs stage composition</span>
+    <p>Does the studio trust a paper that re-weights at ceremonies (B), or is the fixed collation (A) the
+    ceiling of acceptable motion?</p>
+    <div class="ruled" aria-hidden="true"></div>
+  </div>
+  <div class="question">
+    <span class="qtag">Q4 &mdash; First slice</span>
+    <p>A&rsquo;s S-set (days) versus B&rsquo;s Speccing table (3&ndash;4 sprints) &mdash; what is the
+    appetite?</p>
+    <div class="ruled" aria-hidden="true"></div>
+  </div>
+  <div class="question">
+    <span class="qtag">Q5 &mdash; The Drafting Room&rsquo;s future</span>
+    <p>A room reached from the Direction section (A), or retirement along its movements (B)?</p>
+    <div class="ruled" aria-hidden="true"></div>
+  </div>
+  <div class="question">
+    <span class="qtag">Q6 &mdash; Intake capture</span>
+    <p>Is pre-proposal capture &mdash; a client&rsquo;s Pinterest exports at Discovery &mdash; a real
+    complaint worth a new store (B&rsquo;s slice-2 candidate), or inferred?</p>
+    <div class="ruled" aria-hidden="true"></div>
+  </div>
+  <div class="question">
+    <span class="qtag">Q7 &mdash; Below 1440px</span>
+    <p>Both directions restore reachability &mdash; the &lt;1440 index strip in A, compact table tools in
+    B. What priority does that carry relative to the desktop work?</p>
+    <div class="ruled" aria-hidden="true"></div>
+  </div>
+</section>
+
+<!-- ============================= 09 COLOPHON ============================= -->
+<section id="colophon" data-index-title="Colophon" aria-labelledby="colophon-h">
+  <hr class="rule-break" />
+  <p class="eyebrow" data-eyebrow>Colophon</p>
+  <h2 id="colophon-h">Method, sources, and one demonstration</h2>
+
+  <h3>Method note</h3>
+  <p>
+    Every claim in this deck was checked against the repository at <span class="chip">main@70ce2eb2</span>,
+    2026-08-15. Both directions were drafted, then adversarially re-read against the code by a second
+    party; passages that did not survive were corrected rather than softened, and the corrected
+    directions are the only ones presented here. Where a direction says &ldquo;kept, not built,&rdquo;
+    it is crediting shipped Patina work, not proposing it. Costs are S / M / L bands, not estimates in
+    days, except where a slice is explicitly sized.
+  </p>
+
+  <h3>Sources</h3>
+  <ul class="sources">
+    <li>artifacts/document-flow-directions-2026-08-15/source/findings-and-frame.md</li>
+    <li>artifacts/document-flow-directions-2026-08-15/source/direction-a.md</li>
+    <li>artifacts/document-flow-directions-2026-08-15/source/direction-b.md</li>
+    <li>apps/designer-portal/src/app/(document)/doc/[id]/page.tsx</li>
+    <li>apps/designer-portal/src/lib/document/document-index.ts</li>
+    <li>apps/designer-portal/src/lib/document/section-derivation.ts</li>
+    <li>apps/designer-portal/src/lib/document/workflow-gate.ts</li>
+    <li>apps/designer-portal/src/components/document/schedule/schedule-rule-region.tsx</li>
+    <li>apps/designer-portal/src/components/document/commercial/money-region.tsx</li>
+    <li>apps/designer-portal/src/components/document/proposal-instruments.tsx</li>
+    <li>apps/designer-portal/src/components/document/rooms/drafting/drafting-room.tsx</li>
+    <li>apps/designer-portal/src/components/document/project-approval-document-mount.tsx</li>
+    <li>supabase/migrations/00191, 00327, 00429</li>
+    <li>docs/design/the-document/DECISIONS.md &mdash; I114, I135, I136</li>
+  </ul>
+
+  <h3>One demonstration</h3>
+  <p>
+    This deck&rsquo;s own left index is generated from its section order at load, so its index can never
+    disagree with its paper &mdash; which is finding F2&rsquo;s fix, demonstrated.
+  </p>
+
+  <p class="endmark">Start to Signature &middot; 2026 &middot; 08 &middot; 15 &middot; End of deck</p>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var sections = Array.prototype.slice.call(
+    document.querySelectorAll("main > section[data-index-title]")
+  );
+
+  // The index is built from the paper's own order — nothing is hand-listed.
+  var spineList = document.getElementById("spine-list");
+  var inlineList = document.getElementById("inline-index-list");
+  var links = [];
+  var counter = 0;
+
+  sections.forEach(function (section) {
+    var title = section.getAttribute("data-index-title") || section.id;
+    var numbered = section.getAttribute("data-unnumbered") !== "true";
+    var label = title;
+    if (numbered) {
+      counter += 1;
+      var n = counter < 10 ? "0" + counter : String(counter);
+      label = n + " · " + title;
+      var eyebrow = section.querySelector("[data-eyebrow]");
+      if (eyebrow) {
+        eyebrow.innerHTML = n + " · " + eyebrow.innerHTML;
+      }
+    }
+
+    if (spineList) {
+      var li = document.createElement("li");
+      var a = document.createElement("a");
+      a.className = "spine-link";
+      a.href = "#" + section.id;
+      var dot = document.createElement("span");
+      dot.className = "dot";
+      dot.setAttribute("aria-hidden", "true");
+      var text = document.createElement("span");
+      text.innerHTML = label;
+      a.appendChild(dot);
+      a.appendChild(text);
+      li.appendChild(a);
+      spineList.appendChild(li);
+      links.push({ el: a, id: section.id });
+    }
+
+    if (inlineList) {
+      var li2 = document.createElement("li");
+      var a2 = document.createElement("a");
+      a2.href = "#" + section.id;
+      a2.innerHTML = label;
+      li2.appendChild(a2);
+      inlineList.appendChild(li2);
+    }
+  });
+
+  function setCurrent(id) {
+    links.forEach(function (link) {
+      if (link.id === id) {
+        link.el.setAttribute("aria-current", "true");
+      } else {
+        link.el.removeAttribute("aria-current");
+      }
+    });
+  }
+
+  if ("IntersectionObserver" in window) {
+    var visible = {};
+    var spy = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          visible[entry.target.id] = entry.isIntersecting;
+        });
+        for (var i = 0; i < sections.length; i += 1) {
+          if (visible[sections[i].id]) {
+            setCurrent(sections[i].id);
+            break;
+          }
+        }
+      },
+      { rootMargin: "-10% 0px -70% 0px", threshold: 0 }
+    );
+    sections.forEach(function (s) { spy.observe(s); });
+
+    var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduced) {
+      sections.forEach(function (s) { s.classList.add("reveal"); });
+      var revealer = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-in");
+              revealer.unobserve(entry.target);
+            }
+          });
+        },
+        { rootMargin: "0px 0px -8% 0px", threshold: 0.02 }
+      );
+      sections.forEach(function (s) { revealer.observe(s); });
+    }
+  } else if (sections.length) {
+    setCurrent(sections[0].id);
+  }
+})();
+</script>
+
+</body>
+</html>
