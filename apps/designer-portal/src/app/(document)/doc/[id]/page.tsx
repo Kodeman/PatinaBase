@@ -134,6 +134,7 @@ import { RoomsRail } from '@/components/document/worktable/rooms-rail';
 import { Scheme } from '@/components/document/worktable/scheme';
 import { BoardsStrip } from '@/components/document/worktable/boards-strip';
 import { LibraryReachIn } from '@/components/document/worktable/library-reach-in';
+import { IntakeSpreadHeader } from '@/components/document/worktable/intake-spread-header';
 import { DocumentShelves } from '@/components/document/shelves/document-shelves';
 import {
   NEW_BOARD_EVENT,
@@ -1208,6 +1209,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               sealTurn={sealTurnNoted ? { signedDate: seal?.date ?? null } : null}
               slots={speccingSlots}
             >
+            {/* W4c — Table I's spread header: the household chip promoted into
+                the spread. Printed identity only (Q6). Mounted only on the
+                composed Intake table — `table` is null with the flag off, so
+                the flag off is byte-identical — and the component holds the
+                same gate as its own law. */}
+            {table?.table === 'intake' && (
+              <IntakeSpreadHeader
+                table={table.table}
+                leadId={row.lead_id}
+                clientName={row.client_name}
+              />
+            )}
             {spreadSection === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
             {spreadSection === 'discovery' && row.engagement_id && row.designer_id && (
               <DiscoverySection
