@@ -122,6 +122,14 @@ import {
   useRoomLens,
 } from '@/components/document/room-lens-context';
 import { DocSpineShelvedBlocks } from '@/components/document/spine-shelved-blocks';
+import { deriveTableComposition } from '@/lib/document/table-derivation';
+import { useTablePin } from '@/components/document/worktable/use-table-pin';
+import { TableFrame } from '@/components/document/worktable/table-frame';
+import {
+  markSealTurn,
+  readAndClearSealTurn,
+} from '@/components/document/worktable/seal-turn';
+import type { SpeccingTableSlots } from '@/components/document/worktable/table-slots';
 import { DocumentShelves } from '@/components/document/shelves/document-shelves';
 import {
   NEW_BOARD_EVENT,
@@ -233,12 +241,19 @@ function vitalsFor(
 }
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+  // F2 — the body is keyed on the document id so picking up a DIFFERENT
+  // document is a fresh mount by our own construction, not by trusting the
+  // router to remount a segment whose param changed. What depends on it: the
+  // table pin re-snapshots (R7's "re-opening the document adopts naturally"),
+  // and the seal note's read-once guard re-arms for the arrival after a
+  // redirect.
+  const { id } = use(params);
   // The room lens wraps the whole document: the letterhead names the room in
   // hand, the paper lifts by it, and the shelves lift by it too — one hold,
   // read in three places.
   return (
     <RoomLensProvider>
-      <DocumentPageBody params={params} />
+      <DocumentPageBody key={id} params={params} />
     </RoomLensProvider>
   );
 }
@@ -248,6 +263,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const hydrated = useHydrated();
+  // Start to Signature W2 — the Worktable composes the paper's middle. Fails
+  // closed: with the flag off this page prints exactly the composition it has
+  // always printed, and every fixed part of the paper is identical either way.
+  const worktableOn = useFeatureFlag('worktable').value;
 
   const {
     data: resolution,
@@ -464,8 +483,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // R6: an activated proposal's id redirects to its project document —
   // pre-signing links survive the signing moment. replace(), not push.
   useEffect(() => {
-    if (resolution?.kind === 'redirect') router.replace(`/doc/${resolution.projectId}`);
-  }, [resolution, router]);
+    if (resolution?.kind !== 'redirect') return;
+    // W2 — the turn the seal performs is announced on the destination's paper.
+    if (worktableOn) markSealTurn(resolution.projectId);
+    router.replace(`/doc/${resolution.projectId}`);
+  }, [resolution, router, worktableOn]);
 
   // Furnishings authorizations are project instruments, not standalone
   // proposal documents. Route old Desk links through the canonical doorway so
@@ -790,6 +812,35 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // gated on the flag so a cohort without it doesn't pay for a query neither
   // the kickoff band nor the instrument will render from.
   const callSheetGate = useFeatureFlag('call-sheet');
+
+  // W2 — which table the paper composes as, and the pin that holds it still.
+  // Memoized on the two facts it reads so the pin's snapshot is taken once per
+  // real change rather than once per render. The pin runs in both flag states
+  // (rules of hooks); with the flag off nothing reads its answer.
+  const activeSection = row?.active_section;
+  const liveProposalStatus = liveProposal?.status ?? null;
+  const derivedTable = useMemo(
+    () =>
+      activeSection
+        ? deriveTableComposition({
+            activeSection,
+            proposalStatus: liveProposalStatus,
+          })
+        : null,
+    [activeSection, liveProposalStatus],
+  );
+  const tablePin = useTablePin(derivedTable);
+  // The seal note is read ONCE per arrival: the marker is cleared as it is
+  // read, and held in state so this mount keeps printing it.
+  const [sealTurnNoted, setSealTurnNoted] = useState(false);
+  const sealTurnRead = useRef(false);
+  const arrivedProjectId = row?.project_id ?? null;
+  useEffect(() => {
+    if (!worktableOn || !arrivedProjectId || sealTurnRead.current) return;
+    sealTurnRead.current = true;
+    if (readAndClearSealTurn(arrivedProjectId)) setSealTurnNoted(true);
+  }, [worktableOn, arrivedProjectId]);
+
   const rosterProjectId =
     callSheetGate.value && row?.engagement_kind === 'project' && row.project_id
       ? row.project_id
@@ -903,6 +954,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       ).length;
   const unfoldProposalId =
     row.engagement_kind === 'project' ? (project?.proposal?.id ?? null) : (row.proposal_id ?? null);
+  // W2 — the table, or nothing. Which section's spread stands on the paper is
+  // the pinned composition's answer while the flag is on, so a derivation that
+  // moves under the designer's hands cannot re-compose the middle; every other
+  // read on this page stays on the live row.
+  const table = worktableOn ? tablePin.composition : null;
+  const spreadSection = table ? table.section : row.active_section;
+  // W3's integration surface, declared here and filled there.
+  const speccingSlots: SpeccingTableSlots = {};
   const seal = lineage?.signedAt
     ? {
         date: fmtDay(lineage.signedAt),
@@ -1111,8 +1170,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               }
               activeSection={row.active_section}
             />
-            {row.active_section === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
-            {row.active_section === 'discovery' && row.engagement_id && row.designer_id && (
+            <TableFrame
+              composition={table}
+              pending={worktableOn ? tablePin.pending : null}
+              onTurn={tablePin.turn}
+              sealTurn={sealTurnNoted ? { signedDate: seal?.date ?? null } : null}
+              slots={speccingSlots}
+            >
+            {spreadSection === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
+            {spreadSection === 'discovery' && row.engagement_id && row.designer_id && (
               <DiscoverySection
                 engagementId={row.engagement_id}
                 designerId={row.designer_id}
@@ -1120,16 +1186,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 clientName={row.client_name}
               />
             )}
-            {(row.active_section === 'direction' || row.active_section === 'proposal') &&
+            {(spreadSection === 'direction' || spreadSection === 'proposal') &&
               row.proposal_id && (
                 <section>
                   <div className="mb-1.5 mt-5 flex items-baseline justify-between">
                     <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-                      {row.active_section === 'direction' ? 'Direction' : 'Proposal'}
+                      {spreadSection === 'direction' ? 'Direction' : 'Proposal'}
                       {liveProposal?.version ? ` · v${liveProposal.version}` : ''}
                     </h2>
                     <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {sections.find((s) => s.key === row.active_section)?.sub}
+                      {sections.find((s) => s.key === spreadSection)?.sub}
                     </span>
                   </div>
                   {/* C3 — a quiet letterhead read of where the client's verdicts
@@ -1167,7 +1233,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   <ProposalBlocksReadOnly proposalId={row.proposal_id} />
                 </section>
               )}
-              {row.active_section === 'project' && row.project_id && (
+              {spreadSection === 'project' && row.project_id && (
                 <>
                   {/* Track 5 — the coordination band (ball-in-court + dependency web).
                     The band resolves designerClientId itself from clientUserId
@@ -1214,7 +1280,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   <CareBand projectId={row.project_id} />
                 </>
               )}
-            {row.active_section === 'install' && row.project_id && (
+            {spreadSection === 'install' && row.project_id && (
               <>
                 <FFESection
                   projectId={row.project_id}
@@ -1237,7 +1303,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 <CareBand projectId={row.project_id} />
               </>
             )}
-            {row.active_section === 'care' && (
+            {spreadSection === 'care' && (
               <>
                 <CareSection
                   completedLabel={
@@ -1260,6 +1326,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 )}
               </>
             )}
+            </TableFrame>
           </div>
           </RippleProvider>
         </ScheduleNavProvider>
@@ -1271,11 +1338,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 W2 — the accounts moved into the money region, which mounts only
                 while the Project section is open; every other section keeps the
                 band here, where it has always been. */}
-            {row.active_section !== 'project' && (
+            {/* F1 — the band and the money region are one either-or, so both
+                sides read the SAME section. The money region mounts inside the
+                pinned spread; a band gated on the live row would print the
+                accounts twice (or nowhere) for as long as an armed turn goes
+                unpressed. Off the flag `spreadSection` IS `row.active_section`. */}
+            {spreadSection !== 'project' && (
               <AccountBand
                 projectId={row.project_id}
                 clientName={row.client_name}
-                activeSection={row.active_section}
+                activeSection={spreadSection}
               />
             )}
             {/* The four supporting rooms moved to the shelves, so the
