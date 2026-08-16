@@ -399,7 +399,7 @@ tr.total td{font-weight:600;border-bottom:0;}
 }
 .readbox p:last-child{margin-bottom:0;}
 
-/* ---------------- questions ---------------- */
+/* ---------------- questions, and the rulings on them ---------------- */
 .question{
   border-top:1px solid var(--hairline-strong);
   padding:1.2rem 0 1.5rem;
@@ -411,17 +411,20 @@ tr.total td{font-weight:600;border-bottom:0;}
   display:block;margin-bottom:.3rem;
 }
 .question p{margin:0 0 .9rem;}
-.ruled{
-  margin-top:.6rem;
-  background-image:repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 1.75rem,
-    var(--hairline) 1.75rem,
-    var(--hairline) calc(1.75rem + 1px)
-  );
-  height:5.25rem;
+/* The answer, in the leader idiom: ink rule, tint ground. */
+.ruling{
+  border-left:2px solid var(--ink);
+  background:var(--tint);
+  padding:.8rem .95rem;
+  margin:.2rem 0 0;
+  max-width:var(--measure);
 }
+.ruling .mark{
+  font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);display:block;margin-bottom:.25rem;
+}
+.ruling p{margin:0;}
+.ruling p + p{margin-top:.55rem;}
 
 /* ---------------- colophon ---------------- */
 .sources{list-style:none;margin:.6rem 0 1.2rem;padding:0;}
@@ -1364,60 +1367,362 @@ tr.total td{font-weight:600;border-bottom:0;}
   </div>
 </section>
 
-<!-- ============================= 08 QUESTIONS ============================= -->
-<section id="questions" data-index-title="Questions for the team" aria-labelledby="q-h">
+<!-- ============================= 08 THE RULINGS ============================= -->
+<section id="questions" data-index-title="The rulings" aria-labelledby="q-h">
   <hr class="rule-break" />
-  <p class="eyebrow" data-eyebrow>Questions for the Patina team</p>
-  <h2 id="q-h">Seven things we need from you</h2>
+  <p class="eyebrow" data-eyebrow>The rulings</p>
+  <h2 id="q-h">Seven questions, seven answers</h2>
   <p class="lede">
-    We can build neither direction honestly without these answers. Rule on paper; the ruled space is
-    yours.
+    We asked for these before anyone built. The team ruled on all seven on 15 August. The questions stay
+    on the paper &mdash; they are the record of what was asked &mdash; and each now carries the answer it
+    was given.
   </p>
 
   <div class="question">
     <span class="qtag">Q1 &mdash; Boards on the paper (SP5)</span>
     <p>I136 moved boards to the shelves yesterday; both directions want them touchable during speccing.
     Reverse for the direction stage, or hold the shelf line?</p>
-    <div class="ruled" aria-hidden="true"></div>
+    <div class="ruling">
+      <span class="mark">Ruled &mdash; reverse, for the speccing stage only</span>
+      <p>The boards strip mounts on the Speccing table; the shelf remains boards&rsquo; home everywhere
+      else. Amendment A2 is recorded as a <em>scoped</em> reversal of I136, not a rescinding of it &mdash;
+      which is the form we asked for and did not assume.</p>
+    </div>
   </div>
   <div class="question">
     <span class="qtag">Q2 &mdash; The clocks</span>
     <p>Is the team ready to rule the I114 section&harr;stage mapping? A&rsquo;s sealing semantics needs
     it; B&rsquo;s table selector forces a smaller version of it. Who owns that ruling?</p>
-    <div class="ruled" aria-hidden="true"></div>
+    <div class="ruling">
+      <span class="mark">Ruled &mdash; Kody owns it; the session is still owed</span>
+      <p>Nothing in the ratified path was allowed to depend on it. <code>active_section</code> stayed the
+      sealing authority through every wave; A&rsquo;s L-b sealing migration and the Rule merge were left
+      out of scope. Any future sealing-semantics work is gated on that session, which has not yet
+      happened.</p>
+    </div>
   </div>
   <div class="question">
     <span class="qtag">Q3 &mdash; Fixed order vs stage composition</span>
     <p>Does the studio trust a paper that re-weights at ceremonies (B), or is the fixed collation (A) the
     ceiling of acceptable motion?</p>
-    <div class="ruled" aria-hidden="true"></div>
+    <div class="ruling">
+      <span class="mark">Ruled &mdash; the ceremonies are trusted; the Worktable is the destination</span>
+      <p>With the price named in the same breath: the paper never re-composes under a designer
+      unannounced. Stale-table pinning is the ceremony that buys the trust, and it was built into the
+      Worktable&rsquo;s core rather than deferred.</p>
+    </div>
   </div>
   <div class="question">
     <span class="qtag">Q4 &mdash; First slice</span>
     <p>A&rsquo;s S-set (days) versus B&rsquo;s Speccing table (3&ndash;4 sprints) &mdash; what is the
     appetite?</p>
-    <div class="ruled" aria-hidden="true"></div>
+    <div class="ruling">
+      <span class="mark">Ruled &mdash; A&rsquo;s S-set first</span>
+      <p>Exactly the sequencing this deck recommended, and taken without hedging: the collation and the
+      shared planks shipped first, general and unflagged, before a single table was composed.</p>
+    </div>
   </div>
   <div class="question">
     <span class="qtag">Q5 &mdash; The Drafting Room&rsquo;s future</span>
     <p>A room reached from the Direction section (A), or retirement along its movements (B)?</p>
-    <div class="ruled" aria-hidden="true"></div>
+    <div class="ruling">
+      <span class="mark">Ruled &mdash; retire it in two steps</span>
+      <p>The landing and return fix now; the decomposition onto the tables later, once the Speccing table
+      has proved itself. Step one shipped. Step two was attempted inside this program and withdrawn
+      &mdash; the honest account is in the next section.</p>
+    </div>
   </div>
   <div class="question">
     <span class="qtag">Q6 &mdash; Intake capture</span>
     <p>Is pre-proposal capture &mdash; a client&rsquo;s Pinterest exports at Discovery &mdash; a real
     complaint worth a new store (B&rsquo;s slice-2 candidate), or inferred?</p>
-    <div class="ruled" aria-hidden="true"></div>
+    <div class="ruling">
+      <span class="mark">Ruled &mdash; inferred; hold</span>
+      <p>We had inferred the complaint rather than heard it, and said so. No store was built. Table I
+      prints identity only &mdash; name, description, arrival source &mdash; and honest seams naming what
+      opens later. Nothing promises a home the stores cannot keep.</p>
+    </div>
   </div>
   <div class="question">
     <span class="qtag">Q7 &mdash; Below 1440px</span>
     <p>Both directions restore reachability &mdash; the &lt;1440 index strip in A, compact table tools in
     B. What priority does that carry relative to the desktop work?</p>
-    <div class="ruled" aria-hidden="true"></div>
+    <div class="ruling">
+      <span class="mark">Ruled &mdash; same bar, same slice</span>
+      <p>Not a follow-on lane. Every tool ships its compact form in the lane that builds it, and A4
+      stands as doctrine: <code>display:none</code> is forbidden for table tools.</p>
+    </div>
   </div>
 </section>
 
-<!-- ============================= 09 COLOPHON ============================= -->
+<!-- ============================= 09 WHAT WAS BUILT ============================= -->
+<section id="built" data-index-title="What was built" aria-labelledby="built-h">
+  <hr class="rule-break" />
+  <p class="eyebrow" data-eyebrow>What was built</p>
+  <h2 id="built-h">The program, delivered</h2>
+
+  <p class="lede">
+    The rulings were given on 15 August. The program &mdash; <code>sts</code> &mdash; was architected,
+    built, adversarially reviewed and closed on 16 August. Four waves, all merged to <code>main</code>,
+    which stands at <span class="chip">2ed96a20</span>. This section is the delivery record in the
+    deck&rsquo;s own voice, including the piece of it we withdrew.
+  </p>
+  <p>
+    The decisions live in <span class="chip">DECISIONS I137&ndash;I142</span> with their errata, closed by
+    <span class="chip">I143</span>.
+  </p>
+
+  <h3>The four waves</h3>
+
+  <div class="paper-column">
+    <ol>
+      <li>
+        <span class="pos">W1</span>
+        <div>
+          <span class="title">The collation and the shared planks &mdash; GA, no flag</span>
+          <p class="why">Merge <span class="chip">2f2d9941</span>. The Record moves to the foot of the
+          paper, below the active section and the bands (F1). One <code>PROJECT_PAPER_ORDER</code>
+          descriptor now drives both the paper&rsquo;s mount order and the spine&rsquo;s running index, so
+          F2 is not fixed but made impossible. &ldquo;Add a room&rdquo; prints in flow at the foot of the
+          FF&amp;E room list &mdash; never behind a <code>&middot;&middot;&middot;</code>, never only in
+          the head ledger &mdash; answering I135&rsquo;s open flag (SP4). One scored state line stands
+          above both send walls, printing exactly one of {verb, state word} and withholding the nudge on a
+          paper-issued agreement (SP3). SP1 and SP2 were found already true and were ratified rather than
+          rebuilt &mdash; a plank we would have billed for and did not.</p>
+        </div>
+      </li>
+      <li>
+        <span class="pos">W2</span>
+        <div>
+          <span class="title">The Worktable core &mdash; behind the flag</span>
+          <p class="why">Merge <span class="chip">c0a3824b</span>. A table selector reads
+          <code>active_section</code> and answers one of four tables: I intake, II speccing, III finalize,
+          IV delivery. <code>deriveSections</code> is untouched &mdash; the tables are a layer over the
+          section grammar, not a replacement of it, which is amendment A5 held to its narrowest reading.
+          Stale-table pinning shipped with the core: the composition is snapshotted at mount, a derivation
+          that would compose something else arms the line &ldquo;The table is ready to turn &mdash; turn
+          it,&rdquo; and the data stays live throughout. The seal announces its own turn once, then
+          forgets. Intake gained honest future seams; Speccing gained four typed, empty mount slots for the
+          wave after.</p>
+        </div>
+      </li>
+      <li>
+        <span class="pos">W3</span>
+        <div>
+          <span class="title">The Speccing table&rsquo;s four tools &mdash; behind the flag</span>
+          <p class="why">Merge <span class="chip">2bac3e46</span>. The four slots filled in reading order
+          &mdash; the rooms rail at the table head, then the loose scheme, the boards strip, the library
+          reach-in: rooms, then the work, then the tools. All four are keyed on
+          <code>document_state.proposal_id</code>, the live chain version, never the raw route param. One
+          held room id, owned by the page: the lens lifts a room&rsquo;s things to the front and hides
+          nothing, and it persists at every width (A7). The boards strip is Q1&rsquo;s reversal, and it is
+          scoped to this table alone.</p>
+        </div>
+      </li>
+      <li>
+        <span class="pos">W4</span>
+        <div>
+          <span class="title">Finalize, Delivery and Intake &mdash; behind the flag</span>
+          <p class="why">Merge <span class="chip">2ed96a20</span>. <strong>Finalize:</strong> the verdict
+          roll-up becomes the headline in serif; <code>deriveFinalizeLeader</code> folds lifecycle &times;
+          verdicts &times; the send wall&rsquo;s own answer into at most one act, and a promoted act is a
+          moved act rather than a copied one; the Offer movement mounts as fold-open seams with the
+          Room&rsquo;s own editability and not one permission more; the read-only blocks drop their Offer
+          so the offer prints once; the preview rail becomes the &ldquo;client&rsquo;s copy&rdquo; shelf
+          leaf at &ge;1440. One leader per table, ruled at integration. <strong>Delivery:</strong>
+          &ldquo;Release for authorization&rdquo; lifts to the table head while its ceremony stays where it
+          was; the FF&amp;E head demotes rather than inking a second release, but keeps its entry whenever
+          the lift is not showing it; money compresses to one scored seam &mdash; &ldquo;<span
+          class="num">$X</span> committed of <span class="num">$Y</span> authority&rdquo; &mdash; that
+          unfolds in place. <strong>Intake:</strong> a quiet reading-size spread header, printed identity
+          only, narrowed at review to the discovery spread because a brief document already prints all
+          three facts just below.</p>
+        </div>
+      </li>
+      <li class="spine-row">
+        <span class="pos">&mdash;</span>
+        <div>
+          <span class="title">Closeout</span>
+          <p class="why">Commit <span class="chip">3579ae0b</span> on <code>sts/wave5-closeout</code>: the
+          full gates below, one reviewer pass over the decision entries, and branch and worktree
+          retirement. No deploy &mdash; deploy was never part of this program.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+  <p class="arc-legend">W1 general &middot; W2&ndash;W4 flagged &middot; closeout verifies</p>
+
+  <h3>The gates, as merged</h3>
+  <div class="scroller">
+    <table>
+      <caption>Designer portal, on the tree at 2ed96a20 &middot; 2026-08-16</caption>
+      <thead>
+        <tr><th scope="col">Gate</th><th scope="col">Result</th><th scope="col" class="count">Count</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row"><code>type-check</code> &mdash; <code>tsc --noEmit</code></th>
+          <td>Clean; exited 0</td>
+          <td class="count">&mdash;</td>
+        </tr>
+        <tr>
+          <th scope="row"><code>test</code> &mdash; the full suite</th>
+          <td>All passing; one snapshot; exited 0</td>
+          <td class="count">403 suites &middot; 4310 tests</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Zero failures and zero skips reported. The standing caveat is Patina&rsquo;s own and we repeat it
+    rather than let the numbers stand taller than they are: nothing runs these gates on push or on pull
+    request, so this local run is the only verification that exists for this program.
+  </p>
+
+  <h3>The flag, and the plainest fact in this record</h3>
+  <div class="readbox">
+    <p>
+      W1 is general. W2, W3 and W4 sit behind <code>worktable</code>, which is <strong>fail-closed</strong>
+      &mdash; the hook answers false on the server, false on first client render, and false permanently
+      wherever PostHog can never initialize, so an unresolved flag composes exactly main&rsquo;s paper.
+      There is no flash and no half-state. No PostHog flag of that name exists; nothing in the repository
+      creates one. The only way it has ever been true is a local environment override.
+    </p>
+    <p>
+      <strong>Nothing was deployed, and no deploy was requested.</strong> Which leads to the fact that
+      should be read before any other on this page: <strong>the Worktable has never been rendered for a
+      human.</strong> Every sentence above about how these tables <em>look</em> rests on reading the code
+      and on jest &mdash; not on eyes.
+    </p>
+  </div>
+
+  <h3>The press, descoped</h3>
+  <div class="callout">
+    <p>
+      <strong>We asked for step two early, and it had to be withdrawn.</strong> Q5&rsquo;s second step
+      &mdash; pressing <code>/drafting</code> shut &mdash; was built in W4 and taken back out at review.
+      Flag-on, it left the Offer movement &mdash; phases, exclusions, payment milestones, terms &mdash;
+      with no authorable home at all: a draft proposal composes the <em>Speccing</em> table, which carries
+      only the Scope and Vision tools, and the Finalize table&rsquo;s Offer seams are read-only by the
+      Drafting Room&rsquo;s own gate, which is correct and was rightly not overridden. With the Room
+      pressed shut, a new proposal&rsquo;s phases, payments and terms could not have been authored
+      anywhere at all.
+    </p>
+    <p>
+      The fault was in the sequencing, not in the lane that built it. The ruling was <em>two steps</em>;
+      the brief asked for the second one now. <code>/drafting</code> stays open in both flag states and
+      amendment A3 is not in force in this release. The two-step ruling stands &mdash; step two waits until
+      the Speccing table can carry an editable Offer.
+    </p>
+  </div>
+
+  <h3>What is owed, and what is open</h3>
+  <p>
+    None of this is a defect in the delivered work. Each item was scoped out deliberately, ruled to a later
+    release, or is a pre-existing gap this program surfaced rather than caused. All are recorded.
+  </p>
+  <ol class="ledger">
+    <li>
+      <span class="tag">a</span>
+      <div class="body">
+        <p><strong>Kody&rsquo;s flag-on walk.</strong> The largest open item, and the one the rest wait
+        behind. The flag has never been turned on in front of a person on a real screen.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">b</span>
+      <div class="body">
+        <p><strong>The I114 session &mdash; Q2&rsquo;s own answer.</strong> Every wave left
+        <code>active_section</code> standing as the sealing authority rather than touch it. The sealing
+        semantics remain gated on that session.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">c</span>
+      <div class="body">
+        <p><strong>The Offer has no editable home on the Speccing table.</strong> The reason the press was
+        descoped, and the precondition for step two of Q5.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">d</span>
+      <div class="body">
+        <p><strong>A flagged line on a sent proposal cannot be answered anywhere today.</strong> The
+        Drafting Room evicts a sent or viewed proposal, so the verb &ldquo;Answer the flags&rdquo; bounced
+        off the very destination it named. This is <em>pre-existing</em> &mdash; the Desk&rsquo;s own
+        flagged walk-in has the same defect on main &mdash; and the program surfaced it rather than caused
+        it. The leader was dropped rather than left pointing at a wall. It is recorded as a product debt:
+        the gap to close, not the leader to restore.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">e</span>
+      <div class="body">
+        <p><strong>Money does not seam on the install or care spread.</strong> Money does not mount there
+        today, so a seam would be a new mount <em>and</em> a second accounts surface. Bringing money onto
+        the install spread is its own ruling, and it has not been made.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">f</span>
+      <div class="body">
+        <p><strong>The reach-in drops the piece&rsquo;s category and lands lines Unassigned.</strong> A
+        reached-in line arrives uncategorized, its doc code falling back to a name prefix; and the reach
+        does not read the room lens, so the line lands Unassigned and is assigned downstream. Both are
+        named follow-ons.</p>
+      </div>
+    </li>
+    <li>
+      <span class="tag">g</span>
+      <div class="body">
+        <p><strong>The Scheme omits the verdict chips.</strong> Direction-stage client verdicts do not
+        print on the paper &mdash; the builder mounts without the verdict read. Deliberate scope; the
+        follow-on is bringing that read onto the table.</p>
+      </div>
+    </li>
+  </ol>
+  <p class="faint">
+    Four smaller items &mdash; a preview rail that can mount twice, a focus drop when the lifted release is
+    pressed, an offer flag not withdrawn on unmount, and a zero-leader edge on Finalize &mdash; are
+    recorded in the errata as known and accepted.
+  </p>
+
+  <h3>Where the walk should start</h3>
+  <p>
+    Not at the top of the paper. These are the surfaces where a derivation decides what a designer sees,
+    and where jest can prove the logic but not the judgement.
+  </p>
+  <ol class="amendments">
+    <li><span class="tag">1</span><div><strong>The Finalize table&rsquo;s derived leader</strong> &mdash;
+      the single highest-value look. One verb, folded out of lifecycle &times; verdicts &times; the send
+      wall&rsquo;s own answer, and it is the loudest thing on a sent proposal. Three things need eyes at
+      once: that the verb offered is the one a designer would actually reach for; that the zero-leader edge
+      reads as a calm document rather than a broken one; and that the wall below, having given up its verb,
+      still reads as a complete sentence. Walk a proposal with open flags, one with everything approved
+      inside the nudge cooldown, and one issued on paper.</div></li>
+    <li><span class="tag">2</span><div><strong>The Delivery table&rsquo;s release lift, and the FF&amp;E
+      head beneath it.</strong> A leader that moved three regions up the page while its ceremony stayed
+      where it was; the two surfaces must agree in every window about who holds the verb. The narrow one is
+      releasable-but-nothing-eligible, where the head keeps a visible-but-disabled entry and has to explain
+      a silence the reader can already see.</div></li>
+    <li><span class="tag">3</span><div><strong>The money seam &mdash; cold, and overdue.</strong> On a cold
+      load the region must stand open with each tier printing its name and no figure, never
+      &ldquo;<span class="num">$0</span> committed &middot; no authority yet&rdquo; flipping to the truth.
+      Then load a project with an overdue invoice and confirm the seam refuses to fold at all: money is
+      reference until it is owed, and this table suppresses the account band&rsquo;s own home.</div></li>
+    <li><span class="tag">4</span><div><strong>The Speccing table&rsquo;s room lens.</strong> A lift that
+      never hides is correct doctrine and the easiest thing in the program to misread as a filter. The
+      question for a person: with a room in hand, is it obvious that everything else is still there and
+      merely below? And confirm the oddity in the same pass &mdash; reached-in lines land Unassigned, so
+      reaching with a room in hand yields a line that does not join it.</div></li>
+    <li><span class="tag">5</span><div>If there is time: <strong>the stale-table turn line</strong>, on a
+      document whose composition changes while it is open. The pin is the ceremony Q3&rsquo;s trust rests
+      on, and it is the only place a designer is asked to consent to the paper re-composing under
+      them.</div></li>
+  </ol>
+</section>
+
+<!-- ============================= 10 COLOPHON ============================= -->
 <section id="colophon" data-index-title="Colophon" aria-labelledby="colophon-h">
   <hr class="rule-break" />
   <p class="eyebrow" data-eyebrow>Colophon</p>
@@ -1425,12 +1730,22 @@ tr.total td{font-weight:600;border-bottom:0;}
 
   <h3>Method note</h3>
   <p>
-    Every claim in this deck was checked against the repository at <span class="chip">main@70ce2eb2</span>,
-    2026-08-15. Both directions were drafted, then adversarially re-read against the code by a second
-    party; passages that did not survive were corrected rather than softened, and the corrected
-    directions are the only ones presented here. Where a direction says &ldquo;kept, not built,&rdquo;
-    it is crediting shipped Patina work, not proposing it. Costs are S / M / L bands, not estimates in
-    days, except where a slice is explicitly sized.
+    Every claim in the diagnosis and the two directions was checked against the repository at
+    <span class="chip">main@70ce2eb2</span>, 2026-08-15. Both directions were drafted, then adversarially
+    re-read against the code by a second party; passages that did not survive were corrected rather than
+    softened, and the corrected directions are the only ones presented here. Where a direction says
+    &ldquo;kept, not built,&rdquo; it is crediting shipped Patina work, not proposing it. Costs are
+    S / M / L bands, not estimates in days, except where a slice is explicitly sized.
+  </p>
+  <p>
+    Sections 08 and 09 were added on 2026-08-16, after the team ruled and after the program was built. The
+    rulings are recorded as given. The build is reported from the delivery record on
+    <code>sts/wave5-closeout</code>: every commit named here is a merge or a closeout commit on
+    <code>main</code>&rsquo;s own history, and the two gate results are quoted from the run on the tree at
+    <span class="chip">2ed96a20</span>. Each wave was adversarially reviewed in a separate reading before
+    the next one began, which is how the press came back out. Nothing in section 09 has been seen running:
+    the flag has never been on in front of a person, so that section reports what was written and what the
+    gates said, and nowhere claims to report what was observed.
   </p>
 
   <h3>Sources</h3>
@@ -1450,14 +1765,25 @@ tr.total td{font-weight:600;border-bottom:0;}
     <li>supabase/migrations/00191, 00327, 00429</li>
     <li>docs/design/the-document/DECISIONS.md &mdash; I114, I135, I136</li>
   </ul>
+  <p class="eyebrow">Added for sections 08 and 09</p>
+  <ul class="sources">
+    <li>artifacts/document-flow-directions-2026-08-15/delivery-plan.md</li>
+    <li>artifacts/document-flow-directions-2026-08-15/delivery-record.md</li>
+    <li>apps/designer-portal/src/lib/document/table-derivation.ts</li>
+    <li>apps/designer-portal/src/hooks/use-feature-flag.ts</li>
+    <li>docs/design/the-document/DECISIONS.md &mdash; I137&ndash;I142 with errata, closed by I143</li>
+  </ul>
 
   <h3>One demonstration</h3>
   <p>
     This deck&rsquo;s own left index is generated from its section order at load, so its index can never
-    disagree with its paper &mdash; which is finding F2&rsquo;s fix, demonstrated.
+    disagree with its paper &mdash; which is finding F2&rsquo;s fix, demonstrated. A section was inserted into
+    this paper after it was first set, and the index took it without being told &mdash; the colophon you are
+    reading renumbered itself from 09 to 10, because the index reads the paper rather than a list kept
+    beside it. That is precisely the property W1 gave The Document.
   </p>
 
-  <p class="endmark">Start to Signature &middot; 2026 &middot; 08 &middot; 15 &middot; End of deck</p>
+  <p class="endmark">Start to Signature &middot; 2026 &middot; 08 &middot; 15 &middot; built and recorded 2026 &middot; 08 &middot; 16 &middot; End of deck</p>
 </section>
 
 </main>
