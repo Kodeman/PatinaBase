@@ -563,6 +563,9 @@ function AddRoomInline({ projectId }: { projectId: string }) {
   const [budget, setBudget] = useState('');
 
   if (!open) {
+    // SP4 (I137): the room list's own constructive verb, printed in flow at its
+    // foot. RegionHead's one-inked-leader contract polices the region HEAD, so
+    // this line is not a second leader and is not demoted into the ledger.
     return (
       <DocumentAction
         actionKey="open-add-project-room"
@@ -572,7 +575,7 @@ function AddRoomInline({ projectId }: { projectId: string }) {
         onClick={() => setOpen(true)}
         className="mt-3"
       >
-        Add room
+        Add a room
       </DocumentAction>
     );
   }

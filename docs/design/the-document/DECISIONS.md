@@ -8596,3 +8596,87 @@ mount as their own queries settle and there is no event to subscribe to — a
 region arriving after that window is a known limit, now stated in the code.
 
 *Entries add: I136-errata · last id = I136*
+
+### I137 · "Start to Signature" Wave 1 — the collation and the shared planks — 2026-08-15
+
+Kody's Q1–Q7 rulings on the Start to Signature deck
+(`artifacts/document-flow-directions-2026-08-15/`, delivery plan in the same
+folder) authorize a five-wave program. This is Wave 1: the cheap structural
+corrections and the planks both directions share, shipped GA with no flag
+(rollback = git revert; no migrations are involved), on `sts/wave1-collation`.
+
+**The Record moves to the foot of the paper.** `PreviousWork` — the settled
+Brief/Discovery/Direction/Proposal bars — sat between the guide line and the
+live work, so every visit scrolled past history to reach the job. It now mounts
+after the active section, after the account band and the kickoff band, and
+immediately before the colophon. History is an appendix, not a preamble. Props,
+fold state, the approvals-awaiting-publish door and the `jumpToSection` marker
+are all unchanged; this is a reposition, not a rewrite.
+
+**The running index is derived from the paper order, not declared beside it.**
+`document-index.ts` declared `schedule → approvals → ffe → money` under the
+comment "Reading order down the paper" while the DOM mounted approvals above
+the schedule ledger — the index and the paper disagreed about what the paper
+said. One ordered descriptor, `PROJECT_PAPER_ORDER`, now states each Project
+region's key, its index label and its heading id in mount order —
+**approvals → schedule → ffe → money** — and `DOCUMENT_INDEX_KEYS`,
+`DOCUMENT_INDEX_LABELS` and `regionHeadingId` are all read out of it. The paper
+positions themselves are untouched in this wave (deliberately: reordering
+approvals against the schedule ledger is a composition question W2 owns), and
+no `localStorage` fold key changes.
+
+**The add-room ruling — SP4, answering I135's open flag.** I135 recorded that
+`RegionHead`'s one-inked-leader contract had mechanically demoted several
+former in-body primaries, FF&E's `AddRoomInline` among them, and flagged the
+question of whether each demoted act should instead become its region's
+declared leader. The ruling: **it should not.** A region's head carries one
+leader and that contract polices the head only; the room list's constructive
+verb belongs in flow at the foot of the room list, where the rooms are. "Add a
+room" (renamed from "Add room", the deck's wording) prints there as a scored-ink
+line — visible, never behind a `···`, never only in the head ledger — and the
+FF&E ledger's leader is untouched. The same principle answers the approvals
+side of I135's flag by construction: a demoted act's home is the body it acts
+on, not the head.
+
+**SP1 — Begin the Direction lands on the document.** Verified already true and
+recorded here as ratified rather than rebuilt: the act navigates to
+`/doc/<newProposalId>`, whose Direction section is the engagement's new
+identity, and the Drafting Room is reached from that section's own instruments
+(`ProposalInstruments`' work band, or "Open the Drafting Room" on a design
+services agreement) which stash the document as the Room's origin, so the
+Room's way out returns to `/doc/<id>`. Covered by
+`discovery-section.test.tsx` and `doc/[id]/page.test.tsx`'s J1 case.
+
+**SP2 — the relationship-id alias.** Also verified already true: the resolver's
+J6 leg queries `proposals.designer_client_id` on the miss path and redirects a
+pre-Direction `/doc/<designerClientId>` to the chain's activated project or its
+root proposal, mirroring the R6 seal-side pattern. With R6, F1, J6 and the R21
+decision leg, no historical `/doc/[id]` dead-ends. Covered by
+`use-document-state.test.ts`.
+
+**SP3 — the send wall states itself.** Between the send and the seal the paper
+now always opens with one scored state line: how long the agreement has been
+out ("Sent 3 days ago", or "Issued on paper" for 00477's no-email door), then
+the verb that is actually available, or the state word when none is
+("awaiting countersign", "nudged Aug 12", "declined by the client"). It mounts
+at `ProposalInstruments` — above BOTH walls, the legacy watch and the design
+services status block — so neither can be silent.
+
+The nudge lives on that line and **nowhere else on the wall**: `ProposalWatch`'s
+duplicate nudge action and its cooled-down "Nudged {date}" span are removed, so
+the word prints once. No new backend behavior — the line calls the same
+`nudge_proposal` RPC the watch called. The line also reads
+`proposals.commercial_state`, because a client's signature on a design services
+agreement moves that column while `proposals.status` stays `sent`: without it
+the wall would offer to nudge a household that had already signed. On an
+executed or terminal commercial edition the line stands down entirely — the
+status block below states those in full.
+
+**Not in this wave, deliberately:** the Rule UI merge, the signature block, the
+AccountBand extraction, the per-document begin leaders, the <1440 index strip
+and the project-spine derivation (all Direction A's M/L set, later waves); the
+boards seam (Q1's reversal, W3); and any sealing-semantics change
+(`active_section` remains the sealing authority — I114 is still owed Kody's
+mapping session).
+
+*Entries add: I137 · last id = I137*
