@@ -36,5 +36,38 @@
     { "binding": "SVC_PROJECTS", "service": "patina-projects-worker" },
     { "binding": "SVC_ORDERS", "service": "patina-orders-worker" },
     { "binding": "SVC_MEDIA", "service": "patina-media-svc-worker" }
-  ]
+  ],
+  "env": {
+    "staging": {
+      "workers_dev": true,
+      "vars": {
+        "NEXT_PUBLIC_SUPABASE_URL": "https://vuesoyhfrjabfxbrzekd.supabase.co",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1ZXNveWhmcmphYmZ4YnJ6ZWtkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4NzYwNjYsImV4cCI6MjEwMjQ1MjA2Nn0.Fi64Lk7N6vo_t37NKo8ZGQtBko96BBPye-8zwbJWDh4",
+        "SUPABASE_URL": "https://vuesoyhfrjabfxbrzekd.supabase.co",
+        "NEXT_PUBLIC_APP_URL": "https://patina-admin-portal-staging.kody-be3.workers.dev",
+        "NEXT_PUBLIC_QR_AUTH_URL": "https://patina-designer-portal-staging.kody-be3.workers.dev",
+        "NEXT_PUBLIC_ENV": "staging",
+        "NEXT_PUBLIC_POSTHOG_KEY": "",
+        "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com",
+        "NEXT_PUBLIC_ENABLE_MFA": "true",
+        "NEXT_PUBLIC_ENABLE_DUAL_CONTROL": "true",
+        "NEXT_PUBLIC_ENABLE_IMPERSONATION": "false",
+        "NEXT_PUBLIC_ENABLE_ANALYTICS": "false",
+        "NEXT_PUBLIC_ENABLE_DEBUG": "false",
+        "NEXT_PUBLIC_ENABLE_FULFILLMENT": "true",
+        "NEXT_PUBLIC_ENABLED_OAUTH_PROVIDERS": "",
+        "ORDERS_SERVICE_URL": "https://patina-orders-worker-staging.kody-be3.workers.dev",
+        "MEDIA_SERVICE_URL": "https://patina-media-svc-worker-staging.kody-be3.workers.dev",
+        "PROJECTS_SERVICE_URL": "https://patina-projects-worker-staging.kody-be3.workers.dev",
+        "DESIGNER_PORTAL_URL": "https://patina-designer-portal-staging.kody-be3.workers.dev",
+        "CLIENT_PORTAL_URL": "https://patina-client-portal-staging.kody-be3.workers.dev",
+        "APP_NAME": "admin-portal-staging"
+      },
+      "services": [
+        { "binding": "SVC_PROJECTS", "service": "patina-projects-worker-staging" },
+        { "binding": "SVC_ORDERS", "service": "patina-orders-worker-staging" },
+        { "binding": "SVC_MEDIA", "service": "patina-media-svc-worker-staging" }
+      ]
+    }
+  }
 }

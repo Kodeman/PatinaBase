@@ -76,6 +76,15 @@ BEGIN
   DELETE FROM public.project_phases
    WHERE id IN (v_phase_sd, v_phase_dd, v_phase_proc, v_phase_inst, v_phase_comp);
 
+  -- The lifecycle guard permits server-owned creation batches to materialize
+  -- realistic non-pending fixtures when the project/transaction capability
+  -- matches exactly. This keeps staging seed replay on the production guard.
+  PERFORM set_config(
+    'app.project_phase_batch_token',
+    format('project_phase_batch:%s:%s', v_project_id, pg_catalog.txid_current()),
+    true
+  );
+
   -- ── Phases (insert in chain order so follows_phase_id resolves) ──────────
 
   -- 1. Schematic Design — completed, unanchored-chain-wise but carries an
@@ -137,6 +146,8 @@ BEGIN
     CURRENT_DATE + 45, CURRENT_DATE + 52,
     7, v_phase_inst, NULL, 'main', 4
   );
+
+  PERFORM set_config('app.project_phase_batch_token', '', true);
 
   -- ── schedule_milestones ────────────────────────────────────────────────
 

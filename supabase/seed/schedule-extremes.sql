@@ -123,6 +123,12 @@ BEGIN
   -- D3 "Birch Hollow" — 3 phases (1 thread)
   -- ═══════════════════════════════════════════════════════════════════════
 
+  PERFORM set_config(
+    'app.project_phase_batch_token',
+    format('project_phase_batch:%s:%s', v_proj_d3, pg_catalog.txid_current()),
+    true
+  );
+
   -- 1. Schematic Design & Space Planning — completed root. Resolves via the
   --    resolver's unanchored-root path: own start_date + duration_days
   --    (R100 semantic 5) — no anchor_date, so `anchored` reads false.
@@ -186,6 +192,12 @@ BEGIN
   -- ═══════════════════════════════════════════════════════════════════════
   -- D4 "Marrow & Vale Residence" — 7 phases (2 thread, 1 anchored)
   -- ═══════════════════════════════════════════════════════════════════════
+
+  PERFORM set_config(
+    'app.project_phase_batch_token',
+    format('project_phase_batch:%s:%s', v_proj_d4, pg_catalog.txid_current()),
+    true
+  );
 
   -- 1. Consultation — completed root. Same unanchored-root path as D3's
   --    Schematic Design (own start_date + duration_days, anchor_date NULL).
@@ -272,6 +284,8 @@ BEGIN
     CURRENT_DATE + 95, CURRENT_DATE + 109,
     14, v_d4_phase_in, NULL, 'main', 6
   );
+
+  PERFORM set_config('app.project_phase_batch_token', '', true);
 
   -- ── D4 milestones — signed / due (overdue) / upcoming / slipped, plus an
   --    anchored "Install Day" event on the anchored phase ────────────────

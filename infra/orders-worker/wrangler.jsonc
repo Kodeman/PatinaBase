@@ -24,5 +24,23 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["OrdersService"] }],
 
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "env": {
+    "staging": {
+      "workers_dev": true,
+      "containers": [
+        {
+          "name": "patina-orders-service-staging",
+          "class_name": "OrdersService",
+          "image": "../../services/orders/Dockerfile.cf",
+          "image_build_context": "../../",
+          "instance_type": "basic",
+          "max_instances": 2
+        }
+      ],
+      "durable_objects": {
+        "bindings": [{ "name": "ORDERS_SVC", "class_name": "OrdersService" }]
+      }
+    }
+  }
 }

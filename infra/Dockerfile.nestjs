@@ -37,6 +37,7 @@ COPY packages/types/package.json ./packages/types/
 COPY packages/utils/package.json ./packages/utils/
 COPY packages/cache/package.json ./packages/cache/
 COPY packages/auth/package.json ./packages/auth/
+COPY packages/agent-queue/package.json ./packages/agent-queue/
 
 ARG SERVICE_NAME
 COPY services/${SERVICE_NAME}/package.json ./services/${SERVICE_NAME}/
@@ -63,6 +64,7 @@ COPY --from=deps /app/packages/types/node_modules ./packages/types/node_modules
 COPY --from=deps /app/packages/utils/node_modules ./packages/utils/node_modules
 COPY --from=deps /app/packages/cache/node_modules ./packages/cache/node_modules
 COPY --from=deps /app/packages/auth/node_modules ./packages/auth/node_modules
+COPY --from=deps /app/packages/agent-queue/node_modules ./packages/agent-queue/node_modules
 
 ARG SERVICE_NAME
 COPY --from=deps /app/services/${SERVICE_NAME}/node_modules ./services/${SERVICE_NAME}/node_modules
@@ -75,6 +77,7 @@ COPY packages/types/ ./packages/types/
 COPY packages/utils/ ./packages/utils/
 COPY packages/cache/ ./packages/cache/
 COPY packages/auth/ ./packages/auth/
+COPY packages/agent-queue/ ./packages/agent-queue/
 
 # Copy service source
 COPY services/${SERVICE_NAME}/ ./services/${SERVICE_NAME}/
