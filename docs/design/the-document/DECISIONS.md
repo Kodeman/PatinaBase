@@ -9313,3 +9313,119 @@ the only query this component ever opens, and on a brief document it opens
 none.
 
 *Entries add: I142-errata · last id = I142*
+
+### I143 · "Start to Signature" closed — the consistency pass over I135–I142, and what the program leaves open — 2026-08-16
+
+Wave 5, on `sts/wave5-closeout`. No product code changes: this wave reads
+I135 through I142 and every errata against each other and against the code as
+merged at `2ed96a20`, runs the designer-portal gates on that tree, and records
+where the program actually stands. The delivery record with the gate numbers,
+the per-wave commits and the flag-on instructions is
+`artifacts/document-flow-directions-2026-08-15/delivery-record.md`.
+
+**What is GA, unconditionally, on every document today.** Wave 1 shipped with
+no flag and it is live in the codebase for anyone who opens `/doc/[id]`: the
+Record at the foot of the paper (`PreviousWork` after the active section, the
+account band and the kickoff band, immediately before the colophon); one
+`PROJECT_PAPER_ORDER` descriptor driving both the paper's mount order and the
+spine's running index — approvals → schedule → ffe → money, guarded by
+`paper-order.test.tsx` against the real page; "Add a room" printed in flow at
+the foot of the FF&E room list (SP4, I137's answer to I135's open flag); and
+the send-wall state line at `ProposalInstruments`, above both walls, printing
+exactly one of {verb, state word}, withholding the nudge on a paper-issued
+agreement and printing the nudge nowhere else on the wall. SP1 and SP2 were
+verified already true and ratified rather than rebuilt.
+
+**What is flag-gated and has never been seen.** Everything Waves 2, 3 and 4
+built sits behind `worktable`, and `useFeatureFlag` is fail-closed: the value
+is `false` until PostHog answers and stays `false` where PostHog can never
+answer. Flag off, `table` is `null`, `TableFrame` renders its children and
+nothing else, and the composition is main's. Behind it: the table selector over
+`active_section` (A5) and the stale-table pin with its "turn it" line and the
+seal-turn note (W2); the Intake table's honest future seams and, on the
+discovery spread only, the promoted household header (W2, W4c); the Speccing
+table's rooms rail, scheme, boards strip and library reach-in (W3); the
+Finalize table's verdict headline, derived leader, one-leader rule, Offer seams,
+folded offer blocks and the client's-copy shelf (W4a and the integration); and
+the Delivery table's release lift, demoted FF&E head and money seam (W4b).
+**None of it has been rendered for a human on a real screen.** Nothing was
+deployed and no deploy was requested.
+
+**The pass found no contradiction between entries that is not already recorded
+as one.** Every reversal this program made is named in the entry that makes it,
+against the entry it corrects: I139 amends I136's boards ruling explicitly and
+for the speccing stage alone, leaving the shelf boards' home everywhere else;
+I140-errata descopes the press, withdraws A3, drops "Answer the flags" as a
+leader and rescopes the one-leader claim to the table; I141-errata puts two
+guards on the money seam's declared fold and gives the FF&E head its release
+entry back; I142-errata narrows the intake header to the discovery spread. No
+entry was found to have been silently reversed by a later one.
+
+**Every load-bearing claim spot-checked against the code held.** The flag's
+fail-closed default and its `NEXT_PUBLIC_FLAG_OVERRIDES` escape hatch are as
+I138 describes. `/drafting/[proposalId]/page.tsx` contains no reference to the
+flag at all — the press is genuinely gone, not merely disabled, and
+`drafting-room-opens.test.tsx` guards the opposite claim. `firstFlaggedLineId`
+is absent from the tree. `worktable-finalize-once.test.tsx` scopes its
+single-leader assertion to `[data-table="finalize"]` and pins the letterhead's
+own `primary` outside it. The money seam's fold is
+`allSettled ? accountQuiet : null` — both guards, in one expression. The FF&E
+head's `releaseInHead = canRelease && (!releaseLeaderElsewhere ||
+!releaseOffered)` keeps the entry in exactly the window the errata describes.
+The reach-in does pass `ffeCategorySlug: null` and `scopeRoomId: null`, the
+Scheme carries no verdict read, and the intake header holds both its gates
+itself. Add-a-room stands in two homes and in neither head ledger. **No code
+defect was found that is not already recorded as a debt in I139, I140-errata,
+I141-errata or I142-errata.**
+
+**Two corrections, both to this file's own bookkeeping, both recorded rather
+than repaired — the file is append-only.**
+
+- *I135 and I136 carry no `Entries add:` trailer.* They are the only entries in
+  the I126–I142 run without one; the chain jumps from I134's trailer to
+  I136-errata's `last id = I136`. The ledger's net position was never wrong,
+  but two mintings went untrailered and a reader counting trailers would miss
+  them.
+- *The three Wave 4 errata were appended after all three Wave 4 entries, so
+  their trailers read I140, I141, I142 after I142's own had already been
+  written.* The sequence dips rather than climbing. The file's final trailer
+  states `last id = I142`, which is the true position, so this is a reading
+  hazard and not a numbering error.
+
+**And one reading hazard worth stating plainly:** I140's body still asserts the
+Drafting Room press and Amendment A3 in force, and still leads its matrix with
+"Answer the flags". All three are reversed by I140-errata, which is 111 lines
+below it. **I140 must not be read without I140-errata.** The same holds for
+I141 and its errata on the money seam.
+
+**Open, deliberately, and not closed by this program:**
+
+- *Kody's flag-on walk is owed.* Nothing is deployed; the flag has never been
+  turned on in front of a human.
+- *The I114 section↔stage mapping session is still owed by Kody.* Every wave
+  left `active_section` standing as the sealing authority rather than touch it.
+  Any future sealing-semantics work is gated on that session.
+- *The Offer has no editable home on the Speccing table.* This is the reason
+  the press was descoped: step two of Q5's two-step retirement is a later
+  release, and the Drafting Room stays open in both flag states until the
+  Offer can be authored on the paper.
+- *A flagged line on a sent proposal cannot be answered anywhere today.* A
+  pre-existing product gap that this program surfaced rather than created —
+  main's Desk `?flagged=1` walk-in has the same defect. Documented in
+  I140-errata as the gap to close, not the leader to restore.
+- *Money does not seam on the install or care spread.* Scoped out in I141
+  because money does not mount there and a seam would be both a new mount and a
+  second accounts surface. Its own future ruling.
+- *The reach-in drops the piece's category* (`ffeCategorySlug: null`) *and
+  lands its lines Unassigned* (`scopeRoomId: null`).
+- *The Scheme omits the verdict chips and the compose-decision wiring* —
+  direction-stage client verdicts do not print on the paper.
+- *The intake header opens one new gated query on a discovery document.* The
+  lane's only new read, enabled only where the header stands.
+- *Four small items are known and accepted:* the client's copy can mount the
+  preview rail twice; the lifted release leader drops focus on press;
+  `onReleaseOffered` is not withdrawn on unmount; and the Finalize table has a
+  zero-leader edge where every line is approved, the nudge is withheld and the
+  proposal is still out.
+
+*Entries add: I143 · last id = I143*
