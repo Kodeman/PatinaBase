@@ -12,6 +12,7 @@ import { familyLabel } from '@/lib/document/family-label';
 import { HouseholdSheet } from './overlays/household-sheet';
 
 export interface HouseholdChipProps {
+  studioId: string | null;
   engagementKind: string;
   projectId: string | null;
   proposalId: string | null;
@@ -23,6 +24,7 @@ export interface HouseholdChipProps {
 }
 
 export function HouseholdChip({
+  studioId,
   engagementKind,
   projectId,
   proposalId,
@@ -64,6 +66,7 @@ export function HouseholdChip({
 
       <HouseholdSheet
         open={open}
+        studioId={studioId}
         onClose={() => setOpen(false)}
         engagementKind={engagementKind}
         projectId={projectId}

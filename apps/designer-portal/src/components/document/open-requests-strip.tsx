@@ -25,13 +25,14 @@
  * shadows (D4).
  */
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useOpenDesignRequests,
   useClaimDesignRequest,
   useAcceptDesignRequest,
+  useOrganizations,
   type OpenDesignRequest,
   type ClaimDesignRequestResult,
   type AcceptDesignRequestResult,
@@ -48,9 +49,11 @@ const pretty = (s: string) =>
 function RequestCard({
   request,
   ceremonyPath,
+  studioId,
 }: {
   request: OpenDesignRequest;
   ceremonyPath: boolean;
+  studioId: string | null;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -77,8 +80,12 @@ function RequestCard({
 
   const onAccept = () => {
     setOtherError(false);
+    if (!studioId) {
+      setOtherError(true);
+      return;
+    }
     if (ceremonyPath) {
-      accept.mutate(request.id, {
+      accept.mutate({ leadId: request.id, studioId }, {
         onSuccess: (result: AcceptDesignRequestResult) => {
           documentEvents.designRequestClaimed({
             lead_id: result.lead_id,
@@ -94,7 +101,7 @@ function RequestCard({
       });
       return;
     }
-    claim.mutate(request.id, {
+    claim.mutate({ leadId: request.id, studioId }, {
       onSuccess: (result: ClaimDesignRequestResult) => {
         documentEvents.designRequestClaimed({
           lead_id: result.lead_id,
@@ -201,7 +208,7 @@ function RequestCard({
                   regionKey="open-request"
                   variant="primary"
                   onClick={onAccept}
-                  disabled={claim.isPending || accept.isPending}
+                  disabled={!studioId || claim.isPending || accept.isPending}
                   loading={claim.isPending || accept.isPending}
                   loadingLabel="Accepting…"
                 >
@@ -261,6 +268,28 @@ export function OpenRequestsStrip({
   withinPulse?: boolean;
 }) {
   const { requests, ceremonyPath } = population;
+  const { data: organizations } = useOrganizations();
+  const eligibleStudios = useMemo(
+    () =>
+      (organizations ?? []).filter(
+        (organization) =>
+          organization.type === 'design_studio' &&
+          organization.status === 'active' &&
+          organization.membership.status === 'active' &&
+          organization.membership.role !== 'guest',
+      ),
+    [organizations],
+  );
+  const [studioId, setStudioId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStudioId((current) => {
+      if (current && eligibleStudios.some((studio) => studio.id === current)) {
+        return current;
+      }
+      return eligibleStudios.length === 1 ? eligibleStudios[0].id : null;
+    });
+  }, [eligibleStudios]);
 
   // No empty-state noise on the Desk — a transient population, not standing
   // front matter.
@@ -274,9 +303,32 @@ export function OpenRequestsStrip({
       <SectionEyebrow count={requests.length}>
         <span id="open-requests">Open requests</span>
       </SectionEyebrow>
+      {eligibleStudios.length > 1 && (
+        <label className="mb-5 block max-w-xs font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          Claim into workspace
+          <select
+            aria-label="Claim into workspace"
+            value={studioId ?? ''}
+            onChange={(event) => setStudioId(event.target.value || null)}
+            className="mt-1.5 block w-full border-b border-[var(--border-default)] bg-transparent pb-1.5 font-sans text-[13px] normal-case tracking-normal text-[var(--text-primary)] focus:outline-none"
+          >
+            <option value="">Choose a studio…</option>
+            {eligibleStudios.map((studio) => (
+              <option key={studio.id} value={studio.id}>
+                {studio.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2">
         {requests.map((r) => (
-          <RequestCard key={r.id} request={r} ceremonyPath={ceremonyPath} />
+          <RequestCard
+            key={r.id}
+            request={r}
+            ceremonyPath={ceremonyPath}
+            studioId={studioId}
+          />
         ))}
       </div>
     </section>

@@ -118,7 +118,15 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
       const arming = state.nav.screen === 'boot' || state.nav.screen === 'signedOut';
       return {
         ...state,
-        session: { ...state.session, status: 'signed-in', user: action.user },
+        session: {
+          ...state.session,
+          status: 'signed-in',
+          user: action.user,
+          workspaceId:
+            state.session.user?.id === action.user.id
+              ? state.session.workspaceId
+              : null,
+        },
         nav: {
           ...state.nav,
           screen: arming ? 'C1' : state.nav.screen,
@@ -130,10 +138,21 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
     case 'SIGNED_OUT':
       return {
         ...state,
-        session: { ...state.session, status: 'signed-out', user: null },
+        session: {
+          ...state.session,
+          status: 'signed-out',
+          user: null,
+          workspaceId: null,
+        },
         draft: null,
         nav: { ...state.nav, screen: 'signedOut', overlay: null },
         io: { ...state.io, error: null, isSaving: false },
+      };
+
+    case 'WORKSPACE_SET':
+      return {
+        ...state,
+        session: { ...state.session, workspaceId: action.workspaceId },
       };
 
     // ── extraction lifecycle ─────────────────────────────────────────────

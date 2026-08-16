@@ -10,6 +10,7 @@ ALTER TABLE leads DISABLE TRIGGER on_lead_created_notify_designer;
 DO $$
 DECLARE
   v_designer_id uuid := 'a0000000-0000-0000-0000-000000000004'; -- designer@patina.dev (dev-accounts.sql)
+  v_studio_id uuid := 'b0000000-0000-0000-0000-000000000001';
 
   -- Homeowner UUIDs
   h1 uuid := gen_random_uuid();
@@ -116,45 +117,45 @@ VALUES
    now() - interval '4 days', now() - interval '4 days' + interval '5 minutes');
 
 -- ─── Create leads linked to room scans ──────────────────────────────────
-INSERT INTO leads (id, homeowner_id, designer_id, room_scan_id, project_type, project_description, budget_range, timeline, location_city, location_state, location_zip, match_score, match_reasons, status, response_deadline, created_at)
+INSERT INTO leads (id, homeowner_id, designer_id, studio_id, room_scan_id, project_type, project_description, budget_range, timeline, location_city, location_state, location_zip, match_score, match_reasons, status, response_deadline, created_at)
 VALUES
   -- 1. Sarah — new lead, high match
-  (l1, h1, v_designer_id, rs1, 'full_room',
+  (l1, h1, v_designer_id, v_studio_id, rs1, 'full_room',
    'Looking to redesign our living room. We love mid-century modern but want it to feel warm and livable, not like a showroom. Two kids and a dog.',
    '15k_50k', '3_6_months', 'Austin', 'TX', '78704',
    0.92, '["style alignment: mid-century modern", "budget match", "local market expertise"]'::jsonb,
    'new', now() + interval '5 days', now() - interval '3 days'),
 
   -- 2. Marcus — viewed lead
-  (l2, h2, v_designer_id, rs2, 'full_room',
+  (l2, h2, v_designer_id, v_studio_id, rs2, 'full_room',
    'Complete bedroom refresh. Transitioning from college furniture to something grown-up. Want a calm, restful space with Japanese influences.',
    '5k_15k', '1_3_months', 'Austin', 'TX', '78701',
    0.85, '["style alignment: japandi", "timeline fit", "room type experience"]'::jsonb,
    'viewed', now() + interval '3 days', now() - interval '5 days'),
 
   -- 3. Elena — contacted lead
-  (l3, h3, v_designer_id, rs3, 'consultation',
+  (l3, h3, v_designer_id, v_studio_id, rs3, 'consultation',
    'Hosting more dinner parties and want the dining room to make a statement. Have a few heirloom pieces to incorporate.',
    '50k_100k', 'flexible', 'Dripping Springs', 'TX', '78620',
    0.88, '["high-value project", "style alignment: transitional", "heirloom integration experience"]'::jsonb,
    'contacted', now() + interval '7 days', now() - interval '2 days'),
 
   -- 4. James — accepted lead
-  (l4, h4, v_designer_id, rs4, 'single_piece',
+  (l4, h4, v_designer_id, v_studio_id, rs4, 'single_piece',
    'Need a proper desk setup for WFH. Current IKEA situation is falling apart. Want something with character — maybe reclaimed wood?',
    'under_5k', 'asap', 'Round Rock', 'TX', '78664',
    0.72, '["local proximity", "quick timeline match"]'::jsonb,
    'accepted', now() + interval '2 days', now() - interval '7 days'),
 
   -- 5. Lily — new lead, recent
-  (l5, h5, v_designer_id, rs5, 'full_room',
+  (l5, h5, v_designer_id, v_studio_id, rs5, 'full_room',
    'Just bought a 1960s ranch and the kitchen is stuck in the 90s. Want to keep the bones but modernize everything else. Open to knocking out the breakfast nook wall.',
    '50k_100k', '6_12_months', 'Bee Cave', 'TX', '78738',
    0.90, '["high-value project", "style alignment: farmhouse modern", "renovation experience"]'::jsonb,
    'new', now() + interval '6 days', now() - interval '1 day'),
 
   -- 6. David — new lead
-  (l6, h6, v_designer_id, rs6, 'full_room',
+  (l6, h6, v_designer_id, v_studio_id, rs6, 'full_room',
    'Primary bathroom needs a spa-like overhaul. Thinking freestanding tub, walk-in shower, heated floors. The scan shows what we are working with.',
    '15k_50k', '3_6_months', 'Lakeway', 'TX', '78734',
    0.81, '["style alignment: spa modern", "budget match", "bathroom specialization"]'::jsonb,

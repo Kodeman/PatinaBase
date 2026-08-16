@@ -11,6 +11,10 @@ interface MockBuilder {
   select: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   order: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  or: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  eq: any;
   then: (resolve: (value: BuilderResult) => unknown) => Promise<unknown>;
   __chain: Array<{ method: string; args: unknown[] }>;
   __result: BuilderResult;
@@ -29,6 +33,8 @@ function makeBuilder(initial: BuilderResult = { data: null, error: null }): Mock
     });
 
   builder.select = record('select');
+  builder.or = record('or');
+  builder.eq = record('eq');
   builder.order = record('order');
   builder.then = (resolve) => Promise.resolve(builder.__result).then(resolve);
 
@@ -82,7 +88,7 @@ beforeEach(() => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('usePhaseTemplates', () => {
-  it('selects every visible template ordered by label asc', async () => {
+  it('selects system templates and exact-studio custom templates', async () => {
     const sample: PhaseTemplate[] = [
       {
         id: 't1',
@@ -91,6 +97,7 @@ describe('usePhaseTemplates', () => {
         description: null,
         is_system: true,
         designer_id: null,
+        studio_id: null,
         phases: [],
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
@@ -102,6 +109,7 @@ describe('usePhaseTemplates', () => {
         description: null,
         is_system: true,
         designer_id: null,
+        studio_id: null,
         phases: [],
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
@@ -109,13 +117,16 @@ describe('usePhaseTemplates', () => {
     ];
     const builder = setTableResult('phase_templates', { data: sample, error: null });
 
-    const config = usePhaseTemplates() as unknown as {
+    const config = usePhaseTemplates('studio-b') as unknown as {
       queryFn: () => Promise<PhaseTemplate[]>;
     };
     const result = await config.queryFn();
 
     expect(result).toHaveLength(2);
     expect(builder.__chain.find((c) => c.method === 'select')?.args).toEqual(['*']);
+    expect(builder.__chain.find((c) => c.method === 'or')?.args).toEqual([
+      'is_system.eq.true,studio_id.eq.studio-b',
+    ]);
     expect(builder.__chain.find((c) => c.method === 'order')?.args).toEqual([
       'label',
       { ascending: true },
@@ -124,7 +135,7 @@ describe('usePhaseTemplates', () => {
 
   it('throws when the select errors', async () => {
     setTableResult('phase_templates', { data: null, error: new Error('boom') });
-    const config = usePhaseTemplates() as unknown as {
+    const config = usePhaseTemplates('studio-b') as unknown as {
       queryFn: () => Promise<PhaseTemplate[]>;
     };
     await expect(config.queryFn()).rejects.toThrow('boom');
@@ -132,11 +143,15 @@ describe('usePhaseTemplates', () => {
 
   it('returns an empty array when supabase returns null data', async () => {
     setTableResult('phase_templates', { data: null, error: null });
-    const config = usePhaseTemplates() as unknown as {
+    const config = usePhaseTemplates(null) as unknown as {
       queryFn: () => Promise<PhaseTemplate[]>;
     };
     const result = await config.queryFn();
     expect(result).toEqual([]);
+    expect(builders.phase_templates.__chain.find((c) => c.method === 'eq')?.args).toEqual([
+      'is_system',
+      true,
+    ]);
   });
 });
 

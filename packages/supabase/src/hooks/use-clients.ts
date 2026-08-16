@@ -13,6 +13,8 @@ export type ClientLifecycleStage = 'lead' | 'proposal' | 'active' | 'completed' 
 export interface DesignerClient {
   id: string;
   designer_id: string;
+  /** Immutable design-studio authority snapshot. Legacy owner-only rows may be null. */
+  studio_id: string | null;
   client_id: string | null;
   source: 'lead' | 'direct' | 'referral';
   lead_id: string | null;
@@ -176,51 +178,40 @@ export function useClient(clientId: string) {
   });
 }
 
-/**
- * Resolve the current designer's most-recent `designer_clients` row for a
- * given client AUTH user id (profiles.id / auth.users.id). Relationship
- * history intentionally permits more than one row for the same pair, and
- * studio RLS can expose rows owned by collaborators, so the lookup must both
- * scope to the signed-in designer and cap the ordered result before calling
- * `maybeSingle()`. Use when you hold a project's `client_id` but not its
- * relationship id — e.g. when opening the decision composer.
- */
+/** Resolve the one non-lead relationship proven by an exact document tuple.
+ * 00488 makes `(studio, designer, client)` unique for non-lead history. A
+ * profile id alone is never a relationship capability, so no recency/current-
+ * user fallback is permitted. */
 export function useDesignerClientForClientUser(
   clientUserId: string | null | undefined,
+  studioId: string | null | undefined,
+  designerId: string | null | undefined,
 ) {
   return useQuery({
-    queryKey: ['designer-client-for-user', clientUserId],
+    queryKey: ['designer-client-for-user', clientUserId, studioId, designerId],
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-      if (authError) throw authError;
-      if (!user) return null;
-
       const { data, error } = await supabase
         .from('designer_clients')
-        .select('id, designer_id, client_id, lead_id')
+        .select('id, designer_id, studio_id, client_id, lead_id')
         .eq('client_id', clientUserId)
-        .eq('designer_id', user.id)
-        .order('updated_at', { ascending: false })
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false })
-        .limit(1)
+        .eq('studio_id', studioId)
+        .eq('designer_id', designerId)
+        .neq('status', 'lead')
         .maybeSingle();
 
       if (error) throw error;
       return (data as {
         id: string;
         designer_id: string;
+        studio_id: string;
         client_id: string;
         lead_id: string | null;
       } | null) ?? null;
     },
-    enabled: !!clientUserId,
+    enabled: !!clientUserId && !!studioId && !!designerId,
     // This is secondary document context. Consumers already render without it;
     // a failure must not masquerade as failure of the foreground lifecycle act.
     meta: { errorSurface: 'silent' },
@@ -428,9 +419,12 @@ export function useSendClientMessage() {
 
   return useMutation({
     mutationFn: async ({
+      studioId,
       designerClientId,
       message,
     }: {
+      /** Exact workspace already stamped on the relationship. */
+      studioId: string;
       designerClientId: string;
       message: string;
     }) => {
@@ -533,12 +527,15 @@ export function useAddClient() {
 
   return useMutation({
     mutationFn: async ({
+      studioId,
       clientEmail,
       clientName,
       source = 'direct',
       notes,
       invite = true,
     }: {
+      /** Explicit active design-studio workspace for the new relationship. */
+      studioId: string;
       clientEmail: string;
       clientName?: string;
       source?: 'direct' | 'referral';
@@ -550,7 +547,7 @@ export function useAddClient() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientEmail, clientName, source, notes, invite }),
+        body: JSON.stringify({ studioId, clientEmail, clientName, source, notes, invite }),
       });
 
       if (!response.ok) {
@@ -596,10 +593,13 @@ export function useInviteAndLinkClient() {
   return useMutation({
     meta: { errorSurface: 'inline' },
     mutationFn: async ({
+      studioId,
       designerClientId,
       clientEmail,
       clientName,
     }: {
+      /** Exact workspace already stamped on the relationship. */
+      studioId: string;
       /** The existing designer_clients.id to link. */
       designerClientId: string;
       /** Email to invite — defaults server-side to the row's client_email. */
@@ -610,7 +610,13 @@ export function useInviteAndLinkClient() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ designerClientId, clientEmail, clientName, invite: true }),
+        body: JSON.stringify({
+          studioId,
+          designerClientId,
+          clientEmail,
+          clientName,
+          invite: true,
+        }),
       });
 
       if (!response.ok) {

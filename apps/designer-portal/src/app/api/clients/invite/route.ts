@@ -15,6 +15,7 @@ const CLIENT_PORTAL_URL =
   process.env.NEXT_PUBLIC_CLIENT_PORTAL_URL ?? 'https://client.patina.cloud';
 
 interface InviteRequestBody {
+  studioId?: string;
   clientEmail?: string;
   clientName?: string;
   source?: 'direct' | 'referral';
@@ -54,7 +55,41 @@ export async function POST(request: NextRequest) {
     return badRequest('Invalid JSON body');
   }
 
-  const { source = 'direct', notes, invite = true, designerClientId } = body;
+  const { studioId, source = 'direct', notes, invite = true, designerClientId } = body;
+  if (!studioId) {
+    return badRequest('studioId is required');
+  }
+
+  // This service-role route must not infer a workspace from current
+  // memberships. The browser supplies one exact ID, and the route verifies
+  // both the caller's live designer role and that exact active, non-guest
+  // design-studio membership before any invite or write side effect.
+  const [{ data: designerRole, error: roleError }, { data: membership, error: membershipError }] =
+    await Promise.all([
+      (adminClient as any)
+        .from('user_roles')
+        .select('role_id, roles!inner(domain)')
+        .eq('user_id', callerUser.id)
+        .eq('roles.domain', 'designer')
+        .limit(1)
+        .maybeSingle(),
+      (adminClient as any)
+        .from('organization_members')
+        .select('id, organizations!inner(id,type,status)')
+        .eq('user_id', callerUser.id)
+        .eq('organization_id', studioId)
+        .eq('status', 'active')
+        .neq('role', 'guest')
+        .eq('organizations.type', 'design_studio')
+        .eq('organizations.status', 'active')
+        .maybeSingle(),
+    ]);
+  if (roleError || membershipError) {
+    return serverError('Failed to verify studio authority');
+  }
+  if (!designerRole || !membership) {
+    return NextResponse.json({ error: 'Studio workspace not authorized' }, { status: 403 });
+  }
   let clientName = body.clientName;
   const rawEmail = body.clientEmail;
 
@@ -68,14 +103,16 @@ export async function POST(request: NextRequest) {
     client_id: string | null;
     client_email: string | null;
     client_name: string | null;
+    studio_id: string;
   } | null = null;
 
   if (designerClientId) {
     const { data: row, error: rowError } = await (adminClient as any)
       .from('designer_clients')
-      .select('id, designer_id, client_id, client_email, client_name')
+      .select('id, designer_id, studio_id, client_id, client_email, client_name')
       .eq('id', designerClientId)
       .eq('designer_id', callerUser.id)
+      .eq('studio_id', studioId)
       .maybeSingle();
 
     if (rowError) {
@@ -216,6 +253,7 @@ export async function POST(request: NextRequest) {
         clientId != null
           ? {
               designer_id: callerUser.id,
+              studio_id: studioId,
               client_id: clientId,
               source,
               notes: notes ?? null,
@@ -223,6 +261,7 @@ export async function POST(request: NextRequest) {
             }
           : {
               designer_id: callerUser.id,
+              studio_id: studioId,
               client_email: clientEmail,
               client_name: clientName ?? null,
               source,

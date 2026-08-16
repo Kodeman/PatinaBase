@@ -132,7 +132,7 @@ describe('PhaseBuilder autosave integrity', () => {
   afterEach(() => jest.useRealTimers());
 
   it('merges rapid name, fee, and duration edits into one phase write', async () => {
-    const { container } = render(<PhaseBuilder proposalId="proposal-1" />);
+    const { container } = render(<PhaseBuilder proposalId="proposal-1" studioId="studio-1" />);
     const name = container.querySelector('input[type="text"]');
     const fee = container.querySelector('input[type="number"]');
     if (!name || !fee) throw new Error('phase inputs were not rendered');
@@ -160,7 +160,7 @@ describe('PhaseBuilder autosave integrity', () => {
   });
 
   it('flushes the final field value immediately on blur', async () => {
-    const { container } = render(<PhaseBuilder proposalId="proposal-1" />);
+    const { container } = render(<PhaseBuilder proposalId="proposal-1" studioId="studio-1" />);
     const name = container.querySelector('input[type="text"]');
     if (!name) throw new Error('phase name was not rendered');
 
@@ -177,7 +177,9 @@ describe('PhaseBuilder autosave integrity', () => {
   });
 
   it('flushes pending phase edits when the builder unmounts', async () => {
-    const { container, unmount } = render(<PhaseBuilder proposalId="proposal-1" />);
+    const { container, unmount } = render(
+      <PhaseBuilder proposalId="proposal-1" studioId="studio-1" />,
+    );
     const name = container.querySelector('input[type="text"]');
     if (!name) throw new Error('phase name was not rendered');
 
@@ -200,7 +202,7 @@ describe('PhaseBuilder autosave integrity', () => {
         resolveSave = resolve;
       }),
     );
-    const { container } = render(<PhaseBuilder proposalId="proposal-1" />);
+    const { container } = render(<PhaseBuilder proposalId="proposal-1" studioId="studio-1" />);
     const name = container.querySelector('input[type="text"]');
     if (!name) throw new Error('phase name was not rendered');
 
@@ -226,7 +228,7 @@ describe('PhaseBuilder autosave integrity', () => {
 
   it('creates defaults with one canonical Patina Six template mutation', async () => {
     phaseRows = [];
-    render(<PhaseBuilder proposalId="proposal-1" />);
+    render(<PhaseBuilder proposalId="proposal-1" studioId="studio-1" />);
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'The Patina Six' }));
@@ -251,7 +253,7 @@ describe('PhaseBuilder autosave integrity', () => {
         resolveApply = resolve;
       }),
     );
-    render(<PhaseBuilder proposalId="proposal-1" />);
+    render(<PhaseBuilder proposalId="proposal-1" studioId="studio-1" />);
 
     const seed = screen.getByRole('button', { name: 'The Patina Six' });
     fireEvent.click(seed);
@@ -267,7 +269,7 @@ describe('PhaseBuilder autosave integrity', () => {
   it('surfaces an atomic template failure without falling back to partial phase writes', async () => {
     phaseRows = [];
     applyTemplateMutateAsync.mockRejectedValueOnce(new Error('template unavailable'));
-    render(<PhaseBuilder proposalId="proposal-1" />);
+    render(<PhaseBuilder proposalId="proposal-1" studioId="studio-1" />);
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'The Patina Six' }));
@@ -292,7 +294,7 @@ describe('PhaseBuilder autosave integrity', () => {
   });
 
   it('keeps custom phase addition while leaving tail authority to the server', () => {
-    render(<PhaseBuilder proposalId="proposal-1" />);
+    render(<PhaseBuilder proposalId="proposal-1" studioId="studio-1" />);
 
     expect(screen.queryByRole('button', { name: 'Add Defaults' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '+ Add Phase' }));
@@ -317,7 +319,7 @@ describe('PhaseBuilder autosave integrity', () => {
     updateMutateAsync.mockResolvedValueOnce({
       updated_at: '2026-07-31T12:01:00.000Z',
     });
-    const { container } = render(<PhaseBuilder proposalId="proposal-1" />);
+    const { container } = render(<PhaseBuilder proposalId="proposal-1" studioId="studio-1" />);
     const name = container.querySelector('input[type="text"]');
     if (!name) throw new Error('phase name was not rendered');
 

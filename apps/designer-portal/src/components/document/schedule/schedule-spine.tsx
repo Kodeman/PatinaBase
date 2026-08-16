@@ -40,7 +40,6 @@ import {
   useProjectParties,
   useProjectFFEItems,
   useCoordinationRealtime,
-  useDesignerClientForClientUser,
   excludeProjectArtifactApprovals,
   useResolvedSchedule,
   useProjects,
@@ -136,9 +135,9 @@ type ComposeState = {
 // on the project page, so it must slot into the exact same mount.
 export interface ScheduleSpineProps {
   projectId: string;
-  /** The client's AUTH user id (profiles.id) — row.client_profile_id. The spine
-   *  feeds this to useDesignerClientForClientUser to produce designerClientId. */
-  clientUserId: string | null;
+  /** Exact relationship already bound from the document's immutable studio,
+   * designer, and client tuple. */
+  designerClientId: string | null;
   clientName: string;
   /** projects.status as the page already read it. Optional, so the mount stays
    *  drop-in compatible with the band it replaces; when it says 'completed' the
@@ -155,16 +154,10 @@ type SheetState =
 
 export function ScheduleSpine({
   projectId,
-  clientUserId,
+  designerClientId,
   clientName,
   projectStatus = null,
 }: ScheduleSpineProps) {
-  // ── designer_clients.id resolution (work-block.tsx pattern) ──
-  const { data: designerClient } = useDesignerClientForClientUser(
-    clientUserId ?? '',
-  );
-  const designerClientId = designerClient?.id ?? null;
-
   // ── live data (the band's hooks) + the schedule's single door ──
   const { data: items } = useCoordinationItems(projectId);
   const { data: parties } = useProjectParties(projectId);

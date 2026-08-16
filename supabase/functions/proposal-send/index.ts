@@ -204,9 +204,9 @@ function createGateway(authorization: string): ProposalSendGateway {
       return mapInstance(data);
     },
 
-    async isActiveStudioComember(ownerId) {
+    async canDispatchProposal(proposalId) {
       const { data, error } = await caller.rpc("can_dispatch_proposal_send", {
-        p_owner: ownerId,
+        p_proposal_id: proposalId,
       });
       if (error) {
         console.error("proposal-send: studio authorization failed", error);

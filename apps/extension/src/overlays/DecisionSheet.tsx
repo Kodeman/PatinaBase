@@ -3,7 +3,7 @@
  * then creates a single-option decision via the saveAsDecision effect. Owns its
  * own send state; on success it resets for the next capture.
  */
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useCapture, useCaptureDispatch } from '../state/CaptureProvider';
 import { OverlaySheet } from '../panel/OverlaySheet';
 import { DecisionTargetSelector } from '../components/DecisionTargetSelector';
@@ -15,10 +15,26 @@ export function DecisionSheet() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const handleWorkspaceChange = useCallback(
+    (workspaceId: string | null) => {
+      dispatch({ type: 'WORKSPACE_SET', workspaceId });
+      dispatch({
+        type: 'DECISION_TARGET_SET',
+        patch: {
+          designerClientId: null,
+          clientProfileId: null,
+          projectId: null,
+          roomId: null,
+        },
+      });
+    },
+    [dispatch],
+  );
   if (!draft) return null;
 
   const dec = routing.decision;
-  const canSend = !!dec.designerClientId && !!session.user && !sending;
+  const canSend =
+    !!session.workspaceId && !!dec.designerClientId && !!session.user && !sending;
 
   const send = async () => {
     if (!session.user || !dec.designerClientId) return;
@@ -89,17 +105,28 @@ export function DecisionSheet() {
         />
       </div>
       <DecisionTargetSelector
+        designerId={session.user?.id ?? ''}
+        workspaceId={session.workspaceId}
         designerClientId={dec.designerClientId}
         projectId={dec.projectId}
         roomId={dec.roomId}
+        onWorkspaceChange={handleWorkspaceChange}
         onDesignerClientChange={(designerClientId, clientId) =>
           dispatch({
             type: 'DECISION_TARGET_SET',
-            patch: { designerClientId, clientProfileId: clientId },
+            patch: {
+              designerClientId,
+              clientProfileId: clientId,
+              projectId: null,
+              roomId: null,
+            },
           })
         }
         onProjectChange={(projectId) =>
-          dispatch({ type: 'DECISION_TARGET_SET', patch: { projectId } })
+          dispatch({
+            type: 'DECISION_TARGET_SET',
+            patch: { projectId, roomId: null },
+          })
         }
         onRoomChange={(roomId) =>
           dispatch({ type: 'DECISION_TARGET_SET', patch: { roomId } })

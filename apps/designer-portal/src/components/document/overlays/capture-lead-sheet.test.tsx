@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { CaptureLeadSheet } from './capture-lead-sheet';
 
 const mutate = jest.fn();
+let mockOrganizations: Array<Record<string, unknown>> = [];
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -9,6 +10,7 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@patina/supabase', () => ({
   useCreateLead: () => ({ mutate, isPending: false }),
+  useOrganizations: () => ({ data: mockOrganizations }),
 }));
 
 jest.mock('@tanstack/react-query', () => ({
@@ -18,6 +20,15 @@ jest.mock('@tanstack/react-query', () => ({
 describe('CaptureLeadSheet layout', () => {
   beforeEach(() => {
     mutate.mockReset();
+    mockOrganizations = [
+      {
+        id: 'studio-1',
+        name: 'Studio One',
+        type: 'design_studio',
+        status: 'active',
+        membership: { status: 'active', role: 'member' },
+      },
+    ];
   });
 
   it('gives long contact and project values the full sheet width', () => {
@@ -62,6 +73,7 @@ describe('CaptureLeadSheet layout', () => {
 
     expect(mutate).toHaveBeenCalledWith(
       expect.objectContaining({
+        studio_id: 'studio-1',
         contact_name: 'The Okafors',
         project_description: 'Downtown loft refresh',
         contact_email: undefined,
@@ -71,6 +83,42 @@ describe('CaptureLeadSheet layout', () => {
         onSuccess: expect.any(Function),
         onError: expect.any(Function),
       }),
+    );
+  });
+
+  it('requires an explicit workspace when the designer has two eligible studios', () => {
+    mockOrganizations = [
+      {
+        id: 'studio-1',
+        name: 'Studio One',
+        type: 'design_studio',
+        status: 'active',
+        membership: { status: 'active', role: 'member' },
+      },
+      {
+        id: 'studio-2',
+        name: 'Studio Two',
+        type: 'design_studio',
+        status: 'active',
+        membership: { status: 'active', role: 'owner' },
+      },
+    ];
+    render(<CaptureLeadSheet open onClose={jest.fn()} />);
+
+    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: 'The Okafors' } });
+    fireEvent.change(screen.getByLabelText(/The project \(one line\)/), {
+      target: { value: 'Kitchen refresh' },
+    });
+    const submit = screen.getByRole('button', { name: /begin the brief/i });
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio workspace' }), {
+      target: { value: 'studio-2' },
+    });
+    fireEvent.click(submit);
+    expect(mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ studio_id: 'studio-2' }),
+      expect.any(Object),
     );
   });
 

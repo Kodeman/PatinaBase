@@ -18,6 +18,7 @@ const baseLead: Lead = {
   id: 'lead-1',
   homeowner_id: null,
   designer_id: 'designer-1',
+  studio_id: 'studio-1',
   project_type: 'living_room',
   project_description: 'A quiet reading corner.',
   budget_range: '10k_25k',

@@ -29,6 +29,11 @@ export interface DecisionClientOption {
   label: string;
 }
 
+export interface DecisionWorkspaceOption {
+  id: string;
+  name: string;
+}
+
 export interface DecisionProjectOption {
   id: string;
   name: string;
@@ -40,11 +45,14 @@ export interface DecisionRoomOption {
 }
 
 interface DecisionTargetSelectorProps {
+  designerId: string;
+  workspaceId: string | null;
   /** designer_clients.id */
   designerClientId: string | null;
   projectId: string | null;
   roomId: string | null;
   onDesignerClientChange: (designerClientId: string | null, clientId: string | null) => void;
+  onWorkspaceChange: (workspaceId: string | null) => void;
   onProjectChange: (projectId: string | null) => void;
   onRoomChange: (roomId: string | null) => void;
   /** Disable the whole selector (e.g. while a save is in flight). */
@@ -52,32 +60,109 @@ interface DecisionTargetSelectorProps {
 }
 
 export function DecisionTargetSelector({
+  designerId,
+  workspaceId,
   designerClientId,
   projectId,
   roomId,
   onDesignerClientChange,
+  onWorkspaceChange,
   onProjectChange,
   onRoomChange,
   disabled = false,
 }: DecisionTargetSelectorProps) {
+  const [workspaces, setWorkspaces] = useState<DecisionWorkspaceOption[]>([]);
   const [clients, setClients] = useState<DecisionClientOption[]>([]);
   const [projects, setProjects] = useState<DecisionProjectOption[]>([]);
   const [rooms, setRooms] = useState<DecisionRoomOption[]>([]);
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
   const [loadingClients, setLoadingClients] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingRooms, setLoadingRooms] = useState(false);
+  const [clientsWorkspaceId, setClientsWorkspaceId] = useState<string | null>(null);
+  const [projectsRelationshipId, setProjectsRelationshipId] = useState<string | null>(null);
+  const [roomsProjectId, setRoomsProjectId] = useState<string | null>(null);
 
-  // Load the designer's clients once on mount. RLS scopes to the signed-in
-  // designer, so we don't filter by designer_id explicitly.
+  // Resolve only exact active, non-guest design-studio memberships. One
+  // eligible workspace may be selected deterministically; multiple require an
+  // explicit choice and never fall back to the first returned row.
   useEffect(() => {
     let cancelled = false;
+    setLoadingWorkspaces(true);
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('organization_members')
+          .select('organization_id, organization:organizations!inner(id,name,type,status)')
+          .eq('user_id', designerId)
+          .eq('status', 'active')
+          .neq('role', 'guest')
+          .eq('organization.type', 'design_studio')
+          .eq('organization.status', 'active')
+          .order('organization_id', { ascending: true });
+        if (cancelled) return;
+        if (error || !data) {
+          setWorkspaces([]);
+          onWorkspaceChange(null);
+          return;
+        }
+        const options = (data as unknown as Array<{
+          organization_id: string;
+          organization:
+            | { id: string; name: string }
+            | Array<{ id: string; name: string }>
+            | null;
+        }>).flatMap((membership) => {
+          const organization = Array.isArray(membership.organization)
+            ? membership.organization[0]
+            : membership.organization;
+          return organization
+            ? [{ id: organization.id, name: organization.name }]
+            : [];
+        });
+        setWorkspaces(options);
+        if (options.length === 1 && workspaceId !== options[0].id) {
+          onWorkspaceChange(options[0].id);
+        } else if (
+          workspaceId &&
+          !options.some((workspace) => workspace.id === workspaceId)
+        ) {
+          onWorkspaceChange(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setWorkspaces([]);
+          onWorkspaceChange(null);
+        }
+      } finally {
+        if (!cancelled) setLoadingWorkspaces(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [designerId, onWorkspaceChange, workspaceId]);
+
+  // Load only canonical client relationships in the selected workspace.
+  useEffect(() => {
+    if (!workspaceId) {
+      setClients([]);
+      setClientsWorkspaceId(null);
+      setLoadingClients(false);
+      return;
+    }
+    let cancelled = false;
+    setClientsWorkspaceId(null);
     setLoadingClients(true);
     void (async () => {
       try {
         const { data, error } = await supabase
           .from('designer_clients')
           .select('id, client_id, client_name, client:profiles!client_id(full_name, email)')
-          .order('updated_at', { ascending: false });
+          .eq('studio_id', workspaceId)
+          .eq('designer_id', designerId)
+          .neq('status', 'lead')
+          .order('client_name', { ascending: true });
         if (cancelled) return;
         if (error || !data) {
           setClients([]);
@@ -111,18 +196,23 @@ export function DecisionTargetSelector({
       } catch {
         if (!cancelled) setClients([]);
       } finally {
-        if (!cancelled) setLoadingClients(false);
+        if (!cancelled) {
+          setClientsWorkspaceId(workspaceId);
+          setLoadingClients(false);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [designerId, workspaceId]);
 
   // When the client changes, fetch that client's active projects.
   useEffect(() => {
     if (!designerClientId) {
       setProjects([]);
+      setProjectsRelationshipId(null);
+      setLoadingProjects(false);
       return;
     }
     // Resolve the underlying client profile id so we can scope projects.
@@ -130,15 +220,20 @@ export function DecisionTargetSelector({
     const clientProfileId = selected?.clientId ?? null;
     if (!clientProfileId) {
       setProjects([]);
+      setProjectsRelationshipId(designerClientId);
+      setLoadingProjects(false);
       return;
     }
 
     let cancelled = false;
+    setProjectsRelationshipId(null);
     setLoadingProjects(true);
     supabase
       .from('projects')
       .select('id, name')
       .eq('client_id', clientProfileId)
+      .eq('studio_id', workspaceId)
+      .eq('designer_id', designerId)
       .eq('status', 'active')
       .order('name', { ascending: true })
       .then(({ data, error }) => {
@@ -148,20 +243,24 @@ export function DecisionTargetSelector({
         } else {
           setProjects(data as DecisionProjectOption[]);
         }
+        setProjectsRelationshipId(designerClientId);
         setLoadingProjects(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [designerClientId, clients]);
+  }, [designerClientId, clients, designerId, workspaceId]);
 
   // When the project changes, fetch its rooms (migration 00172 linkage).
   useEffect(() => {
     if (!projectId) {
       setRooms([]);
+      setRoomsProjectId(null);
+      setLoadingRooms(false);
       return;
     }
     let cancelled = false;
+    setRoomsProjectId(null);
     setLoadingRooms(true);
     supabase
       .from('project_rooms')
@@ -175,6 +274,7 @@ export function DecisionTargetSelector({
         } else {
           setRooms(data as DecisionRoomOption[]);
         }
+        setRoomsProjectId(projectId);
         setLoadingRooms(false);
       });
     return () => {
@@ -185,28 +285,76 @@ export function DecisionTargetSelector({
   // Clear downstream selections when an upstream one is removed / changed so
   // the parent never holds a stale project/room id.
   useEffect(() => {
-    if (!designerClientId) {
+    if (
+      workspaceId &&
+      clientsWorkspaceId === workspaceId &&
+      designerClientId &&
+      !clients.some((client) => client.id === designerClientId)
+    ) {
+      onDesignerClientChange(null, null);
+    } else if (!designerClientId) {
       if (projectId) onProjectChange(null);
       if (roomId) onRoomChange(null);
     } else if (
+      projectsRelationshipId === designerClientId &&
       projectId &&
-      projects.length > 0 &&
       !projects.some((p) => p.id === projectId)
     ) {
       onProjectChange(null);
     }
-  }, [designerClientId, projectId, projects, roomId, onProjectChange, onRoomChange]);
+  }, [
+    clients,
+    clientsWorkspaceId,
+    designerClientId,
+    onDesignerClientChange,
+    onProjectChange,
+    onRoomChange,
+    projectId,
+    projects,
+    projectsRelationshipId,
+    roomId,
+    workspaceId,
+  ]);
 
   useEffect(() => {
     if (!projectId) {
       if (roomId) onRoomChange(null);
-    } else if (roomId && rooms.length > 0 && !rooms.some((r) => r.id === roomId)) {
+    } else if (
+      roomsProjectId === projectId &&
+      roomId &&
+      !rooms.some((r) => r.id === roomId)
+    ) {
       onRoomChange(null);
     }
-  }, [projectId, roomId, rooms, onRoomChange]);
+  }, [projectId, roomId, rooms, roomsProjectId, onRoomChange]);
 
   return (
     <div className="space-y-2">
+      <label className="block">
+        <span className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
+          Workspace <span className="text-terracotta">*</span>
+        </span>
+        <select
+          value={workspaceId ?? ''}
+          disabled={disabled || loadingWorkspaces || workspaces.length <= 1}
+          onChange={(event) => onWorkspaceChange(event.target.value || null)}
+          className="w-full px-3 py-2 text-[0.85rem] rounded-[3px] border border-pearl bg-surface text-charcoal outline-none focus:border-clay focus:ring-1 focus:ring-clay disabled:opacity-50"
+        >
+          <option value="">
+            {loadingWorkspaces
+              ? 'Loading…'
+              : workspaces.length === 0
+                ? 'No active design studio'
+                : 'Select workspace…'}
+          </option>
+          {workspaces.map((workspace) => (
+            <option key={workspace.id} value={workspace.id}>
+              {workspace.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
       {/* Client (required) */}
       <label className="block">
         <span className="block font-mono text-[0.65rem] uppercase tracking-[0.06em] text-aged-oak mb-1">
@@ -214,7 +362,7 @@ export function DecisionTargetSelector({
         </span>
         <select
           value={designerClientId ?? ''}
-          disabled={disabled || loadingClients}
+          disabled={disabled || !workspaceId || loadingClients}
           onChange={(e) => {
             const next = e.target.value || null;
             const match = clients.find((c) => c.id === next) ?? null;
@@ -223,7 +371,9 @@ export function DecisionTargetSelector({
           className="w-full px-3 py-2 text-[0.85rem] rounded-[3px] border border-pearl bg-surface text-charcoal outline-none focus:border-clay focus:ring-1 focus:ring-clay disabled:opacity-50"
         >
           <option value="">
-            {loadingClients
+            {!workspaceId
+              ? 'Select a workspace first'
+              : loadingClients
               ? 'Loading…'
               : clients.length === 0
                 ? 'No clients yet'

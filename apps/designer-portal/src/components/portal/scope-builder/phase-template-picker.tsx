@@ -33,6 +33,8 @@ import {
 
 export interface PhaseTemplatePickerProps {
   proposalId: string;
+  /** Immutable proposals.studio_id for this authored proposal. */
+  studioId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onApplied?: (phaseIds: string[]) => void;
@@ -59,11 +61,12 @@ function summarizeTemplate(template: PhaseTemplate): string {
 
 export function PhaseTemplatePicker({
   proposalId,
+  studioId,
   open,
   onOpenChange,
   onApplied,
 }: PhaseTemplatePickerProps) {
-  const { data: templates = [], isLoading, isError } = usePhaseTemplates();
+  const { data: templates = [], isLoading, isError } = usePhaseTemplates(studioId);
   const applyMutation = useApplyPhaseTemplate();
 
   // Two-step picker: when a template is "armed" (clicked once), the

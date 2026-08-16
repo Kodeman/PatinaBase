@@ -18,7 +18,7 @@
  * Shape A unresolved and out of scope).
  */
 
-import { useDiscovery, useDesignerClientForClientUser, useStyles } from '@patina/supabase';
+import { useDiscovery, useStyles } from '@patina/supabase';
 import { useDesignerClientIdForProposal } from '@/hooks/use-discovery-relationship-id';
 import { formatBudgetRange } from '@/lib/document/discovery-seed';
 import { fmtDay } from '@/lib/document/format';
@@ -39,11 +39,13 @@ function RecapRow({ label, children }: { label: string; children: React.ReactNod
 
 export function DiscoveryRecap({
   clientProfileId,
+  designerClientId: carriedDesignerClientId,
   engagementKind,
   engagementId,
   proposalId,
 }: {
   clientProfileId: string | null;
+  designerClientId: string | null;
   /** document_state's engagement_kind/engagement_id/proposal_id for THIS
    *  row — needed only for the no-login fallback (R106 §5); a login client
    *  resolves entirely off clientProfileId, unchanged from before. */
@@ -51,8 +53,6 @@ export function DiscoveryRecap({
   engagementId?: string | null;
   proposalId?: string | null;
 }) {
-  const { data: dc, isLoading: dcLoading } = useDesignerClientForClientUser(clientProfileId ?? undefined);
-
   const noLogin = !clientProfileId;
   // Shape D: engagement_id already IS designer_clients.id — no query needed.
   const relationshipLegId = noLogin && engagementKind === 'relationship' ? (engagementId ?? null) : null;
@@ -63,7 +63,8 @@ export function DiscoveryRecap({
     tryProposalLeg ? (proposalId as string) : null,
   );
 
-  const designerClientId = dc?.id ?? relationshipLegId ?? proposalLegId ?? null;
+  const designerClientId =
+    carriedDesignerClientId ?? relationshipLegId ?? proposalLegId ?? null;
   const { data: read, isLoading: discoveryLoading } = useDiscovery(designerClientId);
   const { data: styles } = useStyles() as { data: { id: string; name: string }[] | undefined };
 
@@ -73,7 +74,6 @@ export function DiscoveryRecap({
   // no-login household's proposal-leg lookup, or the discovery row itself —
   // show the quiet loading line rather than flash the apology mid-resolution.
   const resolving =
-    (Boolean(clientProfileId) && dcLoading) ||
     (tryProposalLeg && proposalLegLoading) ||
     (Boolean(designerClientId) && discoveryLoading);
   if (resolving) {

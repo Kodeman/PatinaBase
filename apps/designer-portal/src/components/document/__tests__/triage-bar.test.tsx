@@ -28,6 +28,7 @@ jest.mock('@patina/supabase', () => ({
   useNurtureLead: () => ({ mutate: jest.fn(), isPending: false }),
   useDeclineLead: () => ({ mutate: jest.fn(), isPending: false }),
   useAcceptDesignRequest: () => ({ mutate: acceptRequestMutate, isPending: false }),
+  useLead: () => ({ data: { id: 'lead-1', studio_id: 'studio-1' } }),
 }));
 
 jest.mock('@/hooks/use-feature-flag', () => ({
@@ -69,7 +70,7 @@ describe('TriageBar post-accept destination', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Accept · begin' }));
 
     expect(acceptRequestMutate).toHaveBeenCalledWith(
-      'lead-1',
+      { leadId: 'lead-1', studioId: 'studio-1' },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
     expect(beginDiscoveryMutate).not.toHaveBeenCalled();

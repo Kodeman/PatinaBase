@@ -48,6 +48,7 @@ function createProposalMutation() {
     useCreateProposal() as unknown as {
       mutationFn: (input: {
         title: string;
+        studioId: string;
         clientId?: string;
         designerClientId?: string;
       }) => Promise<unknown>;
@@ -59,6 +60,7 @@ describe("useCreateProposal client relationship identity", () => {
   it("persists profile and designer-client legs in the same proposal insert", async () => {
     await createProposalMutation()({
       title: "Repeat household proposal",
+      studioId: "studio-1",
       clientId: "profile-1",
       designerClientId: "relationship-1",
     });
@@ -67,6 +69,7 @@ describe("useCreateProposal client relationship identity", () => {
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
         client_id: "profile-1",
+        studio_id: "studio-1",
         designer_client_id: "relationship-1",
         status: "draft",
       }),
@@ -77,6 +80,7 @@ describe("useCreateProposal client relationship identity", () => {
     await expect(
       createProposalMutation()({
         title: "Split identity",
+        studioId: "studio-1",
         clientId: "profile-1",
       }),
     ).rejects.toThrow(
@@ -87,13 +91,17 @@ describe("useCreateProposal client relationship identity", () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
-  it("still supports a genuinely unassigned draft with both legs null", async () => {
-    await createProposalMutation()({ title: "Unassigned draft" });
+  it("supports an unassigned household only inside an explicit workspace", async () => {
+    await createProposalMutation()({
+      title: "Unassigned household draft",
+      studioId: "studio-1",
+    });
 
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
         client_id: null,
         designer_client_id: null,
+        studio_id: "studio-1",
       }),
     );
   });

@@ -31,6 +31,7 @@ DO $$
 DECLARE
   uid_designer UUID := 'a0000000-0000-0000-0000-000000000004';
   uid_client   UUID := 'a0000000-0000-0000-0000-000000000005';
+  v_studio_id  UUID := 'b0000000-0000-0000-0000-000000000001';
   v_dc_id      UUID;
   v_project_id UUID := 'b0000000-0000-0000-0000-0000000000d1';
 
@@ -61,7 +62,8 @@ BEGIN
 
   SELECT id INTO v_dc_id
   FROM public.designer_clients
-  WHERE designer_id = uid_designer AND client_id = uid_client
+  WHERE studio_id = v_studio_id
+    AND designer_id = uid_designer AND client_id = uid_client
   LIMIT 1;
 
   IF v_dc_id IS NULL THEN
@@ -170,13 +172,13 @@ BEGIN
   -- (decision-card's "Blocks phase advancement" callout, decisions-panel's
   -- "· blocks phase" tag) render from blocking_status, not blocks_kind.
   INSERT INTO public.client_decisions (
-    id, designer_client_id, designer_id, project_id, phase_id,
+    id, designer_client_id, designer_id, studio_id, project_id, phase_id,
     title, context, due_date,
     decision_type, decision_kind, coordination_kind, court,
     blocks_kind, blocks_milestone_id, blocking_status,
     status, sent_at
   ) VALUES (
-    v_item_blocking, v_dc_id, uid_designer, v_project_id, v_phase_dd,
+    v_item_blocking, v_dc_id, uid_designer, v_studio_id, v_project_id, v_phase_dd,
     'Design Development sign-off — drawing set B',
     'Drawing set B needs your sign-off before Procurement can release the long-lead casegoods on order.',
     (NOW() - INTERVAL '4 days'),

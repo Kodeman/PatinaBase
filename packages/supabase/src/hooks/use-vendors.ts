@@ -360,7 +360,15 @@ export function useToggleVendorSave(options?: { errorSurface?: 'inline' }) {
 
   return useMutation({
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
-    mutationFn: async ({ vendorId, notes }: { vendorId: string; notes?: string }) => {
+    mutationFn: async ({
+      studioId,
+      vendorId,
+      notes,
+    }: {
+      studioId: string;
+      vendorId: string;
+      notes?: string;
+    }) => {
       const supabase = getSupabase() as any;
 
       const {
@@ -372,6 +380,7 @@ export function useToggleVendorSave(options?: { errorSurface?: 'inline' }) {
       const { data: existing } = await supabase
         .from('saved_vendors')
         .select('id')
+        .eq('studio_id', studioId)
         .eq('vendor_id', vendorId)
         .eq('designer_id', user.id)
         .single();
@@ -381,6 +390,7 @@ export function useToggleVendorSave(options?: { errorSurface?: 'inline' }) {
         const { error } = await supabase
           .from('saved_vendors')
           .delete()
+          .eq('studio_id', studioId)
           .eq('vendor_id', vendorId)
           .eq('designer_id', user.id);
 
@@ -389,6 +399,7 @@ export function useToggleVendorSave(options?: { errorSurface?: 'inline' }) {
       } else {
         // Save - insert new record
         const { error } = await supabase.from('saved_vendors').insert({
+          studio_id: studioId,
           vendor_id: vendorId,
           designer_id: user.id,
           notes: notes ?? null,
@@ -422,7 +433,15 @@ export function useSaveVendor(options?: { errorSurface?: 'inline' }) {
 
   return useMutation({
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
-    mutationFn: async ({ vendorId, notes }: { vendorId: string; notes?: string }) => {
+    mutationFn: async ({
+      studioId,
+      vendorId,
+      notes,
+    }: {
+      studioId: string;
+      vendorId: string;
+      notes?: string;
+    }) => {
       const supabase = getSupabase() as any;
 
       const {
@@ -432,12 +451,13 @@ export function useSaveVendor(options?: { errorSurface?: 'inline' }) {
 
       const { error } = await supabase.from('saved_vendors').upsert(
         {
+          studio_id: studioId,
           vendor_id: vendorId,
           designer_id: user.id,
           notes: notes ?? null,
           saved_at: new Date().toISOString(),
         },
-        { onConflict: 'designer_id,vendor_id' }
+        { onConflict: 'studio_id,designer_id,vendor_id' }
       );
 
       if (error) throw error;
@@ -456,9 +476,9 @@ export function useSaveVendor(options?: { errorSurface?: 'inline' }) {
  * The designer's saved vendor ids — the roster-admission set. Cached under
  * ['saved-vendors'] so save/unsave mutations refresh it automatically.
  */
-export function useSavedVendorIds() {
+export function useSavedVendorIds(studioId: string | null) {
   return useQuery({
-    queryKey: ['saved-vendors'],
+    queryKey: ['saved-vendors', studioId],
     queryFn: async (): Promise<string[]> => {
       const supabase = getSupabase() as any;
 
@@ -470,11 +490,13 @@ export function useSavedVendorIds() {
       const { data, error } = await supabase
         .from('saved_vendors')
         .select('vendor_id')
+        .eq('studio_id', studioId)
         .eq('designer_id', user.id);
 
       if (error) throw error;
       return (data ?? []).map((r: { vendor_id: string }) => r.vendor_id);
     },
+    enabled: !!studioId,
   });
 }
 

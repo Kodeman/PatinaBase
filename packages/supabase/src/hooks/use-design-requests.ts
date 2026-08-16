@@ -164,12 +164,13 @@ export function useClaimDesignRequest(options?: { errorSurface?: 'inline' }) {
 
   return useMutation({
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
-    mutationFn: async (leadId: string) => {
+    mutationFn: async ({ leadId, studioId }: { leadId: string; studioId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
       const { data, error } = await supabase.rpc('claim_design_request', {
         p_lead_id: leadId,
+        p_studio_id: studioId,
       });
 
       if (error) throw error;
@@ -253,12 +254,13 @@ export function useAcceptDesignRequest(options?: { errorSurface?: 'inline' }) {
 
   return useMutation({
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
-    mutationFn: async (leadId: string) => {
+    mutationFn: async ({ leadId, studioId }: { leadId: string; studioId: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
       const { data, error } = await supabase.rpc('accept_design_request', {
         p_lead_id: leadId,
+        p_studio_id: studioId,
       });
 
       if (error) throw error;

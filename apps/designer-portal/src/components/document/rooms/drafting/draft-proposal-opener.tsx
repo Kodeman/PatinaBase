@@ -44,13 +44,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { createBrowserClient, useOrganizations } from '@patina/supabase';
 import { useClients, type DesignerClient } from '@/hooks/use-clients';
-import { useAuth } from '@/hooks/use-auth';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 
 export interface OpenDraftProposalArgs {
+  /** Explicit active workspace stamped onto the proposal. */
+  studioId: string;
   /** The household's profiles.id (designer_clients.client_id) — a linked client. */
   clientId: string;
   /** The household relationship row preserved on proposal.designer_client_id. */
@@ -78,11 +79,13 @@ export function useOpenDraftProposal() {
     meta: { errorSurface: 'inline' },
     mutationFn: async ({
       title,
+      studioId,
       clientId,
       designerClientId,
       designerId,
     }: {
       title: string;
+      studioId: string;
       clientId: string;
       designerClientId: string;
       designerId: string;
@@ -95,6 +98,7 @@ export function useOpenDraftProposal() {
       const { data, error } = await supabase
         .from('proposals')
         .insert({
+          studio_id: studioId,
           designer_id: designerId,
           client_id: clientId,
           designer_client_id: designerClientId,
@@ -121,6 +125,7 @@ export function useOpenDraftProposal() {
   const openDraftProposal = useCallback(
     async ({
       clientId,
+      studioId,
       designerClientId,
       designerId,
       clientName,
@@ -131,6 +136,7 @@ export function useOpenDraftProposal() {
         : 'Design services agreement';
       const proposal = await createAgreement.mutateAsync({
         title,
+        studioId,
         clientId,
         designerClientId,
         designerId,
@@ -146,39 +152,14 @@ export function useOpenDraftProposal() {
   return { openDraftProposal, isCreating: createAgreement.isPending };
 }
 
-/** Studio RLS can expose one relationship per teammate for the same household.
- * The cold-start picker is household-shaped, so collapse linked duplicates and
- * prefer the signed-in designer's relationship. A household owned only by a
- * collaborator stays available; proposal ownership follows that exact row. */
+/** Keep only relationships already frozen to the selected exact workspace.
+ * No current-owner, recency, or "primary" relationship preference is valid. */
 export function normalizeDraftHouseholds(
   clients: DesignerClient[],
-  currentDesignerId: string | null | undefined,
+  studioId: string | null,
 ): DesignerClient[] {
-  const normalized: DesignerClient[] = [];
-  const indexByHousehold = new Map<string, number>();
-
-  for (const relationship of clients) {
-    const key = relationship.client_id
-      ? `profile:${relationship.client_id}`
-      : `relationship:${relationship.id}`;
-    const existingIndex = indexByHousehold.get(key);
-    if (existingIndex === undefined) {
-      indexByHousehold.set(key, normalized.length);
-      normalized.push(relationship);
-      continue;
-    }
-
-    const existing = normalized[existingIndex];
-    if (
-      currentDesignerId &&
-      relationship.designer_id === currentDesignerId &&
-      existing.designer_id !== currentDesignerId
-    ) {
-      normalized[existingIndex] = relationship;
-    }
-  }
-
-  return normalized;
+  if (!studioId) return [];
+  return clients.filter((relationship) => relationship.studio_id === studioId);
 }
 
 /**
@@ -194,12 +175,34 @@ export function DraftProposalSheet({
 }) {
   const { openDraftProposal, isCreating } = useOpenDraftProposal();
   const { data: clients } = useClients();
-  const { user } = useAuth();
+  const { data: organizations } = useOrganizations();
   const [error, setError] = useState<string | null>(null);
-  const households = useMemo(
-    () => normalizeDraftHouseholds(clients ?? [], user?.id),
-    [clients, user?.id],
+  const [studioId, setStudioId] = useState<string | null>(null);
+  const eligibleStudios = useMemo(
+    () =>
+      (organizations ?? []).filter(
+        (organization) =>
+          organization.type === 'design_studio' &&
+          organization.status === 'active' &&
+          organization.membership.status === 'active' &&
+          organization.membership.role !== 'guest',
+      ),
+    [organizations],
   );
+  const households = useMemo(
+    () => normalizeDraftHouseholds(clients ?? [], studioId),
+    [clients, studioId],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setStudioId((current) => {
+      if (current && eligibleStudios.some((studio) => studio.id === current)) {
+        return current;
+      }
+      return eligibleStudios.length === 1 ? eligibleStudios[0].id : null;
+    });
+  }, [eligibleStudios, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -215,7 +218,10 @@ export function DraftProposalSheet({
 
   if (!open) return null;
 
-  const handlePick = async (clientId: string | null) => {
+  const handlePick = async (
+    designerClientId: string | null,
+    clientId: string | null,
+  ) => {
     // Defensive: the picker disables no-login rows (client_id null) for this
     // flow — an agreement can't reach a client who has no way to sign in.
     // If one somehow gets picked anyway, say so instead of quietly closing.
@@ -224,7 +230,13 @@ export function DraftProposalSheet({
       return;
     }
     setError(null);
-    const household = households.find((dc) => dc.client_id === clientId);
+    if (!studioId || !designerClientId) {
+      setError('Choose a studio workspace and its exact household relationship.');
+      return;
+    }
+    const household = households.find(
+      (relationship) => relationship.id === designerClientId,
+    );
     if (!household) {
       setError('That household relationship is no longer available. Refresh and try again.');
       return;
@@ -233,6 +245,7 @@ export function DraftProposalSheet({
       household?.client?.full_name ?? household?.client_name ?? household?.client_email ?? null;
     try {
       await openDraftProposal({
+        studioId,
         clientId,
         designerClientId: household.id,
         designerId: household.designer_id,
@@ -272,11 +285,39 @@ export function DraftProposalSheet({
           For an existing household — no lead, no discovery. Pick the client and the Drafting Room
           opens in its services posture.
         </p>
+        {eligibleStudios.length > 1 && (
+          <select
+            aria-label="Studio workspace"
+            value={studioId ?? ''}
+            onChange={(event) => {
+              setStudioId(event.target.value || null);
+              setError(null);
+            }}
+            className="mb-3 w-full rounded border border-[var(--doc-ink-border)] bg-transparent px-2 py-2 text-[0.8rem] text-[var(--color-charcoal)]"
+          >
+            <option value="">Choose a studio workspace…</option>
+            {eligibleStudios.map((studio) => (
+              <option key={studio.id} value={studio.id}>
+                {studio.name}
+              </option>
+            ))}
+          </select>
+        )}
         <ClientPicker
           value={null}
-          onChange={handlePick}
+          onChange={(clientId) => {
+            if (!clientId) {
+              setError(
+                'Needs a client login before an agreement can be sent — add their email first.',
+              );
+            }
+          }}
+          onRelationshipChange={(relationshipId, clientId) => {
+            void handlePick(relationshipId, clientId);
+          }}
+          studioId={studioId}
           placeholder={isCreating ? 'Opening the draft…' : 'Search or add a household…'}
-          disabled={isCreating}
+          disabled={isCreating || !studioId}
           clientOptions={households}
           requireClientLogin
         />

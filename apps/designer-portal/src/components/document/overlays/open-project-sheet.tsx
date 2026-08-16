@@ -21,8 +21,9 @@
  * instrument on the open document (R79); it is deliberately NOT asked here.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useClients, useOrganizations } from '@patina/supabase';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { useOpenProjectDirect } from '@/hooks/use-project-lifecycle';
 import { dollarsToCents } from '@/lib/document/closure-derivation';
@@ -40,10 +41,25 @@ export function OpenProjectSheet({
 }) {
   const router = useRouter();
   const openProject = useOpenProjectDirect();
+  const { data: organizations } = useOrganizations();
+  const { data: clients } = useClients();
+  const eligibleStudios = useMemo(
+    () =>
+      (organizations ?? []).filter(
+        (organization) =>
+          organization.type === 'design_studio' &&
+          organization.status === 'active' &&
+          organization.membership.status === 'active' &&
+          organization.membership.role !== 'guest',
+      ),
+    [organizations],
+  );
 
   // The retry-safe project id — one per sheet-open (00237 p_id).
   const [projectId, setProjectId] = useState('');
+  const [studioId, setStudioId] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
+  const [designerClientId, setDesignerClientId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [bandMin, setBandMin] = useState('');
   const [bandMax, setBandMax] = useState('');
@@ -55,7 +71,9 @@ export function OpenProjectSheet({
   useEffect(() => {
     if (open) {
       setProjectId(crypto.randomUUID());
+      setStudioId(null);
       setClientId(null);
+      setDesignerClientId(null);
       setTitle('');
       setBandMin('');
       setBandMax('');
@@ -65,11 +83,36 @@ export function OpenProjectSheet({
     }
   }, [open]);
 
+  // Organization data may arrive after the sheet opens. A single eligible
+  // workspace is deterministic; two or more always require a human choice.
+  useEffect(() => {
+    if (!open) return;
+    setStudioId((current) => {
+      if (current && eligibleStudios.some((studio) => studio.id === current)) {
+        return current;
+      }
+      return eligibleStudios.length === 1 ? eligibleStudios[0].id : null;
+    });
+  }, [eligibleStudios, open]);
+
+  const workspaceClients = useMemo(
+    () => (clients ?? []).filter((client) => client.studio_id === studioId),
+    [clients, studioId],
+  );
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!dateValid) {
       setError('Enter a valid start date in MM/DD/YYYY format.');
+      return;
+    }
+    if (!studioId) {
+      setError('Choose the studio workspace that will own this project.');
+      return;
+    }
+    if (clientId && !designerClientId) {
+      setError('Choose a household relationship from this studio workspace.');
       return;
     }
 
@@ -86,7 +129,8 @@ export function OpenProjectSheet({
       {
         id: projectId,
         title: title.trim(),
-        clientId,
+        studioId,
+        designerClientId,
         budgetMinCents: min,
         budgetMaxCents: max,
         startDate: startDate || null,
@@ -118,6 +162,36 @@ export function OpenProjectSheet({
         </p>
 
         <div className="mt-7 space-y-5">
+          <Field label="Studio workspace">
+            {eligibleStudios.length > 1 ? (
+              <select
+                aria-label="Studio workspace"
+                value={studioId ?? ''}
+                onChange={(event) => {
+                  setStudioId(event.target.value || null);
+                  setClientId(null);
+                  setDesignerClientId(null);
+                }}
+                className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 text-[14px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+              >
+                <option value="">Choose a studio…</option>
+                {eligibleStudios.map((studio) => (
+                  <option key={studio.id} value={studio.id}>
+                    {studio.name}
+                  </option>
+                ))}
+              </select>
+            ) : eligibleStudios.length === 1 ? (
+              <p className="border-b border-[var(--color-pearl)] pb-1.5 text-[14px] text-[var(--color-charcoal)]">
+                {eligibleStudios[0].name}
+              </p>
+            ) : (
+              <p className="text-[12px] text-[var(--color-terracotta)]" role="alert">
+                No active design-studio workspace is available.
+              </p>
+            )}
+          </Field>
+
           <Field label="Title">
             <Input
               autoFocus
@@ -134,7 +208,14 @@ export function OpenProjectSheet({
                 it later. */}
             <ClientPicker
               value={clientId}
-              onChange={setClientId}
+              onChange={(nextClientId) => {
+                setClientId(nextClientId);
+                if (!nextClientId) setDesignerClientId(null);
+              }}
+              onRelationshipChange={setDesignerClientId}
+              studioId={studioId}
+              clientOptions={workspaceClients}
+              disabled={!studioId}
               placeholder="Who is this for? (optional)"
             />
           </Field>
@@ -193,7 +274,7 @@ export function OpenProjectSheet({
             actionKey="create-project"
             variant="primary"
             type="submit"
-            disabled={!title.trim() || !dateValid}
+            disabled={!title.trim() || !dateValid || !studioId}
             loading={openProject.isPending}
             loadingLabel="Opening…"
             trailing="→"

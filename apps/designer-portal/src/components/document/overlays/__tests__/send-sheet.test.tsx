@@ -53,6 +53,7 @@ jest.mock('@/hooks/use-drafting-state', () => ({
 
 jest.mock('@/hooks/use-clients', () => ({
   useClient: () => ({ data: null, isLoading: false }),
+  useClients: () => ({ data: [] }),
   useInviteAndLinkClient: () => ({
     mutateAsync: jest.fn(),
     isPending: false,

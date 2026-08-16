@@ -97,7 +97,7 @@ export interface ProposalSendGateway {
     proposalId: string;
     sentAt: string;
   }): Promise<ProposalSendInstance>;
-  isActiveStudioComember(ownerId: string): Promise<boolean>;
+  canDispatchProposal(proposalId: string): Promise<boolean>;
   claimDispatch(input: {
     dispatchId: string;
     proposalId: string;
@@ -380,7 +380,7 @@ export function createProposalSendHandler(deps: ProposalSendDependencies) {
     }
 
     const canManage = instance.designerId === caller.userId ||
-      await gateway.isActiveStudioComember(instance.designerId);
+      await gateway.canDispatchProposal(instance.proposalId);
     if (!canManage) return json({ error: "not_authorized" }, 403);
 
     let claim: DispatchClaim;

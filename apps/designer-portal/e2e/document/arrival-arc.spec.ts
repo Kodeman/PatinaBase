@@ -41,6 +41,7 @@ const shot = (page: AuthenticatedPage, name: string) =>
   page.screenshot({ path: path.join(SHOT_DIR, name), fullPage: true });
 
 const DESIGNER_ID = 'a0000000-0000-0000-0000-000000000004'; // designer@patina.dev (dev-accounts.sql)
+const STUDIO_ID = 'b0000000-0000-0000-0000-000000000001'; // exact active dev design studio
 const RUN = Date.now();
 
 const sqlStr = (s: string) => `'${s.replace(/'/g, "''")}'`;
@@ -215,7 +216,10 @@ test.beforeAll(async () => {
       budgetRange: '5k_15k',
     }),
   );
-  psqlAsUser(DESIGNER_ID, `SELECT accept_design_request('${leadB}'::uuid);`);
+  psqlAsUser(
+    DESIGNER_ID,
+    `SELECT accept_design_request('${leadB}'::uuid, '${STUDIO_ID}'::uuid);`,
+  );
   const slotsB = JSON.stringify([
     { starts_at: futureIso(5), duration_minutes: 45 },
     { starts_at: futureIso(6), duration_minutes: 45 },
@@ -258,8 +262,11 @@ test.describe('Arrival Arc — the full arc (R106, Wave 2)', () => {
 
       // psql-assert: claimed, status still 'new', ceremony stub 'draft',
       // client held-notification exists, NO designer_clients row yet.
-      const [designerId, status] = psqlRow(`SELECT designer_id, status FROM leads WHERE id = '${leadA}';`);
+      const [designerId, studioId, status] = psqlRow(
+        `SELECT designer_id, studio_id, status FROM leads WHERE id = '${leadA}';`,
+      );
       expect(designerId).toBe(DESIGNER_ID);
+      expect(studioId).toBe(STUDIO_ID);
       expect(status).toBe('new');
 
       const ceremonyState = psqlScalar(

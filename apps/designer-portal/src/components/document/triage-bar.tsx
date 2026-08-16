@@ -38,6 +38,7 @@ import {
   useNurtureLead,
   useDeclineLead,
   useAcceptDesignRequest,
+  useLead,
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DocumentAction, DocumentActionGroup } from './document-action';
@@ -74,6 +75,7 @@ export function TriageBar({
 }) {
   const qc = useQueryClient();
   const router = useRouter();
+  const { data: lead } = useLead(leadId);
   const beginDiscovery = useBeginDiscovery();
   const nurture = useNurtureLead();
   const decline = useDeclineLead();
@@ -117,7 +119,8 @@ export function TriageBar({
 
   const onAccept = () => {
     if (!arcLoading && arrivalArc && arrivalEligible) {
-      acceptRequest.mutate(leadId, {
+      if (!lead?.studio_id) return;
+      acceptRequest.mutate({ leadId, studioId: lead.studio_id }, {
         onSuccess: () => {
           refreshDesk();
           router.push(`/ceremony/${leadId}`);

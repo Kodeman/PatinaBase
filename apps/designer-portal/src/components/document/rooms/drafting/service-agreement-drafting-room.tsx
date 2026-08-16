@@ -149,9 +149,11 @@ function ServiceAgreementEditor({
   const ownerClients = useMemo(
     () =>
       (clients.data ?? []).filter(
-        (client) => client.designer_id === proposal.designer_id,
+        (client) =>
+          client.designer_id === proposal.designer_id &&
+          client.studio_id === proposal.studio_id,
       ),
-    [clients.data, proposal.designer_id],
+    [clients.data, proposal.designer_id, proposal.studio_id],
   );
   const [terms, setTerms] = useState(initialTerms);
   const [rates, setRates] = useState<ServiceRate[]>(
@@ -228,7 +230,10 @@ function ServiceAgreementEditor({
     if (dirty && !(await persist())) return;
     setSendOpen(true);
   };
-  const changeClient = (clientId: string | null) => {
+  const changeClient = (
+    designerClientId: string | null,
+    clientId: string | null,
+  ) => {
     setClientNote(null);
     setClientError(false);
     if (!ownsProposal) {
@@ -241,6 +246,7 @@ function ServiceAgreementEditor({
         engagementKind: "proposal",
         targetId: document.id,
         clientId,
+        designerClientId,
       },
       {
         onSuccess: () => {
@@ -310,12 +316,14 @@ function ServiceAgreementEditor({
             <p className={labelClass}>Client account</p>
             <ClientPicker
               className="mt-2"
+              studioId={proposal.studio_id ?? null}
               value={
                 typeof proposal.client_id === "string"
                   ? proposal.client_id
                   : null
               }
-              onChange={changeClient}
+              onChange={() => undefined}
+              onRelationshipChange={changeClient}
               disabled={
                 attachClient.isPending ||
                 authStatus === "loading" ||

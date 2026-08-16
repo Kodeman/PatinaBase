@@ -214,6 +214,15 @@ SET email = EXCLUDED.email,
     full_name = EXCLUDED.full_name,
     is_designer = EXCLUDED.is_designer;
 
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT actor_id, role_row.id
+FROM unnest(ARRAY[
+  'a4390000-0000-4000-8000-000000000001'::uuid,
+  'a4390000-0000-4000-8000-000000000004'::uuid
+]) AS actor(actor_id)
+CROSS JOIN public.roles AS role_row
+WHERE role_row.name = 'independent_designer';
+
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES (
   'a4391000-0000-4000-8000-000000000001', 'design_studio',
@@ -231,15 +240,17 @@ INSERT INTO public.organization_members (
    'a4391000-0000-4000-8000-000000000001', 'member', 'active', now());
 
 INSERT INTO public.designer_clients (
-  id, designer_id, client_id, client_name, status, source
+  id, designer_id, client_id, studio_id, client_name, status, source
 ) VALUES
   ('a4392000-0000-4000-8000-000000000001',
    'a4390000-0000-4000-8000-000000000001',
    'a4390000-0000-4000-8000-000000000002',
+   'a4391000-0000-4000-8000-000000000001',
    'Frozen Approval Lead', 'active', 'direct'),
   ('a4392000-0000-4000-8000-000000000002',
    'a4390000-0000-4000-8000-000000000001',
    'a4390000-0000-4000-8000-000000000003',
+   'a4391000-0000-4000-8000-000000000001',
    'Mutable Project Client', 'active', 'direct');
 
 INSERT INTO public.projects (
@@ -316,7 +327,8 @@ SET LOCAL ROLE authenticated;
 SELECT public.set_document_client(
   'project',
   'a4393000-0000-4000-8000-000000000001',
-  'a4390000-0000-4000-8000-000000000003'
+  'a4390000-0000-4000-8000-000000000003',
+  'a4392000-0000-4000-8000-000000000002'
 );
 RESET ROLE;
 

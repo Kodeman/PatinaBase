@@ -623,6 +623,7 @@ export function MobileSheets() {
             <MarginItemBody
               row={row}
               projectId={projectId}
+              designerClientId={activeDoc?.designerClientId ?? null}
               clientName={activeDoc?.clientName ?? ''}
               decisionRows={allItems.filter((i) => i.kind === 'decision')}
             />

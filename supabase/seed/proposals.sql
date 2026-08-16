@@ -14,6 +14,7 @@ DO $$
 DECLARE
   uid_designer UUID := 'a0000000-0000-0000-0000-000000000004';
   uid_client   UUID := 'a0000000-0000-0000-0000-000000000005';
+  v_studio_id  UUID := 'b0000000-0000-0000-0000-000000000001';
   v_designer_client UUID;
   v_accepted   UUID := 'b0000000-0000-0000-0000-000000000001';
   v_sent       UUID := 'b0000000-0000-0000-0000-000000000002';
@@ -27,6 +28,7 @@ BEGIN
   SELECT id INTO v_designer_client
   FROM public.designer_clients
   WHERE designer_id = uid_designer
+    AND studio_id = v_studio_id
     AND client_id = uid_client
   ORDER BY (status <> 'lead') DESC, created_at, id
   LIMIT 1;
@@ -38,10 +40,10 @@ BEGIN
 
   -- ── Proposal 1: accepted (activation fast-path) ───────────────────────
   INSERT INTO public.proposals (
-    id, designer_id, client_id, designer_client_id, title, description, status,
+    id, designer_id, studio_id, client_id, designer_client_id, title, description, status,
     subtotal, total_amount, accepted_at, created_at, updated_at
   ) VALUES (
-    v_accepted, uid_designer, uid_client, v_designer_client,
+    v_accepted, uid_designer, v_studio_id, uid_client, v_designer_client,
     'Sample accepted proposal',
     'Pre-seeded proposal in accepted status. Used to exercise the proposal-to-project activation flow in local dev.',
     'accepted', 10000000, 10000000, NOW(), NOW(), NOW()
@@ -53,11 +55,11 @@ BEGIN
   -- proposal immutable even to postgres, so the seed crosses the lifecycle
   -- boundary only after all sections/items exist.
   INSERT INTO public.proposals (
-    id, designer_id, client_id, designer_client_id, title, description, status,
+    id, designer_id, studio_id, client_id, designer_client_id, title, description, status,
     subtotal, total_amount, sent_at, valid_until,
     personal_message, created_at, updated_at, version
   ) VALUES (
-    v_sent, uid_designer, uid_client, v_designer_client,
+    v_sent, uid_designer, v_studio_id, uid_client, v_designer_client,
     'Aspen Loft — Living Room Refresh',
     'Sent fixture: open this from the client portal to exercise the engagement, sign, and activation flow.',
     'draft',
@@ -132,6 +134,7 @@ DO $$
 DECLARE
   uid_designer uuid := 'a0000000-0000-0000-0000-000000000004';
   uid_client uuid := 'a0000000-0000-0000-0000-000000000005';
+  v_studio_id uuid := 'b0000000-0000-0000-0000-000000000001';
   v_relationship uuid;
   v_source uuid := 'b3900000-0000-4000-8000-000000000001';
   v_target uuid := 'b3900000-0000-4000-8000-000000000002';
@@ -140,6 +143,7 @@ BEGIN
   SELECT id INTO v_relationship
   FROM public.designer_clients
   WHERE designer_id = uid_designer
+    AND studio_id = v_studio_id
     AND client_id = uid_client
   ORDER BY (status <> 'lead') DESC, created_at, id
   LIMIT 1;
@@ -149,17 +153,17 @@ BEGIN
   END IF;
 
   INSERT INTO public.proposals (
-    id, designer_id, client_id, designer_client_id, title, description,
+    id, designer_id, studio_id, client_id, designer_client_id, title, description,
     status, subtotal, total_amount, valid_until
   )
   VALUES
     (
-      v_source, uid_designer, uid_client, v_relationship,
+      v_source, uid_designer, v_studio_id, uid_client, v_relationship,
       'Concurrency source draft', '00390 parent-lock regression source',
       'draft', 100000, 100000, now() + interval '30 days'
     ),
     (
-      v_target, uid_designer, uid_client, v_relationship,
+      v_target, uid_designer, v_studio_id, uid_client, v_relationship,
       'Concurrency target draft', '00390 parent-lock regression target',
       'draft', 100000, 100000, now() + interval '30 days'
     )
@@ -222,6 +226,7 @@ $$;
 DO $$
 DECLARE
   uid_designer  UUID := 'a0000000-0000-0000-0000-000000000004';
+  v_studio_id   UUID := 'b0000000-0000-0000-0000-000000000001';
   dc_direction  UUID := 'd0c10000-0000-0000-0000-0000000000b1';  -- Elena-analog relationship
   v_elena       UUID := 'd0c10000-0000-0000-0000-0000000000b2';  -- the draft proposal
 BEGIN
@@ -236,10 +241,10 @@ BEGIN
   END IF;
 
   INSERT INTO public.proposals (
-    id, designer_id, client_id, designer_client_id, title, description, status,
+    id, designer_id, studio_id, client_id, designer_client_id, title, description, status,
     subtotal, total_amount, created_at, updated_at, version
   ) VALUES (
-    v_elena, uid_designer, NULL, dc_direction,
+    v_elena, uid_designer, v_studio_id, NULL, dc_direction,
     'Elena Marlowe — Living Room Direction',
     'Draft fixture for a no-login household: proposals.designer_client_id links '
       || 'to the household so document_state Shape B rescues the client_name.',

@@ -48,6 +48,8 @@ import type { Court } from '@patina/supabase';
 // ── coordination-band.tsx (orchestrator; owns ALL sheet-open LOCAL state) ──
 export interface CoordinationBandProps {
   projectId: string;
+  studioId: string;
+  designerId: string;
   /** The client's AUTH user id (profiles.id) — row.client_profile_id. The band
    *  feeds this to useDesignerClientForClientUser to produce designerClientId. */
   clientUserId: string | null;
@@ -59,13 +61,19 @@ type SheetState = { kind: 'item'; id: string } | { kind: 'composer' } | null;
 
 export function CoordinationBand({
   projectId,
+  studioId,
+  designerId,
   clientUserId,
   clientName,
 }: CoordinationBandProps) {
   // ── designer_clients.id resolution (work-block.tsx pattern) ──
   // The project's client_id is a raw auth uid; coordination create paths need the
   // designer_clients.id FK or the INSERT trips RLS. null until the resolver lands.
-  const { data: designerClient } = useDesignerClientForClientUser(clientUserId ?? '');
+  const { data: designerClient } = useDesignerClientForClientUser(
+    clientUserId,
+    studioId,
+    designerId,
+  );
   const designerClientId = designerClient?.id ?? null;
 
   // ── live data (one items query; court summary is a select over it) ──

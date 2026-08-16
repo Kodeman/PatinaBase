@@ -104,7 +104,8 @@ function harness(options: {
         attemptCount: attempts,
       };
     },
-    async isActiveStudioComember() {
+    async canDispatchProposal(proposalId) {
+      assertEquals(proposalId, PROPOSAL_ID);
       studioChecks += 1;
       return options.studioComember ?? false;
     },

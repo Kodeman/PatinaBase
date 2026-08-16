@@ -45,5 +45,6 @@ export interface ThreadsViewProps extends PeopleViewProps {
 export interface PersonProfileProps extends PeopleViewProps {
   personId: string;
   role: PartyRole;
+  studioId: string | null;
   onBack: () => void;
 }

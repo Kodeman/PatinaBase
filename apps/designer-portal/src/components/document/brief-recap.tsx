@@ -9,21 +9,23 @@
  * triage auto-hides), so embedding it here is read-only by construction.
  */
 
-import { useDesignerClientForClientUser } from '@patina/supabase';
+import { useClient } from '@patina/supabase';
 import { BriefSection } from './brief-section';
 import { SectionLoadingLine } from './section-loading-line';
 
 export function BriefRecap({
   clientProfileId,
   leadId,
+  designerClientId,
 }: {
   clientProfileId: string | null;
   leadId: string | null;
+  designerClientId: string | null;
 }) {
   // If the row already carries a lead_id (lead shape), use it; otherwise resolve
-  // the source lead from the relationship.
-  const { data: dc, isLoading } = useDesignerClientForClientUser(
-    leadId ? undefined : (clientProfileId ?? undefined),
+  // the source lead from the exact relationship already bound by the document.
+  const { data: dc, isLoading } = useClient(
+    leadId ? '' : (designerClientId ?? ''),
   );
   const resolvedLeadId = leadId ?? dc?.lead_id ?? null;
 

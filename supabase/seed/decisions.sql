@@ -21,6 +21,7 @@ DO $$
 DECLARE
   uid_designer UUID := 'a0000000-0000-0000-0000-000000000004';
   uid_client   UUID := 'a0000000-0000-0000-0000-000000000005';
+  v_studio_id  UUID := 'b0000000-0000-0000-0000-000000000001';
   v_dc_id      UUID;
   v_project_id UUID := 'b0000000-0000-0000-0000-0000000000d1';
   v_dec_draft     UUID := 'b0000000-0000-0000-0000-0000000d2c01';
@@ -35,7 +36,8 @@ DECLARE
 BEGIN
   SELECT id INTO v_dc_id
   FROM public.designer_clients
-  WHERE designer_id = uid_designer AND client_id = uid_client
+  WHERE studio_id = v_studio_id
+    AND designer_id = uid_designer AND client_id = uid_client
   LIMIT 1;
 
   IF v_dc_id IS NULL THEN
@@ -46,10 +48,10 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.projects WHERE id = v_project_id) THEN
     INSERT INTO public.projects (
       id, name, status, budget_cents, design_fee_cents,
-      client_visibility_tier, client_id, designer_id, created_by
+      client_visibility_tier, client_id, designer_id, created_by, studio_id
     ) VALUES (
       v_project_id, 'Aspen Loft Refresh', 'active', 12000000, 250000,
-      'milestone', uid_client, uid_designer, uid_designer
+      'milestone', uid_client, uid_designer, uid_designer, v_studio_id
     );
   END IF;
 
@@ -65,11 +67,11 @@ BEGIN
 
   -- DRAFT
   INSERT INTO public.client_decisions (
-    id, designer_client_id, designer_id, project_id,
+    id, designer_client_id, designer_id, studio_id, project_id,
     title, context, due_date, linked_phase,
     decision_type, blocking_status, status, sent_at
   ) VALUES (
-    v_dec_draft, v_dc_id, uid_designer, v_project_id,
+    v_dec_draft, v_dc_id, uid_designer, v_studio_id, v_project_id,
     'Pendant lights - brushed brass vs blackened steel',
     'Two finishes for the dining pendants. Saving until I have the wood-tone samples back.',
     NULL, 'Concept', 'material', 'non_blocking', 'draft', NULL
@@ -82,11 +84,11 @@ BEGIN
 
   -- PENDING (due in 5 days) — scoped to the Dining Room (00172 room_id)
   INSERT INTO public.client_decisions (
-    id, designer_client_id, designer_id, project_id, room_id,
+    id, designer_client_id, designer_id, studio_id, project_id, room_id,
     title, context, due_date, linked_phase,
     decision_type, blocking_status, status, sent_at
   ) VALUES (
-    v_dec_pending, v_dc_id, uid_designer, v_project_id, v_room_dining,
+    v_dec_pending, v_dc_id, uid_designer, v_studio_id, v_project_id, v_room_dining,
     'Dining chairs - Shaker Oak vs Windsor Elm',
     'Six chairs to pair with the Nordic Atelier table. Both are solid wood - different personalities for the room.',
     (NOW() + INTERVAL '5 days'),
@@ -102,11 +104,11 @@ BEGIN
 
   -- PENDING + OVERDUE (due 3 days ago) — scoped to the Living Room (00172 room_id)
   INSERT INTO public.client_decisions (
-    id, designer_client_id, designer_id, project_id, room_id,
+    id, designer_client_id, designer_id, studio_id, project_id, room_id,
     title, context, due_date, linked_phase,
     decision_type, blocking_status, status, sent_at
   ) VALUES (
-    v_dec_overdue, v_dc_id, uid_designer, v_project_id, v_room_living,
+    v_dec_overdue, v_dc_id, uid_designer, v_studio_id, v_project_id, v_room_living,
     'Rug color - Natural vs Sand',
     'The jute rug from Studio Piet. Natural is warmer, Sand is more neutral.',
     (NOW() - INTERVAL '3 days'),
@@ -121,12 +123,12 @@ BEGIN
 
   -- RESPONDED
   INSERT INTO public.client_decisions (
-    id, designer_client_id, designer_id, project_id,
+    id, designer_client_id, designer_id, studio_id, project_id,
     title, context, due_date, linked_phase,
     decision_type, blocking_status, status,
     sent_at, responded_at, viewed_at, selected_by
   ) VALUES (
-    v_dec_responded, v_dc_id, uid_designer, v_project_id,
+    v_dec_responded, v_dc_id, uid_designer, v_studio_id, v_project_id,
     'Concept direction approval',
     'Two approaches: Scandinavian Warm or Modern Organic. Mood boards in the conversation.',
     (NOW() - INTERVAL '4 days'),
@@ -142,12 +144,12 @@ BEGIN
 
   -- EXPIRED
   INSERT INTO public.client_decisions (
-    id, designer_client_id, designer_id, project_id,
+    id, designer_client_id, designer_id, studio_id, project_id,
     title, context, due_date, linked_phase,
     decision_type, blocking_status, status,
     sent_at, reminder_sent_at
   ) VALUES (
-    v_dec_expired, v_dc_id, uid_designer, v_project_id,
+    v_dec_expired, v_dc_id, uid_designer, v_studio_id, v_project_id,
     'Hardware finish - pulls vs knobs',
     'For the kitchen. Going stale - superseded by a different scope choice.',
     (NOW() - INTERVAL '14 days'),

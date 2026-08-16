@@ -46,6 +46,7 @@ DO $$
 DECLARE
   uid_designer UUID := 'a0000000-0000-0000-0000-000000000004';
   uid_client   UUID := 'a0000000-0000-0000-0000-000000000005';
+  v_studio_id  UUID := 'b0000000-0000-0000-0000-000000000001';
   v_dc_id      UUID;
 
   -- ── Project D3 — "Birch Hollow" (low extreme: 3 phases, 1 thread) ────────
@@ -77,7 +78,8 @@ DECLARE
 BEGIN
   SELECT id INTO v_dc_id
   FROM public.designer_clients
-  WHERE designer_id = uid_designer AND client_id = uid_client
+  WHERE studio_id = v_studio_id
+    AND designer_id = uid_designer AND client_id = uid_client
   LIMIT 1;
 
   IF v_dc_id IS NULL THEN
@@ -89,10 +91,10 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.projects WHERE id = v_proj_d3) THEN
     INSERT INTO public.projects (
       id, name, status, budget_cents, design_fee_cents,
-      client_visibility_tier, client_id, designer_id, created_by
+      client_visibility_tier, client_id, designer_id, created_by, studio_id
     ) VALUES (
       v_proj_d3, 'Birch Hollow', 'active', 18500000, 320000,
-      'milestone', uid_client, uid_designer, uid_designer
+      'milestone', uid_client, uid_designer, uid_designer, v_studio_id
     );
   END IF;
 
@@ -100,10 +102,10 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.projects WHERE id = v_proj_d4) THEN
     INSERT INTO public.projects (
       id, name, status, budget_cents, design_fee_cents,
-      client_visibility_tier, client_id, designer_id, created_by
+      client_visibility_tier, client_id, designer_id, created_by, studio_id
     ) VALUES (
       v_proj_d4, 'Marrow & Vale Residence', 'active', 42000000, 610000,
-      'milestone', uid_client, uid_designer, uid_designer
+      'milestone', uid_client, uid_designer, uid_designer, v_studio_id
     );
   END IF;
 

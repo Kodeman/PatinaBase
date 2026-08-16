@@ -24,7 +24,7 @@ import { NextRequest } from 'next/server';
 // also resolves it.
 function chainable(terminalResult: { data?: unknown; error?: unknown }) {
   const builder: any = {};
-  for (const method of ['select', 'eq', 'in', 'insert', 'update', 'upsert']) {
+  for (const method of ['select', 'eq', 'neq', 'in', 'limit', 'insert', 'update', 'upsert']) {
     builder[method] = jest.fn(() => builder);
   }
   builder.maybeSingle = jest.fn(() => Promise.resolve(terminalResult));
@@ -35,7 +35,8 @@ function chainable(terminalResult: { data?: unknown; error?: unknown }) {
 
 const profilesBuilder = chainable({ data: null, error: null }); // no existing profile by email; caller profile lookup also null (falls back to email)
 const rolesBuilder = chainable({ data: { id: 'role-client' }, error: null });
-const userRolesBuilder = chainable({ data: null, error: null });
+const userRolesBuilder = chainable({ data: { role_id: 'role-designer' }, error: null });
+const organizationMembersBuilder = chainable({ data: { id: 'membership-1' }, error: null });
 const designerClientsBuilder = chainable({ data: { id: 'designer-client-1' }, error: null });
 const activityLogBuilder = chainable({ data: null, error: null });
 
@@ -49,6 +50,8 @@ const fromMock = jest.fn((table: string) => {
       return userRolesBuilder;
     case 'designer_clients':
       return designerClientsBuilder;
+    case 'organization_members':
+      return organizationMembersBuilder;
     case 'client_activity_log':
       return activityLogBuilder;
     default:
@@ -97,6 +100,7 @@ function makeRequest(body: unknown): NextRequest {
 describe('POST /api/clients/invite', () => {
   beforeEach(() => {
     fromMock.mockClear();
+    designerClientsBuilder.insert.mockClear();
     inviteUserByEmailMock.mockClear();
     inviteUserByEmailMock.mockResolvedValue({
       data: { user: { id: 'new-client-user-id' } },
@@ -105,7 +109,11 @@ describe('POST /api/clients/invite', () => {
   });
 
   it('sends the invite with redirectTo pointed at the client portal callback, not the GoTrue site_url default', async () => {
-    const res = await POST(makeRequest({ clientEmail: 'homeowner@example.com', clientName: 'Homeowner' }));
+    const res = await POST(makeRequest({
+      studioId: 'studio-1',
+      clientEmail: 'homeowner@example.com',
+      clientName: 'Homeowner',
+    }));
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -131,11 +139,20 @@ describe('POST /api/clients/invite', () => {
       error: null,
     });
 
-    const res = await POST(makeRequest({ clientEmail: 'existing@example.com' }));
+    const res = await POST(makeRequest({ studioId: 'studio-1', clientEmail: 'existing@example.com' }));
 
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ invited: false, alreadyExists: true, profileId: 'existing-profile-id' });
     expect(inviteUserByEmailMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing exact studio before sending an invite or writing a relationship', async () => {
+    const res = await POST(makeRequest({ clientEmail: 'homeowner@example.com' }));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: 'studioId is required' });
+    expect(inviteUserByEmailMock).not.toHaveBeenCalled();
+    expect(designerClientsBuilder.insert).not.toHaveBeenCalled();
   });
 });

@@ -27,7 +27,7 @@ import {
   type ProposalEmailDeliveryState,
 } from '@/hooks/use-proposals';
 import { ClientPicker } from '@/components/portal/client-picker';
-import { useClient, useInviteAndLinkClient } from '@/hooks/use-clients';
+import { useClient, useClients, useInviteAndLinkClient } from '@/hooks/use-clients';
 import { useAttachDocumentClient } from '@/hooks/use-attach-client';
 import { useToast } from '@/components/portal/toast-provider';
 import { proposalEvents } from '@/lib/analytics';
@@ -153,6 +153,14 @@ export function SendSheet({
   const { data: versions } = useProposalVersions(proposalId);
   const { data: capturedHousehold, isLoading: capturedHouseholdLoading } =
     useClient(proposal?.designer_client_id ?? '');
+  const { data: clients } = useClients();
+  const workspaceClients = useMemo(
+    () =>
+      (clients ?? []).filter(
+        (relationship) => relationship.studio_id === proposal?.studio_id,
+      ),
+    [clients, proposal?.studio_id],
+  );
   const clientPayload = useProposalMirrorData(proposalId);
   const draftingState = useDraftingState(proposalId, open);
   // Treat fresh drafting reconciliation as a required capability: if it is
@@ -582,6 +590,7 @@ export function SendSheet({
     setLinkError(null);
     try {
       await inviteAndAttachCapturedHousehold({
+        studioId: proposal.studio_id,
         proposalId,
         designerClientId: proposal.designer_client_id,
         clientEmail: capturedHousehold.client_email,
@@ -661,13 +670,17 @@ export function SendSheet({
                     <div className="max-w-[320px]">
                       <ClientPicker
                         value={null}
-                        onChange={(clientId) => {
+                        studioId={proposal.studio_id ?? null}
+                        clientOptions={workspaceClients}
+                        onChange={() => undefined}
+                        onRelationshipChange={(designerClientId, clientId) => {
                           setLinkError(null);
                           attachClient.mutate(
                             {
                               engagementKind: 'proposal',
                               targetId: proposalId,
                               clientId,
+                              designerClientId,
                             },
                             {
                               // R83 — inline at the act, in the banner that owns it.
@@ -681,6 +694,7 @@ export function SendSheet({
                           );
                         }}
                         placeholder="Link a client…"
+                        disabled={!proposal.studio_id}
                       />
                     </div>
                   </>

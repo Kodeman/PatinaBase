@@ -814,10 +814,12 @@ export function PulseBody({
 export function NoteBody({
   row,
   projectId,
+  designerClientId,
   clientName,
 }: {
   row: MarginItemRow;
   projectId: string | null;
+  designerClientId: string | null;
   clientName?: string;
 }) {
   const toDecision = useEscalateNoteToDecision();
@@ -841,7 +843,7 @@ export function NoteBody({
           {String(row.payload.author_name)}
         </p>
       ) : null}
-      {projectId && (
+      {projectId && designerClientId && (
         <DocumentActionGroup
           surfaceKey="open-document"
           regionKey="margin-note-escalation"
@@ -855,6 +857,7 @@ export function NoteBody({
               toDecision.mutate({
                 noteId: row.item_id,
                 projectId,
+                designerClientId,
                 body: row.title,
               })
             }
@@ -956,11 +959,13 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
 export function MarginItemBody({
   row,
   projectId,
+  designerClientId,
   clientName,
   decisionRows = [],
 }: {
   row: MarginItemRow;
   projectId: string | null;
+  designerClientId: string | null;
   clientName: string;
   decisionRows?: MarginItemRow[];
 }) {
@@ -987,7 +992,12 @@ export function MarginItemBody({
       return null;
     case 'note':
       return (
-        <NoteBody row={row} projectId={projectId} clientName={clientName} />
+        <NoteBody
+          row={row}
+          projectId={projectId}
+          designerClientId={designerClientId}
+          clientName={clientName}
+        />
       );
     case 'field_sms':
       return <FieldSmsBody row={row} />;

@@ -39,6 +39,7 @@ describe('CapturedHouseholdInvite', () => {
 
     await expect(
       inviteAndAttachCapturedHousehold({
+        studioId: 'studio-1',
         proposalId: 'proposal-1',
         designerClientId: 'designer-client-1',
         clientEmail: 'harper@example.com',
@@ -49,6 +50,7 @@ describe('CapturedHouseholdInvite', () => {
     ).resolves.toBe('profile-1');
 
     expect(invite).toHaveBeenCalledWith({
+      studioId: 'studio-1',
       designerClientId: 'designer-client-1',
       clientEmail: 'harper@example.com',
       clientName: 'Harper Vale',
@@ -57,6 +59,7 @@ describe('CapturedHouseholdInvite', () => {
       engagementKind: 'proposal',
       targetId: 'proposal-1',
       clientId: 'profile-1',
+      designerClientId: 'designer-client-1',
     });
   });
 
@@ -65,6 +68,7 @@ describe('CapturedHouseholdInvite', () => {
 
     await expect(
       inviteAndAttachCapturedHousehold({
+        studioId: 'studio-1',
         proposalId: 'proposal-1',
         designerClientId: 'designer-client-1',
         clientEmail: 'harper@example.com',

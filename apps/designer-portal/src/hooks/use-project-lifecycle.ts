@@ -58,7 +58,10 @@ export interface OpenProjectDirectInput {
   /** Client-generated uuid — makes a retried submit return the same project. */
   id: string;
   title: string;
-  clientId: string | null;
+  /** Explicit active design-studio workspace selected by the designer. */
+  studioId: string;
+  /** Exact designer_clients.id in that workspace, not a client profile id. */
+  designerClientId: string | null;
   budgetMinCents: number | null;
   budgetMaxCents: number | null;
   /** YYYY-MM-DD */
@@ -74,7 +77,8 @@ export function useOpenProjectDirect() {
     mutationFn: async (input: OpenProjectDirectInput): Promise<string> => {
       const { data, error } = await getSupabase().rpc('open_project_direct', {
         p_title: input.title,
-        p_client_id: input.clientId,
+        p_studio_id: input.studioId,
+        p_designer_client_id: input.designerClientId,
         p_budget_min_cents: input.budgetMinCents,
         p_budget_max_cents: input.budgetMaxCents,
         p_start_date: input.startDate,

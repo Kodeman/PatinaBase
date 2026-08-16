@@ -99,6 +99,7 @@ describe('desktop Stage-2 margin classification', () => {
         <MarginRail
           projectId="project-1"
           proposalId={null}
+          designerClientId="designer-client-1"
           clientName="Client"
           onHoverLine={jest.fn()}
         />,

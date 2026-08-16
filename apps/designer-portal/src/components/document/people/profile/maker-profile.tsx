@@ -20,6 +20,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
+  useSavedVendorIds,
   useToggleVendorSave,
   useVendor,
   useVendorProducts,
@@ -277,10 +278,12 @@ function QuoteSheet({
 
 export function MakerProfile({
   vendorId,
+  studioId,
   onBack,
   notify: _notify,
 }: {
   vendorId: string;
+  studioId: string | null;
   onBack: () => void;
   /** Kept for the shared profile contract; the maker view speaks inline (R83). */
   notify: (m: string) => void;
@@ -304,6 +307,7 @@ export function MakerProfile({
   };
 
   const toggleSave = useToggleVendorSave({ errorSurface: 'inline' });
+  const { data: savedVendorIds } = useSavedVendorIds(studioId);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [rosterNote, setRosterNote] = useState<string | null>(null);
   const [quoteOpen, setQuoteOpen] = useState(false);
@@ -354,13 +358,17 @@ export function MakerProfile({
     vendor.trade_account_email ??
     vendor.contact_email ??
     null;
-  const isSaved: boolean = Boolean(vendor.designerRelationship?.isSaved);
+  const isSaved = (savedVendorIds ?? []).includes(vendorId);
 
   const toggleRoster = async () => {
     setRosterError(null);
     setRosterNote(null);
+    if (!studioId) {
+      setRosterError('Choose a studio workspace before changing its roster.');
+      return;
+    }
     try {
-      const result = await toggleSave.mutateAsync({ vendorId });
+      const result = await toggleSave.mutateAsync({ studioId, vendorId });
       setRosterNote(
         result.saved
           ? `${name} joined your roster.`

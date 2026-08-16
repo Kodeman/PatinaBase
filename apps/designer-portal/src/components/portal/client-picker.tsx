@@ -17,6 +17,13 @@ export interface ClientPickerProps {
   value: string | null;
   /** Called with the selected profiles.id, or null to clear. */
   onChange: (clientId: string | null) => void;
+  /** Exact selected designer_clients.id, emitted alongside the profile id. */
+  onRelationshipChange?: (
+    designerClientId: string | null,
+    clientId: string | null,
+  ) => void;
+  /** Explicit workspace required for every relationship surfaced or created. */
+  studioId: string | null;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
@@ -50,6 +57,8 @@ export interface ClientPickerProps {
 export function ClientPicker({
   value,
   onChange,
+  onRelationshipChange,
+  studioId,
   placeholder = 'Select a client…',
   disabled = false,
   className,
@@ -93,7 +102,16 @@ export function ClientPicker({
   }, [open]);
 
   const { data: queriedClients, isLoading } = useClients();
-  const clients = clientOptions ?? queriedClients;
+  const availableClients = clientOptions ?? queriedClients;
+  const clients = React.useMemo(
+    () =>
+      studioId
+        ? availableClients?.filter(
+            (relationship) => relationship.studio_id === studioId,
+          )
+        : [],
+    [availableClients, studioId],
+  );
   const addClient = useAddClient();
   const inviteAndLink = useInviteAndLinkClient();
 
@@ -156,16 +174,22 @@ export function ClientPicker({
 
   const handleAdd = async () => {
     if (!canAdd || adding || disabled) return;
+    if (!studioId) {
+      setAddError('Choose a studio workspace before adding a client.');
+      return;
+    }
     setAdding(true);
     setAddError(null);
     try {
       const result = await addClient.mutateAsync({
+        studioId,
         clientEmail: isEmail ? trimmedSearch : '',
         clientName: isEmail ? undefined : trimmedSearch,
         invite: false,
       });
       if (result.profileId) {
         onChange(result.profileId);
+        onRelationshipChange?.(result.designerClientId, result.profileId);
         setSearch('');
         setOpen(false);
       } else {
@@ -189,16 +213,25 @@ export function ClientPicker({
   // toast stays quiet.
   const handleInviteAndLink = async (dc: DesignerClient) => {
     if (disabled || invitingId || !dc.client_email) return;
+    if (!studioId || dc.studio_id !== studioId) {
+      setInviteError({
+        id: dc.id,
+        message: 'Choose the relationship’s studio workspace before inviting.',
+      });
+      return;
+    }
     setInvitingId(dc.id);
     setInviteError(null);
     try {
       const result = await inviteAndLink.mutateAsync({
+        studioId,
         designerClientId: dc.id,
         clientEmail: dc.client_email,
         clientName: dc.client_name ?? undefined,
       });
       if (result.profileId) {
         onChange(result.profileId);
+        onRelationshipChange?.(result.designerClientId, result.profileId);
         setSearch('');
         setOpen(false);
       } else {
@@ -290,6 +323,7 @@ export function ClientPicker({
                     onSelect={() => {
                       if (disabled) return;
                       onChange(null);
+                      onRelationshipChange?.(null, null);
                       setOpen(false);
                     }}
                     className="relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-[0.82rem] italic text-[var(--text-muted)] outline-none transition-colors aria-selected:bg-[var(--bg-hover)]"
@@ -324,7 +358,9 @@ export function ClientPicker({
                         onSelect={() => {
                           if (disabled || invitingId) return;
                           if (linkable) {
+                            if (!studioId || dc.studio_id !== studioId) return;
                             onChange(dc.client_id);
+                            onRelationshipChange?.(dc.id, dc.client_id);
                             setSearch('');
                             setOpen(false);
                           } else if (invitable) {

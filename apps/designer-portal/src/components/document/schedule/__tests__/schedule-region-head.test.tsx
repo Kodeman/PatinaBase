@@ -211,7 +211,7 @@ function renderSpine() {
   return render(
     <ScheduleSpine
       projectId="project-1"
-      clientUserId="user-1"
+      designerClientId="dc-1"
       clientName="Winky Loft"
     />,
   );

@@ -6,6 +6,7 @@ import type { DesignerClient } from '@/hooks/use-clients';
 const mockPush = jest.fn();
 const mockRememberRoomOrigin = jest.fn();
 let mockClients: DesignerClient[] = [];
+let mockOrganizations: Array<Record<string, unknown>> = [];
 let mockCurrentDesignerId = 'designer-current';
 // Toggled by the "defensive handlePick" test only — appends an escape-hatch
 // button that calls the real onChange(null) directly, simulating a
@@ -20,6 +21,7 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: jest.fn(),
+  useOrganizations: () => ({ data: mockOrganizations }),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -69,9 +71,11 @@ import {
 const relationship = (
   id: string,
   designerId: string,
+  studioId = 'studio-1',
 ): DesignerClient => ({
   id,
   designer_id: designerId,
+  studio_id: studioId,
   client_id: 'client-1',
   source: 'direct',
   lead_id: null,
@@ -106,6 +110,7 @@ const relationship = (
 const noLoginHousehold = (id: string): DesignerClient => ({
   id,
   designer_id: 'designer-current',
+  studio_id: 'studio-1',
   client_id: null,
   source: 'direct',
   lead_id: null,
@@ -148,6 +153,15 @@ describe('DraftProposalSheet', () => {
     jest.clearAllMocks();
     mockCurrentDesignerId = 'designer-current';
     mockClients = [];
+    mockOrganizations = [
+      {
+        id: 'studio-1',
+        name: 'Studio One',
+        type: 'design_studio',
+        status: 'active',
+        membership: { status: 'active', role: 'member' },
+      },
+    ];
     mockForceNullPick = false;
     singleResult = { data: { id: 'proposal-1' }, error: null };
     insert.mockImplementation(() => ({
@@ -182,15 +196,31 @@ describe('DraftProposalSheet', () => {
     fireEvent.click(await screen.findByTestId('client-picker-option-client-1'));
   };
 
-  it('dedupes a shared household, prefers the current relationship, and opens the Drafting Room', async () => {
-    const foreign = relationship('relationship-foreign', 'designer-collaborator');
+  it('requires the selected studio and binds the exact same-client relationship', async () => {
+    const foreign = relationship(
+      'relationship-foreign',
+      'designer-collaborator',
+      'studio-2',
+    );
     const own = relationship('relationship-own', 'designer-current');
     mockClients = [foreign, own];
+    mockOrganizations = [
+      ...mockOrganizations,
+      {
+        id: 'studio-2',
+        name: 'Studio Two',
+        type: 'design_studio',
+        status: 'active',
+        membership: { status: 'active', role: 'member' },
+      },
+    ];
 
-    expect(normalizeDraftHouseholds(mockClients, 'designer-current')).toEqual([
-      own,
-    ]);
+    expect(normalizeDraftHouseholds(mockClients, 'studio-1')).toEqual([own]);
     renderSheet();
+    expect(screen.getByTestId('client-picker-trigger')).toBeDisabled();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Studio workspace' }), {
+      target: { value: 'studio-1' },
+    });
     fireEvent.click(screen.getByTestId('client-picker-trigger'));
     expect(await screen.findAllByText('Client User')).toHaveLength(1);
     fireEvent.click(screen.getByTestId('client-picker-option-client-1'));
@@ -198,6 +228,7 @@ describe('DraftProposalSheet', () => {
     await waitFor(() =>
       expect(insert).toHaveBeenCalledWith(
         expect.objectContaining({
+          studio_id: 'studio-1',
           designer_id: 'designer-current',
           client_id: 'client-1',
           designer_client_id: 'relationship-own',
@@ -222,6 +253,7 @@ describe('DraftProposalSheet', () => {
     await waitFor(() =>
       expect(insert).toHaveBeenCalledWith(
         expect.objectContaining({
+          studio_id: 'studio-1',
           designer_id: 'designer-collaborator',
           client_id: 'client-1',
           designer_client_id: 'relationship-foreign',

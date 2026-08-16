@@ -33,6 +33,15 @@ SET email = EXCLUDED.email,
     full_name = EXCLUDED.full_name,
     updated_at = EXCLUDED.updated_at;
 
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT actor_id, role_row.id
+FROM unnest(ARRAY[
+  'c9500000-0000-4000-8000-000000000001'::uuid,
+  'c9500000-0000-4000-8000-000000000004'::uuid
+]) AS actor(actor_id)
+CROSS JOIN public.roles AS role_row
+WHERE role_row.name = 'independent_designer';
+
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES
   ('c9540000-0000-4000-8000-000000000001',
@@ -60,38 +69,45 @@ VALUES
    'c9540000-0000-4000-8000-000000000002', 'member', 'active', NOW());
 
 INSERT INTO public.designer_clients (
-  id, designer_id, client_id, client_name, status, source
+  id, designer_id, client_id, studio_id, client_name, status, source
 )
 VALUES
   ('c9510000-0000-4000-8000-000000000001',
    'c9500000-0000-4000-8000-000000000001',
    'c9500000-0000-4000-8000-000000000002',
+   'c9540000-0000-4000-8000-000000000001',
    'Scope Client', 'active', 'direct'),
   ('c9510000-0000-4000-8000-000000000002',
    'c9500000-0000-4000-8000-000000000001',
    'c9500000-0000-4000-8000-000000000005',
+   'c9540000-0000-4000-8000-000000000001',
    'Scope Replacement', 'active', 'direct');
 
 INSERT INTO public.projects (
-  id, name, designer_id, client_id, created_by, status,
+  id, name, designer_id, client_id, created_by, studio_id, status,
   budget_cents, design_fee_cents, target_end_date
 )
 VALUES
   ('c9520000-0000-4000-8000-000000000001', 'Open scope project',
    'c9500000-0000-4000-8000-000000000001', 'c9500000-0000-4000-8000-000000000002',
-   'c9500000-0000-4000-8000-000000000001', 'active', 10000, 1000, DATE '2026-08-31'),
+   'c9500000-0000-4000-8000-000000000001', 'c9540000-0000-4000-8000-000000000001',
+   'active', 10000, 1000, DATE '2026-08-31'),
   ('c9520000-0000-4000-8000-000000000002', 'Completed scope project',
    'c9500000-0000-4000-8000-000000000001', 'c9500000-0000-4000-8000-000000000002',
-   'c9500000-0000-4000-8000-000000000001', 'completed', 0, 0, NULL),
+   'c9500000-0000-4000-8000-000000000001', 'c9540000-0000-4000-8000-000000000001',
+   'completed', 0, 0, NULL),
   ('c9520000-0000-4000-8000-000000000003', 'Archived scope project',
    'c9500000-0000-4000-8000-000000000001', 'c9500000-0000-4000-8000-000000000002',
-   'c9500000-0000-4000-8000-000000000001', 'archived', 0, 0, NULL),
+   'c9500000-0000-4000-8000-000000000001', 'c9540000-0000-4000-8000-000000000001',
+   'archived', 0, 0, NULL),
   ('c9520000-0000-4000-8000-000000000004', 'Apply scope project',
    'c9500000-0000-4000-8000-000000000001', 'c9500000-0000-4000-8000-000000000002',
-   'c9500000-0000-4000-8000-000000000001', 'active', 10000, 1000, DATE '2026-08-31'),
+   'c9500000-0000-4000-8000-000000000001', 'c9540000-0000-4000-8000-000000000001',
+   'active', 10000, 1000, DATE '2026-08-31'),
   ('c9520000-0000-4000-8000-000000000005', 'Canonical apply project',
    'c9500000-0000-4000-8000-000000000001', 'c9500000-0000-4000-8000-000000000002',
-   'c9500000-0000-4000-8000-000000000001', 'active', 20000, 2000, DATE '2026-09-30');
+   'c9500000-0000-4000-8000-000000000001', 'c9540000-0000-4000-8000-000000000001',
+   'active', 20000, 2000, DATE '2026-09-30');
 
 -- Trusted setup materializes source states. Untrusted direct INSERT/UPDATE
 -- assertions below run through the installed 00395 guard and ACLs.
@@ -1000,7 +1016,8 @@ SELECT pg_temp.assume_scope_actor('c9500000-0000-4000-8000-000000000001');
 SELECT public.set_document_client(
   'project',
   'c9520000-0000-4000-8000-000000000001',
-  'c9500000-0000-4000-8000-000000000005'
+  'c9500000-0000-4000-8000-000000000005',
+  'c9510000-0000-4000-8000-000000000002'
 );
 
 SELECT pg_temp.assume_scope_actor('c9500000-0000-4000-8000-000000000005');

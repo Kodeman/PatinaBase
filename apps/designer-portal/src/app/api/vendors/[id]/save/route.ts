@@ -10,7 +10,7 @@ import { createServerClient } from '@patina/supabase/server';
 //
 // GET /api/vendors/[id]/save — has the current designer saved this vendor?
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -26,10 +26,15 @@ export async function GET(
     }
 
     const { id: vendorId } = await context.params;
+    const studioId = request.nextUrl.searchParams.get('studioId');
+    if (!studioId) {
+      return NextResponse.json({ error: 'studioId is required' }, { status: 400 });
+    }
 
     const { data, error } = await supabase
       .from('saved_vendors')
       .select('id, notes')
+      .eq('studio_id', studioId)
       .eq('designer_id', user.id)
       .eq('vendor_id', vendorId)
       .maybeSingle();
@@ -66,13 +71,17 @@ export async function POST(
 
     const { id: vendorId } = await context.params;
     const body = await request.json().catch(() => ({}));
+    const studioId = typeof body.studioId === 'string' ? body.studioId : '';
+    if (!studioId) {
+      return NextResponse.json({ error: 'studioId is required' }, { status: 400 });
+    }
     const notes: string | null = body.notes ? String(body.notes) : null;
 
     const { data, error } = await supabase
       .from('saved_vendors')
       .upsert(
-        { designer_id: user.id, vendor_id: vendorId, notes },
-        { onConflict: 'designer_id,vendor_id' }
+        { studio_id: studioId, designer_id: user.id, vendor_id: vendorId, notes },
+        { onConflict: 'studio_id,designer_id,vendor_id' }
       )
       .select()
       .single();
@@ -90,7 +99,7 @@ export async function POST(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -106,10 +115,15 @@ export async function DELETE(
     }
 
     const { id: vendorId } = await context.params;
+    const studioId = request.nextUrl.searchParams.get('studioId');
+    if (!studioId) {
+      return NextResponse.json({ error: 'studioId is required' }, { status: 400 });
+    }
 
     const { error } = await supabase
       .from('saved_vendors')
       .delete()
+      .eq('studio_id', studioId)
       .eq('designer_id', user.id)
       .eq('vendor_id', vendorId);
 

@@ -18,19 +18,26 @@ export interface AttachClientInput {
   engagementKind: AttachEngagementKind;
   targetId: string; // the project id or proposal id
   clientId: string | null; // profiles.id to link, or null to unlink
+  designerClientId: string | null; // exact designer_clients.id, or null to unlink
 }
 
 export function useAttachDocumentClient() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ engagementKind, targetId, clientId }: AttachClientInput) => {
+    mutationFn: async ({
+      engagementKind,
+      targetId,
+      clientId,
+      designerClientId,
+    }: AttachClientInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = createBrowserClient() as any;
       const { error } = await supabase.rpc('set_document_client', {
         p_engagement_kind: engagementKind,
         p_target_id: targetId,
         p_client_id: clientId,
+        p_designer_client_id: designerClientId,
       });
       if (error) throw error;
     },

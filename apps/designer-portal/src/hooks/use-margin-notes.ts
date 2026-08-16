@@ -68,37 +68,24 @@ export function useEscalateNoteToDecision() {
     mutationFn: async ({
       noteId,
       projectId,
+      designerClientId,
       body,
     }: {
       noteId: string;
       projectId: string;
+      /** Exact relationship already bound by the document shell. */
+      designerClientId: string;
       body: string;
     }) => {
       if (!user?.id) throw new Error('Not authenticated');
       const supabase = getSupabase();
-
-      // Resolve the project's designer_clients row (client_decisions needs it).
-      const { data: project, error: projError } = await supabase
-        .from('projects')
-        .select('designer_id, client_id')
-        .eq('id', projectId)
-        .single();
-      if (projError) throw projError;
-      const { data: dc, error: dcError } = await supabase
-        .from('designer_clients')
-        .select('id')
-        .eq('designer_id', project.designer_id)
-        .eq('client_id', project.client_id)
-        .maybeSingle();
-      if (dcError) throw dcError;
-      if (!dc) throw new Error('No designer–client relationship found for this project');
 
       const title = body.length > 70 ? `${body.slice(0, 67)}…` : body;
       const decisionId = crypto.randomUUID();
       const { data: decision, error: decError } = await supabase.rpc('create_client_decision', {
         p_decision_id: decisionId,
         p_payload: {
-          designer_client_id: dc.id,
+          designer_client_id: designerClientId,
           project_id: projectId,
           title,
           context: body,

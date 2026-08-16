@@ -67,6 +67,7 @@ describe('PersonProfile — Nurture card (J7)', () => {
       <PersonProfile
         personId="client-1"
         role="client"
+        studioId="studio-1"
         onBack={jest.fn()}
         openThread={jest.fn()}
         openPerson={jest.fn()}
@@ -89,6 +90,7 @@ describe('PersonProfile — Nurture card (J7)', () => {
       <PersonProfile
         personId="client-1"
         role="client"
+        studioId="studio-1"
         onBack={jest.fn()}
         openThread={jest.fn()}
         openPerson={jest.fn()}
@@ -108,6 +110,7 @@ describe('PersonProfile — Nurture card (J7)', () => {
       <PersonProfile
         personId="client-1"
         role="client"
+        studioId="studio-1"
         onBack={jest.fn()}
         openThread={jest.fn()}
         openPerson={jest.fn()}
@@ -127,6 +130,7 @@ describe('PersonProfile — Nurture card (J7)', () => {
       <PersonProfile
         personId="client-1"
         role="client"
+        studioId="studio-1"
         onBack={jest.fn()}
         openThread={jest.fn()}
         openPerson={jest.fn()}

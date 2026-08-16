@@ -21,6 +21,7 @@ import {
   useDiscovery,
   useProjectContextualHandoffs,
   useResolvedSchedule,
+  useDesignerClientForClientUser,
 } from '@patina/supabase';
 import {
   rollupVerdicts,
@@ -300,7 +301,13 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     documentKind: liveProposal?.document_kind,
   });
   const others = useDocumentPresence(row?.engagement_id ?? null);
-  const designerClientId =
+  const documentStudioId =
+    row?.engagement_kind === 'project'
+      ? ((project as AnyRecord | null)?.studio_id as string | null) ?? null
+      : row?.engagement_kind === 'proposal'
+        ? ((liveProposal as AnyRecord | null)?.studio_id as string | null) ?? null
+        : null;
+  const carriedDesignerClientId =
     row?.engagement_kind === 'relationship'
       ? row.engagement_id
       : row?.engagement_kind === 'proposal'
@@ -308,6 +315,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         : row?.engagement_kind === 'project'
           ? (project?.proposal?.designer_client_id ?? null)
           : null;
+  const { data: exactDocumentRelationship } = useDesignerClientForClientUser(
+    carriedDesignerClientId ? null : row?.client_profile_id,
+    carriedDesignerClientId ? null : documentStudioId,
+    carriedDesignerClientId ? null : row?.designer_id,
+  );
+  const designerClientId = carriedDesignerClientId ?? exactDocumentRelationship?.id ?? null;
 
   // C3 — the proposal's per-line client verdicts, rolled up for a quiet
   // letterhead summary on the open proposal ("4 of 12 approved · 1 flagged").
@@ -668,6 +681,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       ? {
           projectId: row.project_id,
           proposalId: row.proposal_id,
+          designerClientId,
           clientName: row.client_name,
           title: row.title,
           sections,
@@ -834,6 +848,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           client={
             row.engagement_kind === 'project' || row.engagement_kind === 'proposal' ? (
               <HouseholdChip
+                studioId={documentStudioId}
                 engagementKind={row.engagement_kind}
                 projectId={row.project_id}
                 proposalId={row.proposal_id}
@@ -949,11 +964,18 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           // → the captured facts recap; Direction/Proposal → the proposal blocks.
           let body: ReactNode = null;
           if (s.key === 'brief') {
-            body = <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} />;
+            body = (
+              <BriefRecap
+                clientProfileId={row.client_profile_id}
+                leadId={row.lead_id}
+                designerClientId={designerClientId}
+              />
+            );
           } else if (s.key === 'discovery') {
             body = (
               <DiscoveryRecap
                 clientProfileId={row.client_profile_id}
+                designerClientId={designerClientId}
                 engagementKind={row.engagement_kind}
                 engagementId={row.engagement_id}
                 proposalId={row.proposal_id}
@@ -1125,7 +1147,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                     and no longer mounts anywhere. */}
                   <ScheduleSpine
                     projectId={row.project_id}
-                    clientUserId={row.client_profile_id}
+                    designerClientId={designerClientId}
                     clientName={row.client_name}
                     projectStatus={project?.status}
                   />
@@ -1262,8 +1284,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           <MarginRail
             projectId={row.project_id}
             proposalId={row.proposal_id}
+            designerClientId={designerClientId}
             clientName={row.client_name}
-            clientUserId={row.client_profile_id}
             now={gateNow}
             approvalSurfaceMounted={row.engagement_kind === 'project'}
             onHoverLine={setHighlightLineId}

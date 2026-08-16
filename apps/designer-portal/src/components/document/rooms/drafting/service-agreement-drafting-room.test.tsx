@@ -68,6 +68,7 @@ jest.mock("@/hooks/use-clients", () => ({
       {
         id: "manual-lead-relationship",
         designer_id: "designer-1",
+        studio_id: "studio-1",
         client_id: null,
         client_name: "Jordan Manual Lead",
         client_email: "jordan@example.com",
@@ -75,6 +76,7 @@ jest.mock("@/hooks/use-clients", () => ({
       {
         id: "teammate-relationship",
         designer_id: "designer-2",
+        studio_id: "studio-1",
         client_id: "profile-2",
         client_name: "Teammate Client",
         client_email: "teammate@example.com",
@@ -82,6 +84,7 @@ jest.mock("@/hooks/use-clients", () => ({
       {
         id: "linked-relationship",
         designer_id: "designer-1",
+        studio_id: "studio-1",
         client_id: "profile-3",
         client_name: "Linked Client",
         client_email: "linked@example.com",
@@ -136,7 +139,10 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSaveAgreement.mockResolvedValue({});
-    mockInviteAndLinkClient.mockResolvedValue({ profileId: "profile-1" });
+    mockInviteAndLinkClient.mockResolvedValue({
+      profileId: "profile-1",
+      designerClientId: "manual-lead-relationship",
+    });
     mockAttachClient.mockImplementation(
       (_input: unknown, callbacks: { onSuccess: () => void }) =>
         callbacks.onSuccess(),
@@ -149,6 +155,7 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
         proposal={{
           id: "agreement-1",
           designer_id: "designer-1",
+          studio_id: "studio-1",
           client_id: null,
           description: "Seeded from Discovery · budget 60,000–80,000",
           client: null,
@@ -205,6 +212,7 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
         proposal={{
           id: "agreement-1",
           designer_id: "designer-1",
+          studio_id: "studio-1",
           client_id: null,
           designer_client_id: "manual-lead-relationship",
           description: "Seeded from Discovery · budget 15,000–50,000",
@@ -228,6 +236,7 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
 
     await waitFor(() =>
       expect(mockInviteAndLinkClient).toHaveBeenCalledWith({
+        studioId: "studio-1",
         designerClientId: "manual-lead-relationship",
         clientEmail: "jordan@example.com",
         clientName: "Jordan Manual Lead",
@@ -238,6 +247,7 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
         engagementKind: "proposal",
         targetId: "agreement-1",
         clientId: "profile-1",
+        designerClientId: "manual-lead-relationship",
       },
       expect.any(Object),
     );
@@ -252,6 +262,7 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
         proposal={{
           id: "agreement-1",
           designer_id: "designer-1",
+          studio_id: "studio-1",
           client_id: null,
           designer_client_id: "manual-lead-relationship",
           description: "Seeded from Discovery · budget 15,000–50,000",
@@ -287,6 +298,7 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
         proposal={{
           id: "agreement-1",
           designer_id: "designer-1",
+          studio_id: "studio-1",
           client_id: null,
           designer_client_id: "manual-lead-relationship",
           description: "Seeded from Discovery · budget 15,000–50,000",
@@ -327,6 +339,7 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
         proposal={{
           id: "agreement-1",
           designer_id: "designer-1",
+          studio_id: "studio-1",
           client_id: null,
           designer_client_id: "manual-lead-relationship",
           description: "Seeded from Discovery · budget 15,000–50,000",
@@ -349,6 +362,7 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
 
     await waitFor(() =>
       expect(mockInviteAndLinkClient).toHaveBeenCalledWith({
+        studioId: "studio-1",
         designerClientId: "manual-lead-relationship",
         clientEmail: "jordan@example.com",
         clientName: "Jordan Manual Lead",
@@ -362,6 +376,7 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
         proposal={{
           id: "agreement-1",
           designer_id: "designer-1",
+          studio_id: "studio-1",
           client_id: null,
           designer_client_id: "manual-lead-relationship",
           description: "Seeded from Discovery · budget 15,000–50,000",
@@ -396,6 +411,7 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
         proposal={{
           id: "agreement-1",
           designer_id: "designer-1",
+          studio_id: "studio-1",
           client_id: null,
           designer_client_id: "linked-relationship",
           description: "Seeded from Discovery · budget 15,000–50,000",
@@ -416,6 +432,7 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
           engagementKind: "proposal",
           targetId: "agreement-1",
           clientId: "profile-3",
+          designerClientId: "linked-relationship",
         },
         expect.any(Object),
       ),

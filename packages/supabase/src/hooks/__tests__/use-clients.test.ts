@@ -13,6 +13,7 @@ interface MockBuilder {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   select: any;
   eq: any;
+  neq: any;
   order: any;
   limit: any;
   /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -39,6 +40,7 @@ function makeBuilder(initial: BuilderResult = { data: null, error: null }): Mock
 
   builder.select = record('select');
   builder.eq = record('eq');
+  builder.neq = record('neq');
   builder.order = record('order');
   builder.limit = record('limit');
 
@@ -100,54 +102,46 @@ beforeEach(() => {
   supabaseClient.auth.getUser.mockClear();
 });
 
-describe('useDesignerClientForClientUser — relationship history', () => {
-  it('scopes to the signed-in designer and deterministically caps the lookup to one row', async () => {
+describe('useDesignerClientForClientUser — exact workspace relationship', () => {
+  it('binds the immutable studio/designer/client tuple without a recency heuristic', async () => {
     const row = {
-      id: 'relationship-newest',
+      id: 'relationship-exact',
       designer_id: 'designer-1',
+      studio_id: 'studio-1',
       client_id: 'client-1',
-      lead_id: 'lead-newest',
+      lead_id: 'lead-1',
     };
     setTableResult('designer_clients', { data: row, error: null });
 
-    const config = useDesignerClientForClientUser('client-1') as unknown as {
+    const config = useDesignerClientForClientUser(
+      'client-1',
+      'studio-1',
+      'designer-1',
+    ) as unknown as {
       queryFn: () => Promise<typeof row | null>;
       meta?: { errorSurface?: string };
     };
 
     await expect(config.queryFn()).resolves.toEqual(row);
     expect(config.meta).toEqual({ errorSurface: 'silent' });
-    expect(supabaseClient.auth.getUser).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.auth.getUser).not.toHaveBeenCalled();
 
     const chain = builders['designer_clients'].__chain;
     expect(chain).toContainEqual({ method: 'eq', args: ['client_id', 'client-1'] });
+    expect(chain).toContainEqual({ method: 'eq', args: ['studio_id', 'studio-1'] });
     expect(chain).toContainEqual({ method: 'eq', args: ['designer_id', 'designer-1'] });
-    expect(chain).toContainEqual({
-      method: 'order',
-      args: ['updated_at', { ascending: false }],
-    });
-    expect(chain).toContainEqual({
-      method: 'order',
-      args: ['created_at', { ascending: false }],
-    });
-    expect(chain).toContainEqual({ method: 'order', args: ['id', { ascending: false }] });
-    expect(chain).toContainEqual({ method: 'limit', args: [1] });
+    expect(chain).toContainEqual({ method: 'neq', args: ['status', 'lead'] });
+    expect(chain.some(({ method }) => method === 'order' || method === 'limit')).toBe(false);
     expect(chain.at(-1)?.method).toBe('maybeSingle');
   });
 
-  it('treats a signed-out or no-match lookup as an ordinary null result', async () => {
-    supabaseClient.auth.getUser.mockImplementationOnce(async () =>
-      ({ data: { user: null }, error: null }) as any,
-    );
-
-    const signedOut = useDesignerClientForClientUser('client-1') as unknown as {
-      queryFn: () => Promise<unknown>;
-    };
-    await expect(signedOut.queryFn()).resolves.toBeNull();
-    expect(fromCalls).toEqual([]);
-
+  it('treats an exact-tuple no-match as an ordinary null result', async () => {
     setTableResult('designer_clients', { data: null, error: null });
-    const missing = useDesignerClientForClientUser('client-1') as unknown as {
+    const missing = useDesignerClientForClientUser(
+      'client-1',
+      'studio-2',
+      'designer-1',
+    ) as unknown as {
       queryFn: () => Promise<unknown>;
     };
     await expect(missing.queryFn()).resolves.toBeNull();

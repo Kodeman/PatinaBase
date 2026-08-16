@@ -45,53 +45,87 @@ VALUES
   ('c7000000-0000-4000-8000-000000000005', 'other-client@test.invalid', 'Other Client', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES
+  ('c7010000-0000-4000-8000-000000000001', 'design_studio',
+   'Document Client Studio', 'document-client-studio', 'active'),
+  ('c7010000-0000-4000-8000-000000000002', 'design_studio',
+   'Foreign Document Client Studio', 'foreign-document-client-studio', 'active');
+
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT actor_id, role_row.id
+FROM unnest(ARRAY[
+  'c7000000-0000-4000-8000-000000000001'::uuid,
+  'c7000000-0000-4000-8000-000000000004'::uuid
+]) AS actor(actor_id)
+CROSS JOIN public.roles AS role_row
+WHERE role_row.name = 'independent_designer';
+
+INSERT INTO public.organization_members (
+  id, user_id, organization_id, role, status, joined_at
+)
+VALUES
+  ('c7020000-0000-4000-8000-000000000001',
+   'c7000000-0000-4000-8000-000000000001',
+   'c7010000-0000-4000-8000-000000000001', 'owner', 'active', NOW()),
+  ('c7020000-0000-4000-8000-000000000002',
+   'c7000000-0000-4000-8000-000000000004',
+   'c7010000-0000-4000-8000-000000000002', 'owner', 'active', NOW());
+
 INSERT INTO public.designer_clients (
-  id, designer_id, client_id, client_email, client_name, status, source
+  id, designer_id, client_id, studio_id, client_email, client_name, status, source
 )
 VALUES
   (
     'c7100000-0000-4000-8000-000000000001',
     'c7000000-0000-4000-8000-000000000001', NULL,
+    'c7010000-0000-4000-8000-000000000001',
     'old-captured@test.invalid', 'Old Captured Household', 'lead', 'direct'
   ),
   (
     'c7100000-0000-4000-8000-000000000002',
     'c7000000-0000-4000-8000-000000000001',
     'c7000000-0000-4000-8000-000000000002',
+    'c7010000-0000-4000-8000-000000000001',
     'new-client@test.invalid', 'New Registered Household', 'active', 'direct'
   ),
   (
     'c7100000-0000-4000-8000-000000000003',
     'c7000000-0000-4000-8000-000000000001', NULL,
+    'c7010000-0000-4000-8000-000000000001',
     'invited-household@test.invalid', 'Captured Same Household', 'lead', 'direct'
   ),
   (
     'c7100000-0000-4000-8000-000000000004',
     'c7000000-0000-4000-8000-000000000001',
     'c7000000-0000-4000-8000-000000000003',
+    'c7010000-0000-4000-8000-000000000001',
     'historical-household@test.invalid', 'Historical Household Relationship', 'active', 'direct'
   ),
   (
     'c7100000-0000-4000-8000-000000000005',
     'c7000000-0000-4000-8000-000000000004',
     'c7000000-0000-4000-8000-000000000005',
+    'c7010000-0000-4000-8000-000000000002',
     'other-client@test.invalid', 'Other Client Household', 'active', 'direct'
   );
 
 INSERT INTO public.proposals (
-  id, designer_id, designer_client_id, client_id, title, total_amount, status
+  id, designer_id, designer_client_id, client_id, studio_id, title, total_amount, status
 )
 VALUES
   (
     'c7200000-0000-4000-8000-000000000001',
     'c7000000-0000-4000-8000-000000000001',
     'c7100000-0000-4000-8000-000000000001', NULL,
+    'c7010000-0000-4000-8000-000000000001',
     'Reassign captured household', 100000, 'draft'
   ),
   (
     'c7200000-0000-4000-8000-000000000002',
     'c7000000-0000-4000-8000-000000000001',
     'c7100000-0000-4000-8000-000000000003', NULL,
+    'c7010000-0000-4000-8000-000000000001',
     'Invite captured household', 100000, 'draft'
   ),
   (
@@ -99,6 +133,7 @@ VALUES
     'c7000000-0000-4000-8000-000000000004',
     'c7100000-0000-4000-8000-000000000005',
     'c7000000-0000-4000-8000-000000000005',
+    'c7010000-0000-4000-8000-000000000002',
     'Foreign proposal', 100000, 'draft'
   ),
   (
@@ -106,6 +141,7 @@ VALUES
     'c7000000-0000-4000-8000-000000000001',
     'c7100000-0000-4000-8000-000000000002',
     'c7000000-0000-4000-8000-000000000002',
+    'c7010000-0000-4000-8000-000000000001',
     'Already sent proposal', 100000, 'sent'
   ),
   (
@@ -113,11 +149,12 @@ VALUES
     'c7000000-0000-4000-8000-000000000001',
     'c7100000-0000-4000-8000-000000000002',
     'c7000000-0000-4000-8000-000000000002',
+    'c7010000-0000-4000-8000-000000000001',
     'Activated proposal identity', 100000, 'accepted'
   );
 
 INSERT INTO public.projects (
-  id, name, designer_id, client_id, created_by, status
+  id, name, designer_id, client_id, created_by, studio_id, status
 )
 VALUES (
   'c7300000-0000-4000-8000-000000000001',
@@ -125,6 +162,7 @@ VALUES (
   'c7000000-0000-4000-8000-000000000001',
   NULL,
   'c7000000-0000-4000-8000-000000000001',
+  'c7010000-0000-4000-8000-000000000001',
   'active'
 );
 
@@ -136,7 +174,7 @@ SELECT set_config(
   'c7200000-0000-4000-8000-000000000005', true
 );
 INSERT INTO public.projects (
-  id, name, designer_id, client_id, created_by, status, proposal_id
+  id, name, designer_id, client_id, created_by, studio_id, status, proposal_id
 )
 VALUES (
   'c7300000-0000-4000-8000-000000000002',
@@ -144,6 +182,7 @@ VALUES (
   'c7000000-0000-4000-8000-000000000001',
   'c7000000-0000-4000-8000-000000000002',
   'c7000000-0000-4000-8000-000000000001',
+  'c7010000-0000-4000-8000-000000000001',
   'active',
   'c7200000-0000-4000-8000-000000000005'
 );
@@ -212,7 +251,8 @@ $$;
 SELECT public.set_document_client(
   'project',
   'c7300000-0000-4000-8000-000000000001',
-  'c7000000-0000-4000-8000-000000000002'
+  'c7000000-0000-4000-8000-000000000002',
+  'c7100000-0000-4000-8000-000000000002'
 );
 DO $$
 BEGIN
@@ -233,7 +273,8 @@ BEGIN
     PERFORM public.set_document_client(
       'project',
       'c7300000-0000-4000-8000-000000000002',
-      'c7000000-0000-4000-8000-000000000003'
+      'c7000000-0000-4000-8000-000000000003',
+      'c7100000-0000-4000-8000-000000000004'
     );
   EXCEPTION WHEN check_violation THEN
     v_error := SQLERRM;
@@ -254,7 +295,8 @@ $$;
 SELECT public.set_document_client(
   'proposal',
   'c7200000-0000-4000-8000-000000000001',
-  'c7000000-0000-4000-8000-000000000002'
+  'c7000000-0000-4000-8000-000000000002',
+  'c7100000-0000-4000-8000-000000000002'
 );
 
 DO $$
@@ -324,7 +366,8 @@ WHERE id = 'c7100000-0000-4000-8000-000000000003';
 SELECT public.set_document_client(
   'proposal',
   'c7200000-0000-4000-8000-000000000002',
-  'c7000000-0000-4000-8000-000000000003'
+  'c7000000-0000-4000-8000-000000000003',
+  'c7100000-0000-4000-8000-000000000003'
 );
 
 DO $$
@@ -347,6 +390,7 @@ $$;
 SELECT public.set_document_client(
   'proposal',
   'c7200000-0000-4000-8000-000000000001',
+  NULL,
   NULL
 );
 DO $$
@@ -367,12 +411,13 @@ BEGIN
     PERFORM public.set_document_client(
       'proposal',
       'c7200000-0000-4000-8000-000000000001',
-      'c7000000-0000-4000-8000-000000000005'
+      'c7000000-0000-4000-8000-000000000005',
+      'c7100000-0000-4000-8000-000000000005'
     );
   EXCEPTION WHEN insufficient_privilege THEN
     v_error := SQLERRM;
   END;
-  ASSERT v_error = 'client c7000000-0000-4000-8000-000000000005 is not one of your clients',
+  ASSERT v_error = 'client relationship does not belong to this workspace',
     format('cross-designer client should be rejected, got %L', v_error);
 
   v_error := NULL;
@@ -380,6 +425,7 @@ BEGIN
     PERFORM public.set_document_client(
       'proposal',
       'c7200000-0000-4000-8000-000000000003',
+      NULL,
       NULL
     );
   EXCEPTION WHEN insufficient_privilege THEN
@@ -400,6 +446,7 @@ BEGIN
     PERFORM public.set_document_client(
       'proposal',
       'c7200000-0000-4000-8000-000000000004',
+      NULL,
       NULL
     );
   EXCEPTION WHEN check_violation THEN
@@ -413,14 +460,17 @@ $$;
 DO $$
 BEGIN
   ASSERT has_function_privilege(
-    'authenticated', 'public.set_document_client(text,uuid,uuid)', 'EXECUTE'
+    'authenticated', 'public.set_document_client(text,uuid,uuid,uuid)', 'EXECUTE'
   ), 'authenticated must execute set_document_client';
   ASSERT NOT has_function_privilege(
-    'anon', 'public.set_document_client(text,uuid,uuid)', 'EXECUTE'
+    'anon', 'public.set_document_client(text,uuid,uuid,uuid)', 'EXECUTE'
   ), 'anon must not execute set_document_client';
   ASSERT NOT has_function_privilege(
-    'public', 'public.set_document_client(text,uuid,uuid)', 'EXECUTE'
+    'public', 'public.set_document_client(text,uuid,uuid,uuid)', 'EXECUTE'
   ), 'PUBLIC must not execute set_document_client';
+  ASSERT pg_catalog.to_regprocedure(
+    'public.set_document_client(text,uuid,uuid)'
+  ) IS NULL, 'heuristic three-argument set_document_client must be retired';
 END;
 $$;
 

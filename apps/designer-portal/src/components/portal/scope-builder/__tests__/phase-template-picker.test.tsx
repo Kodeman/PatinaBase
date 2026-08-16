@@ -2,6 +2,11 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { PhaseTemplatePicker } from '../phase-template-picker';
 
 const applyTemplateMutateAsync = jest.fn();
+const mockUsePhaseTemplates = jest.fn(() => ({
+  data: [template],
+  isLoading: false,
+  isError: false,
+}));
 
 const template = {
   id: 'template-1',
@@ -16,7 +21,7 @@ const template = {
 };
 
 jest.mock('@patina/supabase', () => ({
-  usePhaseTemplates: () => ({ data: [template], isLoading: false, isError: false }),
+  usePhaseTemplates: (studioId: string | null) => mockUsePhaseTemplates(studioId),
   useApplyPhaseTemplate: () => ({
     mutateAsync: applyTemplateMutateAsync,
     isPending: false,
@@ -63,6 +68,7 @@ describe('PhaseTemplatePicker request receipts', () => {
     render(
       <PhaseTemplatePicker
         proposalId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        studioId="studio-a"
         open
         onOpenChange={onOpenChange}
       />,
@@ -93,6 +99,7 @@ describe('PhaseTemplatePicker request receipts', () => {
     const view = render(
       <PhaseTemplatePicker
         proposalId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        studioId="studio-a"
         open
         onOpenChange={onOpenChange}
       />,
@@ -108,6 +115,7 @@ describe('PhaseTemplatePicker request receipts', () => {
     view.rerender(
       <PhaseTemplatePicker
         proposalId="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        studioId="studio-b"
         open
         onOpenChange={onOpenChange}
       />,
@@ -123,5 +131,6 @@ describe('PhaseTemplatePicker request receipts', () => {
       requestId: expect.any(String),
     });
     expect(applyTemplateMutateAsync.mock.calls[1][0].requestId).not.toBe(firstRequestId);
+    expect(mockUsePhaseTemplates).toHaveBeenLastCalledWith('studio-b');
   });
 });

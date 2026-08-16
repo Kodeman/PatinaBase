@@ -86,6 +86,7 @@ export interface ClientDecision {
   id: string;
   designer_client_id: string;
   designer_id: string;
+  studio_id: string | null;
   project_id: string | null;
   title: string;
   context: string | null;

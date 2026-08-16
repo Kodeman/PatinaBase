@@ -99,14 +99,6 @@ export function PeopleRoom() {
     null,
   );
 
-  useMobilePrimaryAction({
-    actionKey: 'add-person',
-    surfaceKey: 'people',
-    regionKey: 'room-head',
-    label: 'Add person',
-    target: { kind: 'press', onPress: () => setAddOpen(true) },
-  });
-
   // Wave 4 (00420) scope ruling — left STUDIO-wide (unscoped) on purpose.
   // `all` does two jobs here: the Room-wide "N people" count (browse) and the
   // ?person= deep-link role resolution (must reach anyone ⌘K or a cross-link
@@ -123,14 +115,46 @@ export function PeopleRoom() {
   const { data: mine } = usePeopleDirectory({ role: 'all', scope: 'mine' });
   const now = useMemo(() => new Date(), []);
 
-  // Call Sheet Wave 2 — the active studio, for the Companies chip / rolodex
-  // marker (same "prefer design_studio, else first org" resolution as the
-  // Account sheet's studio page). Null while orgs are still loading.
+  // Canonical workspace authority: one eligible studio is deterministic;
+  // multiple studios require an explicit selection and are never ordered into
+  // an implicit "primary" workspace.
   const { data: orgs } = useOrganizations();
-  const organizationId = useMemo(
-    () => orgs?.find((o) => o.type === 'design_studio')?.id ?? orgs?.[0]?.id ?? null,
+  const eligibleStudios = useMemo(
+    () =>
+      (orgs ?? []).filter(
+        (organization) =>
+          organization.type === 'design_studio' &&
+          organization.status === 'active' &&
+          organization.membership.status === 'active' &&
+          organization.membership.role !== 'guest',
+      ),
     [orgs],
   );
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  useEffect(() => {
+    setOrganizationId((current) => {
+      if (current && eligibleStudios.some((studio) => studio.id === current)) {
+        return current;
+      }
+      return eligibleStudios.length === 1 ? eligibleStudios[0].id : null;
+    });
+  }, [eligibleStudios]);
+
+  const openAddPerson = () => {
+    if (!organizationId) {
+      setNotice('Choose a studio workspace before adding someone to its roster.');
+      return;
+    }
+    setAddOpen(true);
+  };
+
+  useMobilePrimaryAction({
+    actionKey: 'add-person',
+    surfaceKey: 'people',
+    regionKey: 'room-head',
+    label: 'Add person',
+    target: { kind: 'press', onPress: openAddPerson },
+  });
 
   // Deep-link entry (R78/R60/F4): /people?person=<id>&role=<role> opens
   // straight onto a profile — the Orders book's "relationship & profile →"
@@ -337,6 +361,7 @@ export function PeopleRoom() {
     <PersonProfile
       personId={openPerson.id}
       role={openPerson.role}
+      studioId={organizationId}
       onBack={() => setOpenPerson(null)}
       {...nav}
     />
@@ -358,7 +383,7 @@ export function PeopleRoom() {
       onScopeChange={setScope}
       onAddPerson={(kind) => {
         setAddKind(kind);
-        setAddOpen(true);
+        openAddPerson();
       }}
     />
   ) : view === 'threads' ? (
@@ -391,13 +416,36 @@ export function PeopleRoom() {
             actionKey="add-person"
             variant="primary"
             leading="+"
-            onClick={() => setAddOpen(true)}
+            onClick={openAddPerson}
+            disabled={!organizationId}
           >
             Add person
           </DocumentAction>
         </DocumentActionGroup>
       }
     >
+      {eligibleStudios.length > 1 && (
+        <label className="mx-auto mb-4 block w-full max-w-[1100px] px-4 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] sm:px-6 min-[1180px]:px-8">
+          Studio workspace
+          <select
+            aria-label="Studio workspace"
+            value={organizationId ?? ''}
+            onChange={(event) => {
+              setOrganizationId(event.target.value || null);
+              setNotice(null);
+              setOpenPerson(null);
+            }}
+            className="ml-3 border-b border-[var(--color-pearl)] bg-transparent pb-1 text-[12px] normal-case tracking-normal text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+          >
+            <option value="">Choose a studio…</option>
+            {eligibleStudios.map((studio) => (
+              <option key={studio.id} value={studio.id}>
+                {studio.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {/* Ask bar — over people + history (derivation-backed v1). */}
       <AskBar value={ask} onChange={setAsk} onAsk={askEngine} />
 
@@ -432,6 +480,7 @@ export function PeopleRoom() {
       {/* Add a person — a paper sheet over the Room. */}
       <AddPersonSheet
         open={addOpen}
+        studioId={organizationId}
         initialKind={addKind}
         onClose={() => setAddOpen(false)}
         onAdded={(message, kind) => {

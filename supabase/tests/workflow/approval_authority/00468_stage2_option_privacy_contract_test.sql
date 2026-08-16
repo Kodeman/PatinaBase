@@ -98,6 +98,15 @@ SET email = EXCLUDED.email,
     full_name = EXCLUDED.full_name,
     is_designer = EXCLUDED.is_designer;
 
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT actor_id, role_row.id
+FROM unnest(ARRAY[
+  'a4400000-0000-4000-8000-000000000001'::uuid,
+  'a4400000-0000-4000-8000-000000000006'::uuid
+]) AS actor(actor_id)
+CROSS JOIN public.roles AS role_row
+WHERE role_row.name = 'independent_designer';
+
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES (
   'a4401000-0000-4000-8000-000000000001', 'design_studio',
@@ -115,19 +124,22 @@ INSERT INTO public.organization_members (
    'a4401000-0000-4000-8000-000000000001', 'member', 'active', now());
 
 INSERT INTO public.designer_clients (
-  id, designer_id, client_id, client_name, status, source
+  id, designer_id, client_id, studio_id, client_name, status, source
 ) VALUES
   ('a4402000-0000-4000-8000-000000000001',
    'a4400000-0000-4000-8000-000000000001',
    'a4400000-0000-4000-8000-000000000002',
+   'a4401000-0000-4000-8000-000000000001',
    'Frozen Lead Relationship', 'active', 'direct'),
   ('a4402000-0000-4000-8000-000000000002',
    'a4400000-0000-4000-8000-000000000001',
    'a4400000-0000-4000-8000-000000000004',
+   'a4401000-0000-4000-8000-000000000001',
    'New Project Client Relationship', 'active', 'direct'),
   ('a4402000-0000-4000-8000-000000000003',
    'a4400000-0000-4000-8000-000000000001',
    'a4400000-0000-4000-8000-000000000005',
+   'a4401000-0000-4000-8000-000000000001',
    'Legacy Relationship', 'active', 'direct');
 
 INSERT INTO public.projects (
@@ -251,7 +263,8 @@ WHERE id = 'a4402000-0000-4000-8000-000000000001';
 SELECT public.set_document_client(
   'project',
   'a4403000-0000-4000-8000-000000000001',
-  'a4400000-0000-4000-8000-000000000004'
+  'a4400000-0000-4000-8000-000000000004',
+  'a4402000-0000-4000-8000-000000000002'
 );
 INSERT INTO public.project_parties (
   id, project_id, party_kind, display_name, profile_id, created_by

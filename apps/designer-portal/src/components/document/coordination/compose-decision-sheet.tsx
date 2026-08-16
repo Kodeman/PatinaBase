@@ -19,7 +19,6 @@ import {
   useProjectFFEItems,
   useProjectParties,
   useProjectPhases,
-  useDesignerClientForClientUser,
   useEscalateFeedbackToDecision,
   type CoordinationItem,
 } from '@patina/supabase';
@@ -47,21 +46,18 @@ function toOptionValue(o: ComposeDecisionOption): DecisionOptionValue {
 export function ComposeDecisionSheet({
   proposalId,
   projectId,
-  clientUserId,
+  designerClientId,
   request,
   onClose,
   onLinked,
 }: {
   proposalId: string;
   projectId: string;
-  clientUserId: string | null;
+  designerClientId: string;
   request: ComposeDecisionRequest;
   onClose: () => void;
   onLinked?: () => void;
 }) {
-  const { data: designerClient } = useDesignerClientForClientUser(clientUserId ?? '');
-  const designerClientId = designerClient?.id ?? null;
-
   const { data: ffeItems } = useProjectFFEItems(projectId);
   const { data: parties } = useProjectParties(projectId);
   const { data: phaseRows } = useProjectPhases(projectId);

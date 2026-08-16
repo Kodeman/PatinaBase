@@ -213,6 +213,7 @@ export interface Proposal {
   id: string;
   project_id: string | null;
   designer_id: string;
+  studio_id: string | null;
   client_id: string | null;
   /** Canonical designer↔household relationship, including no-login clients. */
   designer_client_id: string | null;
@@ -549,6 +550,7 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       title,
+      studioId,
       description,
       projectId,
       clientId,
@@ -557,6 +559,7 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
       templateId,
     }: {
       title: string;
+      studioId: string;
       description?: string;
       projectId?: string;
       clientId?: string;
@@ -569,6 +572,7 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
 
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error('Not authenticated');
+      if (!studioId) throw new Error('Choose an active studio workspace');
       if (!!clientId !== !!designerClientId) {
         throw new Error(
           'A proposal client must include both profile and designer relationship identities',
@@ -578,6 +582,7 @@ export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
       const { data, error } = await supabase
         .from('proposals')
         .insert({
+          studio_id: studioId,
           designer_id: user.user.id,
           title,
           description,

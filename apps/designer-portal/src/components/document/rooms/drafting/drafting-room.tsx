@@ -249,8 +249,9 @@ function DraftingRoomEditor({
   // own route (no margin rail), so it hosts the composer itself. Available only
   // once the proposal has a project + client — the composer's existing contract.
   const composeProjectId = (proposal?.project_id as string | null) ?? null;
-  const composeClientUserId = (proposal?.client_id as string | null) ?? null;
-  const canComposeDecision = Boolean(composeProjectId && composeClientUserId);
+  const composeDesignerClientId =
+    (proposal?.designer_client_id as string | null) ?? null;
+  const canComposeDecision = Boolean(composeProjectId && composeDesignerClientId);
   const [composeRequest, setComposeRequest] =
     useState<ComposeDecisionRequest | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -612,7 +613,10 @@ function DraftingRoomEditor({
               open={currentFacet === 'phases'}
               onToggle={() => setActiveFacet('phases')}
             >
-              <PhaseBuilder proposalId={proposalId} />
+              <PhaseBuilder
+                proposalId={proposalId}
+                studioId={(proposal?.studio_id as string | null) ?? null}
+              />
             </FacetSection>
 
             <FacetSection
@@ -724,7 +728,7 @@ function DraftingRoomEditor({
         <ComposeDecisionSheet
           proposalId={proposalId}
           projectId={composeProjectId}
-          clientUserId={composeClientUserId}
+          designerClientId={composeDesignerClientId as string}
           request={composeRequest}
           onClose={() => setComposeRequest(null)}
         />

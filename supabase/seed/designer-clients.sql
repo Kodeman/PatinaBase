@@ -10,25 +10,25 @@
 
 DO $$
 DECLARE
-  uid_superadmin UUID := 'a0000000-0000-0000-0000-000000000001';
-  uid_admin      UUID := 'a0000000-0000-0000-0000-000000000002';
   uid_studio_mgr UUID := 'a0000000-0000-0000-0000-000000000003';
   uid_designer   UUID := 'a0000000-0000-0000-0000-000000000004';
   uid_client     UUID := 'a0000000-0000-0000-0000-000000000005';
+  v_studio_id    UUID := 'b0000000-0000-0000-0000-000000000001';
   d UUID;
   dc_id UUID;
 BEGIN
   -- Wire each dev designer-ish profile to client@patina.dev so any of them
   -- can use the project-creation wizard's client picker in local dev.
-  FOREACH d IN ARRAY ARRAY[uid_superadmin, uid_admin, uid_studio_mgr, uid_designer] LOOP
+  FOREACH d IN ARRAY ARRAY[uid_studio_mgr, uid_designer] LOOP
     IF NOT EXISTS (
       SELECT 1 FROM public.designer_clients
-      WHERE designer_id = d AND client_id = uid_client
+      WHERE studio_id = v_studio_id
+        AND designer_id = d AND client_id = uid_client
     ) THEN
       INSERT INTO public.designer_clients (
-        designer_id, client_id, status, client_name, client_email, source
+        designer_id, studio_id, client_id, status, client_name, client_email, source
       ) VALUES (
-        d, uid_client, 'active',
+        d, v_studio_id, uid_client, 'active',
         'Client User', 'client@patina.dev', 'manual'
       );
     END IF;
@@ -37,7 +37,8 @@ BEGIN
   -- Seed activity log for the designer@patina.dev ↔ client@patina.dev pair
   -- so the client profile page activity feed and timeline show real data.
   SELECT id INTO dc_id FROM public.designer_clients
-    WHERE designer_id = uid_designer AND client_id = uid_client
+    WHERE studio_id = v_studio_id
+      AND designer_id = uid_designer AND client_id = uid_client
     LIMIT 1;
 
   IF dc_id IS NOT NULL AND NOT EXISTS (
@@ -138,6 +139,7 @@ END $$;
 DO $$
 DECLARE
   uid_designer     UUID := 'a0000000-0000-0000-0000-000000000004';
+  v_studio_id      UUID := 'b0000000-0000-0000-0000-000000000001';
   lead_nologin     UUID := 'd0c10000-0000-0000-0000-0000000000a1';  -- accepted lead, no homeowner
   dc_discovery     UUID := 'd0c10000-0000-0000-0000-0000000000a2';  -- Shape D repro (status='lead')
   dc_direction     UUID := 'd0c10000-0000-0000-0000-0000000000b1';  -- Shape B rescue (Elena analog)
@@ -149,8 +151,8 @@ BEGIN
   END IF;
 
   -- (A.1) The accepted lead with NO homeowner profile (no-login household).
-  INSERT INTO public.leads (id, designer_id, homeowner_id, project_type, status, created_at, updated_at)
-  VALUES (lead_nologin, uid_designer, NULL, 'full_room', 'accepted',
+  INSERT INTO public.leads (id, designer_id, studio_id, homeowner_id, project_type, status, created_at, updated_at)
+  VALUES (lead_nologin, uid_designer, v_studio_id, NULL, 'full_room', 'accepted',
           now() - interval '30 days', now() - interval '20 days')
   ON CONFLICT (id) DO NOTHING;
 
@@ -158,8 +160,8 @@ BEGIN
   -- the accepted lead. Shape D emits dc.lead_id and (post-00327) is NOT excluded
   -- by the project-pair rule.
   INSERT INTO public.designer_clients
-    (id, designer_id, client_id, status, client_name, source, lead_id, created_at, updated_at)
-  VALUES (dc_discovery, uid_designer, NULL, 'lead',
+    (id, designer_id, studio_id, client_id, status, client_name, source, lead_id, created_at, updated_at)
+  VALUES (dc_discovery, uid_designer, v_studio_id, NULL, 'lead',
           'The Ashfords (no-login household)', 'manual', lead_nologin,
           now() - interval '20 days', now() - interval '20 days')
   ON CONFLICT (id) DO NOTHING;
@@ -168,8 +170,8 @@ BEGIN
   -- 'proposal' (a draft proposal exists → NOT a Shape D row). Its client_name is
   -- what Shape B rescues through proposals.designer_client_id.
   INSERT INTO public.designer_clients
-    (id, designer_id, client_id, status, client_name, source, created_at, updated_at)
-  VALUES (dc_direction, uid_designer, NULL, 'proposal',
+    (id, designer_id, studio_id, client_id, status, client_name, source, created_at, updated_at)
+  VALUES (dc_direction, uid_designer, v_studio_id, NULL, 'proposal',
           'Elena Marlowe (no-login household)', 'manual',
           now() - interval '15 days', now() - interval '15 days')
   ON CONFLICT (id) DO NOTHING;

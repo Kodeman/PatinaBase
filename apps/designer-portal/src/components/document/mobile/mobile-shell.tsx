@@ -34,6 +34,7 @@ import type { SpineSection } from '@/lib/document/section-derivation';
 export interface MobileActiveDoc {
   projectId: string | null;
   proposalId: string | null;
+  designerClientId: string | null;
   clientName: string;
   title: string;
   sections: SpineSection[];
@@ -289,7 +290,10 @@ export function useMobileSecondaryAction(action: MobileSecondaryAction | null) {
  *  it on unmount so the bar reverts to its Desk state. */
 export function useMobileActiveDoc(doc: MobileActiveDoc | null) {
   const { setActiveDoc } = useMobileShell();
-  const key = doc?.projectId ?? doc?.proposalId ?? null;
+  const key = [
+    doc?.projectId ?? doc?.proposalId ?? '',
+    doc?.designerClientId ?? '',
+  ].join(':');
   // Re-publish when the engagement or its sections change (sections drive the
   // bar's section label + the spine sheet's section list).
   const sectionsSig = [

@@ -21,9 +21,9 @@
  * (00223) so People's pipeline / referral stats stay clean.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCreateLead } from '@patina/supabase';
+import { useCreateLead, useOrganizations } from '@patina/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { DocSheet } from './doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
@@ -55,7 +55,20 @@ export function CaptureLeadSheet({
   const router = useRouter();
   const createLead = useCreateLead();
   const queryClient = useQueryClient();
+  const { data: organizations } = useOrganizations();
+  const eligibleStudios = useMemo(
+    () =>
+      (organizations ?? []).filter(
+        (organization) =>
+          organization.type === 'design_studio' &&
+          organization.status === 'active' &&
+          organization.membership.status === 'active' &&
+          organization.membership.role !== 'guest',
+      ),
+    [organizations],
+  );
 
+  const [studioId, setStudioId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [project, setProject] = useState('');
@@ -66,6 +79,7 @@ export function CaptureLeadSheet({
   // Fresh form every open; clear any prior error.
   useEffect(() => {
     if (open) {
+      setStudioId(null);
       setName('');
       setContact('');
       setProject('');
@@ -75,17 +89,31 @@ export function CaptureLeadSheet({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    setStudioId((current) => {
+      if (current && eligibleStudios.some((studio) => studio.id === current)) {
+        return current;
+      }
+      return eligibleStudios.length === 1 ? eligibleStudios[0].id : null;
+    });
+  }, [eligibleStudios, open]);
+
   const nameMissing = name.trim() === '';
   const projectMissing = project.trim() === '';
-  const canSubmit = !nameMissing && !projectMissing;
+  const canSubmit = !nameMissing && !projectMissing && !!studioId;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!canSubmit) {
+    if (nameMissing || projectMissing || !studioId) {
       setTouched({ name: true, project: true });
-      setError('Add a name and a one-line project note before beginning the Brief.');
+      setError(
+        studioId
+          ? 'Add a name and a one-line project note before beginning the Brief.'
+          : 'Choose the studio workspace that will own this Brief.',
+      );
       return;
     }
 
@@ -105,6 +133,7 @@ export function CaptureLeadSheet({
 
     createLead.mutate(
       {
+        studio_id: studioId,
         // The table requires project_type (NOT NULL). A captured front-door
         // lead has no type chosen yet — 'consultation' is the honest default
         // for "someone just came in"; the Brief refines it as the work begins.
@@ -154,6 +183,33 @@ export function CaptureLeadSheet({
         </p>
 
         <div className="mt-7 space-y-5">
+          <Field id="capture-lead-workspace" label="Studio workspace" required>
+            {eligibleStudios.length > 1 ? (
+              <select
+                id="capture-lead-workspace"
+                aria-label="Studio workspace"
+                value={studioId ?? ''}
+                onChange={(event) => setStudioId(event.target.value || null)}
+                className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 text-[14px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+              >
+                <option value="">Choose a studio…</option>
+                {eligibleStudios.map((studio) => (
+                  <option key={studio.id} value={studio.id}>
+                    {studio.name}
+                  </option>
+                ))}
+              </select>
+            ) : eligibleStudios.length === 1 ? (
+              <p className="border-b border-[var(--color-pearl)] pb-1.5 text-[14px] text-[var(--color-charcoal)]">
+                {eligibleStudios[0].name}
+              </p>
+            ) : (
+              <p className="text-[12px] text-[var(--color-terracotta)]" role="alert">
+                No active design-studio workspace is available.
+              </p>
+            )}
+          </Field>
+
           <Field
             id="capture-lead-name"
             label="Name"
@@ -284,7 +340,9 @@ export function CaptureLeadSheet({
             role="status"
             className="mt-2 text-[12px] text-[var(--color-aged-oak)]"
           >
-            Add a name and one-line project note to begin.
+            {!studioId
+              ? 'Choose a studio workspace to begin.'
+              : 'Add a name and one-line project note to begin.'}
           </p>
         )}
       </form>

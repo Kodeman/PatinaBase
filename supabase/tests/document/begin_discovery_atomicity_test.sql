@@ -55,7 +55,19 @@ VALUES
   ('d6100000-0000-4000-8000-000000000001', 'design_studio',
    'Begin Discovery Studio', 'begin-discovery-studio'),
   ('d6100000-0000-4000-8000-000000000002', 'contractor',
-   'Begin Shared Contractor', 'begin-shared-contractor');
+   'Begin Shared Contractor', 'begin-shared-contractor'),
+  ('d6100000-0000-4000-8000-000000000003', 'design_studio',
+   'Foreign Begin Discovery Studio', 'foreign-begin-discovery-studio');
+
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT actor_id, role_row.id
+FROM unnest(ARRAY[
+  'd6000000-0000-4000-8000-000000000001'::uuid,
+  'd6000000-0000-4000-8000-000000000002'::uuid,
+  'd6000000-0000-4000-8000-000000000003'::uuid
+]) AS actor(actor_id)
+CROSS JOIN public.roles AS role_row
+WHERE role_row.name = 'independent_designer';
 
 INSERT INTO public.organization_members (
   id, user_id, organization_id, role, status, joined_at
@@ -72,59 +84,72 @@ VALUES
   ('d6110000-0000-4000-8000-000000000005', 'd6000000-0000-4000-8000-000000000006',
    'd6100000-0000-4000-8000-000000000001', 'guest', 'active', NOW()),
   ('d6110000-0000-4000-8000-000000000006', 'd6000000-0000-4000-8000-000000000007',
-   'd6100000-0000-4000-8000-000000000001', 'member', 'suspended', NOW());
+   'd6100000-0000-4000-8000-000000000001', 'member', 'suspended', NOW()),
+  ('d6110000-0000-4000-8000-000000000007', 'd6000000-0000-4000-8000-000000000003',
+   'd6100000-0000-4000-8000-000000000003', 'owner', 'active', NOW());
 
 INSERT INTO public.leads (
-  id, homeowner_id, designer_id, project_type, status, contact_name, contact_email
+  id, homeowner_id, designer_id, studio_id, project_type, status, contact_name, contact_email
 )
 VALUES
   ('d6200000-0000-4000-8000-000000000001', 'd6000000-0000-4000-8000-000000000010',
-   'd6000000-0000-4000-8000-000000000001', 'consultation', 'new', NULL, NULL),
+   'd6000000-0000-4000-8000-000000000001', 'd6100000-0000-4000-8000-000000000001',
+   'consultation', 'new', NULL, NULL),
   ('d6200000-0000-4000-8000-000000000002', NULL,
-   'd6000000-0000-4000-8000-000000000001', 'consultation', 'viewed',
+   'd6000000-0000-4000-8000-000000000001', 'd6100000-0000-4000-8000-000000000001',
+   'consultation', 'viewed',
    'Profile-less Client', 'profileless@test.invalid'),
   ('d6200000-0000-4000-8000-000000000003', NULL,
-   'd6000000-0000-4000-8000-000000000003', 'consultation', 'new',
+   'd6000000-0000-4000-8000-000000000003', 'd6100000-0000-4000-8000-000000000003',
+   'consultation', 'new',
    'Foreign Lead', 'foreign-lead@test.invalid'),
   ('d6200000-0000-4000-8000-000000000004', NULL,
-   'd6000000-0000-4000-8000-000000000001', 'consultation', 'contacted',
+   'd6000000-0000-4000-8000-000000000001', 'd6100000-0000-4000-8000-000000000001',
+   'consultation', 'contacted',
    'Studio Lead', 'studio-lead@test.invalid'),
   ('d6200000-0000-4000-8000-000000000005', NULL,
-   'd6000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'd6000000-0000-4000-8000-000000000001', 'd6100000-0000-4000-8000-000000000001',
+   'consultation', 'new',
    'Rollback Lead', 'rollback-lead@test.invalid'),
   ('d6200000-0000-4000-8000-000000000006', NULL,
-   'd6000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'd6000000-0000-4000-8000-000000000001', 'd6100000-0000-4000-8000-000000000001',
+   'consultation', 'new',
    'Contractor Boundary Lead', 'contractor-boundary@test.invalid'),
   ('d6200000-0000-4000-8000-000000000007', NULL,
-   'd6000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'd6000000-0000-4000-8000-000000000001', 'd6100000-0000-4000-8000-000000000001',
+   'consultation', 'new',
    'Guest Boundary Lead', 'guest-boundary@test.invalid'),
   ('d6200000-0000-4000-8000-000000000008', NULL,
-   'd6000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'd6000000-0000-4000-8000-000000000001', 'd6100000-0000-4000-8000-000000000001',
+   'consultation', 'new',
    'Suspended Boundary Lead', 'suspended-boundary@test.invalid'),
   ('d6200000-0000-4000-8000-000000000009', 'd6000000-0000-4000-8000-000000000011',
-   'd6000000-0000-4000-8000-000000000001', 'consultation', 'new',
+   'd6000000-0000-4000-8000-000000000001', 'd6100000-0000-4000-8000-000000000001',
+   'consultation', 'new',
    'Progressed Client', 'begin-progressed@test.invalid');
 
 -- A repeat-client canonical relationship must survive unchanged while the new
 -- lead receives its own Discovery-stage engagement (00331 duplicate policy).
 INSERT INTO public.designer_clients (
-  id, designer_id, client_id, client_name, status, source
+  id, designer_id, client_id, studio_id, client_name, status, source
 )
 VALUES (
   'd6300000-0000-4000-8000-000000000001',
   'd6000000-0000-4000-8000-000000000001',
   'd6000000-0000-4000-8000-000000000010',
+  'd6100000-0000-4000-8000-000000000001',
   'Repeat Client', 'active', 'direct'
 );
 
 -- A progressed profile-less direct contact may be associated with the lead,
 -- but Discovery must preserve its lifecycle and identity fields.
 INSERT INTO public.designer_clients (
-  id, designer_id, client_id, client_email, client_name, status, source
+  id, designer_id, client_id, studio_id, client_email, client_name, status, source
 )
 VALUES (
   'd6300000-0000-4000-8000-000000000002',
   'd6000000-0000-4000-8000-000000000001', NULL,
+  'd6100000-0000-4000-8000-000000000001',
   'profileless@test.invalid', 'Old Name', 'active', 'direct'
 );
 
@@ -200,7 +225,8 @@ DECLARE
 BEGIN
   BEGIN
     PERFORM public.accept_design_request(
-      'd6200000-0000-4000-8000-000000000006'
+      'd6200000-0000-4000-8000-000000000006',
+      'd6100000-0000-4000-8000-000000000001'
     );
   EXCEPTION WHEN OTHERS THEN
     v_error := SQLERRM;
@@ -217,10 +243,11 @@ BEGIN
   ), 'arrival eligibility failure must not create a ceremony stub';
 
   INSERT INTO public.designer_clients (
-    id, designer_id, client_id, source, lead_id, status
+    id, designer_id, client_id, studio_id, source, lead_id, status
   ) VALUES (
     'd6300000-0000-4000-8000-000000000006',
     'd6000000-0000-4000-8000-000000000001', NULL,
+    'd6100000-0000-4000-8000-000000000001',
     'design_request', 'd6200000-0000-4000-8000-000000000006', 'lead'
   );
   ASSERT (SELECT client_name = 'Contractor Boundary Lead'

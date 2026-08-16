@@ -1680,6 +1680,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -1719,6 +1720,7 @@ export type Database = {
           selected_by?: string | null
           sent_at?: string | null
           status?: string
+          studio_id?: string | null
           title: string
           updated_at?: string
           viewed_at?: string | null
@@ -1758,6 +1760,7 @@ export type Database = {
           selected_by?: string | null
           sent_at?: string | null
           status?: string
+          studio_id?: string | null
           title?: string
           updated_at?: string
           viewed_at?: string | null
@@ -1824,6 +1827,13 @@ export type Database = {
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_decisions_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
           {
@@ -4077,6 +4087,7 @@ export type Database = {
           satisfaction_score: number | null
           source: string | null
           status: string
+          studio_id: string | null
           style_preferences: Json | null
           style_tags: string[] | null
           tags: string[] | null
@@ -4104,6 +4115,7 @@ export type Database = {
           satisfaction_score?: number | null
           source?: string | null
           status?: string
+          studio_id?: string | null
           style_preferences?: Json | null
           style_tags?: string[] | null
           tags?: string[] | null
@@ -4131,6 +4143,7 @@ export type Database = {
           satisfaction_score?: number | null
           source?: string | null
           status?: string
+          studio_id?: string | null
           style_preferences?: Json | null
           style_tags?: string[] | null
           tags?: string[] | null
@@ -4165,6 +4178,13 @@ export type Database = {
             columns: ["designer_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_clients_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
           {
@@ -7872,6 +7892,7 @@ export type Database = {
           room_scan_id: string | null
           source: string | null
           status: string
+          studio_id: string | null
           timeline: string | null
           updated_at: string
         }
@@ -7898,6 +7919,7 @@ export type Database = {
           room_scan_id?: string | null
           source?: string | null
           status?: string
+          studio_id?: string | null
           timeline?: string | null
           updated_at?: string
         }
@@ -7924,6 +7946,7 @@ export type Database = {
           room_scan_id?: string | null
           source?: string | null
           status?: string
+          studio_id?: string | null
           timeline?: string | null
           updated_at?: string
         }
@@ -7954,6 +7977,13 @@ export type Database = {
             columns: ["homeowner_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
           {
@@ -9204,6 +9234,7 @@ export type Database = {
           label: string
           phases: Json
           slug: string
+          studio_id: string | null
           updated_at: string
           version: number
         }
@@ -9216,6 +9247,7 @@ export type Database = {
           label: string
           phases: Json
           slug: string
+          studio_id?: string | null
           updated_at?: string
           version?: number
         }
@@ -9228,10 +9260,18 @@ export type Database = {
           label?: string
           phases?: Json
           slug?: string
+          studio_id?: string | null
           updated_at?: string
           version?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "phase_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "phase_templates_designer_id_fkey"
             columns: ["designer_id"]
@@ -18115,6 +18155,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -18166,6 +18207,7 @@ export type Database = {
           signed_by_name?: string | null
           signed_ip?: string | null
           status?: string
+          studio_id?: string | null
           subtotal?: number | null
           superseded_at?: string | null
           superseded_reason?: string | null
@@ -18217,6 +18259,7 @@ export type Database = {
           signed_by_name?: string | null
           signed_ip?: string | null
           status?: string
+          studio_id?: string | null
           subtotal?: number | null
           superseded_at?: string | null
           superseded_reason?: string | null
@@ -18314,6 +18357,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "proposal_send_dispatches"
             referencedColumns: ["proposal_id", "id"]
+          },
+          {
+            foreignKeyName: "proposals_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "proposals_template_id_fkey"
@@ -20101,6 +20151,7 @@ export type Database = {
           id: string
           notes: string | null
           saved_at: string | null
+          studio_id: string | null
           vendor_id: string
         }
         Insert: {
@@ -20108,6 +20159,7 @@ export type Database = {
           id?: string
           notes?: string | null
           saved_at?: string | null
+          studio_id?: string | null
           vendor_id: string
         }
         Update: {
@@ -20115,9 +20167,17 @@ export type Database = {
           id?: string
           notes?: string | null
           saved_at?: string | null
+          studio_id?: string | null
           vendor_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "saved_vendors_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "saved_vendors_vendor_id_fkey"
             columns: ["vendor_id"]
@@ -26857,6 +26917,10 @@ export type Database = {
       }
     }
     Functions: {
+      _accept_design_request_00488_core: {
+        Args: { p_lead_id: string }
+        Returns: Json
+      }
       _accept_design_request_profile_bound_core: {
         Args: { p_lead_id: string }
         Returns: Json
@@ -27057,6 +27121,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -27102,13 +27167,20 @@ export type Database = {
         Returns: boolean
       }
       _can_author_proposal: { Args: { p_owner: string }; Returns: boolean }
+      _can_author_studio_snapshot: {
+        Args: { p_exact_owner?: string; p_studio_id: string }
+        Returns: boolean
+      }
       _can_manage_configurable_product: {
         Args: { p_product_id: string }
         Returns: boolean
       }
-      _can_manage_invoice_owner: { Args: { p_owner: string }; Returns: boolean }
       _can_read_configurable_product: {
         Args: { p_product_id: string }
+        Returns: boolean
+      }
+      _can_read_studio_snapshot: {
+        Args: { p_exact_owner?: string; p_studio_id: string }
         Returns: boolean
       }
       _can_record_proposal_engagement: {
@@ -27128,6 +27200,10 @@ export type Database = {
           p_decision: Database["public"]["Tables"]["client_decisions"]["Row"]
         }
         Returns: boolean
+      }
+      _claim_design_request_00488_core: {
+        Args: { p_lead_id: string }
+        Returns: Json
       }
       _clone_proposal_legacy_00399: {
         Args: {
@@ -27197,6 +27273,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -27469,6 +27546,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -27727,6 +27805,10 @@ export type Database = {
           status: string
         }[]
       }
+      _lock_designer_studio_authority: {
+        Args: { p_designer_id: string; p_studio_id: string }
+        Returns: boolean
+      }
       _mark_project_review_delivery_sent_00442_impl: {
         Args: {
           p_actor_id: string
@@ -27776,6 +27858,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -27841,6 +27924,10 @@ export type Database = {
       _plan_room_rev_letter: { Args: { p_n: number }; Returns: string }
       _plan_room_set_doc_visibility: {
         Args: { p_doc_id: string; p_visible: boolean }
+        Returns: undefined
+      }
+      _prepare_canonical_lead_claim: {
+        Args: { p_lead_id: string; p_studio_id: string }
         Returns: undefined
       }
       _prepare_legacy_proposal_phase_insert: {
@@ -28045,6 +28132,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -28149,6 +28237,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -28350,7 +28439,10 @@ export type Database = {
         Args: { p_project_id: string; p_request_id: string }
         Returns: Json
       }
-      accept_design_request: { Args: { p_lead_id: string }; Returns: Json }
+      accept_design_request: {
+        Args: { p_lead_id: string; p_studio_id: string }
+        Returns: Json
+      }
       accept_trade_scope: {
         Args: { p_proposal_id: string; p_signed_name: string }
         Returns: Json
@@ -28485,6 +28577,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -28546,6 +28639,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -28782,6 +28876,7 @@ export type Database = {
           signed_by_name: string | null
           signed_ip: string | null
           status: string
+          studio_id: string | null
           subtotal: number | null
           superseded_at: string | null
           superseded_reason: string | null
@@ -28884,7 +28979,7 @@ export type Database = {
         Returns: boolean
       }
       can_dispatch_proposal_send: {
-        Args: { p_owner: string }
+        Args: { p_proposal_id: string }
         Returns: boolean
       }
       can_manage_invoice: { Args: { p_invoice_id: string }; Returns: boolean }
@@ -29025,7 +29120,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      claim_design_request: { Args: { p_lead_id: string }; Returns: Json }
+      claim_design_request: {
+        Args: { p_lead_id: string; p_studio_id: string }
+        Returns: Json
+      }
       claim_invoice_checkout_attempt: {
         Args: {
           p_allow_designer_test?: boolean
@@ -29252,6 +29350,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -29297,6 +29396,56 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "direct_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_draft_invoice: {
+        Args: {
+          p_expected_client_id: string
+          p_expected_designer_id: string
+          p_expected_studio_id: string
+          p_internal_notes?: string
+          p_lines?: Json
+          p_memo?: string
+          p_payment_terms_days?: number
+          p_project_id: string
+          p_tax_rate?: number
+        }
+        Returns: {
+          amount_paid_cents: number
+          ar_flagged_at: string | null
+          ar_last_chased_at: string | null
+          client_id: string | null
+          created_at: string
+          currency: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          internal_notes: string | null
+          invoice_number: string | null
+          issue_date: string | null
+          last_reminder_at: string | null
+          memo: string | null
+          paid_at: string | null
+          payment_terms_days: number
+          project_id: string
+          reminder_count: number
+          sent_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          studio_id: string | null
+          subtotal_cents: number
+          tax_cents: number
+          tax_rate: number
+          total_cents: number
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -29911,6 +30060,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -29972,6 +30122,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -30960,6 +31111,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -31090,9 +31242,10 @@ export type Database = {
         Args: {
           p_budget_max_cents?: number
           p_budget_min_cents?: number
-          p_client_id?: string
+          p_designer_client_id?: string
           p_id?: string
           p_start_date?: string
+          p_studio_id: string
           p_title: string
         }
         Returns: string
@@ -31268,6 +31421,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -31587,6 +31741,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -31771,6 +31926,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -32107,6 +32263,7 @@ export type Database = {
               signed_by_name: string | null
               signed_ip: string | null
               status: string
+              studio_id: string | null
               subtotal: number | null
               superseded_at: string | null
               superseded_reason: string | null
@@ -32172,6 +32329,7 @@ export type Database = {
               signed_by_name: string | null
               signed_ip: string | null
               status: string
+              studio_id: string | null
               subtotal: number | null
               superseded_at: string | null
               superseded_reason: string | null
@@ -32223,6 +32381,7 @@ export type Database = {
       set_document_client: {
         Args: {
           p_client_id: string
+          p_designer_client_id: string
           p_engagement_kind: string
           p_target_id: string
         }
@@ -32627,6 +32786,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -32675,6 +32835,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -32911,6 +33072,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -32966,6 +33128,7 @@ export type Database = {
           selected_by: string | null
           sent_at: string | null
           status: string
+          studio_id: string | null
           title: string
           updated_at: string
           viewed_at: string | null
@@ -33516,4 +33679,3 @@ export const Constants = {
     },
   },
 } as const
-

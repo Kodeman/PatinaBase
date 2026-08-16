@@ -25,7 +25,7 @@ function extraction(overrides: Partial<ExtractedProductData> = {}): ExtractedPro
 const fakeUser = {
   id: 'u1',
   email: 'a@b.com',
-} as unknown as CaptureState['session']['user'];
+} as unknown as NonNullable<CaptureState['session']['user']>;
 
 function captured(): CaptureState {
   let s = initialCaptureState();
@@ -94,10 +94,28 @@ describe('captureReducer — session', () => {
 
   it('SIGNED_OUT clears the draft and returns to signed-out', () => {
     let s = captured();
+    s = captureReducer(s, { type: 'WORKSPACE_SET', workspaceId: 'studio-a' });
     s = captureReducer(s, { type: 'SIGNED_OUT' });
     expect(s.session.status).toBe('signed-out');
     expect(s.nav.screen).toBe('signedOut');
     expect(s.draft).toBeNull();
+    expect(s.session.workspaceId).toBeNull();
+  });
+
+  it('preserves a workspace only for the same session user', () => {
+    let s = captureReducer(initialCaptureState(), {
+      type: 'SESSION_RESOLVED',
+      user: fakeUser,
+    });
+    s = captureReducer(s, { type: 'WORKSPACE_SET', workspaceId: 'studio-a' });
+    s = captureReducer(s, { type: 'SESSION_RESOLVED', user: fakeUser });
+    expect(s.session.workspaceId).toBe('studio-a');
+
+    s = captureReducer(s, {
+      type: 'SESSION_RESOLVED',
+      user: { ...fakeUser, id: 'u2' },
+    });
+    expect(s.session.workspaceId).toBeNull();
   });
 });
 

@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "verdict": "STATIC REJECT",
+  "artifact_kind": "concise_findings_for_canonical_studio_authority_review",
+  "review_artifact_path": "/tmp/patina_canonical_studio_authority_review.json",
+  "findings": [
+    {
+      "id": "CSA-01",
+      "severity": "HIGH",
+      "confidence": 0.99,
+      "title": "Owner-to-owner studio helpers are not resource-studio capabilities",
+      "assessment": "The final composed closure contains 193 policies, 166 routines, and one view (263 direct rows; 97 wrapper-mediated rows). is_studio_comember accepts unrelated organization types/status; design-only owner helpers remain ambiguous across multiple studios.",
+      "smallest_safe_disposition": "Authorize against exact resource studio keys. Harden helper bodies, but never treat owner UUID co-membership as a resource capability."
+    },
+    {
+      "id": "CSA-02",
+      "severity": "HIGH",
+      "confidence": 0.98,
+      "title": "Unanchored schemas block safe delegated studio sharing",
+      "assessment": "104 policy rows and 67 routine rows traverse nullable/unscoped proposal, client, lead, decision, saved-vendor, or template ownership. Per-row runtime evidence is included.",
+      "smallest_safe_disposition": "Add immutable studio snapshots; keep historical NULL rows owner-only; proposal snapshot must equal project.studio_id when linked."
+    },
+    {
+      "id": "CSA-03",
+      "severity": "HIGH",
+      "confidence": 0.99,
+      "title": "All helper-dependent permissive RLS legs must be dropped",
+      "assessment": "All 193 effective policy rows are permissive authorization legs, including 48 wrapper-mediated policies missed by a direct grep. Adding exact policies without DROP leaves the old OR legs live.",
+      "smallest_safe_disposition": "DROP each named policy and atomically recreate the exact-anchor predicate, preserving separately reviewed client/owner legs."
+    },
+    {
+      "id": "CSA-04",
+      "severity": "MEDIUM",
+      "confidence": 0.99,
+      "title": "Exact organization helper omits organization lifecycle/type",
+      "assessment": "is_active_studio_member checks membership status/role but not organizations.type=design_studio or organizations.status=active.",
+      "smallest_safe_disposition": "Harden the body; authoring additionally needs live designer-domain role and revocation-safe locks."
+    },
+    {
+      "id": "CSA-05",
+      "severity": "HIGH",
+      "confidence": 1.0,
+      "title": "Nine storage.objects policies require platform-owner handoff",
+      "assessment": "The nine exact policy names/operations are listed below; ordinary migration ownership must not be assumed.",
+      "policies": [
+        {
+          "policy": "Designers manage proposal folio objects",
+          "operation": "ALL",
+          "source": {
+            "source_root": "moving_00484",
+            "path": "supabase/migrations/00425_executed_on_paper.sql",
+            "line": 1492,
+            "file_sha256": "08024a8a5b8bdb2911584f1a6ced5ff1676a154f30f13a02486fe89dbe20d930"
+          }
+        },
+        {
+          "policy": "Site request designers read immutable media",
+          "operation": "SELECT",
+          "source": {
+            "source_root": "moving_00484",
+            "path": "supabase/migrations/00374_field_site_request_loop.sql",
+            "line": 737,
+            "file_sha256": "f5e0969384994fac25adc7680f2aacb67154afc27b59ff31bd449a60ec6c6e7b"
+          }
+        },
+        {
+          "policy": "project_ffe_working_studio_delete",
+          "operation": "DELETE",
+          "source": {
+            "source_root": "moving_00484",
+            "path": "supabase/migrations/00433_ffe_safe_reader_media_compatibility.sql",
+            "line": 197,
+            "file_sha256": "439b02d74abe4f96a95279c2430ce9e30e59632bbf9d67ee897b5e8b65405a5e"
+          }
+        },
+        {
+          "policy": "project_ffe_working_studio_insert",
+          "operation": "INSERT",
+          "source": {
+            "source_root": "moving_00484",
+            "path": "supabase/migrations/00433_ffe_safe_reader_media_compatibility.sql",
+            "line": 165,
+            "file_sha256": "439b02d74abe4f96a95279c2430ce9e30e59632bbf9d67ee897b5e8b65405a5e"
+          }
+        },
+        {
+          "policy": "project_ffe_working_studio_select",
+          "operation": "SELECT",
+          "source": {
+            "source_root": "moving_00484",
+            "path": "supabase/migrations/00433_ffe_safe_reader_media_compatibility.sql",
+            "line": 153,
+            "file_sha256": "439b02d74abe4f96a95279c2430ce9e30e59632bbf9d67ee897b5e8b65405a5e"
+          }
+        },
+        {
+          "policy": "project_ffe_working_studio_update",
+          "operation": "UPDATE",
+          "source": {
+            "source_root": "moving_00484",
+            "path": "supabase/migrations/00433_ffe_safe_reader_media_compatibility.sql",
+            "line": 177,
+            "file_sha256": "439b02d74abe4f96a95279c2430ce9e30e59632bbf9d67ee897b5e8b65405a5e"
+          }
+        },
+        {
+          "policy": "proposal_mood_boards_proposal_delete",
+          "operation": "DELETE",
+          "source": {
+            "source_root": "moving_00484",
+            "path": "supabase/migrations/00438_ffe_release_security_hardening.sql",
+            "line": 145,
+            "file_sha256": "afa1e0092a1603565f6f8d2a414e5ab4d009fb69a12cc2558d172ceca89908ef"
+          }
+        },
+        {
+          "policy": "proposal_mood_boards_proposal_insert",
+          "operation": "INSERT",
+          "source": {
+            "source_root": "moving_00484",
+            "path": "supabase/migrations/00438_ffe_release_security_hardening.sql",
+            "line": 117,
+            "file_sha256": "afa1e0092a1603565f6f8d2a414e5ab4d009fb69a12cc2558d172ceca89908ef"
+          }
+        },
+        {
+          "policy": "proposal_mood_boards_proposal_update",
+          "operation": "UPDATE",
+          "source": {
+            "source_root": "moving_00484",
+            "path": "supabase/migrations/00438_ffe_release_security_hardening.sql",
+            "line": 127,
+            "file_sha256": "afa1e0092a1603565f6f8d2a414e5ab4d009fb69a12cc2558d172ceca89908ef"
+          }
+        }
+      ],
+      "smallest_safe_disposition": "Use privileged platform-admin DROP/CREATE plus ordinary-phase sentinels; fail closed on ownership mismatch."
+    },
+    {
+      "id": "CSA-06",
+      "severity": "HIGH",
+      "confidence": 0.99,
+      "title": "open_project_direct selects an exact studio from an unanchored heuristic",
+      "assessment": "Moving 00484 persists/retry-checks studio_id but chooses the earliest eligible studio; caller and designer_clients provide no source studio.",
+      "evidence": [
+        "supabase/migrations/00484_public_rpc_authorization_contract.sql:507",
+        "apps/designer-portal/src/hooks/use-project-lifecycle.ts:75"
+      ],
+      "smallest_safe_disposition": "Require p_studio_id from active workspace context and bind/lock the client relationship to it. Dirty 00484 remains provisional."
+    },
+    {
+      "id": "CSA-07",
+      "severity": "INFO",
+      "confidence": 0.99,
+      "title": "00485/00486 already eliminate eighteen effective rows",
+      "assessment": "14 routine dependency paths and 4 invoice-line policies are separately recorded to prevent rebase regression.",
+      "smallest_safe_disposition": "Preserve final bodies/callee graph and exact policy replacements."
+    }
+  ],
+  "counts": {
+    "live_helper_dependent_policies": 193,
+    "live_helper_dependent_routines": 166,
+    "live_helper_dependent_views": 1,
+    "live_total": 360,
+    "direct_dependency_rows": 263,
+    "transitive_only_dependency_rows": 97,
+    "dispositioned_00485_00486_routines": 14,
+    "dispositioned_00486_policies": 4,
+    "storage_objects_platform_handoffs": 9,
+    "unique_record_ids": 378,
+    "duplicate_record_ids": 0,
+    "helper_reference_rows": {
+      "_can_author_proposal": 68,
+      "is_active_studio_member": 8,
+      "is_design_studio_comember": 186,
+      "is_studio_comember": 120
+    },
+    "anchor_dispositions": {
+      "branchwise_rewrite_with_schema_blockers": 1,
+      "generic_owner_argument_must_be_retired": 2,
+      "mixed_exact_project_and_unanchored_proposal": 22,
+      "mixed_target_anchor_and_unanchored_template_owner": 2,
+      "safe_exact_anchor_after_helper_hardening": 5,
+      "safe_exact_anchor_rewrite": 181,
+      "safe_exact_anchor_rewrite_drop_broad_or_leg": 2,
+      "schema_blocker_nullable_project_or_relationship_snapshot": 30,
+      "schema_blocker_proposal_studio_snapshot": 106,
+      "schema_blocker_studio_snapshot_required": 9
+    },
+    "severity_rows": {
+      "HIGH": 223,
+      "MEDIUM": 137
+    }
+  }
+}

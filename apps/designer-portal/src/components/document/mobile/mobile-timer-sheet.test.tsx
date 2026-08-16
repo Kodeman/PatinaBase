@@ -172,6 +172,7 @@ function OpenProjectSpine() {
         setActiveDoc({
           projectId: 'project-1',
           proposalId: null,
+          designerClientId: 'designer-client-1',
           clientName: 'Client',
           title: 'Project',
           sections: [],

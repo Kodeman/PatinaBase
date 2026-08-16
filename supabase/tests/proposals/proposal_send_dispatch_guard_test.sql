@@ -386,7 +386,7 @@ DECLARE
   v_status jsonb;
 BEGIN
   ASSERT public.can_dispatch_proposal_send(
-    'c8000000-0000-4000-8000-000000000001'
+    'c8300000-0000-4000-8000-000000000001'
   ), 'owner must be authorized';
   v_status := public.get_proposal_send_dispatch_status(
     'c8300000-0000-4000-8000-000000000001',
@@ -411,7 +411,7 @@ DECLARE
   v_status jsonb;
 BEGIN
   ASSERT public.can_dispatch_proposal_send(
-    'c8000000-0000-4000-8000-000000000001'
+    'c8300000-0000-4000-8000-000000000001'
   ), 'active design-studio co-member must be authorized';
   v_status := public.get_proposal_send_dispatch_status(
     'c8300000-0000-4000-8000-000000000001',
@@ -429,7 +429,7 @@ DECLARE
   v_rejected boolean := false;
 BEGIN
   ASSERT NOT public.can_dispatch_proposal_send(
-    'c8000000-0000-4000-8000-000000000001'
+    'c8300000-0000-4000-8000-000000000001'
   ), 'shared contractor membership must not confer dispatch authority';
   BEGIN
     PERFORM public.get_proposal_send_dispatch_status(

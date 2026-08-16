@@ -18,10 +18,10 @@
  * (account/account-sheet.tsx) and the project money band (account-band.tsx).
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   useClient,
-  useDesignerClientForClientUser,
+  useClients,
   useUpdateClientContact,
 } from '@patina/supabase';
 import { ClientPicker } from '@/components/portal/client-picker';
@@ -42,6 +42,7 @@ const pretty = (s: string) =>
 
 export interface HouseholdSheetProps {
   open: boolean;
+  studioId: string | null;
   onClose: () => void;
   engagementKind: string; // 'project' | 'proposal' | 'lead' | 'relationship'
   projectId: string | null;
@@ -56,6 +57,7 @@ export interface HouseholdSheetProps {
 
 export function HouseholdSheet({
   open,
+  studioId,
   onClose,
   engagementKind,
   projectId,
@@ -65,11 +67,13 @@ export function HouseholdSheet({
   clientName,
   proposalStatus,
 }: HouseholdSheetProps) {
-  const { data: rel } = useDesignerClientForClientUser(
-    clientProfileId ?? undefined,
-  );
-  const relationshipId = designerClientId ?? rel?.id ?? '';
+  const relationshipId = designerClientId ?? '';
   const { data: client } = useClient(relationshipId);
+  const { data: clients } = useClients();
+  const workspaceClients = useMemo(
+    () => (clients ?? []).filter((relationship) => relationship.studio_id === studioId),
+    [clients, studioId],
+  );
   const attach = useAttachDocumentClient();
   const updateContact = useUpdateClientContact();
 
@@ -108,9 +112,16 @@ export function HouseholdSheet({
     });
   }, [client?.id, client?.client_name, client?.client_email, client?.notes]);
 
-  const onPick = (clientId: string | null) => {
+  const onPick = (
+    selectedRelationshipId: string | null,
+    clientId: string | null,
+  ) => {
     if (!attachTarget) return;
-    attach.mutate({ ...attachTarget, clientId });
+    attach.mutate({
+      ...attachTarget,
+      clientId,
+      designerClientId: selectedRelationshipId,
+    });
   };
 
   const saveDetails = () => {
@@ -183,7 +194,10 @@ export function HouseholdSheet({
               <div className="max-w-[340px]">
                 <ClientPicker
                   value={clientProfileId}
-                  onChange={onPick}
+                  onChange={() => undefined}
+                  onRelationshipChange={onPick}
+                  studioId={studioId}
+                  clientOptions={workspaceClients}
                   placeholder={
                     clientProfileId
                       ? 'Change client…'
@@ -191,7 +205,7 @@ export function HouseholdSheet({
                         ? 'Invite or choose a client…'
                         : 'Link a household…'
                   }
-                  disabled={attach.isPending}
+                  disabled={attach.isPending || !studioId}
                 />
                 {attach.isError && (
                   <p className="mt-2 text-[12px] text-[var(--color-clay)]">

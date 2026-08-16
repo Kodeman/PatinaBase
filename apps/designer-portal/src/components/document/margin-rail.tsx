@@ -20,7 +20,6 @@ import {
   useProjectParties,
   useProjectPhases,
   useCoordinationItems,
-  useDesignerClientForClientUser,
   type CoordinationItem,
 } from '@patina/supabase';
 import { useSectionTasks } from '@/hooks/use-section-work';
@@ -294,8 +293,8 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
 export function MarginRail({
   projectId,
   proposalId,
+  designerClientId,
   clientName,
-  clientUserId = null,
   onHoverLine,
   pendingNoteAnchor = null,
   onNoteAnchorConsumed = () => {},
@@ -304,6 +303,8 @@ export function MarginRail({
 }: {
   projectId: string | null;
   proposalId: string | null;
+  /** Exact relationship carried/resolved by the document shell. */
+  designerClientId: string | null;
   clientName: string;
   /** Whether the Stage-2 approval ceremony is mounted on this document; the
    *  gates' `open` act dispatches to it and is withheld when it is not. */
@@ -311,9 +312,6 @@ export function MarginRail({
   /** The document's one clock, so the margin stamp and the guide sentence
    *  cannot disagree across a midnight. */
   now: Date;
-  /** The client's AUTH uid (row.client_profile_id) — resolves designer_clients.id
-   *  for the R55 decision composer's INSERT (the same FK the band resolves). */
-  clientUserId?: string | null;
   onHoverLine: (lineId: string | null) => void;
   /** R14: a line unfold asked for a note — open the composer pre-anchored. */
   pendingNoteAnchor?: string | null;
@@ -356,12 +354,8 @@ export function MarginRail({
   }, [visibleItems, ffeItems]);
 
   // ── R55: the decision composer, opened from the margin "+ New" ──
-  // designer_clients.id resolution (the band's pattern) — the composer INSERT
-  // needs the FK, not the raw client auth uid. null until the resolver lands.
-  const { data: designerClient } = useDesignerClientForClientUser(
-    clientUserId ?? '',
-  );
-  const designerClientId = designerClient?.id ?? null;
+  // The composer receives the exact relationship capability resolved at the
+  // document boundary; a raw client profile id is never re-resolved here.
   const canCompose = Boolean(projectId && designerClientId);
 
   const { data: parties } = useProjectParties(projectId ?? '');
@@ -428,6 +422,7 @@ export function MarginRail({
     <MarginItemBody
       row={row}
       projectId={projectId}
+      designerClientId={designerClientId}
       clientName={clientName}
       decisionRows={decisionRows}
     />

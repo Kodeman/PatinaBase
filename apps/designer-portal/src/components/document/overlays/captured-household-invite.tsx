@@ -3,6 +3,7 @@
 import { DocumentAction } from '../document-action';
 
 export async function inviteAndAttachCapturedHousehold({
+  studioId,
   proposalId,
   designerClientId,
   clientEmail,
@@ -10,11 +11,13 @@ export async function inviteAndAttachCapturedHousehold({
   invite,
   attach,
 }: {
+  studioId: string;
   proposalId: string;
   designerClientId: string;
   clientEmail: string;
   clientName?: string;
   invite: (input: {
+    studioId: string;
     designerClientId: string;
     clientEmail: string;
     clientName?: string;
@@ -23,9 +26,10 @@ export async function inviteAndAttachCapturedHousehold({
     engagementKind: 'proposal';
     targetId: string;
     clientId: string;
+    designerClientId: string;
   }) => Promise<unknown>;
 }): Promise<string> {
-  const result = await invite({ designerClientId, clientEmail, clientName });
+  const result = await invite({ studioId, designerClientId, clientEmail, clientName });
   if (!result.profileId) {
     throw new Error('The invite went out but no client account came back.');
   }
@@ -33,6 +37,7 @@ export async function inviteAndAttachCapturedHousehold({
     engagementKind: 'proposal',
     targetId: proposalId,
     clientId: result.profileId,
+    designerClientId,
   });
   return result.profileId;
 }

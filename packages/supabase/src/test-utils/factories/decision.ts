@@ -58,6 +58,7 @@ export function makeDecision(
     id: nextId('c'),
     designer_client_id: nextId('d'),
     designer_id: nextId('e'),
+    studio_id: null,
     project_id: nextId('f'),
     title: 'Test Decision',
     context: null,

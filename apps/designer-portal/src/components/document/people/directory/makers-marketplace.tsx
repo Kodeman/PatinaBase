@@ -42,8 +42,10 @@ const cat = (raw: unknown): string =>
     .trim();
 
 export function MakersMarketplace({
+  studioId,
   onOpenMaker,
 }: {
+  studioId: string | null;
   /** Open the role-adaptive maker profile (works pre-admission too). */
   onOpenMaker: (vendorId: string) => void;
 }) {
@@ -59,7 +61,7 @@ export function MakersMarketplace({
   };
   const vendors = useMemo(() => vendorsPage?.data ?? [], [vendorsPage]);
 
-  const { data: savedIds } = useSavedVendorIds();
+  const { data: savedIds } = useSavedVendorIds(studioId);
   const saved = useMemo(() => new Set(savedIds ?? []), [savedIds]);
 
   const toggleSave = useToggleVendorSave({ errorSurface: 'inline' });
@@ -103,9 +105,16 @@ export function MakersMarketplace({
   const admit = async (vendor: AnyVendor) => {
     // The act only renders on UNSAVED rows, so the toggle always saves here.
     setRowError(null);
+    if (!studioId) {
+      setRowError({
+        id: vendor.id,
+        text: 'Choose a studio workspace before adding a maker.',
+      });
+      return;
+    }
     setSavingId(vendor.id);
     try {
-      await toggleSave.mutateAsync({ vendorId: vendor.id });
+      await toggleSave.mutateAsync({ studioId, vendorId: vendor.id });
     } catch (e) {
       setRowError({
         id: vendor.id,

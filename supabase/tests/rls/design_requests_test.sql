@@ -4,7 +4,7 @@
 -- Covers:
 --   1. Assigned submit → lead 'new' + junction (one primary) + active/full
 --      associations for the designer + in-app notification row.
---   2. Pool submit → designer_id NULL, no associations; visible in
+--   2. Quarantined submit → designer_id/studio_id NULL, no associations; visible in
 --      open_design_requests to both designers; invisible to a non-designer
 --      (authenticated) and to anon; view exposes no homeowner-identity columns.
 --   3. Validation error slugs (each RAISE EXCEPTION path).
@@ -15,8 +15,9 @@
 --   7. Storage policy (00287): objects laid out under scan-id AND under legacy
 --      room-id 3rd path segment are both readable by A post-claim, neither by B.
 --   8. document_state: pool lead absent pre-claim; Shape C for A post-claim.
---   9. Auto-resolve (ruling #2): a client with EXACTLY ONE active
---      designer_clients relationship submits with NULL designer → assigned.
+--   9. No historical/current-relationship inference: a client with exactly one
+--      active relationship still submits with NULL designer/studio and remains
+--      quarantined until an explicit-workspace claim.
 --  10. Homeowner lead RLS (00014): homeowner reads own lead, another does not.
 --  11. Client status notification (00289): a designer flipping an app-originated
 --      lead (client_request_id set) to 'accepted' inserts exactly one homeowner
@@ -45,17 +46,63 @@ VALUES
 INSERT INTO profiles (id, email, full_name, role, is_designer, city, state, zip)
 VALUES
   ('de000000-0000-4000-8000-000000000001', 'dr-client@test.invalid',     'DR Client',    'homeowner', false, 'Austin',  'TX', '78701'),
-  ('de000000-0000-4000-8000-000000000002', 'dr-desa@test.invalid',       'DR Designer A','designer',  true,  NULL, NULL, NULL),
-  ('de000000-0000-4000-8000-000000000003', 'dr-desb@test.invalid',       'DR Designer B','designer',  true,  NULL, NULL, NULL),
+  ('de000000-0000-4000-8000-000000000002', 'dr-desa@test.invalid',       'DR Designer A','designer',  false, NULL, NULL, NULL),
+  ('de000000-0000-4000-8000-000000000003', 'dr-desb@test.invalid',       'DR Designer B','designer',  false, NULL, NULL, NULL),
   ('de000000-0000-4000-8000-000000000004', 'dr-nondesigner@test.invalid','DR NonDesigner','homeowner',false, NULL, NULL, NULL),
   ('de000000-0000-4000-8000-000000000005', 'dr-soloclient@test.invalid', 'DR SoloClient','homeowner', false, 'Dallas', 'TX', '75201')
 ON CONFLICT (id) DO UPDATE SET is_designer = EXCLUDED.is_designer, city = EXCLUDED.city, state = EXCLUDED.state, zip = EXCLUDED.zip;
 
--- Solo client has EXACTLY ONE active designer_clients relationship → Designer A.
-INSERT INTO designer_clients (id, designer_id, client_id, status)
-VALUES ('de000000-0000-4000-8000-0000000000c1',
-        'de000000-0000-4000-8000-000000000002',
-        'de000000-0000-4000-8000-000000000005', 'active');
+-- Canonical authoring authority: the role row is shared/read-locked first,
+-- followed by each actor's role, exact membership, and active studio row.
+INSERT INTO organizations (id, type, name, slug, status)
+VALUES
+  ('de100000-0000-4000-8000-000000000001', 'design_studio',
+   'DR Canonical Studio', 'dr-canonical-studio', 'active'),
+  ('de100000-0000-4000-8000-000000000002', 'design_studio',
+   'DR Second Studio', 'dr-second-studio', 'active');
+
+INSERT INTO organization_members (
+  id, user_id, organization_id, role, status, joined_at
+)
+VALUES
+  ('de110000-0000-4000-8000-000000000001',
+   'de000000-0000-4000-8000-000000000002',
+   'de100000-0000-4000-8000-000000000001', 'owner', 'active', NOW()),
+  ('de110000-0000-4000-8000-000000000002',
+   'de000000-0000-4000-8000-000000000003',
+   'de100000-0000-4000-8000-000000000001', 'member', 'active', NOW()),
+  ('de110000-0000-4000-8000-000000000003',
+   'de000000-0000-4000-8000-000000000004',
+   'de100000-0000-4000-8000-000000000001', 'member', 'active', NOW()),
+  ('de110000-0000-4000-8000-000000000004',
+   'de000000-0000-4000-8000-000000000002',
+   'de100000-0000-4000-8000-000000000002', 'owner', 'active', NOW());
+
+-- Establish exact memberships before the role-sync trigger turns the two
+-- profiles into designers; otherwise the production provisioning trigger
+-- would create unrelated personal studios and invalidate this fixture.
+INSERT INTO user_roles (user_id, role_id)
+SELECT actor_id, role_row.id
+FROM unnest(ARRAY[
+  'de000000-0000-4000-8000-000000000002'::uuid,
+  'de000000-0000-4000-8000-000000000003'::uuid
+]) AS actor(actor_id)
+CROSS JOIN roles AS role_row
+WHERE role_row.name = 'independent_designer';
+
+-- Assigned intake can bind only an exact active relationship snapshot.
+-- Solo client deliberately also has exactly one relationship, proving that a
+-- NULL-designer intake never infers current membership/relationship authority.
+INSERT INTO designer_clients (id, designer_id, client_id, status, studio_id)
+VALUES
+  ('de000000-0000-4000-8000-0000000000c0',
+   'de000000-0000-4000-8000-000000000002',
+   'de000000-0000-4000-8000-000000000001', 'active',
+   'de100000-0000-4000-8000-000000000001'),
+  ('de000000-0000-4000-8000-0000000000c1',
+   'de000000-0000-4000-8000-000000000002',
+   'de000000-0000-4000-8000-000000000005', 'active',
+   'de100000-0000-4000-8000-000000000001');
 
 -- A room owned by the client, so sc_room can carry a legacy room_id (case 7).
 INSERT INTO rooms (id, user_id, name, type)
@@ -171,13 +218,16 @@ DECLARE
 BEGIN
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000001');
   v_res := public.submit_design_request(
-    ARRAY['de000000-0000-4000-8000-0000000000f3']::uuid[], 'consultation');
+    ARRAY['de000000-0000-4000-8000-0000000000f3']::uuid[], 'consultation',
+    p_client_request_id => 'de200000-0000-4000-8000-000000000002');
   PERFORM pg_temp.reset_role();
 
   v_lead := (v_res->>'lead_id')::uuid;
   INSERT INTO pg_temp_state VALUES ('lead2', v_lead);
 
   ASSERT (v_res->>'designer_id') IS NULL,      'FAIL 2a: pool submit must leave designer NULL';
+  ASSERT (SELECT studio_id IS NULL FROM leads WHERE id = v_lead),
+                                               'FAIL 2b: quarantined intake must leave studio NULL';
   ASSERT (v_res->>'pooled')::boolean = true,   'FAIL 2b: pooled=true';
   ASSERT (SELECT count(*) FROM room_scan_associations WHERE lead_id = v_lead) = 0,
                                                'FAIL 2c: no associations minted for a pool submit';
@@ -232,11 +282,14 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- Case 3 — validation error slugs
+-- Case 3 — validation slugs plus the retained roomless quarantine
 -- ═══════════════════════════════════════════════════════════════════════════
 DO $$
 DECLARE
   v_err text;
+  v_result jsonb;
+  v_lead uuid;
+  v_quarantined uuid;
 BEGIN
   -- not_authenticated (cleared claims → auth.uid() NULL)
   PERFORM pg_temp.reset_role();
@@ -248,12 +301,25 @@ BEGIN
 
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000001');
 
-  -- no_scans
-  BEGIN
-    PERFORM public.submit_design_request(ARRAY[]::uuid[], 'full_room');
-    v_err := '<none>';
-  EXCEPTION WHEN OTHERS THEN v_err := SQLERRM; END;
-  ASSERT v_err = 'no_scans', 'FAIL 3b: expected no_scans, got ' || v_err;
+  -- Roomless mobile intake is retained, but remains non-authoritative until
+  -- an explicit-workspace claim stamps both designer and studio atomically.
+  v_result := public.submit_design_request(
+    ARRAY[]::uuid[], 'full_room',
+    p_client_request_id => 'de200000-0000-4000-8000-000000000003'
+  );
+  v_lead := (v_result->>'lead_id')::uuid;
+  ASSERT (v_result->>'pooled')::boolean
+     AND (v_result->>'designer_id') IS NULL,
+    'FAIL 3b: roomless intake must remain quarantined';
+  ASSERT (
+    SELECT designer_id IS NULL AND studio_id IS NULL AND room_scan_id IS NULL
+    FROM public.leads WHERE id = v_lead
+  ), 'FAIL 3ba: roomless intake must carry no owner/studio/scan authority';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.lead_room_scans WHERE lead_id = v_lead
+  ) AND NOT EXISTS (
+    SELECT 1 FROM public.room_scan_associations WHERE lead_id = v_lead
+  ), 'FAIL 3bb: roomless quarantine must mint no scan authority';
 
   -- primary_not_in_set
   BEGIN
@@ -285,16 +351,68 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN v_err := SQLERRM; END;
   ASSERT v_err = 'scan_not_ready', 'FAIL 3f: expected scan_not_ready, got ' || v_err;
 
-  -- designer_not_found (non-designer profile passed as designer)
+  -- designer_not_found_or_ambiguous (no exact active relationship snapshot)
   BEGIN
     PERFORM public.submit_design_request(
       ARRAY['de000000-0000-4000-8000-0000000000f1']::uuid[], 'full_room',
       p_designer_id => 'de000000-0000-4000-8000-000000000004');
     v_err := '<none>';
   EXCEPTION WHEN OTHERS THEN v_err := SQLERRM; END;
-  ASSERT v_err = 'designer_not_found', 'FAIL 3g: expected designer_not_found, got ' || v_err;
+  ASSERT v_err = 'designer_not_found_or_ambiguous',
+    'FAIL 3g: expected designer_not_found_or_ambiguous, got ' || v_err;
 
+  -- No privileged/runtime caller may turn a quarantined row into a scoped
+  -- authority tuple with an arbitrary direct UPDATE. Claim/accept owns the
+  -- sole NULL -> exact-studio transition and its side effects.
   PERFORM pg_temp.reset_role();
+  SELECT v INTO v_quarantined FROM pg_temp_state WHERE k = 'lead2';
+  EXECUTE 'SET LOCAL ROLE service_role';
+  PERFORM pg_catalog.set_config('request.jwt.claims', '', true);
+  BEGIN
+    UPDATE public.leads
+    SET designer_id = 'de000000-0000-4000-8000-000000000002',
+        studio_id = 'de100000-0000-4000-8000-000000000001'
+    WHERE id = v_quarantined;
+    v_err := '<none>';
+  EXCEPTION WHEN check_violation THEN
+    v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'studio_snapshot_immutable',
+    'FAIL 3h: forged quarantine transition was not denied: ' || v_err;
+  PERFORM pg_temp.reset_role();
+  ASSERT (
+    SELECT designer_id IS NULL AND studio_id IS NULL
+    FROM public.leads WHERE id = v_quarantined
+  ), 'FAIL 3ha: forged transition changed quarantined authority';
+
+  -- Even an explicitly requested designer is not enough when two immutable
+  -- active relationships point at two studios. The request must fail closed
+  -- instead of selecting either workspace.
+  INSERT INTO public.designer_clients (
+    id, designer_id, client_id, status, studio_id
+  ) VALUES (
+    'de000000-0000-4000-8000-0000000000c2',
+    'de000000-0000-4000-8000-000000000002',
+    'de000000-0000-4000-8000-000000000001', 'active',
+    'de100000-0000-4000-8000-000000000002'
+  );
+  PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000001');
+  BEGIN
+    PERFORM public.submit_design_request(
+      ARRAY['de000000-0000-4000-8000-0000000000f1']::uuid[], 'full_room',
+      p_designer_id => 'de000000-0000-4000-8000-000000000002',
+      p_client_request_id => 'de200000-0000-4000-8000-000000000004'
+    );
+    v_err := '<none>';
+  EXCEPTION WHEN OTHERS THEN
+    v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'designer_not_found_or_ambiguous',
+    'FAIL 3i: ambiguous relationship selected a workspace: ' || v_err;
+  PERFORM pg_temp.reset_role();
+  DELETE FROM public.designer_clients
+  WHERE id = 'de000000-0000-4000-8000-0000000000c2';
+
   RAISE NOTICE 'design_requests: case 3 (validation slugs) passed.';
 END $$;
 
@@ -345,7 +463,8 @@ BEGIN
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000001');
   v_res := public.submit_design_request(
     ARRAY['de000000-0000-4000-8000-0000000000f6',
-          'de000000-0000-4000-8000-0000000000f7']::uuid[], 'full_room');
+          'de000000-0000-4000-8000-0000000000f7']::uuid[], 'full_room',
+    p_client_request_id => 'de200000-0000-4000-8000-000000000005');
   PERFORM pg_temp.reset_role();
   v_lead := (v_res->>'lead_id')::uuid;
   INSERT INTO pg_temp_state VALUES ('lead5', v_lead);
@@ -353,12 +472,16 @@ BEGIN
 
   -- A wins
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000002');
-  v_res := public.claim_design_request(v_lead);
+  v_res := public.claim_design_request(
+    v_lead, 'de100000-0000-4000-8000-000000000001'
+  );
   PERFORM pg_temp.reset_role();
   ASSERT (v_res->>'designer_id') = 'de000000-0000-4000-8000-000000000002', 'FAIL 5b: A should win the claim';
   ASSERT (v_res->>'already_yours')::boolean = false, 'FAIL 5c: A''s win is a fresh claim';
   ASSERT (SELECT designer_id = 'de000000-0000-4000-8000-000000000002' FROM leads WHERE id = v_lead),
                                              'FAIL 5d: lead.designer_id persisted to A';
+  ASSERT (SELECT studio_id = 'de100000-0000-4000-8000-000000000001' FROM leads WHERE id = v_lead),
+                                             'FAIL 5da: claim atomically freezes the explicit studio';
   ASSERT (SELECT count(*) FROM room_scan_associations
             WHERE lead_id = v_lead AND designer_id = 'de000000-0000-4000-8000-000000000002'
               AND status = 'active' AND access_level = 'full') = 2,
@@ -373,7 +496,9 @@ BEGIN
   -- B loses
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000003');
   BEGIN
-    v_res := public.claim_design_request(v_lead);
+    v_res := public.claim_design_request(
+      v_lead, 'de100000-0000-4000-8000-000000000001'
+    );
     v_err := '<none>';
   EXCEPTION WHEN OTHERS THEN v_err := SQLERRM; END;
   PERFORM pg_temp.reset_role();
@@ -381,14 +506,18 @@ BEGIN
 
   -- A re-claims → already_yours
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000002');
-  v_res := public.claim_design_request(v_lead);
+  v_res := public.claim_design_request(
+    v_lead, 'de100000-0000-4000-8000-000000000001'
+  );
   PERFORM pg_temp.reset_role();
   ASSERT (v_res->>'already_yours')::boolean = true, 'FAIL 5i: A re-claim → already_yours';
 
   -- non-designer cannot claim
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000004');
   BEGIN
-    v_res := public.claim_design_request(v_lead);
+    v_res := public.claim_design_request(
+      v_lead, 'de100000-0000-4000-8000-000000000001'
+    );
     v_err := '<none>';
   EXCEPTION WHEN OTHERS THEN v_err := SQLERRM; END;
   PERFORM pg_temp.reset_role();
@@ -397,7 +526,10 @@ BEGIN
   -- unknown lead → request_not_found
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000002');
   BEGIN
-    v_res := public.claim_design_request('de000000-0000-4000-8000-0000dead0000');
+    v_res := public.claim_design_request(
+      'de000000-0000-4000-8000-0000dead0000',
+      'de100000-0000-4000-8000-000000000001'
+    );
     v_err := '<none>';
   EXCEPTION WHEN OTHERS THEN v_err := SQLERRM; END;
   PERFORM pg_temp.reset_role();
@@ -473,7 +605,8 @@ DECLARE
 BEGIN
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000001');
   v_res := public.submit_design_request(
-    ARRAY['de000000-0000-4000-8000-0000000000f8']::uuid[], 'full_room');
+    ARRAY['de000000-0000-4000-8000-0000000000f8']::uuid[], 'full_room',
+    p_client_request_id => 'de200000-0000-4000-8000-000000000008');
   PERFORM pg_temp.reset_role();
   v_lead := (v_res->>'lead_id')::uuid;
 
@@ -485,7 +618,9 @@ BEGIN
 
   -- claim it
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000002');
-  PERFORM public.claim_design_request(v_lead);
+  PERFORM public.claim_design_request(
+    v_lead, 'de100000-0000-4000-8000-000000000001'
+  );
   -- post-claim: present as a Shape C row for A
   ASSERT (SELECT count(*) FROM document_state
             WHERE lead_id = v_lead AND designer_id = 'de000000-0000-4000-8000-000000000002') = 1,
@@ -496,7 +631,7 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- Case 9 — auto-resolve (exactly one active designer_clients relationship)
+-- Case 9 — current relationship is not historical creation-time authority
 -- ═══════════════════════════════════════════════════════════════════════════
 DO $$
 DECLARE
@@ -504,18 +639,21 @@ DECLARE
 BEGIN
   PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000005'); -- solo client → Designer A
   v_res := public.submit_design_request(
-    ARRAY['de000000-0000-4000-8000-0000000000f9']::uuid[], 'full_room');
+    ARRAY['de000000-0000-4000-8000-0000000000f9']::uuid[], 'full_room',
+    p_client_request_id => 'de200000-0000-4000-8000-000000000009');
   PERFORM pg_temp.reset_role();
 
-  ASSERT (v_res->>'designer_id') = 'de000000-0000-4000-8000-000000000002',
-                                          'FAIL 9a: auto-resolved to the single active designer';
-  ASSERT (v_res->>'pooled')::boolean = false, 'FAIL 9b: auto-resolved request is not pooled';
+  ASSERT (v_res->>'designer_id') IS NULL,
+                                          'FAIL 9a: current relationship must not infer a designer';
+  ASSERT (v_res->>'pooled')::boolean = true, 'FAIL 9b: NULL-designer request remains quarantined';
+  ASSERT (SELECT studio_id IS NULL
+          FROM leads WHERE id = (v_res->>'lead_id')::uuid),
+                                          'FAIL 9c: current relationship must not infer a studio';
   ASSERT (SELECT count(*) FROM room_scan_associations
-            WHERE lead_id = (v_res->>'lead_id')::uuid
-              AND designer_id = 'de000000-0000-4000-8000-000000000002' AND status = 'active') = 1,
-                                          'FAIL 9c: auto-resolved request mints the association';
+            WHERE lead_id = (v_res->>'lead_id')::uuid) = 0,
+                                          'FAIL 9d: quarantined request mints no association';
 
-  RAISE NOTICE 'design_requests: case 9 (auto-resolve) passed.';
+  RAISE NOTICE 'design_requests: case 9 (no relationship inference) passed.';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════

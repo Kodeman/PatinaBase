@@ -121,12 +121,15 @@ const KIND_NOUN: Record<PartyKind, string> = {
 
 export function AddPersonSheet({
   open,
+  studioId,
   onClose,
   onAdded,
   onGoToLeads,
   initialKind = 'client',
 }: {
   open: boolean;
+  /** Exact active workspace that owns new client/maker roster rows. */
+  studioId: string | null;
   onClose: () => void;
   /** The kind the sheet opens on (⌘K "Add a maker" cold-starts on 'maker'). */
   initialKind?: AddedPersonKind;
@@ -211,6 +214,10 @@ export function AddPersonSheet({
 
   const submitClient = async () => {
     setError(null);
+    if (!studioId) {
+      setError('Choose a studio workspace before adding a client.');
+      return;
+    }
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       setError(
@@ -220,6 +227,7 @@ export function AddPersonSheet({
     }
     try {
       const result = await addClient.mutateAsync({
+        studioId,
         clientEmail: trimmedEmail,
         clientName: name.trim() || undefined,
         source: 'direct',
@@ -247,6 +255,10 @@ export function AddPersonSheet({
 
   const submitMaker = async () => {
     setError(null);
+    if (!studioId) {
+      setError('Choose a studio workspace before adding a maker.');
+      return;
+    }
     const trimmedName = makerName.trim();
     if (!trimmedName) {
       setError('A maker needs at least a name — the shop you order from.');
@@ -259,7 +271,7 @@ export function AddPersonSheet({
         primaryCategory: category.trim() || undefined,
         ordersEmail: ordersEmail.trim() || undefined,
       });
-      await saveVendor.mutateAsync({ vendorId: result.vendorId });
+      await saveVendor.mutateAsync({ studioId, vendorId: result.vendorId });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
 
       const message = result.isNew

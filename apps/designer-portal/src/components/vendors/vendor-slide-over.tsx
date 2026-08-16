@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState, useEffect, useCallback } from 'react';
+import { Fragment, useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -17,7 +17,12 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Button, IconButton } from '@/components/ui/controls';
-import { useVendor, useToggleVendorSave } from '@patina/supabase';
+import {
+  useOrganizations,
+  useSavedVendorIds,
+  useVendor,
+  useToggleVendorSave,
+} from '@patina/supabase';
 import { useVendorSlideOver, useVendorsStore } from '../../stores/vendors-store';
 import { VendorLogo } from './vendor-logo';
 import { VendorRatingBadge } from './vendor-rating-badge';
@@ -85,6 +90,29 @@ export function VendorSlideOver() {
   const shouldFetch = isOpen && vendorId;
   const { data: vendor, isLoading, error } = useVendor(shouldFetch ? vendorId : 'skip');
   const toggleSaveMutation = useToggleVendorSave();
+  const { data: organizations } = useOrganizations();
+  const eligibleStudios = useMemo(
+    () =>
+      (organizations ?? []).filter(
+        (organization) =>
+          organization.type === 'design_studio' &&
+          organization.status === 'active' &&
+          organization.membership.status === 'active' &&
+          organization.membership.role !== 'guest',
+      ),
+    [organizations],
+  );
+  const [studioId, setStudioId] = useState<string | null>(null);
+  useEffect(() => {
+    setStudioId((current) => {
+      if (current && eligibleStudios.some((studio) => studio.id === current)) {
+        return current;
+      }
+      return eligibleStudios.length === 1 ? eligibleStudios[0].id : null;
+    });
+  }, [eligibleStudios]);
+  const { data: savedVendorIds } = useSavedVendorIds(studioId);
+  const isSaved = !!vendorId && (savedVendorIds ?? []).includes(vendorId);
 
   // Reset to overview tab when vendor changes
   useEffect(() => {
@@ -117,10 +145,10 @@ export function VendorSlideOver() {
   }, [isOpen]);
 
   const handleSave = useCallback(() => {
-    if (vendorId) {
-      toggleSaveMutation.mutate({ vendorId });
+    if (vendorId && studioId) {
+      toggleSaveMutation.mutate({ studioId, vendorId });
     }
-  }, [vendorId, toggleSaveMutation]);
+  }, [studioId, vendorId, toggleSaveMutation]);
 
   const handleWriteReview = useCallback(() => {
     if (vendorId) {
@@ -207,18 +235,33 @@ export function VendorSlideOver() {
 
               {/* Quick Actions */}
               <div className="flex items-center gap-2 px-4 pb-4 sm:px-6">
+                {eligibleStudios.length > 1 && (
+                  <select
+                    aria-label="Studio workspace"
+                    value={studioId ?? ''}
+                    onChange={(event) => setStudioId(event.target.value || null)}
+                    className="rounded border border-patina-clay-beige bg-white px-2 py-1.5 text-sm text-patina-charcoal"
+                  >
+                    <option value="">Choose a studio…</option>
+                    {eligibleStudios.map((studio) => (
+                      <option key={studio.id} value={studio.id}>
+                        {studio.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <Button
-                  variant={vendor.designerRelationship?.isSaved ? 'primary' : 'secondary'}
+                  variant={isSaved ? 'primary' : 'secondary'}
                   size="sm"
                   onClick={handleSave}
-                  disabled={toggleSaveMutation.isPending}
+                  disabled={toggleSaveMutation.isPending || !studioId}
                 >
-                  {vendor.designerRelationship?.isSaved ? (
+                  {isSaved ? (
                     <BookmarkCheck className="w-4 h-4" />
                   ) : (
                     <Bookmark className="w-4 h-4" />
                   )}
-                  {vendor.designerRelationship?.isSaved ? 'Saved' : 'Save'}
+                  {isSaved ? 'Saved' : 'Save'}
                 </Button>
                 <Button
                   variant="secondary"

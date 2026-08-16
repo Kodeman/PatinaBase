@@ -505,7 +505,10 @@ export function DirectoryView({
           </>
         )
       ) : marketplace ? (
-        <MakersMarketplace onOpenMaker={(id) => openPerson(id, 'maker')} />
+        <MakersMarketplace
+          studioId={organizationId}
+          onOpenMaker={(id) => openPerson(id, 'maker')}
+        />
       ) : isLoading ? (
         <p className="px-1 py-6 text-[0.76rem] text-[var(--color-aged-oak)]">
           Reading the roster…

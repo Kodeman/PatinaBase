@@ -1,0 +1,270 @@
+{
+  "artifact": {
+    "path": "supabase/platform-admin/00488_canonical_studio_storage_policies.sql",
+    "sha256": "dc7eb7d411590f73a6b38b2d774aeecff44d947bb1d1a92bf2fd46dba8e30749"
+  },
+  "artifact_kind": "platform_admin_storage_policy_handoff",
+  "expected_policy_count": 9,
+  "ordinary_migration": "supabase/migrations/00488_canonical_studio_authority_closure.sql",
+  "policies": [
+    {
+      "final_catalog_fingerprint": "bee7ae78bc8f07a2310c744285e2a119f0d70cfc414bd1a219d90ecc13859f9d",
+      "final_catalog_qual": "((bucket_id = 'project-documents'::text) AND (EXISTS ( SELECT 1\n   FROM proposals pr\n  WHERE ((pr.id = ((storage.foldername(objects.name))[1])::uuid) AND _can_author_studio_snapshot(pr.studio_id, pr.designer_id)))))",
+      "final_catalog_with_check": "((bucket_id = 'project-documents'::text) AND (EXISTS ( SELECT 1\n   FROM proposals pr\n  WHERE ((pr.id = ((storage.foldername(objects.name))[1])::uuid) AND _can_author_studio_snapshot(pr.studio_id, pr.designer_id)))))",
+      "final_statement_sha256": "9734643bb4dc607328091d82de8aea04ed2cc6648a6d02b5ecf0cbf97b47ec08",
+      "operation": "ALL",
+      "permissive": true,
+      "policy": "Designers manage proposal folio objects",
+      "record_id": "policy:storage.objects:Designers manage proposal folio objects",
+      "roles": [
+        "authenticated"
+      ],
+      "source": {
+        "file_sha256": "08024a8a5b8bdb2911584f1a6ced5ff1676a154f30f13a02486fe89dbe20d930",
+        "line": 1492,
+        "path": "supabase/migrations/00425_executed_on_paper.sql",
+        "source_root": "moving_00484"
+      },
+      "source_catalog_fingerprint": "5ede429cc5709eab29a2c257ac4953327802a1327b81327098e5a1535acbaf71",
+      "source_catalog_qual": "((bucket_id = 'project-documents'::text) AND (EXISTS ( SELECT 1\n   FROM proposals pr\n  WHERE ((pr.id = ((storage.foldername(objects.name))[1])::uuid) AND is_design_studio_comember(pr.designer_id)))))",
+      "source_catalog_with_check": "((bucket_id = 'project-documents'::text) AND (EXISTS ( SELECT 1\n   FROM proposals pr\n  WHERE ((pr.id = ((storage.foldername(objects.name))[1])::uuid) AND is_design_studio_comember(pr.designer_id)))))",
+      "source_statement_sha256": "6a68261bc3a6d7a765ef72a4b1faa305262597b629ebfe6e057ad8960ecb4cf6"
+    },
+    {
+      "final_catalog_fingerprint": "fe35034e3a0496db75a9475801830fb54fb79d7e975c372af82db588a84ce467",
+      "final_catalog_qual": "((bucket_id = 'site-requests'::text) AND (EXISTS ( SELECT 1\n   FROM (site_requests sr\n     JOIN projects p ON ((p.id = sr.project_id)))\n  WHERE (((sr.id)::text = (storage.foldername(objects.name))[1]) AND _can_read_studio_snapshot(p.studio_id, p.designer_id)))))",
+      "final_catalog_with_check": null,
+      "final_statement_sha256": "db9e2c13212fab710c87469916a2a9d39c9201c0616a5aa2246d9db27bbbed31",
+      "operation": "SELECT",
+      "permissive": true,
+      "policy": "Site request designers read immutable media",
+      "record_id": "policy:storage.objects:Site request designers read immutable media",
+      "roles": [
+        "authenticated"
+      ],
+      "source": {
+        "file_sha256": "f5e0969384994fac25adc7680f2aacb67154afc27b59ff31bd449a60ec6c6e7b",
+        "line": 737,
+        "path": "supabase/migrations/00374_field_site_request_loop.sql",
+        "source_root": "moving_00484"
+      },
+      "source_catalog_fingerprint": "b1f30dc540826435b6f6e877f4793df4de60711ed72b3b5ed317170e9e57e942",
+      "source_catalog_qual": "((bucket_id = 'site-requests'::text) AND (EXISTS ( SELECT 1\n   FROM (site_requests sr\n     JOIN projects p ON ((p.id = sr.project_id)))\n  WHERE (((sr.id)::text = (storage.foldername(objects.name))[1]) AND is_studio_comember(p.designer_id)))))",
+      "source_catalog_with_check": null,
+      "source_statement_sha256": "ad650b5f68898bf22e1c59ace3da61b08cd14a1d84cc8bf658e455390060aef6"
+    },
+    {
+      "final_catalog_fingerprint": "4e5e0e407ce7593d83e07ac26c8fbcdf4a3e5a873861673a4d32286b84a8bb69",
+      "final_catalog_qual": "((bucket_id = 'project-ffe-working'::text) AND (EXISTS ( SELECT 1\n   FROM projects project\n  WHERE (((project.id)::text = (storage.foldername(objects.name))[1]) AND _can_author_studio_snapshot(project.studio_id, project.designer_id)))))",
+      "final_catalog_with_check": null,
+      "final_statement_sha256": "18ff929d92fa5c84b294919de17fb227383e7ffb32d880dc556c4a9bda401241",
+      "operation": "DELETE",
+      "permissive": true,
+      "policy": "project_ffe_working_studio_delete",
+      "record_id": "policy:storage.objects:project_ffe_working_studio_delete",
+      "roles": [
+        "authenticated"
+      ],
+      "source": {
+        "file_sha256": "439b02d74abe4f96a95279c2430ce9e30e59632bbf9d67ee897b5e8b65405a5e",
+        "line": 197,
+        "path": "supabase/migrations/00433_ffe_safe_reader_media_compatibility.sql",
+        "source_root": "moving_00484"
+      },
+      "source_catalog_fingerprint": "2fc3e22c995c8503ca6c28b8238a8d360ac01a5f2bcee8e9ef9ca566094ae5c1",
+      "source_catalog_qual": "((bucket_id = 'project-ffe-working'::text) AND (EXISTS ( SELECT 1\n   FROM projects project\n  WHERE (((project.id)::text = (storage.foldername(objects.name))[1]) AND is_studio_comember(project.designer_id)))))",
+      "source_catalog_with_check": null,
+      "source_statement_sha256": "386e0b7cce5cef698a18290578325da08406a9ef202cedef6a3d80aa1ebb6489"
+    },
+    {
+      "final_catalog_fingerprint": "1b4ac00fcefd7c36b2c7408cc4e743c34cb8a72fba347f138e46169b64431019",
+      "final_catalog_qual": null,
+      "final_catalog_with_check": "((bucket_id = 'project-ffe-working'::text) AND (EXISTS ( SELECT 1\n   FROM projects project\n  WHERE (((project.id)::text = (storage.foldername(objects.name))[1]) AND _can_author_studio_snapshot(project.studio_id, project.designer_id)))))",
+      "final_statement_sha256": "ce15be2dbe77f2a71018921a399a488027fb080e59f21de888298e3dbea623aa",
+      "operation": "INSERT",
+      "permissive": true,
+      "policy": "project_ffe_working_studio_insert",
+      "record_id": "policy:storage.objects:project_ffe_working_studio_insert",
+      "roles": [
+        "authenticated"
+      ],
+      "source": {
+        "file_sha256": "439b02d74abe4f96a95279c2430ce9e30e59632bbf9d67ee897b5e8b65405a5e",
+        "line": 165,
+        "path": "supabase/migrations/00433_ffe_safe_reader_media_compatibility.sql",
+        "source_root": "moving_00484"
+      },
+      "source_catalog_fingerprint": "a06aecbab06a9a9d275189e37cdce755061ed7c2f7b62d437d604383bc94fe7d",
+      "source_catalog_qual": null,
+      "source_catalog_with_check": "((bucket_id = 'project-ffe-working'::text) AND (EXISTS ( SELECT 1\n   FROM projects project\n  WHERE (((project.id)::text = (storage.foldername(objects.name))[1]) AND is_studio_comember(project.designer_id)))))",
+      "source_statement_sha256": "ba2be522dad42957966eee490836f4a8caa03bbb6400a6a499ba08f93440cb05"
+    },
+    {
+      "final_catalog_fingerprint": "61a4b177f97ed6e89a3554768f74af2e2b562a127782fb53851dbba8d3f68c5d",
+      "final_catalog_qual": "((bucket_id = 'project-ffe-working'::text) AND (EXISTS ( SELECT 1\n   FROM projects project\n  WHERE (((project.id)::text = (storage.foldername(objects.name))[1]) AND _can_read_studio_snapshot(project.studio_id, project.designer_id)))))",
+      "final_catalog_with_check": null,
+      "final_statement_sha256": "f999f0e888a8283c1a58f646c3a3c47fa6d50aa139f236394fc5fb30ff10f935",
+      "operation": "SELECT",
+      "permissive": true,
+      "policy": "project_ffe_working_studio_select",
+      "record_id": "policy:storage.objects:project_ffe_working_studio_select",
+      "roles": [
+        "authenticated"
+      ],
+      "source": {
+        "file_sha256": "439b02d74abe4f96a95279c2430ce9e30e59632bbf9d67ee897b5e8b65405a5e",
+        "line": 153,
+        "path": "supabase/migrations/00433_ffe_safe_reader_media_compatibility.sql",
+        "source_root": "moving_00484"
+      },
+      "source_catalog_fingerprint": "2fc3e22c995c8503ca6c28b8238a8d360ac01a5f2bcee8e9ef9ca566094ae5c1",
+      "source_catalog_qual": "((bucket_id = 'project-ffe-working'::text) AND (EXISTS ( SELECT 1\n   FROM projects project\n  WHERE (((project.id)::text = (storage.foldername(objects.name))[1]) AND is_studio_comember(project.designer_id)))))",
+      "source_catalog_with_check": null,
+      "source_statement_sha256": "4b1af0858cf2e3e0d35d11376540b0ef98d067c93a4112639f3eb73a7fb39f1d"
+    },
+    {
+      "final_catalog_fingerprint": "a3d01dc8e5938bdc0ced2f923d5945b93fb0fc2f48ea3b908496b499db52b1df",
+      "final_catalog_qual": "((bucket_id = 'project-ffe-working'::text) AND (EXISTS ( SELECT 1\n   FROM projects project\n  WHERE (((project.id)::text = (storage.foldername(objects.name))[1]) AND _can_author_studio_snapshot(project.studio_id, project.designer_id)))))",
+      "final_catalog_with_check": "((bucket_id = 'project-ffe-working'::text) AND (EXISTS ( SELECT 1\n   FROM projects project\n  WHERE (((project.id)::text = (storage.foldername(objects.name))[1]) AND _can_author_studio_snapshot(project.studio_id, project.designer_id)))))",
+      "final_statement_sha256": "0acc23b5aef1a2ade01913f577e631e47297a51e103bd8a5496f87e7d320d4f3",
+      "operation": "UPDATE",
+      "permissive": true,
+      "policy": "project_ffe_working_studio_update",
+      "record_id": "policy:storage.objects:project_ffe_working_studio_update",
+      "roles": [
+        "authenticated"
+      ],
+      "source": {
+        "file_sha256": "439b02d74abe4f96a95279c2430ce9e30e59632bbf9d67ee897b5e8b65405a5e",
+        "line": 177,
+        "path": "supabase/migrations/00433_ffe_safe_reader_media_compatibility.sql",
+        "source_root": "moving_00484"
+      },
+      "source_catalog_fingerprint": "7730555c5c5a0a7e5b465c9a37675ef8c6f56602c571fbf4f3b3e08fe6b7085e",
+      "source_catalog_qual": "((bucket_id = 'project-ffe-working'::text) AND (EXISTS ( SELECT 1\n   FROM projects project\n  WHERE (((project.id)::text = (storage.foldername(objects.name))[1]) AND is_studio_comember(project.designer_id)))))",
+      "source_catalog_with_check": "((bucket_id = 'project-ffe-working'::text) AND (EXISTS ( SELECT 1\n   FROM projects project\n  WHERE (((project.id)::text = (storage.foldername(objects.name))[1]) AND is_studio_comember(project.designer_id)))))",
+      "source_statement_sha256": "4a93bcb1350d189793afef84e69cfa279c7a8c06b8d00754a1cf89497920ee85"
+    },
+    {
+      "final_catalog_fingerprint": "c1296eb2d205742e87c93fc2aa7c7ed62153a94ec1f6e86f149c29dbb6c4156b",
+      "final_catalog_qual": "((bucket_id = 'proposal-mood-boards'::text) AND (EXISTS ( SELECT 1\n   FROM proposals proposal\n  WHERE (((proposal.id)::text = (storage.foldername(objects.name))[1]) AND _can_author_studio_snapshot(proposal.studio_id, proposal.designer_id)))))",
+      "final_catalog_with_check": null,
+      "final_statement_sha256": "6fabd0fb5141555039a58a0de8130a9774fa112e875e059dc9269424923b55af",
+      "operation": "DELETE",
+      "permissive": true,
+      "policy": "proposal_mood_boards_proposal_delete",
+      "record_id": "policy:storage.objects:proposal_mood_boards_proposal_delete",
+      "roles": [
+        "authenticated"
+      ],
+      "source": {
+        "file_sha256": "afa1e0092a1603565f6f8d2a414e5ab4d009fb69a12cc2558d172ceca89908ef",
+        "line": 145,
+        "path": "supabase/migrations/00438_ffe_release_security_hardening.sql",
+        "source_root": "moving_00484"
+      },
+      "source_catalog_fingerprint": "3c773dfb461ba298aad09caa33d76b13814777e6cf9698770c1d64a133c27b83",
+      "source_catalog_qual": "((bucket_id = 'proposal-mood-boards'::text) AND (EXISTS ( SELECT 1\n   FROM proposals proposal\n  WHERE (((proposal.id)::text = (storage.foldername(objects.name))[1]) AND is_design_studio_comember(proposal.designer_id)))))",
+      "source_catalog_with_check": null,
+      "source_statement_sha256": "b326e765bb3c234327466fee744f103c21b57275361f06eadcddffc160fbde8e"
+    },
+    {
+      "final_catalog_fingerprint": "9d241e9c66e363ec9ee79da0269fe155a6964b69c8287f5db5a7faa1b1ca0cdc",
+      "final_catalog_qual": null,
+      "final_catalog_with_check": "((bucket_id = 'proposal-mood-boards'::text) AND (EXISTS ( SELECT 1\n   FROM proposals proposal\n  WHERE (((proposal.id)::text = (storage.foldername(objects.name))[1]) AND _can_author_studio_snapshot(proposal.studio_id, proposal.designer_id)))))",
+      "final_statement_sha256": "ffb356520ed9ec645b5f7114cb4751185160e3769199d84c52091a497544efe6",
+      "operation": "INSERT",
+      "permissive": true,
+      "policy": "proposal_mood_boards_proposal_insert",
+      "record_id": "policy:storage.objects:proposal_mood_boards_proposal_insert",
+      "roles": [
+        "authenticated"
+      ],
+      "source": {
+        "file_sha256": "afa1e0092a1603565f6f8d2a414e5ab4d009fb69a12cc2558d172ceca89908ef",
+        "line": 117,
+        "path": "supabase/migrations/00438_ffe_release_security_hardening.sql",
+        "source_root": "moving_00484"
+      },
+      "source_catalog_fingerprint": "aa0b1f92c406cc783233f736f3070f18a7a490f7757849ff93eb417c8eededbe",
+      "source_catalog_qual": null,
+      "source_catalog_with_check": "((bucket_id = 'proposal-mood-boards'::text) AND (EXISTS ( SELECT 1\n   FROM proposals proposal\n  WHERE (((proposal.id)::text = (storage.foldername(objects.name))[1]) AND is_design_studio_comember(proposal.designer_id)))))",
+      "source_statement_sha256": "54177fbc574c7b583f1b45f542c8956f1a264947f31551ccbf49a283359f6d92"
+    },
+    {
+      "final_catalog_fingerprint": "9e095779ecf7eaa98bad4208d6986a354031115443e41aef04fcc911c98929e2",
+      "final_catalog_qual": "((bucket_id = 'proposal-mood-boards'::text) AND (EXISTS ( SELECT 1\n   FROM proposals proposal\n  WHERE (((proposal.id)::text = (storage.foldername(objects.name))[1]) AND _can_author_studio_snapshot(proposal.studio_id, proposal.designer_id)))))",
+      "final_catalog_with_check": "((bucket_id = 'proposal-mood-boards'::text) AND (EXISTS ( SELECT 1\n   FROM proposals proposal\n  WHERE (((proposal.id)::text = (storage.foldername(objects.name))[1]) AND _can_author_studio_snapshot(proposal.studio_id, proposal.designer_id)))))",
+      "final_statement_sha256": "34ec479dfa33841423c064416243d0f63c5dd1e7dab1601906c58e94188c5ffe",
+      "operation": "UPDATE",
+      "permissive": true,
+      "policy": "proposal_mood_boards_proposal_update",
+      "record_id": "policy:storage.objects:proposal_mood_boards_proposal_update",
+      "roles": [
+        "authenticated"
+      ],
+      "source": {
+        "file_sha256": "afa1e0092a1603565f6f8d2a414e5ab4d009fb69a12cc2558d172ceca89908ef",
+        "line": 127,
+        "path": "supabase/migrations/00438_ffe_release_security_hardening.sql",
+        "source_root": "moving_00484"
+      },
+      "source_catalog_fingerprint": "4ed278068ed7594fb5849516f391b81d9a20b2e33913bb1f2ddd9611143d83e3",
+      "source_catalog_qual": "((bucket_id = 'proposal-mood-boards'::text) AND (EXISTS ( SELECT 1\n   FROM proposals proposal\n  WHERE (((proposal.id)::text = (storage.foldername(objects.name))[1]) AND is_design_studio_comember(proposal.designer_id)))))",
+      "source_catalog_with_check": "((bucket_id = 'proposal-mood-boards'::text) AND (EXISTS ( SELECT 1\n   FROM proposals proposal\n  WHERE (((proposal.id)::text = (storage.foldername(objects.name))[1]) AND is_design_studio_comember(proposal.designer_id)))))",
+      "source_statement_sha256": "4ffbcb7903df3005f5c73438d6d973a49863113a76a12d3d585fd37f84bab0b2"
+    }
+  ],
+  "policy_fingerprint_contract": {
+    "framing": "patina-csa-policy-v1:null-tag-or-present-tag-int8be-octets",
+    "pg_get_expr_arguments": 2,
+    "pretty_mode": "default_indent",
+    "quote_all_identifiers": false,
+    "search_path": [
+      "pg_catalog",
+      "public"
+    ],
+    "server_encoding": "UTF8",
+    "server_major": 17,
+    "standard_conforming_strings": true
+  },
+  "review_input_sha256": "7d4a3de8ef879787abc2df50e3d3801ffa128ff1f41e58194ddb3b00f79deab7",
+  "reviewed_final_dynamic_routines": [
+    {
+      "body_sha256": "c3cf2fc6b7a6e4f856b6c76d4fea40bb11d40885328e4e8a4e7bc3ebbb34c455",
+      "canonical_regprocedure": "public.evaluate_collection_rules(uuid)"
+    },
+    {
+      "body_sha256": "05e2f08a10ca3ce9b356fc8f45a93da6f8003165085d8793c46a3d53e6033732",
+      "canonical_regprocedure": "public.get_aesthete_matches(uuid,uuid,real,text,uuid,text,integer,integer,real,text)"
+    },
+    {
+      "body_sha256": "0f733420758c50632ab9bcdb73fdfe61de21286d598451957ed01055da1ffce6",
+      "canonical_regprocedure": "public.increment_campaign_counter(uuid,text)"
+    },
+    {
+      "body_sha256": "9d7c2703645fb8f774ff37698453de7c15d1fa0e67e2d902f3fd49ae17511142",
+      "canonical_regprocedure": "public.increment_sequence_counter(uuid,text)"
+    }
+  ],
+  "reviewed_sql_standard_body_universe": {
+    "disposition": "fail_closed_before_prosrc_lexical_contract",
+    "expected_count": 0,
+    "schemas": [
+      "public",
+      "app_private"
+    ]
+  },
+  "rollback_artifact": {
+    "path": "supabase/platform-admin/00488_canonical_studio_storage_policies.rollback.sql",
+    "sha256": "8179a190a11be12e2b4ee55f396611e1df11124a33f60ba3974d9ee57f074e42"
+  },
+  "row_level_security_relations": [
+    {
+      "force_row_security": false,
+      "relation": "storage.objects",
+      "row_security_enabled": true
+    }
+  ],
+  "schema_version": 1
+}

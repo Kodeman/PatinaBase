@@ -12,6 +12,8 @@ export interface Lead {
   id: string;
   homeowner_id: string | null;
   designer_id: string | null;
+  /** Immutable design-studio authority snapshot. Pooled/legacy rows may be null. */
+  studio_id: string | null;
   project_type: string;
   project_description: string | null;
   budget_range: string | null;
@@ -47,71 +49,6 @@ export interface LeadFilters {
   matchScoreMin?: number;
   projectType?: string;
   budgetRange?: string;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// I65 bug 2 ripple (Arrival Arc Phase 0) — the designer_clients unique index
-// now permits multiple status='lead' rows per (designer, client) pair (the
-// re-scope that lets ceremony_complete insert a fresh engagement row beside
-// an existing active/proposal relationship — see 00332-era). A bare
-// pair-scoped `.maybeSingle()` — `.eq('designer_id', d).eq('client_id', c)`
-// with no further predicate — ERRORS ("multiple rows returned") the moment a
-// pair carries a second row. The retained legacy `useAcceptLead` path still
-// needs this browser resolver. `useBeginDiscovery` is now the atomic 00386 RPC
-// and resolves the 00331 duplicate policy under a database row lock.
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Resolve the ONE designer_clients row the retained accept-a-lead act should
- * touch, now that a pair can carry more than one row.
- * Three ordered `.limit(1)` reads, each capped so `.maybeSingle()` is safe by
- * construction — priority, not a single query, because PostgREST has no
- * portable "prefer X else Y else Z" ordering expression:
- *   1. a row already linked to THIS lead — idempotent re-run of the same act.
- *   2. an engaged (status <> 'lead') row for the pair — detected, never
- *      written here; callers use this to REFUSE to downgrade it (I65 bug 2).
- *   3. else the newest row for the pair, whatever its status (today's
- *      single-row behavior, preserved).
- * Returns null when the pair has no row at all.
- */
-async function resolvePairDesignerClient(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-  designerId: string,
-  clientId: string,
-  leadId: string,
-): Promise<{ id: string; lead_id: string | null; status: string } | null> {
-  const { data: byLead } = await supabase
-    .from('designer_clients')
-    .select('id, lead_id, status')
-    .eq('designer_id', designerId)
-    .eq('client_id', clientId)
-    .eq('lead_id', leadId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (byLead) return byLead;
-
-  const { data: engaged } = await supabase
-    .from('designer_clients')
-    .select('id, lead_id, status')
-    .eq('designer_id', designerId)
-    .eq('client_id', clientId)
-    .neq('status', 'lead')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (engaged) return engaged;
-
-  const { data: newest } = await supabase
-    .from('designer_clients')
-    .select('id, lead_id, status')
-    .eq('designer_id', designerId)
-    .eq('client_id', clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return newest ?? null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -249,6 +186,8 @@ export function useCreateLead() {
 
   return useMutation({
     mutationFn: async (input: {
+      /** Explicit active design-studio workspace for this captured lead. */
+      studio_id: string;
       project_type: string; // required (NOT NULL on the table)
       project_description?: string;
       budget_range?: string;
@@ -276,6 +215,7 @@ export function useCreateLead() {
         .from('leads')
         .insert({
           designer_id: user.user.id,
+          studio_id: input.studio_id,
           homeowner_id: null,
           status: 'new',
           project_type: input.project_type,
@@ -411,6 +351,9 @@ export function useAcceptLead() {
         .single();
 
       if (leadError) throw leadError;
+      if (!lead.studio_id) {
+        throw new Error('This legacy lead has no immutable studio workspace.');
+      }
 
       // Update lead status
       const { error: updateError } = await supabase
@@ -425,15 +368,15 @@ export function useAcceptLead() {
 
       // Create designer_client relationship
       if (lead.homeowner_id) {
-        // I65 bug 2 ripple: a pair can now carry >1 row — resolve the right
-        // one via the shared ordered-limit(1) selection instead of a bare
-        // pair-scoped `.maybeSingle()` (which errors past one row).
-        const existing = await resolvePairDesignerClient(
-          supabase,
-          lead.designer_id,
-          lead.homeowner_id,
-          leadId,
-        );
+        // Only an immutable relationship already bound to this exact lead and
+        // studio may be reused. Never choose a pair row by recency/priority.
+        const { data: existing, error: existingError } = await supabase
+          .from('designer_clients')
+          .select('id')
+          .eq('lead_id', leadId)
+          .eq('studio_id', lead.studio_id)
+          .maybeSingle();
+        if (existingError) throw existingError;
 
         if (existing) {
           const { error: clientError } = await supabase
@@ -451,6 +394,7 @@ export function useAcceptLead() {
             .from('designer_clients')
             .insert({
               designer_id: lead.designer_id,
+              studio_id: lead.studio_id,
               client_id: lead.homeowner_id,
               source: 'lead',
               lead_id: leadId,
@@ -478,24 +422,10 @@ export function useAcceptLead() {
           .from('designer_clients')
           .select('id')
           .eq('lead_id', leadId)
+          .eq('studio_id', lead.studio_id)
           .maybeSingle();
 
         let existingId: string | null = existingByLead?.id ?? null;
-
-        // Otherwise, if the lead carries an email, look for a profile-less
-        // client of this designer already using that email (the row the
-        // idx_designer_clients_unique_email index would collide with).
-        if (!existingId && lead.contact_email) {
-          const { data: existingByEmail } = await supabase
-            .from('designer_clients')
-            .select('id')
-            .eq('designer_id', lead.designer_id)
-            .eq('client_email', lead.contact_email)
-            .is('client_id', null)
-            .maybeSingle();
-
-          existingId = existingByEmail?.id ?? null;
-        }
 
         if (existingId) {
           // Update the existing profile-less row in place (keep client_id null).
@@ -516,6 +446,7 @@ export function useAcceptLead() {
             .from('designer_clients')
             .insert({
               designer_id: lead.designer_id,
+              studio_id: lead.studio_id,
               client_id: null,
               client_name: lead.contact_name ?? null,
               client_email: lead.contact_email ?? null,

@@ -42,26 +42,30 @@ export interface PhaseTemplate {
   description: string | null;
   is_system: boolean;
   designer_id: string | null;
+  studio_id: string | null;
   phases: PhaseTemplatePhase[];
   created_at: string;
   updated_at: string;
 }
 
 /**
- * List every phase template visible to the caller.
- * RLS surfaces all `is_system=true` rows + the designer's own custom rows.
- * Templates are returned sorted by label so the system catalog is stable.
+ * List system templates plus custom templates frozen to the proposal's exact
+ * studio. A caller with multiple workspaces must never see Studio A's custom
+ * template while authoring Studio B's proposal.
  */
-export function usePhaseTemplates() {
+export function usePhaseTemplates(studioId: string | null) {
   return useQuery<PhaseTemplate[]>({
-    queryKey: ['phase-templates'],
+    queryKey: ['phase-templates', studioId],
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
+      let query = supabase
         .from('phase_templates')
-        .select('*')
-        .order('label', { ascending: true });
+        .select('*');
+      query = studioId
+        ? query.or(`is_system.eq.true,studio_id.eq.${studioId}`)
+        : query.eq('is_system', true);
+      const { data, error } = await query.order('label', { ascending: true });
       if (error) throw error;
       return (data ?? []) as PhaseTemplate[];
     },

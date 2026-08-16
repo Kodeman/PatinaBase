@@ -176,7 +176,7 @@ describe('ScheduleSpine add item action', () => {
     render(
       <ScheduleSpine
         projectId="project-1"
-        clientUserId={null}
+        designerClientId={null}
         clientName="Winky Loft"
       />,
     );
@@ -192,7 +192,11 @@ describe('ScheduleSpine add item action', () => {
 describe('ScheduleSpine ongoing add-a-phase line', () => {
   it('offers the ghost line while the project is still running', () => {
     render(
-      <ScheduleSpine projectId="project-1" clientUserId={null} clientName="Winky Loft" />,
+      <ScheduleSpine
+        projectId="project-1"
+        designerClientId={null}
+        clientName="Winky Loft"
+      />,
     );
 
     expect(screen.getByTestId('ghost-add-line')).toBeInTheDocument();
@@ -202,7 +206,7 @@ describe('ScheduleSpine ongoing add-a-phase line', () => {
     render(
       <ScheduleSpine
         projectId="project-1"
-        clientUserId={null}
+        designerClientId={null}
         clientName="Winky Loft"
         projectStatus="completed"
       />,

@@ -754,6 +754,7 @@ function humanizeTeamRole(raw: string | null): string {
 export function PersonProfile({
   personId,
   role,
+  studioId,
   onBack,
   openThread,
   notify,
@@ -764,7 +765,14 @@ export function PersonProfile({
   // directory row, and it must open PRE-admission too (the marketplace lens
   // walks into makers who aren't on the roster, so have no directory row).
   if (role === 'maker') {
-    return <MakerProfile vendorId={personId} onBack={onBack} notify={notify} />;
+    return (
+      <MakerProfile
+        vendorId={personId}
+        studioId={studioId}
+        onBack={onBack}
+        notify={notify}
+      />
+    );
   }
 
   if (isLoading || !person) {

@@ -9,6 +9,7 @@ describe('HouseholdChip', () => {
   it('keeps a profile-less Discovery household linked after Direction begins', () => {
     render(
       <HouseholdChip
+        studioId="studio-1"
         engagementKind="proposal"
         projectId={null}
         proposalId="proposal-1"

@@ -350,6 +350,16 @@ SET email = EXCLUDED.email,
     full_name = EXCLUDED.full_name,
     is_designer = EXCLUDED.is_designer;
 
+INSERT INTO public.user_roles (user_id, role_id)
+SELECT actor_id, role_row.id
+FROM unnest(ARRAY[
+  'a4360000-0000-4000-8000-000000000001'::uuid,
+  'a4360000-0000-4000-8000-000000000003'::uuid,
+  'a4360000-0000-4000-8000-000000000004'::uuid
+]) AS actor(actor_id)
+CROSS JOIN public.roles AS role_row
+WHERE role_row.name = 'independent_designer';
+
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES
   ('a4361000-0000-4000-8000-000000000001', 'design_studio', 'Lifecycle Studio A', 'lifecycle-stage2-a', 'active'),
@@ -366,20 +376,24 @@ INSERT INTO public.organization_members (
    'a4361000-0000-4000-8000-000000000002', 'owner', 'active', now());
 
 INSERT INTO public.designer_clients (
-  id, designer_id, client_id, client_name, status, source
+  id, designer_id, client_id, studio_id, client_name, status, source
 ) VALUES
   ('a4362000-0000-4000-8000-000000000001',
    'a4360000-0000-4000-8000-000000000001',
-   'a4360000-0000-4000-8000-000000000002', 'Lifecycle Lead A', 'active', 'direct'),
+   'a4360000-0000-4000-8000-000000000002',
+   'a4361000-0000-4000-8000-000000000001', 'Lifecycle Lead A', 'active', 'direct'),
   ('a4362000-0000-4000-8000-000000000002',
    'a4360000-0000-4000-8000-000000000004',
-   'a4360000-0000-4000-8000-000000000005', 'Lifecycle Client B', 'active', 'direct'),
+   'a4360000-0000-4000-8000-000000000005',
+   'a4361000-0000-4000-8000-000000000002', 'Lifecycle Client B', 'active', 'direct'),
   ('a4362000-0000-4000-8000-000000000003',
    'a4360000-0000-4000-8000-000000000001',
-   'a4360000-0000-4000-8000-000000000007', 'Lifecycle Lead A2', 'active', 'direct'),
+   'a4360000-0000-4000-8000-000000000007',
+   'a4361000-0000-4000-8000-000000000001', 'Lifecycle Lead A2', 'active', 'direct'),
   ('a4362000-0000-4000-8000-000000000004',
    'a4360000-0000-4000-8000-000000000001',
-   'a4360000-0000-4000-8000-000000000006', 'Lifecycle Current Client', 'active', 'direct');
+   'a4360000-0000-4000-8000-000000000006',
+   'a4361000-0000-4000-8000-000000000001', 'Lifecycle Current Client', 'active', 'direct');
 
 INSERT INTO public.projects (
   id, name, designer_id, client_id, created_by, studio_id, status,
@@ -1675,7 +1689,8 @@ SELECT pg_temp.assume_approval_actor('a4360000-0000-4000-8000-000000000001');
 SET LOCAL ROLE authenticated;
 SELECT public.set_document_client(
   'project', 'a4363000-0000-4000-8000-000000000001',
-  'a4360000-0000-4000-8000-000000000007'
+  'a4360000-0000-4000-8000-000000000007',
+  'a4362000-0000-4000-8000-000000000003'
 );
 INSERT INTO approval_lifecycle_results(label, payload)
 SELECT 'authority-a2', public.set_project_decision_authority(
@@ -1685,7 +1700,8 @@ SELECT 'authority-a2', public.set_project_decision_authority(
 SELECT pg_temp.create_lifecycle_approval('new-lead-only', 15);
 SELECT public.set_document_client(
   'project', 'a4363000-0000-4000-8000-000000000001',
-  'a4360000-0000-4000-8000-000000000006'
+  'a4360000-0000-4000-8000-000000000006',
+  'a4362000-0000-4000-8000-000000000004'
 );
 RESET ROLE;
 

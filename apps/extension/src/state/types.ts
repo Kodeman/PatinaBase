@@ -204,6 +204,7 @@ export type CaptureAction =
   // session
   | { type: 'SESSION_RESOLVED'; user: User | null; entry?: EntryPoint }
   | { type: 'SIGNED_OUT' }
+  | { type: 'WORKSPACE_SET'; workspaceId: UUID | null }
   // extraction lifecycle
   | { type: 'EXTRACTION_START'; url: string; entry: EntryPoint }
   | { type: 'EXTRACTION_SUCCESS'; data: ExtractedProductData }

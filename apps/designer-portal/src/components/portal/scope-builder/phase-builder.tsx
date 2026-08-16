@@ -53,6 +53,8 @@ const PHASE_KEY_OPTIONS = [
 
 interface PhaseBuilderProps {
   proposalId: string;
+  /** Immutable proposals.studio_id used to scope custom phase templates. */
+  studioId: string | null;
 }
 
 interface ProposalPhaseRow {
@@ -98,7 +100,7 @@ function fmtEffectiveDuration(days: number | null | undefined, weeks: number | n
   return effectiveDays % 7 === 0 ? `${effectiveDays / 7}w` : `${effectiveDays}d`;
 }
 
-export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
+export function PhaseBuilder({ proposalId, studioId }: PhaseBuilderProps) {
   const { data: phases = [], isLoading } = useProposalPhases(proposalId) as {
     data: ProposalPhaseRow[];
     isLoading: boolean;
@@ -775,6 +777,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
       {/* ─── Template picker modal ───────────────────────────────────────── */}
       <PhaseTemplatePicker
         proposalId={proposalId}
+        studioId={studioId}
         open={templatePickerOpen}
         onOpenChange={setTemplatePickerOpen}
       />
