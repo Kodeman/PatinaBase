@@ -62,7 +62,7 @@ VALUES
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '299b2eec88629f4abb9c8ef5c62b2549bf444ee2673f30ace8266e00958fb911',
-    '17f07b6b0c089f663ca9d4bc2fe551d32c43327d83932008cb4d1ba564221b28', ARRAY['authenticated']
+    '88cd8a50f7851f7a4857e7a0e79bafb741c20c0ddd87b6f49005aa2438c58e49', ARRAY['authenticated']
   ),
   (
     'public.claim_proposal_send_dispatch(uuid,uuid,timestamp with time zone,integer)',
@@ -294,10 +294,10 @@ INSERT INTO _00486_dependency_profile VALUES
   (
     'public._scope_change_requester_can_author(uuid,uuid,uuid)',
     'p_actor uuid, p_owner uuid, p_project_id uuid', 'boolean',
-    'sql', true, 's', ARRAY['search_path=pg_catalog, public, pg_temp'],
+    'plpgsql', true, 'v', ARRAY['search_path=pg_catalog, public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '5b7df65b73ce6fcdac0d66aadce7aebcffd198e2fc08b9b90c46e6e69496a946',
-    '5b7df65b73ce6fcdac0d66aadce7aebcffd198e2fc08b9b90c46e6e69496a946',
+    '0ad79001500666469b44240b55335f5f2eb07adc967d97f43e04b34397273508',
     ARRAY[]::text[], ARRAY[]::text[], false
   ),
   (
@@ -305,7 +305,7 @@ INSERT INTO _00486_dependency_profile VALUES
     'plpgsql', false, 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     'fd3a5657e3191045f8a93f119be4a44bf6d64b313b396850640e86765fd713b7',
-    '574deae128ca3211207e7236eeebe2577f438a6d2b98aa10ca5d7b3f3f68059f',
+    'badf9f769e014fd8128509af9e1a4fd5a59615954f82ad83e639616abaeef0aa',
     ARRAY[]::text[], ARRAY[]::text[], true
   ),
   (
@@ -314,7 +314,7 @@ INSERT INTO _00486_dependency_profile VALUES
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '8ceedb9b9f013a2c26e1adcc27f6d3751bff9ed6428a1ed715e26bd47f5dfe0c',
-    '563b52802fc3479848f1b098b55bc95358a9ad65ad206f87d1e7ae5f5979c838',
+    '625f109b0473c31b20f69efa634bc0f4ca80c013c5037bacb316809b5100c657',
     ARRAY['authenticated', 'service_role'],
     ARRAY['authenticated', 'service_role'], true
   ),
@@ -334,7 +334,7 @@ INSERT INTO _00486_dependency_profile VALUES
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     'd7ac29da8abcbfb065aaa1bdfab469a9fb711f25148e1c2eb5846f0e6c097258',
-    'bb3b43ef55808bfae7c683563852819e4d6703bd71022493702cdd2d81c49c2c',
+    '56c34a3f637393aa3fec4c7aea708db421f054ebb034092a54b35347b2af3d8a',
     ARRAY['authenticated', 'service_role'],
     ARRAY['authenticated', 'service_role'], true
   ),
@@ -648,35 +648,50 @@ CREATE OR REPLACE FUNCTION public._scope_change_requester_can_author(
   p_project_id uuid
 )
 RETURNS boolean
-LANGUAGE sql
-STABLE
+LANGUAGE plpgsql
+VOLATILE
 SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $$
-  SELECT p_actor IS NOT NULL
-     AND p_owner IS NOT NULL
-     AND p_project_id IS NOT NULL
-     AND EXISTS (
-       SELECT 1
-       FROM public.projects AS project
-       WHERE project.id = p_project_id
-         AND project.designer_id = p_owner
-         AND (
-           p_actor = p_owner
-           OR EXISTS (
-             SELECT 1
-             FROM public.organizations AS organization
-             JOIN public.organization_members AS membership
-               ON membership.organization_id = organization.id
-             WHERE organization.id = project.studio_id
-               AND organization.type = 'design_studio'
-               AND organization.status = 'active'
-               AND membership.user_id = p_actor
-               AND membership.status = 'active'
-               AND membership.role <> 'guest'
-           )
-         )
-     );
+DECLARE
+  v_project_owner uuid;
+  v_studio_id uuid;
+BEGIN
+  IF p_actor IS NULL OR p_owner IS NULL OR p_project_id IS NULL THEN
+    RETURN false;
+  END IF;
+
+  SELECT project.designer_id, project.studio_id
+  INTO v_project_owner, v_studio_id
+  FROM public.projects AS project
+  WHERE project.id = p_project_id
+  FOR SHARE OF project;
+  IF NOT FOUND OR v_project_owner IS DISTINCT FROM p_owner THEN
+    RETURN false;
+  END IF;
+  IF p_actor = p_owner THEN
+    RETURN true;
+  END IF;
+
+  PERFORM 1
+  FROM public.organizations AS organization
+  WHERE organization.id = v_studio_id
+    AND organization.type = 'design_studio'
+    AND organization.status = 'active'
+  FOR SHARE OF organization;
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+
+  PERFORM 1
+  FROM public.organization_members AS membership
+  WHERE membership.organization_id = v_studio_id
+    AND membership.user_id = p_actor
+    AND membership.status = 'active'
+    AND membership.role <> 'guest'
+  FOR SHARE OF membership;
+  RETURN FOUND;
+END;
 $$;
 
 REVOKE ALL PRIVILEGES ON FUNCTION
@@ -694,6 +709,7 @@ DECLARE
   v_transition text;
   v_table_owner name;
   v_project_designer uuid;
+  v_studio_id uuid;
 BEGIN
   SELECT pg_get_userbyid(relation.relowner)
   INTO v_table_owner
@@ -701,47 +717,62 @@ BEGIN
   WHERE relation.oid = TG_RELID;
 
   IF TG_OP = 'INSERT' THEN
-    -- Browser-created designer/studio drafts must identify their real author.
-    -- Client-created rows execute as the checked definer RPC and set this too.
-    IF current_user IS DISTINCT FROM v_table_owner
-       AND auth.uid() IS NOT NULL
-       AND NEW.requested_by IS DISTINCT FROM auth.uid()
-    THEN
-      RAISE EXCEPTION 'scope_change_request_requested_by_must_match_actor'
-        USING ERRCODE = 'insufficient_privilege';
-    END IF;
+    IF current_user IS DISTINCT FROM v_table_owner THEN
+      IF current_user::text <> 'authenticated' OR auth.uid() IS NULL THEN
+        RAISE EXCEPTION 'scope_change_request_direct_insert_requires_authenticated_role'
+          USING ERRCODE = 'insufficient_privilege';
+      END IF;
 
-    IF current_user IS DISTINCT FROM v_table_owner
-       AND NEW.request_origin IS DISTINCT FROM 'designer_amendment'
-    THEN
-      RAISE EXCEPTION 'scope_change_request_direct_insert_origin_forbidden'
-        USING ERRCODE = 'insufficient_privilege';
-    END IF;
+      IF NEW.requested_by IS DISTINCT FROM auth.uid() THEN
+        RAISE EXCEPTION 'scope_change_request_requested_by_must_match_actor'
+          USING ERRCODE = 'insufficient_privilege';
+      END IF;
 
-    IF current_user IS DISTINCT FROM v_table_owner
-       AND auth.uid() IS NOT NULL
-    THEN
-      SELECT project.designer_id
-      INTO v_project_designer
+      IF NEW.request_origin IS DISTINCT FROM 'designer_amendment' THEN
+        RAISE EXCEPTION 'scope_change_request_direct_insert_origin_forbidden'
+          USING ERRCODE = 'insufficient_privilege';
+      END IF;
+
+      SELECT project.designer_id, project.studio_id
+      INTO v_project_designer, v_studio_id
       FROM public.projects AS project
       WHERE project.id = NEW.project_id
-        AND public._scope_change_requester_can_author(
-          auth.uid(), project.designer_id, project.id
-        )
-      FOR KEY SHARE OF project;
-
+      FOR SHARE OF project;
       IF NOT FOUND THEN
         RAISE EXCEPTION 'scope_change_request_direct_insert_requires_project_studio'
           USING ERRCODE = 'insufficient_privilege';
       END IF;
-    END IF;
+
+      IF v_project_designer IS DISTINCT FROM auth.uid() THEN
+        PERFORM 1
+        FROM public.organizations AS organization
+        WHERE organization.id = v_studio_id
+          AND organization.type = 'design_studio'
+          AND organization.status = 'active'
+        FOR SHARE OF organization;
+        IF NOT FOUND THEN
+          RAISE EXCEPTION 'scope_change_request_direct_insert_requires_project_studio'
+            USING ERRCODE = 'insufficient_privilege';
+        END IF;
+
+        PERFORM 1
+        FROM public.organization_members AS membership
+        WHERE membership.organization_id = v_studio_id
+          AND membership.user_id = auth.uid()
+          AND membership.status = 'active'
+          AND membership.role <> 'guest'
+        FOR SHARE OF membership;
+        IF NOT FOUND THEN
+          RAISE EXCEPTION 'scope_change_request_direct_insert_requires_project_studio'
+            USING ERRCODE = 'insufficient_privilege';
+        END IF;
+      END IF;
 
     -- Only a checked owner-executed authority may create lifecycle evidence.
-    -- Direct designer/studio/service writes remain useful for composing drafts,
-    -- but cannot fabricate something sent, signed, resolved, or applied.
-    IF current_user IS DISTINCT FROM v_table_owner
-       AND (
-         NEW.status <> 'draft'
+    -- Direct designer/studio writes can compose drafts but cannot fabricate
+    -- something sent, signed, resolved, or applied.
+      IF (
+        NEW.status <> 'draft'
          OR NEW.sent_at IS NOT NULL
          OR NEW.viewed_at IS NOT NULL
          OR NEW.approved_at IS NOT NULL
@@ -753,10 +784,11 @@ BEGIN
          OR NEW.applied_at IS NOT NULL
          OR NEW.signed_pdf_url IS NOT NULL
          OR NEW.signature_metadata IS NOT NULL
-       )
-    THEN
-      RAISE EXCEPTION 'scope_change_request_direct_inserts_must_be_clean_drafts'
-        USING ERRCODE = 'check_violation';
+        )
+      THEN
+        RAISE EXCEPTION 'scope_change_request_direct_inserts_must_be_clean_drafts'
+          USING ERRCODE = 'check_violation';
+      END IF;
     END IF;
     RETURN NEW;
   END IF;
@@ -1113,11 +1145,10 @@ BEGIN
   SELECT * INTO v_project
   FROM public.projects
   WHERE id = p_project_id
-    AND public._scope_change_requester_can_author(
-      v_actor, designer_id, id
-    )
   FOR UPDATE;
-  IF NOT FOUND THEN
+  IF NOT FOUND OR NOT public._scope_change_requester_can_author(
+    v_actor, v_project.designer_id, v_project.id
+  ) THEN
     RAISE EXCEPTION 'send_scope_change_request: project not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -1276,11 +1307,10 @@ BEGIN
   SELECT * INTO v_project
   FROM public.projects
   WHERE id = p_project_id
-    AND public._scope_change_requester_can_author(
-      v_actor, designer_id, id
-    )
   FOR UPDATE;
-  IF NOT FOUND THEN
+  IF NOT FOUND OR NOT public._scope_change_requester_can_author(
+    v_actor, v_project.designer_id, v_project.id
+  ) THEN
     RAISE EXCEPTION
       'accept_client_scope_change_request: project not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
@@ -2706,24 +2736,11 @@ BEGIN
   FROM public.scope_change_requests AS request
   JOIN public.projects AS project ON project.id = request.project_id
   WHERE request.id = p_request_id
-    AND (
-      project.designer_id = auth.uid()
-      OR EXISTS (
-        SELECT 1
-        FROM public.organizations AS organization
-        JOIN public.organization_members AS membership
-          ON membership.organization_id = organization.id
-        WHERE organization.id = project.studio_id
-          AND organization.type = 'design_studio'
-          AND organization.status = 'active'
-          AND membership.user_id = auth.uid()
-          AND membership.status = 'active'
-          AND membership.role <> 'guest'
-      )
-    )
   FOR UPDATE OF project;
 
-  IF NOT FOUND THEN
+  IF NOT FOUND OR NOT public._scope_change_requester_can_author(
+    auth.uid(), v_project.designer_id, v_project.id
+  ) THEN
     RAISE EXCEPTION 'scope change request not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -4900,7 +4917,6 @@ BEGIN
       'public.approve_scope_change_request(uuid,uuid,text,text)',
       'public.cancel_scope_change_request(uuid,uuid)',
       'public.decline_scope_change_request(uuid,uuid,text)',
-      'public.guard_scope_change_request_integrity()',
       'public.send_scope_change_request(uuid,uuid)'
     ]) AS expected(signature)
   ) THEN
@@ -4910,18 +4926,18 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM (VALUES
-      ('public.guard_scope_change_request_integrity()',
-       'public._scope_change_requester_can_author( auth.uid(), project.designer_id, project.id )'),
       ('public.send_scope_change_request(uuid,uuid)',
-       'public._scope_change_requester_can_author( v_actor, designer_id, id )'),
+       'public._scope_change_requester_can_author( v_actor, v_project.designer_id, v_project.id )'),
       ('public.approve_scope_change_request(uuid,uuid,text,text)',
        'public._scope_change_requester_can_author( v_request.requested_by, v_project.designer_id, v_project.id )'),
       ('public.accept_client_scope_change_request(uuid,uuid)',
-       'public._scope_change_requester_can_author( v_actor, designer_id, id )'),
+       'public._scope_change_requester_can_author( v_actor, v_project.designer_id, v_project.id )'),
       ('public.decline_scope_change_request(uuid,uuid,text)',
        'public._scope_change_requester_can_author( v_request.requested_by, v_project.designer_id, v_project.id )'),
       ('public.cancel_scope_change_request(uuid,uuid)',
        'public._scope_change_requester_can_author( v_actor, v_project.designer_id, v_project.id )'),
+      ('public.apply_scope_change(uuid)',
+       'public._scope_change_requester_can_author( auth.uid(), v_project.designer_id, v_project.id )'),
       ('public.apply_scope_change(uuid)',
        'public._scope_change_requester_can_author( v_request.requested_by, v_project.designer_id, v_project.id )')
     ) AS expected(signature, call_fragment)
@@ -4939,9 +4955,11 @@ BEGIN
   IF (
     SELECT array_agg(caller.oid ORDER BY caller.oid)
     FROM pg_proc AS caller
-    WHERE position(
-      'public._draft_invoice_from_milestone_00486(' IN caller.prosrc
-    ) > 0
+    JOIN pg_namespace AS caller_namespace
+      ON caller_namespace.oid = caller.pronamespace
+    WHERE caller_namespace.nspname !~ '^pg_'
+      AND caller_namespace.nspname <> 'information_schema'
+      AND caller.prosrc ~ $milestone_core_call$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_call$
   ) IS DISTINCT FROM ARRAY[
     to_regprocedure('public.draft_invoice_from_milestone(uuid)')::oid
   ] THEN
@@ -4951,13 +4969,17 @@ BEGIN
   IF (
     SELECT array_agg(caller.oid ORDER BY caller.oid)
     FROM pg_proc AS caller
-    WHERE position(
-      'public.draft_invoice_from_milestone(' IN caller.prosrc
-    ) > 0
+    JOIN pg_namespace AS caller_namespace
+      ON caller_namespace.oid = caller.pronamespace
+    WHERE caller_namespace.nspname !~ '^pg_'
+      AND caller_namespace.nspname <> 'information_schema'
+      AND caller.prosrc ~ $milestone_wrapper_call$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_call$
   ) IS DISTINCT FROM (
     SELECT array_agg(signature::regprocedure::oid ORDER BY signature::regprocedure::oid)
     FROM unnest(ARRAY[
+      'public._activate_proposal_as_project_impl(uuid,date)',
       'public._draft_invoice_from_milestone_00486(uuid)',
+      'public.draft_milestones_on_production_start()',
       'public.generate_milestone_invoice(uuid)',
       'public.settle_section_on_gate_approval()'
     ]) AS expected(signature)

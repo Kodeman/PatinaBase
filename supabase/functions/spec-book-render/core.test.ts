@@ -114,11 +114,71 @@ Deno.test("successful render archives deterministic path, upserts document, and 
   assertEquals(repo.finalizeCalls, [REVISION_ID]);
 });
 
-Deno.test("expected finalization guard keeps durable artifact ready for sibling editions", async () => {
+Deno.test("production finalization guard lets the later sibling finalize", async () => {
+  const early = await repository();
+  const later = await repository();
+  const laterArtifactId = "40000000-0000-4000-8000-000000000002";
+  later.claim = {
+    ...later.claim!,
+    id: laterArtifactId,
+    audience: "vendor",
+  };
+
+  const readyAudiences = new Set<string>();
+  let releaseLater!: () => void;
+  const earlyFinalizeAttempted = new Promise<void>((resolve) => {
+    releaseLater = resolve;
+  });
+  early.markArtifactReady = (input: unknown): Promise<void> => {
+    early.ready.push(input);
+    readyAudiences.add("client");
+    return Promise.resolve();
+  };
+  early.finalizeRevision = (id: string): Promise<void> => {
+    early.finalizeCalls.push(id);
+    releaseLater();
+    return Promise.reject(
+      new SpecBookRenderError(
+        "finalization_guard",
+        "all requested artifacts must be durable before finalization",
+      ),
+    );
+  };
+  later.markArtifactReady = async (input: unknown): Promise<void> => {
+    await earlyFinalizeAttempted;
+    later.ready.push(input);
+    readyAudiences.add("vendor");
+  };
+  later.finalizeRevision = (id: string): Promise<void> => {
+    later.finalizeCalls.push(id);
+    return readyAudiences.size === 2
+      ? Promise.resolve()
+      : Promise.reject(new Error("later audience finalized too early"));
+  };
+
+  const [earlyResult, laterResult] = await Promise.all([
+    runSpecBookRender(early, ARTIFACT_ID),
+    runSpecBookRender(later, laterArtifactId),
+  ]);
+  assertEquals(earlyResult.finalized, false);
+  assertEquals(laterResult.finalized, true);
+  assertEquals(early.ready.length, 1);
+  assertEquals(later.ready.length, 1);
+  assertEquals(early.failed, []);
+  assertEquals(later.failed, []);
+});
+
+Deno.test("non-guard finalization failures remain fatal after the artifact is durable", async () => {
   const repo = await repository();
-  repo.finalizeError = new Error("finalization_guard: artifacts pending");
-  const result = await runSpecBookRender(repo, ARTIFACT_ID);
-  assertEquals(result.finalized, false);
+  repo.finalizeError = new SpecBookRenderError(
+    "finalization_guard",
+    "database connection unavailable",
+  );
+  await assertRejects(
+    () => runSpecBookRender(repo, ARTIFACT_ID),
+    SpecBookRenderError,
+    "database connection unavailable",
+  );
   assertEquals(repo.ready.length, 1);
   assertEquals(repo.failed, []);
 });

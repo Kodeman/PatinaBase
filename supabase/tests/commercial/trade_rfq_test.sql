@@ -35,8 +35,6 @@ BEGIN;
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id uuid, p_role text DEFAULT 'authenticated')
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
-  EXECUTE 'RESET ROLE';
-  EXECUTE format('SET LOCAL ROLE %I', p_role);
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', p_user_id, 'role', p_role
   )::text, true);
@@ -377,9 +375,17 @@ WHERE proposal_id = (SELECT value FROM rfq_ids WHERE key = 'scope')
 -- (3) MINTING THE LINK. Service role only, raw token returned once, and
 --     re-minting kills what came before.
 -- ═══════════════════════════════════════════════════════════════════════════
+SELECT pg_temp.assume_user(
+  'd9000000-0000-4000-8000-000000000001', 'authenticated'
+);
+SELECT set_config(
+  'rfq.mint_target',
+  (SELECT value::text FROM rfq_ids WHERE key = 'rfq_hollis'), true
+);
+SET LOCAL ROLE authenticated;
 DO $$
 DECLARE
-  v_rfq uuid := (SELECT value FROM rfq_ids WHERE key = 'rfq_hollis');
+  v_rfq uuid := current_setting('rfq.mint_target')::uuid;
   v_id uuid;
   v_raw text;
   v_err text;
@@ -393,12 +399,32 @@ BEGIN
   END;
   ASSERT v_err = 'minting a trade RFQ link requires service_role',
     format('mint role refusal: %L', v_err);
+END $$;
+RESET ROLE;
 
-  PERFORM pg_temp.assume_user('d9000000-0000-4000-8000-000000000001', 'service_role');
+SELECT pg_temp.assume_user(
+  'd9000000-0000-4000-8000-000000000001', 'service_role'
+);
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_rfq uuid := current_setting('rfq.mint_target')::uuid;
+  v_id uuid;
+  v_raw text;
+BEGIN
   SELECT m.id, m.token INTO v_id, v_raw FROM public.mint_trade_rfq_token(v_rfq) m;
+  PERFORM set_config('rfq.mint_id', v_id::text, true);
+  PERFORM set_config('rfq.token_stale', v_raw, true);
+END $$;
+RESET ROLE;
+DO $$
+DECLARE
+  v_rfq uuid := current_setting('rfq.mint_target')::uuid;
+  v_id uuid := current_setting('rfq.mint_id')::uuid;
+  v_raw text := current_setting('rfq.token_stale');
+BEGIN
   ASSERT v_raw ~ '^[0-9a-f]{64}$',
     format('the raw token must be 32 random bytes as hex: %L', v_raw);
-  PERFORM set_config('rfq.token_stale', v_raw, true);
   INSERT INTO rfq_ids VALUES ('token_stale', v_id);
 
   -- Only the hash is at rest. The raw value appears nowhere in the row.
@@ -420,15 +446,25 @@ END $$;
 
 -- Re-mint. Hash-at-rest means "send it again" can only mean "revoke and cut a
 -- fresh one" — so the link already in the sub's inbox must die.
+SET LOCAL ROLE service_role;
 DO $$
 DECLARE
-  v_rfq uuid := (SELECT value FROM rfq_ids WHERE key = 'rfq_hollis');
-  v_stale text := current_setting('rfq.token_stale');
+  v_rfq uuid := current_setting('rfq.mint_target')::uuid;
   v_id uuid;
   v_raw text;
 BEGIN
   SELECT m.id, m.token INTO v_id, v_raw FROM public.mint_trade_rfq_token(v_rfq) m;
+  PERFORM set_config('rfq.mint_id', v_id::text, true);
   PERFORM set_config('rfq.token_hollis', v_raw, true);
+END $$;
+RESET ROLE;
+DO $$
+DECLARE
+  v_rfq uuid := current_setting('rfq.mint_target')::uuid;
+  v_stale text := current_setting('rfq.token_stale');
+  v_id uuid := current_setting('rfq.mint_id')::uuid;
+  v_raw text := current_setting('rfq.token_hollis');
+BEGIN
   INSERT INTO rfq_ids VALUES ('token_hollis', v_id);
 
   ASSERT v_raw <> v_stale, 'a re-mint must not re-emit the prior token';
@@ -445,16 +481,25 @@ BEGIN
 END $$;
 
 -- Renn's link, minted once and left alone.
+SELECT set_config(
+  'rfq.mint_target',
+  (SELECT value::text FROM rfq_ids WHERE key = 'rfq_renn'), true
+);
+SET LOCAL ROLE service_role;
 DO $$
 DECLARE
-  v_rfq uuid := (SELECT value FROM rfq_ids WHERE key = 'rfq_renn');
+  v_rfq uuid := current_setting('rfq.mint_target')::uuid;
   v_id uuid;
   v_raw text;
 BEGIN
   SELECT m.id, m.token INTO v_id, v_raw FROM public.mint_trade_rfq_token(v_rfq) m;
+  PERFORM set_config('rfq.mint_id', v_id::text, true);
   PERFORM set_config('rfq.token_renn', v_raw, true);
-  INSERT INTO rfq_ids VALUES ('token_renn', v_id);
 END $$;
+RESET ROLE;
+INSERT INTO rfq_ids VALUES (
+  'token_renn', current_setting('rfq.mint_id')::uuid
+);
 SELECT pg_temp.assume_user('d9000000-0000-4000-8000-000000000001');
 
 -- The active authenticated role remains denied even if its JWT claims forge
@@ -467,13 +512,18 @@ SELECT set_config(
   '{"sub":"d9000000-0000-4000-8000-000000000001","role":"service_role"}',
   true
 );
+SELECT set_config(
+  'rfq.mint_target',
+  (SELECT value::text FROM rfq_ids WHERE key = 'rfq_renn'), true
+);
+SET LOCAL ROLE authenticated;
 DO $$
 DECLARE v_err text; v_id uuid; v_raw text;
 BEGIN
   BEGIN
     SELECT m.id, m.token INTO v_id, v_raw
     FROM public.mint_trade_rfq_token(
-      (SELECT value FROM rfq_ids WHERE key = 'rfq_renn')
+      current_setting('rfq.mint_target')::uuid
     ) m;
     ASSERT false, 'forged service claims must not mint a trade RFQ link';
   EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
@@ -481,6 +531,7 @@ BEGIN
   ASSERT v_err = 'minting a trade RFQ link requires service_role',
     format('forged service-claim refusal: %L', v_err);
 END $$;
+RESET ROLE;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (4) THE GUEST READ. What the sub is shown, and — asserted twice over — what
@@ -1061,10 +1112,15 @@ BEGIN
 END $$;
 
 -- And a closed ask cannot be re-linked.
+SELECT set_config(
+  'rfq.mint_target',
+  (SELECT value::text FROM rfq_ids WHERE key = 'rfq_renn'), true
+);
 SELECT pg_temp.assume_user('d9000000-0000-4000-8000-000000000001', 'service_role');
+SET LOCAL ROLE service_role;
 DO $$
 DECLARE
-  v_rfq uuid := (SELECT value FROM rfq_ids WHERE key = 'rfq_renn');
+  v_rfq uuid := current_setting('rfq.mint_target')::uuid;
   v_id uuid; v_raw text; v_err text;
 BEGIN
   BEGIN
@@ -1075,6 +1131,7 @@ BEGIN
   ASSERT v_err = format('trade RFQ %s is closed and cannot be re-linked', v_rfq),
     format('closed-relink refusal: %L', v_err);
 END $$;
+RESET ROLE;
 
 -- FALSIFY (THE CLOSED WINDOW) — post-signature, FIVE independent things refuse a
 -- late number, and this block found them by having to strip each in turn before
@@ -1376,7 +1433,6 @@ DO $$
 DECLARE
   v_scope2 uuid := (SELECT value FROM rfq_ids WHERE key = 'scope2');
   v_rfq uuid;
-  v_id uuid; v_raw text; v_err text;
 BEGIN
   SELECT id INTO v_rfq FROM public.trade_rfq_requests
   WHERE proposal_id = v_scope2
@@ -1385,9 +1441,28 @@ BEGIN
   ASSERT (SELECT status FROM public.trade_rfq_requests WHERE id = v_rfq) = 'draft',
     'fixture: and it is still a draft, or nothing below is about drafts';
   INSERT INTO rfq_ids VALUES ('rfq_scope2', v_rfq);
+  PERFORM set_config('rfq.mint_target', v_rfq::text, true);
+END $$;
 
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_rfq uuid := current_setting('rfq.mint_target')::uuid;
+  v_id uuid;
+  v_raw text;
+BEGIN
   SELECT m.id, m.token INTO v_id, v_raw FROM public.mint_trade_rfq_token(v_rfq) m;
+  PERFORM set_config('rfq.mint_id', v_id::text, true);
   PERFORM set_config('rfq.token_scope2', v_raw, true);
+END $$;
+RESET ROLE;
+
+DO $$
+DECLARE
+  v_id uuid := current_setting('rfq.mint_id')::uuid;
+  v_raw text := current_setting('rfq.token_scope2');
+  v_err text;
+BEGIN
   INSERT INTO rfq_ids VALUES ('token_scope2', v_id);
   ASSERT (SELECT status FROM public.trade_rfq_tokens WHERE id = v_id) = 'active',
     'fixture: the link is live, or the refusals below are about a dead one';
@@ -1450,15 +1525,24 @@ END $$;
 
 -- An EXPIRED link is not in anyone's hands either — the qualifier in the check
 -- is load-bearing, so it gets its own probe.
+SELECT set_config(
+  'rfq.mint_target',
+  (SELECT value::text FROM rfq_ids WHERE key = 'rfq_scope2'), true
+);
 SELECT pg_temp.assume_user('d9000000-0000-4000-8000-000000000001', 'service_role');
+SET LOCAL ROLE service_role;
 DO $$
 DECLARE
-  v_rfq uuid := (SELECT value FROM rfq_ids WHERE key = 'rfq_scope2');
+  v_rfq uuid := current_setting('rfq.mint_target')::uuid;
   v_id uuid; v_raw text;
 BEGIN
   SELECT m.id, m.token INTO v_id, v_raw FROM public.mint_trade_rfq_token(v_rfq) m;
-  UPDATE public.trade_rfq_tokens SET expires_at = now() - interval '1 day' WHERE id = v_id;
+  PERFORM set_config('rfq.mint_id', v_id::text, true);
 END $$;
+RESET ROLE;
+UPDATE public.trade_rfq_tokens
+SET expires_at = now() - interval '1 day'
+WHERE id = current_setting('rfq.mint_id')::uuid;
 SELECT pg_temp.assume_user('d9000000-0000-4000-8000-000000000001');
 DO $$
 DECLARE
@@ -1475,16 +1559,25 @@ END $$;
 -- and the frozen question moves while a live credential points at it. The link
 -- and the words it was cut against are supposed to stay bound together; without
 -- this predicate they come apart silently.
+SELECT set_config(
+  'rfq.mint_target',
+  (SELECT value::text FROM rfq_ids WHERE key = 'rfq_scope2'), true
+);
 SELECT pg_temp.assume_user('d9000000-0000-4000-8000-000000000001', 'service_role');
+SET LOCAL ROLE service_role;
 DO $$
 DECLARE
-  v_rfq uuid := (SELECT value FROM rfq_ids WHERE key = 'rfq_scope2');
+  v_rfq uuid := current_setting('rfq.mint_target')::uuid;
   v_id uuid; v_raw text;
 BEGIN
   SELECT m.id, m.token INTO v_id, v_raw FROM public.mint_trade_rfq_token(v_rfq) m;
-  INSERT INTO rfq_ids VALUES ('token_scope2_live', v_id);
+  PERFORM set_config('rfq.mint_id', v_id::text, true);
   PERFORM set_config('rfq.token_scope2_live', v_raw, true);
 END $$;
+RESET ROLE;
+INSERT INTO rfq_ids VALUES (
+  'token_scope2_live', current_setting('rfq.mint_id')::uuid
+);
 SELECT pg_temp.assume_user('d9000000-0000-4000-8000-000000000001');
 SAVEPOINT freeze_falsify;
 DO $$

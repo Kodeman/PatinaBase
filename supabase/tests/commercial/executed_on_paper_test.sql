@@ -36,8 +36,6 @@ BEGIN;
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id uuid, p_role text DEFAULT 'authenticated')
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
-  EXECUTE 'RESET ROLE';
-  EXECUTE format('SET LOCAL ROLE %I', p_role);
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', p_user_id, 'role', p_role
   )::text, true);
@@ -1254,10 +1252,27 @@ BEGIN
   -- Ask the sub, and mint them a link. Executing must end both.
   v_rfq := public.prepare_trade_rfq(v_scope_id, v_party, 'Please quote.', 'March start.');
   INSERT INTO paper_ids VALUES ('rfq', (v_rfq->>'id')::uuid);
-  PERFORM pg_temp.assume_user('ea000000-0000-4000-8000-000000000001', 'service_role');
-  PERFORM public.mint_trade_rfq_token((v_rfq->>'id')::uuid);
-  PERFORM pg_temp.assume_user('ea000000-0000-4000-8000-000000000001');
+  PERFORM set_config('paper.mint_target', v_rfq->>'id', true);
+END $$;
 
+SELECT pg_temp.assume_user(
+  'ea000000-0000-4000-8000-000000000001', 'service_role'
+);
+SET LOCAL ROLE service_role;
+DO $$
+BEGIN
+  PERFORM public.mint_trade_rfq_token(
+    current_setting('paper.mint_target')::uuid
+  );
+END $$;
+RESET ROLE;
+SELECT pg_temp.assume_user('ea000000-0000-4000-8000-000000000001');
+
+DO $$
+DECLARE
+  v_scope_id uuid := (SELECT value FROM paper_ids WHERE key = 'scope');
+  v_party uuid := (SELECT value FROM paper_ids WHERE key = 'party');
+BEGIN
   INSERT INTO public.trade_scope_bids (
     proposal_id, party_id, party_display_name, amount_cents, status, source
   ) VALUES (v_scope_id, v_party, 'Hollis Millwork', 700000, 'quoted', 'recorded');

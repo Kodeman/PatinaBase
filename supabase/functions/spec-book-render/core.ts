@@ -122,10 +122,11 @@ async function resolveImages(
 }
 
 function expectedFinalizeGuard(error: unknown): boolean {
-  const text = errorMessage(error).toLowerCase();
-  return text.includes("finalization_guard") ||
-    text.includes("artifacts") &&
-      (text.includes("pending") || text.includes("ready"));
+  return error instanceof SpecBookRenderError &&
+    error.code === "finalization_guard" &&
+    error.message.toLowerCase().includes(
+      "all requested artifacts must be durable before finalization",
+    );
 }
 
 export async function runSpecBookRender(

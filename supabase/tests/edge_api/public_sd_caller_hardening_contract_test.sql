@@ -15,6 +15,8 @@ BEGIN
 END
 $assertion_preflight$;
 
+CREATE EXTENSION IF NOT EXISTS dblink WITH SCHEMA extensions;
+
 CREATE TEMP TABLE _00486_expected (
   signature text PRIMARY KEY,
   arguments text NOT NULL,
@@ -37,7 +39,7 @@ INSERT INTO _00486_expected VALUES
   (
     'public.apply_scope_change(uuid)', 'p_request_id uuid', 'void', 'v',
     ARRAY['search_path=pg_catalog, public, pg_temp'],
-    '17f07b6b0c089f663ca9d4bc2fe551d32c43327d83932008cb4d1ba564221b28',
+    '88cd8a50f7851f7a4857e7a0e79bafb741c20c0ddd87b6f49005aa2438c58e49',
     ARRAY['authenticated'],
     $call$SELECT public.apply_scope_change('48600000-0000-4000-8000-00000000ff01')$call$
   ),
@@ -312,16 +314,16 @@ INSERT INTO _00486_dependencies VALUES
    'cf1a32d2ab1608f8c3667b5f8320192dc274ad47d740b0609d64bc6824744e00',
    ARRAY[]::text[]),
   ('public._scope_change_requester_can_author(uuid,uuid,uuid)',
-   'p_actor uuid, p_owner uuid, p_project_id uuid', 'boolean', 'sql', true, 's',
-   '5b7df65b73ce6fcdac0d66aadce7aebcffd198e2fc08b9b90c46e6e69496a946',
+   'p_actor uuid, p_owner uuid, p_project_id uuid', 'boolean', 'plpgsql', true, 'v',
+   '0ad79001500666469b44240b55335f5f2eb07adc967d97f43e04b34397273508',
    ARRAY[]::text[]),
   ('public.guard_scope_change_request_integrity()', '', 'trigger',
    'plpgsql', false, 'v',
-   '574deae128ca3211207e7236eeebe2577f438a6d2b98aa10ca5d7b3f3f68059f',
+   'badf9f769e014fd8128509af9e1a4fd5a59615954f82ad83e639616abaeef0aa',
    ARRAY[]::text[]),
   ('public.send_scope_change_request(uuid,uuid)',
    'p_request_id uuid, p_project_id uuid', 'jsonb', 'plpgsql', true, 'v',
-   '563b52802fc3479848f1b098b55bc95358a9ad65ad206f87d1e7ae5f5979c838',
+   '625f109b0473c31b20f69efa634bc0f4ca80c013c5037bacb316809b5100c657',
    ARRAY['authenticated', 'service_role']),
   ('public.approve_scope_change_request(uuid,uuid,text,text)',
    'p_request_id uuid, p_project_id uuid, p_approved_by_name text, p_approved_ip text DEFAULT NULL::text',
@@ -330,7 +332,7 @@ INSERT INTO _00486_dependencies VALUES
    ARRAY['authenticated', 'service_role']),
   ('public.accept_client_scope_change_request(uuid,uuid)',
    'p_request_id uuid, p_project_id uuid', 'jsonb', 'plpgsql', true, 'v',
-   'bb3b43ef55808bfae7c683563852819e4d6703bd71022493702cdd2d81c49c2c',
+   '56c34a3f637393aa3fec4c7aea708db421f054ebb034092a54b35347b2af3d8a',
    ARRAY['authenticated', 'service_role']),
   ('public.decline_scope_change_request(uuid,uuid,text)',
    'p_request_id uuid, p_project_id uuid, p_decline_reason text DEFAULT NULL::text',
@@ -431,6 +433,12 @@ BEGIN
     FROM pg_trigger AS binding
     WHERE binding.tgfoid =
       'public.guard_scope_change_request_integrity()'::regprocedure
+      AND NOT binding.tgisinternal
+  ) AND EXISTS (
+    SELECT 1
+    FROM pg_trigger AS binding
+    WHERE binding.tgfoid =
+      'public.guard_scope_change_request_integrity()'::regprocedure
       AND binding.tgname = 'guard_scope_change_request_integrity'
       AND binding.tgrelid = 'public.scope_change_requests'::regclass
       AND binding.tgtype = 23
@@ -471,7 +479,6 @@ BEGIN
       'public.approve_scope_change_request(uuid,uuid,text,text)',
       'public.cancel_scope_change_request(uuid,uuid)',
       'public.decline_scope_change_request(uuid,uuid,text)',
-      'public.guard_scope_change_request_integrity()',
       'public.send_scope_change_request(uuid,uuid)'
     ]) AS expected(signature)
   ), 'scope-change helper caller graph drifted';
@@ -479,18 +486,18 @@ BEGIN
   ASSERT NOT EXISTS (
     SELECT 1
     FROM (VALUES
-      ('public.guard_scope_change_request_integrity()',
-       'public._scope_change_requester_can_author( auth.uid(), project.designer_id, project.id )'),
       ('public.send_scope_change_request(uuid,uuid)',
-       'public._scope_change_requester_can_author( v_actor, designer_id, id )'),
+       'public._scope_change_requester_can_author( v_actor, v_project.designer_id, v_project.id )'),
       ('public.approve_scope_change_request(uuid,uuid,text,text)',
        'public._scope_change_requester_can_author( v_request.requested_by, v_project.designer_id, v_project.id )'),
       ('public.accept_client_scope_change_request(uuid,uuid)',
-       'public._scope_change_requester_can_author( v_actor, designer_id, id )'),
+       'public._scope_change_requester_can_author( v_actor, v_project.designer_id, v_project.id )'),
       ('public.decline_scope_change_request(uuid,uuid,text)',
        'public._scope_change_requester_can_author( v_request.requested_by, v_project.designer_id, v_project.id )'),
       ('public.cancel_scope_change_request(uuid,uuid)',
        'public._scope_change_requester_can_author( v_actor, v_project.designer_id, v_project.id )'),
+      ('public.apply_scope_change(uuid)',
+       'public._scope_change_requester_can_author( auth.uid(), v_project.designer_id, v_project.id )'),
       ('public.apply_scope_change(uuid)',
        'public._scope_change_requester_can_author( v_request.requested_by, v_project.designer_id, v_project.id )')
     ) AS expected(signature, call_fragment)
@@ -503,12 +510,38 @@ BEGIN
     ) = 0
   ), 'scope-change caller lost the exact project helper argument';
 
+  ASSERT 'SELECT public._draft_invoice_from_milestone_00486(' ~
+      $milestone_core_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_token$
+     AND 'SELECT _draft_invoice_from_milestone_00486 (' ~
+      $milestone_core_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_token$
+     AND 'SELECT "public"."_draft_invoice_from_milestone_00486" (' ~
+      $milestone_core_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_token$
+     AND 'SELECT other._draft_invoice_from_milestone_00486(' !~
+      $milestone_core_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_token$
+     AND 'SELECT ''public._draft_invoice_from_milestone_00486(' !~
+      $milestone_core_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_token$,
+    'milestone core caller token matcher lost quoting or identifier boundaries';
+
+  ASSERT 'SELECT public.draft_invoice_from_milestone(' ~
+      $milestone_wrapper_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_token$
+     AND 'SELECT draft_invoice_from_milestone (' ~
+      $milestone_wrapper_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_token$
+     AND 'SELECT "public"."draft_invoice_from_milestone" (' ~
+      $milestone_wrapper_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_token$
+     AND 'SELECT other.draft_invoice_from_milestone(' !~
+      $milestone_wrapper_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_token$
+     AND 'SELECT ''public.draft_invoice_from_milestone(' !~
+      $milestone_wrapper_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_token$,
+    'milestone wrapper caller token matcher lost quoting or identifier boundaries';
+
   ASSERT (
     SELECT array_agg(caller.oid ORDER BY caller.oid)
     FROM pg_proc AS caller
-    WHERE position(
-      'public._draft_invoice_from_milestone_00486(' IN caller.prosrc
-    ) > 0
+    JOIN pg_namespace AS caller_namespace
+      ON caller_namespace.oid = caller.pronamespace
+    WHERE caller_namespace.nspname !~ '^pg_'
+      AND caller_namespace.nspname <> 'information_schema'
+      AND caller.prosrc ~ $milestone_core_call$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_call$
   ) IS NOT DISTINCT FROM ARRAY[
     'public.draft_invoice_from_milestone(uuid)'::regprocedure::oid
   ], 'milestone-invoice legacy core caller graph drifted';
@@ -516,13 +549,17 @@ BEGIN
   ASSERT (
     SELECT array_agg(caller.oid ORDER BY caller.oid)
     FROM pg_proc AS caller
-    WHERE position(
-      'public.draft_invoice_from_milestone(' IN caller.prosrc
-    ) > 0
+    JOIN pg_namespace AS caller_namespace
+      ON caller_namespace.oid = caller.pronamespace
+    WHERE caller_namespace.nspname !~ '^pg_'
+      AND caller_namespace.nspname <> 'information_schema'
+      AND caller.prosrc ~ $milestone_wrapper_call$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_call$
   ) IS NOT DISTINCT FROM (
     SELECT array_agg(signature::regprocedure::oid ORDER BY signature::regprocedure::oid)
     FROM unnest(ARRAY[
+      'public._activate_proposal_as_project_impl(uuid,date)',
       'public._draft_invoice_from_milestone_00486(uuid)',
+      'public.draft_milestones_on_production_start()',
       'public.generate_milestone_invoice(uuid)',
       'public.settle_section_on_gate_approval()'
     ]) AS expected(signature)
@@ -639,7 +676,6 @@ BEGIN
   ASSERT NOT EXISTS (
     SELECT 1
     FROM unnest(ARRAY[
-      'public.guard_scope_change_request_integrity()',
       'public.send_scope_change_request(uuid,uuid)',
       'public.approve_scope_change_request(uuid,uuid,text,text)',
       'public.accept_client_scope_change_request(uuid,uuid)',
@@ -656,13 +692,42 @@ BEGIN
   SELECT routine.prosrc INTO body
   FROM pg_proc AS routine
   WHERE routine.oid =
-    'public._scope_change_requester_can_author(uuid,uuid,uuid)'::regprocedure;
-  ASSERT body LIKE '%project.id = p_project_id%'
-     AND body LIKE '%organization.id = project.studio_id%'
+    'public.guard_scope_change_request_integrity()'::regprocedure;
+  ASSERT body LIKE '%current_user::text <> ''authenticated''%'
+     AND body LIKE '%auth.uid() IS NULL%'
+     AND body LIKE '%NEW.requested_by IS DISTINCT FROM auth.uid()%'
+     AND body LIKE '%project.id = NEW.project_id%'
+     AND body LIKE '%organization.id = v_studio_id%'
      AND body LIKE '%organization.type = ''design_studio''%'
      AND body LIKE '%organization.status = ''active''%'
+     AND body LIKE '%membership.organization_id = v_studio_id%'
+     AND body LIKE '%membership.user_id = auth.uid()%'
      AND body LIKE '%membership.status = ''active''%'
-     AND body LIKE '%membership.role <> ''guest''%',
+     AND body LIKE '%membership.role <> ''guest''%'
+     AND position('FOR SHARE OF project' IN body) > 0
+     AND position('FOR SHARE OF organization' IN body) >
+         position('FOR SHARE OF project' IN body)
+     AND position('FOR SHARE OF membership' IN body) >
+         position('FOR SHARE OF organization' IN body)
+     AND body NOT LIKE '%_scope_change_requester_can_author(%',
+    'scope-change direct INSERT guard lost active caller/project-studio binding';
+
+  SELECT routine.prosrc INTO body
+  FROM pg_proc AS routine
+  WHERE routine.oid =
+    'public._scope_change_requester_can_author(uuid,uuid,uuid)'::regprocedure;
+  ASSERT body LIKE '%project.id = p_project_id%'
+     AND body LIKE '%organization.id = v_studio_id%'
+     AND body LIKE '%organization.type = ''design_studio''%'
+     AND body LIKE '%organization.status = ''active''%'
+     AND body LIKE '%membership.organization_id = v_studio_id%'
+     AND body LIKE '%membership.status = ''active''%'
+     AND body LIKE '%membership.role <> ''guest''%'
+     AND position('FOR SHARE OF project' IN body) > 0
+     AND position('FOR SHARE OF organization' IN body) >
+         position('FOR SHARE OF project' IN body)
+     AND position('FOR SHARE OF membership' IN body) >
+         position('FOR SHARE OF organization' IN body),
     'scope-change helper is not bound to the exact canonical project studio';
 
   SELECT routine.prosrc INTO body
@@ -1981,6 +2046,24 @@ BEGIN
   before_links := pg_temp.count_00486_party_field_links(
     '48600000-0000-4000-8000-000000000051'
   );
+
+  INSERT INTO public.scope_change_requests (
+    id, project_id, requested_by, request_origin, title, description, status
+  ) VALUES (
+    '48600000-0000-4000-8000-000000000067',
+    '48600000-0000-4000-8000-000000000040',
+    '48600000-0000-4000-8000-000000000001',
+    'designer_amendment', '00486 authorized direct insert',
+    'browser-equivalent exact project studio draft', 'draft'
+  );
+  ASSERT (
+    SELECT requested_by = auth.uid()
+       AND project_id = '48600000-0000-4000-8000-000000000040'
+       AND status = 'draft'
+    FROM public.scope_change_requests
+    WHERE id = '48600000-0000-4000-8000-000000000067'
+  ), 'authorized browser-equivalent direct scope draft insert failed';
+
   SELECT * INTO failure FROM pg_temp.capture_00486_error(
     $call$SELECT * FROM public.create_field_link('48600000-0000-4000-8000-000000000051')$call$
   );
@@ -2359,6 +2442,218 @@ BEGIN
 END
 $close_project_contract$;
 RESET ROLE;
+
+DO $scope_membership_revocation_race$
+DECLARE
+  v_conninfo text := format(
+    'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
+    inet_server_addr(), inet_server_port()
+  );
+  v_revoker_pid integer;
+  v_waiting boolean := false;
+  v_attempt integer;
+  v_status text;
+  v_error text;
+BEGIN
+  PERFORM extensions.dblink_connect('scope486_setup', v_conninfo);
+  PERFORM extensions.dblink_exec(
+    'scope486_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec(
+    'scope486_setup',
+    $cleanup$
+      DELETE FROM public.scope_change_requests
+      WHERE id IN (
+        '48690000-0000-4000-8000-000000000060',
+        '48690000-0000-4000-8000-000000000061'
+      );
+      DELETE FROM public.projects
+      WHERE id = '48690000-0000-4000-8000-000000000040';
+      DELETE FROM public.organization_members
+      WHERE id IN (
+        '48690000-0000-4000-8000-000000000020',
+        '48690000-0000-4000-8000-000000000021'
+      );
+      DELETE FROM public.organizations
+      WHERE id = '48690000-0000-4000-8000-000000000010';
+    $cleanup$
+  );
+  PERFORM extensions.dblink_exec(
+    'scope486_setup',
+    $setup$
+      INSERT INTO public.organizations (id, type, name, slug, status)
+      VALUES (
+        '48690000-0000-4000-8000-000000000010', 'design_studio',
+        '00486 Scope Race Studio', 'sd486-scope-race', 'active'
+      );
+      INSERT INTO public.organization_members (
+        id, user_id, organization_id, role, status, joined_at
+      ) VALUES
+        (
+          '48690000-0000-4000-8000-000000000020',
+          '48690000-0000-4000-8000-000000000001',
+          '48690000-0000-4000-8000-000000000010',
+          'owner', 'active', now()
+        ),
+        (
+          '48690000-0000-4000-8000-000000000021',
+          '48690000-0000-4000-8000-000000000002',
+          '48690000-0000-4000-8000-000000000010',
+          'member', 'active', now()
+        );
+      INSERT INTO public.projects (
+        id, name, designer_id, client_id, studio_id, created_by, status,
+        total_amount_cents, budget_cents, design_fee_cents, target_end_date
+      ) VALUES (
+        '48690000-0000-4000-8000-000000000040',
+        '00486 Scope Membership Race',
+        '48690000-0000-4000-8000-000000000001', NULL,
+        '48690000-0000-4000-8000-000000000010',
+        '48690000-0000-4000-8000-000000000001', 'active',
+        0, 0, 0, current_date + 30
+      );
+      INSERT INTO public.scope_change_requests (
+        id, project_id, requested_by, request_origin,
+        title, description, status
+      ) VALUES
+        (
+          '48690000-0000-4000-8000-000000000060',
+          '48690000-0000-4000-8000-000000000040',
+          '48690000-0000-4000-8000-000000000002',
+          'designer_amendment', '00486 race send', 'first draft', 'draft'
+        ),
+        (
+          '48690000-0000-4000-8000-000000000061',
+          '48690000-0000-4000-8000-000000000040',
+          '48690000-0000-4000-8000-000000000002',
+          'designer_amendment', '00486 post-revocation send',
+          'second draft', 'draft'
+        );
+    $setup$
+  );
+  PERFORM extensions.dblink_exec(
+    'scope486_setup', 'SET session_replication_role = origin'
+  );
+
+  PERFORM extensions.dblink_connect('scope486_sender', v_conninfo);
+  PERFORM extensions.dblink_connect('scope486_revoker', v_conninfo);
+  PERFORM extensions.dblink_exec(
+    'scope486_sender',
+    $session$
+      BEGIN;
+      SET LOCAL ROLE authenticated;
+      SET LOCAL request.jwt.claims =
+        '{"sub":"48690000-0000-4000-8000-000000000002","role":"authenticated"}';
+      SET LOCAL request.jwt.claim.sub =
+        '48690000-0000-4000-8000-000000000002';
+    $session$
+  );
+  PERFORM sent.receipt
+  FROM extensions.dblink(
+    'scope486_sender',
+    $send$SELECT public.send_scope_change_request(
+      '48690000-0000-4000-8000-000000000060',
+      '48690000-0000-4000-8000-000000000040'
+    )::text$send$
+  ) AS sent(receipt text);
+
+  SELECT remote.pid INTO v_revoker_pid
+  FROM extensions.dblink(
+    'scope486_revoker', 'SELECT pg_backend_pid()'
+  ) AS remote(pid integer);
+  PERFORM extensions.dblink_send_query(
+    'scope486_revoker',
+    $revoke$UPDATE public.organization_members
+      SET status = 'suspended'
+      WHERE id = '48690000-0000-4000-8000-000000000021'$revoke$
+  );
+  FOR v_attempt IN 1..40 LOOP
+    SELECT activity.wait_event_type = 'Lock'
+    INTO v_waiting
+    FROM pg_stat_activity AS activity
+    WHERE activity.pid = v_revoker_pid;
+    EXIT WHEN COALESCE(v_waiting, false);
+    PERFORM pg_sleep(0.025);
+  END LOOP;
+  ASSERT COALESCE(v_waiting, false)
+     AND extensions.dblink_is_busy('scope486_revoker') = 1,
+    'membership revoker did not wait behind scope-change authority locks';
+
+  PERFORM extensions.dblink_exec('scope486_sender', 'COMMIT');
+  SELECT result.status INTO v_status
+  FROM extensions.dblink_get_result('scope486_revoker', false)
+    AS result(status text);
+  ASSERT v_status = 'UPDATE 1',
+    format('membership revocation did not complete after sender commit: %L', v_status);
+
+  PERFORM extensions.dblink_exec(
+    'scope486_sender',
+    $session$
+      BEGIN;
+      SET LOCAL ROLE authenticated;
+      SET LOCAL request.jwt.claims =
+        '{"sub":"48690000-0000-4000-8000-000000000002","role":"authenticated"}';
+      SET LOCAL request.jwt.claim.sub =
+        '48690000-0000-4000-8000-000000000002';
+    $session$
+  );
+  PERFORM extensions.dblink_send_query(
+    'scope486_sender',
+    $send$SELECT public.send_scope_change_request(
+      '48690000-0000-4000-8000-000000000061',
+      '48690000-0000-4000-8000-000000000040'
+    )::text$send$
+  );
+  PERFORM denied.receipt
+  FROM extensions.dblink_get_result('scope486_sender', false)
+    AS denied(receipt text);
+  v_error := extensions.dblink_error_message('scope486_sender');
+  ASSERT position(
+    'send_scope_change_request: project not found or access denied' IN v_error
+  ) > 0, format('next call after membership revocation was not denied: %L', v_error);
+  PERFORM extensions.dblink_exec('scope486_sender', 'ROLLBACK');
+
+  ASSERT (
+    SELECT status = 'sent'
+    FROM public.scope_change_requests
+    WHERE id = '48690000-0000-4000-8000-000000000060'
+  ) AND (
+    SELECT status = 'draft'
+    FROM public.scope_change_requests
+    WHERE id = '48690000-0000-4000-8000-000000000061'
+  ) AND (
+    SELECT status = 'suspended'
+    FROM public.organization_members
+    WHERE id = '48690000-0000-4000-8000-000000000021'
+  ), 'scope-change revocation race left an invalid committed state';
+
+  PERFORM extensions.dblink_disconnect('scope486_revoker');
+  PERFORM extensions.dblink_disconnect('scope486_sender');
+  PERFORM extensions.dblink_exec(
+    'scope486_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec('scope486_setup', $cleanup$
+    DELETE FROM public.scope_change_requests
+    WHERE id IN (
+      '48690000-0000-4000-8000-000000000060',
+      '48690000-0000-4000-8000-000000000061'
+    );
+    DELETE FROM public.projects
+    WHERE id = '48690000-0000-4000-8000-000000000040';
+    DELETE FROM public.organization_members
+    WHERE id IN (
+      '48690000-0000-4000-8000-000000000020',
+      '48690000-0000-4000-8000-000000000021'
+    );
+    DELETE FROM public.organizations
+    WHERE id = '48690000-0000-4000-8000-000000000010';
+  $cleanup$);
+  PERFORM extensions.dblink_exec(
+    'scope486_setup', 'SET session_replication_role = origin'
+  );
+  PERFORM extensions.dblink_disconnect('scope486_setup');
+END
+$scope_membership_revocation_race$;
 
 CREATE TEMP TABLE _00486_enumeration_pairs (
   signature text PRIMARY KEY,
