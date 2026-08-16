@@ -77,7 +77,7 @@ VALUES
   (
     'public.issue_trade_draw_invoice(uuid)', 'p_draw_id uuid', 'jsonb',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'a0ae45909cb9297e38f0a99b72a0581a52686bccc44235866c1543b100b51ebb',
+    'b63830994f1173424a3a798a8d969fbeae946c5eb5d97bd3b3cbaaf51d8b8aa9',
     ARRAY['authenticated']::text[]
   ),
   (
@@ -102,13 +102,13 @@ VALUES
     'public.prepare_spec_book_issue(uuid,text[],text,text,uuid,text,jsonb)',
     'p_spec_book_id uuid, p_audiences text[], p_issue_type text, p_reason text, p_base_revision_id uuid, p_idempotency_key text, p_warning_acknowledgements jsonb DEFAULT ''[]''::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '9db7632d6d2c5e9f655f6a5e8e7729d7a88995c35c59e9264b56dc0e50a07ad0',
+    '1b63dbc14bcdcc8a7a5b19e7375bf80d117159429b87d2cc5048a2ace9242b4b',
     ARRAY['authenticated']::text[]
   ),
   (
     'public.publish_project_review(jsonb)', 'p_request jsonb', 'jsonb',
     ARRAY['search_path=pg_catalog, public, extensions, pg_temp']::text[],
-    'e597174717ea8b7663a9fb78d9ff34b98a886263c051f501687045d1c11b6744',
+    'b20d24b78c8169b238cfb2357c9ecde725d584098a340dad50b91ed78ebefeeb',
     ARRAY['authenticated']::text[]
   ),
   (
@@ -121,13 +121,13 @@ VALUES
   (
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '209b6ded25eae8464931b26f8112db309f6937561cee0c16d786870759e65e3c',
+    'd7652d832a55cd066c0e3f1d12572a4a387447f99a70af1f0d88b4fed258954a',
     ARRAY[]::text[]
   ),
   (
     'public.set_project_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '8c14190278562ee8ba47eecdcfc3cb322a04e4130ee66930ae085bc52609d936',
+    '8597fc772be15ef6201f66aae03744aebb6844c01237694d208b13f2741ee1da',
     ARRAY[]::text[]
   ),
   (
@@ -240,73 +240,154 @@ BEGIN
 END
 $public_catalog_contract$;
 
-DO $private_dependency_contract$
-DECLARE
-  core_oid oid := to_regprocedure(
-    'app_private.issue_invoice_for_actor(uuid,date,uuid)'
+CREATE TEMP TABLE _00485_expected_dependency (
+  signature text PRIMARY KEY,
+  arguments text NOT NULL,
+  result_type text NOT NULL,
+  final_config text[] NOT NULL,
+  body_sha256 text NOT NULL
+) ON COMMIT DROP;
+
+INSERT INTO _00485_expected_dependency (
+  signature, arguments, result_type, final_config, body_sha256
+)
+VALUES
+  (
+    'app_private.issue_invoice_for_actor(uuid,date,uuid)',
+    'p_invoice_id uuid, p_due_date date, p_actor_id uuid', 'invoices',
+    ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
+    '855d1e914495ee4c6e8c0e9550478190945fc11940750fad7e0ee7b2aab763c4'
+  ),
+  (
+    'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
+    'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
+    'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
+    'cdadc449f368eb12d56d0006e3ccb81d752bdc3388f783e4cd1a6b414923bb84'
+  ),
+  (
+    'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
+    'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
+    'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
+    '3f8d36043d9d38c275fa802690205a67104add2654eb818a08d5bf7bcdb85a36'
+  ),
+  (
+    'public._prepare_spec_book_issue_00403(uuid,text[],text,text,uuid,text,jsonb)',
+    'p_spec_book_id uuid, p_audiences text[], p_issue_type text, p_reason text, p_base_revision_id uuid, p_idempotency_key text, p_warning_acknowledgements jsonb DEFAULT ''[]''::jsonb',
+    'jsonb',
+    ARRAY['search_path=pg_catalog, public, extensions, pg_temp']::text[],
+    '8a06f30204b11f3f3e2551b74944988031d6b776edde0423fcb176f6d963586b'
+  ),
+  (
+    'public._publish_project_review_00448_impl(jsonb)',
+    'p_request jsonb', 'jsonb',
+    ARRAY['search_path=pg_catalog, public, extensions, pg_temp']::text[],
+    '0c3b935559ff383878d7c36f4057378663f52c5825088335c7e62f6c5412295e'
   );
+
+DO $private_dependency_contract$
 BEGIN
-  ASSERT core_oid IS NOT NULL,
-    'app_private.issue_invoice_for_actor(uuid,date,uuid) is missing';
-  ASSERT (
-    SELECT owner.rolname = 'postgres'
-       AND language.lanname = 'plpgsql'
-       AND routine.prokind = 'f'
-       AND routine.prosecdef
-       AND routine.provolatile = 'v'
-       AND NOT routine.proisstrict
-       AND NOT routine.proleakproof
-       AND routine.proparallel = 'u'
-       AND routine.proconfig =
-             ARRAY['search_path=pg_catalog, public, pg_temp']::text[]
-       AND pg_get_function_arguments(routine.oid) =
-             'p_invoice_id uuid, p_due_date date, p_actor_id uuid'
-       AND pg_get_function_result(routine.oid) = 'invoices'
-       AND encode(
-             extensions.digest(
-               convert_to(routine.prosrc, 'UTF8'), 'sha256'
-             ),
-             'hex'
-           ) =
-             '1bb33e50769432c5ecd3f08328da152008e0d328a47167c4a059cafc31c3d3e4'
-    FROM pg_proc AS routine
-    JOIN pg_roles AS owner ON owner.oid = routine.proowner
-    JOIN pg_language AS language ON language.oid = routine.prolang
-    WHERE routine.oid = core_oid
-  ), 'the private explicit-actor invoice core profile drifted';
+  ASSERT (SELECT count(*) FROM _00485_expected_dependency) = 5,
+    'the 00485 dependency manifest must contain exactly five rows';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM _00485_expected_dependency AS expected
+    LEFT JOIN pg_proc AS routine
+      ON routine.oid = to_regprocedure(expected.signature)
+    LEFT JOIN pg_roles AS owner ON owner.oid = routine.proowner
+    LEFT JOIN pg_language AS language ON language.oid = routine.prolang
+    WHERE routine.oid IS NULL
+      OR owner.rolname IS DISTINCT FROM 'postgres'
+      OR language.lanname IS DISTINCT FROM 'plpgsql'
+      OR routine.prokind <> 'f'
+      OR NOT routine.prosecdef
+      OR routine.provolatile <> 'v'
+      OR routine.proisstrict
+      OR routine.proleakproof
+      OR routine.proparallel <> 'u'
+      OR routine.proconfig IS DISTINCT FROM expected.final_config
+      OR pg_get_function_arguments(routine.oid)
+           IS DISTINCT FROM expected.arguments
+      OR pg_get_function_result(routine.oid)
+           IS DISTINCT FROM expected.result_type
+      OR encode(
+           extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
+           'hex'
+         ) IS DISTINCT FROM expected.body_sha256
+  ), 'an owner-only 00485 dependency profile drifted';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM _00485_expected_dependency AS expected
+    JOIN pg_proc AS routine
+      ON routine.oid = to_regprocedure(expected.signature)
+    CROSS JOIN LATERAL aclexplode(
+      COALESCE(routine.proacl, acldefault('f', routine.proowner))
+    ) AS acl
+    WHERE acl.grantee <> routine.proowner
+  ), 'an owner-only 00485 dependency has a nonowner ACL row';
+
+  ASSERT NOT EXISTS (
+    WITH expected(caller_signature) AS (
+      VALUES
+        ('public.issue_trade_draw_invoice(uuid)'::text),
+        ('public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)'::text),
+        ('public._execute_trade_scope_authorized(uuid,text,uuid,text)'::text)
+    ),
+    actual AS (
+      SELECT
+        namespace.nspname || '.' || routine.proname || '(' ||
+          pg_get_function_identity_arguments(routine.oid) || ')' AS caller_signature
+      FROM pg_proc AS routine
+      JOIN pg_namespace AS namespace ON namespace.oid = routine.pronamespace
+      WHERE namespace.nspname <> 'information_schema'
+        AND namespace.nspname NOT LIKE 'pg_%'
+        AND position(
+          'app_private.issue_invoice_for_actor(' IN routine.prosrc
+        ) > 0
+    )
+    SELECT 1
+    FROM (
+      (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual)
+      UNION ALL
+      (SELECT * FROM actual EXCEPT ALL SELECT * FROM expected)
+    ) AS drift
+  ), 'the private invoice core global caller universe drifted';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM (VALUES
+      (
+        'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
+        '''commercialDocumentId'''
+      ),
+      (
+        'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
+        '''tradeScopeDocumentId'''
+      ),
+      ('public.issue_trade_draw_invoice(uuid)', '''tradeScopeDocumentId''')
+    ) AS expected(signature, metadata_key)
+    JOIN pg_proc AS routine
+      ON routine.oid = to_regprocedure(expected.signature)
+    WHERE position(expected.metadata_key IN routine.prosrc) = 0
+  ), 'an invoice-core caller does not persist its exact metadata anchor';
 
   ASSERT NOT EXISTS (
     SELECT 1
     FROM pg_proc AS routine
-    CROSS JOIN LATERAL aclexplode(
-      COALESCE(routine.proacl, acldefault('f', routine.proowner))
-    ) AS acl
-    WHERE routine.oid = core_oid
-      AND acl.grantee <> routine.proowner
-  ), 'the private explicit-actor invoice core has a nonowner ACL row';
-
-  ASSERT 1 = (
-    SELECT count(*)
-    FROM _00485_expected_public AS expected
-    JOIN pg_proc AS routine
-      ON routine.oid = to_regprocedure(expected.signature)
-    WHERE position('app_private.' IN routine.prosrc) > 0
-      AND expected.signature = 'public.issue_trade_draw_invoice(uuid)'
-      AND position(
-        'app_private.issue_invoice_for_actor(' IN routine.prosrc
-      ) > 0
-      AND position(
-        'v_invoice_id, current_date, v_actor' IN routine.prosrc
-      ) > 0
-  ), 'the private dependency is not bound exactly to issue_trade_draw_invoice';
-
-  ASSERT 1 = (
-    SELECT count(*)
-    FROM _00485_expected_public AS expected
-    JOIN pg_proc AS routine
-      ON routine.oid = to_regprocedure(expected.signature)
-    WHERE position('app_private.' IN routine.prosrc) > 0
-  ), 'an unmanifested app_private dependency is used by the 17 wrappers';
+    WHERE routine.oid IN (
+      to_regprocedure(
+        'public._accept_trade_scope_authorized(uuid,text,uuid)'
+      ),
+      to_regprocedure(
+        'public._sign_design_services_agreement_authorized(uuid,text,uuid,text)'
+      )
+    )
+      AND (
+        position('issue_invoice(' IN routine.prosrc) > 0
+        OR position('request.jwt.claims' IN routine.prosrc) > 0
+      )
+  ), 'sign/accept siblings unexpectedly issue invoices or rewrite claims';
 END
 $private_dependency_contract$;
 
@@ -314,38 +395,39 @@ DO $trigger_binding_contract$
 BEGIN
   ASSERT NOT EXISTS (
     WITH expected AS (
-      SELECT
-        fixture.relation_name,
-        fixture.trigger_name,
-        fixture.function_signature,
-        'O'::"char" AS enabled,
-        false AS is_internal,
-        23::smallint AS trigger_type,
-        0::smallint AS argument_count,
-        ''::text AS arguments_hex,
-        attribute.attnum::text AS trigger_columns,
-        NULL::text AS when_expression,
-        0::oid AS parent_trigger,
-        fixture.definition
+      SELECT *
       FROM (VALUES
         (
-          'public.projects', 'set_project_studio_id',
-          'public.set_project_studio_id()',
-          'createtriggerset_project_studio_idbeforeinsertorupdateofstudio_idonprojectsforeachrowexecutefunctionset_project_studio_id()'
+          'public.projects'::text, 'set_project_studio_id'::text,
+          'public.set_project_studio_id()'::text, 'O'::"char", false,
+          23::smallint, 0::smallint, ''::text,
+          (SELECT string_agg(attnum::text, ' ' ORDER BY
+             array_position(ARRAY['studio_id','designer_id'], attname))
+           FROM pg_attribute
+           WHERE attrelid = 'public.projects'::regclass
+             AND attname = ANY(ARRAY['studio_id','designer_id'])),
+          NULL::text, 0::oid,
+          'createtriggerset_project_studio_idbeforeinsertorupdateofstudio_id,designer_idonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
         ),
         (
-          'public.invoices', 'set_invoice_studio_id',
-          'public.set_invoice_studio_id()',
-          'createtriggerset_invoice_studio_idbeforeinsertorupdateofstudio_idoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'
+          'public.invoices'::text, 'set_invoice_studio_id'::text,
+          'public.set_invoice_studio_id()'::text, 'O'::"char", false,
+          23::smallint, 0::smallint, ''::text,
+          (SELECT string_agg(attnum::text, ' ' ORDER BY array_position(
+             ARRAY['studio_id','designer_id','project_id'], attname))
+           FROM pg_attribute
+           WHERE attrelid = 'public.invoices'::regclass
+             AND attname = ANY(
+               ARRAY['studio_id','designer_id','project_id']
+             )),
+          NULL::text, 0::oid,
+          'createtriggerset_invoice_studio_idbeforeinsertorupdateofstudio_id,designer_id,project_idoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
         )
       ) AS fixture(
-        relation_name, trigger_name, function_signature, definition
+        relation_name, trigger_name, function_signature, enabled, is_internal,
+        trigger_type, argument_count, arguments_hex, trigger_columns,
+        when_expression, parent_trigger, definition
       )
-      JOIN pg_attribute AS attribute
-        ON attribute.attrelid = fixture.relation_name::regclass
-       AND attribute.attname = 'studio_id'
-       AND attribute.attnum > 0
-       AND NOT attribute.attisdropped
     ),
     actual AS (
       SELECT
@@ -492,6 +574,12 @@ VALUES
     'd4850000-0000-4000-8000-000000000002',
     'd4851000-0000-4000-8000-000000000001',
     'member', 'active', now()
+  ),
+  (
+    'd4851100-0000-4000-8000-000000000003',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4851000-0000-4000-8000-000000000002',
+    'owner', 'active', now()
   );
 
 INSERT INTO public.projects (
@@ -510,7 +598,7 @@ VALUES
     'd4850000-0000-4000-8000-000000000001',
     'd4850000-0000-4000-8000-000000000004',
     'd4850000-0000-4000-8000-000000000001',
-    'd4851000-0000-4000-8000-000000000001'
+    'd4851000-0000-4000-8000-000000000002'
   ),
   (
     'd4852000-0000-4000-8000-000000000003', 'SD Spec Project',
@@ -525,11 +613,39 @@ VALUES
     'd4850000-0000-4000-8000-000000000004',
     'd4850000-0000-4000-8000-000000000001',
     'd4851000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4852000-0000-4000-8000-000000000005', 'SD Foreign Spec Project',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4851000-0000-4000-8000-000000000002'
+  ),
+  (
+    'd4852000-0000-4000-8000-000000000006', 'SD Foreign Review Project',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4851000-0000-4000-8000-000000000002'
+  ),
+  (
+    'd4852000-0000-4000-8000-000000000007', 'SD Furnish Execute Project',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4851000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4852000-0000-4000-8000-000000000008', 'SD Trade Execute Project',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4851000-0000-4000-8000-000000000001'
   );
 
 INSERT INTO public.proposals (
   id, project_id, designer_id, client_id, title, status,
-  document_kind, commercial_state, total_amount
+  document_kind, commercial_state, total_amount, deposit_percent
 )
 VALUES
   (
@@ -537,31 +653,119 @@ VALUES
     'd4852000-0000-4000-8000-000000000001',
     'd4850000-0000-4000-8000-000000000001',
     'd4850000-0000-4000-8000-000000000004',
-    'SD Trade Scope One', 'draft', 'trade_scope', 'executed', 10000
+    'SD Trade Scope One', 'draft', 'trade_scope', 'executed', 10000, 0
   ),
   (
     'd4853000-0000-4000-8000-000000000002',
     'd4852000-0000-4000-8000-000000000002',
     'd4850000-0000-4000-8000-000000000001',
     'd4850000-0000-4000-8000-000000000004',
-    'SD Trade Scope Two', 'draft', 'trade_scope', 'executed', 12000
+    'SD Trade Scope Two', 'draft', 'trade_scope', 'executed', 12000, 0
+  ),
+  (
+    'd4853000-0000-4000-8000-000000000020',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'SD Furnish Origin', 'accepted', 'design_services', 'executed', 0, 0
+  ),
+  (
+    'd4853000-0000-4000-8000-000000000021',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'SD Furnish Authorization', 'sent',
+    'furnishings_authorization', 'sent', 10000, 25
+  ),
+  (
+    'd4853000-0000-4000-8000-000000000022',
+    'd4852000-0000-4000-8000-000000000008',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'SD Trade Origin', 'accepted', 'design_services', 'executed', 0, 0
+  ),
+  (
+    'd4853000-0000-4000-8000-000000000023',
+    'd4852000-0000-4000-8000-000000000008',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'SD Trade Execution', 'sent', 'trade_scope', 'sent', 15000, 0
   );
 
+INSERT INTO public.project_budget_versions (
+  id, project_id, version, status, low_total_cents,
+  target_total_cents, high_total_cents, created_by
+)
+VALUES (
+  'd4853300-0000-4000-8000-000000000001',
+  'd4852000-0000-4000-8000-000000000007',
+  1, 'draft', 10000, 10000, 10000,
+  'd4850000-0000-4000-8000-000000000001'
+);
+
+INSERT INTO public.project_budget_checkpoints (
+  id, project_id, budget_version_id, checkpoint_code, status,
+  snapshot_fingerprint, published_by, acknowledged_by, acknowledged_at
+)
+VALUES (
+  'd4853310-0000-4000-8000-000000000001',
+  'd4852000-0000-4000-8000-000000000007',
+  'd4853300-0000-4000-8000-000000000001',
+  'sd-00485-checkpoint', 'acknowledged',
+  public._budget_version_fingerprint(
+    'd4853300-0000-4000-8000-000000000001'
+  ),
+  'd4850000-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000004', now()
+);
+
 INSERT INTO public.project_commercial_documents (
-  id, project_id, proposal_id, document_kind, executed_at, created_by
+  id, project_id, proposal_id, document_kind, wave_name,
+  budget_checkpoint_id, is_origin, executed_at, created_by
 )
 VALUES
   (
     'd4853100-0000-4000-8000-000000000001',
     'd4852000-0000-4000-8000-000000000001',
     'd4853000-0000-4000-8000-000000000001',
-    'trade_scope', now(), 'd4850000-0000-4000-8000-000000000001'
+    'trade_scope', NULL, NULL, false, now(),
+    'd4850000-0000-4000-8000-000000000001'
   ),
   (
     'd4853100-0000-4000-8000-000000000002',
     'd4852000-0000-4000-8000-000000000002',
     'd4853000-0000-4000-8000-000000000002',
-    'trade_scope', now(), 'd4850000-0000-4000-8000-000000000001'
+    'trade_scope', NULL, NULL, false, now(),
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4853100-0000-4000-8000-000000000020',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4853000-0000-4000-8000-000000000020',
+    'design_services', NULL, NULL, true, now(),
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4853100-0000-4000-8000-000000000021',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4853000-0000-4000-8000-000000000021',
+    'furnishings_authorization', 'SD Furnish Wave',
+    'd4853310-0000-4000-8000-000000000001', false, NULL,
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4853100-0000-4000-8000-000000000022',
+    'd4852000-0000-4000-8000-000000000008',
+    'd4853000-0000-4000-8000-000000000022',
+    'design_services', NULL, NULL, true, now(),
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4853100-0000-4000-8000-000000000023',
+    'd4852000-0000-4000-8000-000000000008',
+    'd4853000-0000-4000-8000-000000000023',
+    'trade_scope', NULL, NULL, false, NULL,
+    'd4850000-0000-4000-8000-000000000001'
   );
 
 INSERT INTO public.trade_scope_terms (
@@ -569,7 +773,8 @@ INSERT INTO public.trade_scope_terms (
 )
 VALUES
   ('d4853000-0000-4000-8000-000000000001', 10000, 'USD', 'none'),
-  ('d4853000-0000-4000-8000-000000000002', 12000, 'USD', 'none');
+  ('d4853000-0000-4000-8000-000000000002', 12000, 'USD', 'none'),
+  ('d4853000-0000-4000-8000-000000000023', 15000, 'USD', 'none');
 
 INSERT INTO public.trade_scope_draws (
   id, proposal_id, label, amount_cents, sort_order, gates_on_acceptance
@@ -584,6 +789,11 @@ VALUES
     'd4853200-0000-4000-8000-000000000002',
     'd4853000-0000-4000-8000-000000000002',
     'Trade draw two', 12000, 0, false
+  ),
+  (
+    'd4853200-0000-4000-8000-000000000023',
+    'd4853000-0000-4000-8000-000000000023',
+    'Trade execution deposit', 15000, 0, false
   );
 
 INSERT INTO public.spec_book_templates (
@@ -600,13 +810,21 @@ VALUES (
 INSERT INTO public.spec_books (
   id, project_id, title, template_id, created_by
 )
-VALUES (
-  'd4854100-0000-4000-8000-000000000001',
-  'd4852000-0000-4000-8000-000000000003',
-  'SD Contract Spec Book',
-  'd4854000-0000-4000-8000-000000000001',
-  'd4850000-0000-4000-8000-000000000001'
-);
+VALUES
+  (
+    'd4854100-0000-4000-8000-000000000001',
+    'd4852000-0000-4000-8000-000000000003',
+    'SD Contract Spec Book',
+    'd4854000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4854100-0000-4000-8000-000000000002',
+    'd4852000-0000-4000-8000-000000000005',
+    'SD Foreign Spec Book',
+    'd4854000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000001'
+  );
 
 INSERT INTO public.proposal_boards (
   id, proposal_id, project_id, name, cover_image_url
@@ -691,8 +909,9 @@ VALUES
     NULL, NULL, NULL, NULL, NULL, NULL, 0
   );
 
--- These replacements isolate the reviewed public boundary from already-pinned
--- private implementations; ROLLBACK restores every production body.
+-- Unrelated downstream cores are replaced transaction-locally. The two
+-- commercial execution cores remain real so nested invoice authority and
+-- request-context behavior are exercised end to end.
 CREATE OR REPLACE FUNCTION public._accept_trade_scope_authorized(
   p_proposal_id uuid, p_signed_name text, p_client_id uuid
 )
@@ -738,62 +957,6 @@ BEGIN
                    ':sign_design_services_agreement:%'
   THEN
     RAISE EXCEPTION 'design services not found or access denied'
-      USING ERRCODE = 'insufficient_privilege';
-  END IF;
-  RETURN jsonb_build_object(
-    'proposalId', p_proposal_id, 'actorId', p_client_id,
-    'signedIp', p_signed_ip
-  );
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public._execute_furnishings_authorization_authorized(
-  p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_signed_ip text
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
-AS $$
-BEGIN
-  IF p_signed_name = 'force-error' THEN
-    RAISE EXCEPTION 'forced trusted furnishings error'
-      USING ERRCODE = 'check_violation';
-  END IF;
-  IF p_client_id <> 'd4850000-0000-4000-8000-000000000004'
-     OR current_setting('app.commercial_signature_capability', true)
-          NOT LIKE 'commercial_signature:' || p_proposal_id::text ||
-                   ':execute_furnishings_authorization:%'
-  THEN
-    RAISE EXCEPTION 'furnishings not found or access denied'
-      USING ERRCODE = 'insufficient_privilege';
-  END IF;
-  RETURN jsonb_build_object(
-    'proposalId', p_proposal_id, 'actorId', p_client_id,
-    'signedIp', p_signed_ip
-  );
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public._execute_trade_scope_authorized(
-  p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_signed_ip text
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
-AS $$
-BEGIN
-  IF p_signed_name = 'force-error' THEN
-    RAISE EXCEPTION 'forced trusted trade error'
-      USING ERRCODE = 'check_violation';
-  END IF;
-  IF p_client_id <> 'd4850000-0000-4000-8000-000000000004'
-     OR current_setting('app.commercial_signature_capability', true)
-          NOT LIKE 'commercial_signature:' || p_proposal_id::text ||
-                   ':execute_trade_scope:%'
-  THEN
-    RAISE EXCEPTION 'trade scope not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
   RETURN jsonb_build_object(
@@ -875,7 +1038,7 @@ $$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
-  'd4850000-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000002',
   'service_role',
   jsonb_build_object(
     'actor_id', 'd4850000-0000-4000-8000-000000000004',
@@ -1010,33 +1173,55 @@ BEGIN
     'trusted design signing leaked its capability';
 
   first_result := public.execute_furnishings_authorization_with_trusted_ip(
-    'd4853000-0000-4000-8000-000000000001', 'SD Client',
+    'd4853000-0000-4000-8000-000000000021', 'SD Client',
     'd4850000-0000-4000-8000-000000000004', '203.0.113.12'
   );
   retry_result := public.execute_furnishings_authorization_with_trusted_ip(
-    'd4853000-0000-4000-8000-000000000001', 'SD Client',
+    'd4853000-0000-4000-8000-000000000021', 'SD Client',
     'd4850000-0000-4000-8000-000000000004', '203.0.113.12'
   );
-  ASSERT first_result = retry_result
-     AND first_result->>'actorId' =
-           'd4850000-0000-4000-8000-000000000004',
-    'trusted furnishings did not pass the verified actor idempotently';
+  ASSERT (first_result->>'newlyExecuted')::boolean
+     AND NOT (retry_result->>'newlyExecuted')::boolean
+     AND first_result->>'depositInvoiceId' =
+           retry_result->>'depositInvoiceId'
+     AND (
+       SELECT invoice.status = 'sent'
+          AND invoice.client_id =
+                'd4850000-0000-4000-8000-000000000004'
+          AND invoice.project_id =
+                'd4852000-0000-4000-8000-000000000007'
+          AND invoice.studio_id =
+                'd4851000-0000-4000-8000-000000000001'
+       FROM public.invoices AS invoice
+       WHERE invoice.id = (first_result->>'depositInvoiceId')::uuid
+     ), 'real furnishings execution did not issue the exact relational invoice';
   ASSERT current_setting('app.commercial_signature_capability', true) =
            'sd-sentinel',
     'trusted furnishings leaked its capability';
 
   first_result := public.execute_trade_scope_with_trusted_ip(
-    'd4853000-0000-4000-8000-000000000001', 'SD Client',
+    'd4853000-0000-4000-8000-000000000023', 'SD Client',
     'd4850000-0000-4000-8000-000000000004', '203.0.113.13'
   );
   retry_result := public.execute_trade_scope_with_trusted_ip(
-    'd4853000-0000-4000-8000-000000000001', 'SD Client',
+    'd4853000-0000-4000-8000-000000000023', 'SD Client',
     'd4850000-0000-4000-8000-000000000004', '203.0.113.13'
   );
-  ASSERT first_result = retry_result
-     AND first_result->>'actorId' =
-           'd4850000-0000-4000-8000-000000000004',
-    'trusted trade execution did not pass the verified actor idempotently';
+  ASSERT (first_result->>'newlyExecuted')::boolean
+     AND NOT (retry_result->>'newlyExecuted')::boolean
+     AND first_result->>'depositInvoiceId' =
+           retry_result->>'depositInvoiceId'
+     AND (
+       SELECT invoice.status = 'sent'
+          AND invoice.client_id =
+                'd4850000-0000-4000-8000-000000000004'
+          AND invoice.project_id =
+                'd4852000-0000-4000-8000-000000000008'
+          AND invoice.studio_id =
+                'd4851000-0000-4000-8000-000000000001'
+       FROM public.invoices AS invoice
+       WHERE invoice.id = (first_result->>'depositInvoiceId')::uuid
+     ), 'real trade execution did not issue the exact relational invoice';
   ASSERT current_setting('app.commercial_signature_capability', true) =
            'sd-sentinel',
     'trusted trade execution leaked its capability';
@@ -1178,7 +1363,7 @@ BEGIN
   END;
   BEGIN
     PERFORM public.execute_furnishings_authorization_with_trusted_ip(
-      'd4853000-0000-4000-8000-000000000001', 'Bad actor',
+      'd4853000-0000-4000-8000-000000000021', 'Bad actor',
       'd4850000-0000-4000-8000-000000000003', NULL
     );
     RAISE EXCEPTION 'cross-project trusted furnishings actor succeeded';
@@ -1186,7 +1371,7 @@ BEGIN
   END;
   BEGIN
     PERFORM public.execute_trade_scope_with_trusted_ip(
-      'd4853000-0000-4000-8000-000000000001', 'Bad actor',
+      'd4853000-0000-4000-8000-000000000023', 'Bad actor',
       'd4850000-0000-4000-8000-000000000003', NULL
     );
     RAISE EXCEPTION 'cross-project trusted trade actor succeeded';
@@ -1220,7 +1405,7 @@ BEGIN
 
   BEGIN
     PERFORM public.execute_furnishings_authorization_with_trusted_ip(
-      'd4853000-0000-4000-8000-000000000001', 'force-error',
+      'd4853000-0000-4000-8000-000000000021', 'force-error',
       'd4850000-0000-4000-8000-000000000004', NULL
     );
     RAISE EXCEPTION 'forced trusted furnishings error did not fire';
@@ -1228,7 +1413,7 @@ BEGIN
   END;
   BEGIN
     PERFORM public.execute_trade_scope_with_trusted_ip(
-      'd4853000-0000-4000-8000-000000000001', 'force-error',
+      'd4853000-0000-4000-8000-000000000023', 'force-error',
       'd4850000-0000-4000-8000-000000000004', NULL
     );
     RAISE EXCEPTION 'forced trusted trade error did not fire';
@@ -1271,6 +1456,77 @@ BEGIN
   ), 'release state drifted';
 END
 $service_mutation_results$;
+
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, studio_id,
+  status, currency, subtotal_cents, total_cents
+)
+VALUES
+  (
+    'd4857000-0000-4000-8000-000000000070',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'd4851000-0000-4000-8000-000000000001',
+    'draft', 'USD', 100, 100
+  ),
+  (
+    'd4857000-0000-4000-8000-000000000071',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'd4851000-0000-4000-8000-000000000001',
+    'draft', 'USD', 100, 100
+  );
+
+INSERT INTO public.invoice_line_items (
+  invoice_id, kind, description, quantity,
+  unit_amount_cents, amount_cents, metadata
+)
+VALUES
+  (
+    'd4857000-0000-4000-8000-000000000070', 'adhoc',
+    'Ordinary unrelated line', 1, 100, 100, '{}'::jsonb
+  ),
+  (
+    'd4857000-0000-4000-8000-000000000071', 'adhoc',
+    'Ambiguous commercial anchors', 1, 100, 100,
+    jsonb_build_object(
+      'commercialDocumentId', 'd4853100-0000-4000-8000-000000000021',
+      'tradeScopeDocumentId', 'd4853100-0000-4000-8000-000000000023'
+    )
+  );
+
+DO $invoice_core_anchor_denials$
+DECLARE
+  ordinary_error text;
+  ambiguous_error text;
+BEGIN
+  BEGIN
+    PERFORM app_private.issue_invoice_for_actor(
+      'd4857000-0000-4000-8000-000000000070', current_date,
+      'd4850000-0000-4000-8000-000000000004'
+    );
+    RAISE EXCEPTION 'ordinary adhoc invoice reached the commercial core';
+  EXCEPTION WHEN insufficient_privilege THEN
+    ordinary_error := SQLERRM;
+  END;
+
+  BEGIN
+    PERFORM app_private.issue_invoice_for_actor(
+      'd4857000-0000-4000-8000-000000000071', current_date,
+      'd4850000-0000-4000-8000-000000000004'
+    );
+    RAISE EXCEPTION 'ambiguous invoice anchors reached issuance';
+  EXCEPTION WHEN insufficient_privilege THEN
+    ambiguous_error := SQLERRM;
+  END;
+
+  ASSERT ordinary_error = ambiguous_error
+     AND ordinary_error = 'issue_invoice: invoice not found or access denied',
+    'invoice core anchor denials are not fixed and non-enumerating';
+END
+$invoice_core_anchor_denials$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
@@ -1334,6 +1590,26 @@ $trade_draw_success_state$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000002', 'authenticated'
+);
+
+DO $trade_draw_wrong_canonical_studio_denial$
+BEGIN
+  BEGIN
+    PERFORM public.issue_trade_draw_invoice(
+      'd4853200-0000-4000-8000-000000000002'
+    );
+    RAISE EXCEPTION
+      'shared-studio member issued a draw from another canonical studio';
+  EXCEPTION WHEN insufficient_privilege THEN
+    ASSERT SQLERRM = 'trade scope draw not found or access denied';
+  END;
+END
+$trade_draw_wrong_canonical_studio_denial$;
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
   'd4850000-0000-4000-8000-000000000003',
   'service_role',
   jsonb_build_object(
@@ -1364,7 +1640,8 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     nonexistent_error := SQLERRM;
   END;
-  ASSERT inaccessible_error = nonexistent_error,
+  ASSERT inaccessible_error = nonexistent_error
+     AND inaccessible_error = 'trade scope draw not found or access denied',
     'trade draw denial distinguishes inaccessible and nonexistent rows';
 END
 $trade_draw_outsider_denial$;
@@ -1384,7 +1661,7 @@ DO $trade_draw_inactive_denial$
 BEGIN
   BEGIN
     PERFORM public.issue_trade_draw_invoice(
-      'd4853200-0000-4000-8000-000000000002'
+      'd4853200-0000-4000-8000-000000000001'
     );
     RAISE EXCEPTION 'inactive studio member issued a trade draw';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
@@ -1431,7 +1708,7 @@ EXECUTE FUNCTION pg_temp.force_trade_draw_update_error();
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
-  'd4850000-0000-4000-8000-000000000002', 'authenticated'
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
 );
 SELECT set_config('app.trade_draw_invoice_id', 'draw-error-sentinel', true);
 
@@ -1447,7 +1724,7 @@ BEGIN
   ASSERT current_setting('app.trade_draw_invoice_id', true) =
            'draw-error-sentinel',
     'trade draw error leaked its row capability';
-  ASSERT auth.uid() = 'd4850000-0000-4000-8000-000000000002',
+  ASSERT auth.uid() = 'd4850000-0000-4000-8000-000000000001',
     'trade draw error changed the real caller';
 END
 $trade_draw_forced_error_restore$;
@@ -1491,6 +1768,17 @@ BEGIN
      AND first_result->>'actorId' =
            'd4850000-0000-4000-8000-000000000002',
     'spec issue did not bind the current active studio member idempotently';
+
+  BEGIN
+    PERFORM public.prepare_spec_book_issue(
+      'd4854100-0000-4000-8000-000000000002', ARRAY['client'],
+      'full', NULL, NULL, 'sd-spec-wrong-studio', '[]'::jsonb
+    );
+    RAISE EXCEPTION
+      'shared-studio member prepared a book from another canonical studio';
+  EXCEPTION WHEN insufficient_privilege THEN
+    ASSERT SQLERRM = 'spec book not found or not accessible';
+  END;
 END
 $spec_book_member_success$;
 
@@ -1575,6 +1863,14 @@ BEGIN
     RAISE EXCEPTION 'service role retained direct spec-issue EXECUTE';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
+  BEGIN
+    PERFORM public._prepare_spec_book_issue_00403(
+      'd4854100-0000-4000-8000-000000000001', ARRAY['client'],
+      'full', NULL, NULL, 'sd-spec-private-service', '[]'::jsonb
+    );
+    RAISE EXCEPTION 'service role retained direct private spec-core EXECUTE';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
 END
 $spec_book_service_acl_denial$;
 
@@ -1601,6 +1897,20 @@ BEGIN
   ASSERT current_setting('app.project_review_publish', true) =
            'review-sentinel',
     'successful review publication leaked its capability';
+
+  BEGIN
+    PERFORM public.publish_project_review(jsonb_build_object(
+      'projectId', 'd4852000-0000-4000-8000-000000000006',
+      'title', 'SD Wrong Studio Review',
+      'clientPriceMode', 'hide',
+      'boardIds', '[]'::jsonb,
+      'items', '[]'::jsonb
+    ));
+    RAISE EXCEPTION
+      'shared-studio member published another canonical studio project';
+  EXCEPTION WHEN insufficient_privilege THEN
+    ASSERT SQLERRM = 'project not found or access denied';
+  END;
 
   BEGIN
     PERFORM public.publish_project_review(jsonb_build_object(
@@ -1689,7 +1999,7 @@ RESET ROLE;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
-  'd4850000-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000002',
   'service_role',
   jsonb_build_object(
     'organization_id', 'd4851000-0000-4000-8000-000000000002'
@@ -1720,7 +2030,7 @@ BEGIN
       status, currency, subtotal_cents, total_cents
     ) VALUES (
       'd4857000-0000-4000-8000-000000000090',
-      'd4852000-0000-4000-8000-000000000001',
+      'd4852000-0000-4000-8000-000000000002',
       'd4850000-0000-4000-8000-000000000001',
       'd4850000-0000-4000-8000-000000000004',
       'd4851000-0000-4000-8000-000000000002',
@@ -1776,20 +2086,20 @@ $authenticated_trigger_null_uid_denials$;
 
 RESET ROLE;
 SET LOCAL ROLE service_role;
-SELECT pg_temp.assume_actor(
-  'd4850000-0000-4000-8000-000000000003', 'authenticated'
-);
+SELECT set_config('request.jwt.claims', '', true);
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', '', true);
 
 INSERT INTO public.projects (
   id, name, designer_id, client_id, created_by, studio_id
 )
 VALUES (
   'd4852000-0000-4000-8000-000000000091',
-  'Service Foreign Studio Project',
+  'Service Exact Studio Project',
   'd4850000-0000-4000-8000-000000000001',
   'd4850000-0000-4000-8000-000000000004',
   'd4850000-0000-4000-8000-000000000001',
-  'd4851000-0000-4000-8000-000000000002'
+  'd4851000-0000-4000-8000-000000000001'
 );
 
 INSERT INTO public.invoices (
@@ -1798,27 +2108,90 @@ INSERT INTO public.invoices (
 )
 VALUES (
   'd4857000-0000-4000-8000-000000000091',
-  'd4852000-0000-4000-8000-000000000001',
+  'd4852000-0000-4000-8000-000000000091',
   'd4850000-0000-4000-8000-000000000001',
   'd4850000-0000-4000-8000-000000000004',
-  'd4851000-0000-4000-8000-000000000002',
+  NULL,
   'draft', 'USD', 0, 0
 );
+
+DO $service_trigger_tuple_contract$
+BEGIN
+  BEGIN
+    INSERT INTO public.projects (
+      id, name, designer_id, client_id, created_by, studio_id
+    ) VALUES (
+      'd4852000-0000-4000-8000-000000000092',
+      'Service Null Derived Project',
+      'd4850000-0000-4000-8000-000000000003',
+      'd4850000-0000-4000-8000-000000000004',
+      'd4850000-0000-4000-8000-000000000003',
+      NULL
+    );
+    RAISE EXCEPTION 'service role retained an invalid NULL-derived project tuple';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  BEGIN
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, studio_id,
+      status, currency, subtotal_cents, total_cents
+    ) VALUES (
+      'd4857000-0000-4000-8000-000000000092',
+      'd4852000-0000-4000-8000-000000000002',
+      'd4850000-0000-4000-8000-000000000002',
+      'd4850000-0000-4000-8000-000000000004',
+      NULL, 'draft', 'USD', 0, 0
+    );
+    RAISE EXCEPTION 'service role retained a cross-studio derived invoice tuple';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  BEGIN
+    UPDATE public.projects
+    SET designer_id = 'd4850000-0000-4000-8000-000000000002'
+    WHERE id = 'd4852000-0000-4000-8000-000000000002';
+    RAISE EXCEPTION 'designer ownership update crossed the canonical studio';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  BEGIN
+    UPDATE public.invoices
+    SET project_id = 'd4852000-0000-4000-8000-000000000002'
+    WHERE id = 'd4857000-0000-4000-8000-000000000091';
+    RAISE EXCEPTION 'invoice project ownership update crossed studios';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  BEGIN
+    UPDATE public.invoices
+    SET designer_id = 'd4850000-0000-4000-8000-000000000002'
+    WHERE id = 'd4857000-0000-4000-8000-000000000091';
+    RAISE EXCEPTION 'invoice designer ownership update escaped its project';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+END
+$service_trigger_tuple_contract$;
 
 RESET ROLE;
 
 DO $service_trigger_success$
 BEGIN
   ASSERT (
-    SELECT studio_id = 'd4851000-0000-4000-8000-000000000002'
+    SELECT studio_id = 'd4851000-0000-4000-8000-000000000001'
     FROM public.projects
     WHERE id = 'd4852000-0000-4000-8000-000000000091'
-  ), 'active service role could not stamp the reviewed project studio';
+  ), 'service role could not retain an exact project tuple without auth.uid';
   ASSERT (
-    SELECT studio_id = 'd4851000-0000-4000-8000-000000000002'
+    SELECT studio_id = 'd4851000-0000-4000-8000-000000000001'
     FROM public.invoices
     WHERE id = 'd4857000-0000-4000-8000-000000000091'
-  ), 'active service role could not stamp the reviewed invoice studio';
+  ), 'service role could not derive and validate the exact invoice studio';
   ASSERT NOT has_function_privilege(
     'service_role', 'public.set_project_studio_id()', 'EXECUTE'
   ) AND NOT has_function_privilege(
@@ -1832,8 +2205,11 @@ ROLLBACK;
 -- A pooled successor transaction must not inherit any transaction-local
 -- authority minted by a successful or failed request above.
 BEGIN;
+SET LOCAL plpgsql.check_asserts = on;
 DO $pooled_successor_contract$
 BEGIN
+  ASSERT current_setting('plpgsql.check_asserts') = 'on',
+    'pooled successor disabled plpgsql assertions';
   ASSERT COALESCE(
     NULLIF(current_setting('app.commercial_signature_capability', true), ''),
     ''

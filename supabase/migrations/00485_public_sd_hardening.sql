@@ -128,7 +128,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     'ee7d6f4269b453e04d1fb9ab3f9a039893d2312dc62a71632e14f05230ce9caa',
-    'a0ae45909cb9297e38f0a99b72a0581a52686bccc44235866c1543b100b51ebb', ARRAY['authenticated']::text[],
+    'b63830994f1173424a3a798a8d969fbeae946c5eb5d97bd3b3cbaaf51d8b8aa9', ARRAY['authenticated']::text[],
     ARRAY['authenticated']::text[]
   ),
   (
@@ -168,7 +168,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '93b5139ac2d585c9ca306c232f46c87a116a8f77ea4aa174c0707c64569ed26a',
-    '9db7632d6d2c5e9f655f6a5e8e7729d7a88995c35c59e9264b56dc0e50a07ad0', ARRAY['authenticated', 'service_role']::text[],
+    '1b63dbc14bcdcc8a7a5b19e7375bf80d117159429b87d2cc5048a2ace9242b4b', ARRAY['authenticated', 'service_role']::text[],
     ARRAY['authenticated']::text[]
   ),
   (
@@ -178,7 +178,7 @@ VALUES
     ARRAY['search_path=public, extensions, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, extensions, pg_temp']::text[],
     'ce4e7ba2e0911edd394cab4963746e0e8e6b2e24951fa19cf640781fc8c5dfee',
-    'e597174717ea8b7663a9fb78d9ff34b98a886263c051f501687045d1c11b6744', ARRAY['authenticated']::text[],
+    'b20d24b78c8169b238cfb2357c9ecde725d584098a340dad50b91ed78ebefeeb', ARRAY['authenticated']::text[],
     ARRAY['authenticated']::text[]
   ),
   (
@@ -197,7 +197,7 @@ VALUES
     'trigger', 'v', ARRAY['search_path=public']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '53c95a7cbfb04102ddd662fc0d0d63fd33474c3e3e3c51e9c23ce6263bf3a474',
-    '209b6ded25eae8464931b26f8112db309f6937561cee0c16d786870759e65e3c', ARRAY['authenticated', 'service_role']::text[],
+    'd7652d832a55cd066c0e3f1d12572a4a387447f99a70af1f0d88b4fed258954a', ARRAY['authenticated', 'service_role']::text[],
     ARRAY[]::text[]
   ),
   (
@@ -206,7 +206,7 @@ VALUES
     'trigger', 'v', ARRAY['search_path=public']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '04b921692fd72c03a2137e413c76d997435bafb3c29d2506e8b3fa14d8f6ce20',
-    '8c14190278562ee8ba47eecdcfc3cb322a04e4130ee66930ae085bc52609d936', ARRAY['authenticated', 'service_role']::text[],
+    '8597fc772be15ef6201f66aae03744aebb6844c01237694d208b13f2741ee1da', ARRAY['authenticated', 'service_role']::text[],
     ARRAY[]::text[]
   ),
   (
@@ -475,6 +475,215 @@ BEGIN
 END
 $profile_preflight$;
 
+CREATE TEMP TABLE _00485_dependency_profile (
+  signature text PRIMARY KEY,
+  language_name text NOT NULL,
+  arguments text NOT NULL,
+  result_type text NOT NULL,
+  volatility "char" NOT NULL,
+  original_config text[] NOT NULL,
+  final_config text[] NOT NULL,
+  original_body_sha256 text NOT NULL,
+  final_body_sha256 text NOT NULL,
+  original_roles text[] NOT NULL,
+  final_roles text[] NOT NULL
+) ON COMMIT DROP;
+
+INSERT INTO _00485_dependency_profile (
+  signature, language_name, arguments, result_type, volatility,
+  original_config, final_config, original_body_sha256, final_body_sha256,
+  original_roles, final_roles
+)
+VALUES
+  (
+    'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
+    'plpgsql',
+    'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
+    'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
+    ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
+    '29b7bfc55982372d2bb3b00739d2d243683af11e89d99525cabe06c699fda984',
+    'cdadc449f368eb12d56d0006e3ccb81d752bdc3388f783e4cd1a6b414923bb84',
+    ARRAY[]::text[], ARRAY[]::text[]
+  ),
+  (
+    'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
+    'plpgsql',
+    'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
+    'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
+    ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
+    '152b51f7bcd3b7a17a6f88967da0fef1648d95f46eea58334ed2ce2a2f917f5c',
+    '3f8d36043d9d38c275fa802690205a67104add2654eb818a08d5bf7bcdb85a36',
+    ARRAY[]::text[], ARRAY[]::text[]
+  ),
+  (
+    'public._prepare_spec_book_issue_00403(uuid,text[],text,text,uuid,text,jsonb)',
+    'plpgsql',
+    'p_spec_book_id uuid, p_audiences text[], p_issue_type text, p_reason text, p_base_revision_id uuid, p_idempotency_key text, p_warning_acknowledgements jsonb DEFAULT ''[]''::jsonb',
+    'jsonb', 'v',
+    ARRAY['search_path=public, extensions, pg_temp']::text[],
+    ARRAY['search_path=pg_catalog, public, extensions, pg_temp']::text[],
+    '8a06f30204b11f3f3e2551b74944988031d6b776edde0423fcb176f6d963586b',
+    '8a06f30204b11f3f3e2551b74944988031d6b776edde0423fcb176f6d963586b',
+    ARRAY['service_role']::text[], ARRAY[]::text[]
+  ),
+  (
+    'public._publish_project_review_00448_impl(jsonb)',
+    'plpgsql', 'p_request jsonb', 'jsonb', 'v',
+    ARRAY['search_path=public, extensions, pg_temp']::text[],
+    ARRAY['search_path=pg_catalog, public, extensions, pg_temp']::text[],
+    '0c3b935559ff383878d7c36f4057378663f52c5825088335c7e62f6c5412295e',
+    '0c3b935559ff383878d7c36f4057378663f52c5825088335c7e62f6c5412295e',
+    ARRAY[]::text[], ARRAY[]::text[]
+  );
+
+DO $dependency_preflight$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM _00485_dependency_profile AS expected
+    LEFT JOIN pg_proc AS routine
+      ON routine.oid = to_regprocedure(expected.signature)
+    LEFT JOIN pg_roles AS owner ON owner.oid = routine.proowner
+    LEFT JOIN pg_language AS language ON language.oid = routine.prolang
+    WHERE routine.oid IS NULL
+      OR owner.rolname IS DISTINCT FROM 'postgres'
+      OR language.lanname IS DISTINCT FROM expected.language_name
+      OR routine.prokind <> 'f'
+      OR NOT routine.prosecdef
+      OR routine.provolatile IS DISTINCT FROM expected.volatility
+      OR routine.proisstrict
+      OR routine.proleakproof
+      OR routine.proparallel <> 'u'
+      OR pg_get_function_arguments(routine.oid)
+           IS DISTINCT FROM expected.arguments
+      OR pg_get_function_result(routine.oid)
+           IS DISTINCT FROM expected.result_type
+      OR NOT (
+        (
+          routine.proconfig IS NOT DISTINCT FROM expected.original_config
+          AND encode(
+                extensions.digest(
+                  convert_to(routine.prosrc, 'UTF8'), 'sha256'
+                ), 'hex'
+              ) = expected.original_body_sha256
+        )
+        OR (
+          routine.proconfig IS NOT DISTINCT FROM expected.final_config
+          AND encode(
+                extensions.digest(
+                  convert_to(routine.prosrc, 'UTF8'), 'sha256'
+                ), 'hex'
+              ) = expected.final_body_sha256
+        )
+      )
+  ) THEN
+    RAISE EXCEPTION '00485 dependency source/final profile drifted';
+  END IF;
+
+  IF EXISTS (
+    WITH profile_state AS (
+      SELECT
+        expected.signature,
+        routine.proconfig IS NOT DISTINCT FROM expected.original_config
+          AND encode(
+                extensions.digest(
+                  convert_to(routine.prosrc, 'UTF8'), 'sha256'
+                ), 'hex'
+              ) = expected.original_body_sha256 AS is_source,
+        routine.proconfig IS NOT DISTINCT FROM expected.final_config
+          AND encode(
+                extensions.digest(
+                  convert_to(routine.prosrc, 'UTF8'), 'sha256'
+                ), 'hex'
+              ) = expected.final_body_sha256 AS is_final
+      FROM _00485_dependency_profile AS expected
+      JOIN pg_proc AS routine
+        ON routine.oid = to_regprocedure(expected.signature)
+    ),
+    actual_acl AS (
+      SELECT
+        expected.signature,
+        CASE acl.grantee
+          WHEN 0 THEN 'PUBLIC'
+          ELSE grantee.rolname::text
+        END AS grantee,
+        grantor.rolname::text AS grantor,
+        acl.privilege_type,
+        acl.is_grantable
+      FROM _00485_dependency_profile AS expected
+      JOIN pg_proc AS routine
+        ON routine.oid = to_regprocedure(expected.signature)
+      CROSS JOIN LATERAL aclexplode(
+        COALESCE(routine.proacl, acldefault('f', routine.proowner))
+      ) AS acl
+      LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+      LEFT JOIN pg_roles AS grantor ON grantor.oid = acl.grantor
+      WHERE acl.grantee <> routine.proowner
+    ),
+    source_acl AS (
+      SELECT
+        expected.signature,
+        role_name AS grantee,
+        'postgres'::text AS grantor,
+        'EXECUTE'::text AS privilege_type,
+        false AS is_grantable
+      FROM _00485_dependency_profile AS expected
+      CROSS JOIN LATERAL unnest(expected.original_roles) AS role_name
+    ),
+    final_acl AS (
+      SELECT
+        expected.signature,
+        role_name AS grantee,
+        'postgres'::text AS grantor,
+        'EXECUTE'::text AS privilege_type,
+        false AS is_grantable
+      FROM _00485_dependency_profile AS expected
+      CROSS JOIN LATERAL unnest(expected.final_roles) AS role_name
+    ),
+    acl_state AS (
+      SELECT
+        expected.signature,
+        NOT EXISTS (
+          (SELECT grantee, grantor, privilege_type, is_grantable
+           FROM actual_acl WHERE signature = expected.signature
+           EXCEPT ALL
+           SELECT grantee, grantor, privilege_type, is_grantable
+           FROM source_acl WHERE signature = expected.signature)
+          UNION ALL
+          (SELECT grantee, grantor, privilege_type, is_grantable
+           FROM source_acl WHERE signature = expected.signature
+           EXCEPT ALL
+           SELECT grantee, grantor, privilege_type, is_grantable
+           FROM actual_acl WHERE signature = expected.signature)
+        ) AS is_source,
+        NOT EXISTS (
+          (SELECT grantee, grantor, privilege_type, is_grantable
+           FROM actual_acl WHERE signature = expected.signature
+           EXCEPT ALL
+           SELECT grantee, grantor, privilege_type, is_grantable
+           FROM final_acl WHERE signature = expected.signature)
+          UNION ALL
+          (SELECT grantee, grantor, privilege_type, is_grantable
+           FROM final_acl WHERE signature = expected.signature
+           EXCEPT ALL
+           SELECT grantee, grantor, privilege_type, is_grantable
+           FROM actual_acl WHERE signature = expected.signature)
+        ) AS is_final
+      FROM _00485_dependency_profile AS expected
+    )
+    SELECT 1
+    FROM profile_state
+    JOIN acl_state USING (signature)
+    WHERE NOT (
+      (profile_state.is_source AND acl_state.is_source)
+      OR (profile_state.is_final AND acl_state.is_final)
+    )
+  ) THEN
+    RAISE EXCEPTION '00485 dependency profile and ACL states are incoherent';
+  END IF;
+END
+$dependency_preflight$;
+
 DO $private_core_preflight$
 DECLARE
   core_oid oid := to_regprocedure(
@@ -510,8 +719,10 @@ BEGIN
                convert_to(routine.prosrc, 'UTF8'), 'sha256'
              ),
              'hex'
-           ) IS DISTINCT FROM
-             '1bb33e50769432c5ecd3f08328da152008e0d328a47167c4a059cafc31c3d3e4'
+           ) <> ALL(ARRAY[
+             '1bb33e50769432c5ecd3f08328da152008e0d328a47167c4a059cafc31c3d3e4',
+             '855d1e914495ee4c6e8c0e9550478190945fc11940750fad7e0ee7b2aab763c4'
+           ]::text[])
       )
   ) THEN
     RAISE EXCEPTION '00485 existing private invoice core profile drifted';
@@ -530,6 +741,168 @@ BEGIN
   END IF;
 END
 $private_core_preflight$;
+
+DO $trigger_binding_preflight$
+DECLARE
+  source_ok boolean;
+  final_ok boolean;
+BEGIN
+  WITH actual AS (
+    SELECT
+      relation_namespace.nspname || '.' || relation.relname AS relation_name,
+      trigger_row.tgname AS trigger_name,
+      function_namespace.nspname || '.' || routine.proname || '(' ||
+        pg_get_function_identity_arguments(routine.oid) || ')' AS function_signature,
+      trigger_row.tgenabled AS enabled,
+      trigger_row.tgisinternal AS is_internal,
+      trigger_row.tgtype AS trigger_type,
+      trigger_row.tgnargs AS argument_count,
+      encode(trigger_row.tgargs, 'hex') AS arguments_hex,
+      trigger_row.tgattr::text AS trigger_columns,
+      pg_get_expr(
+        trigger_row.tgqual, trigger_row.tgrelid, true
+      ) AS when_expression,
+      trigger_row.tgparentid AS parent_trigger,
+      replace(
+        regexp_replace(
+          lower(pg_get_triggerdef(trigger_row.oid, false)), '\s+', '', 'g'
+        ),
+        'public.', ''
+      ) AS definition
+    FROM pg_trigger AS trigger_row
+    JOIN pg_class AS relation ON relation.oid = trigger_row.tgrelid
+    JOIN pg_namespace AS relation_namespace
+      ON relation_namespace.oid = relation.relnamespace
+    JOIN pg_proc AS routine ON routine.oid = trigger_row.tgfoid
+    JOIN pg_namespace AS function_namespace
+      ON function_namespace.oid = routine.pronamespace
+    WHERE trigger_row.tgfoid IN (
+      to_regprocedure('public.set_project_studio_id()')::oid,
+      to_regprocedure('public.set_invoice_studio_id()')::oid
+    )
+  ),
+  source_expected AS (
+    SELECT *
+    FROM (VALUES
+      (
+        'public.projects'::text, 'set_project_studio_id'::text,
+        'public.set_project_studio_id()'::text, 'O'::"char", false,
+        23::smallint, 0::smallint, ''::text,
+        (SELECT attnum::text FROM pg_attribute
+         WHERE attrelid = 'public.projects'::regclass
+           AND attname = 'studio_id'),
+        NULL::text, 0::oid,
+        'createtriggerset_project_studio_idbeforeinsertorupdateofstudio_idonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
+      ),
+      (
+        'public.invoices'::text, 'set_invoice_studio_id'::text,
+        'public.set_invoice_studio_id()'::text, 'O'::"char", false,
+        23::smallint, 0::smallint, ''::text,
+        (SELECT attnum::text FROM pg_attribute
+         WHERE attrelid = 'public.invoices'::regclass
+           AND attname = 'studio_id'),
+        NULL::text, 0::oid,
+        'createtriggerset_invoice_studio_idbeforeinsertorupdateofstudio_idoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
+      )
+    ) AS expected(
+      relation_name, trigger_name, function_signature, enabled, is_internal,
+      trigger_type, argument_count, arguments_hex, trigger_columns,
+      when_expression, parent_trigger, definition
+    )
+  ),
+  final_expected AS (
+    SELECT *
+    FROM (VALUES
+      (
+        'public.projects'::text, 'set_project_studio_id'::text,
+        'public.set_project_studio_id()'::text, 'O'::"char", false,
+        23::smallint, 0::smallint, ''::text,
+        (SELECT string_agg(attnum::text, ' ' ORDER BY
+           array_position(ARRAY['studio_id','designer_id'], attname))
+         FROM pg_attribute
+         WHERE attrelid = 'public.projects'::regclass
+           AND attname = ANY(ARRAY['studio_id','designer_id'])),
+        NULL::text, 0::oid,
+        'createtriggerset_project_studio_idbeforeinsertorupdateofstudio_id,designer_idonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
+      ),
+      (
+        'public.invoices'::text, 'set_invoice_studio_id'::text,
+        'public.set_invoice_studio_id()'::text, 'O'::"char", false,
+        23::smallint, 0::smallint, ''::text,
+        (SELECT string_agg(attnum::text, ' ' ORDER BY array_position(
+           ARRAY['studio_id','designer_id','project_id'], attname))
+         FROM pg_attribute
+         WHERE attrelid = 'public.invoices'::regclass
+           AND attname = ANY(
+             ARRAY['studio_id','designer_id','project_id']
+           )),
+        NULL::text, 0::oid,
+        'createtriggerset_invoice_studio_idbeforeinsertorupdateofstudio_id,designer_id,project_idoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
+      )
+    ) AS expected(
+      relation_name, trigger_name, function_signature, enabled, is_internal,
+      trigger_type, argument_count, arguments_hex, trigger_columns,
+      when_expression, parent_trigger, definition
+    )
+  )
+  SELECT
+    NOT EXISTS (
+      (SELECT * FROM source_expected EXCEPT ALL SELECT * FROM actual)
+      UNION ALL
+      (SELECT * FROM actual EXCEPT ALL SELECT * FROM source_expected)
+    ),
+    NOT EXISTS (
+      (SELECT * FROM final_expected EXCEPT ALL SELECT * FROM actual)
+      UNION ALL
+      (SELECT * FROM actual EXCEPT ALL SELECT * FROM final_expected)
+    )
+  INTO source_ok, final_ok;
+
+  IF NOT (source_ok OR final_ok) THEN
+    RAISE EXCEPTION '00485 source/final studio trigger binding drifted';
+  END IF;
+
+  IF source_ok AND EXISTS (
+    SELECT 1
+    FROM _00485_profile AS expected
+    JOIN pg_proc AS routine
+      ON routine.oid = to_regprocedure(expected.signature)
+    WHERE expected.signature IN (
+      'public.set_project_studio_id()', 'public.set_invoice_studio_id()'
+    )
+      AND NOT (
+        routine.proconfig IS NOT DISTINCT FROM expected.original_config
+        AND encode(
+              extensions.digest(
+                convert_to(routine.prosrc, 'UTF8'), 'sha256'
+              ), 'hex'
+            ) = expected.original_body_sha256
+      )
+  ) THEN
+    RAISE EXCEPTION '00485 source trigger body/binding states are incoherent';
+  END IF;
+
+  IF final_ok AND EXISTS (
+    SELECT 1
+    FROM _00485_profile AS expected
+    JOIN pg_proc AS routine
+      ON routine.oid = to_regprocedure(expected.signature)
+    WHERE expected.signature IN (
+      'public.set_project_studio_id()', 'public.set_invoice_studio_id()'
+    )
+      AND NOT (
+        routine.proconfig IS NOT DISTINCT FROM expected.final_config
+        AND encode(
+              extensions.digest(
+                convert_to(routine.prosrc, 'UTF8'), 'sha256'
+              ), 'hex'
+            ) = expected.final_body_sha256
+      )
+  ) THEN
+    RAISE EXCEPTION '00485 final trigger body/binding states are incoherent';
+  END IF;
+END
+$trigger_binding_preflight$;
 
 CREATE OR REPLACE FUNCTION public.begin_proposal_send_provider_attempt(
   p_dispatch_id uuid,
@@ -1185,19 +1558,43 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
-  v_designer_id uuid;
+  v_actor uuid := auth.uid();
 BEGIN
-  IF auth.uid() IS NULL THEN
+  IF v_actor IS NULL THEN
     RAISE EXCEPTION 'spec book not found or not accessible'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT project.designer_id INTO v_designer_id
+  PERFORM 1
   FROM public.spec_books AS book
   JOIN public.projects AS project ON project.id = book.project_id
-  WHERE book.id = p_spec_book_id;
+  JOIN public.organizations AS studio ON studio.id = project.studio_id
+  WHERE book.id = p_spec_book_id
+    AND project.status = 'active'
+    AND studio.type = 'design_studio'
+    AND studio.status = 'active'
+    AND EXISTS (
+      SELECT 1
+      FROM public.organization_members AS lead_membership
+      WHERE lead_membership.organization_id = project.studio_id
+        AND lead_membership.user_id = project.designer_id
+        AND lead_membership.status = 'active'
+        AND lead_membership.role <> 'guest'
+    )
+    AND (
+      project.designer_id = v_actor
+      OR EXISTS (
+        SELECT 1
+        FROM public.organization_members AS actor_membership
+        WHERE actor_membership.organization_id = project.studio_id
+          AND actor_membership.user_id = v_actor
+          AND actor_membership.status = 'active'
+          AND actor_membership.role <> 'guest'
+      )
+    )
+  FOR SHARE OF book, project, studio;
 
-  IF NOT public.is_design_studio_comember(v_designer_id) THEN
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'spec book not found or not accessible'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -1209,6 +1606,11 @@ BEGIN
 END;
 $$;
 
+COMMENT ON FUNCTION public.prepare_spec_book_issue(
+  uuid, text[], text, text, uuid, text, jsonb
+) IS
+  'Authenticated boundary for the owner-only canonical preparation core. The book project must be active in an active design-studio, and the real actor must be the lead designer or an active non-guest member of that exact project studio.';
+
 CREATE OR REPLACE FUNCTION public.set_project_studio_id()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1217,32 +1619,57 @@ SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   v_active_role text := COALESCE(current_setting('role', true), 'none');
-  v_trusted_writer boolean :=
-    v_active_role = 'service_role'
-    OR (
-      session_user = 'postgres'
-      AND v_active_role IN ('none', 'postgres')
-    );
+  v_actor uuid := auth.uid();
+  v_postgres_migration boolean :=
+    session_user = 'postgres' AND v_active_role IN ('none', 'postgres');
 BEGIN
-  IF NOT v_trusted_writer AND auth.uid() IS NULL THEN
+  IF NEW.studio_id IS NULL AND NEW.designer_id IS NOT NULL THEN
+    NEW.studio_id := public._primary_studio_for(NEW.designer_id);
+  END IF;
+
+  -- Only a true migration session may preserve a legacy ownerless NULL tuple.
+  IF v_postgres_migration
+     AND NEW.designer_id IS NULL
+     AND NEW.studio_id IS NULL
+  THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.designer_id IS NULL
+     OR NEW.studio_id IS NULL
+     OR NOT EXISTS (
+       SELECT 1
+       FROM public.organizations AS studio
+       JOIN public.organization_members AS lead_membership
+         ON lead_membership.organization_id = studio.id
+       WHERE studio.id = NEW.studio_id
+         AND studio.type = 'design_studio'
+         AND studio.status = 'active'
+         AND lead_membership.user_id = NEW.designer_id
+         AND lead_membership.status = 'active'
+         AND lead_membership.role <> 'guest'
+     )
+  THEN
     RAISE EXCEPTION 'studio_id_not_designer_studio';
   END IF;
 
-  IF NEW.studio_id IS NOT NULL THEN
-    IF NOT v_trusted_writer
-       AND NOT EXISTS (
+  IF v_active_role = 'authenticated' THEN
+    IF v_actor IS NULL
+       OR NOT EXISTS (
          SELECT 1
-         FROM public.organization_members AS membership
-         WHERE membership.organization_id = NEW.studio_id
-           AND membership.user_id = NEW.designer_id
-           AND membership.status = 'active'
+         FROM public.organization_members AS actor_membership
+         WHERE actor_membership.organization_id = NEW.studio_id
+           AND actor_membership.user_id = v_actor
+           AND actor_membership.status = 'active'
+           AND actor_membership.role <> 'guest'
        )
     THEN
       RAISE EXCEPTION 'studio_id_not_designer_studio';
     END IF;
-  ELSIF TG_OP = 'INSERT' AND NEW.designer_id IS NOT NULL THEN
-    NEW.studio_id := public._primary_studio_for(NEW.designer_id);
+  ELSIF v_active_role <> 'service_role' AND NOT v_postgres_migration THEN
+    RAISE EXCEPTION 'studio_id_not_designer_studio';
   END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -1255,42 +1682,84 @@ SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   v_active_role text := COALESCE(current_setting('role', true), 'none');
-  v_trusted_writer boolean :=
-    v_active_role = 'service_role'
-    OR (
-      session_user = 'postgres'
-      AND v_active_role IN ('none', 'postgres')
-    );
+  v_actor uuid := auth.uid();
+  v_postgres_migration boolean :=
+    session_user = 'postgres' AND v_active_role IN ('none', 'postgres');
 BEGIN
-  IF NOT v_trusted_writer AND auth.uid() IS NULL THEN
+  IF NEW.studio_id IS NULL THEN
+    SELECT project.studio_id INTO NEW.studio_id
+    FROM public.projects AS project
+    WHERE project.id = NEW.project_id;
+  END IF;
+
+  IF NEW.project_id IS NULL
+     OR NEW.designer_id IS NULL
+     OR NEW.studio_id IS NULL
+     OR NOT EXISTS (
+       SELECT 1
+       FROM public.projects AS project
+       JOIN public.organizations AS studio ON studio.id = project.studio_id
+       JOIN public.organization_members AS lead_membership
+         ON lead_membership.organization_id = project.studio_id
+       WHERE project.id = NEW.project_id
+         AND project.status = 'active'
+         AND project.designer_id = NEW.designer_id
+         AND project.studio_id = NEW.studio_id
+         AND studio.type = 'design_studio'
+         AND studio.status = 'active'
+         AND lead_membership.user_id = NEW.designer_id
+         AND lead_membership.status = 'active'
+         AND lead_membership.role <> 'guest'
+     )
+  THEN
     RAISE EXCEPTION 'studio_id_not_designer_studio';
   END IF;
 
-  IF NEW.studio_id IS NOT NULL THEN
-    IF NOT v_trusted_writer
-       AND NOT EXISTS (
+  IF v_active_role = 'authenticated' THEN
+    IF v_actor IS NULL
+       OR NOT EXISTS (
          SELECT 1
-         FROM public.organization_members AS membership
-         WHERE membership.organization_id = NEW.studio_id
-           AND membership.user_id = NEW.designer_id
-           AND membership.status = 'active'
+         FROM public.organization_members AS actor_membership
+         WHERE actor_membership.organization_id = NEW.studio_id
+           AND actor_membership.user_id = v_actor
+           AND actor_membership.status = 'active'
+           AND actor_membership.role <> 'guest'
        )
     THEN
       RAISE EXCEPTION 'studio_id_not_designer_studio';
     END IF;
-  ELSIF TG_OP = 'INSERT' THEN
-    NEW.studio_id := COALESCE(
-      (
-        SELECT project.studio_id
-        FROM public.projects AS project
-        WHERE project.id = NEW.project_id
-      ),
-      public._primary_studio_for(NEW.designer_id)
-    );
+  ELSIF v_active_role <> 'service_role' AND NOT v_postgres_migration THEN
+    RAISE EXCEPTION 'studio_id_not_designer_studio';
   END IF;
+
   RETURN NEW;
 END;
 $$;
+
+DROP TRIGGER IF EXISTS set_project_studio_id ON public.projects;
+CREATE TRIGGER set_project_studio_id
+  BEFORE INSERT OR UPDATE OF studio_id, designer_id ON public.projects
+  FOR EACH ROW EXECUTE FUNCTION public.set_project_studio_id();
+
+DROP TRIGGER IF EXISTS set_invoice_studio_id ON public.invoices;
+CREATE TRIGGER set_invoice_studio_id
+  BEFORE INSERT OR UPDATE OF studio_id, designer_id, project_id
+  ON public.invoices
+  FOR EACH ROW EXECUTE FUNCTION public.set_invoice_studio_id();
+
+COMMENT ON FUNCTION public.set_project_studio_id() IS
+  'Derives studio_id before validation; requires an active design-studio and active non-guest lead membership, and requires authenticated writers to be active non-guest members of that exact studio. service_role may omit auth.uid but cannot bypass tuple validation. Only a true postgres migration session may retain a legacy NULL designer_id/NULL studio_id tuple.';
+
+COMMENT ON FUNCTION public.set_invoice_studio_id() IS
+  'Derives studio_id from the invoice project before validation; requires an active project with exact project/designer/studio equality, an active design-studio, and active non-guest lead membership. Authenticated writers must be active non-guest members of that exact studio; service_role and postgres may omit auth.uid but cannot bypass tuple validation.';
+
+ALTER FUNCTION public._prepare_spec_book_issue_00403(
+  uuid, text[], text, text, uuid, text, jsonb
+)
+SET search_path = pg_catalog, public, extensions, pg_temp;
+
+ALTER FUNCTION public._publish_project_review_00448_impl(jsonb)
+SET search_path = pg_catalog, public, extensions, pg_temp;
 
 CREATE OR REPLACE FUNCTION public.publish_project_review(p_request jsonb)
 RETURNS jsonb
@@ -1300,6 +1769,7 @@ SET search_path = pg_catalog, public, extensions, pg_temp
 AS $$
 DECLARE
   v_project_id uuid := NULLIF(p_request->>'projectId', '')::uuid;
+  v_actor uuid := auth.uid();
   v_result jsonb;
   v_edition_id uuid;
   v_boards jsonb;
@@ -1307,7 +1777,43 @@ DECLARE
   v_previous_publish text :=
     current_setting('app.project_review_publish', true);
 BEGIN
-  PERFORM public._ffe_require_studio_project(v_project_id);
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  PERFORM 1
+  FROM public.projects AS project
+  JOIN public.organizations AS studio ON studio.id = project.studio_id
+  WHERE project.id = v_project_id
+    AND project.status = 'active'
+    AND studio.type = 'design_studio'
+    AND studio.status = 'active'
+    AND EXISTS (
+      SELECT 1
+      FROM public.organization_members AS lead_membership
+      WHERE lead_membership.organization_id = project.studio_id
+        AND lead_membership.user_id = project.designer_id
+        AND lead_membership.status = 'active'
+        AND lead_membership.role <> 'guest'
+    )
+    AND (
+      project.designer_id = v_actor
+      OR EXISTS (
+        SELECT 1
+        FROM public.organization_members AS actor_membership
+        WHERE actor_membership.organization_id = project.studio_id
+          AND actor_membership.user_id = v_actor
+          AND actor_membership.status = 'active'
+          AND actor_membership.role <> 'guest'
+      )
+    )
+  FOR SHARE OF project, studio;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
 
   IF EXISTS (
     SELECT 1
@@ -1483,6 +1989,9 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+COMMENT ON FUNCTION public.publish_project_review(jsonb) IS
+  'Publishes a project review only after a non-enumerating authorization read proves an active project/studio tuple and the real actor is the lead or an active non-guest member of that exact project studio; board/media reads occur afterward.';
+
 CREATE OR REPLACE FUNCTION app_private.issue_invoice_for_actor(
   p_invoice_id uuid,
   p_due_date date,
@@ -1495,6 +2004,10 @@ SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   v_invoice public.invoices%ROWTYPE;
+  v_project public.projects%ROWTYPE;
+  v_proposal public.proposals%ROWTYPE;
+  v_document public.project_commercial_documents%ROWTYPE;
+  v_anchor_count integer;
   v_line_count integer;
   v_subtotal bigint;
   v_tax integer;
@@ -1502,36 +2015,103 @@ DECLARE
   v_due date;
   v_studio_id uuid;
 BEGIN
-  SELECT * INTO v_invoice
-  FROM public.invoices
-  WHERE id = p_invoice_id
-  FOR UPDATE;
+  SELECT invoice, project
+  INTO v_invoice, v_project
+  FROM public.invoices AS invoice
+  JOIN public.projects AS project ON project.id = invoice.project_id
+  WHERE invoice.id = p_invoice_id
+  FOR UPDATE OF project, invoice;
+
+  IF NOT FOUND OR p_actor_id IS NULL THEN
+    RAISE EXCEPTION
+      'issue_invoice: invoice not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  WITH anchors AS (
+    SELECT DISTINCT document.id, document.proposal_id, anchor.anchor_kind
+    FROM public.invoice_line_items AS line
+    CROSS JOIN LATERAL (VALUES
+      ('furnishings_authorization'::text,
+       NULLIF(line.metadata->>'commercialDocumentId', '')),
+      ('trade_scope'::text,
+       NULLIF(line.metadata->>'tradeScopeDocumentId', ''))
+    ) AS anchor(anchor_kind, document_id_text)
+    JOIN public.project_commercial_documents AS document
+      ON document.id::text = anchor.document_id_text
+     AND document.document_kind = anchor.anchor_kind
+    WHERE line.invoice_id = p_invoice_id
+  )
+  SELECT count(*) INTO v_anchor_count FROM anchors;
+
+  IF v_anchor_count <> 1 THEN
+    RAISE EXCEPTION
+      'issue_invoice: invoice not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT document, proposal
+  INTO v_document, v_proposal
+  FROM public.project_commercial_documents AS document
+  JOIN public.proposals AS proposal ON proposal.id = document.proposal_id
+  WHERE EXISTS (
+      SELECT 1
+      FROM public.invoice_line_items AS line
+      WHERE line.invoice_id = p_invoice_id
+        AND (
+          (
+            document.document_kind = 'furnishings_authorization'
+            AND document.id::text =
+                  NULLIF(line.metadata->>'commercialDocumentId', '')
+          )
+          OR (
+            document.document_kind = 'trade_scope'
+            AND document.id::text =
+                  NULLIF(line.metadata->>'tradeScopeDocumentId', '')
+          )
+        )
+    )
+    AND document.project_id = v_project.id
+    AND proposal.project_id = v_project.id
+    AND proposal.document_kind = document.document_kind
+    AND proposal.designer_id = v_project.designer_id
+    AND proposal.client_id = v_project.client_id
+    AND v_invoice.project_id = v_project.id
+    AND v_invoice.designer_id = proposal.designer_id
+    AND v_invoice.client_id = proposal.client_id
+    AND v_invoice.studio_id = v_project.studio_id
+  FOR UPDATE OF document, proposal;
 
   IF NOT FOUND
-     OR p_actor_id IS NULL
+     OR v_project.status <> 'active'
+     OR NOT EXISTS (
+       SELECT 1
+       FROM public.organizations AS studio
+       JOIN public.organization_members AS lead_membership
+         ON lead_membership.organization_id = studio.id
+       WHERE studio.id = v_project.studio_id
+         AND studio.type = 'design_studio'
+         AND studio.status = 'active'
+         AND lead_membership.user_id = v_project.designer_id
+         AND lead_membership.status = 'active'
+         AND lead_membership.role <> 'guest'
+     )
      OR NOT (
-       v_invoice.designer_id = p_actor_id
+       p_actor_id = v_proposal.client_id
+       OR p_actor_id = v_project.designer_id
        OR EXISTS (
          SELECT 1
          FROM public.organization_members AS actor_membership
-         JOIN public.organization_members AS owner_membership
-           ON owner_membership.organization_id =
-                actor_membership.organization_id
-         JOIN public.organizations AS organization
-           ON organization.id = actor_membership.organization_id
-         WHERE actor_membership.user_id = p_actor_id
+         WHERE actor_membership.organization_id = v_project.studio_id
+           AND actor_membership.user_id = p_actor_id
            AND actor_membership.status = 'active'
            AND actor_membership.role <> 'guest'
-           AND owner_membership.user_id = v_invoice.designer_id
-           AND owner_membership.status = 'active'
-           AND owner_membership.role <> 'guest'
-           AND organization.type = 'design_studio'
-           AND organization.status = 'active'
        )
      )
   THEN
     RAISE EXCEPTION
-      'issue_invoice: invoice % not found or access denied', p_invoice_id;
+      'issue_invoice: invoice not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
   END IF;
 
   IF EXISTS (
@@ -1603,7 +2183,7 @@ BEGIN
       'issue_invoice: a linked milestone is already paid or billed on another invoice';
   END IF;
 
-  v_studio_id := v_invoice.studio_id;
+  v_studio_id := v_project.studio_id;
   IF v_studio_id IS NOT NULL THEN
     INSERT INTO public.studio_invoice_counters(studio_id)
     VALUES (v_studio_id)
@@ -1654,8 +2234,583 @@ BEGIN
 END;
 $$;
 
+COMMENT ON FUNCTION app_private.issue_invoice_for_actor(uuid, date, uuid) IS
+  'Owner-only invoice issuance core. Resolves exactly one furnishings/trade commercial anchor from invoice-line metadata, locks and validates exact invoice/project/proposal/document identities plus the canonical active studio tuple, then accepts only the exact client or an active non-guest actor in that exact studio.';
+
 REVOKE ALL PRIVILEGES ON FUNCTION
   app_private.issue_invoice_for_actor(uuid, date, uuid)
+FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public._execute_furnishings_authorization_authorized(
+  p_proposal_id uuid,
+  p_signed_name text,
+  p_client_id uuid,
+  p_trusted_signed_ip text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := p_client_id;
+  v_proposal public.proposals%ROWTYPE;
+  v_document public.project_commercial_documents%ROWTYPE;
+  v_signature public.commercial_document_signatures%ROWTYPE;
+  v_name text := btrim(COALESCE(p_signed_name, ''));
+  v_fingerprint text;
+  v_deposit_cents integer;
+  v_deposit_invoice_id uuid;
+  v_applied_ids uuid[] := '{}'::uuid[];
+  v_linked_ids uuid[] := '{}'::uuid[];
+  v_newly boolean := false;
+  v_previous_accept text :=
+    current_setting('app.proposal_accept_id', true);
+  v_previous_commercial text :=
+    current_setting('app.commercial_document_id', true);
+  v_anchor_phase_id uuid;
+BEGIN
+  IF v_actor IS NULL OR char_length(v_name) < 2 THEN
+    RAISE EXCEPTION
+      'furnishings execution requires an authenticated client and legal name'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+  IF NOT FOUND
+     OR v_proposal.client_id IS DISTINCT FROM v_actor
+     OR v_proposal.document_kind <> 'furnishings_authorization'
+  THEN
+    RAISE EXCEPTION
+      'furnishings authorization % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_document
+  FROM public.project_commercial_documents
+  WHERE proposal_id = p_proposal_id
+  FOR UPDATE;
+  IF v_document.id IS NULL THEN
+    RAISE EXCEPTION 'furnishings authorization has no project binding'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF v_proposal.commercial_state <> 'executed'
+     AND v_proposal.valid_until IS NOT NULL
+     AND v_proposal.valid_until < now()
+  THEN
+    RAISE EXCEPTION 'furnishings authorization % has expired', p_proposal_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.project_budget_checkpoints AS checkpoint
+    WHERE checkpoint.id = v_document.budget_checkpoint_id
+      AND checkpoint.project_id = v_document.project_id
+      AND checkpoint.status IN ('acknowledged', 'overridden')
+      AND checkpoint.snapshot_fingerprint =
+            public._budget_version_fingerprint(checkpoint.budget_version_id)
+  ) THEN
+    RAISE EXCEPTION
+      'furnishings authorization checkpoint is missing or invalid'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.project_commercial_documents AS origin_document
+    JOIN public.proposals AS origin_proposal
+      ON origin_proposal.id = origin_document.proposal_id
+    WHERE origin_document.project_id = v_document.project_id
+      AND origin_document.is_origin
+      AND origin_document.document_kind = 'design_services'
+      AND origin_proposal.commercial_state = 'executed'
+  ) THEN
+    RAISE EXCEPTION 'project % has no executed design-services origin',
+      v_document.project_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  v_fingerprint := public._commercial_document_fingerprint(p_proposal_id);
+  v_deposit_cents := round(
+    COALESCE(v_proposal.total_amount, 0)::numeric
+    * COALESCE(v_proposal.deposit_percent, 0)::numeric / 100
+  )::integer;
+
+  SELECT * INTO v_signature
+  FROM public.commercial_document_signatures
+  WHERE proposal_id = p_proposal_id
+    AND party_role = 'client'
+  FOR UPDATE;
+
+  IF v_proposal.commercial_state = 'executed' THEN
+    IF v_signature.id IS NULL
+       OR v_signature.signer_user_id IS DISTINCT FROM v_actor
+       OR v_signature.signed_name IS DISTINCT FROM v_name
+       OR v_signature.evidence_fingerprint IS DISTINCT FROM v_fingerprint
+    THEN
+      RAISE EXCEPTION
+        'furnishings signature retry conflicts with immutable evidence'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    SELECT COALESCE(array_agg(item.id ORDER BY item.id), '{}'::uuid[])
+    INTO v_applied_ids
+    FROM public.project_ffe_items AS item
+    WHERE item.source_commercial_document_id = v_document.id;
+  ELSIF v_proposal.commercial_state = 'sent' THEN
+    IF v_signature.id IS NOT NULL THEN
+      RAISE EXCEPTION
+        'furnishings signature topology conflicts with document state'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    INSERT INTO public.commercial_document_signatures (
+      proposal_id, party_role, signer_user_id, signed_name, signed_ip,
+      evidence_fingerprint, metadata
+    ) VALUES (
+      p_proposal_id, 'client', v_actor, v_name,
+      NULLIF(btrim(COALESCE(p_trusted_signed_ip, '')), ''), v_fingerprint,
+      jsonb_build_object('via', 'execute_furnishings_authorization')
+    )
+    RETURNING * INTO v_signature;
+
+    PERFORM set_config('app.proposal_accept_id', p_proposal_id::text, true);
+    PERFORM set_config(
+      'app.commercial_document_id', p_proposal_id::text, true
+    );
+
+    UPDATE public.proposals
+    SET status = 'accepted',
+        commercial_state = 'executed',
+        signed_at = v_signature.signed_at,
+        signed_by_name = v_name,
+        accepted_at = v_signature.signed_at,
+        updated_at = now()
+    WHERE id = p_proposal_id;
+
+    WITH inserted AS (
+      INSERT INTO public.project_ffe_items (
+        project_id, source_proposal_item_id, product_id, name, ffe_category,
+        item_type, status, quantity, unit_price_cents, trade_price_cents,
+        markup_percent, line_total_cents, vendor_id, vendor_name, sort_order,
+        source_commercial_document_id, source_authorization_item_id,
+        custom_fields
+      )
+      SELECT
+        v_document.project_id, item.source_proposal_item_id, item.product_id,
+        item.name, item.category, item.item_type, 'approved', item.quantity,
+        item.client_unit_price_cents, item.trade_unit_cost_cents,
+        item.markup_percent, item.client_line_total_cents, item.vendor_id,
+        item.vendor_name, item.sort_order, v_document.id, item.id,
+        COALESCE(item.snapshot->'customFields', '{}'::jsonb)
+      FROM public.furnishing_authorization_items AS item
+      WHERE item.commercial_document_id = v_document.id
+        AND item.source_proposal_item_id IS NOT NULL
+      ORDER BY item.sort_order, item.id
+      RETURNING id
+    )
+    SELECT COALESCE(array_agg(id ORDER BY id), '{}'::uuid[])
+    INTO v_applied_ids
+    FROM inserted;
+
+    WITH linked AS (
+      UPDATE public.project_ffe_items AS project_item
+      SET source_commercial_document_id = v_document.id,
+          source_authorization_item_id = item.id,
+          status = CASE
+            WHEN public.ffe_status_rank(project_item.status) <
+                 public.ffe_status_rank('approved')
+              THEN 'approved'
+            ELSE project_item.status
+          END,
+          updated_at = now()
+      FROM public.furnishing_authorization_items AS item
+      WHERE item.commercial_document_id = v_document.id
+        AND item.source_ffe_item_id IS NOT NULL
+        AND project_item.id = item.source_ffe_item_id
+      RETURNING project_item.id
+    )
+    SELECT COALESCE(array_agg(id ORDER BY id), '{}'::uuid[])
+    INTO v_linked_ids
+    FROM linked;
+
+    SELECT COALESCE(array_agg(applied ORDER BY applied), '{}'::uuid[])
+    INTO v_applied_ids
+    FROM unnest(v_applied_ids || v_linked_ids) AS applied;
+
+    IF v_deposit_cents > 0 THEN
+      INSERT INTO public.invoices (
+        project_id, designer_id, client_id, status, currency,
+        subtotal_cents, tax_rate, tax_cents, total_cents, memo
+      ) VALUES (
+        v_document.project_id, v_proposal.designer_id, v_proposal.client_id,
+        'draft', 'USD', v_deposit_cents, 0, 0, v_deposit_cents,
+        'Furnishings deposit · ' || v_document.wave_name
+      )
+      RETURNING id INTO v_deposit_invoice_id;
+
+      INSERT INTO public.invoice_line_items (
+        invoice_id, kind, description, quantity, unit_amount_cents,
+        amount_cents, metadata
+      ) VALUES (
+        v_deposit_invoice_id, 'adhoc',
+        'Furnishings authorization deposit', 1,
+        v_deposit_cents, v_deposit_cents,
+        jsonb_build_object(
+          'commercialDocumentId', v_document.id,
+          'kind', 'furnishings_deposit'
+        )
+      );
+
+      PERFORM app_private.issue_invoice_for_actor(
+        v_deposit_invoice_id, current_date, v_actor
+      );
+    END IF;
+
+    UPDATE public.project_commercial_documents
+    SET executed_at = v_signature.signed_at,
+        deposit_invoice_id = v_deposit_invoice_id
+    WHERE id = v_document.id;
+
+    v_anchor_phase_id := public._schedule_thread_phase(v_document.project_id);
+    IF v_anchor_phase_id IS NOT NULL THEN
+      PERFORM public._commit_schedule_edit_authorized(
+        v_document.project_id,
+        jsonb_build_array(jsonb_build_object(
+          'kind', 'phase-anchor',
+          'phase_id', v_anchor_phase_id,
+          'anchor_date', to_char(v_signature.signed_at::date, 'YYYY-MM-DD'),
+          'source_ref', p_proposal_id
+        )),
+        'Furnishings authorization executed',
+        NULL,
+        'ceremony:furnishings-authorization-executed'
+      );
+    END IF;
+
+    PERFORM set_config(
+      'app.proposal_accept_id', COALESCE(v_previous_accept, ''), true
+    );
+    PERFORM set_config(
+      'app.commercial_document_id', COALESCE(v_previous_commercial, ''), true
+    );
+    v_newly := true;
+  ELSE
+    RAISE EXCEPTION 'furnishings authorization % is not executable from %',
+      p_proposal_id, COALESCE(v_proposal.commercial_state, 'NULL')
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN jsonb_build_object(
+    'projectId', v_document.project_id,
+    'documentId', v_document.id,
+    'checkpointId', v_document.budget_checkpoint_id,
+    'appliedItemIds', to_jsonb(v_applied_ids),
+    'depositInvoiceId',
+      COALESCE(v_deposit_invoice_id, v_document.deposit_invoice_id),
+    'depositRequiredCents', COALESCE((
+      SELECT invoice.total_cents
+      FROM public.invoices AS invoice
+      WHERE invoice.id =
+            COALESCE(v_deposit_invoice_id, v_document.deposit_invoice_id)
+    ), v_deposit_cents),
+    'deposit_required_cents', COALESCE((
+      SELECT invoice.total_cents
+      FROM public.invoices AS invoice
+      WHERE invoice.id =
+            COALESCE(v_deposit_invoice_id, v_document.deposit_invoice_id)
+    ), v_deposit_cents),
+    'depositPaidCents', COALESCE((
+      SELECT invoice.amount_paid_cents
+      FROM public.invoices AS invoice
+      WHERE invoice.id =
+            COALESCE(v_deposit_invoice_id, v_document.deposit_invoice_id)
+    ), 0),
+    'deposit_paid_cents', COALESCE((
+      SELECT invoice.amount_paid_cents
+      FROM public.invoices AS invoice
+      WHERE invoice.id =
+            COALESCE(v_deposit_invoice_id, v_document.deposit_invoice_id)
+    ), 0),
+    'newlyExecuted', v_newly
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.proposal_accept_id', COALESCE(v_previous_accept, ''), true
+  );
+  PERFORM set_config(
+    'app.commercial_document_id', COALESCE(v_previous_commercial, ''), true
+  );
+  RAISE;
+END;
+$$;
+
+COMMENT ON FUNCTION public._execute_furnishings_authorization_authorized(
+  uuid, text, uuid, text
+) IS
+  'Owner-only client furnishings execution core. Preserves the explicit verified client actor and delegates any deposit invoice issuance to the relational app_private core without rewriting request JWT claims.';
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public._execute_furnishings_authorization_authorized(
+    uuid, text, uuid, text
+  )
+FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public._execute_trade_scope_authorized(
+  p_proposal_id uuid,
+  p_signed_name text,
+  p_client_id uuid,
+  p_trusted_signed_ip text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := p_client_id;
+  v_proposal public.proposals%ROWTYPE;
+  v_document public.project_commercial_documents%ROWTYPE;
+  v_signature public.commercial_document_signatures%ROWTYPE;
+  v_terms public.trade_scope_terms%ROWTYPE;
+  v_draw public.trade_scope_draws%ROWTYPE;
+  v_name text := btrim(COALESCE(p_signed_name, ''));
+  v_fingerprint text;
+  v_deposit_invoice_id uuid;
+  v_newly boolean := false;
+  v_previous_accept text :=
+    current_setting('app.proposal_accept_id', true);
+  v_previous_commercial text :=
+    current_setting('app.commercial_document_id', true);
+  v_previous_draw text :=
+    current_setting('app.trade_draw_invoice_id', true);
+BEGIN
+  IF v_actor IS NULL OR char_length(v_name) < 2 THEN
+    RAISE EXCEPTION
+      'trade scope execution requires an authenticated client and legal name'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_proposal
+  FROM public.proposals
+  WHERE id = p_proposal_id
+  FOR UPDATE;
+  IF NOT FOUND
+     OR v_proposal.client_id IS DISTINCT FROM v_actor
+     OR v_proposal.document_kind <> 'trade_scope'
+  THEN
+    RAISE EXCEPTION 'trade scope % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_document
+  FROM public.project_commercial_documents
+  WHERE proposal_id = p_proposal_id
+  FOR UPDATE;
+  IF v_document.id IS NULL THEN
+    RAISE EXCEPTION 'trade scope has no project binding'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF v_proposal.commercial_state <> 'executed'
+     AND v_proposal.valid_until IS NOT NULL
+     AND v_proposal.valid_until < now()
+  THEN
+    RAISE EXCEPTION 'trade scope % has expired', p_proposal_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.project_commercial_documents AS origin_document
+    JOIN public.proposals AS origin_proposal
+      ON origin_proposal.id = origin_document.proposal_id
+    WHERE origin_document.project_id = v_document.project_id
+      AND origin_document.is_origin
+      AND origin_document.document_kind = 'design_services'
+      AND origin_proposal.commercial_state = 'executed'
+  ) THEN
+    RAISE EXCEPTION 'project % has no executed design-services origin',
+      v_document.project_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_terms
+  FROM public.trade_scope_terms
+  WHERE proposal_id = p_proposal_id;
+  v_fingerprint := public._commercial_document_fingerprint(p_proposal_id);
+
+  SELECT * INTO v_signature
+  FROM public.commercial_document_signatures
+  WHERE proposal_id = p_proposal_id
+    AND party_role = 'client'
+  FOR UPDATE;
+
+  IF v_proposal.commercial_state = 'executed' THEN
+    IF v_signature.id IS NULL
+       OR v_signature.signer_user_id IS DISTINCT FROM v_actor
+       OR v_signature.signed_name IS DISTINCT FROM v_name
+       OR v_signature.evidence_fingerprint IS DISTINCT FROM v_fingerprint
+    THEN
+      RAISE EXCEPTION
+        'trade scope signature retry conflicts with immutable evidence'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSIF v_proposal.commercial_state = 'sent' THEN
+    IF v_signature.id IS NOT NULL THEN
+      RAISE EXCEPTION 'trade scope signature topology conflicts with document state'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    SELECT * INTO v_draw
+    FROM public.trade_scope_draws
+    WHERE proposal_id = p_proposal_id
+    ORDER BY sort_order, id
+    LIMIT 1
+    FOR UPDATE;
+    IF v_draw.id IS NULL THEN
+      RAISE EXCEPTION 'trade scope has no draw schedule to bill'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_draw.gates_on_acceptance THEN
+      RAISE EXCEPTION
+        'the trade scope deposit draw gates on acceptance and cannot be billed at signature'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    INSERT INTO public.commercial_document_signatures (
+      proposal_id, party_role, signer_user_id, signed_name, signed_ip,
+      evidence_fingerprint, metadata
+    ) VALUES (
+      p_proposal_id, 'client', v_actor, v_name,
+      NULLIF(btrim(COALESCE(p_trusted_signed_ip, '')), ''), v_fingerprint,
+      jsonb_build_object('via', 'execute_trade_scope')
+    )
+    RETURNING * INTO v_signature;
+
+    PERFORM set_config('app.proposal_accept_id', p_proposal_id::text, true);
+    PERFORM set_config(
+      'app.commercial_document_id', p_proposal_id::text, true
+    );
+    UPDATE public.proposals
+    SET status = 'accepted',
+        commercial_state = 'executed',
+        signed_at = v_signature.signed_at,
+        signed_by_name = v_name,
+        accepted_at = v_signature.signed_at,
+        updated_at = now()
+    WHERE id = p_proposal_id;
+
+    INSERT INTO public.invoices (
+      project_id, designer_id, client_id, status, currency,
+      subtotal_cents, tax_rate, tax_cents, total_cents, memo
+    ) VALUES (
+      v_document.project_id, v_proposal.designer_id, v_proposal.client_id,
+      'draft', COALESCE(v_terms.currency, 'USD'),
+      v_draw.amount_cents, 0, 0, v_draw.amount_cents,
+      'Trade scope deposit · ' || v_draw.label
+    )
+    RETURNING id INTO v_deposit_invoice_id;
+
+    INSERT INTO public.invoice_line_items (
+      invoice_id, kind, description, quantity, unit_amount_cents,
+      amount_cents, metadata
+    ) VALUES (
+      v_deposit_invoice_id, 'adhoc', v_draw.label, 1,
+      v_draw.amount_cents, v_draw.amount_cents,
+      jsonb_build_object(
+        'tradeScopeId', p_proposal_id,
+        'tradeScopeDocumentId', v_document.id,
+        'drawId', v_draw.id,
+        'kind', 'trade_draw'
+      )
+    );
+
+    PERFORM app_private.issue_invoice_for_actor(
+      v_deposit_invoice_id, current_date, v_actor
+    );
+
+    UPDATE public.project_commercial_documents
+    SET executed_at = v_signature.signed_at,
+        deposit_invoice_id = v_deposit_invoice_id
+    WHERE id = v_document.id;
+
+    PERFORM set_config('app.trade_draw_invoice_id', v_draw.id::text, true);
+    UPDATE public.trade_scope_draws
+    SET invoice_id = v_deposit_invoice_id
+    WHERE id = v_draw.id;
+    PERFORM set_config(
+      'app.trade_draw_invoice_id', COALESCE(v_previous_draw, ''), true
+    );
+
+    PERFORM public._close_trade_rfqs_for_scope(p_proposal_id);
+
+    PERFORM set_config(
+      'app.proposal_accept_id', COALESCE(v_previous_accept, ''), true
+    );
+    PERFORM set_config(
+      'app.commercial_document_id', COALESCE(v_previous_commercial, ''), true
+    );
+    v_newly := true;
+  ELSE
+    RAISE EXCEPTION 'trade scope % is not executable from %',
+      p_proposal_id, COALESCE(v_proposal.commercial_state, 'NULL')
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_document
+  FROM public.project_commercial_documents
+  WHERE id = v_document.id;
+
+  RETURN jsonb_build_object(
+    'proposalId', p_proposal_id,
+    'projectId', v_document.project_id,
+    'documentId', v_document.id,
+    'commercialState', 'executed',
+    'progressState', COALESCE((
+      SELECT terms.progress_state
+      FROM public.trade_scope_terms AS terms
+      WHERE terms.proposal_id = p_proposal_id
+    ), 'none'),
+    'depositInvoiceId', v_document.deposit_invoice_id,
+    'depositRequiredCents', (
+      SELECT invoice.total_cents
+      FROM public.invoices AS invoice
+      WHERE invoice.id = v_document.deposit_invoice_id
+    ),
+    'depositPaidCents', COALESCE((
+      SELECT invoice.amount_paid_cents
+      FROM public.invoices AS invoice
+      WHERE invoice.id = v_document.deposit_invoice_id
+    ), 0),
+    'newlyExecuted', v_newly
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.proposal_accept_id', COALESCE(v_previous_accept, ''), true
+  );
+  PERFORM set_config(
+    'app.commercial_document_id', COALESCE(v_previous_commercial, ''), true
+  );
+  PERFORM set_config(
+    'app.trade_draw_invoice_id', COALESCE(v_previous_draw, ''), true
+  );
+  RAISE;
+END;
+$$;
+
+COMMENT ON FUNCTION public._execute_trade_scope_authorized(
+  uuid, text, uuid, text
+) IS
+  'Owner-only client trade-scope execution core. Preserves the explicit verified client actor and delegates deposit invoice issuance to the relational app_private core without rewriting request JWT claims.';
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public._execute_trade_scope_authorized(uuid, text, uuid, text)
 FROM PUBLIC, anon, authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION public.issue_trade_draw_invoice(p_draw_id uuid)
@@ -1669,6 +2824,7 @@ DECLARE
   v_draw public.trade_scope_draws%ROWTYPE;
   v_proposal public.proposals%ROWTYPE;
   v_document public.project_commercial_documents%ROWTYPE;
+  v_project public.projects%ROWTYPE;
   v_terms public.trade_scope_terms%ROWTYPE;
   v_invoice public.invoices%ROWTYPE;
   v_invoice_id uuid;
@@ -1677,40 +2833,53 @@ DECLARE
     current_setting('app.trade_draw_invoice_id', true);
 BEGIN
   IF v_actor IS NULL THEN
-    RAISE EXCEPTION
-      'trade scope draw % not found or access denied', p_draw_id
+    RAISE EXCEPTION 'trade scope draw not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT * INTO v_draw
-  FROM public.trade_scope_draws
-  WHERE id = p_draw_id
-  FOR UPDATE;
+  SELECT draw, proposal, document, project
+  INTO v_draw, v_proposal, v_document, v_project
+  FROM public.trade_scope_draws AS draw
+  JOIN public.proposals AS proposal ON proposal.id = draw.proposal_id
+  JOIN public.project_commercial_documents AS document
+    ON document.proposal_id = proposal.id
+  JOIN public.projects AS project ON project.id = document.project_id
+  JOIN public.organizations AS studio ON studio.id = project.studio_id
+  WHERE draw.id = p_draw_id
+    AND proposal.document_kind = 'trade_scope'
+    AND document.document_kind = 'trade_scope'
+    AND proposal.project_id = project.id
+    AND proposal.designer_id = project.designer_id
+    AND proposal.client_id = project.client_id
+    AND project.status = 'active'
+    AND studio.type = 'design_studio'
+    AND studio.status = 'active'
+    AND EXISTS (
+      SELECT 1
+      FROM public.organization_members AS lead_membership
+      WHERE lead_membership.organization_id = project.studio_id
+        AND lead_membership.user_id = project.designer_id
+        AND lead_membership.status = 'active'
+        AND lead_membership.role <> 'guest'
+    )
+    AND (
+      v_actor = project.designer_id
+      OR EXISTS (
+        SELECT 1
+        FROM public.organization_members AS actor_membership
+        WHERE actor_membership.organization_id = project.studio_id
+          AND actor_membership.user_id = v_actor
+          AND actor_membership.status = 'active'
+          AND actor_membership.role <> 'guest'
+      )
+    )
+  FOR UPDATE OF draw, proposal, document, project;
   IF NOT FOUND THEN
-    RAISE EXCEPTION
-      'trade scope draw % not found or access denied', p_draw_id
+    RAISE EXCEPTION 'trade scope draw not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT * INTO v_proposal
-  FROM public.proposals
-  WHERE id = v_draw.proposal_id
-  FOR UPDATE;
-  IF NOT FOUND
-     OR v_proposal.document_kind <> 'trade_scope'
-     OR NOT public._can_author_proposal(v_proposal.designer_id)
-  THEN
-    RAISE EXCEPTION
-      'trade scope draw % not found or access denied', p_draw_id
-      USING ERRCODE = 'insufficient_privilege';
-  END IF;
-
-  SELECT * INTO v_document
-  FROM public.project_commercial_documents
-  WHERE proposal_id = v_draw.proposal_id
-  FOR UPDATE;
-  IF NOT FOUND
-     OR v_proposal.commercial_state IS DISTINCT FROM 'executed'
+  IF v_proposal.commercial_state IS DISTINCT FROM 'executed'
      OR v_document.executed_at IS NULL
   THEN
     RAISE EXCEPTION
@@ -1841,6 +3010,9 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+COMMENT ON FUNCTION public.issue_trade_draw_invoice(uuid) IS
+  'Issues one trade-scope draw only after the initial locked read proves the real caller is the lead or an active non-guest member of the exact canonical project studio; invoice issuance retains that actor through the owner-only relational core.';
+
 DO $normalize_acl$
 DECLARE
   routine_oid oid;
@@ -1848,6 +3020,14 @@ DECLARE
 BEGIN
   FOR routine_oid IN
     SELECT to_regprocedure(signature)::oid FROM _00485_profile
+    UNION ALL
+    SELECT to_regprocedure(signature)::oid
+    FROM (VALUES
+      ('public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)'),
+      ('public._execute_trade_scope_authorized(uuid,text,uuid,text)'),
+      ('public._prepare_spec_book_issue_00403(uuid,text[],text,text,uuid,text,jsonb)'),
+      ('public._publish_project_review_00448_impl(jsonb)')
+    ) AS dependency(signature)
     UNION ALL
     SELECT to_regprocedure(
       'app_private.issue_invoice_for_actor(uuid,date,uuid)'
@@ -1906,6 +3086,14 @@ REVOKE ALL PRIVILEGES ON FUNCTION
 FROM PUBLIC, anon, authenticated, service_role;
 
 REVOKE ALL PRIVILEGES ON FUNCTION
+  public._execute_furnishings_authorization_authorized(
+    uuid, text, uuid, text
+  ),
+  public._execute_trade_scope_authorized(uuid, text, uuid, text),
+  public._prepare_spec_book_issue_00403(
+    uuid, text[], text, text, uuid, text, jsonb
+  ),
+  public._publish_project_review_00448_impl(jsonb),
   app_private.issue_invoice_for_actor(uuid, date, uuid)
 FROM PUBLIC, anon, authenticated, service_role;
 
@@ -2038,6 +3226,76 @@ BEGIN
 
   IF EXISTS (
     SELECT 1
+    FROM _00485_dependency_profile AS expected
+    LEFT JOIN pg_proc AS routine
+      ON routine.oid = to_regprocedure(expected.signature)
+    LEFT JOIN pg_roles AS owner ON owner.oid = routine.proowner
+    LEFT JOIN pg_language AS language ON language.oid = routine.prolang
+    WHERE routine.oid IS NULL
+      OR owner.rolname IS DISTINCT FROM 'postgres'
+      OR language.lanname IS DISTINCT FROM expected.language_name
+      OR routine.prokind <> 'f'
+      OR NOT routine.prosecdef
+      OR routine.provolatile IS DISTINCT FROM expected.volatility
+      OR routine.proisstrict
+      OR routine.proleakproof
+      OR routine.proparallel <> 'u'
+      OR routine.proconfig IS DISTINCT FROM expected.final_config
+      OR pg_get_function_arguments(routine.oid)
+           IS DISTINCT FROM expected.arguments
+      OR pg_get_function_result(routine.oid)
+           IS DISTINCT FROM expected.result_type
+      OR encode(
+           extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
+           'hex'
+         ) IS DISTINCT FROM expected.final_body_sha256
+  ) THEN
+    RAISE EXCEPTION '00485 final dependency semantic/body profile is wrong';
+  END IF;
+
+  IF EXISTS (
+    WITH expected_acl AS (
+      SELECT
+        expected.signature,
+        role_name AS grantee,
+        'postgres'::text AS grantor,
+        'EXECUTE'::text AS privilege_type,
+        false AS is_grantable
+      FROM _00485_dependency_profile AS expected
+      CROSS JOIN LATERAL unnest(expected.final_roles) AS role_name
+    ),
+    actual_acl AS (
+      SELECT
+        expected.signature,
+        CASE acl.grantee
+          WHEN 0 THEN 'PUBLIC'
+          ELSE grantee.rolname::text
+        END AS grantee,
+        grantor.rolname::text AS grantor,
+        acl.privilege_type,
+        acl.is_grantable
+      FROM _00485_dependency_profile AS expected
+      JOIN pg_proc AS routine
+        ON routine.oid = to_regprocedure(expected.signature)
+      CROSS JOIN LATERAL aclexplode(
+        COALESCE(routine.proacl, acldefault('f', routine.proowner))
+      ) AS acl
+      LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+      LEFT JOIN pg_roles AS grantor ON grantor.oid = acl.grantor
+      WHERE acl.grantee <> routine.proowner
+    )
+    SELECT 1
+    FROM (
+      (SELECT * FROM expected_acl EXCEPT ALL SELECT * FROM actual_acl)
+      UNION ALL
+      (SELECT * FROM actual_acl EXCEPT ALL SELECT * FROM expected_acl)
+    ) AS drift
+  ) THEN
+    RAISE EXCEPTION '00485 final dependency direct ACL contract is wrong';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
     FROM pg_proc AS routine
     CROSS JOIN LATERAL aclexplode(
       COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -2078,7 +3336,7 @@ BEGIN
              ),
              'hex'
            ) IS DISTINCT FROM
-             '1bb33e50769432c5ecd3f08328da152008e0d328a47167c4a059cafc31c3d3e4'
+             '855d1e914495ee4c6e8c0e9550478190945fc11940750fad7e0ee7b2aab763c4'
       )
   ) OR to_regprocedure(
     'app_private.issue_invoice_for_actor(uuid,date,uuid)'
@@ -2088,40 +3346,39 @@ BEGIN
 
   IF EXISTS (
     WITH expected AS (
-      SELECT
-        fixture.relation_name,
-        fixture.trigger_name,
-        fixture.function_signature,
-        'O'::"char" AS enabled,
-        false AS is_internal,
-        23::smallint AS trigger_type,
-        0::smallint AS argument_count,
-        ''::text AS arguments_hex,
-        attribute.attnum::text AS trigger_columns,
-        NULL::text AS when_expression,
-        0::oid AS parent_trigger,
-        fixture.definition
+      SELECT *
       FROM (VALUES
         (
-          'public.projects',
-          'set_project_studio_id',
-          'public.set_project_studio_id()',
-          'createtriggerset_project_studio_idbeforeinsertorupdateofstudio_idonprojectsforeachrowexecutefunctionset_project_studio_id()'
+          'public.projects'::text, 'set_project_studio_id'::text,
+          'public.set_project_studio_id()'::text, 'O'::"char", false,
+          23::smallint, 0::smallint, ''::text,
+          (SELECT string_agg(attnum::text, ' ' ORDER BY
+             array_position(ARRAY['studio_id','designer_id'], attname))
+           FROM pg_attribute
+           WHERE attrelid = 'public.projects'::regclass
+             AND attname = ANY(ARRAY['studio_id','designer_id'])),
+          NULL::text, 0::oid,
+          'createtriggerset_project_studio_idbeforeinsertorupdateofstudio_id,designer_idonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
         ),
         (
-          'public.invoices',
-          'set_invoice_studio_id',
-          'public.set_invoice_studio_id()',
-          'createtriggerset_invoice_studio_idbeforeinsertorupdateofstudio_idoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'
+          'public.invoices'::text, 'set_invoice_studio_id'::text,
+          'public.set_invoice_studio_id()'::text, 'O'::"char", false,
+          23::smallint, 0::smallint, ''::text,
+          (SELECT string_agg(attnum::text, ' ' ORDER BY array_position(
+             ARRAY['studio_id','designer_id','project_id'], attname))
+           FROM pg_attribute
+           WHERE attrelid = 'public.invoices'::regclass
+             AND attname = ANY(
+               ARRAY['studio_id','designer_id','project_id']
+             )),
+          NULL::text, 0::oid,
+          'createtriggerset_invoice_studio_idbeforeinsertorupdateofstudio_id,designer_id,project_idoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
         )
       ) AS fixture(
-        relation_name, trigger_name, function_signature, definition
+        relation_name, trigger_name, function_signature, enabled, is_internal,
+        trigger_type, argument_count, arguments_hex, trigger_columns,
+        when_expression, parent_trigger, definition
       )
-      JOIN pg_attribute AS attribute
-        ON attribute.attrelid = fixture.relation_name::regclass
-       AND attribute.attname = 'studio_id'
-       AND attribute.attnum > 0
-       AND NOT attribute.attisdropped
     ),
     actual AS (
       SELECT
@@ -2198,7 +3455,13 @@ BEGIN
       to_regprocedure(
         'public.sign_design_services_agreement_with_trusted_ip(uuid,text,uuid,text)'
       ),
-      to_regprocedure('public.issue_trade_draw_invoice(uuid)')
+      to_regprocedure('public.issue_trade_draw_invoice(uuid)'),
+      to_regprocedure(
+        'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)'
+      ),
+      to_regprocedure(
+        'public._execute_trade_scope_authorized(uuid,text,uuid,text)'
+      )
     )
       AND position('request.jwt.claims' IN routine.prosrc) > 0
   ) THEN
@@ -2207,7 +3470,7 @@ BEGIN
 
   IF (
     SELECT position(
-      'PERFORM public._ffe_require_studio_project(v_project_id)'
+      'FROM public.projects AS project'
       IN routine.prosrc
     ) < position('FROM public.proposal_boards' IN routine.prosrc)
     FROM pg_proc AS routine
@@ -2228,11 +3491,85 @@ BEGIN
       AND (
         position('current_setting(''role'', true)' IN routine.prosrc) = 0
         OR position('session_user = ''postgres''' IN routine.prosrc) = 0
-        OR position('auth.uid() IS NULL' IN routine.prosrc) = 0
+        OR position('studio.type = ''design_studio''' IN routine.prosrc) = 0
+        OR position('studio.status = ''active''' IN routine.prosrc) = 0
+        OR position('actor_membership.organization_id = NEW.studio_id'
+                    IN routine.prosrc) = 0
         OR position('auth.jwt()' IN routine.prosrc) > 0
       )
   ) THEN
     RAISE EXCEPTION '00485 trigger authority contract is wrong';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_proc AS routine
+    WHERE routine.oid IN (
+      to_regprocedure(
+        'public._accept_trade_scope_authorized(uuid,text,uuid)'
+      ),
+      to_regprocedure(
+        'public._sign_design_services_agreement_authorized(uuid,text,uuid,text)'
+      )
+    )
+      AND (
+        position('issue_invoice(' IN routine.prosrc) > 0
+        OR position('request.jwt.claims' IN routine.prosrc) > 0
+      )
+  ) THEN
+    RAISE EXCEPTION '00485 sign/accept sibling invoice audit drifted';
+  END IF;
+
+  IF EXISTS (
+    WITH expected(caller_signature) AS (
+      VALUES
+        ('public.issue_trade_draw_invoice(uuid)'::text),
+        ('public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)'::text),
+        ('public._execute_trade_scope_authorized(uuid,text,uuid,text)'::text)
+    ),
+    actual AS (
+      SELECT
+        namespace.nspname || '.' || routine.proname || '(' ||
+          pg_get_function_identity_arguments(routine.oid) || ')' AS caller_signature
+      FROM pg_proc AS routine
+      JOIN pg_namespace AS namespace ON namespace.oid = routine.pronamespace
+      WHERE namespace.nspname <> 'information_schema'
+        AND namespace.nspname NOT LIKE 'pg_%'
+        AND position(
+          'app_private.issue_invoice_for_actor(' IN routine.prosrc
+        ) > 0
+    )
+    SELECT 1
+    FROM (
+      (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual)
+      UNION ALL
+      (SELECT * FROM actual EXCEPT ALL SELECT * FROM expected)
+    ) AS drift
+  ) THEN
+    RAISE EXCEPTION '00485 private invoice core caller universe is wrong';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM (VALUES
+      (
+        'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
+        '''commercialDocumentId'''
+      ),
+      (
+        'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
+        '''tradeScopeDocumentId'''
+      ),
+      (
+        'public.issue_trade_draw_invoice(uuid)',
+        '''tradeScopeDocumentId'''
+      )
+    ) AS expected(signature, metadata_key)
+    JOIN pg_proc AS routine
+      ON routine.oid = to_regprocedure(expected.signature)
+    WHERE position(expected.metadata_key IN routine.prosrc) = 0
+  ) THEN
+    RAISE EXCEPTION '00485 invoice core caller metadata anchor is missing';
   END IF;
 END
 $postconditions$;
