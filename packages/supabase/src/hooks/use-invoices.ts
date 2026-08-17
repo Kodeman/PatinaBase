@@ -196,7 +196,6 @@ function parseInvoiceCheckoutReceipt(value: unknown): InvoiceCheckoutReceipt {
 export interface Invoice {
   id: string;
   project_id: string;
-  studio_id: string;
   designer_id: string;
   client_id: string | null;
   invoice_number: string | null;
@@ -645,8 +644,9 @@ export function useArAging() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Creates a draft invoice header and its initial lines atomically after
- * resolving the canonical project billing tuple under caller RLS.
+ * Creates a draft invoice header + its initial lines, then stamps draft
+ * totals. The JS client cannot wrap these in one transaction, so a failed
+ * line insert triggers a compensating header delete (lines CASCADE).
  *
  * `{ errorSurface: 'inline' }` — see useSendInvoice (R83). The Document's
  * invoice composer renders failures inline; legacy callers keep the toast.
@@ -663,58 +663,37 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
       } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { data: project, error: projectErr } = await supabase
-        .from('projects')
-        .select('id, designer_id, client_id, studio_id')
-        .eq('id', input.projectId)
+      const { data: invoice, error: invErr } = await supabase
+        .from('invoices')
+        .insert({
+          project_id: input.projectId,
+          designer_id: user.id,
+          client_id: input.clientId ?? null,
+          status: 'draft',
+          tax_rate: input.taxRate ?? 0,
+          payment_terms_days: input.paymentTermsDays ?? 15,
+          memo: input.memo ?? null,
+          internal_notes: input.internalNotes ?? null,
+        })
+        .select()
         .single();
-      if (projectErr) {
-        throw new Error(
-          `Failed to load invoice project: ${projectErr.message ?? String(projectErr)}`
-        );
-      }
-      if (
-        !project ||
-        project.id !== input.projectId ||
-        !project.designer_id ||
-        !project.client_id ||
-        !project.studio_id
-      ) {
-        throw new Error('Invoice project is missing its canonical billing tuple');
-      }
-      if (input.clientId !== undefined && input.clientId !== project.client_id) {
-        throw new Error('Invoice client does not match the selected project');
-      }
-
-      const lines = input.lines.map((line, index) => {
-        const row = buildLineRow('', line, index);
-        return {
-          kind: row.kind,
-          milestone_id: row.milestone_id,
-          ffe_item_id: row.ffe_item_id,
-          description: row.description,
-          quantity: row.quantity,
-          unit_amount_cents: row.unit_amount_cents,
-          metadata: row.metadata,
-          sort_order: row.sort_order,
-        };
-      });
-      const { data: invoice, error: invErr } = await supabase.rpc(
-        'create_draft_invoice',
-        {
-          p_project_id: project.id,
-          p_expected_designer_id: project.designer_id,
-          p_expected_client_id: project.client_id,
-          p_expected_studio_id: project.studio_id,
-          p_tax_rate: input.taxRate ?? 0,
-          p_payment_terms_days: input.paymentTermsDays ?? 15,
-          p_memo: input.memo ?? null,
-          p_internal_notes: input.internalNotes ?? null,
-          p_lines: lines,
-        }
-      );
       if (invErr) {
         throw new Error(`Failed to create draft invoice: ${invErr.message ?? String(invErr)}`);
+      }
+
+      const invoiceId = (invoice as { id: string }).id;
+
+      if (input.lines.length > 0) {
+        const rows = input.lines.map((line, i) => buildLineRow(invoiceId, line, i));
+        const { error: linesErr } = await supabase.from('invoice_line_items').insert(rows);
+        if (linesErr) {
+          // Compensating delete — CASCADE removes any inserted lines.
+          await supabase.from('invoices').delete().eq('id', invoiceId);
+          throw new Error(
+            `Failed to add invoice lines: ${linesErr.message ?? String(linesErr)}`
+          );
+        }
+        await recomputeDraftTotals(supabase, invoiceId);
       }
 
       return invoice as Invoice;

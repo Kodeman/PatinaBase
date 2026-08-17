@@ -83,11 +83,7 @@ SELECT fixture.user_id, role_row.id
 FROM (
   VALUES
     ('c4840000-0000-4000-8000-000000000001'::uuid, 'super_admin'),
-    ('c4840000-0000-4000-8000-000000000002'::uuid, 'super_admin'),
-    -- 00485's set_project_studio_id derives the studio only for a lead who
-    -- holds a designer-domain role; without it the nested-derivation
-    -- assertion below sees a NULL studio_id.
-    ('c4840000-0000-4000-8000-000000000001'::uuid, 'studio_admin')
+    ('c4840000-0000-4000-8000-000000000002'::uuid, 'super_admin')
 ) AS fixture(user_id, role_name)
 JOIN public.roles AS role_row ON role_row.name = fixture.role_name
 ON CONFLICT (user_id, role_id) DO NOTHING;
@@ -128,24 +124,6 @@ VALUES
     'c4840000-0000-4000-8000-000000000004',
     'c4840000-0000-4000-8000-000000000011',
     'owner', 'active', now()
-  );
-
--- The designer-domain grant above auto-provisions a personal workspace for the
--- lead. 00485's set_project_studio_id derives a studio only from an
--- unambiguous single candidate, so that extra workspace is dropped here.
-UPDATE public.organizations AS studio
-SET status = 'deactivated'
-WHERE studio.type = 'design_studio'
-  AND studio.id NOT IN (
-    'c4840000-0000-4000-8000-000000000010',
-    'c4840000-0000-4000-8000-000000000011',
-    'c4840000-0000-4000-8000-000000000013'
-  )
-  AND EXISTS (
-    SELECT 1
-    FROM public.organization_members AS membership
-    WHERE membership.organization_id = studio.id
-      AND membership.user_id = 'c4840000-0000-4000-8000-000000000001'
   );
 
 INSERT INTO public.projects (id, name, designer_id, created_by, studio_id)

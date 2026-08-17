@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mocks — mirrors the use-procurement rig. W3-T2 (00187) coverage: the
-// get_ffe_invoice_coverage RPC hook, the ffe line-row builder, the canonical
-// project tuple used by draft creation, and the ffe-invoice-coverage
-// invalidation additions on the money mutations.
+// get_ffe_invoice_coverage RPC hook, the ffe line-row builder, and the
+// ffe-invoice-coverage invalidation additions on the money mutations. Only
+// the rpc surface is exercised here; table-builder flows (draft create /
+// upsert) have their own coverage via the SQL test suite.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const supabaseClient = {
@@ -39,7 +40,6 @@ import {
   useNotifyCheckIntent,
   useRecordPayment,
   useVoidInvoice,
-  type CreateDraftInvoiceInput,
   type DraftLineInput,
   type FfeInvoiceCoverageMap,
   InvoiceCheckoutError,
@@ -319,167 +319,6 @@ describe('ffe-invoice-coverage invalidation', () => {
     config.onSuccess(undefined, { invoiceId: 'inv-1', lineItemId: 'line-1' });
     expect(invalidatedKeys()).toContainEqual(['invoices']);
     expect(invalidatedKeys()).toContainEqual(['ffe-invoice-coverage']);
-  });
-});
-
-describe('useCreateDraftInvoice', () => {
-  type CreateConfig = {
-    mutationFn: (input: CreateDraftInvoiceInput) => Promise<unknown>;
-  };
-
-  const input: CreateDraftInvoiceInput = {
-    projectId: 'project-a',
-    clientId: 'client-a',
-    lines: [],
-  };
-
-  function projectRead(result: { data: unknown; error: unknown }) {
-    const single = vi.fn().mockResolvedValue(result);
-    const eq = vi.fn(() => ({ single }));
-    const select = vi.fn(() => ({ eq }));
-    return { select, eq, single };
-  }
-
-  beforeEach(() => {
-    supabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'co-member-a' } },
-    });
-  });
-
-  it('reads the project under caller RLS and writes its canonical billing tuple for a co-member', async () => {
-    const project = projectRead({
-      data: {
-        id: 'project-a',
-        designer_id: 'project-lead-a',
-        client_id: 'client-a',
-        studio_id: 'studio-a',
-      },
-      error: null,
-    });
-    supabaseClient.from.mockReturnValue(project);
-    supabaseClient.rpc.mockResolvedValue({
-      data: { id: 'invoice-a', project_id: 'project-a' },
-      error: null,
-    });
-
-    const config = useCreateDraftInvoice() as unknown as CreateConfig;
-    await config.mutationFn(input);
-
-    expect(project.select).toHaveBeenCalledWith('id, designer_id, client_id, studio_id');
-    expect(project.eq).toHaveBeenCalledWith('id', 'project-a');
-    expect(supabaseClient.rpc).toHaveBeenCalledWith('create_draft_invoice', {
-      p_project_id: 'project-a',
-      p_expected_studio_id: 'studio-a',
-      p_expected_designer_id: 'project-lead-a',
-      p_expected_client_id: 'client-a',
-      p_tax_rate: 0,
-      p_payment_terms_days: 15,
-      p_memo: null,
-      p_internal_notes: null,
-      p_lines: [],
-    });
-  });
-
-  it('does not create a header when the project read fails', async () => {
-    const project = projectRead({
-      data: null,
-      error: { message: 'row hidden by RLS' },
-    });
-    supabaseClient.from.mockReturnValue(project);
-
-    const config = useCreateDraftInvoice() as unknown as CreateConfig;
-    await expect(config.mutationFn(input)).rejects.toThrow(
-      'Failed to load invoice project: row hidden by RLS'
-    );
-    expect(supabaseClient.rpc).not.toHaveBeenCalled();
-  });
-
-  it('does not create a header when a supplied client mismatches the project', async () => {
-    const project = projectRead({
-      data: {
-        id: 'project-a',
-        designer_id: 'project-lead-a',
-        client_id: 'client-a',
-        studio_id: 'studio-a',
-      },
-      error: null,
-    });
-    supabaseClient.from.mockReturnValue(project);
-
-    const config = useCreateDraftInvoice() as unknown as CreateConfig;
-    await expect(
-      config.mutationFn({ ...input, clientId: 'foreign-client' })
-    ).rejects.toThrow('Invoice client does not match the selected project');
-    expect(supabaseClient.rpc).not.toHaveBeenCalled();
-  });
-
-  it('does not create a header from an incomplete project tuple', async () => {
-    const project = projectRead({
-      data: {
-        id: 'project-a',
-        designer_id: 'project-lead-a',
-        client_id: 'client-a',
-        studio_id: null,
-      },
-      error: null,
-    });
-    supabaseClient.from.mockReturnValue(project);
-
-    const config = useCreateDraftInvoice() as unknown as CreateConfig;
-    await expect(config.mutationFn(input)).rejects.toThrow(
-      'Invoice project is missing its canonical billing tuple'
-    );
-    expect(supabaseClient.rpc).not.toHaveBeenCalled();
-  });
-
-  it('sends only allowlisted line fields and surfaces an atomic RPC failure', async () => {
-    const project = projectRead({
-      data: {
-        id: 'project-a',
-        designer_id: 'project-lead-a',
-        client_id: 'client-a',
-        studio_id: 'studio-a',
-      },
-      error: null,
-    });
-    supabaseClient.from.mockReturnValue(project);
-    supabaseClient.rpc.mockResolvedValue({
-      data: null,
-      error: { message: 'invalid draft invoice payload' },
-    });
-
-    const config = useCreateDraftInvoice() as unknown as CreateConfig;
-    await expect(
-      config.mutationFn({
-        projectId: 'project-a',
-        clientId: 'client-a',
-        lines: [
-          {
-            description: 'Canonical chair',
-            quantity: 2,
-            unitAmountCents: 1250,
-          },
-        ],
-      })
-    ).rejects.toThrow('Failed to create draft invoice: invalid draft invoice payload');
-
-    expect(supabaseClient.rpc).toHaveBeenCalledWith(
-      'create_draft_invoice',
-      expect.objectContaining({
-        p_lines: [
-          {
-            kind: 'adhoc',
-            milestone_id: null,
-            ffe_item_id: null,
-            description: 'Canonical chair',
-            quantity: 2,
-            unit_amount_cents: 1250,
-            metadata: {},
-            sort_order: 0,
-          },
-        ],
-      })
-    );
   });
 });
 
