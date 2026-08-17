@@ -2,6 +2,23 @@
 /dist
 /node_modules
 
+# Stray tsc output that lands next to sources instead of in /dist (has
+# happened repeatedly here — phase1-close artifact-gc cleanup removed 90 +
+# 88 committed instances across two passes). Real build target stays
+# /dist above.
+src/**/*.js
+src/**/*.d.ts
+src/**/*.js.map
+src/**/*.d.ts.map
+test/**/*.js
+test/**/*.d.ts
+test/**/*.js.map
+test/**/*.d.ts.map
+prisma/**/*.js
+prisma/**/*.d.ts
+prisma/**/*.js.map
+prisma/**/*.d.ts.map
+
 # Logs
 logs
 *.log
