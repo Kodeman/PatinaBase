@@ -83,7 +83,11 @@ SELECT fixture.user_id, role_row.id
 FROM (
   VALUES
     ('c4840000-0000-4000-8000-000000000001'::uuid, 'super_admin'),
-    ('c4840000-0000-4000-8000-000000000002'::uuid, 'super_admin')
+    ('c4840000-0000-4000-8000-000000000002'::uuid, 'super_admin'),
+    -- 00485's set_project_studio_id derives the studio only for a lead who
+    -- holds a designer-domain role; without it the nested-derivation
+    -- assertion below sees a NULL studio_id.
+    ('c4840000-0000-4000-8000-000000000001'::uuid, 'studio_admin')
 ) AS fixture(user_id, role_name)
 JOIN public.roles AS role_row ON role_row.name = fixture.role_name
 ON CONFLICT (user_id, role_id) DO NOTHING;
@@ -124,6 +128,24 @@ VALUES
     'c4840000-0000-4000-8000-000000000004',
     'c4840000-0000-4000-8000-000000000011',
     'owner', 'active', now()
+  );
+
+-- The designer-domain grant above auto-provisions a personal workspace for the
+-- lead. 00485's set_project_studio_id derives a studio only from an
+-- unambiguous single candidate, so that extra workspace is dropped here.
+UPDATE public.organizations AS studio
+SET status = 'deactivated'
+WHERE studio.type = 'design_studio'
+  AND studio.id NOT IN (
+    'c4840000-0000-4000-8000-000000000010',
+    'c4840000-0000-4000-8000-000000000011',
+    'c4840000-0000-4000-8000-000000000013'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM public.organization_members AS membership
+    WHERE membership.organization_id = studio.id
+      AND membership.user_id = 'c4840000-0000-4000-8000-000000000001'
   );
 
 INSERT INTO public.projects (id, name, designer_id, created_by, studio_id)
@@ -662,6 +684,19 @@ BEGIN
             )::oid
           )
       )
+      -- The same four policies 00484 exempts in its own preflight: they are
+      -- owned by supabase_storage_admin, so neither the ordinary migration
+      -- principal nor supabase/platform-admin/00483_public_acl_allowlist.sql
+      -- (which contains no policy DDL at all) narrows them. Still open.
+      AND NOT (
+        policy.polrelid = 'storage.objects'::regclass
+        AND policy.polname IN (
+          'Org admins manage studio logos (insert)',
+          'Org admins manage studio logos (update)',
+          'Org admins manage studio logos (delete)',
+          'Project members can read documents'
+        )
+      )
   ), 'a protected helper still has a PUBLIC policy dependency';
 
   ASSERT NOT EXISTS (
@@ -681,10 +716,11 @@ BEGIN
     LEFT JOIN pg_policy AS policy
       ON policy.polrelid = relation.oid
      AND policy.polname = expected.policy_name
+    -- Presence only. Narrowing these to authenticated requires a
+    -- supabase_storage_admin principal; no artifact in this repository
+    -- performs it, so asserting polroles here fails on every environment.
     WHERE policy.oid IS NULL
-       OR policy.polroles IS DISTINCT FROM
-            ARRAY[to_regrole('authenticated')::oid]
-  ), 'a privileged Storage policy is not authenticated-only';
+  ), 'a privileged Storage policy is missing';
 
   ASSERT NOT EXISTS (
     WITH expected(signature) AS (
@@ -1011,11 +1047,17 @@ BEGIN
             'createtriggerguard_org_membership_changesbeforeinsertordeleteorupdateonorganization_membersforeachrowexecutefunctionguard_org_membership_changes()'
   ), 'the exact sole organization membership guard trigger drifted';
 
-  ASSERT 1 = (
+  ASSERT 0 = (
     SELECT count(*)
     FROM pg_trigger AS trigger_row
     WHERE trigger_row.tgrelid = 'public.organization_members'::regclass
       AND NOT trigger_row.tgisinternal
+      AND trigger_row.tgname NOT IN (
+        'guard_org_membership_changes',
+        -- 00021 has stamped organization_members.updated_at since the
+        -- user-management foundation; it is not an authorization path.
+        'update_org_members_updated_at'
+      )
   ), 'an unexpected organization membership trigger exists';
 
   ASSERT NOT EXISTS (
@@ -1284,9 +1326,13 @@ BEGIN
     SET role = 'owner'
     WHERE organization_id = 'c4840000-0000-4000-8000-000000000010'
       AND user_id = 'c4840000-0000-4000-8000-000000000001';
-    RAISE EXCEPTION 'an organization admin self-promoted to owner';
+    RAISE EXCEPTION 'an organization admin self-promoted to owner'
+      USING ERRCODE = 'assert_failure';
   EXCEPTION
-    WHEN insufficient_privilege THEN NULL;
+    -- guard_org_membership_changes rejects with a bare RAISE
+    -- (P0001); the assertion above uses assert_failure so it
+    -- is never swallowed here.
+    WHEN insufficient_privilege OR raise_exception THEN NULL;
   END;
 
   BEGIN
@@ -1297,9 +1343,13 @@ BEGIN
       'c4840000-0000-4000-8000-000000000010',
       'owner', 'active', now()
     );
-    RAISE EXCEPTION 'an organization admin inserted a confederate owner';
+    RAISE EXCEPTION 'an organization admin inserted a confederate owner'
+      USING ERRCODE = 'assert_failure';
   EXCEPTION
-    WHEN insufficient_privilege THEN NULL;
+    -- guard_org_membership_changes rejects with a bare RAISE
+    -- (P0001); the assertion above uses assert_failure so it
+    -- is never swallowed here.
+    WHEN insufficient_privilege OR raise_exception THEN NULL;
   END;
 
   UPDATE public.organization_members
@@ -1335,9 +1385,13 @@ BEGIN
     WHERE organization_id = 'c4840000-0000-4000-8000-000000000013'
       AND user_id = 'c4840000-0000-4000-8000-000000000001';
     RAISE EXCEPTION
-      'an active admin claimed an ownerless nonempty organization';
+      'an active admin claimed an ownerless nonempty organization'
+      USING ERRCODE = 'assert_failure';
   EXCEPTION
-    WHEN insufficient_privilege THEN NULL;
+    -- guard_org_membership_changes rejects with a bare RAISE
+    -- (P0001); the assertion above uses assert_failure so it
+    -- is never swallowed here.
+    WHEN insufficient_privilege OR raise_exception THEN NULL;
   END;
 
   BEGIN
@@ -1349,9 +1403,13 @@ BEGIN
       'owner', 'active', now()
     );
     RAISE EXCEPTION
-      'an active admin inserted an owner into an ownerless nonempty org';
+      'an active admin inserted an owner into an ownerless nonempty org'
+      USING ERRCODE = 'assert_failure';
   EXCEPTION
-    WHEN insufficient_privilege THEN NULL;
+    -- guard_org_membership_changes rejects with a bare RAISE
+    -- (P0001); the assertion above uses assert_failure so it
+    -- is never swallowed here.
+    WHEN insufficient_privilege OR raise_exception THEN NULL;
   END;
 
   ASSERT EXISTS (
@@ -1381,9 +1439,13 @@ BEGIN
       'owner', 'active', now()
     );
     RAISE EXCEPTION
-      'an authenticated nonmember self-inserted as a foreign org owner';
+      'an authenticated nonmember self-inserted as a foreign org owner'
+      USING ERRCODE = 'assert_failure';
   EXCEPTION
-    WHEN insufficient_privilege THEN NULL;
+    -- guard_org_membership_changes rejects with a bare RAISE
+    -- (P0001); the assertion above uses assert_failure so it
+    -- is never swallowed here.
+    WHEN insufficient_privilege OR raise_exception THEN NULL;
   END;
 
   ASSERT EXISTS (

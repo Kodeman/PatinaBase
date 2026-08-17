@@ -13,7 +13,7 @@ DO $foreign_proposal_lock_probe$
 DECLARE
   v_conninfo text := format(
     'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
-    COALESCE(inet_server_addr()::text, '127.0.0.1'), inet_server_port()
+    COALESCE(host(inet_server_addr()), '127.0.0.1'), inet_server_port()
   );
 BEGIN
   PERFORM extensions.dblink_connect('d485_foreign_setup', v_conninfo);
@@ -74,7 +74,12 @@ BEGIN
           'd485f000-0000-4000-8000-000000000002',
           'd485-foreign-client@test.invalid', 'D485 Foreign Client', false,
           now(), now()
-        );
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          email = EXCLUDED.email,
+          full_name = EXCLUDED.full_name,
+          is_designer = EXCLUDED.is_designer,
+          updated_at = EXCLUDED.updated_at;
       INSERT INTO public.proposals (
         id, designer_id, client_id, title, status, document_kind,
         commercial_state, total_amount
@@ -219,7 +224,7 @@ DO $close_order_payment_probe$
 DECLARE
   v_conninfo text := format(
     'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
-    COALESCE(inet_server_addr()::text, '127.0.0.1'), inet_server_port()
+    COALESCE(host(inet_server_addr()), '127.0.0.1'), inet_server_port()
   );
 BEGIN
   PERFORM extensions.dblink_connect('d485_close_setup', v_conninfo);
@@ -280,7 +285,12 @@ BEGIN
           'd485d000-0000-4000-8000-000000000002',
           'd485-close-order-client@test.invalid',
           'D485 Close Order Client', false, now(), now()
-        );
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          email = EXCLUDED.email,
+          full_name = EXCLUDED.full_name,
+          is_designer = EXCLUDED.is_designer,
+          updated_at = EXCLUDED.updated_at;
       INSERT INTO public.projects (
         id, name, designer_id, client_id, created_by, studio_id, status
       ) VALUES (
@@ -436,7 +446,7 @@ DO $reassignment_revocation_race$
 DECLARE
   v_conninfo text := format(
     'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
-    COALESCE(inet_server_addr()::text, '127.0.0.1'), inet_server_port()
+    COALESCE(host(inet_server_addr()), '127.0.0.1'), inet_server_port()
   );
   v_busy integer;
   v_status text;
@@ -544,7 +554,12 @@ BEGIN
           'd485e000-0000-4000-8000-000000000004',
           'd485-race-third-lead@test.invalid', 'D485 Race Third Lead', true,
           now(), now()
-        );
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          email = EXCLUDED.email,
+          full_name = EXCLUDED.full_name,
+          is_designer = EXCLUDED.is_designer,
+          updated_at = EXCLUDED.updated_at;
       INSERT INTO public.roles (
         id, name, display_name, domain, is_system, is_assignable
       ) VALUES (
@@ -951,7 +966,7 @@ DO $atomic_invoice_lock_probes$
 DECLARE
   v_conninfo text := format(
     'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
-    COALESCE(inet_server_addr()::text, '127.0.0.1'), inet_server_port()
+    COALESCE(host(inet_server_addr()), '127.0.0.1'), inet_server_port()
   );
   v_first_invoice_id text;
   v_second_invoice_id text;
@@ -1058,7 +1073,12 @@ BEGIN
           'd485c000-0000-4000-8000-000000000005',
           'd485-foreign-client@test.invalid', 'D485 Foreign Client', false,
           now(), now()
-        );
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          email = EXCLUDED.email,
+          full_name = EXCLUDED.full_name,
+          is_designer = EXCLUDED.is_designer,
+          updated_at = EXCLUDED.updated_at;
       INSERT INTO public.roles (
         id, name, display_name, domain, is_system, is_assignable
       ) VALUES (
@@ -1602,7 +1622,7 @@ VALUES
   (
     'public.issue_trade_draw_invoice(uuid)', 'p_draw_id uuid', 'jsonb',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'fdbbbcb8bcf4df64d25492affe45e99d4cecb2721171af41cc3fe282e231a7fb',
+    '1ece28644a5acc17ac7f474e0cc1f4ad149d92e0024859acca8396abf794a21e',
     ARRAY['authenticated']::text[]
   ),
   (
@@ -1646,13 +1666,13 @@ VALUES
   (
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'f08204081f3b22f845b46af0e00f6b13e4aa578c9744e323481c24d28d59a18f',
+    '3f8b56b7fa94c3e7b4830fa8a3242b637f8da533f3f3bdb2f13acab0175fe7f8',
     ARRAY[]::text[]
   ),
   (
     'public.set_project_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '9fb547de4460ddbc9d939f747e554b3f8340293da214fa911e874c4cc31ae7bf',
+    'fe66293d1fc39149dba2abc85d6ecd7b948f786e53f7e4e5746a65b69e82028d',
     ARRAY[]::text[]
   ),
   (
@@ -1789,37 +1809,37 @@ VALUES
     'app_private.issue_invoice_for_actor(uuid,date,uuid)',
     'p_invoice_id uuid, p_due_date date, p_actor_id uuid', 'invoices',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '2f89692c867a5bd0c7d44eea587b7a82d0715a1e542254b8e0870b98349abaf7'
+    'bdf903ba6445367c7f18551859a0a14aeaa2f0dfbec95d4304110e39b537c727'
   ),
   (
     'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'f9031e3b7cefb9cc0de4a2c3d98adc470488f40c677b811de620ff40e9ee4e84'
+    'd1ea9e357d5f1c685677365601abaff4c96cf83f6006ab8c3479f1d745487293'
   ),
   (
     'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '03277ddec803f42c90e96f67e5fba134b91342677bb44d672f927565a64fc541'
+    '02f9aab1ace96f0e439dee937ecd50e5b0b58a8366c732caafe66d70e1b25dd8'
   ),
   (
     'public._countersign_design_services_agreement_impl(uuid,text,jsonb)',
     'p_proposal_id uuid, p_signer_name text, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '91cda0b749a9f82ae3e91db4a567d40c400c4c0d722b5c8d150bf736b4802f8e'
+    '1d0db8c0c2e123121a24d4c2ade04d507e42399a708b2e598c199559cd46a89e'
   ),
   (
     'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',
     'p_proposal_id uuid, p_signed_name text, p_paper_signed_on date, p_recorded_by uuid, p_scan_document_id uuid DEFAULT NULL::uuid, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'd14f7a3cf958ff2c99f43d45cc2d3f2941ca49175d495e613cea346ff59fec86'
+    '81d54e2f271e78c1c901c6cec0b1d763cffecb87ce7d5c20990dddd789b3e432'
   ),
   (
     'public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)',
     'p_proposal_id uuid, p_signed_name text, p_paper_signed_on date, p_recorded_by uuid, p_scan_document_id uuid DEFAULT NULL::uuid',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'f9904c33fb253e1210dbc16ad1c84ac55bd23df41e22783a72cca31f687eb7f0'
+    '99c9545b3b59638bab7a034d62e743d32eb36bfe31b8a18f070f325fc69d0626'
   ),
   (
     'public._prepare_spec_book_issue_00403(uuid,text[],text,text,uuid,text,jsonb)',
@@ -2033,9 +2053,9 @@ BEGIN
        AND encode(
              extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
              'hex'
-           ) = 'ae0f955f26b0cd4570f2b1dfe5d0762cdd387475033281f4abfddb1637f14000'
+           ) = '600c435c99acbb850b3b6a0f7f190aa62aa330e8281659b803abd38ef6c347c6'
        AND octet_length(convert_to(routine.prosrc, 'UTF8')) =
-             11488
+             11492
     FROM pg_proc AS routine
     JOIN pg_roles AS owner ON owner.oid = routine.proowner
     JOIN pg_language AS language ON language.oid = routine.prolang

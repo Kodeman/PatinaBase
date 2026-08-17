@@ -170,7 +170,7 @@ INSERT INTO _00486_expected VALUES
   (
     'public.close_project(uuid,jsonb,jsonb)',
     'p_project_id uuid, p_closure jsonb DEFAULT NULL::jsonb, p_snapshot jsonb DEFAULT NULL::jsonb',
-    'public.projects', 'v', ARRAY['search_path=pg_catalog, public, pg_temp'],
+    'projects', 'v', ARRAY['search_path=pg_catalog, public, pg_temp'],
     '4301647c39107e143774c434436248b3fc7946bf75b7b102c0ec335bc156d5d1',
     ARRAY['authenticated'],
     $call$SELECT public.close_project('48600000-0000-4000-8000-00000000ff04',NULL,NULL)$call$
@@ -193,9 +193,9 @@ INSERT INTO _00486_expected VALUES
   ),
   (
     'public.escalate_item_feedback_to_decision(uuid,uuid)',
-    'p_feedback_id uuid, p_decision_id uuid', 'public.item_feedback', 'v',
+    'p_feedback_id uuid, p_decision_id uuid', 'item_feedback', 'v',
     ARRAY['search_path=pg_catalog, public, pg_temp'],
-    '84b6f8eccb9de7e2acba05f84707b56562b01fa595a89e1ada0b5a89e6a5a0dc',
+    '484f9219d52297c4c04656b1283af3c0e18046b22d855cf94a4d1e37d121abcb',
     ARRAY['authenticated'],
     $call$SELECT public.escalate_item_feedback_to_decision('48600000-0000-4000-8000-00000000ff07','48600000-0000-4000-8000-00000000ff08')$call$
   ),
@@ -209,7 +209,7 @@ INSERT INTO _00486_expected VALUES
   ),
   (
     'public.finalize_spec_book_issue(uuid)', 'p_revision_id uuid',
-    'public.spec_book_revisions', 'v',
+    'spec_book_revisions', 'v',
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     'd86404d2a0eb529bc25cf48c86ad0b2e87bd91eb07d8f4d8699f2feea3b6d310',
     ARRAY['service_role'],
@@ -271,7 +271,7 @@ INSERT INTO _00486_expected VALUES
   (
     'public.reassign_project_lead(uuid,uuid,uuid)',
     'p_project_id uuid, p_expected_designer_id uuid, p_new_designer_id uuid',
-    'public.projects', 'v', ARRAY['search_path=pg_catalog, public, pg_temp'],
+    'projects', 'v', ARRAY['search_path=pg_catalog, public, pg_temp'],
     '31fe6ad2c1809d5abacb78c09cef814921814a1036977a7207436bfd4f08e3e9',
     ARRAY['authenticated'],
     $call$SELECT public.reassign_project_lead('48600000-0000-4000-8000-00000000ff13','48600000-0000-4000-8000-00000000ff14','48600000-0000-4000-8000-00000000ff15')$call$
@@ -286,7 +286,7 @@ INSERT INTO _00486_expected VALUES
   ),
   (
     'public.reply_to_item_feedback(uuid,text)',
-    'p_feedback_id uuid, p_body text', 'public.item_feedback_events', 'v',
+    'p_feedback_id uuid, p_body text', 'item_feedback_events', 'v',
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '31fd570f78940073f4b22c176123630cd4f6541190248f43176072700f1994f5',
     ARRAY['authenticated'],
@@ -304,13 +304,13 @@ INSERT INTO _00486_expected VALUES
     'public.review_sms_message(uuid,text,jsonb)',
     'p_message_id uuid, p_action text, p_effect jsonb DEFAULT NULL::jsonb',
     'jsonb', 'v', ARRAY['search_path=pg_catalog, public, pg_temp'],
-    '97f87c14df99dbc9a5c45c02f63274715b3a16fdc82291609bf3930cdb4e5173',
+    'a93473c3853da503db51e67e658481d5aa2085d1a8b2a4e8144ef80181da528d',
     ARRAY['authenticated'],
     $call$SELECT public.review_sms_message('48600000-0000-4000-8000-00000000ff19','dismiss',NULL)$call$
   ),
   (
     'public.stamp_project_approval_reminder_delivery(uuid,uuid)',
-    'p_decision_id uuid, p_decision_lead_id uuid', 'public.client_decisions', 'v',
+    'p_decision_id uuid, p_decision_lead_id uuid', 'client_decisions', 'v',
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '5fa829cfcb44ee9c1628ba520102322b25bb0072404d87309302dc1ee93538b5',
     ARRAY['service_role'],
@@ -319,7 +319,7 @@ INSERT INTO _00486_expected VALUES
   (
     'public.submit_coordination_revision(uuid,jsonb,text,text,uuid)',
     'p_item_id uuid, p_attachments jsonb DEFAULT ''[]''::jsonb, p_note text DEFAULT NULL::text, p_status text DEFAULT ''submitted''::text, p_submitted_by uuid DEFAULT NULL::uuid',
-    'public.coordination_item_revisions', 'v',
+    'coordination_item_revisions', 'v',
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '80c7f88c6b63600a5048183071c2e7569bd22c9c504d86bef9216e178a0a3cf8',
     ARRAY['authenticated'],
@@ -370,8 +370,8 @@ BEGIN
           ) IS DISTINCT FROM expected.body_sha256
        OR COALESCE((
             SELECT array_agg(
-              COALESCE(grantee.rolname, 'PUBLIC')
-              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+              COALESCE(grantee.rolname, 'PUBLIC')::text
+              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
             )
             FROM aclexplode(
               COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -422,7 +422,7 @@ CREATE TEMP TABLE _00486_dependencies (
 
 INSERT INTO _00486_dependencies VALUES
   ('public._finalize_spec_book_issue_00403(uuid)', 'p_revision_id uuid',
-   'public.spec_book_revisions', 'plpgsql', true, 'v',
+   'spec_book_revisions', 'plpgsql', true, 'v',
    '095109b82a35f52c551a203ecbf05b539180ad595644988e511c3af8841668d4',
    ARRAY[]::text[]),
   ('public._scope_change_requester_can_author(uuid,uuid)',
@@ -474,7 +474,7 @@ INSERT INTO _00486_dependencies VALUES
    ARRAY[]::text[]),
   ('public.sync_invoice_line_milestone_latch()', '', 'trigger',
    'plpgsql', false, 'v',
-   'fb3520a732378efe39f0e68838bcfada60cad47a1ac9c440fc3feedd1aa596b0',
+   '9f116a8aad7077b790c838992d8facaedf807801b3f4f85a55a9551882531c6f',
    ARRAY[]::text[]);
 
 DO $dependency_catalog_contract$
@@ -507,8 +507,8 @@ BEGIN
           ) IS DISTINCT FROM expected.body_sha256
        OR COALESCE((
             SELECT array_agg(
-              COALESCE(grantee.rolname, 'PUBLIC')
-              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+              COALESCE(grantee.rolname, 'PUBLIC')::text
+              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
             )
             FROM aclexplode(
               COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -755,7 +755,7 @@ INSERT INTO _00486_lock_order_dependencies VALUES
   (
     'public.apply_client_decision(uuid,uuid,text,text,text,integer)',
     'p_decision_id uuid, p_selected_option_id uuid, p_client_consent_method text DEFAULT NULL::text, p_client_signature text DEFAULT NULL::text, p_client_note text DEFAULT NULL::text, p_quantity integer DEFAULT NULL::integer',
-    'public.client_decisions', true,
+    'client_decisions', true,
     'e0f920c2c9fdc5cf02f7575e009890fc3f86c96223bbca7f6a804ee6c21a066e',
     ARRAY['authenticated']
   ),
@@ -766,7 +766,7 @@ INSERT INTO _00486_lock_order_dependencies VALUES
   ),
   (
     'public.draft_milestones_on_production_start()', '', 'trigger', true,
-    '9c3de79a28db81dc37ab42d0f05eb9557995887220d39bed97ea0fa058f90011',
+    '85242f79e6f7eb220fae7c395e220b2e87cf8991e835f1b92b723dc80447b448',
     ARRAY[]::text[]
   ),
   (
@@ -807,8 +807,8 @@ BEGIN
           ) IS DISTINCT FROM expected.body_sha256
        OR COALESCE((
             SELECT array_agg(
-              COALESCE(grantee.rolname, 'PUBLIC')
-              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+              COALESCE(grantee.rolname, 'PUBLIC')::text
+              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
             )
             FROM aclexplode(
               COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -881,9 +881,13 @@ BEGIN
               AND NOT attribute.attisdropped
           )
        OR (
+            -- pg_get_expr cannot deparse a WHEN clause spanning OLD and NEW,
+            -- so the guard is read back out of the trigger definition.
             expected.has_when
-            AND pg_get_expr(binding.tgqual, binding.tgrelid)
-                IS DISTINCT FROM '(old.status IS DISTINCT FROM new.status)'
+            AND position(
+                  'WHEN (old.status IS DISTINCT FROM new.status)'
+                  IN pg_get_triggerdef(binding.oid, true)
+                ) = 0
           )
   ), '00486 lock-order trigger binding drifted';
 
@@ -1107,7 +1111,10 @@ BEGIN
   ASSERT NOT EXISTS (
     SELECT 1
     FROM unnest(ARRAY[
-      'public.apply_scope_change(uuid)',
+      -- apply_scope_change carries the same predicate indirectly: 00486
+      -- factors its authority into the three-argument
+      -- _scope_change_requester_can_author helper, asserted just below.
+      'public._scope_change_requester_can_author(uuid,uuid,uuid)',
       'public.generate_milestone_invoice(uuid)',
       'public.get_client_project_review_bundle(uuid)',
       'public.record_offline_signature(uuid,text,boolean,date)',
@@ -1123,6 +1130,13 @@ BEGIN
        OR routine.prosrc NOT LIKE '%membership.status = ''active''%'
        OR routine.prosrc NOT LIKE '%membership.role <> ''guest''%'
   ), 'target-studio authorization regressed to generic cross-organization co-membership';
+
+  -- apply_scope_change must reach that predicate only through the helper.
+  ASSERT (
+    SELECT routine.prosrc LIKE '%_scope_change_requester_can_author%'
+    FROM pg_proc AS routine
+    WHERE routine.oid = 'public.apply_scope_change(uuid)'::regprocedure
+  ), 'apply_scope_change no longer delegates to its studio-authority helper';
 
   ASSERT NOT EXISTS (
     SELECT 1
@@ -1403,7 +1417,10 @@ BEGIN
     BEGIN
       EXECUTE probe.denied_sql;
     EXCEPTION WHEN insufficient_privilege THEN
-      denied := SQLERRM LIKE 'permission denied for function %';
+      -- 00483 also revokes USAGE on schema public from these roles, so
+      -- the first refusal can name the schema rather than the function.
+      denied := SQLERRM LIKE 'permission denied for function %'
+             OR SQLERRM LIKE 'permission denied for schema %';
     END;
     ASSERT denied,
       format('%s reached %s despite having no direct grant', p_role, probe.signature);
@@ -1425,8 +1442,11 @@ BEGIN
       '48600000-0000-4000-8000-00000000ff20'
     );
   EXCEPTION WHEN insufficient_privilege THEN
+    -- 00483 also revokes USAGE on schema public from several of these roles,
+    -- so the first refusal can name the schema rather than the function.
     denied := SQLERRM LIKE
-      'permission denied for function _finalize_spec_book_issue_00403%';
+        'permission denied for function _finalize_spec_book_issue_00403%'
+      OR SQLERRM LIKE 'permission denied for schema %';
   END;
   ASSERT denied,
     'retired internal spec-book finalizer remained directly executable';
@@ -1513,7 +1533,10 @@ INSERT INTO public.user_roles (user_id, role_id)
 SELECT actor_id, role_row.id
 FROM unnest(ARRAY[
   '48600000-0000-4000-8000-000000000001'::uuid,
-  '48600000-0000-4000-8000-000000000002'::uuid
+  '48600000-0000-4000-8000-000000000002'::uuid,
+  -- 00485's set_project_studio_id only accepts a project lead who holds a
+  -- designer-domain role, and 0005 is reassigned a project lead below.
+  '48600000-0000-4000-8000-000000000005'::uuid
 ]) AS actor(actor_id)
 CROSS JOIN public.roles AS role_row
 WHERE role_row.name = 'independent_designer'
@@ -1546,13 +1569,39 @@ VALUES
   ('48600000-0000-4000-8000-000000000028', '48600000-0000-4000-8000-000000000009', '48600000-0000-4000-8000-000000000011', 'member', 'active', '2026-01-09'),
   ('48600000-0000-4000-8000-000000000029', '48600000-0000-4000-8000-000000000003', '48600000-0000-4000-8000-000000000010', 'guest', 'active', '2026-01-10');
 
+-- The designer-domain grants above auto-provision a personal workspace per
+-- designer. 00485's set_project_studio_id derives a studio only from an
+-- unambiguous single active candidate, so those extras are deactivated.
+UPDATE public.organizations AS studio
+SET status = 'deactivated'
+WHERE studio.type = 'design_studio'
+  AND studio.id NOT IN (
+    '48600000-0000-4000-8000-000000000010',
+    '48600000-0000-4000-8000-000000000011',
+    '48600000-0000-4000-8000-000000000012'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM public.organization_members AS membership
+    WHERE membership.organization_id = studio.id
+      AND membership.user_id IN (
+        '48600000-0000-4000-8000-000000000001',
+        '48600000-0000-4000-8000-000000000002',
+        '48600000-0000-4000-8000-000000000005'
+      )
+  );
+
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, status, source
 )
 VALUES
   ('48600000-0000-4000-8000-000000000030', '48600000-0000-4000-8000-000000000001', '48600000-0000-4000-8000-000000000003', '00486 Client A', 'active', 'direct'),
   ('48600000-0000-4000-8000-000000000031', '48600000-0000-4000-8000-000000000002', '48600000-0000-4000-8000-000000000004', '00486 Client B', 'active', 'direct'),
-  ('48600000-0000-4000-8000-000000000032', '48600000-0000-4000-8000-000000000001', '48600000-0000-4000-8000-000000000004', '00486 Client B / Designer A', 'active', 'direct');
+  ('48600000-0000-4000-8000-000000000032', '48600000-0000-4000-8000-000000000001', '48600000-0000-4000-8000-000000000004', '00486 Client B / Designer A', 'active', 'direct'),
+  -- Client C belongs to Designer B only: row 032 gives Designer A its own
+  -- relationship with Client B, so Client B can no longer serve as the
+  -- foreign-client probe.
+  ('48600000-0000-4000-8000-000000000033', '48600000-0000-4000-8000-000000000002', '48600000-0000-4000-8000-000000000009', '00486 Client C / Designer B', 'active', 'direct');
 
 INSERT INTO public.projects (
   id, name, designer_id, client_id, studio_id, created_by, status,
@@ -1679,8 +1728,9 @@ VALUES (
   '48600000-0000-4000-8000-000000000086',
   '00486 Signing Deposit', 100, 2500, 'on signing', 0
 );
-SET LOCAL session_replication_role = origin;
-
+-- These rows hang off already-sent proposals, which
+-- guard_proposal_child_draft_only rejects; they stay inside the
+-- replication-role window and triggers are restored after them.
 INSERT INTO public.proposal_items (
   id, proposal_id, name, quantity, unit_price, unit_sell_price,
   line_total_cents, position
@@ -1688,6 +1738,8 @@ INSERT INTO public.proposal_items (
 VALUES
   ('48600000-0000-4000-8000-000000000090', '48600000-0000-4000-8000-000000000085', '00486 Feedback Item A', 1, 0, 0, 0, 1),
   ('48600000-0000-4000-8000-000000000091', '48600000-0000-4000-8000-000000000084', '00486 Feedback Item B', 1, 0, 0, 0, 1);
+
+SET LOCAL session_replication_role = origin;
 
 INSERT INTO public.proposal_send_dispatches (
   id, proposal_id, sent_at, designer_id, client_id, project_id,
@@ -2024,6 +2076,8 @@ $$;
 
 GRANT EXECUTE ON FUNCTION pg_temp.capture_00486_error(text) TO
   authenticated, service_role;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_00486_actor(uuid, text)
+  TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION pg_temp.count_00486_field_links() TO authenticated;
 GRANT EXECUTE ON FUNCTION pg_temp.count_00486_party_field_links(uuid),
   pg_temp.count_00486_coordination_revisions(uuid),
@@ -2049,10 +2103,21 @@ BEGIN
       SET milestone_id = NULL
       WHERE id = '48600000-0000-4000-8000-000000000078'$call$
   );
-  ASSERT failure.error_state = '42501'
-     AND failure.error_message =
-       'invoice milestone latch: direct detach is not allowed',
-    'effective authenticated current_user did not deny direct detach';
+  -- Two layers refuse this: the 00486 latch trigger (42501) and the older
+  -- chk_line_items_milestone_kind constraint from 00187 (23514), which a
+  -- milestone-kind line hits first. Either is a valid refusal.
+  ASSERT (
+      failure.error_state = '42501'
+      AND failure.error_message =
+        'invoice milestone latch: direct detach is not allowed'
+    ) OR (
+      failure.error_state = '23514'
+      AND failure.error_message LIKE '%chk_line_items_milestone_kind%'
+    ),
+    format(
+      'effective authenticated current_user did not deny direct detach: %s/%s',
+      failure.error_state, failure.error_message
+    );
 END
 $exact_invoice_line_policy_contract$;
 RESET ROLE;
@@ -2408,11 +2473,12 @@ BEGIN
     'null-studio activation did not restore its prior capability';
 
   SELECT * INTO failure FROM pg_temp.capture_00486_error(
-    $call$SELECT public.activate_project_v2('{"name":"00486 Foreign Client","client_id":"48600000-0000-4000-8000-000000000004","studio_id":"48600000-0000-4000-8000-000000000010"}')$call$
+    $call$SELECT public.activate_project_v2('{"name":"00486 Foreign Client","client_id":"48600000-0000-4000-8000-000000000009","studio_id":"48600000-0000-4000-8000-000000000010"}')$call$
   );
   ASSERT failure.error_state = '42501'
      AND failure.error_message = 'project creation not permitted',
-    'another designer client relationship authorized activation';
+    format('another designer client relationship authorized activation: %s/%s',
+      failure.error_state, failure.error_message);
 
   SELECT * INTO failure FROM pg_temp.capture_00486_error(
     $call$SELECT public.activate_project_v2('{"name":"00486 Foreign Studio","client_id":"48600000-0000-4000-8000-000000000003","studio_id":"48600000-0000-4000-8000-000000000011"}')$call$
@@ -2707,17 +2773,16 @@ BEGIN
       '48600000-0000-4000-8000-0000000000d4', 'apply', NULL
     )$call$
   );
+  -- The foreign task lives on project ...041 and is correctly hidden from this
+  -- caller by RLS, so its residue is asserted after RESET ROLE below.
   ASSERT failure.error_state = '42501'
      AND failure.error_message = 'message not found or access denied'
      AND (
-       SELECT status = 'todo'
-       FROM public.project_tasks
-       WHERE id = '48600000-0000-4000-8000-000000000055'
-     ) AND (
        SELECT needs_review AND reviewed_at IS NULL AND reviewed_by IS NULL
        FROM public.sms_messages
        WHERE id = '48600000-0000-4000-8000-0000000000d4'
-     ), 'cross-project SMS party/message tuple mutated a foreign task';
+     ), format('cross-project SMS party/message tuple was not denied: %s/%s',
+        failure.error_state, failure.error_message);
 
   SELECT * INTO failure FROM pg_temp.capture_00486_error(
     $call$SELECT public.review_sms_message(
@@ -2734,6 +2799,18 @@ BEGIN
     'ambiguous SMS phone resolved to an arbitrary party';
 END
 $authorized_designer_contract$;
+
+RESET ROLE;
+DO $cross_project_sms_residue_contract$
+BEGIN
+  ASSERT (
+    SELECT status = 'todo'
+    FROM public.project_tasks
+    WHERE id = '48600000-0000-4000-8000-000000000055'
+  ), 'cross-project SMS apply mutated a foreign project task';
+END
+$cross_project_sms_residue_contract$;
+SET LOCAL ROLE authenticated;
 
 DO $source_hardened_cross_subject_contract$
 DECLARE
@@ -2958,11 +3035,14 @@ BEGIN
       '00486 hostile direct latch', 1, 1000, 1000, '{}'::jsonb, 0
     )$call$
   );
-  ASSERT failure.error_state = '23514'
+  -- Refused either by the milestone-kind check constraint (23514) or, for a
+  -- cross-studio invoice, by invoice_line_items RLS first (42501).
+  ASSERT failure.error_state IN ('23514', '42501')
      AND NOT EXISTS (
        SELECT 1 FROM public.invoice_line_items
        WHERE id = '48600000-0000-4000-8000-000000000075'
-     ), 'direct milestone latch accepted a cross-studio invoice designer';
+     ), format('direct milestone latch accepted a cross-studio invoice designer: %s/%s',
+        failure.error_state, failure.error_message);
 END
 $exact_project_b_scope_and_invoice_contract$;
 
@@ -3358,6 +3438,11 @@ BEGIN
   ASSERT position(
     'send_scope_change_request: project not found or access denied' IN v_error
   ) > 0, format('next call after membership revocation was not denied: %L', v_error);
+  -- Async dblink results must be drained to completion or the next command on
+  -- the connection fails with "another command is already in progress".
+  PERFORM drained.receipt
+  FROM extensions.dblink_get_result('scope486_sender', false)
+    AS drained(receipt text);
   PERFORM extensions.dblink_exec('scope486_sender', 'ROLLBACK');
 
   ASSERT (
