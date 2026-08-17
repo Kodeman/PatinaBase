@@ -7,3 +7,19 @@ src/**/*.js
 src/**/*.jsx.map
 src/**/*.js.map
 src/**/*.d.ts.map
+
+# Root-level *.config.ts / vitest.setup.ts also get accidentally tsc-compiled
+# in place (same failure mode as above, just outside src/) — strip the stray
+# siblings, keep only the .ts sources (phase1-close artifact-gc cleanup).
+/tailwind.config.js
+/tailwind.config.d.ts
+/tailwind.config.js.map
+/tsup.config.js
+/tsup.config.d.ts
+/tsup.config.js.map
+/vitest.config.js
+/vitest.config.d.ts
+/vitest.config.js.map
+/vitest.setup.js
+/vitest.setup.d.ts
+/vitest.setup.js.map
