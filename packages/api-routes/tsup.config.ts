@@ -10,7 +10,7 @@ export default defineConfig({
   dts: false, // Disabled due to tsconfig conflicts
   sourcemap: true,
   clean: true,
-  external: ['next', 'next-auth', 'zod', '@patina/types'],
+  external: ['next', 'zod', '@patina/types'],
   treeshake: true,
   splitting: false,
   minify: false,

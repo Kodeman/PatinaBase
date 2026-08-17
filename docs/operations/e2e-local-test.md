@@ -464,7 +464,7 @@ tunnelled through ngrok or similar, OR skip this step and rely on Test 8
 (Resend sandbox will deliver real events from real sends).
 
 If you want to replay a captured event locally, use the Python snippet in
-`docs/operations/email-system-runbook.md` to compute the signature.
+`infra/runbooks/email-ops.md` to compute the signature.
 
 Expect on a bounce event:
 

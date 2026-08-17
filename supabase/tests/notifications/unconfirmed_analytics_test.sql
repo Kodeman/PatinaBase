@@ -95,6 +95,7 @@ BEGIN
     jsonb_build_object('sub', v_user_id, 'role', 'authenticated')::text,
     true
   );
+  EXECUTE 'SET LOCAL ROLE authenticated';
 
   SELECT stats.sent, stats.delivered
   INTO v_sent, v_delivered
@@ -130,16 +131,21 @@ BEGIN
     WHEN insufficient_privilege THEN NULL;
   END;
 
+  EXECUTE 'RESET ROLE';
   PERFORM set_config(
     'request.jwt.claims',
     jsonb_build_object('role', 'service_role')::text,
     true
   );
-  ASSERT EXISTS (
-    SELECT 1
-    FROM public.get_ab_variant_stats(v_campaign_id)
-    WHERE variant = 'a'
-  ), 'service-role campaign processing must retain analytics access';
+  EXECUTE 'SET LOCAL ROLE service_role';
+  BEGIN
+    PERFORM 1
+    FROM public.get_ab_variant_stats(v_campaign_id);
+    RAISE EXCEPTION 'active service role must not read user-owned campaign analytics';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
+  EXECUTE 'RESET ROLE';
 
   ASSERT NOT has_function_privilege('anon', 'public.get_ab_variant_stats(uuid)', 'EXECUTE'),
     'anon must not execute campaign analytics';
@@ -148,11 +154,11 @@ BEGIN
     'public.get_ab_variant_stats(uuid)',
     'EXECUTE'
   ), 'authenticated campaign consumers must retain execute';
-  ASSERT has_function_privilege(
+  ASSERT NOT has_function_privilege(
     'service_role',
     'public.get_ab_variant_stats(uuid)',
     'EXECUTE'
-  ), 'service-role campaign consumers must retain execute';
+  ), 'service role must not execute user-owned campaign analytics';
 
   SELECT pg_get_expr(index_row.indpred, index_row.indrelid)
   INTO v_index_predicate

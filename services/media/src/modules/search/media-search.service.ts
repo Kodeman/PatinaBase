@@ -171,8 +171,8 @@ export class MediaSearchService {
         mimeType: asset.mimeType || undefined,
         width: asset.width || undefined,
         height: asset.height || undefined,
-        tags: asset.tags as string[] || [],
-        metadata: (asset as any).metadata as Record<string, any> || {},
+        tags: (asset.tags as string[]) || [],
+        metadata: ((asset as any).metadata as Record<string, any>) || {},
         createdAt: asset.createdAt,
         updatedAt: asset.updatedAt,
       },
@@ -193,9 +193,7 @@ export class MediaSearchService {
   /**
    * Execute metadata-based search
    */
-  async searchByMetadata(
-    request: MetadataSearchRequest,
-  ): Promise<SearchResponse<SearchResult>> {
+  async searchByMetadata(request: MetadataSearchRequest): Promise<SearchResponse<SearchResult>> {
     const startTime = Date.now();
     const limit = request.limit || 50;
 
@@ -220,8 +218,8 @@ export class MediaSearchService {
         mimeType: asset.mimeType || undefined,
         width: asset.width || undefined,
         height: asset.height || undefined,
-        tags: asset.tags as string[] || [],
-        metadata: (asset as any).metadata as Record<string, any> || {},
+        tags: (asset.tags as string[]) || [],
+        metadata: ((asset as any).metadata as Record<string, any>) || {},
         createdAt: asset.createdAt,
         updatedAt: asset.updatedAt,
       },
@@ -287,8 +285,7 @@ export class MediaSearchService {
 
     for (const result of results) {
       // Aggregate by kind
-      aggregations.byKind![result.asset.kind] =
-        (aggregations.byKind![result.asset.kind] || 0) + 1;
+      aggregations.byKind![result.asset.kind] = (aggregations.byKind![result.asset.kind] || 0) + 1;
 
       // Aggregate by role
       if (result.asset.role) {
@@ -336,7 +333,7 @@ export class MediaSearchService {
 
       return normalized.map((val) => val / Math.max(...normalized));
     } catch (error) {
-      this.logger.error(`Failed to generate embedding: ${error.message}`);
+      this.logger.error('Failed to generate media embedding');
       throw error;
     }
   }
@@ -387,8 +384,8 @@ export class MediaSearchService {
         mimeType: item.asset.mimeType || undefined,
         width: item.asset.width || undefined,
         height: item.asset.height || undefined,
-        tags: item.asset.tags as string[] || [],
-        metadata: (item.asset as any).metadata as Record<string, any> || {},
+        tags: (item.asset.tags as string[]) || [],
+        metadata: ((item.asset as any).metadata as Record<string, any>) || {},
         createdAt: item.asset.createdAt,
         updatedAt: item.asset.updatedAt,
       },
@@ -454,8 +451,8 @@ export class MediaSearchService {
           mimeType: item.asset.mimeType || undefined,
           width: item.asset.width || undefined,
           height: item.asset.height || undefined,
-          tags: item.asset.tags as string[] || [],
-          metadata: (item.asset as any).metadata as Record<string, any> || {},
+          tags: (item.asset.tags as string[]) || [],
+          metadata: ((item.asset as any).metadata as Record<string, any>) || {},
           createdAt: item.asset.createdAt,
           updatedAt: item.asset.updatedAt,
         },
@@ -509,8 +506,8 @@ export class MediaSearchService {
           mimeType: item.asset.mimeType || undefined,
           width: item.asset.width || undefined,
           height: item.asset.height || undefined,
-          tags: item.asset.tags as string[] || [],
-          metadata: (item.asset as any).metadata as Record<string, any> || {},
+          tags: (item.asset.tags as string[]) || [],
+          metadata: ((item.asset as any).metadata as Record<string, any>) || {},
           createdAt: item.asset.createdAt,
           updatedAt: item.asset.updatedAt,
         },
@@ -538,8 +535,8 @@ export class MediaSearchService {
         mimeType: asset.mimeType || undefined,
         width: asset.width || undefined,
         height: asset.height || undefined,
-        tags: asset.tags as string[] || [],
-        metadata: (asset as any).metadata as Record<string, any> || {},
+        tags: (asset.tags as string[]) || [],
+        metadata: ((asset as any).metadata as Record<string, any>) || {},
         createdAt: asset.createdAt,
         updatedAt: asset.updatedAt,
       },
@@ -549,10 +546,7 @@ export class MediaSearchService {
   /**
    * Search by similar color
    */
-  private async searchBySimilarColor(
-    hexColor: string,
-    tolerance: number,
-  ): Promise<SearchResult[]> {
+  private async searchBySimilarColor(hexColor: string, tolerance: number): Promise<SearchResult[]> {
     // Similar to palette search but with higher tolerance
     return this.searchByColorInPalette(hexColor, tolerance);
   }
@@ -579,9 +573,7 @@ export class MediaSearchService {
     rgb2: { r: number; g: number; b: number },
   ): number {
     return Math.sqrt(
-      Math.pow(rgb1.r - rgb2.r, 2) +
-        Math.pow(rgb1.g - rgb2.g, 2) +
-        Math.pow(rgb1.b - rgb2.b, 2),
+      Math.pow(rgb1.r - rgb2.r, 2) + Math.pow(rgb1.g - rgb2.g, 2) + Math.pow(rgb1.b - rgb2.b, 2),
     );
   }
 }

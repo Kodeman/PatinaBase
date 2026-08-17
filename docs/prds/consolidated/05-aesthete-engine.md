@@ -24,15 +24,14 @@
 **Last reconciled:** 2026-07-06
 
 **Source docs:**
-- `docs/prds/AE/aesthete-engine-product-brief.md`
 - `docs/prds/AE/aesthete-engine-system-design.md`
-- `docs/prds/AE/aesthete-engine-delivery-plan.md`
-- `docs/prds/AE/aesthete-engine-delivery-log.md`
-- `docs/prds/AE/aesthete-engine-runbook.md`
-- `docs/prds/AE/aesthete-engine-prod-readiness.md`
-- `docs/prds/AE/aesthete-engine-salvage.md`
 - `docs/prds/AE/aesthete-engine-deck.html`
 - `docs/prds/AE/aesthete-engine-system-design-deck.html`
+- `docs/engineering/patina-cloudflare-plan.md`
+- `docs/engineering/patina-cloudflare-phase-1-runbook.md`
+- `infra/inference-worker/README.md`
+- `services/aesthete-inference/README.md`
+- `docs/_archive/prds/AE/` (historical delivery snapshots only)
 - `docs/specs/Redesign/patina-aesthete-engine-design.html`
 
 ## 2. Overview
@@ -67,7 +66,7 @@ The Aesthete Engine is Patina's taste/matching system: one shared 768-dimensiona
 
 ### Legacy pieces retired / re-pointed
 
-- The old `services/aesthete-engine` Python service was deleted (Wave 0C; salvage notes in `aesthete-engine-salvage.md`). Dead `use-embeddings.ts` hooks were removed.
+- The old `services/aesthete-engine` Python service was deleted. Historical salvage notes are archived under `docs/_archive/prds/AE/`. Dead `use-embeddings.ts` hooks were removed.
 - `apps/designer-portal/src/app/api/search/search/similar/route.ts` was re-pointed to `find_products_similar_to` (pgvector) with a category fallback.
 
 ## 4. Data Model
@@ -102,7 +101,17 @@ All Aesthete Engine schema lives in `public`. Migrations landed as **00239–002
 
 ## 5. API / Edge / Service Surface
 
-### Edge functions (Deno; all JWT-protected/service-role, deployed via `scripts/deploy-edge-functions.sh`)
+### Edge functions (Deno; all JWT-protected/service-role)
+
+Deploy only the changed functions to linked Strata with the supported CLI commands:
+
+```bash
+supabase functions deploy aesthete-embed-worker
+supabase functions deploy aesthete-dna-draft
+supabase functions deploy aesthete-nightly
+supabase functions deploy aesthete-drift-audit
+supabase functions deploy aesthete-ask
+```
 
 - **`aesthete-embed-worker`** — cron every 1 min (00241). Drains embed jobs → worker `/embed/*` → upserts vectors. Needs `INFERENCE_URL`, `INFERENCE_TOKEN`.
 - **`aesthete-dna-draft`** — cron every 2 min (00241). Claude Haiku→Sonnet DNA draft-fill + spend governor. Needs `ANTHROPIC_API_KEY` (absent → parks, never crashes).
@@ -157,7 +166,7 @@ The Aesthete Engine has essentially none of its own — the quiz calls PostgREST
 - ⚠ **Ask-embed cache deviates from spec.** Design §12.3 specified a Redis ask-embed cache; the build uses an UNLOGGED Postgres `ask_embed_cache` table (00250) because there is no Redis-from-edge seam in the repo. Documented deviation, but the design text still says Redis.
 - ⚠ **House-blend dial has no real consensus yet.** On prod today the house has no consensus θ (no real judgments / no House Hundred), so the dial reads a validated-catalog centroid / neutral θ rather than a curated house taste. The "meaningful dial" the design centers on is structurally present but not yet populated with real data.
 - ⚠ **Stale counts in root docs.** CLAUDE.md / root docs cite stale counts ("52 migrations", "33+ edge functions"); the repo actually has 252 migration files (tip 00254) and 39 edge functions. The AE program left these as out-of-scope (noted in the Wave-0 log).
-- ⚠ **Functions-container env name mismatches on prod.** Edge functions read `ANTHROPIC_API_KEY`/`POSTHOG_KEY`, but the prod functions container currently has `CLAUDE_API_KEY`/`POSTHOG_API_KEY` instead; `INFERENCE_URL`/`INFERENCE_TOKEN` are absent entirely. Must be fixed at deploy time — and note Coolify env PATCH does not re-render the on-disk `.env` (the same gotcha behind the 14-day email outage).
+- ⚠ **Function secrets require live verification.** The functions read `ANTHROPIC_API_KEY`, `POSTHOG_KEY`, `INFERENCE_URL`, and `INFERENCE_TOKEN`. Check the linked Strata function secrets before promotion; do not infer their live values from historical delivery notes.
 - ⚠ **Typesense/keyword-facet search deferred.** No Typesense/Qdrant/OpenSearch exists anywhere; `aesthete_search` (FTS+trgm) is the seam it will eventually plug into.
 - ⚠ **iOS stub references a deleted service.** `AestheteEngineService.swift` still points at the deleted FastAPI service (harmless stale reference; retire later — iOS otherwise only uses the frozen `process_style_quiz`/`get_recommendations` shims).
 - ⚠ **Guardrail-audit soak incomplete.** Drift audits are proven "green two consecutive local runs" and idempotent (DoD gate G4), but the DoD's "two consecutive weeks in prod" is a post-deploy soak that has not yet run (app tier isn't deployed).
@@ -167,7 +176,7 @@ The Aesthete Engine has essentially none of its own — the quiz calls PostgREST
 
 | Item | Priority |
 |---|---|
-| Deploy the app tier: build + stand up the inference worker on Coolify (`INFERENCE_TOKEN`, internal network alias), rebuild the edge-runtime image with the 5 AE fns + `proposal-nudge`, fix the `ANTHROPIC_API_KEY`/`POSTHOG_KEY`/`INFERENCE_*` env names on the functions container, and redeploy the client `/quiz` portal — per `aesthete-engine-runbook.md`. | P0 |
+| Deploy the inference Container from `infra/inference-worker`, deploy the five functions with the exact Strata CLI commands above, set the required secrets, and redeploy the client portal through `infra/deploy-portal.sh`. Follow the Cloudflare roadmap and inference Worker README. | P0 |
 | Provision `ANTHROPIC_API_KEY` under the correct var name so `aesthete-dna-draft` stops parking and DNA draft-fill goes live. | P0 |
 | Run the designer validation sprint + curate the House Hundred so house θ becomes a real consensus and the dial reads a curated house taste (unblocks the ≥500-validated-products DoD). | P1 |
 | Embed real quiz imagery (room 2×2s, texture macros) into `quiz_option_loadings.image_embedding` so client `style_vector`s leave the text-render fallback. | P1 |
@@ -180,11 +189,7 @@ The Aesthete Engine has essentially none of its own — the quiz calls PostgREST
 
 **Build status:** Build-complete on `main` (Waves 0–5 all merged; program held at main by Kody 2026-07-02, then the database tier was deployed).
 
-**Prod database tier:** DEPLOYED 2026-07-02 (recent commit `cb15fb37`): migrations 00230–00254 applied to prod (prod tip was 00229 → now 00254, 252 applied total), which shipped Aesthete Engine 00239–00251 plus 12 non-AE riders (proposal-watch 00230/00231, iOS field-capture 00232–00235, The Document 00236–00238/00252/00253/00254). Applied via `sudo docker exec … psql -U supabase_admin` (the pooler tunnel fails with 42501 because upstream runs as non-owner `postgres` — a DB-rebuild artifact; future prod migrations must run as `supabase_admin` via docker-exec).
-
-**Verified live on prod:** anon `submit_style_quiz` → real six-spectrum profile; `get_aesthete_matches`, `aesthete_vector vector(768)`, and the HNSW ANN index all present. The pure-SQL quiz→matches money path is live (matches return empty until the catalog carries embeddings/spectrums, which needs the worker + teaching). pgvector on prod confirmed at 0.7.0 (HNSW built, not ivfflat).
-
-**App tier NOT deployed:** the inference worker (needs `INFERENCE_TOKEN` + its first-ever image build), the 5 AE edge functions + `proposal-nudge` (need edge-runtime rebuild + functions-container recreate), and the client `/quiz` redeploy are all outstanding. AE crons currently fire on schedule and 404 harmlessly against the undeployed functions.
+**Production status:** Historical delivery notes record a partial 2026-07 rollout, but they are not proof of current live state. Before any release, verify the linked Strata migration tip, function deployments/secrets, the inference Worker deployment, and the client quiz behavior. This document authorizes no production mutation.
 
 **Local stack:** full gate green through G4 + 00251 (12 SQL suites, 6 edge-function suites, worker pytest, 26/26 TS, walk anon-quiz→top-10 in ~86 ms).
 
@@ -192,16 +197,15 @@ The Aesthete Engine has essentially none of its own — the quiz calls PostgREST
 
 This consolidated PRD replaces the following documents as the system of record for the Aesthete Engine:
 
-- `docs/prds/AE/aesthete-engine-product-brief.md`
 - `docs/prds/AE/aesthete-engine-system-design.md`
-- `docs/prds/AE/aesthete-engine-delivery-plan.md`
-- `docs/prds/AE/aesthete-engine-salvage.md`
 - `docs/specs/Redesign/patina-aesthete-engine-design.html`
 
 The following related documents remain live and are **not** superseded by this PRD — they cover deploy/runbook and package-level operational detail this consolidated PRD does not replace:
 
-- `docs/prds/AE/aesthete-engine-runbook.md`
-- `docs/prds/AE/aesthete-engine-prod-readiness.md`
-- `docs/prds/AE/aesthete-engine-delivery-log.md`
+- `docs/engineering/patina-cloudflare-plan.md`
+- `docs/engineering/patina-cloudflare-phase-1-runbook.md`
+- `infra/inference-worker/README.md`
 - `services/aesthete-inference/README.md`
 - `packages/aesthete-quiz/WIRE-CONTRACT.md`
+
+Historical delivery logs, readiness reports, and the retired runbook are under `docs/_archive/prds/AE/` and are not operational references.

@@ -2,8 +2,8 @@
  * Designer Portal Authentication
  *
  * Uses Supabase Auth via @patina/supabase.
- * Exports a backward-compatible `auth()` function that returns session-like data
- * so existing middleware and API routes continue to work during migration.
+ * Exports an `auth()` function that returns the portal's session projection for
+ * existing middleware and API routes.
  */
 import { createServerClient } from '@patina/supabase/server';
 
@@ -23,8 +23,7 @@ export interface AuthSession {
 }
 
 /**
- * Get the current auth session.
- * Compatible with the previous NextAuth `auth()` signature.
+ * Get the current Supabase auth session.
  */
 export async function auth(): Promise<AuthSession | null> {
   try {

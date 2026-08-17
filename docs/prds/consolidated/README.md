@@ -21,7 +21,7 @@ Each PRD carries: as-built architecture with real file-path anchors · data mode
 | 09 | Help & Guidance | [09-help-guidance.md](09-help-guidance.md) | Shipped (code) — four-layer `@patina/help-system`, Sanity-backed; most CMS content still placeholder |
 | 10 | Comms, Email & Notifications | [10-comms-email-notifications.md](10-comms-email-notifications.md) | Shipped — `notify()` + React-Email templates, in-app comms threads, campaigns/automation |
 | 11 | Native — iOS & Extension | [11-native-ios-extension.md](11-native-ios-extension.md) | Partial — iOS Capture (RoomPlan "Walk"), companion app, Chrome extension; companion-context bug flagged |
-| 12 | Platform & Infrastructure | [12-platform-infra.md](12-platform-infra.md) | Shipped — Coolify + Cloudflare Tunnel, self-hosted Supabase, proxy/data-access packages, CI |
+| 12 | Platform & Infrastructure | [12-platform-infra.md](12-platform-infra.md) | Shipped — Supabase Strata + Cloudflare Workers/Containers; Phase 1 edge migration planned |
 
 ## What happened to the old docs
 

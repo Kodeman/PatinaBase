@@ -123,7 +123,7 @@ export class MetadataExtractionService {
 
       return Object.keys(exif).length > 0 ? exif : undefined;
     } catch (error) {
-      this.logger.warn(`Failed to extract EXIF data: ${error.message}`);
+      this.logger.warn('Failed to extract EXIF data');
       return undefined;
     }
   }
@@ -136,7 +136,7 @@ export class MetadataExtractionService {
       const hash = await imageHashAsync(buffer as any, 16, true);
       return hash as string;
     } catch (error) {
-      this.logger.error(`Failed to generate perceptual hash: ${(error as Error).message}`);
+      this.logger.error('Failed to generate perceptual hash');
       throw error;
     }
   }
@@ -144,10 +144,7 @@ export class MetadataExtractionService {
   /**
    * Generate blurhash for progressive image loading
    */
-  private async generateBlurhash(
-    image: sharp.Sharp,
-    metadata: sharp.Metadata,
-  ): Promise<string> {
+  private async generateBlurhash(image: sharp.Sharp, metadata: sharp.Metadata): Promise<string> {
     try {
       // Resize to small dimensions for blurhash
       const small = await image
@@ -166,7 +163,7 @@ export class MetadataExtractionService {
 
       return blurhash;
     } catch (error) {
-      this.logger.error(`Failed to generate blurhash: ${error.message}`);
+      this.logger.error('Failed to generate blurhash');
       throw error;
     }
   }
@@ -188,7 +185,7 @@ export class MetadataExtractionService {
         lightMuted: palette.LightMuted?.hex,
       };
     } catch (error) {
-      this.logger.error(`Failed to extract color palette: ${error.message}`);
+      this.logger.error('Failed to extract color palette');
       return { dominant: '#000000' };
     }
   }
@@ -228,7 +225,7 @@ export class MetadataExtractionService {
         isLowQuality,
       };
     } catch (error) {
-      this.logger.error(`Failed to calculate quality metrics: ${error.message}`);
+      this.logger.error('Failed to calculate quality metrics');
       return {
         sharpness: 0,
         brightness: 0.5,
@@ -262,9 +259,7 @@ export class MetadataExtractionService {
 
     // From PRD: aspect ratio should be between 4:3 and 16:9
     if (aspectRatio < 4 / 3 || aspectRatio > 16 / 9) {
-      issues.push(
-        `Aspect ratio ${aspectRatio.toFixed(2)}:1 outside allowed range (4:3 to 16:9)`,
-      );
+      issues.push(`Aspect ratio ${aspectRatio.toFixed(2)}:1 outside allowed range (4:3 to 16:9)`);
     }
 
     return {
@@ -280,7 +275,7 @@ export class MetadataExtractionService {
     try {
       return await sharp(buffer).rotate().toBuffer();
     } catch (error) {
-      this.logger.error(`Failed to apply EXIF orientation: ${error.message}`);
+      this.logger.error('Failed to apply EXIF orientation');
       return buffer;
     }
   }
@@ -292,7 +287,7 @@ export class MetadataExtractionService {
     try {
       return await sharp(buffer).toColorspace('srgb').toBuffer();
     } catch (error) {
-      this.logger.error(`Failed to convert to sRGB: ${error.message}`);
+      this.logger.error('Failed to convert to sRGB');
       return buffer;
     }
   }
@@ -304,7 +299,7 @@ export class MetadataExtractionService {
     try {
       return await sharp(buffer).withMetadata({ orientation: undefined }).toBuffer();
     } catch (error) {
-      this.logger.error(`Failed to strip EXIF data: ${error.message}`);
+      this.logger.error('Failed to strip EXIF data');
       return buffer;
     }
   }

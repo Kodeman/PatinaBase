@@ -151,9 +151,7 @@ export class MediaUploadService {
   }> {
     this.logger.log(`Starting batch upload: ${commands.length} files`);
 
-    const results = await Promise.allSettled(
-      commands.map((cmd) => this.uploadSingle(cmd)),
-    );
+    const results = await Promise.allSettled(commands.map((cmd) => this.uploadSingle(cmd)));
 
     const successful = results.filter((r) => r.status === 'fulfilled').length;
     const failed = results.filter((r) => r.status === 'rejected').length;
@@ -194,8 +192,11 @@ export class MediaUploadService {
   /**
    * Confirm upload completion
    */
-  async confirmUpload(sessionId: string): Promise<{ assetId: string; targetKey: string }> {
-    const result = await this.uploadService.confirmUpload(sessionId);
+  async confirmUpload(
+    subject: string,
+    sessionId: string,
+  ): Promise<{ assetId: string; targetKey: string }> {
+    const result = await this.uploadService.confirmUpload(subject, sessionId);
 
     // Emit event
     this.eventEmitter.emit('media.upload.completed', {

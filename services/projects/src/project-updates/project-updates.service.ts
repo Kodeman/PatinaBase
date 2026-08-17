@@ -3,6 +3,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectUpdateDto } from './dto/create-project-update.dto';
 import { ProjectUpdateResponseDto } from './dto/project-update-response.dto';
+import { ProjectsAuthorizationResolver } from '../common/authorization/projects-authorization.resolver';
 
 /**
  * Service for managing project updates/timeline events
@@ -14,6 +15,7 @@ export class ProjectUpdatesService {
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
+    private readonly authorization: ProjectsAuthorizationResolver,
   ) {}
 
   /**
@@ -39,51 +41,60 @@ export class ProjectUpdatesService {
     createDto: CreateProjectUpdateDto,
     authorId: string,
   ): Promise<ProjectUpdateResponseDto> {
-    // Verify project exists
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true, clientId: true, designerId: true },
-    });
-
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    // Create update and outbox event in a transaction
-    const result = await this.prisma.$transaction(async (tx) => {
-      // Create the project update
-      const update = await tx.projectUpdate.create({
-        data: {
-          projectId,
-          title: createDto.title,
-          content: createDto.content,
-          authorId,
-          media: createDto.media ? JSON.parse(JSON.stringify(createDto.media)) : null,
-          metadata: createDto.metadata,
-        },
-      });
-
-      // Create outbox event for reliable event publishing
-      await tx.outboxEvent.create({
-        data: {
-          type: 'project.update.created',
-          payload: {
-            updateId: update.id,
+    const result = await this.authorization.withProjectAccess(
+      authorId,
+      projectId,
+      'manage',
+      async (tx) => {
+        const project = await tx.project.findUnique({
+          where: { id: projectId },
+          select: { id: true, clientId: true, designerId: true },
+        });
+        if (!project) throw new NotFoundException('Project not found');
+        // Create the project update
+        const update = await tx.projectUpdate.create({
+          data: {
             projectId,
-            title: update.title,
+            title: createDto.title,
+            content: createDto.content,
             authorId,
-            clientId: project.clientId,
-            designerId: project.designerId,
+            media: createDto.media ? JSON.parse(JSON.stringify(createDto.media)) : null,
+            metadata: createDto.metadata,
           },
-          headers: {
-            timestamp: new Date().toISOString(),
-            source: 'projects-service',
-          },
-        },
-      });
+        });
 
-      return update;
-    });
+        // Create outbox event for reliable event publishing
+        await tx.outboxEvent.create({
+          data: {
+            type: 'project.update.created',
+            payload: {
+              updateId: update.id,
+              projectId,
+              title: update.title,
+              authorId,
+              clientId: project.clientId,
+              designerId: project.designerId,
+            },
+            headers: {
+              timestamp: new Date().toISOString(),
+              source: 'projects-service',
+            },
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            entityType: 'project_update',
+            entityId: update.id,
+            action: 'created',
+            actor: authorId,
+            metadata: { projectId },
+          },
+        });
+
+        return update;
+      },
+    );
 
     // Emit in-process event for immediate handling
     this.eventEmitter.emit('project.update.created', {
@@ -93,18 +104,7 @@ export class ProjectUpdatesService {
       timestamp: new Date(),
     });
 
-    // Create audit log
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'project_update',
-        entityId: result.id,
-        action: 'created',
-        actor: authorId,
-        metadata: { projectId },
-      },
-    });
-
-    this.logger.log(`Project update created: ${result.id} for project ${projectId}`);
+    this.logger.log('Project update created');
 
     return this.toProjectUpdateResponseDto(result);
   }
@@ -114,23 +114,14 @@ export class ProjectUpdatesService {
    * @param projectId - The project ID
    * @returns Array of project updates sorted by creation date (newest first)
    */
-  async findByProject(projectId: string): Promise<ProjectUpdateResponseDto[]> {
-    // Verify project exists
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true },
+  async findByProject(projectId: string, userId: string): Promise<ProjectUpdateResponseDto[]> {
+    return this.authorization.withProjectAccess(userId, projectId, 'read', async (tx) => {
+      const updates = await tx.projectUpdate.findMany({
+        where: { projectId },
+        orderBy: { createdAt: 'desc' },
+      });
+      return updates.map((update) => this.toProjectUpdateResponseDto(update));
     });
-
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    const updates = await this.prisma.projectUpdate.findMany({
-      where: { projectId },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return updates.map((u) => this.toProjectUpdateResponseDto(u));
   }
 
   /**
@@ -138,16 +129,22 @@ export class ProjectUpdatesService {
    * @param updateId - The update ID
    * @returns Project update
    */
-  async findOne(updateId: string): Promise<ProjectUpdateResponseDto> {
-    const update = await this.prisma.projectUpdate.findUnique({
-      where: { id: updateId },
+  async findOne(
+    projectId: string,
+    updateId: string,
+    userId: string,
+  ): Promise<ProjectUpdateResponseDto> {
+    return this.authorization.withProjectAccess(userId, projectId, 'read', async (tx) => {
+      const update = await tx.projectUpdate.findFirst({
+        where: { id: updateId, projectId },
+      });
+
+      if (!update) {
+        throw new NotFoundException('Project update not found');
+      }
+
+      return this.toProjectUpdateResponseDto(update);
     });
-
-    if (!update) {
-      throw new NotFoundException('Project update not found');
-    }
-
-    return this.toProjectUpdateResponseDto(update);
   }
 
   /**
@@ -155,32 +152,25 @@ export class ProjectUpdatesService {
    * @param updateId - The update ID
    * @param userId - User performing the deletion
    */
-  async remove(updateId: string, userId: string): Promise<void> {
-    const existing = await this.prisma.projectUpdate.findUnique({
-      where: { id: updateId },
-      select: { id: true, projectId: true, authorId: true },
+  async remove(projectId: string, updateId: string, userId: string): Promise<void> {
+    await this.authorization.withProjectAccess(userId, projectId, 'manage', async (tx) => {
+      const existing = await tx.projectUpdate.findFirst({
+        where: { id: updateId, projectId },
+        select: { id: true },
+      });
+      if (!existing) throw new NotFoundException('Project update not found');
+      await tx.projectUpdate.deleteMany({ where: { id: updateId, projectId } });
+      await tx.auditLog.create({
+        data: {
+          entityType: 'project_update',
+          entityId: updateId,
+          action: 'deleted',
+          actor: userId,
+          metadata: { projectId },
+        },
+      });
     });
 
-    if (!existing) {
-      throw new NotFoundException('Project update not found');
-    }
-
-    // Delete the update
-    await this.prisma.projectUpdate.delete({
-      where: { id: updateId },
-    });
-
-    // Create audit log
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'project_update',
-        entityId: updateId,
-        action: 'deleted',
-        actor: userId,
-        metadata: { projectId: existing.projectId },
-      },
-    });
-
-    this.logger.log(`Project update deleted: ${updateId}`);
+    this.logger.log('Project update deleted');
   }
 }

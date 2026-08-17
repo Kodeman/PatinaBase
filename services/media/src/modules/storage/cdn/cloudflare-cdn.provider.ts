@@ -28,7 +28,8 @@ export class CloudflareCDNProvider implements ICDNProvider {
   constructor(private configService: ConfigService) {
     this.zoneId = this.configService.get('CF_ZONE_ID') || '';
     this.apiToken = this.configService.get('CF_API_TOKEN') || '';
-    this.domainName = this.configService.get('CDN_DOMAIN', 'cdn.patina.cloud') || 'cdn.patina.cloud';
+    this.domainName =
+      this.configService.get('CDN_DOMAIN', 'cdn.patina.cloud') || 'cdn.patina.cloud';
   }
 
   async purgeCache(options: PurgeOptions): Promise<{ invalidationId: string }> {
@@ -48,7 +49,9 @@ export class CloudflareCDNProvider implements ICDNProvider {
         body.tags = options.tags;
       } else if (options.pattern) {
         // Prefix purge (Enterprise) — fall back to wildcard URL
-        const cleanPattern = options.pattern.startsWith('/') ? options.pattern.substring(1) : options.pattern;
+        const cleanPattern = options.pattern.startsWith('/')
+          ? options.pattern.substring(1)
+          : options.pattern;
         body.files = [`https://${this.domainName}/${cleanPattern}`];
       } else {
         body.purge_everything = true;
@@ -63,7 +66,7 @@ export class CloudflareCDNProvider implements ICDNProvider {
         body: JSON.stringify(body),
       });
 
-      const result = await response.json() as any;
+      const result = (await response.json()) as any;
 
       if (!result.success) {
         const errors = result.errors?.map((e: any) => e.message).join(', ') || 'Unknown error';
@@ -71,11 +74,11 @@ export class CloudflareCDNProvider implements ICDNProvider {
       }
 
       const invalidationId = result.result?.id || `cf-purge-${Date.now()}`;
-      this.logger.log(`Purged Cloudflare cache: ${invalidationId}`);
+      this.logger.log('Purged Cloudflare cache');
 
       return { invalidationId };
     } catch (error) {
-      this.logger.error(`Failed to purge Cloudflare cache: ${error.message}`, error.stack);
+      this.logger.error('Failed to purge Cloudflare cache');
       throw error;
     }
   }
@@ -88,9 +91,9 @@ export class CloudflareCDNProvider implements ICDNProvider {
       try {
         const url = this.getCDNUrl(path);
         const response = await fetch(url, { method: 'HEAD' });
-        this.logger.debug(`Preloaded ${path}: ${response.status}`);
+        this.logger.debug('Preloaded Cloudflare path');
       } catch (error) {
-        this.logger.warn(`Failed to preload ${path}: ${error.message}`);
+        this.logger.warn('Failed to preload Cloudflare path');
       }
     });
 
@@ -165,7 +168,7 @@ export class CloudflareCDNProvider implements ICDNProvider {
         body: JSON.stringify({ query }),
       });
 
-      const result = await response.json() as any;
+      const result = (await response.json()) as any;
       const groups = result.data?.viewer?.zones?.[0]?.httpRequests1dGroups || [];
 
       let totalRequests = 0;
@@ -198,7 +201,7 @@ export class CloudflareCDNProvider implements ICDNProvider {
         ],
       };
     } catch (error) {
-      this.logger.error(`Failed to get Cloudflare cache stats: ${error.message}`, error.stack);
+      this.logger.error('Failed to get Cloudflare cache stats');
 
       return {
         hitRate: 0,

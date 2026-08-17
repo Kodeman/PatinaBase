@@ -2,38 +2,30 @@
 //  APIConfiguration.swift
 //  Patina
 //
-//  Extended API configuration for self-hosted Coolify deployment
-//  This configuration supports both Supabase Cloud and self-hosted environments
+//  API configuration for Supabase Strata and local development
 //
 
 import Foundation
 
 // MARK: - Deployment Target
 
-/// Deployment environment (cloud vs self-hosted)
+/// Deployment environment
 public enum DeploymentTarget {
     /// Supabase Cloud (current)
     case cloud
-
-    /// Self-hosted on Coolify (production)
-    case selfHosted
 
     /// Local development
     case local
 
     /// Current deployment target.
     ///
-    /// The self-hosted Coolify box is RETIRED, so the default is now
-    /// `.cloud` (Supabase Cloud "Strata"). A UserDefaults / launch-argument
-    /// override repoints at runtime — pass `-DeploymentTarget local` to run
-    /// against the local Supabase CLI stack, or `selfHosted` only for legacy
-    /// diagnostics. An unknown override value falls back to `.cloud` so a
-    /// typo can never silently target the dead box.
+    /// The default is `.cloud` (Supabase Cloud "Strata"). Pass
+    /// `-DeploymentTarget local` to use the local Supabase CLI stack. Unknown
+    /// values fall back to `.cloud`.
     public static var current: DeploymentTarget {
         if let override = UserDefaults.standard.string(forKey: "DeploymentTarget") {
             switch override {
             case "local": return .local
-            case "selfHosted": return .selfHosted
             default: return .cloud
             }
         }
@@ -43,7 +35,7 @@ public enum DeploymentTarget {
 
 // MARK: - API Configuration
 
-/// Extended API configuration for self-hosted deployment
+/// API configuration by deployment target
 public enum APIConfiguration {
 
     // MARK: - Base URLs
@@ -57,8 +49,6 @@ public enum APIConfiguration {
             // sourced from the gitignored Secrets.swift. This is the literal
             // that breaks the old AppConfiguration ↔ APIConfiguration cycle.
             return URL(string: "https://bkvcixdmuyejfzcijpdg.supabase.co")!
-        case .selfHosted:
-            return URL(string: "https://api.patina.cloud")!
         case .local:
             // Local Supabase CLI stack (Kong/PostgREST on 54321), NOT the
             // old self-hosted docker Kong (:8000).
@@ -71,8 +61,6 @@ public enum APIConfiguration {
         switch DeploymentTarget.current {
         case .cloud:
             return URL(string: "https://app.patina.cloud")!
-        case .selfHosted:
-            return URL(string: "https://app.patina.cloud")!
         case .local:
             return URL(string: "http://localhost:3000")!
         }
@@ -80,14 +68,7 @@ public enum APIConfiguration {
 
     /// Storage URL for file uploads/downloads
     public static var storageURL: URL {
-        switch DeploymentTarget.current {
-        case .cloud:
-            return AppConfiguration.supabaseURL.appendingPathComponent("storage/v1")
-        case .selfHosted:
-            return URL(string: "https://storage.patina.cloud")!
-        case .local:
-            return URL(string: "http://localhost:5000")!
-        }
+        AppConfiguration.supabaseURL.appendingPathComponent("storage/v1")
     }
 
     /// Realtime WebSocket URL
@@ -95,10 +76,8 @@ public enum APIConfiguration {
         switch DeploymentTarget.current {
         case .cloud:
             return URL(string: "wss://bkvcixdmuyejfzcijpdg.supabase.co/realtime/v1/websocket")!
-        case .selfHosted:
-            return URL(string: "wss://realtime.patina.cloud/socket")!
         case .local:
-            return URL(string: "ws://localhost:4000/socket")!
+            return URL(string: "ws://127.0.0.1:54321/realtime/v1/websocket")!
         }
     }
 
@@ -107,8 +86,6 @@ public enum APIConfiguration {
         switch DeploymentTarget.current {
         case .cloud:
             return URL(string: "https://client.patina.cloud")!
-        case .selfHosted:
-            return URL(string: "https://client.patina.cloud")!
         case .local:
             return URL(string: "http://localhost:3002")!
         }
@@ -116,35 +93,17 @@ public enum APIConfiguration {
 
     /// Search API URL (Typesense)
     public static var searchURL: URL {
-        switch DeploymentTarget.current {
-        case .cloud:
-            // Cloud uses Supabase's built-in full-text search
-            return AppConfiguration.supabaseURL
-        case .selfHosted:
-            return URL(string: "https://search.patina.cloud")!
-        case .local:
-            return URL(string: "http://localhost:8108")!
-        }
+        AppConfiguration.supabaseURL
     }
 
     /// ML/Intelligence Service URL
     public static var mlServiceURL: URL {
-        switch DeploymentTarget.current {
-        case .cloud:
-            // Cloud uses Edge Functions for ML
-            return AppConfiguration.supabaseURL.appendingPathComponent("functions/v1")
-        case .selfHosted:
-            return URL(string: "https://ml.patina.cloud")!
-        case .local:
-            return URL(string: "http://localhost:4002")!
-        }
+        AppConfiguration.supabaseURL.appendingPathComponent("functions/v1")
     }
 
     // MARK: - API Keys
 
     /// Supabase anon key
-    /// Self-hosted: prefers SUPABASE_ANON_KEY env override; falls back to the
-    /// gitignored Secrets.swift value resolved through AppConfiguration.
     public static var anonKey: String {
         switch DeploymentTarget.current {
         case .cloud:
@@ -152,21 +111,9 @@ public enum APIConfiguration {
             // directly (not via AppConfiguration.supabaseAnonKey) so the
             // AppConfiguration ↔ APIConfiguration resolution can't cycle.
             return Secrets.supabaseAnonKey
-        case .selfHosted:
-            return ProcessInfo.processInfo.environment["SUPABASE_ANON_KEY"] ?? AppConfiguration.supabaseAnonKey
         case .local:
             // Local dev anon key (standard Supabase local key)
             return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
-        }
-    }
-
-    /// Typesense search-only key (for self-hosted)
-    public static var typesenseSearchKey: String? {
-        switch DeploymentTarget.current {
-        case .selfHosted:
-            return ProcessInfo.processInfo.environment["TYPESENSE_SEARCH_KEY"]
-        default:
-            return nil
         }
     }
 
@@ -188,14 +135,7 @@ public enum APIConfiguration {
 
     /// Universal link domains
     public static var universalLinkDomains: [String] {
-        switch DeploymentTarget.current {
-        case .cloud:
-            return [] // No universal links for cloud currently
-        case .selfHosted:
-            return ["app.patina.cloud", "api.patina.cloud"]
-        case .local:
-            return []
-        }
+        []
     }
 }
 

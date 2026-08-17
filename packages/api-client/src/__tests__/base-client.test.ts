@@ -212,6 +212,16 @@ describe('BaseApiClient', () => {
   });
 
   describe('request ID generation', () => {
+    it('adds the Supabase access token supplied by getAccessToken', async () => {
+      new BaseApiClient({
+        ...config,
+        getAccessToken: jest.fn().mockResolvedValue('supabase-access-token'),
+      });
+
+      const result = await requestInterceptor({ headers: {} });
+      expect(result.headers.Authorization).toBe('Bearer supabase-access-token');
+    });
+
     it('should add request ID header', async () => {
       new BaseApiClient(config);
 

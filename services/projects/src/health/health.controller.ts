@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Public } from '@patina/auth';
+import { ProjectAdmin } from '../common/decorators/project-authorization.decorator';
 
 /**
  * Health Check Controller
@@ -57,11 +58,10 @@ export class HealthController {
   }
 
   /**
-   * Build version info — stamped into the image at build time
-   * (GIT_SHA / BUILD_TIME / APP_VERSION via infra/build-and-push.sh).
+   * Build version info supplied by the active Container deployment environment.
    * Served at /v1/version (global prefix applies).
    */
-  @Public()
+  @ProjectAdmin()
   @Get('version')
   @ApiOperation({ summary: 'Build version info' })
   @ApiResponse({ status: 200, description: 'Build version info' })

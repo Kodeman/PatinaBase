@@ -95,7 +95,7 @@ These are intentionally deferred from this dashboard build session:
 7. **Diagnose ingestion.** Before the dashboards become useful, confirm `help.*` events actually reach project 326191. Spot checks:
    - In dev: `pnpm dev:designer`, open the help panel → check PostHog Live Events for `help.panel.opened`.
    - In iOS: launch app, trigger a tooltip → check Live Events for `help.tooltip.shown`.
-   - Production: confirm `NEXT_PUBLIC_POSTHOG_KEY` is set on each portal in Coolify env (current `infra/.env` shows `POSTHOG_KEY` empty per session memory).
+   - Production: confirm `NEXT_PUBLIC_POSTHOG_KEY` is set in each portal's active Wrangler configuration, then deploy through `infra/deploy-portal.sh` and verify Live Events.
 
 ## Verification (what was confirmed)
 

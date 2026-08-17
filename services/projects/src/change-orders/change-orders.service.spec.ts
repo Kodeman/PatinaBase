@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ChangeOrderStatus } from './dto/create-change-order.dto';
 import { ApprovalAction } from './dto/approve-change-order.dto';
+import { ProjectsAuthorizationResolver } from '../common/authorization/projects-authorization.resolver';
 
 describe('ChangeOrdersService', () => {
   let service: ChangeOrdersService;
@@ -15,14 +16,34 @@ describe('ChangeOrdersService', () => {
     changeOrder: {
       create: jest.fn(),
       findMany: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
+      findFirst: jest.fn(),
+      findFirstOrThrow: jest.fn(),
+      updateMany: jest.fn(),
     },
     auditLog: { create: jest.fn() },
   };
 
   const mockEventEmitter = {
     emit: jest.fn(),
+  };
+  const assertProjectApprovalAccess = jest.fn().mockResolvedValue(undefined);
+  const authorizationMock = {
+    withProjectAccess: jest.fn(
+      async (_userId: string, _projectId: string, _mode: string, operation: (tx: any) => any) =>
+        operation(mockPrismaService),
+    ),
+    assertProjectAccess: jest.fn().mockResolvedValue('project-123'),
+    assertProjectApprovalAccess,
+    withProjectApprovalAccess: jest.fn(
+      async (userId: string, projectId: string, operation: (tx: any) => any) => {
+        await assertProjectApprovalAccess(userId, projectId, mockPrismaService);
+        return operation(mockPrismaService);
+      },
+    ),
+    withAccessibleProjectIds: jest.fn(
+      async (_userId: string, _mode: string, operation: (ids: string[], tx: any) => any) =>
+        operation([], mockPrismaService),
+    ),
   };
 
   beforeEach(async () => {
@@ -31,11 +52,15 @@ describe('ChangeOrdersService', () => {
         ChangeOrdersService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: ProjectsAuthorizationResolver, useValue: authorizationMock },
       ],
     }).compile();
 
     service = module.get<ChangeOrdersService>(ChangeOrdersService);
     prisma = module.get<PrismaService>(PrismaService);
+    (mockPrismaService as any).$transaction = jest.fn(async (operation: (tx: any) => any) =>
+      operation(mockPrismaService),
+    );
   });
 
   afterEach(() => {
@@ -45,25 +70,28 @@ describe('ChangeOrdersService', () => {
   describe('submit', () => {
     it('should submit a draft change order', async () => {
       const co = { id: 'co-123', status: ChangeOrderStatus.DRAFT, projectId: 'project-123' };
-      mockPrismaService.changeOrder.findUnique.mockResolvedValue(co);
-      mockPrismaService.changeOrder.update.mockResolvedValue({
+      mockPrismaService.changeOrder.findFirst.mockResolvedValue(co);
+      mockPrismaService.changeOrder.updateMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.changeOrder.findFirstOrThrow.mockResolvedValue({
         ...co,
         status: ChangeOrderStatus.SUBMITTED,
       });
       mockPrismaService.project.findUnique.mockResolvedValue({ clientId: 'client-123' });
 
-      const result = await service.submit('co-123', 'user-123');
+      const result = await service.submit('project-123', 'co-123', 'user-123');
 
       expect(result.status).toBe(ChangeOrderStatus.SUBMITTED);
     });
 
     it('should not allow submitting non-draft change orders', async () => {
-      mockPrismaService.changeOrder.findUnique.mockResolvedValue({
+      mockPrismaService.changeOrder.findFirst.mockResolvedValue({
         id: 'co-123',
         status: ChangeOrderStatus.APPROVED,
       });
 
-      await expect(service.submit('co-123', 'user-123')).rejects.toThrow(BadRequestException);
+      await expect(service.submit('project-123', 'co-123', 'user-123')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -75,14 +103,15 @@ describe('ChangeOrdersService', () => {
         project: { id: 'project-123', clientId: 'client-123', status: 'active' },
       };
 
-      mockPrismaService.changeOrder.findUnique.mockResolvedValue(co);
-      mockPrismaService.changeOrder.update.mockResolvedValue({
+      mockPrismaService.changeOrder.findFirst.mockResolvedValue(co);
+      mockPrismaService.changeOrder.updateMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.changeOrder.findFirstOrThrow.mockResolvedValue({
         ...co,
         status: ChangeOrderStatus.APPROVED,
       });
 
       const approvalDto = { action: ApprovalAction.APPROVE, reason: 'Looks good' };
-      const result = await service.approve('co-123', approvalDto, 'client-123', 'client');
+      const result = await service.approve('project-123', 'co-123', approvalDto, 'client-123');
 
       expect(result.status).toBe(ChangeOrderStatus.APPROVED);
     });
@@ -94,12 +123,13 @@ describe('ChangeOrdersService', () => {
         project: { id: 'project-123', clientId: 'other-client', status: 'active' },
       };
 
-      mockPrismaService.changeOrder.findUnique.mockResolvedValue(co);
+      mockPrismaService.changeOrder.findFirst.mockResolvedValue(co);
+      authorizationMock.assertProjectApprovalAccess.mockRejectedValueOnce(new ForbiddenException());
 
       const approvalDto = { action: ApprovalAction.APPROVE };
-      await expect(service.approve('co-123', approvalDto, 'client-123', 'client')).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        service.approve('project-123', 'co-123', approvalDto, 'client-123'),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should allow rejection with reason', async () => {
@@ -109,14 +139,15 @@ describe('ChangeOrdersService', () => {
         project: { id: 'project-123', clientId: 'client-123', status: 'active' },
       };
 
-      mockPrismaService.changeOrder.findUnique.mockResolvedValue(co);
-      mockPrismaService.changeOrder.update.mockResolvedValue({
+      mockPrismaService.changeOrder.findFirst.mockResolvedValue(co);
+      mockPrismaService.changeOrder.updateMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.changeOrder.findFirstOrThrow.mockResolvedValue({
         ...co,
         status: ChangeOrderStatus.REJECTED,
       });
 
       const approvalDto = { action: ApprovalAction.REJECT, reason: 'Too expensive' };
-      const result = await service.approve('co-123', approvalDto, 'client-123', 'client');
+      const result = await service.approve('project-123', 'co-123', approvalDto, 'client-123');
 
       expect(result.status).toBe(ChangeOrderStatus.REJECTED);
     });

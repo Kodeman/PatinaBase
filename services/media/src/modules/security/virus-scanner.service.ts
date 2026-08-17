@@ -41,12 +41,8 @@ export class VirusScannerService {
     setImmediate(async () => {
       try {
         await this.initializeClamAV();
-      } catch (error) {
-        this.logger.error(
-          `Failed to initialize ClamAV during startup: ${error.message}. ` +
-          'Virus scanning will be disabled. Ensure ClamAV is running on the configured host:port.',
-          error.stack,
-        );
+      } catch {
+        this.logger.error('ClamAV startup initialization failed');
       }
     });
   }
@@ -62,15 +58,15 @@ export class VirusScannerService {
       // Attempt to create scanner
       if (typeof clamav.createScanner === 'function') {
         this.clamavClient = clamav.createScanner(host, port);
-        this.logger.log(`Connected to ClamAV at ${host}:${port}`);
+        this.logger.log('Connected to ClamAV');
       } else {
         throw new Error('ClamAV library not properly initialized: createScanner is not a function');
       }
 
       this.initialized = true;
-    } catch (error) {
-      this.logger.warn(`ClamAV initialization failed: ${error.message}`);
-      this.initializationError = error.message;
+    } catch {
+      this.logger.warn('ClamAV initialization failed');
+      this.initializationError = 'unavailable';
       this.enabled = false;
       this.initialized = true;
     }

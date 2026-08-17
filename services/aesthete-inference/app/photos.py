@@ -20,8 +20,10 @@ from __future__ import annotations
 import base64
 from functools import lru_cache
 from io import BytesIO
-
 import httpx
+
+from .image_safety import UnsafeImageError, load_image_bytes
+from .safe_fetch import HostnameResolver, SafeFetchError, fetch_public_bytes, resolve_hostname
 
 
 class PhotoFetchError(Exception):
@@ -57,45 +59,32 @@ async def fetch_photo(
     *,
     timeout_s: float,
     max_bytes: int,
+    resolver: HostnameResolver = resolve_hostname,
 ) -> bytes:
     """Stream a photo from a (signed) URL with a hard size cap.
 
-    No content-type gate — HEIC is served as anything from ``image/heic`` to
-    ``application/octet-stream``, and the source is our own signed storage URL;
-    the Pillow/pillow-heif decode is the real arbiter. Any fetch-side failure
-    raises :class:`PhotoFetchError` (the route maps it to 502).
+    HEIC and generic binary storage content types are accepted; unrelated
+    types are rejected before the body is read. Any fetch-side failure raises
+    :class:`PhotoFetchError` (the route maps it to 502).
     """
-    if not url.lower().startswith(("http://", "https://")):
-        raise PhotoFetchError("url must be http(s)")
-
     try:
-        async with client.stream(
-            "GET", url, timeout=timeout_s, follow_redirects=True
-        ) as resp:
-            if resp.status_code != 200:
-                raise PhotoFetchError(f"fetch failed: HTTP {resp.status_code}")
-
-            declared = resp.headers.get("content-length")
-            if declared is not None and declared.isdigit() and int(declared) > max_bytes:
-                raise PhotoFetchError(
-                    f"content-length {declared} exceeds limit of {max_bytes} bytes"
-                )
-
-            buf = bytearray()
-            async for chunk in resp.aiter_bytes():
-                buf.extend(chunk)
-                if len(buf) > max_bytes:
-                    raise PhotoFetchError(f"body exceeds limit of {max_bytes} bytes")
-    except PhotoFetchError:
-        raise
-    except httpx.TimeoutException:
-        raise PhotoFetchError(f"fetch timed out after {timeout_s:g}s") from None
-    except httpx.HTTPError as exc:
-        raise PhotoFetchError(f"fetch failed: {exc.__class__.__name__}") from None
-
-    if not buf:
-        raise PhotoFetchError("empty response body")
-    return bytes(buf)
+        return await fetch_public_bytes(
+            client,
+            url,
+            timeout_s=timeout_s,
+            max_bytes=max_bytes,
+            allowed_content_types={
+                "application/octet-stream",
+                "binary/octet-stream",
+                "image/heic",
+                "image/heif",
+                "image/heic-sequence",
+                "image/heif-sequence",
+            },
+            resolver=resolver,
+        )
+    except SafeFetchError as exc:
+        raise PhotoFetchError(str(exc)) from None
 
 
 def convert_heic_to_jpeg(
@@ -104,6 +93,7 @@ def convert_heic_to_jpeg(
     thumb_max_px: int = 512,
     preview_max_px: int = 1600,
     jpeg_quality: float = 0.8,
+    max_pixels: int = 32_000_000,
 ) -> dict:
     """Decode HEIC bytes ONCE → a 512px thumb + a 1600px preview, both JPEG-b64.
 
@@ -122,32 +112,40 @@ def convert_heic_to_jpeg(
         raise PhotoDecodeError("empty request body")
 
     try:
-        base = Image.open(BytesIO(data))
-        base.load()
-    except PhotoDecodeError:
-        raise
-    except Exception:
-        raise PhotoDecodeError("body is not a decodable image") from None
+        base = load_image_bytes(data, max_pixels=max_pixels)
+    except UnsafeImageError as exc:
+        raise PhotoDecodeError(str(exc)) from None
 
     # Respect EXIF orientation, then normalise to RGB (JPEG has no alpha).
-    base = ImageOps.exif_transpose(base) or base
+    oriented = ImageOps.exif_transpose(base)
+    if oriented is not base:
+        base.close()
+        base = oriented
     if base.mode != "RGB":
-        base = base.convert("RGB")
+        converted = base.convert("RGB")
+        base.close()
+        base = converted
 
     # jpeg_quality arrives as a 0–1 float; Pillow wants an int 1–95.
     quality = max(1, min(95, int(round(jpeg_quality * 100))))
 
     def render(max_px: int) -> dict:
         variant = base.copy()
-        variant.thumbnail((max_px, max_px), Image.Resampling.LANCZOS)
-        out = BytesIO()
-        variant.save(out, format="JPEG", quality=quality, optimize=True)
-        raw = out.getvalue()
-        return {
-            "b64": base64.b64encode(raw).decode("ascii"),
-            "width": variant.width,
-            "height": variant.height,
-            "bytes": len(raw),
-        }
+        try:
+            variant.thumbnail((max_px, max_px), Image.Resampling.LANCZOS)
+            out = BytesIO()
+            variant.save(out, format="JPEG", quality=quality, optimize=True)
+            raw = out.getvalue()
+            return {
+                "b64": base64.b64encode(raw).decode("ascii"),
+                "width": variant.width,
+                "height": variant.height,
+                "bytes": len(raw),
+            }
+        finally:
+            variant.close()
 
-    return {"thumb": render(thumb_max_px), "preview": render(preview_max_px)}
+    try:
+        return {"thumb": render(thumb_max_px), "preview": render(preview_max_px)}
+    finally:
+        base.close()

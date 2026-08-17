@@ -27,7 +27,7 @@ To start sending from `mail.patina.cloud`:
 3. **Add the records in Cloudflare DNS** (since `patina.cloud` is on Cloudflare). Type, name, value as Resend specifies. Disable Cloudflare proxying (gray cloud, not orange) for TXT and MX.
 4. **Click "Verify" in the Resend dashboard.** Propagation usually takes < 5 minutes; can be longer.
 5. Once verified, set `RESEND_FROM_MARKETING="Patina <mail@mail.patina.cloud>"` in:
-   - Coolify env for `designer-portal`, `client-portal`, `admin-portal`, `services/orders`, `services/media`, `services/projects`
+   - the portal Wrangler `vars` blocks and retained service Worker/Container configuration
    - Supabase edge function secrets (`supabase secrets set RESEND_FROM_MARKETING="Patina <mail@mail.patina.cloud>"`)
 
 ## Reverse: collapsing back to a single domain

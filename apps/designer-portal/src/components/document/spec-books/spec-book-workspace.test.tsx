@@ -9,28 +9,64 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { SpecBookWorkItem } from "@patina/supabase";
-import { SelectionEditor } from "./spec-book-workspace";
+import {
+  SelectionEditor,
+  SpecBookWorkspace,
+  specBookArtifactRetryLabel,
+} from "./spec-book-workspace";
 
 const mutateAsync = jest.fn();
 const readinessChanged = jest.fn();
+const artifactRetry = jest.fn();
+const opened = jest.fn();
+const renderArtifactMutateAsync = jest.fn();
+let mockWorkbenchHookResult: unknown;
 
 jest.mock("@patina/supabase", () => ({
-  useCreateSpecBookShare: jest.fn(),
-  useFinalizeSpecBookIssue: jest.fn(),
-  usePrepareSpecBookIssue: jest.fn(),
-  useProjectV2: jest.fn(),
-  useRenderSpecBookArtifact: jest.fn(),
-  useSpecBookWorkbench: jest.fn(),
+  useCreateSpecBookShare: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  usePrepareSpecBookIssue: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useProjectFfeReadiness: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+  }),
+  useProjectV2: () => ({ data: { name: "Oak project" } }),
+  useRenderSpecBookArtifact: () => ({
+    mutateAsync: renderArtifactMutateAsync,
+    isPending: false,
+  }),
+  useSpecBookWorkbench: () => mockWorkbenchHookResult,
   useUpdateProjectFfeSpec: () => ({
     mutateAsync,
     isPending: false,
   }),
-  useUpdateSpecBookItemSetting: jest.fn(),
+  useUpdateSpecBookItemSetting: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+  }),
 }));
+
+jest.mock("@/hooks/use-hydrated", () => ({ useHydrated: () => true }));
 
 jest.mock("@/lib/analytics/spec-book-events", () => ({
   specBookEvents: {
+    addendumStarted: jest.fn(),
+    artifactFailed: jest.fn(),
+    artifactRendered: jest.fn(),
+    artifactRetry: (props: unknown) => artifactRetry(props),
+    driftDecision: jest.fn(),
+    issueAttempted: jest.fn(),
+    issued: jest.fn(),
+    opened: (props: unknown) => opened(props),
+    preflightCompleted: jest.fn(),
     readinessChanged: (props: unknown) => readinessChanged(props),
+    shareCreated: jest.fn(),
   },
 }));
 
@@ -108,7 +144,92 @@ function buildItem(
 beforeEach(() => {
   mutateAsync.mockReset();
   mutateAsync.mockResolvedValue({});
+  renderArtifactMutateAsync.mockReset();
+  renderArtifactMutateAsync.mockResolvedValue({ finalized: true });
   readinessChanged.mockClear();
+  artifactRetry.mockClear();
+  opened.mockClear();
+  mockWorkbenchHookResult = {
+    data: {
+      book: { id: "book-1", title: "Oak project specification" },
+      chapters: [],
+      items: [],
+      revisions: [
+        {
+          id: "revision-1",
+          revision_number: 1,
+          issue_type: "full",
+          status: "pending",
+          reason: null,
+          created_at: "2026-08-01T00:00:00.000Z",
+          issued_at: null,
+        },
+      ],
+      artifacts: [
+        {
+          id: "artifact-1",
+          revision_id: "revision-1",
+          audience: "client",
+          format: "pdf",
+          status: "ready",
+          error_message: null,
+        },
+      ],
+    },
+    isLoading: false,
+    error: null,
+    refetch: jest.fn(),
+  };
+});
+
+describe("Spec Book artifact recovery actions", () => {
+  it("offers finalize-only recovery for a durable artifact on an unissued revision", () => {
+    expect(specBookArtifactRetryLabel("ready", "pending")).toBe("Finalize");
+    expect(specBookArtifactRetryLabel("ready", "issued")).toBeNull();
+  });
+
+  it("preserves render and retry labels for artifacts that are not durable", () => {
+    expect(specBookArtifactRetryLabel("pending", "pending")).toBe("Render");
+    expect(specBookArtifactRetryLabel("failed", "pending")).toBe("Retry");
+    expect(specBookArtifactRetryLabel("rendering", "pending")).toBeNull();
+  });
+
+  it("offers and executes finalize-only recovery from revision history", async () => {
+    const user = userEvent.setup();
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    await user.click(screen.getByRole("button", { name: "Revisions" }));
+    await user.click(screen.getByRole("button", { name: "Finalize" }));
+
+    expect(renderArtifactMutateAsync).toHaveBeenCalledTimes(1);
+    expect(renderArtifactMutateAsync).toHaveBeenCalledWith("artifact-1");
+    expect(artifactRetry).toHaveBeenCalledWith(
+      expect.objectContaining({ artifact_id: "artifact-1" }),
+    );
+    expect(
+      await screen.findByText(
+        "client artifact finalized and the revision is issued.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("reports a durable artifact as still ready when siblings block issuance", async () => {
+    const user = userEvent.setup();
+    renderArtifactMutateAsync.mockResolvedValueOnce({ finalized: false });
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    await user.click(screen.getByRole("button", { name: "Revisions" }));
+    await user.click(screen.getByRole("button", { name: "Finalize" }));
+
+    expect(
+      await screen.findByText(
+        "client artifact remains ready. Other editions must finish before the revision can issue.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/client artifact finalized/i),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("SelectionEditor — structured dimensions", () => {

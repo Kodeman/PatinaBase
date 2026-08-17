@@ -23,6 +23,10 @@ export const isValidProjectStatus = (value: string): value is ProjectStatus =>
   PROJECT_STATUS_VALUES.includes(value as ProjectStatus);
 
 export class CreateProjectDto {
+  @ApiProperty({ description: 'Canonical public project ID' })
+  @IsUUID()
+  publicProjectId: string;
+
   @ApiPropertyOptional({ description: 'ID of approved proposal to import from' })
   @IsOptional()
   @IsUUID()

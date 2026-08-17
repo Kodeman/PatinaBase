@@ -62,7 +62,7 @@ if [ ! -f ".env.local" ]; then
 fi
 
 echo "🌍 Environment: $(grep NEXT_PUBLIC_ENV .env.local | cut -d '=' -f2)"
-echo "🔐 Auth URL: $(grep NEXTAUTH_URL .env.local | cut -d '=' -f2)"
+echo "🔐 Supabase URL: $(grep NEXT_PUBLIC_SUPABASE_URL .env.local | cut -d '=' -f2)"
 echo ""
 
 # Step 4: Determine port

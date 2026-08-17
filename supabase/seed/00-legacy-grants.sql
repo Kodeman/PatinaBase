@@ -11023,3 +11023,63 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.materialize_schedule_dates(uuid, jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON TABLE public.edge_catalog_products FROM PUBLIC, anon, authenticated, service_role, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON TABLE public.products FROM edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA public TO edge_catalog_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.edge_catalog_products TO edge_catalog_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  GRANT authenticated TO edge_rls_user WITH INHERIT FALSE, SET TRUE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00482_retained_service_authorization_contract.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE svc_orders.stripe_webhook_receipts FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_public_acl_allowlist.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON SCHEMA public FROM PUBLIC, anon, authenticated, service_role, postgres, agent_reader, agent_writer, edge_catalog_reader, dashboard_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_public_acl_allowlist.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres, agent_reader, agent_writer, edge_catalog_reader, dashboard_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_public_acl_allowlist.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.grant_role_to_user(uuid, character varying, uuid), public.revoke_role_from_user(uuid, character varying) FROM PUBLIC, anon, authenticated, dashboard_user, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_public_acl_allowlist.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.grant_role_to_user(uuid, character varying, uuid), public.revoke_role_from_user(uuid, character varying) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

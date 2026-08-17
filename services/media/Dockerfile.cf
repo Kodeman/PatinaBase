@@ -1,7 +1,7 @@
 # =============================================================================
 # PATINA MEDIA SERVICE — CLOUDFLARE CONTAINER DOCKERFILE
-# Copy of infra/Dockerfile.nestjs with SERVICE_NAME defaulted to `media` so
-# wrangler (which cannot pass --build-arg through its `containers[].image`
+# SERVICE_NAME is defaulted to `media` because Wrangler cannot pass
+# --build-arg through its `containers[].image`
 # pointer) builds the right service. Build context MUST be the monorepo root
 # (see infra/media-svc-worker/wrangler.jsonc `image_build_context: "../../"`).
 # =============================================================================
@@ -34,8 +34,7 @@ COPY services/${SERVICE_NAME}/package.json ./services/${SERVICE_NAME}/
 # Copy Prisma schema so postinstall `prisma generate` succeeds
 COPY services/${SERVICE_NAME}/prisma ./services/${SERVICE_NAME}/prisma
 
-# Force NODE_ENV=development so devDependencies (prisma, typescript, etc.) are installed
-# Coolify injects NODE_ENV=production as a build-arg which would skip them
+# Install build-time dependencies (Prisma and TypeScript) in the dependency stage.
 ENV NODE_ENV=development
 RUN pnpm install --frozen-lockfile --filter @patina/${SERVICE_NAME}...
 

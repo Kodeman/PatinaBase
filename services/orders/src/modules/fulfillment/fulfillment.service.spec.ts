@@ -11,15 +11,22 @@ import { FulfillmentService } from './fulfillment.service';
 import { CarrierFactory } from './carriers/carrier.factory';
 import { EasyPostCarrier } from './carriers/easypost.carrier';
 import { PrismaClient } from '../../generated/prisma-client';
+import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 describe('FulfillmentService', () => {
+  const subject = 'user-123';
   let service: FulfillmentService;
   let prisma: PrismaClient;
   let carrierFactory: CarrierFactory;
 
-  const mockPrisma = {
+  const mockPrisma: any = {
     order: {
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(async (args) => {
+        const order = await mockPrisma.order.findUnique(args);
+        if (!order) throw new NotFoundException('Order not found');
+        return order;
+      }),
       update: jest.fn(),
     },
     orderItem: {
@@ -47,6 +54,24 @@ describe('FulfillmentService', () => {
     refundShipment: jest.fn(),
   };
 
+  const authorizationState = { subject, roles: [], permissions: [], organizationIds: [] };
+  const mockAuthorization = {
+    authorize: jest.fn(async (_subject, _action, operation) =>
+      operation(mockPrisma, authorizationState, { userId: subject }),
+    ),
+    authorizeShipment: jest.fn(async (_subject, _action, shipmentId, operation) => {
+      const shipment = await mockPrisma.shipment.findUnique({ where: { id: shipmentId } });
+      if (!shipment) throw new NotFoundException('Shipment not found');
+      return operation(mockPrisma, authorizationState, shipment);
+    }),
+    requireOrder: jest.fn(async (database, _scope, where) => {
+      const order = await database.order.findUnique({ where });
+      if (!order) throw new NotFoundException('Order not found');
+      return order;
+    }),
+    cartScope: jest.fn(() => ({ userId: subject })),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -64,6 +89,10 @@ describe('FulfillmentService', () => {
           useValue: {
             getCarrier: jest.fn().mockReturnValue(mockCarrier),
           },
+        },
+        {
+          provide: OrdersAuthorizationResolver,
+          useValue: mockAuthorization,
         },
       ],
     }).compile();
@@ -123,7 +152,7 @@ describe('FulfillmentService', () => {
         },
       };
 
-      const result = await service.getRates(getRatesDto);
+      const result = await service.getRates(getRatesDto, subject);
 
       expect(result.rates).toHaveLength(2);
       expect(result.recommendedRate).toBeDefined();
@@ -194,7 +223,7 @@ describe('FulfillmentService', () => {
         items: [{ orderItemId: 'item-1', qty: 2 }],
       };
 
-      const result = await service.createShipment(orderId, createShipmentDto);
+      const result = await service.createShipment(orderId, createShipmentDto, subject);
 
       expect(result.trackingNumber).toBe(mockLabel.trackingNumber);
       expect(mockCarrier.createLabel).toHaveBeenCalled();
@@ -244,10 +273,12 @@ describe('FulfillmentService', () => {
         items: [{ orderItemId: 'item-1', qty: 2 }],
       };
 
-      await service.createShipment(orderId, createShipmentDto);
-      await service.createShipment(orderId, createShipmentDto);
+      await service.createShipment(orderId, createShipmentDto, subject);
+      await service.createShipment(orderId, createShipmentDto, subject);
 
-      const shipmentNumbers = mockPrisma.shipment.create.mock.calls.map(call => call[0].data.shipmentNumber);
+      const shipmentNumbers = mockPrisma.shipment.create.mock.calls.map(
+        (call: any[]) => call[0].data.shipmentNumber,
+      );
       expect(new Set(shipmentNumbers).size).toBe(shipmentNumbers.length);
     });
 
@@ -262,7 +293,7 @@ describe('FulfillmentService', () => {
       };
 
       await expect(
-        service.createShipment('invalid-order', createShipmentDto),
+        service.createShipment('invalid-order', createShipmentDto, subject),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -281,7 +312,7 @@ describe('FulfillmentService', () => {
       };
 
       await expect(
-        service.createShipment('order-123', createShipmentDto),
+        service.createShipment('order-123', createShipmentDto, subject),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -312,7 +343,7 @@ describe('FulfillmentService', () => {
       mockCarrier.getTracking.mockResolvedValue(mockTracking);
       mockPrisma.shipment.update.mockResolvedValue({});
 
-      const result = await service.getTracking(shipmentId);
+      const result = await service.getTracking(shipmentId, subject);
 
       expect(result.trackingNumber).toBe(mockTracking.trackingNumber);
       expect(result.status).toBe('in_transit');
@@ -325,7 +356,7 @@ describe('FulfillmentService', () => {
     it('should throw NotFoundException if shipment does not exist', async () => {
       mockPrisma.shipment.findUnique.mockResolvedValue(null);
 
-      await expect(service.getTracking('invalid-shipment')).rejects.toThrow(
+      await expect(service.getTracking('invalid-shipment', subject)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -336,7 +367,7 @@ describe('FulfillmentService', () => {
         trackingNumber: null,
       });
 
-      await expect(service.getTracking('shipment-123')).rejects.toThrow(
+      await expect(service.getTracking('shipment-123', subject)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -361,7 +392,7 @@ describe('FulfillmentService', () => {
 
       mockCarrier.validateAddress.mockResolvedValue(mockValidation);
 
-      const result = await service.validateAddress(addressDto);
+      const result = await service.validateAddress(addressDto, subject);
 
       expect(result.valid).toBe(true);
       expect(mockCarrier.validateAddress).toHaveBeenCalled();
@@ -388,7 +419,9 @@ describe('FulfillmentService', () => {
         statusDetail: 'Package in transit',
       };
 
-      const result = await service.updateShipmentStatus(shipmentId, statusDto);
+      mockPrisma.shipment.findUnique.mockResolvedValue(mockShipment);
+
+      const result = await service.updateShipmentStatus(shipmentId, statusDto, subject);
 
       expect(result.status).toBe('in_transit');
       expect(mockEventsService.publish).toHaveBeenCalledWith(

@@ -33,12 +33,19 @@ from .config import Settings, settings_from_env
 from .embedder import EmbedderLike
 from .fit import FitInputError, backtest, fit_bt_map
 from .images import ImageFetchError, fetch_image
+from .image_safety import DecodedPixelBudget
 from .photos import (
     PhotoDecodeError,
     PhotoFetchError,
     convert_heic_to_jpeg,
     fetch_photo,
     heif_available,
+)
+from .safe_fetch import (
+    EncodedByteBudget,
+    HostnameResolver,
+    create_public_network_transport,
+    resolve_hostname,
 )
 from .schemas import (
     EmbedResponse,
@@ -90,8 +97,13 @@ def create_app(
     *,
     embedder: EmbedderLike | None = None,
     http_transport: httpx.AsyncBaseTransport | None = None,
+    hostname_resolver: HostnameResolver = resolve_hostname,
 ) -> FastAPI:
     settings = settings or settings_from_env()
+    if settings.image_fetch_concurrency < 1:
+        raise ValueError("IMAGE_FETCH_CONCURRENCY must be positive")
+    if settings.image_batch_max_bytes < 1:
+        raise ValueError("IMAGE_BATCH_MAX_BYTES must be positive")
     gate = ConcurrencyGate(settings.max_concurrency)
 
     @asynccontextmanager
@@ -109,7 +121,8 @@ def create_app(
                 return eng
 
             app.state.embedder = await run_in_threadpool(_load)
-        app.state.http_client = httpx.AsyncClient(transport=http_transport)
+        transport = http_transport or create_public_network_transport()
+        app.state.http_client = httpx.AsyncClient(transport=transport, trust_env=False)
         try:
             yield
         finally:
@@ -196,17 +209,26 @@ def create_app(
 
         enter_gate()
         try:
-            # Per-item error isolation: one bad URL never fails the batch.
-            fetches = await asyncio.gather(
-                *(
-                    fetch_image(
+            pixel_budget = DecodedPixelBudget(settings.image_batch_max_pixels)
+            byte_budget = EncodedByteBudget(settings.image_batch_max_bytes)
+            fetch_gate = asyncio.Semaphore(settings.image_fetch_concurrency)
+
+            async def fetch_one(url: str):
+                async with fetch_gate:
+                    return await fetch_image(
                         client,
-                        item.url,
+                        url,
                         timeout_s=settings.image_fetch_timeout_s,
                         max_bytes=settings.image_max_bytes,
+                        max_pixels=settings.image_max_pixels,
+                        pixel_budget=pixel_budget,
+                        byte_budget=byte_budget,
+                        resolver=hostname_resolver,
                     )
-                    for item in req.inputs
-                ),
+
+            # Per-item error isolation: one bad URL never fails the batch.
+            fetches = await asyncio.gather(
+                *(fetch_one(item.url) for item in req.inputs),
                 return_exceptions=True,
             )
 
@@ -226,11 +248,15 @@ def create_app(
 
             vectors: list[Vector] = []
             if good_images:
-                embs = await run_in_threadpool(eng.embed_images, good_images)
-                vectors = [
-                    Vector(id=item_id, dim=int(emb.shape[-1]), v=emb.tolist())
-                    for item_id, emb in zip(good_ids, embs)
-                ]
+                try:
+                    embs = await run_in_threadpool(eng.embed_images, good_images)
+                    vectors = [
+                        Vector(id=item_id, dim=int(emb.shape[-1]), v=emb.tolist())
+                        for item_id, emb in zip(good_ids, embs)
+                    ]
+                finally:
+                    for image in good_images:
+                        image.close()
         finally:
             gate.leave()
 
@@ -333,6 +359,7 @@ def create_app(
                 req.usdz_url,
                 timeout_s=settings.usdz_fetch_timeout_s,
                 max_bytes=settings.usdz_max_bytes,
+                resolver=hostname_resolver,
             )
         except UsdFetchError as err:
             raise HTTPException(status_code=502, detail=f"usdz fetch failed: {err}")
@@ -370,6 +397,7 @@ def create_app(
                 req.image_url,
                 timeout_s=settings.photo_fetch_timeout_s,
                 max_bytes=settings.photo_max_bytes,
+                resolver=hostname_resolver,
             )
         except PhotoFetchError as err:
             raise HTTPException(status_code=502, detail=f"photo fetch failed: {err}")
@@ -382,6 +410,7 @@ def create_app(
                 thumb_max_px=req.thumb_max_px,
                 preview_max_px=req.preview_max_px,
                 jpeg_quality=req.jpeg_quality,
+                max_pixels=settings.photo_max_pixels,
             )
         except PhotoDecodeError as err:
             raise HTTPException(status_code=422, detail=str(err))

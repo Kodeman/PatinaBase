@@ -15,7 +15,7 @@ Don't use when: local dev (patina-local-dev), writing migrations (patina-db-migr
 ## GATE (read first — this is the whole game)
 - **Prod mutations** — `supabase db push`, `supabase functions deploy`, `supabase secrets set`, `wrangler deploy`, prod SQL writes — require an **explicit user request in the current session**. If the user said "ship/deploy X", the full chain (migrate → services/functions → portals → verify) is authorized; do NOT re-ask per step. Absent that ask: build + verify locally, then ask.
 - Read-only prod (SELECTs, logs, `wrangler deployments list`, health/version probes) is **always allowed**.
-- **NEVER run these DEAD legacy artifacts** (they target the retired box): `infra/deploy.sh`, `infra/build-and-push.sh`, `scripts/remote-db.sh`, `scripts/deploy-edge-functions.sh`, `infra/coolify/*`, `infra/docker-compose.{supabase,services,frontend,deploy}.yml`, `infra/cloudflare-tunnel-config.yml`. Never SSH/deploy to `coolify.patina.cloud` or its box even if a doc says so.
+- **NEVER run these DEAD legacy artifacts** (they target the retired box): `infra/deploy.sh`, `infra/build-and-push.sh`, `scripts/remote-db.sh`, `infra/coolify/*`, `infra/docker-compose.{supabase,services,frontend,deploy}.yml`, `infra/cloudflare-tunnel-config.yml`. Never SSH/deploy to `coolify.patina.cloud` or its box even if a doc says so. [retired-deploy-reference-allow: records prohibited historical deployment paths for operator safety]
 - The cutover punch list is ACTIVE and shifts week to week. Before acting on a doc/memory claim about prod topology, verify live (`wrangler`, `supabase` CLI, dashboard) or ask.
 - `wrangler deploy` / container builds need **wrangler auth on this machine**; if unauthed, stop and ask.
 
@@ -35,7 +35,7 @@ Don't use when: local dev (patina-local-dev), writing migrations (patina-db-migr
 Each `apps/*/wrangler.jsonc` has a `vars` block with the prod values hard-committed (Supabase URL, anon key, service URLs, feature flags). They are NOT read from `.env` at deploy time. So **changing a prod `NEXT_PUBLIC_*` = editing that portal's `wrangler.jsonc`** (a tracked, public-visible file — put no real secrets there; the anon key is the only "key" that legitimately belongs client-side). After editing, redeploy via `deploy-portal.sh` for it to take effect.
 
 ## Procedure
-Deploy order is fixed (House law, `docs/prds/AE/aesthete-engine-runbook.md` §"order of operations"; that runbook predates the cutover so its Coolify/GUC mechanics are superseded — the ORDER still holds): **① migrations → ② edge functions → ③ services/workers → ④ portals → ⑤ smoke.** A portal/edge fn that reaches for a table/RPC not yet migrated fails closed.
+Deploy order is fixed (House law, `docs/_archive/prds/AE/aesthete-engine-runbook.md` §"order of operations"; that historical runbook predates the cutover, so only its ordering remains applicable): **① migrations → ② edge functions → ③ services/workers → ④ portals → ⑤ smoke.** A portal/edge fn that reaches for a table/RPC not yet migrated fails closed.
 
 1. **Migrations → Strata.** CLI is linked (`supabase/.temp/project-ref` = `bkvcixdmuyejfzcijpdg`). Before pushing, confirm no numbering collision (concurrent programs consume numbers): compare `supabase/migrations/` head against `supabase_migrations.schema_migrations` on Strata. Then `supabase db push` (gated). See patina-db-migrations.
 2. **Edge functions → Strata.** `supabase functions deploy <name>` (gated). A `_shared/*` edit fans out — **redeploy every importer**, not just the one you touched (see patina-edge-functions). Secrets: `supabase secrets set KEY=value` (names only in reports).
@@ -97,7 +97,7 @@ curl https://patina-<designer|client|admin>-portal.kody-be3.workers.dev/api/vers
 - [ ] For a stale-dist suspicion: confirm you deployed via `deploy-portal.sh` (Phase 1 ran), not a raw app-dir build.
 
 ## Version-stamping reality (why `/version` lies)
-Because wrangler passes no build args, containers fall back to `Dockerfile.cf` ARG defaults → services report **version `1.0.0`, gitSha `unknown`**; portals get no build env on Workers → **version `0.0.0`, gitSha `unknown`, buildTime `null`**. Both are static defaults, NOT deploy freshness. `/version` and `/v1/version` confirm **liveness only**. (Their code cites `infra/build-and-push.sh` stamping — that is the DEAD path.)
+Because wrangler passes no build args, containers fall back to `Dockerfile.cf` ARG defaults → services report **version `1.0.0`, gitSha `unknown`**; portals get no build env on Workers → **version `0.0.0`, gitSha `unknown`, buildTime `null`**. Both are static defaults, NOT deploy freshness. `/version` and `/v1/version` confirm **liveness only**. (Their code cites `infra/build-and-push.sh` stamping — that is the DEAD path.) [retired-deploy-reference-allow: explains why a removed build script cannot prove deploy freshness]
 
 ## Rollback
 Evidenced path = **redeploy from the last-good commit**: check that commit out in a worktree (see patina-parallel-work) and re-run the same deploy command (`deploy-portal.sh` for a portal, `wrangler deploy` for a worker; container images are content-addressed so redeploying the prior tag is atomic — `aesthete-engine-runbook.md` §9). Edge fn: redeploy the prior function version. Migrations are append-only — roll forward with a new migration; only drop top-down if a migration is truly reversible. `wrangler rollback` is **not documented in-repo** — prefer redeploy-prior-good unless you confirm rollback support live.
@@ -109,11 +109,11 @@ Evidenced path = **redeploy from the last-good commit**: check that commit out i
 | "Is it deployed?" | Trust `/version` version/gitSha | `wrangler deployments list` **bottom** row + behavior probe |
 | Reading deployments list | Read the top (newest?) entry | List is **oldest-first**; read the **bottom** |
 | designer/client TS error | Assume build caught it | It didn't (`ignoreBuildErrors`); run `type-check` pre-ship |
-| Prod is broken, doc says Coolify | SSH/deploy to the old box | Box is DEAD; deploy CF/Strata only |
+| Prod is broken, doc says Coolify | SSH/deploy to the old box | Box is DEAD; deploy CF/Strata only | [retired-deploy-reference-allow: prevents an operator following stale production guidance]
 | media probe 404 at `/v1/health` | Conclude media is down | media has **no** global prefix — use `/health`, `/version` |
 | Container build hangs on macOS | Kill/retry blindly | Apply the `DOCKER_CONFIG` credsStore workaround |
 | Edited `_shared/*` in an edge fn | Deploy only the fn you were in | Redeploy **every** importer |
-| CI (docker-publish.yml) is red | Block the deploy on it | It targets the DEAD GHCR/Coolify path; it gates nothing — ignore for CF ships |
+| CI (docker-publish.yml) is red | Block the deploy on it | It targets the DEAD GHCR/Coolify path; it gates nothing — ignore for CF ships | [retired-deploy-reference-allow: distinguishes obsolete CI from the supported release path]
 | Multi-part ship | Deploy portals first | Order: migrations → edge fns → services → portals → smoke |
 
 ## Report back

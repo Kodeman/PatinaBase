@@ -1,17 +1,28 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '@patina/auth';
-import { PrismaService } from '../../prisma/prisma.service';
+import { ProjectsAuthorizationResolver } from '../authorization/projects-authorization.resolver';
+import {
+  PROJECT_ACCESS_MODE_KEY,
+  PROJECT_ENTITY_KEY,
+  type ProjectEntityScope,
+} from '../decorators/project-authorization.decorator';
 
 @Injectable()
 export class ProjectAccessGuard implements CanActivate {
   constructor(
-    private prisma: PrismaService,
+    private authorization: ProjectsAuthorizationResolver,
     private reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Check if endpoint is marked as @Public()
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -23,45 +34,42 @@ export class ProjectAccessGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-    const projectId = request.params.projectId || request.params.id;
-
-    if (!user) {
-      throw new ForbiddenException('User not authenticated');
+    if (!user || typeof user.sub !== 'string' || user.id !== user.sub || user.userId !== user.sub) {
+      throw new UnauthorizedException('Authentication required');
     }
 
-    if (!projectId) {
-      // No project ID in route, allow (handled by roles guard)
-      return true;
+    const mode = this.reflector.getAllAndOverride<'read' | 'manage'>(PROJECT_ACCESS_MODE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (!mode) {
+      throw new ForbiddenException('Project authorization contract is missing');
     }
 
-    // Admins have access to all projects
-    if (user.role === 'admin') {
-      return true;
+    const entity = this.reflector.getAllAndOverride<ProjectEntityScope>(PROJECT_ENTITY_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    const params = request.params ?? {};
+    let projectId: string;
+    if (entity?.type === 'changeOrder') {
+      if (typeof params[entity.param] !== 'string') {
+        throw new NotFoundException('Project not found');
+      }
+      projectId = await this.authorization.assertChangeOrderAccess(
+        user.sub,
+        params[entity.param],
+        mode,
+      );
+    } else {
+      const requestedProjectId = params.projectId ?? params.id;
+      if (typeof requestedProjectId !== 'string') {
+        throw new NotFoundException('Project not found');
+      }
+      projectId = await this.authorization.assertProjectAccess(user.sub, requestedProjectId, mode);
     }
 
-    // Check if user has access to this project
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true, clientId: true, designerId: true },
-    });
-
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    // Designer must be assigned to project
-    if (user.role === 'designer' && project.designerId !== user.id) {
-      throw new ForbiddenException('You do not have access to this project');
-    }
-
-    // Client must be the project client
-    if (user.role === 'client' && project.clientId !== user.id) {
-      throw new ForbiddenException('You do not have access to this project');
-    }
-
-    // Contractor access can be checked here (future)
-    // if (user.role === 'contractor') { ... }
-
+    request.authorizedProjectId = projectId;
     return true;
   }
 }

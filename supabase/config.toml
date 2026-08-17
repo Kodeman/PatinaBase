@@ -48,7 +48,16 @@ enabled = true
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory. For example:
 # sql_paths = ['./seeds/*.sql', '../project-src/seeds/*-load-testing.sql']
-sql_paths = ['./seed/00-legacy-grants.sql', './seed/dev-accounts.sql', './seed/organizations.sql', './seed/vendors.sql', './seed/products.sql', './seed/designer-clients.sql', './seed/leads_room_scans.sql', './seed/proposals.sql', './seed/proposal-captures.sql', './seed/decisions.sql', './seed/schedule.sql', './seed/schedule-extremes.sql', './seed/project_documents_tasks.sql', './seed/paint_colors_seed.sql', './seed/procurement_workspace_dev.sql', './seed/procurement_receiving_dev.sql', './seed/procurement_notifications_dev.sql', './seed/aesthete_demo.sql', './seed/agent-tasks-dev.sql', './seed/fulfillment-vendor-profiles.sql', './seed/fulfillment-catalog-dev.sql', './seed/99-local-edge-settings.sql']
+sql_paths = ['./seed/00-legacy-grants.sql', './seed/dev-accounts.sql', './seed/organizations.sql', './seed/vendors.sql', './seed/products.sql', './seed/designer-clients.sql', './seed/leads_room_scans.sql', './seed/proposals.sql', './seed/proposal-captures.sql', './seed/decisions.sql', './seed/schedule.sql', './seed/schedule-extremes.sql', './seed/project_documents_tasks.sql', './seed/paint_colors_seed.sql', './seed/procurement_workspace_dev.sql', './seed/procurement_receiving_dev.sql', './seed/procurement_notifications_dev.sql', './seed/aesthete_demo.sql', './seed/agent-tasks-dev.sql', './seed/fulfillment-vendor-profiles.sql', './seed/fulfillment-catalog-dev.sql', './seed/cloudflare-phase1-staging.sql', './seed/99-local-edge-settings.sql']
+
+# A persistent remote requires the literal 20-character branch project ref;
+# add this block after `staging` is provisioned (environment interpolation is
+# rejected for remotes.<branch>.project_id by the pinned Supabase CLI):
+# [remotes.staging]
+# project_id = "<staging-branch-ref>"
+# [remotes.staging.db.seed]
+# enabled = true
+# sql_paths = ['./seed/00-legacy-grants.sql', './seed/cloudflare-phase1-staging.sql']
 
 # Long-lived, data-less staging branch under the Strata project. Staging uses
 # representative seed data but never the local-only Vault credentials from

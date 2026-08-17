@@ -10,15 +10,17 @@
 
 This document traces every data point collected by The Daily Room home screen from the moment a user's thumb touches glass to the moment that signal reshapes a recommendation, appears on a designer's dashboard, or triggers a re-engagement push notification. Nothing is collected without a purpose. Nothing is stored without a destination.
 
-### Hard Constraints (Phase 1 Reality)
+### Original Phase 1 Assumptions (Historical)
+
+This April 2026 design predates the production cutover to Supabase Cloud Strata and Cloudflare. Infrastructure labels in the pipeline diagrams below are historical design context, not deployment instructions; the current architecture source of truth is `docs/engineering/patina-cloudflare-plan.md`.
 
 | Layer | Technology | Notes |
 |---|---|---|
 | **Primary Database** | PostgreSQL (Supabase managed) | All transactional data, pgvector for embeddings |
 | **Object Storage** | Cloudflare R2 | Room scans (USD/USDZ), product images (WebP) |
-| **Cache** | Redis (self-hosted on Proxmox) | Session data, recommendation cache, feed cache |
-| **Analytics** | PostHog (self-hosted) | Event stream, funnels, feature flags, session replay |
-| **ML Inference** | FastAPI sidecar (Proxmox) | Recommendation scoring, re-ranking |
+| **Cache** | Historical Redis proposal | Session data, recommendation cache, feed cache |
+| **Analytics** | PostHog | Event stream, funnels, feature flags, session replay |
+| **ML Inference** | Retained Cloudflare inference Container | Recommendation scoring, re-ranking |
 | **Behavioral Batch** | Client-side queue → API every 30s | Dwell, scroll, swipe events batched, not real-time |
 | **Search** | pgvector nearest-neighbor | Style vector → product vector similarity |
 
@@ -182,7 +184,7 @@ Every night at 2:00 AM CST, a batch job processes the day's behavioral data and 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    NIGHTLY PIPELINE                          │
-│                    (FastAPI on Proxmox)                      │
+│           (historical FastAPI batch-pipeline proposal)       │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  1. COLLECT                                                 │
@@ -388,7 +390,7 @@ The user never sees raw data. They see the *effects* of data:
 | **Add-to-room conversion rate** | `product_add_initiated` → `product_added_to_room` | PostHog funnel |
 | **Recommendation accuracy** | `interactions` where event_type IN (save, add_to_room) / total impressions | Nightly computed metric, tracked as time-series |
 | **Style vector drift** | `style_profiles.computed_vector` versioned over time | Custom visualization — how user cohort vectors shift |
-| **ML pipeline health** | Pipeline logs, timing, error rates | Grafana on Proxmox |
+| **ML pipeline health** | Pipeline logs, timing, error rates | Cloudflare dashboards and service telemetry |
 | **Product staleness** | `product_engagement.declining_flag` | SQL count of declining products, alert if >20% |
 | **Push notification effectiveness** | PostHog: `push_opened` / `push_sent` | PostHog ratio metric |
 

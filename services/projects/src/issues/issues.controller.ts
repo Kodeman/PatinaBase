@@ -3,20 +3,19 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { IssuesService } from './issues.service';
 import { CreateIssueDto, IssueStatus } from './dto/create-issue.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
-import { RolesGuard } from '../common/guards/roles.guard';
 import { ProjectAccessGuard } from '../common/guards/project-access.guard';
-import { Roles } from '../common/decorators/roles.decorator';
 import { GetCurrentUser } from '../common/decorators/current-user.decorator';
+import { ProjectManage, ProjectRead } from '../common/decorators/project-authorization.decorator';
 
 @ApiTags('issues')
 @ApiBearerAuth()
 @Controller('projects/:projectId/issues')
-@UseGuards(RolesGuard, ProjectAccessGuard)
+@UseGuards(ProjectAccessGuard)
 export class IssuesController {
   constructor(private readonly issuesService: IssuesService) {}
 
   @Post()
-  @Roles('admin', 'designer', 'contractor', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Create a new issue' })
   @ApiResponse({ status: 201, description: 'Issue created successfully' })
   create(
@@ -28,30 +27,39 @@ export class IssuesController {
   }
 
   @Get()
-  @Roles('admin', 'designer', 'client', 'contractor')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get all issues for a project' })
   @ApiResponse({ status: 200, description: 'Issues retrieved successfully' })
-  findAll(@Param('projectId') projectId: string, @Query('status') status?: IssueStatus) {
-    return this.issuesService.findAll(projectId, status);
+  findAll(
+    @Param('projectId') projectId: string,
+    @GetCurrentUser('id') userId: string,
+    @Query('status') status?: IssueStatus,
+  ) {
+    return this.issuesService.findAll(projectId, userId, status);
   }
 
   @Get(':id')
-  @Roles('admin', 'designer', 'client', 'contractor')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get issue by ID' })
   @ApiResponse({ status: 200, description: 'Issue retrieved successfully' })
-  findOne(@Param('id') id: string) {
-    return this.issuesService.findOne(id);
+  findOne(
+    @Param('projectId') projectId: string,
+    @Param('id') id: string,
+    @GetCurrentUser('id') userId: string,
+  ) {
+    return this.issuesService.findOne(projectId, id, userId);
   }
 
   @Patch(':id')
-  @Roles('admin', 'designer', 'contractor')
+  @ProjectManage()
   @ApiOperation({ summary: 'Update issue' })
   @ApiResponse({ status: 200, description: 'Issue updated successfully' })
   update(
+    @Param('projectId') projectId: string,
     @Param('id') id: string,
     @Body() updateDto: UpdateIssueDto,
     @GetCurrentUser('id') userId: string,
   ) {
-    return this.issuesService.update(id, updateDto, userId);
+    return this.issuesService.update(projectId, id, updateDto, userId);
   }
 }

@@ -33,8 +33,8 @@ mutation is an explicit, verified act (patina-deploy discipline).
    Regenerate + commit `database.types.ts` at this point (deferred through P1 to
    avoid colliding with the item-12 portal branch).
 
-2. **Worker — install on Kody's Linux box** (R109.1; the box he stood up, not
-   Coolify). From `services/scan-pipeline/`:
+2. **Worker — install on Kody's retained Linux reconstruction host** (R109.1).
+   From `services/scan-pipeline/`:
    - `sudo ./install.sh` — creates the `patina` user, the venv, `apt install
      libcairo2` (cairosvg → PDF), `pip install .[drawings]`, the systemd unit,
      the env template; runs `doctor` last.

@@ -27,9 +27,9 @@ interface Env {
   // NestJS producer sends it; without it the public route is an open job
   // injector against the prod buckets.
   ENQUEUE_SECRET: string;
-  // Optional: NestJS ledger callback (POST {jobId,state,result}). Skipped if unset.
-  COMPLETE_CALLBACK_URL?: string;
-  COMPLETE_CALLBACK_SECRET?: string;
+  // Required signed NestJS ledger callback (POST {jobId,state,result}).
+  COMPLETE_CALLBACK_URL: string;
+  COMPLETE_CALLBACK_SECRET: string;
 }
 
 // Job types the container can run today. 3D / snapshot / virus scan are stubs in
@@ -78,7 +78,14 @@ async function processJob(env: Env, job: MediaJob): Promise<{ ok: boolean; resul
     new Request('http://media-processor/process', {
       method: 'POST',
       headers: {
-        'x-media-job': btoa(JSON.stringify({ jobId: job.jobId, assetId: job.assetId, type: job.type, meta: { operations: job.meta?.operations } })),
+        'x-media-job': btoa(
+          JSON.stringify({
+            jobId: job.jobId,
+            assetId: job.assetId,
+            type: job.type,
+            meta: { operations: job.meta?.operations },
+          }),
+        ),
       },
       body: bytes,
     }),
@@ -110,15 +117,36 @@ async function reportCompletion(
   state: 'SUCCEEDED' | 'FAILED',
   payload: unknown,
 ): Promise<void> {
-  if (!env.COMPLETE_CALLBACK_URL) return;
-  await fetch(env.COMPLETE_CALLBACK_URL, {
+  if (!env.COMPLETE_CALLBACK_URL || !env.COMPLETE_CALLBACK_SECRET) {
+    throw new Error('Media completion callback is not configured');
+  }
+  const body = JSON.stringify({ jobId: job.jobId, assetId: job.assetId, state, result: payload });
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signingKey = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(env.COMPLETE_CALLBACK_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signatureBytes = await crypto.subtle.sign(
+    'HMAC',
+    signingKey,
+    new TextEncoder().encode(`${timestamp}.${body}`),
+  );
+  const signature = Array.from(new Uint8Array(signatureBytes), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+  const response = await fetch(env.COMPLETE_CALLBACK_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(env.COMPLETE_CALLBACK_SECRET ? { 'x-worker-secret': env.COMPLETE_CALLBACK_SECRET } : {}),
+      'x-patina-timestamp': timestamp,
+      'x-patina-signature': `v1=${signature}`,
     },
-    body: JSON.stringify({ jobId: job.jobId, assetId: job.assetId, state, result: payload }),
-  }).catch(() => {}); // best-effort; a failed callback must not fail the job
+    body,
+  });
+  if (!response.ok) throw new Error('Media completion callback rejected');
 }
 
 export default {
@@ -146,7 +174,7 @@ export default {
       const job = message.body;
       try {
         if (!CONTAINER_JOB_TYPES.has(job.type)) {
-          console.log(`skipping unported job type ${job.type} (job ${job.jobId})`);
+          console.log('Skipping unsupported media job type');
           message.ack();
           continue;
         }
@@ -156,11 +184,11 @@ export default {
           await reportCompletion(env, job, 'SUCCEEDED', result);
           message.ack();
         } else {
-          console.error(`job ${job.jobId} failed:`, JSON.stringify(result).slice(0, 500));
+          console.error('Media job processing failed');
           message.retry(); // Queues re-delivers; exhausted retries → DLQ
         }
-      } catch (err) {
-        console.error(`job ${message.body?.jobId} errored`, err);
+      } catch {
+        console.error('Media job processing errored');
         message.retry();
       }
     }

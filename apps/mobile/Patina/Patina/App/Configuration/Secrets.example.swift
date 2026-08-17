@@ -18,7 +18,6 @@ import Foundation
 public enum Secrets {
 
     /// Supabase anonymous key - safe to expose, used for client-side auth
-    /// Self-hosted Coolify deployment key
     public static let supabaseAnonKey = ""
 
     /// OpenAI API key for conversation features (optional)

@@ -11,6 +11,7 @@
   },
   "vars": {
     "NEXT_PUBLIC_SUPABASE_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
+    "NEXT_PUBLIC_EDGE_API_URL": "https://api.patina.cloud",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJrdmNpeGRtdXllamZ6Y2lqcGRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNjg0MzIsImV4cCI6MjA4Mzg0NDQzMn0.SPl6jHaeTp9McfF-AmXJUDKTwRaXD7Qf0hlve72rVg0",
     "SUPABASE_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
     "NEXT_PUBLIC_APP_URL": "https://client.patina.cloud",

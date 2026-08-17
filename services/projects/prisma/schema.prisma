@@ -14,23 +14,23 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-
 model Project {
-  id          String    @id @default(uuid())
-  proposalId  String?   // Link to approved proposal
-  title       String
-  clientId    String
-  designerId  String
-  status      String    @default("draft") // draft|active|substantial_completion|closed
-  startDate   DateTime?
-  endDate     DateTime?
-  actualEnd   DateTime?
-  budget      Decimal?  @db.Decimal(12, 2)
-  currency    String    @default("USD")
-  description String?   @db.Text
-  metadata    Json?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  publicProjectId String?   @unique @map("public_project_id") @db.Uuid
+  proposalId      String?   @map("proposal_id") // Link to approved proposal
+  title           String
+  clientId        String    @map("client_id")
+  designerId      String    @map("designer_id")
+  status          String    @default("draft") // draft|active|substantial_completion|closed
+  startDate       DateTime? @map("start_date")
+  endDate         DateTime? @map("end_date")
+  actualEnd       DateTime? @map("actual_end")
+  budget          Decimal?  @db.Decimal(12, 2)
+  currency        String    @default("USD")
+  description     String?   @db.Text
+  metadata        Json?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   tasks             Task[]
   rfis              RFI[]
@@ -55,20 +55,20 @@ model Project {
 
 model Task {
   id          String    @id @default(uuid())
-  projectId   String
+  projectId   String    @map("project_id")
   title       String
   description String?   @db.Text
-  assigneeId  String?
-  dueDate     DateTime?
+  assigneeId  String?   @map("assignee_id")
+  dueDate     DateTime? @map("due_date")
   status      String    @default("todo") // todo|in_progress|blocked|done|cancelled
   priority    String    @default("medium") // low|medium|high|urgent
   order       Int       @default(0)
-  completedAt DateTime?
+  completedAt DateTime? @map("completed_at")
   metadata    Json?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, status])
   @@index([assigneeId, status])
@@ -78,21 +78,21 @@ model Task {
 
 model RFI {
   id          String    @id @default(uuid())
-  projectId   String
+  projectId   String    @map("project_id")
   title       String
   question    String    @db.Text
   answer      String?   @db.Text
-  requestedBy String
-  assignedTo  String?
-  dueDate     DateTime?
+  requestedBy String    @map("requested_by")
+  assignedTo  String?   @map("assigned_to")
+  dueDate     DateTime? @map("due_date")
   status      String    @default("open") // open|answered|closed|cancelled
   priority    String    @default("normal") // normal|urgent
-  answeredAt  DateTime?
+  answeredAt  DateTime? @map("answered_at")
   metadata    Json?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, status])
   @@index([assignedTo, status])
@@ -100,22 +100,22 @@ model RFI {
 }
 
 model ChangeOrder {
-  id              String    @id @default(uuid())
-  projectId       String
-  title           String
-  description     String    @db.Text
-  requestedBy     String
-  costImpact      Decimal?  @db.Decimal(12, 2)
-  scheduleImpact  Int?      // Days
-  status          String    @default("draft") // draft|submitted|approved|rejected|implemented
-  reason          String?   @db.Text
-  approvedBy      String?
-  approvedAt      DateTime?
-  metadata        Json?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  projectId      String    @map("project_id")
+  title          String
+  description    String    @db.Text
+  requestedBy    String    @map("requested_by")
+  costImpact     Decimal?  @map("cost_impact") @db.Decimal(12, 2)
+  scheduleImpact Int?      @map("schedule_impact") // Days
+  status         String    @default("draft") // draft|submitted|approved|rejected|implemented
+  reason         String?   @db.Text
+  approvedBy     String?   @map("approved_by")
+  approvedAt     DateTime? @map("approved_at")
+  metadata       Json?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, status])
   @@index([status, createdAt])
@@ -124,20 +124,20 @@ model ChangeOrder {
 
 model Issue {
   id          String    @id @default(uuid())
-  projectId   String
+  projectId   String    @map("project_id")
   title       String
   description String    @db.Text
-  reportedBy  String
-  assignedTo  String?
+  reportedBy  String    @map("reported_by")
+  assignedTo  String?   @map("assigned_to")
   severity    String    @default("medium") // low|medium|high|critical
   status      String    @default("open") // open|investigating|resolved|closed|wont_fix
   resolution  String?   @db.Text
-  resolvedAt  DateTime?
+  resolvedAt  DateTime? @map("resolved_at")
   metadata    Json?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, status])
   @@index([assignedTo, status])
@@ -146,19 +146,19 @@ model Issue {
 }
 
 model DailyLog {
-  id        String   @id @default(uuid())
-  projectId String
-  authorId  String
-  date      DateTime @db.Date
-  notes     String?  @db.Text
-  weather   String?  // Good|Fair|Poor|N/A
-  photos    Json?    // Array of photo keys in object storage
-  attendees Json?    // Array of user IDs
-  activities Json?   // Array of activity descriptions
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  projectId  String   @map("project_id")
+  authorId   String   @map("author_id")
+  date       DateTime @db.Date
+  notes      String?  @db.Text
+  weather    String? // Good|Fair|Poor|N/A
+  photos     Json? // Array of photo keys in object storage
+  attendees  Json? // Array of user IDs
+  activities Json? // Array of activity descriptions
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, date])
   @@index([projectId, date])
@@ -167,20 +167,20 @@ model DailyLog {
 }
 
 model Document {
-  id          String   @id @default(uuid())
-  projectId   String
-  title       String
-  key         String   // Object storage key
-  category    String   // contract|drawing|spec|photo|invoice|other
-  version     Int      @default(1)
-  size        Int?     // Bytes
-  mimeType    String?
-  uploadedBy  String
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(uuid())
+  projectId  String   @map("project_id")
+  title      String
+  key        String // Object storage key
+  category   String // contract|drawing|spec|photo|invoice|other
+  version    Int      @default(1)
+  size       Int? // Bytes
+  mimeType   String?  @map("mime_type")
+  uploadedBy String   @map("uploaded_by")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, category])
   @@index([uploadedBy])
@@ -189,19 +189,19 @@ model Document {
 
 model Milestone {
   id          String    @id @default(uuid())
-  projectId   String
+  projectId   String    @map("project_id")
   title       String
   description String?   @db.Text
-  targetDate  DateTime
-  completedAt DateTime?
+  targetDate  DateTime  @map("target_date")
+  completedAt DateTime? @map("completed_at")
   status      String    @default("pending") // pending|in_progress|completed|delayed|cancelled|blocked
   order       Int       @default(0)
-  media       Json?     // Array of media objects {id, url, type, caption}
+  media       Json? // Array of media objects {id, url, type, caption}
   metadata    Json?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, order])
   @@index([targetDate])
@@ -211,16 +211,16 @@ model Milestone {
 // Project Updates for Timeline
 model ProjectUpdate {
   id        String   @id @default(uuid())
-  projectId String
+  projectId String   @map("project_id")
   title     String
   content   String   @db.Text
-  authorId  String   // User ID of the author (usually designer)
-  media     Json?    // Array of media objects {id, url, type, caption}
-  metadata  Json?    // Additional metadata
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  authorId  String   @map("author_id") // User ID of the author (usually designer)
+  media     Json? // Array of media objects {id, url, type, caption}
+  metadata  Json? // Additional metadata
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
   @@index([authorId])
@@ -229,15 +229,15 @@ model ProjectUpdate {
 
 // Outbox Pattern for Event Publishing (Transactional Outbox)
 model OutboxEvent {
-  id          String   @id @default(uuid())
-  type        String   // e.g., "project.created", "task.completed", "change_order.approved"
-  payload     Json     // Event payload
-  headers     Json?    // Additional headers (traceId, etc.)
-  published   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  publishedAt DateTime?
-  retryCount  Int      @default(0)
-  lastError   String?
+  id          String    @id @default(uuid())
+  type        String // e.g., "project.created", "task.completed", "change_order.approved"
+  payload     Json // Event payload
+  headers     Json? // Additional headers (traceId, etc.)
+  published   Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  publishedAt DateTime? @map("published_at")
+  retryCount  Int       @default(0) @map("retry_count")
+  lastError   String?   @map("last_error")
 
   @@index([type, published])
   @@index([createdAt])
@@ -246,13 +246,13 @@ model OutboxEvent {
 
 model AuditLog {
   id         String   @id @default(uuid())
-  entityType String   // project|task|rfi|change_order|issue|daily_log|document
-  entityId   String
-  action     String   // created|updated|deleted|status_changed|etc
-  actor      String?  // user ID
-  changes    Json?    // diff of changes
+  entityType String   @map("entity_type") // project|task|rfi|change_order|issue|daily_log|document
+  entityId   String   @map("entity_id")
+  action     String // created|updated|deleted|status_changed|etc
+  actor      String? // user ID
+  changes    Json? // diff of changes
   metadata   Json?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([entityType, entityId])
   @@index([action])
@@ -262,25 +262,25 @@ model AuditLog {
 
 // Timeline Segments for Client Portal
 model TimelineSegment {
-  id            String    @id @default(uuid())
-  projectId     String
-  title         String
-  description   String?   @db.Text
-  phase         String    // planning|design|procurement|construction|completion
-  startDate     DateTime
-  endDate       DateTime
-  status        String    @default("pending") // pending|in_progress|completed|delayed
-  progress      Int       @default(0) // 0-100
-  dependencies  Json?     // Array of dependent segment IDs
-  deliverables  Json?     // Array of deliverable descriptions
-  order         Int       @default(0)
-  metadata      Json?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String   @id @default(uuid())
+  projectId    String   @map("project_id")
+  title        String
+  description  String?  @db.Text
+  phase        String // planning|design|procurement|construction|completion
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
+  status       String   @default("pending") // pending|in_progress|completed|delayed
+  progress     Int      @default(0) // 0-100
+  dependencies Json? // Array of dependent segment IDs
+  deliverables Json? // Array of deliverable descriptions
+  order        Int      @default(0)
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  activities    ClientActivity[]
-  approvals     ApprovalRecord[]
+  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activities ClientActivity[]
+  approvals  ApprovalRecord[]
 
   @@index([projectId, order])
   @@index([phase, status])
@@ -290,21 +290,21 @@ model TimelineSegment {
 
 // Client Activity Tracking
 model ClientActivity {
-  id          String    @id @default(uuid())
-  projectId   String
-  segmentId   String?
-  userId      String    // Client user ID
-  activityType String   // view|comment|approve|reject|upload|download|discuss
-  entityType  String?   // segment|approval|document|task|milestone
-  entityId    String?
-  duration    Int?      // Seconds spent (for view activities)
-  metadata    Json?     // Additional context (page, action details, etc.)
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime  @default(now())
+  id           String   @id @default(uuid())
+  projectId    String   @map("project_id")
+  segmentId    String?  @map("segment_id")
+  userId       String   @map("user_id") // Client user ID
+  activityType String   @map("activity_type") // view|comment|approve|reject|upload|download|discuss
+  entityType   String?  @map("entity_type") // segment|approval|document|task|milestone
+  entityId     String?  @map("entity_id")
+  duration     Int? // Seconds spent (for view activities)
+  metadata     Json? // Additional context (page, action details, etc.)
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  segment     TimelineSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  segment TimelineSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
 
   @@index([projectId, userId, createdAt])
   @@index([userId, activityType])
@@ -315,31 +315,31 @@ model ClientActivity {
 
 // Approval Workflow Records
 model ApprovalRecord {
-  id            String    @id @default(uuid())
-  projectId     String
-  segmentId     String?
-  title         String
-  description   String?   @db.Text
-  approvalType  String    // design|budget|material|milestone|change_order|final
-  status        String    @default("pending") // pending|approved|rejected|needs_discussion
-  priority      String    @default("normal") // low|normal|high|urgent
-  requestedBy   String    // Designer user ID
-  assignedTo    String    // Client user ID
-  dueDate       DateTime?
-  approvedAt    DateTime?
-  approvedBy    String?
-  rejectedAt    DateTime?
-  rejectedBy    String?
-  rejectionReason String? @db.Text
-  documents     Json?     // Array of document IDs/keys
-  comments      Json?     // Array of comment objects
-  signature     Json?     // Digital signature data
-  metadata      Json?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  projectId       String    @map("project_id")
+  segmentId       String?   @map("segment_id")
+  title           String
+  description     String?   @db.Text
+  approvalType    String    @map("approval_type") // design|budget|material|milestone|change_order|final
+  status          String    @default("pending") // pending|approved|rejected|needs_discussion
+  priority        String    @default("normal") // low|normal|high|urgent
+  requestedBy     String    @map("requested_by") // Designer user ID
+  assignedTo      String    @map("assigned_to") // Client user ID
+  dueDate         DateTime? @map("due_date")
+  approvedAt      DateTime? @map("approved_at")
+  approvedBy      String?   @map("approved_by")
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectedBy      String?   @map("rejected_by")
+  rejectionReason String?   @map("rejection_reason") @db.Text
+  documents       Json? // Array of document IDs/keys
+  comments        Json? // Array of comment objects
+  signature       Json? // Digital signature data
+  metadata        Json?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  segment       TimelineSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  segment TimelineSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
 
   @@index([projectId, status])
   @@index([assignedTo, status, dueDate])
@@ -350,25 +350,25 @@ model ApprovalRecord {
 
 // Client Engagement Metrics
 model EngagementMetrics {
-  id                  String   @id @default(uuid())
-  projectId           String   @unique
-  clientId            String
-  totalViews          Int      @default(0)
-  totalTimeSpent      Int      @default(0) // Total seconds
-  lastActivity        DateTime?
-  approvalVelocity    Float?   @db.DoublePrecision // Avg days to approval
-  responseRate        Float?   @db.DoublePrecision // % of timely responses
-  satisfactionScore   Float?   @db.DoublePrecision // 1-5 scale
-  commentsCount       Int      @default(0)
-  approvalsCount      Int      @default(0)
-  rejectionsCount     Int      @default(0)
-  documentsViewed     Int      @default(0)
-  documentsDownloaded Int      @default(0)
-  metadata            Json?    // Additional custom metrics
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                  String    @id @default(uuid())
+  projectId           String    @unique @map("project_id")
+  clientId            String    @map("client_id")
+  totalViews          Int       @default(0) @map("total_views")
+  totalTimeSpent      Int       @default(0) @map("total_time_spent") // Total seconds
+  lastActivity        DateTime? @map("last_activity")
+  approvalVelocity    Float?    @map("approval_velocity") @db.DoublePrecision // Avg days to approval
+  responseRate        Float?    @map("response_rate") @db.DoublePrecision // % of timely responses
+  satisfactionScore   Float?    @map("satisfaction_score") @db.DoublePrecision // 1-5 scale
+  commentsCount       Int       @default(0) @map("comments_count")
+  approvalsCount      Int       @default(0) @map("approvals_count")
+  rejectionsCount     Int       @default(0) @map("rejections_count")
+  documentsViewed     Int       @default(0) @map("documents_viewed")
+  documentsDownloaded Int       @default(0) @map("documents_downloaded")
+  metadata            Json? // Additional custom metrics
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  project             Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
   @@index([lastActivity])
@@ -377,43 +377,43 @@ model EngagementMetrics {
 
 // Notification Preferences & Delivery
 model NotificationPreference {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  email       Boolean  @default(true)
-  emailAddress String?
-  sms         Boolean  @default(false)
-  phoneNumber String?
-  push        Boolean  @default(true)
-  pushTokens  Json?    // Array of device push tokens
-  channels    Json?    // Granular channel preferences by notification type
-  frequency   String   @default("immediate") // immediate|daily_digest|weekly_digest
-  quietHours  Json?    // {start: "22:00", end: "08:00"}
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  userId       String   @unique @map("user_id")
+  email        Boolean  @default(true)
+  emailAddress String?  @map("email_address")
+  sms          Boolean  @default(false)
+  phoneNumber  String?  @map("phone_number")
+  push         Boolean  @default(true)
+  pushTokens   Json?    @map("push_tokens") // Array of device push tokens
+  channels     Json? // Granular channel preferences by notification type
+  frequency    String   @default("immediate") // immediate|daily_digest|weekly_digest
+  quietHours   Json?    @map("quiet_hours") // {start: "22:00", end: "08:00"}
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("notification_preferences")
 }
 
 model Notification {
-  id          String    @id @default(uuid())
-  userId      String
-  projectId   String?
-  type        String    // approval_requested|status_update|comment|milestone|deadline|etc
-  priority    String    @default("normal") // low|normal|high|urgent
-  title       String
-  message     String    @db.Text
-  actionUrl   String?   // Deep link to relevant page
-  channels    Json      // {email: true, sms: false, push: true}
-  status      String    @default("pending") // pending|sent|failed|read
-  sentAt      DateTime?
-  readAt      DateTime?
-  deliveryStatus Json?  // Channel-specific delivery status
-  metadata    Json?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  projectId      String?   @map("project_id")
+  type           String // approval_requested|status_update|comment|milestone|deadline|etc
+  priority       String    @default("normal") // low|normal|high|urgent
+  title          String
+  message        String    @db.Text
+  actionUrl      String?   @map("action_url") // Deep link to relevant page
+  channels       Json // {email: true, sms: false, push: true}
+  status         String    @default("pending") // pending|sent|failed|read
+  sentAt         DateTime? @map("sent_at")
+  readAt         DateTime? @map("read_at")
+  deliveryStatus Json?     @map("delivery_status") // Channel-specific delivery status
+  metadata       Json?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([userId, status, createdAt])
   @@index([projectId, type])
@@ -424,16 +424,16 @@ model Notification {
 // WebSocket Connection Tracking
 model ActiveConnection {
   id          String   @id @default(uuid())
-  userId      String
-  projectId   String?
-  socketId    String   @unique
-  userAgent   String?
-  ipAddress   String?
-  connectedAt DateTime @default(now())
-  lastPingAt  DateTime @default(now())
+  userId      String   @map("user_id")
+  projectId   String?  @map("project_id")
+  socketId    String   @unique @map("socket_id")
+  userAgent   String?  @map("user_agent")
+  ipAddress   String?  @map("ip_address")
+  connectedAt DateTime @default(now()) @map("connected_at")
+  lastPingAt  DateTime @default(now()) @map("last_ping_at")
   metadata    Json?
 
-  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([projectId])
@@ -444,12 +444,12 @@ model ActiveConnection {
 // Message Queue for offline clients
 model QueuedMessage {
   id        String   @id // Generated from event + entity ID + timestamp
-  userId    String
+  userId    String   @map("user_id")
   event     String
   payload   Json
-  projectId String?
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  projectId String?  @map("project_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId, expiresAt])
   @@index([expiresAt])

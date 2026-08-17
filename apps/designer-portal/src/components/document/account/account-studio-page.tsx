@@ -7,7 +7,8 @@
  * `create_studio_workspace` RPC, 00295 — the client can never SELECT its own
  * insert before the owner membership exists, hence the SECURITY DEFINER
  * RPC). Studio state: inline rename, the member roster (role changes +
- * removal, owner/admin only — never against yourself or the last owner),
+ * removal, owner/admin only — never against yourself; ownership changes use
+ * the dedicated transfer RPC),
  * "Invite teammate" (opens StudioInviteModal), and "Leave studio" for
  * non-owners. Document-shell styling mirrors account-profile-page.tsx;
  * sibling account pages don't use help-system copy wrappers, so this one
@@ -197,13 +198,6 @@ export function AccountStudioPage() {
 
   const myRole = studio?.membership.role ?? null;
   const canManage = myRole === 'owner' || myRole === 'admin';
-  const ownerCount = useMemo(
-    () =>
-      (members ?? []).filter((m) => m.role === 'owner' && m.status === 'active')
-        .length,
-    [members],
-  );
-
   // Day-1 checklist inputs (U3) — own title + crew count read off the same
   // members list the roster below renders. contactsCount/seedSkipped (Call
   // Sheet Wave 2) only read real data behind the flag — flag-off leaves them
@@ -258,7 +252,15 @@ export function AccountStudioPage() {
     );
   };
 
-  const handleRoleChange = (memberId: string, role: MemberRole) => {
+  const handleRoleChange = (
+    memberId: string,
+    currentRole: MemberRole,
+    role: MemberRole,
+  ) => {
+    // Ownership is a transfer, never a direct membership-row update. Keep this
+    // runtime guard even though the roster omits Owner from its select so a
+    // stale or scripted change event cannot bypass the transfer RPC.
+    if (currentRole === 'owner' || role === 'owner') return;
     updateRole.mutate({ memberId, role });
   };
 
@@ -881,8 +883,10 @@ export function AccountStudioPage() {
               m.profiles?.email ||
               'Invited teammate';
             const isSelf = m.user_id === user?.id;
-            const isLastOwner = m.role === 'owner' && ownerCount <= 1;
-            const showControls = canManage && !isSelf && !isLastOwner;
+            const canEditMembership =
+              canManage && !isSelf && m.role !== 'owner';
+            const canTransferOwnership =
+              myRole === 'owner' && !isSelf && m.status === 'active';
 
             return (
               <li
@@ -925,51 +929,56 @@ export function AccountStudioPage() {
                   <StatusBadge tone={STATUS_TONE[m.status] ?? 'neutral'} dot>
                     {m.status}
                   </StatusBadge>
-                  {showControls ? (
-                    <>
-                      <Select
-                        aria-label={`Role for ${label}`}
-                        value={m.role}
-                        onChange={(e) =>
-                          handleRoleChange(m.id, e.target.value as MemberRole)
-                        }
-                        disabled={updateRole.isPending}
-                        wrapperClassName="w-28"
-                      >
-                        <option value="owner">Owner</option>
-                        <option value="admin">Admin</option>
-                        <option value="member">Member</option>
-                      </Select>
-                      {myRole === 'owner' &&
-                        m.status === 'active' &&
-                        m.role !== 'owner' && (
-                          <DocumentAction
-                            actionKey="make-studio-owner"
-                            surfaceKey="account"
-                            regionKey="studio-member-row"
-                            variant="secondary"
-                            onClick={() => handleTransfer(m.user_id, label)}
-                            disabled={transferOwner.isPending}
-                          >
-                            Make owner
-                          </DocumentAction>
-                        )}
-                      <DocumentAction
-                        actionKey="remove-studio-member"
-                        surfaceKey="account"
-                        regionKey="studio-member-row"
-                        variant="tertiary"
-                        onClick={() => handleRemove(m.id, label)}
-                        disabled={removeMember.isPending}
-                        className="text-[var(--color-terracotta)]"
-                      >
-                        Remove
-                      </DocumentAction>
-                    </>
+                  {canEditMembership ? (
+                    <Select
+                      aria-label={`Role for ${label}`}
+                      value={m.role}
+                      onChange={(e) =>
+                        handleRoleChange(
+                          m.id,
+                          m.role,
+                          e.target.value as MemberRole,
+                        )
+                      }
+                      disabled={updateRole.isPending}
+                      wrapperClassName="w-28"
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="member">Member</option>
+                    </Select>
                   ) : (
                     <span className="font-mono text-[9.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                       {m.role}
                     </span>
+                  )}
+                  {canTransferOwnership && (
+                    <DocumentAction
+                      actionKey={
+                        m.role === 'owner'
+                          ? 'transfer-studio-ownership'
+                          : 'make-studio-owner'
+                      }
+                      surfaceKey="account"
+                      regionKey="studio-member-row"
+                      variant="secondary"
+                      onClick={() => handleTransfer(m.user_id, label)}
+                      disabled={transferOwner.isPending}
+                    >
+                      {m.role === 'owner' ? 'Transfer ownership' : 'Make owner'}
+                    </DocumentAction>
+                  )}
+                  {canEditMembership && (
+                    <DocumentAction
+                      actionKey="remove-studio-member"
+                      surfaceKey="account"
+                      regionKey="studio-member-row"
+                      variant="tertiary"
+                      onClick={() => handleRemove(m.id, label)}
+                      disabled={removeMember.isPending}
+                      className="text-[var(--color-terracotta)]"
+                    >
+                      Remove
+                    </DocumentAction>
                   )}
                 </div>
               </li>
@@ -990,23 +999,28 @@ export function AccountStudioPage() {
         </p>
       )}
 
-      {/* Leave studio. The last owner is blocked by the DB guard (00319) — they
-          must transfer ownership first; the error copy below tells them so. */}
+      {/* Ownership transitions only go through transfer_studio_ownership. */}
       <div className="mt-6 border-t border-[var(--color-pearl)] pt-4">
-        <DocumentAction
-          actionKey="leave-studio"
-          surfaceKey="account"
-          regionKey="studio-membership"
-          variant="tertiary"
-          onClick={handleLeave}
-          disabled={leaveOrg.isPending}
-          loading={leaveOrg.isPending}
-          loadingLabel="Leaving…"
-          className="text-[var(--color-terracotta)]"
-        >
-          Leave studio
-        </DocumentAction>
-        {leaveOrg.isError && (
+        {myRole === 'owner' ? (
+          <p className={HELP}>
+            Transfer ownership to an active teammate before leaving the studio.
+          </p>
+        ) : (
+          <DocumentAction
+            actionKey="leave-studio"
+            surfaceKey="account"
+            regionKey="studio-membership"
+            variant="tertiary"
+            onClick={handleLeave}
+            disabled={leaveOrg.isPending}
+            loading={leaveOrg.isPending}
+            loadingLabel="Leaving…"
+            className="text-[var(--color-terracotta)]"
+          >
+            Leave studio
+          </DocumentAction>
+        )}
+        {myRole !== 'owner' && leaveOrg.isError && (
           <p
             role="alert"
             className="mt-2 text-[12px] text-[var(--color-terracotta)]"

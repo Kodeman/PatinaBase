@@ -2,20 +2,19 @@ import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards } from '@ne
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { DailyLogsService } from './daily-logs.service';
 import { CreateDailyLogDto } from './dto/create-daily-log.dto';
-import { RolesGuard } from '../common/guards/roles.guard';
 import { ProjectAccessGuard } from '../common/guards/project-access.guard';
-import { Roles } from '../common/decorators/roles.decorator';
 import { GetCurrentUser } from '../common/decorators/current-user.decorator';
+import { ProjectManage, ProjectRead } from '../common/decorators/project-authorization.decorator';
 
 @ApiTags('daily-logs')
 @ApiBearerAuth()
 @Controller('projects/:projectId/logs')
-@UseGuards(RolesGuard, ProjectAccessGuard)
+@UseGuards(ProjectAccessGuard)
 export class DailyLogsController {
   constructor(private readonly dailyLogsService: DailyLogsService) {}
 
   @Post()
-  @Roles('admin', 'designer', 'contractor')
+  @ProjectManage()
   @ApiOperation({ summary: 'Create a daily log entry' })
   @ApiResponse({ status: 201, description: 'Log created successfully' })
   @ApiResponse({ status: 409, description: 'Log already exists for this date' })
@@ -28,34 +27,40 @@ export class DailyLogsController {
   }
 
   @Get()
-  @Roles('admin', 'designer', 'client', 'contractor')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get daily logs for a project' })
   @ApiResponse({ status: 200, description: 'Logs retrieved successfully' })
   findAll(
     @Param('projectId') projectId: string,
+    @GetCurrentUser('id') userId: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.dailyLogsService.findAll(projectId, startDate, endDate);
+    return this.dailyLogsService.findAll(projectId, userId, startDate, endDate);
   }
 
   @Get(':id')
-  @Roles('admin', 'designer', 'client', 'contractor')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get daily log by ID' })
   @ApiResponse({ status: 200, description: 'Log retrieved successfully' })
-  findOne(@Param('id') id: string) {
-    return this.dailyLogsService.findOne(id);
+  findOne(
+    @Param('projectId') projectId: string,
+    @Param('id') id: string,
+    @GetCurrentUser('id') userId: string,
+  ) {
+    return this.dailyLogsService.findOne(projectId, id, userId);
   }
 
   @Patch(':id')
-  @Roles('admin', 'designer', 'contractor')
+  @ProjectManage()
   @ApiOperation({ summary: 'Update daily log' })
   @ApiResponse({ status: 200, description: 'Log updated successfully' })
   update(
+    @Param('projectId') projectId: string,
     @Param('id') id: string,
     @Body() updateDto: Partial<CreateDailyLogDto>,
     @GetCurrentUser('id') userId: string,
   ) {
-    return this.dailyLogsService.update(id, updateDto, userId);
+    return this.dailyLogsService.update(projectId, id, updateDto, userId);
   }
 }

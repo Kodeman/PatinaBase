@@ -24,6 +24,7 @@ and never executes on prod.
 
 import glob
 import re
+from collections.abc import Iterator
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -32,7 +33,13 @@ OUT = ROOT / "supabase" / "seed" / "00-legacy-grants.sql"
 DOLLAR_BODY = re.compile(r"\$([A-Za-z_]*)\$.*?\$\1\$", re.DOTALL)
 LINE_COMMENT = re.compile(r"--[^\n]*")
 BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-STMT = re.compile(r"(?:GRANT|REVOKE)\s[^;]*;", re.DOTALL)
+# A replayable ACL statement must begin a SQL statement. Without the boundary,
+# the matcher splits `ALTER DEFAULT PRIVILEGES ... REVOKE ...` at its nested
+# REVOKE subcommand and emits an invalid standalone statement into the seed.
+STMT = re.compile(
+    r"(?:(?<=;)|\A)\s*(?:GRANT|REVOKE)\s[^;]*;",
+    re.DOTALL,
+)
 DROP_FN = re.compile(
     r"DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?([A-Za-z_.\"]+\s*\([^)]*\))", re.IGNORECASE
 )
@@ -59,6 +66,14 @@ def clean(raw: str) -> str:
     return LINE_COMMENT.sub("", BLOCK_COMMENT.sub("", DOLLAR_BODY.sub("", raw)))
 
 
+def iter_top_level_acl_statements(
+    cleaned_sql: str,
+) -> Iterator[tuple[int, str]]:
+    """Yield `(position, normalized SQL)` for statement-start GRANT/REVOKE."""
+    for match in STMT.finditer(cleaned_sql):
+        yield match.start(), " ".join(match.group(0).split())
+
+
 def extract_statements() -> list[tuple[str, str]]:
     paths = sorted(glob.glob(str(ROOT / "supabase" / "migrations" / "*.sql")))
     cleaned = {path: clean(Path(path).read_text()) for path in paths}
@@ -77,15 +92,14 @@ def extract_statements() -> list[tuple[str, str]]:
 
     out: list[tuple[str, str]] = []
     for index, path in enumerate(paths):
-        for m in STMT.finditer(cleaned[path]):
-            stmt = " ".join(m.group(0).split())
+        for position, stmt in iter_top_level_acl_statements(cleaned[path]):
             # Only statements that start with the keyword survive (defensive).
             if not stmt.startswith(("GRANT ", "REVOKE ")):
                 continue
             target = ON_FN.search(stmt)
             if target and last_drop.get(signature(target.group(1)), (-1, -1)) > (
                 index,
-                m.start(),
+                position,
             ):
                 continue
             out.append((Path(path).name, stmt))

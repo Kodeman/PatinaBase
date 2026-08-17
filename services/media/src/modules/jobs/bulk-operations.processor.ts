@@ -423,8 +423,8 @@ export class BulkOperationsProcessor implements OnModuleInit {
   /**
    * Private: Convert AssetKind to storage kind format
    */
-  private toStorageKind(kind: any): 'image' | '3d' {
-    return kind === 'IMAGE' ? 'image' : '3d';
+  private toStorageKind(kind: any): 'image' | '3d' | 'document' {
+    return kind === 'IMAGE' ? 'image' : kind === 'DOCUMENT' ? 'document' : '3d';
   }
 
   /**

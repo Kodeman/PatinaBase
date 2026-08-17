@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, TaskStatus } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { CreateTaskCommentDto, TaskCommentDto, TaskComment } from './dto/create-task-comment.dto';
 import { v4 as uuid } from 'uuid';
+import { ProjectsAuthorizationResolver } from '../common/authorization/projects-authorization.resolver';
 
 @Injectable()
 export class TasksService {
@@ -13,31 +14,37 @@ export class TasksService {
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
+    private readonly authorization: ProjectsAuthorizationResolver,
   ) {}
 
   async create(projectId: string, createDto: CreateTaskDto, userId: string) {
-    // Verify project exists
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true, status: true },
-    });
-
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    if (project.status === 'closed') {
-      throw new BadRequestException('Cannot add tasks to a closed project');
-    }
-
-    const task = await this.prisma.task.create({
-      data: {
-        ...createDto,
-        projectId,
+    const task = await this.authorization.withProjectAccess(
+      userId,
+      projectId,
+      'manage',
+      async (tx) => {
+        const project = await tx.project.findUnique({
+          where: { id: projectId },
+          select: { id: true, status: true },
+        });
+        if (!project) throw new NotFoundException('Project not found');
+        if (project.status === 'closed') {
+          throw new BadRequestException('Cannot add tasks to a closed project');
+        }
+        const created = await tx.task.create({ data: { ...createDto, projectId } });
+        await tx.auditLog.create({
+          data: {
+            entityType: 'task',
+            entityId: created.id,
+            action: 'created',
+            actor: userId,
+            metadata: { projectId },
+          },
+        });
+        return created;
       },
-    });
+    );
 
-    // Emit event
     this.eventEmitter.emit('task.created', {
       taskId: task.id,
       projectId,
@@ -46,75 +53,72 @@ export class TasksService {
       timestamp: new Date(),
     });
 
-    // Log audit
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'task',
-        entityId: task.id,
-        action: 'created',
-        actor: userId,
-        metadata: { projectId },
-      },
-    });
-
     return task;
   }
 
-  async findAll(projectId: string, status?: TaskStatus) {
+  async findAll(projectId: string, userId: string, status?: TaskStatus) {
     const where: any = { projectId };
     if (status) {
       where.status = status;
     }
 
-    return this.prisma.task.findMany({
-      where,
-      orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
-    });
+    return this.authorization.withProjectAccess(userId, projectId, 'read', (tx) =>
+      tx.task.findMany({ where, orderBy: [{ order: 'asc' }, { createdAt: 'desc' }] }),
+    );
   }
 
-  async findOne(id: string) {
-    const task = await this.prisma.task.findUnique({
-      where: { id },
-      include: {
-        project: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
+  async findOne(projectId: string, id: string, userId: string) {
+    return this.authorization.withProjectAccess(userId, projectId, 'read', async (tx) => {
+      const task = await tx.task.findFirst({
+        where: { id, projectId },
+        include: {
+          project: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+            },
           },
         },
-      },
+      });
+      if (!task) throw new NotFoundException('Task not found');
+      return task;
     });
-
-    if (!task) {
-      throw new NotFoundException('Task not found');
-    }
-
-    return task;
   }
 
-  async update(id: string, updateDto: UpdateTaskDto, userId: string) {
-    const existing = await this.prisma.task.findUnique({
-      where: { id },
-      select: { id: true, status: true, projectId: true },
-    });
-
-    if (!existing) {
-      throw new NotFoundException('Task not found');
-    }
-
-    // Validate status transition
-    if (updateDto.status) {
-      this.validateStatusTransition(existing.status, updateDto.status);
-    }
-
-    const task = await this.prisma.task.update({
-      where: { id },
-      data: {
-        ...updateDto,
-        completedAt: updateDto.status === TaskStatus.DONE ? new Date() : undefined,
+  async update(projectId: string, id: string, updateDto: UpdateTaskDto, userId: string) {
+    const { existing, task } = await this.authorization.withProjectAccess(
+      userId,
+      projectId,
+      'manage',
+      async (tx) => {
+        const existing = await tx.task.findFirst({
+          where: { id, projectId },
+          select: { id: true, status: true, projectId: true },
+        });
+        if (!existing) throw new NotFoundException('Task not found');
+        if (updateDto.status) this.validateStatusTransition(existing.status, updateDto.status);
+        await tx.task.updateMany({
+          where: { id, projectId },
+          data: {
+            ...updateDto,
+            completedAt: updateDto.status === TaskStatus.DONE ? new Date() : undefined,
+          },
+        });
+        const task = await tx.task.findFirstOrThrow({ where: { id, projectId } });
+        await tx.auditLog.create({
+          data: {
+            entityType: 'task',
+            entityId: id,
+            action: 'updated',
+            actor: userId,
+            changes: updateDto as any,
+            metadata: { projectId },
+          },
+        });
+        return { existing, task };
       },
-    });
+    );
 
     // Emit event if status changed
     if (updateDto.status && updateDto.status !== existing.status) {
@@ -138,33 +142,33 @@ export class TasksService {
       }
     }
 
-    // Log audit
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'task',
-        entityId: id,
-        action: 'updated',
-        actor: userId,
-        changes: updateDto as any,
-      },
-    });
-
     return task;
   }
 
-  async remove(id: string, userId: string) {
-    const existing = await this.prisma.task.findUnique({
-      where: { id },
-      select: { id: true, projectId: true },
-    });
-
-    if (!existing) {
-      throw new NotFoundException('Task not found');
-    }
-
-    await this.prisma.task.delete({
-      where: { id },
-    });
+  async remove(projectId: string, id: string, userId: string) {
+    const existing = await this.authorization.withProjectAccess(
+      userId,
+      projectId,
+      'manage',
+      async (tx) => {
+        const existing = await tx.task.findFirst({
+          where: { id, projectId },
+          select: { id: true, projectId: true },
+        });
+        if (!existing) throw new NotFoundException('Task not found');
+        await tx.task.deleteMany({ where: { id, projectId } });
+        await tx.auditLog.create({
+          data: {
+            entityType: 'task',
+            entityId: id,
+            action: 'deleted',
+            actor: userId,
+            metadata: { projectId },
+          },
+        });
+        return existing;
+      },
+    );
 
     // Emit event
     this.eventEmitter.emit('task.deleted', {
@@ -174,43 +178,31 @@ export class TasksService {
       timestamp: new Date(),
     });
 
-    // Log audit
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'task',
-        entityId: id,
-        action: 'deleted',
-        actor: userId,
-        metadata: { projectId: existing.projectId },
-      },
-    });
-
     return { message: 'Task deleted successfully' };
   }
 
   async bulkUpdateStatus(projectId: string, taskIds: string[], status: TaskStatus, userId: string) {
-    // Verify all tasks belong to project
-    const tasks = await this.prisma.task.findMany({
-      where: {
-        id: { in: taskIds },
-        projectId,
+    const updated = await this.authorization.withProjectAccess(
+      userId,
+      projectId,
+      'manage',
+      async (tx) => {
+        const tasks = await tx.task.findMany({
+          where: { id: { in: taskIds }, projectId },
+          select: { id: true },
+        });
+        if (tasks.length !== taskIds.length) {
+          throw new BadRequestException('One or more tasks are unavailable');
+        }
+        return tx.task.updateMany({
+          where: { id: { in: taskIds }, projectId },
+          data: {
+            status,
+            completedAt: status === TaskStatus.DONE ? new Date() : undefined,
+          },
+        });
       },
-      select: { id: true },
-    });
-
-    if (tasks.length !== taskIds.length) {
-      throw new BadRequestException('Some tasks not found or do not belong to this project');
-    }
-
-    const updated = await this.prisma.task.updateMany({
-      where: {
-        id: { in: taskIds },
-      },
-      data: {
-        status,
-        completedAt: status === TaskStatus.DONE ? new Date() : undefined,
-      },
-    });
+    );
 
     // Emit bulk event
     this.eventEmitter.emit('task.bulk_updated', {
@@ -221,7 +213,7 @@ export class TasksService {
       timestamp: new Date(),
     });
 
-    return { updated: updated.count, taskIds };
+    return { updated: updated.count };
   }
 
   private validateStatusTransition(currentStatus: string, newStatus: string) {
@@ -250,23 +242,6 @@ export class TasksService {
     userId: string,
     userName?: string,
   ): Promise<TaskCommentDto> {
-    // Verify task exists and belongs to project
-    const task = await this.prisma.task.findFirst({
-      where: {
-        id: taskId,
-        projectId,
-      },
-    });
-
-    if (!task) {
-      throw new NotFoundException('Task not found in this project');
-    }
-
-    // Parse existing comments from metadata
-    const metadata = task.metadata as any || {};
-    const comments: TaskComment[] = metadata.comments || [];
-
-    // Create new comment
     const newComment: TaskComment = {
       id: uuid(),
       text: createCommentDto.text,
@@ -278,18 +253,25 @@ export class TasksService {
       edited: false,
     };
 
-    // Add comment to list
-    comments.push(newComment);
-
-    // Update task with new comments
-    await this.prisma.task.update({
-      where: { id: taskId },
-      data: {
-        metadata: {
-          ...metadata,
-          comments,
+    await this.authorization.withProjectAccess(userId, projectId, 'read', async (tx) => {
+      const task = await tx.task.findFirst({ where: { id: taskId, projectId } });
+      if (!task) throw new NotFoundException('Task not found');
+      const metadata = (task.metadata as any) || {};
+      const comments: TaskComment[] = metadata.comments || [];
+      comments.push(newComment);
+      await tx.task.updateMany({
+        where: { id: taskId, projectId },
+        data: { metadata: { ...metadata, comments } },
+      });
+      await tx.auditLog.create({
+        data: {
+          entityType: 'task_comment',
+          entityId: newComment.id,
+          action: 'created',
+          actor: userId,
+          metadata: { taskId, projectId },
         },
-      },
+      });
     });
 
     // Emit event
@@ -302,41 +284,19 @@ export class TasksService {
       timestamp: new Date(),
     });
 
-    // Log audit
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'task_comment',
-        entityId: newComment.id,
-        action: 'created',
-        actor: userId,
-        metadata: { taskId, projectId },
-      },
-    });
-
     return newComment as TaskCommentDto;
   }
 
-  async getComments(projectId: string, taskId: string): Promise<TaskCommentDto[]> {
-    // Verify task exists and belongs to project
-    const task = await this.prisma.task.findFirst({
-      where: {
-        id: taskId,
-        projectId,
-      },
+  async getComments(projectId: string, taskId: string, userId: string): Promise<TaskCommentDto[]> {
+    return this.authorization.withProjectAccess(userId, projectId, 'read', async (tx) => {
+      const task = await tx.task.findFirst({ where: { id: taskId, projectId } });
+      if (!task) throw new NotFoundException('Task not found');
+      const metadata = (task.metadata as any) || {};
+      const comments: TaskComment[] = metadata.comments || [];
+      return comments.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ) as TaskCommentDto[];
     });
-
-    if (!task) {
-      throw new NotFoundException('Task not found in this project');
-    }
-
-    // Parse comments from metadata
-    const metadata = task.metadata as any || {};
-    const comments: TaskComment[] = metadata.comments || [];
-
-    // Sort by creation date (newest first)
-    return comments.sort((a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    ) as TaskCommentDto[];
   }
 
   async deleteComment(
@@ -344,49 +304,28 @@ export class TasksService {
     taskId: string,
     commentId: string,
     userId: string,
-    userRole?: string,
   ): Promise<void> {
-    // Verify task exists and belongs to project
-    const task = await this.prisma.task.findFirst({
-      where: {
-        id: taskId,
-        projectId,
-      },
-    });
-
-    if (!task) {
-      throw new NotFoundException('Task not found in this project');
-    }
-
-    // Parse comments from metadata
-    const metadata = task.metadata as any || {};
-    const comments: TaskComment[] = metadata.comments || [];
-
-    // Find comment
-    const commentIndex = comments.findIndex(c => c.id === commentId);
-    if (commentIndex === -1) {
-      throw new NotFoundException('Comment not found');
-    }
-
-    const comment = comments[commentIndex];
-
-    // Check permissions - only author or admin can delete
-    if (comment.userId !== userId && userRole !== 'admin') {
-      throw new ForbiddenException('Only comment author or admin can delete comments');
-    }
-
-    // Remove comment
-    comments.splice(commentIndex, 1);
-
-    // Update task
-    await this.prisma.task.update({
-      where: { id: taskId },
-      data: {
-        metadata: {
-          ...metadata,
-          comments,
+    await this.authorization.withProjectAccess(userId, projectId, 'manage', async (tx) => {
+      const task = await tx.task.findFirst({ where: { id: taskId, projectId } });
+      if (!task) throw new NotFoundException('Task not found');
+      const metadata = (task.metadata as any) || {};
+      const comments: TaskComment[] = metadata.comments || [];
+      const commentIndex = comments.findIndex((comment) => comment.id === commentId);
+      if (commentIndex === -1) throw new NotFoundException('Comment not found');
+      comments.splice(commentIndex, 1);
+      await tx.task.updateMany({
+        where: { id: taskId, projectId },
+        data: { metadata: { ...metadata, comments } },
+      });
+      await tx.auditLog.create({
+        data: {
+          entityType: 'task_comment',
+          entityId: commentId,
+          action: 'deleted',
+          actor: userId,
+          metadata: { taskId, projectId },
         },
-      },
+      });
     });
 
     // Emit event
@@ -396,17 +335,6 @@ export class TasksService {
       commentId,
       userId,
       timestamp: new Date(),
-    });
-
-    // Log audit
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'task_comment',
-        entityId: commentId,
-        action: 'deleted',
-        actor: userId,
-        metadata: { taskId, projectId },
-      },
     });
   }
 }

@@ -9,6 +9,7 @@ import { ProgressAnalyticsService } from './progress-analytics.service';
 describe('ProgressAnalyticsService', () => {
   let service: ProgressAnalyticsService;
   let mockPrismaService: any;
+  let mockAuthorization: any;
 
   // Mock data factories
   const createMockProject = (overrides = {}) => ({
@@ -78,10 +79,19 @@ describe('ProgressAnalyticsService', () => {
         findMany: jest.fn(),
         count: jest.fn(),
       },
+      timelineSegment: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'segment-123' }),
+      },
     };
 
+    mockAuthorization = {
+      withProjectAccess: jest.fn(
+        async (_userId: string, _projectId: string, _mode: string, operation: (tx: any) => any) =>
+          operation(mockPrismaService),
+      ),
+    };
     // Manual instantiation - bypasses NestJS DI metadata issues
-    service = new ProgressAnalyticsService(mockPrismaService);
+    service = new ProgressAnalyticsService(mockAuthorization);
   });
 
   describe('getProjectProgress', () => {
@@ -100,7 +110,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.milestoneMetrics.totalMilestones).toBe(3);
       expect(result.milestoneMetrics.completedMilestones).toBe(2);
@@ -123,7 +133,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.overallProgress).toBe(50); // (100 + 50 + 0) / 3 = 50
     });
@@ -143,7 +153,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.approvalMetrics.approvalRate).toBe(67); // 2/3 = 66.67, rounded to 67
     });
@@ -172,7 +182,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.milestoneMetrics.onTimeCompletionRate).toBe(50); // 1/2 on time
     });
@@ -188,7 +198,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.overallProgress).toBe(0);
       expect(result.milestoneMetrics.totalMilestones).toBe(0);
@@ -198,7 +208,9 @@ describe('ProgressAnalyticsService', () => {
     it('should throw NotFoundException if project not found', async () => {
       mockPrismaService.project.findUnique.mockResolvedValue(null);
 
-      await expect(service.getProjectProgress('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.getProjectProgress('nonexistent', 'user-123')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -218,20 +230,22 @@ describe('ProgressAnalyticsService', () => {
       });
 
       mockPrismaService.project.findUnique.mockResolvedValue(mockProject);
-      mockPrismaService.auditLog.findMany.mockResolvedValue([{
-        createdAt: now,
-        metadata: { sessionId: 'session-1', durationSeconds: 120 },
-      }]);
+      mockPrismaService.auditLog.findMany.mockResolvedValue([
+        {
+          createdAt: now,
+          metadata: { sessionId: 'session-1', durationSeconds: 120 },
+        },
+      ]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
     };
 
     it('should calculate weighted health score', async () => {
       setupHealthTest();
 
-      const result = await service.getHealthIndicators('project-123');
+      const result = await service.getHealthIndicators('project-123', 'user-123');
 
       expect(result).toHaveLength(4); // schedule, approvals, engagement, milestones
-      result.forEach(indicator => {
+      result.forEach((indicator) => {
         expect(indicator).toHaveProperty('category');
         expect(indicator).toHaveProperty('score');
         expect(indicator).toHaveProperty('status');
@@ -250,7 +264,11 @@ describe('ProgressAnalyticsService', () => {
         endDate,
         timelineSegments: [createMockSegment({ progress: 20 })], // Only 20% done at 67% time
         milestones: [
-          createMockMilestone({ status: 'pending', completedAt: null, targetDate: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) }), // Overdue
+          createMockMilestone({
+            status: 'pending',
+            completedAt: null,
+            targetDate: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+          }), // Overdue
         ],
         approvalRecords: [],
       });
@@ -259,12 +277,12 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getHealthIndicators('project-123');
+      const result = await service.getHealthIndicators('project-123', 'user-123');
 
-      const scheduleIndicator = result.find(i => i.category === 'schedule');
+      const scheduleIndicator = result.find((i) => i.category === 'schedule');
       expect(scheduleIndicator?.status).toBe('critical');
 
-      const milestoneIndicator = result.find(i => i.category === 'milestones');
+      const milestoneIndicator = result.find((i) => i.category === 'milestones');
       // One overdue milestone should trigger at least a warning status
       expect(['critical', 'warning']).toContain(milestoneIndicator?.status);
     });
@@ -272,8 +290,8 @@ describe('ProgressAnalyticsService', () => {
     it('should calculate schedule variance', async () => {
       setupHealthTest();
 
-      const result = await service.getHealthIndicators('project-123');
-      const scheduleIndicator = result.find(i => i.category === 'schedule');
+      const result = await service.getHealthIndicators('project-123', 'user-123');
+      const scheduleIndicator = result.find((i) => i.category === 'schedule');
 
       expect(scheduleIndicator).toBeDefined();
       expect(scheduleIndicator?.message).toMatch(/ahead|behind/);
@@ -285,7 +303,13 @@ describe('ProgressAnalyticsService', () => {
         startDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
         endDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
         timelineSegments: [createMockSegment({ progress: 10 })], // Way behind
-        milestones: [createMockMilestone({ status: 'pending', completedAt: null, targetDate: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000) })],
+        milestones: [
+          createMockMilestone({
+            status: 'pending',
+            completedAt: null,
+            targetDate: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000),
+          }),
+        ],
         approvalRecords: [],
       });
 
@@ -294,10 +318,10 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getHealthIndicators('project-123');
+      const result = await service.getHealthIndicators('project-123', 'user-123');
 
-      const scheduleRec = result.find(i => i.category === 'schedule')?.recommendation;
-      const engagementRec = result.find(i => i.category === 'engagement')?.recommendation;
+      const scheduleRec = result.find((i) => i.category === 'schedule')?.recommendation;
+      const engagementRec = result.find((i) => i.category === 'engagement')?.recommendation;
 
       expect(scheduleRec).toBeDefined();
       expect(engagementRec).toBeDefined();
@@ -307,7 +331,7 @@ describe('ProgressAnalyticsService', () => {
       setupHealthTest();
 
       // Get project progress to check health status
-      const progress = await service.getProjectProgress('project-123');
+      const progress = await service.getProjectProgress('project-123', 'user-123');
 
       expect(progress.status).toBeDefined();
       expect(['on_track', 'at_risk', 'behind', 'ahead']).toContain(progress.status);
@@ -324,7 +348,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getHealthIndicators('project-123');
+      const result = await service.getHealthIndicators('project-123', 'user-123');
 
       expect(result).toHaveLength(4);
       // Should not throw, should return default/safe values
@@ -365,13 +389,12 @@ describe('ProgressAnalyticsService', () => {
       });
     });
 
-    it('should not throw on database error', async () => {
+    it('should roll back on database error', async () => {
       mockPrismaService.auditLog.create.mockRejectedValue(new Error('DB error'));
 
-      // Should not throw
       await expect(
-        service.recordTimelineView('project-123', 'user-123', 'session-abc')
-      ).resolves.not.toThrow();
+        service.recordTimelineView('project-123', 'user-123', 'session-abc'),
+      ).rejects.toThrow('DB error');
     });
   });
 
@@ -392,12 +415,12 @@ describe('ProgressAnalyticsService', () => {
       });
     });
 
-    it('should not throw on database error', async () => {
+    it('should roll back on database error', async () => {
       mockPrismaService.auditLog.create.mockRejectedValue(new Error('DB error'));
 
       await expect(
-        service.recordMediaGalleryOpen('project-123', 'segment-123', 'user-123')
-      ).resolves.not.toThrow();
+        service.recordMediaGalleryOpen('project-123', 'segment-123', 'user-123'),
+      ).rejects.toThrow('DB error');
     });
   });
 
@@ -417,7 +440,7 @@ describe('ProgressAnalyticsService', () => {
       ]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.engagement.avgViewDurationSeconds).toBe(150); // (100 + 200 + 150) / 3
     });
@@ -437,7 +460,7 @@ describe('ProgressAnalyticsService', () => {
       ]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.engagement.uniqueSessions).toBe(2);
     });
@@ -456,7 +479,7 @@ describe('ProgressAnalyticsService', () => {
       ]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.engagement.daysSinceLastVisit).toBe(2);
     });
@@ -481,7 +504,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.approvalMetrics.avgResponseTimeHours).toBe(6); // (4 + 8) / 2
     });
@@ -496,9 +519,24 @@ describe('ProgressAnalyticsService', () => {
         timelineSegments: [],
         milestones: [],
         approvalRecords: [
-          createMockApproval({ id: 'apr-1', status: 'pending', dueDate: laterDate, approvedAt: null }),
-          createMockApproval({ id: 'apr-2', status: 'pending', dueDate: overdueDate, approvedAt: null }),
-          createMockApproval({ id: 'apr-3', status: 'pending', dueDate: soonDate, approvedAt: null }),
+          createMockApproval({
+            id: 'apr-1',
+            status: 'pending',
+            dueDate: laterDate,
+            approvedAt: null,
+          }),
+          createMockApproval({
+            id: 'apr-2',
+            status: 'pending',
+            dueDate: overdueDate,
+            approvedAt: null,
+          }),
+          createMockApproval({
+            id: 'apr-3',
+            status: 'pending',
+            dueDate: soonDate,
+            approvedAt: null,
+          }),
         ],
       });
 
@@ -506,7 +544,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       // Pending list should be sorted by priority: urgent > high > normal > low
       expect(result.approvalMetrics.pendingList[0].priority).toBe('urgent'); // Overdue
@@ -524,8 +562,18 @@ describe('ProgressAnalyticsService', () => {
       const mockProject = createMockProject({
         timelineSegments: [],
         milestones: [
-          createMockMilestone({ id: 'ms-2', status: 'pending', completedAt: null, targetDate: future2 }),
-          createMockMilestone({ id: 'ms-1', status: 'pending', completedAt: null, targetDate: future1 }),
+          createMockMilestone({
+            id: 'ms-2',
+            status: 'pending',
+            completedAt: null,
+            targetDate: future2,
+          }),
+          createMockMilestone({
+            id: 'ms-1',
+            status: 'pending',
+            completedAt: null,
+            targetDate: future1,
+          }),
         ],
         approvalRecords: [],
       });
@@ -534,7 +582,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.milestoneMetrics.nextMilestone?.id).toBe('ms-1');
       expect(result.milestoneMetrics.nextMilestone?.daysUntil).toBeGreaterThanOrEqual(4);
@@ -561,7 +609,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.milestoneMetrics.avgCompletionDays).toBe(15); // (10 + 20) / 2
     });
@@ -584,7 +632,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.milestoneMetrics.overdueMilestones).toBe(2);
     });
@@ -606,10 +654,12 @@ describe('ProgressAnalyticsService', () => {
       });
 
       mockPrismaService.project.findUnique.mockResolvedValue(mockProject);
-      mockPrismaService.auditLog.findMany.mockResolvedValue([{ createdAt: now, metadata: { sessionId: 's1' } }]);
+      mockPrismaService.auditLog.findMany.mockResolvedValue([
+        { createdAt: now, metadata: { sessionId: 's1' } },
+      ]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.status).toBe('ahead');
     });
@@ -632,7 +682,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.status).toBe('behind');
     });
@@ -648,7 +698,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.healthScore).toBeGreaterThanOrEqual(0);
       expect(result.healthScore).toBeLessThanOrEqual(100);
@@ -671,7 +721,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.currentPhase).toBe('development');
     });
@@ -690,7 +740,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.currentPhase).toBe('development');
     });
@@ -706,7 +756,7 @@ describe('ProgressAnalyticsService', () => {
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.count.mockResolvedValue(0);
 
-      const result = await service.getProjectProgress('project-123');
+      const result = await service.getProjectProgress('project-123', 'user-123');
 
       expect(result.currentPhase).toBe('planning');
     });
