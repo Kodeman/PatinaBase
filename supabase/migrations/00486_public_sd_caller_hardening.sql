@@ -78,7 +78,7 @@ VALUES
     'projects', 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '44c113df92bbfe30c596e7b1304b95338dd7a66883d79051da64b65395623d84',
-    '4301647c39107e143774c434436248b3fc7946bf75b7b102c0ec335bc156d5d1', ARRAY['authenticated']
+    '903c0bc045a65e0690f0c5c724b1dcced59fe3398bd3452c9b884bd44f4ea3f2', ARRAY['authenticated']
   ),
   (
     'public.create_field_link(uuid)', 'p_party_id uuid',
@@ -3569,11 +3569,18 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
+  -- FOR NO KEY UPDATE, not FOR UPDATE: closing mutates non-key project
+  -- columns only, and FOR UPDATE additionally conflicts with the FOR KEY
+  -- SHARE that every foreign-key child insert takes on this row, which
+  -- fences unrelated money settlement (invoice_payments -> designer_earnings)
+  -- for the whole close. Financial state is serialized by the explicit
+  -- FOR UPDATE locks this routine takes on invoices, line items, milestones
+  -- and FF&E below, not by the project row's lock strength.
   SELECT * INTO v_project
   FROM public.projects
   WHERE id = p_project_id
     AND designer_id = v_designer
-  FOR UPDATE;
+  FOR NO KEY UPDATE;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'project not found or access denied'

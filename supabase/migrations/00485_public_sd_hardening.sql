@@ -199,7 +199,7 @@ VALUES
     'trigger', 'v', ARRAY['search_path=public']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '53c95a7cbfb04102ddd662fc0d0d63fd33474c3e3e3c51e9c23ce6263bf3a474',
-    '3f8b56b7fa94c3e7b4830fa8a3242b637f8da533f3f3bdb2f13acab0175fe7f8', ARRAY['authenticated', 'service_role']::text[],
+    'a091eb39e882302c77b85e378234753b6cc3125578cb2e3318bd249bf7cf57b1', ARRAY['authenticated', 'service_role']::text[],
     ARRAY[]::text[]
   ),
   (
@@ -2608,7 +2608,7 @@ BEGIN
     SELECT project.* INTO v_project
     FROM public.projects AS project
     WHERE project.id = NEW.project_id
-      AND project.client_id = NEW.client_id
+      AND project.client_id IS NOT DISTINCT FROM NEW.client_id
       AND project.studio_id = NEW.studio_id;
     IF NOT FOUND THEN
       RAISE EXCEPTION 'studio_id_not_designer_studio';
@@ -2765,7 +2765,7 @@ BEGIN
     FROM public.projects AS project
     WHERE project.id = NEW.project_id
       AND project.designer_id = NEW.designer_id
-      AND project.client_id = NEW.client_id
+      AND project.client_id IS NOT DISTINCT FROM NEW.client_id
       AND project.studio_id = NEW.studio_id
       AND project.status = 'active'
     FOR SHARE;
@@ -2811,7 +2811,7 @@ BEGIN
      AND lead_membership.user_id = project.designer_id
     WHERE project.id = NEW.project_id
       AND project.designer_id = NEW.designer_id
-      AND project.client_id = NEW.client_id
+      AND project.client_id IS NOT DISTINCT FROM NEW.client_id
       AND project.studio_id = NEW.studio_id
       AND project.status = 'active'
       AND studio.type = 'design_studio'
