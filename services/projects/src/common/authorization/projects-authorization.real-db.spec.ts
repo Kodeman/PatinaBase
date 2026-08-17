@@ -6,6 +6,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { ProjectsService } from '../../projects/projects.service';
 import { ProjectsAuthorizationResolver } from './projects-authorization.resolver';
 
+const databaseUrl = process.env.DATABASE_URL;
+const isLocalDatabase = Boolean(databaseUrl && /127\.0\.0\.1:54322/.test(databaseUrl));
+const describeLocal = isLocalDatabase ? describe : describe.skip;
+
 // This module has a tracked stale .js sibling, so Jest must load the current TypeScript implementation.
 const { ProjectsService: CurrentProjectsService } =
   require('../../projects/projects.service.ts') as {
@@ -43,7 +47,7 @@ const ABSENT_PROJECT_ID = 'cfb40000-0000-4000-8000-000000000099';
 const UNKNOWN_ROLE_ID = 'cfb50000-0000-4000-8000-000000000001';
 const UNKNOWN_ROLE_NAME = 'cfb_invented_project_admin';
 
-describe('ProjectsAuthorizationResolver (real local Postgres)', () => {
+describeLocal('ProjectsAuthorizationResolver (real local Postgres)', () => {
   let prisma: PrismaService;
   let resolver: ProjectsAuthorizationResolver;
   let service: ProjectsService;
@@ -93,10 +97,6 @@ describe('ProjectsAuthorizationResolver (real local Postgres)', () => {
   };
 
   beforeAll(async () => {
-    if (!process.env.DATABASE_URL?.includes('127.0.0.1:54322')) {
-      throw new Error('This suite requires the local Supabase Postgres DATABASE_URL');
-    }
-
     prisma = new PrismaService();
     resolver = new ProjectsAuthorizationResolver(prisma);
     await prisma.$connect();
