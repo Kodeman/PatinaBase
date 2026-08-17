@@ -43,12 +43,12 @@ BEGIN
 -- The on_auth_user_created trigger auto-creates profiles with display_name
 INSERT INTO auth.users (id, instance_id, email, encrypted_password, email_confirmed_at, raw_user_meta_data, role, aud, created_at, updated_at)
 VALUES
-  (h1, '00000000-0000-0000-0000-000000000000', 'sarah.chen@example.com',    crypt('password123', gen_salt('bf')), now(), '{"full_name":"Sarah Chen"}'::jsonb,    'authenticated', 'authenticated', now(), now()),
-  (h2, '00000000-0000-0000-0000-000000000000', 'marcus.wright@example.com', crypt('password123', gen_salt('bf')), now(), '{"full_name":"Marcus Wright"}'::jsonb, 'authenticated', 'authenticated', now(), now()),
-  (h3, '00000000-0000-0000-0000-000000000000', 'elena.ruiz@example.com',    crypt('password123', gen_salt('bf')), now(), '{"full_name":"Elena Ruiz"}'::jsonb,    'authenticated', 'authenticated', now(), now()),
-  (h4, '00000000-0000-0000-0000-000000000000', 'james.okafor@example.com',  crypt('password123', gen_salt('bf')), now(), '{"full_name":"James Okafor"}'::jsonb,  'authenticated', 'authenticated', now(), now()),
-  (h5, '00000000-0000-0000-0000-000000000000', 'lily.tanaka@example.com',   crypt('password123', gen_salt('bf')), now(), '{"full_name":"Lily Tanaka"}'::jsonb,   'authenticated', 'authenticated', now(), now()),
-  (h6, '00000000-0000-0000-0000-000000000000', 'david.nielsen@example.com', crypt('password123', gen_salt('bf')), now(), '{"full_name":"David Nielsen"}'::jsonb, 'authenticated', 'authenticated', now(), now());
+  (h1, '00000000-0000-0000-0000-000000000000', 'sarah.chen@example.com',    extensions.crypt('password123', extensions.gen_salt('bf')), now(), '{"full_name":"Sarah Chen"}'::jsonb,    'authenticated', 'authenticated', now(), now()),
+  (h2, '00000000-0000-0000-0000-000000000000', 'marcus.wright@example.com', extensions.crypt('password123', extensions.gen_salt('bf')), now(), '{"full_name":"Marcus Wright"}'::jsonb, 'authenticated', 'authenticated', now(), now()),
+  (h3, '00000000-0000-0000-0000-000000000000', 'elena.ruiz@example.com',    extensions.crypt('password123', extensions.gen_salt('bf')), now(), '{"full_name":"Elena Ruiz"}'::jsonb,    'authenticated', 'authenticated', now(), now()),
+  (h4, '00000000-0000-0000-0000-000000000000', 'james.okafor@example.com',  extensions.crypt('password123', extensions.gen_salt('bf')), now(), '{"full_name":"James Okafor"}'::jsonb,  'authenticated', 'authenticated', now(), now()),
+  (h5, '00000000-0000-0000-0000-000000000000', 'lily.tanaka@example.com',   extensions.crypt('password123', extensions.gen_salt('bf')), now(), '{"full_name":"Lily Tanaka"}'::jsonb,   'authenticated', 'authenticated', now(), now()),
+  (h6, '00000000-0000-0000-0000-000000000000', 'david.nielsen@example.com', extensions.crypt('password123', extensions.gen_salt('bf')), now(), '{"full_name":"David Nielsen"}'::jsonb, 'authenticated', 'authenticated', now(), now());
 
 -- ─── Update profiles to homeowner role with full_name ───────────────────
 UPDATE profiles SET role = 'homeowner', full_name = 'Sarah Chen'     WHERE id = h1;

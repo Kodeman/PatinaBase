@@ -50,6 +50,23 @@ enabled = true
 # sql_paths = ['./seeds/*.sql', '../project-src/seeds/*-load-testing.sql']
 sql_paths = ['./seed/00-legacy-grants.sql', './seed/dev-accounts.sql', './seed/organizations.sql', './seed/vendors.sql', './seed/products.sql', './seed/designer-clients.sql', './seed/leads_room_scans.sql', './seed/proposals.sql', './seed/proposal-captures.sql', './seed/decisions.sql', './seed/schedule.sql', './seed/schedule-extremes.sql', './seed/project_documents_tasks.sql', './seed/paint_colors_seed.sql', './seed/procurement_workspace_dev.sql', './seed/procurement_receiving_dev.sql', './seed/procurement_notifications_dev.sql', './seed/aesthete_demo.sql', './seed/agent-tasks-dev.sql', './seed/fulfillment-vendor-profiles.sql', './seed/fulfillment-catalog-dev.sql', './seed/99-local-edge-settings.sql']
 
+# Long-lived, data-less staging branch under the Strata project. Staging uses
+# representative seed data but never the local-only Vault credentials from
+# 99-local-edge-settings.sql.
+[remotes.staging]
+project_id = "vuesoyhfrjabfxbrzekd"
+
+[remotes.staging.db.seed]
+enabled = true
+sql_paths = ['./seed/00-legacy-grants.sql', './seed/dev-accounts.sql', './seed/organizations.sql', './seed/vendors.sql', './seed/products.sql', './seed/designer-clients.sql', './seed/leads_room_scans.sql', './seed/proposals.sql', './seed/proposal-captures.sql', './seed/decisions.sql', './seed/schedule.sql', './seed/schedule-extremes.sql', './seed/project_documents_tasks.sql', './seed/paint_colors_seed.sql', './seed/procurement_workspace_dev.sql', './seed/procurement_receiving_dev.sql', './seed/procurement_notifications_dev.sql', './seed/aesthete_demo.sql', './seed/agent-tasks-dev.sql', './seed/fulfillment-vendor-profiles.sql', './seed/fulfillment-catalog-dev.sql']
+
+[remotes.staging.auth]
+site_url = "https://patina-designer-portal-staging.kody-be3.workers.dev"
+additional_redirect_urls = ["https://patina-designer-portal-staging.kody-be3.workers.dev/**", "https://patina-client-portal-staging.kody-be3.workers.dev/**", "https://patina-admin-portal-staging.kody-be3.workers.dev/**", "field://auth/callback"]
+
+[remotes.staging.auth.external.apple]
+enabled = false
+
 [realtime]
 enabled = true
 # Bind realtime via either IPv4 or IPv6. (default: IPv4)

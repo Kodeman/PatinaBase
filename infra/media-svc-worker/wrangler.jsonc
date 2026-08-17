@@ -30,5 +30,27 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MediaService"] }],
 
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "env": {
+    "staging": {
+      "workers_dev": true,
+      "containers": [
+        {
+          "name": "patina-media-service-staging",
+          "class_name": "MediaService",
+          "image": "../../services/media/Dockerfile.cf",
+          "image_build_context": "../../",
+          "instance_type": "standard-1",
+          "max_instances": 2
+        }
+      ],
+      "vars": {
+        "R2_BUCKET_RAW": "patina-raw-staging",
+        "R2_BUCKET_PROCESSED": "patina-processed-staging"
+      },
+      "durable_objects": {
+        "bindings": [{ "name": "MEDIA_SVC", "class_name": "MediaService" }]
+      }
+    }
+  }
 }

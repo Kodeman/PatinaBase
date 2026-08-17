@@ -1,4 +1,4 @@
-import { Container, getRandom } from '@cloudflare/containers';
+import { Container, getRandom } from "@cloudflare/containers";
 
 interface Env {
   MEDIA_SVC: DurableObjectNamespace<MediaService>;
@@ -23,6 +23,8 @@ interface Env {
   R2_ACCOUNT_ID: string;
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
+  R2_BUCKET_RAW?: string;
+  R2_BUCKET_PROCESSED?: string;
 }
 
 /**
@@ -45,14 +47,14 @@ interface Env {
  */
 export class MediaService extends Container<Env> {
   defaultPort = 8080;
-  sleepAfter = '10m';
+  sleepAfter = "10m";
 
   constructor(ctx: DurableObjectState<Env>, env: Env) {
     super(ctx, env);
     this.envVars = {
-      PORT: '8080',
-      NODE_ENV: 'production',
-      REDIS_DISABLED: 'true',
+      PORT: "8080",
+      NODE_ENV: "production",
+      REDIS_DISABLED: "true",
       DATABASE_URL: env.DATABASE_URL,
       SUPABASE_URL: env.SUPABASE_URL,
       ...(env.SUPABASE_SERVICE_ROLE_KEY
@@ -79,12 +81,12 @@ export class MediaService extends Container<Env> {
       MEDIA_WORKER_URL: env.MEDIA_WORKER_URL,
       MEDIA_WORKER_ENQUEUE_SECRET: env.MEDIA_WORKER_ENQUEUE_SECRET,
       COMPLETE_CALLBACK_SECRET: env.COMPLETE_CALLBACK_SECRET,
-      STORAGE_PROVIDER: 'R2',
+      STORAGE_PROVIDER: "R2",
       R2_ACCOUNT_ID: env.R2_ACCOUNT_ID,
       R2_ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID,
       R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
-      R2_BUCKET_RAW: 'patina-raw',
-      R2_BUCKET_PROCESSED: 'patina-processed',
+      R2_BUCKET_RAW: env.R2_BUCKET_RAW ?? "patina-raw",
+      R2_BUCKET_PROCESSED: env.R2_BUCKET_PROCESSED ?? "patina-processed",
     };
   }
 }
