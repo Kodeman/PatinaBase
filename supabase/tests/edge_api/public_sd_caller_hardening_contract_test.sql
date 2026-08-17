@@ -171,7 +171,7 @@ INSERT INTO _00486_expected VALUES
     'public.close_project(uuid,jsonb,jsonb)',
     'p_project_id uuid, p_closure jsonb DEFAULT NULL::jsonb, p_snapshot jsonb DEFAULT NULL::jsonb',
     'projects', 'v', ARRAY['search_path=pg_catalog, public, pg_temp'],
-    '4301647c39107e143774c434436248b3fc7946bf75b7b102c0ec335bc156d5d1',
+    '903c0bc045a65e0690f0c5c724b1dcced59fe3398bd3452c9b884bd44f4ea3f2',
     ARRAY['authenticated'],
     $call$SELECT public.close_project('48600000-0000-4000-8000-00000000ff04',NULL,NULL)$call$
   ),
@@ -3395,6 +3395,9 @@ BEGIN
       WHERE id = '48690000-0000-4000-8000-000000000021'$revoke$
   );
   FOR v_attempt IN 1..40 LOOP
+    -- pg_stat_activity is snapshotted once per transaction; without this
+    -- the poll never sees a backend that started after the snapshot.
+    PERFORM pg_stat_clear_snapshot();
     SELECT activity.wait_event_type = 'Lock'
     INTO v_waiting
     FROM pg_stat_activity AS activity
@@ -3603,6 +3606,9 @@ BEGIN
     )$generate$
   );
   FOR v_attempt IN 1..40 LOOP
+    -- pg_stat_activity is snapshotted once per transaction; without this
+    -- the poll never sees a backend that started after the snapshot.
+    PERFORM pg_stat_clear_snapshot();
     SELECT activity.wait_event_type = 'Lock'
     INTO v_waiting
     FROM pg_stat_activity AS activity
@@ -3677,6 +3683,9 @@ BEGIN
     )
   );
   FOR v_attempt IN 1..40 LOOP
+    -- pg_stat_activity is snapshotted once per transaction; without this
+    -- the poll never sees a backend that started after the snapshot.
+    PERFORM pg_stat_clear_snapshot();
     EXIT WHEN extensions.dblink_is_busy('invoice486_detach') = 0;
     PERFORM pg_sleep(0.025);
   END LOOP;
@@ -4103,6 +4112,9 @@ BEGIN
   $apply$);
   v_waiting := false;
   FOR v_attempt IN 1..40 LOOP
+    -- pg_stat_activity is snapshotted once per transaction; without this
+    -- the poll never sees a backend that started after the snapshot.
+    PERFORM pg_stat_clear_snapshot();
     SELECT activity.wait_event_type = 'Lock' INTO v_waiting
     FROM pg_stat_activity AS activity WHERE activity.pid = v_worker_pid;
     EXIT WHEN COALESCE(v_waiting, false);
@@ -4179,6 +4191,9 @@ BEGIN
   $production$);
   v_waiting := false;
   FOR v_attempt IN 1..40 LOOP
+    -- pg_stat_activity is snapshotted once per transaction; without this
+    -- the poll never sees a backend that started after the snapshot.
+    PERFORM pg_stat_clear_snapshot();
     SELECT activity.wait_event_type = 'Lock' INTO v_waiting
     FROM pg_stat_activity AS activity WHERE activity.pid = v_worker_pid;
     EXIT WHEN COALESCE(v_waiting, false);
@@ -4267,6 +4282,9 @@ BEGIN
   $insert$);
   v_waiting := false;
   FOR v_attempt IN 1..40 LOOP
+    -- pg_stat_activity is snapshotted once per transaction; without this
+    -- the poll never sees a backend that started after the snapshot.
+    PERFORM pg_stat_clear_snapshot();
     SELECT activity.wait_event_type = 'Lock' INTO v_waiting
     FROM pg_stat_activity AS activity WHERE activity.pid = v_worker_pid;
     EXIT WHEN COALESCE(v_waiting, false);

@@ -330,7 +330,8 @@ BEGIN
       SELECT id::text
       FROM public.projects
       WHERE id = 'd485d200-0000-4000-8000-000000000001'
-      FOR UPDATE
+      -- Models the lock close_project actually takes on the project row.
+      FOR NO KEY UPDATE
     $remote$
   ) AS locked(id text);
   PERFORM extensions.dblink_exec(
@@ -695,6 +696,12 @@ BEGIN
   IF v_status IS DISTINCT FROM 'UPDATE 1' THEN
     RAISE EXCEPTION 'queued membership revocation returned %', v_status;
   END IF;
+  -- Async dblink results must be drained to completion or the next
+  -- dblink_send_query on this connection fails with
+  -- "another command is already in progress".
+  PERFORM drained.status
+  FROM extensions.dblink_get_result('d485_reassign_revoke', false)
+    AS drained(status text);
 
   SELECT state.designer_id, state.member_status
   INTO v_project_designer, v_target_status
@@ -827,6 +834,9 @@ BEGIN
   IF v_status IS DISTINCT FROM 'DELETE 1' THEN
     RAISE EXCEPTION 'queued designer-role removal returned %', v_status;
   END IF;
+  PERFORM drained.status
+  FROM extensions.dblink_get_result('d485_reassign_revoke', false)
+    AS drained(status text);
 
   SELECT state.designer_id, state.designer_role_count
   INTO v_project_designer, v_target_role_count
@@ -851,6 +861,10 @@ BEGIN
     RAISE EXCEPTION 'reassignment/role-removal serialization state drifted';
   END IF;
 
+  -- As bare postgres this probe would take set_invoice_studio_id's documented
+  -- migration bypass and assert nothing; service_role still walks the full
+  -- authority chain on INSERT while bypassing RLS.
+  PERFORM extensions.dblink_exec('d485_reassign_setup', 'SET ROLE service_role');
   PERFORM extensions.dblink_exec(
     'd485_reassign_setup',
     $remote$
@@ -879,6 +893,7 @@ BEGIN
       $probe$;
     $remote$
   );
+  PERFORM extensions.dblink_exec('d485_reassign_setup', 'RESET ROLE');
 
   PERFORM extensions.dblink_exec(
     'd485_reassign_setup', 'SET session_replication_role = replica'
@@ -1307,6 +1322,9 @@ BEGIN
         END;
       END;
       $body$;
+      -- pg_temp helpers are not executable by the app roles by default.
+      GRANT EXECUTE ON FUNCTION pg_temp.d485_try_same_milestone()
+        TO authenticated, service_role;
       SET LOCAL ROLE authenticated;
       SET LOCAL request.jwt.claims =
         '{"sub":"d485c000-0000-4000-8000-000000000002","role":"authenticated"}';
@@ -1326,6 +1344,9 @@ BEGIN
   );
   v_waiting := false;
   FOR v_attempt IN 1..40 LOOP
+    -- pg_stat_activity is snapshotted once per transaction; without this
+    -- the poll never sees a backend that started after the snapshot.
+    PERFORM pg_stat_clear_snapshot();
     SELECT activity.wait_event_type = 'Lock' INTO v_waiting
     FROM pg_stat_activity AS activity
     WHERE activity.pid = v_worker_pid;
@@ -1343,6 +1364,8 @@ BEGIN
   IF v_status IS DISTINCT FROM 'rejected' THEN
     RAISE EXCEPTION 'same-milestone second composer returned %', v_status;
   END IF;
+  PERFORM drained.status
+  FROM extensions.dblink_get_result('d485_atomic_second', false) AS drained(status text);
   PERFORM extensions.dblink_exec('d485_atomic_second', 'ROLLBACK');
 
   SELECT state.invoice_count, state.line_count, state.latched_invoice_id
@@ -1426,6 +1449,9 @@ BEGIN
         END;
       END;
       $body$;
+      -- pg_temp helpers are not executable by the app roles by default.
+      GRANT EXECUTE ON FUNCTION pg_temp.d485_try_close_atomic_project()
+        TO authenticated, service_role;
       SET LOCAL ROLE authenticated;
       SET LOCAL request.jwt.claims =
         '{"sub":"d485c000-0000-4000-8000-000000000001","role":"authenticated"}';
@@ -1444,6 +1470,9 @@ BEGIN
   );
   v_waiting := false;
   FOR v_attempt IN 1..40 LOOP
+    -- pg_stat_activity is snapshotted once per transaction; without this
+    -- the poll never sees a backend that started after the snapshot.
+    PERFORM pg_stat_clear_snapshot();
     SELECT activity.wait_event_type = 'Lock' INTO v_waiting
     FROM pg_stat_activity AS activity
     WHERE activity.pid = v_worker_pid;
@@ -1461,6 +1490,8 @@ BEGIN
   IF v_status IS DISTINCT FROM 'blocked' THEN
     RAISE EXCEPTION 'atomic composer/close race returned %', v_status;
   END IF;
+  PERFORM drained.status
+  FROM extensions.dblink_get_result('d485_atomic_close', false) AS drained(status text);
   PERFORM extensions.dblink_exec('d485_atomic_close', 'ROLLBACK');
 
   IF v_second_invoice_id IS NULL THEN
@@ -1666,7 +1697,7 @@ VALUES
   (
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '3f8b56b7fa94c3e7b4830fa8a3242b637f8da533f3f3bdb2f13acab0175fe7f8',
+    'a091eb39e882302c77b85e378234753b6cc3125578cb2e3318bd249bf7cf57b1',
     ARRAY[]::text[]
   ),
   (
@@ -2177,17 +2208,17 @@ BEGIN
   ASSERT NOT EXISTS (
     WITH expected(caller_signature) AS (
       VALUES
-        ('public.issue_trade_draw_invoice(uuid)'::text),
-        ('public._countersign_design_services_agreement_impl(uuid,text,jsonb)'::text),
-        ('public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)'::text),
-        ('public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)'::text),
-        ('public._execute_trade_scope_authorized(uuid,text,uuid,text)'::text),
-        ('public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)'::text)
+        (to_regprocedure('public.issue_trade_draw_invoice(uuid)')::oid),
+        (to_regprocedure('public._countersign_design_services_agreement_impl(uuid,text,jsonb)')::oid),
+        (to_regprocedure('public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)')::oid),
+        (to_regprocedure('public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)')::oid),
+        (to_regprocedure('public._execute_trade_scope_authorized(uuid,text,uuid,text)')::oid),
+        (to_regprocedure('public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)')::oid)
     ),
     actual AS (
-      SELECT
-        namespace.nspname || '.' || routine.proname || '(' ||
-          pg_get_function_identity_arguments(routine.oid) || ')' AS caller_signature
+      -- Compared as oids: pg_get_function_identity_arguments renders argument
+      -- names, so a hand-built signature string never matches these literals.
+      SELECT routine.oid AS caller_signature
       FROM pg_proc AS routine
       JOIN pg_namespace AS namespace ON namespace.oid = routine.pronamespace
       WHERE namespace.nspname <> 'information_schema'
@@ -2624,7 +2655,8 @@ VALUES
   (
     'd4851000-0000-4000-8000-000000000003',
     'design_studio', 'SD Inactive Studio', 'sd-inactive-studio-d485',
-    'inactive'
+    -- organization_status has no 'inactive'; the inactive state is 'deactivated'.
+    'deactivated'
   );
 
 INSERT INTO public.organization_members (
@@ -2672,6 +2704,24 @@ VALUES
     'd4850000-0000-4000-8000-000000000006',
     'd4851000-0000-4000-8000-000000000001',
     'member', 'active', now()
+  );
+
+-- Designer-domain grants auto-provision a personal workspace per designer, and
+-- set_project_studio_id derives a studio only from an unambiguous single
+-- active candidate. Keep only this fixture's own studios active.
+UPDATE public.organizations AS studio
+SET status = 'deactivated'
+WHERE studio.type = 'design_studio'
+  AND studio.id NOT IN (
+    'd4851000-0000-4000-8000-000000000001',
+    'd4851000-0000-4000-8000-000000000002',
+    'd4851000-0000-4000-8000-000000000003'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM public.organization_members AS membership
+    WHERE membership.organization_id = studio.id
+      AND membership.user_id::text LIKE 'd4850000-%'
   );
 
 -- Legacy fixture replay runs as the real postgres owner without SET ROLE.
@@ -2944,6 +2994,11 @@ VALUES
     'design_services', 'sent', 10000, 0
   );
 
+-- These children hang off proposals already in 'sent', which
+-- guard_proposal_child_draft_only rejects; the fixture writes them with
+-- triggers suspended, exactly as the dblink fixtures above do.
+SET LOCAL session_replication_role = replica;
+
 INSERT INTO public.proposal_payment_milestones (
   id, proposal_id, label, percentage, amount_cents, sort_order
 )
@@ -2978,6 +3033,8 @@ VALUES
     'd4853000-0000-4000-8000-000000000040',
     'Designer', 10000
   );
+
+SET LOCAL session_replication_role = origin;
 
 INSERT INTO public.project_rooms (
   id, project_id, name, room_type, sort_order
@@ -3034,7 +3091,7 @@ VALUES
     'd4853270-0000-4000-8000-000000000003',
     'd4852000-0000-4000-8000-000000000007',
     'd4853250-0000-4000-8000-000000000001',
-    'd4853260-0000-4000-8000-000000000001',
+    NULL,
     'Paper lamp', 'Lighting', 'fixed', 'specified', 1,
     5000, 3500, 5000,
     'd4853280-0000-4000-8000-000000000001', 'SD Vendor',
@@ -3044,6 +3101,7 @@ VALUES
     'd4853270-0000-4000-8000-000000000004',
     'd4852000-0000-4000-8000-000000000007',
     'd4853250-0000-4000-8000-000000000001',
+    NULL,
     'Zero-deposit table', 'Tables', 'fixed', 'specified', 1,
     4000, 2800, 4000,
     'd4853280-0000-4000-8000-000000000001', 'SD Vendor',
@@ -3152,6 +3210,10 @@ VALUES
     'd4850000-0000-4000-8000-000000000001'
   );
 
+-- Deliberately unsafe pre-existing row for the media guard probe below; the
+-- guard that rejects it is exactly what the probe asserts, so it is seeded
+-- with triggers suspended.
+SET LOCAL session_replication_role = replica;
 INSERT INTO public.proposal_boards (
   id, proposal_id, project_id, name, cover_image_url
 )
@@ -3160,6 +3222,7 @@ VALUES (
   'd4852000-0000-4000-8000-000000000004',
   'SD Unsafe Media Board', 'private/unprepared-reference.jpg'
 );
+SET LOCAL session_replication_role = origin;
 
 INSERT INTO public.proposals (
   id, project_id, designer_id, client_id, title, status, total_amount
