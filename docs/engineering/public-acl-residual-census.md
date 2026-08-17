@@ -396,6 +396,79 @@ and does not re-open the question. **Nothing in this section requires action.**
 
 ---
 
+## Section E — storage.objects policies the repo deferred and never narrowed
+
+**Why this is open: the deferral target does not exist and cannot be run.**
+Migration `00484_public_rpc_authorization_contract.sql:15-17` states that the PUBLIC
+policies on `storage.objects` "are intentionally narrowed in the privileged 00483
+platform-admin phase." `supabase/platform-admin/00483_public_acl_allowlist.sql`
+contains **no policy DDL at all** (0 `CREATE`/`DROP`/`ALTER POLICY` statements in 1056
+lines), and that script is retired under Kody's ruling as unrunnable on Supabase Cloud —
+`postgres` is `rolsuper = false` and cannot become `supabase_admin`. So the deferral
+points at a step that will never happen, while the runbook records Blocker 1 as closed.
+
+This is a **separate category from sections A–D**. Those are PUBLIC privileges we cannot
+withdraw without superuser. This is a promise the repository made and did not keep.
+Recorded so a retired script stops implying these are handled. Reported by a6.
+
+### Reachability: checked, not assumed — and it does **not** follow section D
+
+Section D concluded the 17 `storage` routines are unreachable because `storage`
+withholds schema `USAGE` from PUBLIC. **That reasoning does not carry to RLS policies.**
+Measured:
+
+| Role | `storage` USAGE | SELECT/INSERT/UPDATE/DELETE on `storage.objects` |
+|---|---|---|
+| PUBLIC (pseudo-role) | no | no |
+| `anon` | **yes** (explicit) | **yes, all four** |
+| `authenticated` | **yes** (explicit) | **yes, all four** |
+| `service_role` | yes | yes |
+
+`anon` and `authenticated` hold their own explicit privileges, and a policy whose role
+list is `{public}` applies to **every** role including `anon`. `storage.objects` has RLS
+enabled (not forced), owner `supabase_storage_admin`, 61 policies total, 29 of them with
+role `{public}`. So these policies *are* reachable — by any caller holding the anon key,
+through the Storage API, which is a different path from schema `USAGE`.
+
+The second gate is the bucket's `public` flag: on a public bucket, objects are already
+served over the unauthenticated CDN path, so a permissive read policy adds nothing.
+
+### Determination
+
+Of the 29 `{public}` policies, **28 are flagged but not actually exposed**, and **one is
+genuinely reachable by `anon`**:
+
+| Schema.table | Policy | Command | Role | Predicate | Bucket public? | Determination | accepted_by | accepted_on |
+|---|---|---|---|---|---|---|---|---|
+| storage.objects | `proposal_mood_boards_proposal_read` | SELECT | `{public}` | `bucket_id = 'proposal-mood-boards' AND EXISTS (SELECT 1 FROM proposals proposal WHERE proposal.id::text = (storage.foldername(objects.name))[1])` | **no — private** | **EXPOSED.** The predicate only checks that the proposal row *exists*; it never binds the caller to it. On a private bucket RLS is the only gate, so any `anon` caller who can guess or enumerate a proposal UUID reads that proposal's mood-board objects. |  |  |
+| storage.objects | `Anyone can view thumbnails` | SELECT | `{public}` | `bucket_id = 'room-scan-thumbnails'` | yes | Not exposed beyond the bucket flag — public bucket is already served unauthenticated over the CDN. |  |  |
+| storage.objects | `Avatar images are publicly readable` | SELECT | `{public}` | `bucket_id = 'avatars'` | yes | Not exposed beyond the bucket flag. |  |  |
+| storage.objects | `Product images are publicly accessible` | SELECT | `{public}` | `bucket_id = 'product-images'` | yes | Not exposed beyond the bucket flag. |  |  |
+| storage.objects | `Proposal assets are publicly readable` | SELECT | `{public}` | `bucket_id = 'proposal-assets'` | yes | Not exposed beyond the bucket flag. |  |  |
+| storage.objects | `Public read access for hero frames` | SELECT | `{public}` | `bucket_id = 'room-hero-frames'` | yes | Not exposed beyond the bucket flag. |  |  |
+| storage.objects | `Studio logos are publicly readable` | SELECT | `{public}` | `bucket_id = 'studio-logos'` | yes | Not exposed beyond the bucket flag. |  |  |
+| storage.objects | `Org admins manage studio logos (insert)` | INSERT | `{public}` | `bucket_id = 'studio-logos' AND is_org_admin_or_owner((storage.foldername(name))[1]::uuid)` | yes (writes still gated by RLS) | Already narrow — `is_org_admin_or_owner()` cannot be satisfied without an authenticated org-admin session. |  |  |
+| storage.objects | `Org admins manage studio logos (update)` | UPDATE | `{public}` | same as above | yes | Already narrow. |  |  |
+| storage.objects | `Org admins manage studio logos (delete)` | DELETE | `{public}` | same as above | yes | Already narrow. |  |  |
+| storage.objects | remaining 19 `{public}` policies (project documents, scan artifacts, comms attachments, hero frames, avatars, product images) | SELECT/INSERT/UPDATE/DELETE | `{public}` | each binds `auth.uid()` or a membership helper (`is_project_team_member`, `is_studio_comember`, …) | mixed | Already narrow — the `{public}` role list is cosmetic because the predicate binds the caller identity. Census section E2 lists each. |  |  |
+
+**Accepted exception.** `proposal_mood_boards_proposal_read` is the one live gap: an
+unauthenticated read of private mood-board objects gated only by proposal-UUID guessing.
+It is recorded here rather than fixed, per Kody's ruling — narrowing the policy is a
+separate question, and whether `postgres` can narrow a `supabase_storage_admin`-owned
+policy at all is unresolved.
+
+### The "four" in 00484 is not a count this database supports
+
+`00484` says "The four PUBLIC policies on `storage.objects`". No set of four matches
+under any reading: 61 policies total, **29** carry role `{public}`, **10** of those lack
+an `auth.uid()` reference, **6** are unconditional reads on public buckets, **3** are
+studio-logo writes gated by `is_org_admin_or_owner`, and **1** is genuinely
+anon-reachable. The comment's number is unsubstantiated and should not be relied on as
+an inventory. Census section E4 emits these totals.
+
+---
+
 ## Divergence from the brief
 
 One item measured differently than the task brief assumed, recorded rather than
@@ -406,5 +479,10 @@ silently reconciled:
   PUBLIC EXECUTE, but `cron` withholds schema `USAGE` from PUBLIC, so the privilege is
   inert. It is filed under section D. `postgres` and its members can still call it,
   which is expected and unchanged.
+
+- Migration `00484` describes "the four PUBLIC policies on `storage.objects`". That count
+  is not reproducible against the live database under any reading (section E). The four
+  policies were recorded as the measured sets instead, with the discrepancy stated rather
+  than resolved to a number.
 
 All other reference figures reproduced exactly on both staging and production.

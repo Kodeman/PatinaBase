@@ -292,4 +292,107 @@ GROUP BY n.nspname, n.oid
 ORDER BY count(*) DESC, n.nspname;
 
 
+-- ===========================================================================
+-- SECTION E - storage.objects policies the repository defers and never narrows
+--
+-- A distinct category from sections A-D. Those are PUBLIC privileges we cannot
+-- withdraw without superuser. This is a promise the repository made and did not
+-- keep: migration 00484 states the PUBLIC policies on storage.objects "are
+-- intentionally narrowed in the privileged 00483 platform-admin phase", but
+-- supabase/platform-admin/00483_public_acl_allowlist.sql contains no policy DDL
+-- at all, and that script is retired as unrunnable on Supabase Cloud
+-- (`postgres` is rolsuper = false and cannot become supabase_admin). The
+-- deferral therefore points at a step that cannot happen.
+--
+-- Reachability warning: RLS policies are NOT schema-gated the way routines are.
+-- Section D concluded the 17 storage routines are unreachable because PUBLIC
+-- lacks storage schema USAGE. That reasoning does NOT carry to policies, because
+-- `anon` and `authenticated` hold their own explicit schema USAGE and table
+-- privileges, and a policy whose role list is {public} applies to every role
+-- including `anon`. E1 measures that difference rather than assuming it.
+-- ===========================================================================
+
+-- E1. Who can actually reach storage.objects.
+-- PUBLIC cannot, but anon/authenticated can, via their own explicit privileges.
+SELECT
+  'E1. storage.objects reachability'                                  AS section,
+  role_name                                                           AS role,
+  pg_catalog.has_schema_privilege(role_name, 'storage', 'USAGE')      AS schema_usage,
+  pg_catalog.has_table_privilege(role_name, 'storage.objects', 'SELECT') AS can_read,
+  pg_catalog.has_table_privilege(role_name, 'storage.objects', 'INSERT') AS can_add,
+  pg_catalog.has_table_privilege(role_name, 'storage.objects', 'UPDATE') AS can_modify,
+  pg_catalog.has_table_privilege(role_name, 'storage.objects', 'DELETE') AS can_remove
+FROM (VALUES ('public'), ('anon'), ('authenticated'), ('service_role')) AS r(role_name)
+ORDER BY role_name;
+
+
+-- E2. Policies on storage.objects whose role list is {public}, classified by
+-- whether the predicate actually constrains the caller's identity.
+-- `bucket_is_public` matters: on a public bucket, objects are already served
+-- over the unauthenticated CDN path, so a permissive read policy adds nothing.
+SELECT
+  'E2. {public} policies on storage.objects'          AS section,
+  p.policyname                                        AS policy,
+  p.cmd                                               AS command,
+  p.roles::text                                       AS roles,
+  b.public                                            AS bucket_is_public,
+  coalesce(p.qual, p.with_check)                      AS predicate,
+  CASE
+    WHEN (coalesce(p.qual,'') || coalesce(p.with_check,'')) ~* 'auth\.uid|is_org_admin_or_owner|is_studio_comember|is_design_studio_comember|is_project_team_member|user_has_role'
+      THEN 'constrained - predicate binds the caller identity'
+    WHEN b.public IS TRUE
+      THEN 'unconstrained, but bucket is public - no exposure beyond the bucket flag'
+    ELSE 'UNCONSTRAINED ON A PRIVATE BUCKET - reachable by anon'
+  END                                                 AS assessment
+FROM pg_catalog.pg_policies p
+LEFT JOIN storage.buckets b
+       ON b.id = (regexp_match(coalesce(p.qual, p.with_check), 'bucket_id = ''([^'']+)'''))[1]
+WHERE p.schemaname = 'storage'
+  AND p.tablename = 'objects'
+  AND 'public' = ANY(string_to_array(btrim(p.roles::text, '{}'), ','))
+ORDER BY
+  CASE WHEN (coalesce(p.qual,'') || coalesce(p.with_check,'')) ~* 'auth\.uid|is_org_admin_or_owner|is_studio_comember|is_design_studio_comember|is_project_team_member|user_has_role' THEN 2
+       WHEN b.public IS TRUE THEN 1 ELSE 0 END,
+  p.policyname;
+
+
+-- E3. The go/no-go line for this section.
+-- Any {public} policy on a PRIVATE bucket whose predicate does not bind the
+-- caller's identity is readable by `anon`. Expected: exactly one, the mood-board
+-- read policy, which is the accepted exception recorded in the prose census.
+SELECT
+  'E3. anon-reachable on private buckets'    AS section,
+  p.policyname                               AS policy,
+  p.cmd                                      AS command,
+  b.id                                       AS bucket,
+  b.public                                   AS bucket_is_public,
+  coalesce(p.qual, p.with_check)             AS predicate
+FROM pg_catalog.pg_policies p
+JOIN storage.buckets b
+  ON b.id = (regexp_match(coalesce(p.qual, p.with_check), 'bucket_id = ''([^'']+)'''))[1]
+WHERE p.schemaname = 'storage'
+  AND p.tablename = 'objects'
+  AND 'public' = ANY(string_to_array(btrim(p.roles::text, '{}'), ','))
+  AND b.public IS FALSE
+  AND (coalesce(p.qual,'') || coalesce(p.with_check,'')) !~* 'auth\.uid|is_org_admin_or_owner|is_studio_comember|is_design_studio_comember|is_project_team_member|user_has_role'
+ORDER BY p.policyname;
+
+
+-- E4. Totals, so a reader can see the "four" in the 00484 comment is not a
+-- count this database supports under any reading.
+SELECT
+  'E4. policy totals'                                                    AS section,
+  count(*)                                                               AS policies_total,
+  count(*) FILTER (
+    WHERE 'public' = ANY(string_to_array(btrim(roles::text, '{}'), ','))
+  )                                                                      AS role_public_policies,
+  count(*) FILTER (
+    WHERE 'public' = ANY(string_to_array(btrim(roles::text, '{}'), ','))
+      AND coalesce(qual,'') !~* 'auth\.uid'
+      AND coalesce(with_check,'') !~* 'auth\.uid'
+  )                                                                      AS role_public_without_auth_uid
+FROM pg_catalog.pg_policies
+WHERE schemaname = 'storage' AND tablename = 'objects';
+
+
 ROLLBACK;
