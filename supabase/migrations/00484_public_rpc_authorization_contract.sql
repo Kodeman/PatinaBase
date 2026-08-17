@@ -264,7 +264,12 @@ BEGIN
     FROM pg_trigger AS trigger_row
     WHERE trigger_row.tgrelid = 'public.organization_members'::regclass
       AND NOT trigger_row.tgisinternal
-      AND trigger_row.tgname <> 'guard_org_membership_changes'
+      AND trigger_row.tgname NOT IN (
+        'guard_org_membership_changes',
+        -- 00021 has stamped organization_members.updated_at since the
+        -- user-management foundation; it is not an authorization path.
+        'update_org_members_updated_at'
+      )
   ) THEN
     RAISE EXCEPTION '00484 organization membership guard trigger drifted';
   END IF;
@@ -1450,7 +1455,12 @@ BEGIN
     FROM pg_trigger AS trigger_row
     WHERE trigger_row.tgrelid = 'public.organization_members'::regclass
       AND NOT trigger_row.tgisinternal
-      AND trigger_row.tgname <> 'guard_org_membership_changes'
+      AND trigger_row.tgname NOT IN (
+        'guard_org_membership_changes',
+        -- 00021 has stamped organization_members.updated_at since the
+        -- user-management foundation; it is not an authorization path.
+        'update_org_members_updated_at'
+      )
   ) THEN
     RAISE EXCEPTION '00484 organization membership guard trigger is wrong';
   END IF;

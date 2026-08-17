@@ -130,7 +130,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     'ee7d6f4269b453e04d1fb9ab3f9a039893d2312dc62a71632e14f05230ce9caa',
-    'fdbbbcb8bcf4df64d25492affe45e99d4cecb2721171af41cc3fe282e231a7fb', ARRAY['authenticated']::text[],
+    '1ece28644a5acc17ac7f474e0cc1f4ad149d92e0024859acca8396abf794a21e', ARRAY['authenticated']::text[],
     ARRAY['authenticated']::text[]
   ),
   (
@@ -199,7 +199,7 @@ VALUES
     'trigger', 'v', ARRAY['search_path=public']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '53c95a7cbfb04102ddd662fc0d0d63fd33474c3e3e3c51e9c23ce6263bf3a474',
-    'f08204081f3b22f845b46af0e00f6b13e4aa578c9744e323481c24d28d59a18f', ARRAY['authenticated', 'service_role']::text[],
+    '3f8b56b7fa94c3e7b4830fa8a3242b637f8da533f3f3bdb2f13acab0175fe7f8', ARRAY['authenticated', 'service_role']::text[],
     ARRAY[]::text[]
   ),
   (
@@ -208,7 +208,7 @@ VALUES
     'trigger', 'v', ARRAY['search_path=public']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '04b921692fd72c03a2137e413c76d997435bafb3c29d2506e8b3fa14d8f6ce20',
-    '9fb547de4460ddbc9d939f747e554b3f8340293da214fa911e874c4cc31ae7bf', ARRAY['authenticated', 'service_role']::text[],
+    'fe66293d1fc39149dba2abc85d6ecd7b948f786e53f7e4e5746a65b69e82028d', ARRAY['authenticated', 'service_role']::text[],
     ARRAY[]::text[]
   ),
   (
@@ -521,7 +521,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '29b7bfc55982372d2bb3b00739d2d243683af11e89d99525cabe06c699fda984',
-    'f9031e3b7cefb9cc0de4a2c3d98adc470488f40c677b811de620ff40e9ee4e84',
+    'd1ea9e357d5f1c685677365601abaff4c96cf83f6006ab8c3479f1d745487293',
     ARRAY[]::text[], ARRAY[]::text[]
   ),
   (
@@ -531,7 +531,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '152b51f7bcd3b7a17a6f88967da0fef1648d95f46eea58334ed2ce2a2f917f5c',
-    '03277ddec803f42c90e96f67e5fba134b91342677bb44d672f927565a64fc541',
+    '02f9aab1ace96f0e439dee937ecd50e5b0b58a8366c732caafe66d70e1b25dd8',
     ARRAY[]::text[], ARRAY[]::text[]
   ),
   (
@@ -541,7 +541,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '6df1c093ae444e862cedefe230136e00771adbe426a14a96752f125307382111',
-    '91cda0b749a9f82ae3e91db4a567d40c400c4c0d722b5c8d150bf736b4802f8e',
+    '1d0db8c0c2e123121a24d4c2ade04d507e42399a708b2e598c199559cd46a89e',
     ARRAY[]::text[], ARRAY[]::text[]
   ),
   (
@@ -551,7 +551,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '25695d6936c992df270877af7e6b464cff5c7805318c58c4a63f334761c25aa2',
-    'd14f7a3cf958ff2c99f43d45cc2d3f2941ca49175d495e613cea346ff59fec86',
+    '81d54e2f271e78c1c901c6cec0b1d763cffecb87ce7d5c20990dddd789b3e432',
     ARRAY[]::text[], ARRAY[]::text[]
   ),
   (
@@ -561,7 +561,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '41a78dd3007d8cc529c8b439750a6d94191787ba89e06a254eec0df49f4cf261',
-    'f9904c33fb253e1210dbc16ad1c84ac55bd23df41e22783a72cca31f687eb7f0',
+    '99c9545b3b59638bab7a034d62e743d32eb36bfe31b8a18f070f325fc69d0626',
     ARRAY[]::text[], ARRAY[]::text[]
   ),
   (
@@ -965,7 +965,7 @@ BEGIN
              'hex'
            ) <> ALL(ARRAY[
              '56b8797bfcf3244bb9a1693be3d7ad1b9f6e886edd7307c8c54b9ce7a7f8481e',
-             '2f89692c867a5bd0c7d44eea587b7a82d0715a1e542254b8e0870b98349abaf7'
+             'bdf903ba6445367c7f18551859a0a14aeaa2f0dfbec95d4304110e39b537c727'
            ]::text[])
       )
   ) THEN
@@ -1030,9 +1030,9 @@ BEGIN
              extensions.digest(
                convert_to(routine.prosrc, 'UTF8'), 'sha256'
              ), 'hex'
-           ) IS DISTINCT FROM 'ae0f955f26b0cd4570f2b1dfe5d0762cdd387475033281f4abfddb1637f14000'
+           ) IS DISTINCT FROM '600c435c99acbb850b3b6a0f7f190aa62aa330e8281659b803abd38ef6c347c6'
         OR octet_length(convert_to(routine.prosrc, 'UTF8'))
-             IS DISTINCT FROM 11488
+             IS DISTINCT FROM 11492
       )
   ) THEN
     RAISE EXCEPTION '00485 existing atomic draft profile drifted';
@@ -2494,7 +2494,7 @@ BEGIN
   END IF;
 
   IF NEW.proposal_id IS NOT NULL THEN
-    SELECT proposal INTO v_proposal
+    SELECT proposal.* INTO v_proposal
     FROM public.proposals AS proposal
     WHERE proposal.id = NEW.proposal_id
       AND proposal.client_id = NEW.client_id
@@ -2605,7 +2605,7 @@ BEGIN
 
     v_immutable_update := true;
 
-    SELECT project INTO v_project
+    SELECT project.* INTO v_project
     FROM public.projects AS project
     WHERE project.id = NEW.project_id
       AND project.client_id = NEW.client_id
@@ -2638,14 +2638,14 @@ BEGIN
     -- commercial, activation, or decision capability. Neither path first
     -- reads or contends on a foreign project selected only by caller input.
     IF v_postgres_migration OR v_active_role = 'service_role' THEN
-      SELECT project INTO v_project
+      SELECT project.* INTO v_project
       FROM public.projects AS project
       WHERE project.id = NEW.project_id;
     ELSIF v_active_role = 'authenticated' THEN
       IF v_actor IS NULL THEN
         RAISE EXCEPTION 'studio_id_not_designer_studio';
       ELSIF current_user = 'authenticated' THEN
-        SELECT project INTO v_project
+        SELECT project.* INTO v_project
         FROM public.projects AS project
         JOIN public.organization_members AS actor_membership
           ON actor_membership.organization_id = project.studio_id
@@ -2658,7 +2658,7 @@ BEGIN
           AND studio.type = 'design_studio'
           AND studio.status = 'active';
       ELSIF current_user = 'postgres' THEN
-        SELECT project INTO v_project
+        SELECT project.* INTO v_project
         FROM public.projects AS project
         WHERE project.id = NEW.project_id
           AND (
@@ -2761,7 +2761,7 @@ BEGIN
       RETURN NEW;
     END IF;
 
-    SELECT project INTO v_project
+    SELECT project.* INTO v_project
     FROM public.projects AS project
     WHERE project.id = NEW.project_id
       AND project.designer_id = NEW.designer_id
@@ -2803,7 +2803,7 @@ BEGIN
     ORDER BY studio.id
     FOR SHARE;
 
-    SELECT project INTO v_project
+    SELECT project.* INTO v_project
     FROM public.projects AS project
     JOIN public.organizations AS studio ON studio.id = project.studio_id
     JOIN public.organization_members AS lead_membership
@@ -3341,7 +3341,7 @@ BEGIN
 
   -- Discover only an exact-studio row the actor can already reach. Authority
   -- rows are locked below in the repository-wide revocation order.
-  SELECT project INTO v_project
+  SELECT project.* INTO v_project
   FROM public.projects AS project
   JOIN public.organizations AS studio ON studio.id = project.studio_id
   JOIN public.organization_members AS actor_membership
@@ -3372,7 +3372,7 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT project INTO v_project
+  SELECT project.* INTO v_project
   FROM public.projects AS project
   WHERE project.id = p_project_id
     AND project.designer_id = p_expected_designer_id
@@ -3701,11 +3701,14 @@ DECLARE
   v_number integer;
   v_due date;
   v_studio_id uuid;
+  -- plpgsql forbids a row variable in a multi-item INTO list, so the paired
+  -- composites land in one record and are unpacked below.
+  v_admitted record;
 BEGIN
   -- Discover only an invoice whose canonical project tuple already admits the
   -- explicit actor; no foreign project or invoice row is locked on denial.
   SELECT invoice, project
-  INTO v_invoice, v_project
+  INTO v_admitted
   FROM public.invoices AS invoice
   JOIN public.projects AS project ON project.id = invoice.project_id
   WHERE invoice.id = p_invoice_id
@@ -3732,7 +3735,10 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT project INTO v_project
+  v_invoice := v_admitted.invoice;
+  v_project := v_admitted.project;
+
+  SELECT project.* INTO v_project
   FROM public.projects AS project
   WHERE project.id = v_project.id
     AND project.designer_id = v_project.designer_id
@@ -3779,7 +3785,7 @@ BEGIN
   ORDER BY studio.id
   FOR SHARE;
 
-  SELECT invoice INTO v_invoice
+  SELECT invoice.* INTO v_invoice
   FROM public.invoices AS invoice
   WHERE invoice.id = p_invoice_id
     AND invoice.project_id = v_project.id
@@ -3875,13 +3881,13 @@ BEGIN
     AND v_invoice.studio_id = v_project.studio_id;
 
   IF FOUND THEN
-    SELECT document INTO v_document
+    SELECT document.* INTO v_document
     FROM public.project_commercial_documents AS document
     WHERE document.id = v_document_id
       AND document.project_id = v_project.id
     FOR UPDATE;
 
-    SELECT proposal INTO v_proposal
+    SELECT proposal.* INTO v_proposal
     FROM public.proposals AS proposal
     WHERE proposal.id = v_proposal_id
       AND proposal.client_id = v_project.client_id
@@ -4094,12 +4100,16 @@ DECLARE
   v_previous_accept text := current_setting('app.proposal_accept_id', true);
   v_previous_commercial text := current_setting('app.commercial_document_id', true);
   v_anchor_phase_id uuid;   -- 00475
+  -- plpgsql forbids a row variable in a multi-item INTO list, so the paired
+  -- composites land in one record and are unpacked below.
+  v_row_4180 record;
+  v_row_4359 record;
 BEGIN
   IF v_actor IS NULL OR char_length(v_name) < 2 THEN
     RAISE EXCEPTION 'studio countersign requires an authenticated signer and legal name'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
-  SELECT proposal INTO v_proposal
+  SELECT proposal.* INTO v_proposal
   FROM public.proposals AS proposal
   WHERE proposal.id = p_proposal_id
     AND proposal.client_id IS NOT NULL
@@ -4171,7 +4181,7 @@ BEGIN
   END IF;
 
   SELECT document.id, document.project_id, project
-  INTO v_document_id, v_project_id, v_project
+  INTO v_row_4180
   FROM public.project_commercial_documents AS document
   JOIN public.projects AS project ON project.id = document.project_id
   JOIN public.organizations AS studio ON studio.id = project.studio_id
@@ -4193,8 +4203,12 @@ BEGIN
     AND lead_membership.status = 'active'
     AND lead_membership.role <> 'guest';
 
+  v_document_id := v_row_4180.id;
+  v_project_id := v_row_4180.project_id;
+  v_project := v_row_4180.project;
+
   IF FOUND THEN
-    SELECT project INTO v_project
+    SELECT project.* INTO v_project
     FROM public.projects AS project
     WHERE project.id = v_project_id
       AND project.client_id = v_proposal.client_id
@@ -4225,7 +4239,7 @@ BEGIN
       AND actor_membership.role <> 'guest';
   END IF;
 
-  SELECT proposal INTO v_proposal
+  SELECT proposal.* INTO v_proposal
   FROM public.proposals AS proposal
   WHERE proposal.id = p_proposal_id
     AND proposal.client_id IS NOT NULL
@@ -4341,15 +4355,23 @@ BEGIN
   END IF;
 
   IF v_proposal.commercial_state = 'executed' THEN
-    SELECT document.id, document.project_id, authority.id,
-           authority.retainer_invoice_id, project
-    INTO v_document_id, v_project_id, v_authority_id,
-         v_retainer_invoice_id, v_project
+    SELECT document.id AS document_id, document.project_id AS project_id,
+           authority.id AS authority_id,
+           authority.retainer_invoice_id AS retainer_invoice_id,
+           project AS project_row
+    INTO v_row_4359
     FROM public.project_commercial_documents AS document
     JOIN public.projects AS project ON project.id = document.project_id
     JOIN public.project_billing_authorities AS authority
       ON authority.commercial_document_id = document.id
     WHERE document.proposal_id = p_proposal_id;
+
+    v_document_id := v_row_4359.document_id;
+    v_project_id := v_row_4359.project_id;
+    v_authority_id := v_row_4359.authority_id;
+    v_retainer_invoice_id := v_row_4359.retainer_invoice_id;
+    v_project := v_row_4359.project_row;
+
     SELECT * INTO v_studio_signature FROM public.commercial_document_signatures
     WHERE proposal_id = p_proposal_id AND party_role = 'studio';
     IF v_document_id IS NULL OR v_studio_signature.id IS NULL
@@ -4393,7 +4415,7 @@ BEGIN
       v_project_id := public._activate_proposal_as_project_authorized(
         p_proposal_id, current_date
       );
-      SELECT project INTO STRICT v_project
+      SELECT project.* INTO STRICT v_project
       FROM public.projects AS project
       WHERE project.id = v_project_id
       FOR SHARE;
@@ -4429,7 +4451,7 @@ BEGIN
       FROM public.project_commercial_documents AS document
       WHERE document.proposal_id = p_proposal_id
         AND document.document_kind = 'service_addendum';
-      SELECT project INTO v_project
+      SELECT project.* INTO v_project
       FROM public.projects AS project
       WHERE project.id = v_project_id
       FOR UPDATE;
@@ -4615,13 +4637,16 @@ DECLARE
   v_previous_accept text := current_setting('app.proposal_accept_id', true);
   v_previous_commercial text := current_setting('app.commercial_document_id', true);
   v_anchor_phase_id uuid;   -- 00475
+  -- plpgsql forbids a row variable in a multi-item INTO list, so the paired
+  -- composites land in one record and are unpacked below.
+  v_row_4630 record;
 BEGIN
   IF v_recorder IS NULL OR char_length(v_name) < 2 THEN
     RAISE EXCEPTION 'recording a paper furnishings execution requires an authenticated studio author and legal name'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
   SELECT proposal, document, project
-  INTO v_proposal, v_document, v_project
+  INTO v_row_4630
   FROM public.proposals AS proposal
   JOIN public.project_commercial_documents AS document
     ON document.proposal_id = proposal.id
@@ -4655,7 +4680,11 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT project INTO v_project
+  v_proposal := v_row_4630.proposal;
+  v_document := v_row_4630.document;
+  v_project := v_row_4630.project;
+
+  SELECT project.* INTO v_project
   FROM public.projects AS project
   WHERE project.id = v_document.project_id
     AND project.client_id = v_proposal.client_id
@@ -4722,7 +4751,7 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT proposal INTO v_proposal
+  SELECT proposal.* INTO v_proposal
   FROM public.proposals AS proposal
   WHERE proposal.id = p_proposal_id
     AND proposal.document_kind = 'furnishings_authorization'
@@ -4730,7 +4759,7 @@ BEGIN
     AND (proposal.project_id IS NULL OR proposal.project_id = v_project.id)
   FOR UPDATE;
 
-  SELECT document INTO v_document
+  SELECT document.* INTO v_document
   FROM public.project_commercial_documents AS document
   WHERE document.id = v_document.id
     AND document.proposal_id = v_proposal.id
@@ -5006,13 +5035,16 @@ DECLARE
   v_previous_accept text := current_setting('app.proposal_accept_id', true);
   v_previous_commercial text := current_setting('app.commercial_document_id', true);
   v_previous_draw text := current_setting('app.trade_draw_invoice_id', true);
+  -- plpgsql forbids a row variable in a multi-item INTO list, so the paired
+  -- composites land in one record and are unpacked below.
+  v_row_5021 record;
 BEGIN
   IF v_recorder IS NULL OR char_length(v_name) < 2 THEN
     RAISE EXCEPTION 'recording a paper trade scope execution requires an authenticated studio author and legal name'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
   SELECT proposal, document, project
-  INTO v_proposal, v_document, v_project
+  INTO v_row_5021
   FROM public.proposals AS proposal
   JOIN public.project_commercial_documents AS document
     ON document.proposal_id = proposal.id
@@ -5046,7 +5078,11 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT project INTO v_project
+  v_proposal := v_row_5021.proposal;
+  v_document := v_row_5021.document;
+  v_project := v_row_5021.project;
+
+  SELECT project.* INTO v_project
   FROM public.projects AS project
   WHERE project.id = v_document.project_id
     AND project.client_id = v_proposal.client_id
@@ -5113,7 +5149,7 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT proposal INTO v_proposal
+  SELECT proposal.* INTO v_proposal
   FROM public.proposals AS proposal
   WHERE proposal.id = p_proposal_id
     AND proposal.document_kind = 'trade_scope'
@@ -5121,7 +5157,7 @@ BEGIN
     AND (proposal.project_id IS NULL OR proposal.project_id = v_project.id)
   FOR UPDATE;
 
-  SELECT document INTO v_document
+  SELECT document.* INTO v_document
   FROM public.project_commercial_documents AS document
   WHERE document.id = v_document.id
     AND document.proposal_id = v_proposal.id
@@ -5329,6 +5365,9 @@ DECLARE
   v_previous_commercial text :=
     current_setting('app.commercial_document_id', true);
   v_anchor_phase_id uuid;
+  -- plpgsql forbids a row variable in a multi-item INTO list, so the paired
+  -- composites land in one record and are unpacked below.
+  v_row_5356 record;
 BEGIN
   IF v_actor IS NULL OR char_length(v_name) < 2 THEN
     RAISE EXCEPTION
@@ -5347,7 +5386,7 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT document, project INTO v_document, v_project
+  SELECT document, project INTO v_row_5356
   FROM public.project_commercial_documents AS document
   JOIN public.projects AS project ON project.id = document.project_id
   WHERE document.proposal_id = p_proposal_id
@@ -5364,7 +5403,10 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT project INTO v_project
+  v_document := v_row_5356.document;
+  v_project := v_row_5356.project;
+
+  SELECT project.* INTO v_project
   FROM public.projects AS project
   WHERE project.id = v_document.project_id
     AND project.client_id = v_actor
@@ -5424,7 +5466,7 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT proposal INTO v_proposal
+  SELECT proposal.* INTO v_proposal
   FROM public.proposals AS proposal
   WHERE proposal.id = p_proposal_id
     AND proposal.client_id = v_actor
@@ -5432,7 +5474,7 @@ BEGIN
     AND (proposal.project_id IS NULL OR proposal.project_id = v_project.id)
   FOR UPDATE;
 
-  SELECT document INTO v_document
+  SELECT document.* INTO v_document
   FROM public.project_commercial_documents AS document
   WHERE document.id = v_document.id
     AND document.proposal_id = v_proposal.id
@@ -5738,6 +5780,9 @@ DECLARE
     current_setting('app.commercial_document_id', true);
   v_previous_draw text :=
     current_setting('app.trade_draw_invoice_id', true);
+  -- plpgsql forbids a row variable in a multi-item INTO list, so the paired
+  -- composites land in one record and are unpacked below.
+  v_row_5764 record;
 BEGIN
   IF v_actor IS NULL OR char_length(v_name) < 2 THEN
     RAISE EXCEPTION
@@ -5755,7 +5800,7 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT document, project INTO v_document, v_project
+  SELECT document, project INTO v_row_5764
   FROM public.project_commercial_documents AS document
   JOIN public.projects AS project ON project.id = document.project_id
   WHERE document.proposal_id = p_proposal_id
@@ -5771,7 +5816,10 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT project INTO v_project
+  v_document := v_row_5764.document;
+  v_project := v_row_5764.project;
+
+  SELECT project.* INTO v_project
   FROM public.projects AS project
   WHERE project.id = v_document.project_id
     AND project.client_id = v_actor
@@ -5829,7 +5877,7 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT proposal INTO v_proposal
+  SELECT proposal.* INTO v_proposal
   FROM public.proposals AS proposal
   WHERE proposal.id = p_proposal_id
     AND proposal.client_id = v_actor
@@ -5837,7 +5885,7 @@ BEGIN
     AND (proposal.project_id IS NULL OR proposal.project_id = v_project.id)
   FOR UPDATE;
 
-  SELECT document INTO v_document
+  SELECT document.* INTO v_document
   FROM public.project_commercial_documents AS document
   WHERE document.id = v_document.id
     AND document.proposal_id = v_proposal.id
@@ -6066,6 +6114,9 @@ DECLARE
     current_setting('app.trade_draw_invoice_id', true);
   v_previous_commercial text :=
     current_setting('app.commercial_document_id', true);
+  -- plpgsql forbids a row variable in a multi-item INTO list, so the paired
+  -- composites land in one record and are unpacked below.
+  v_row_6082 record;
 BEGIN
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'trade scope draw not found or access denied'
@@ -6073,7 +6124,7 @@ BEGIN
   END IF;
 
   SELECT draw, proposal, document, project
-  INTO v_draw, v_proposal, v_document, v_project
+  INTO v_row_6082
   FROM public.trade_scope_draws AS draw
   JOIN public.proposals AS proposal ON proposal.id = draw.proposal_id
   JOIN public.project_commercial_documents AS document
@@ -6119,7 +6170,12 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT project INTO v_project
+  v_draw := v_row_6082.draw;
+  v_proposal := v_row_6082.proposal;
+  v_document := v_row_6082.document;
+  v_project := v_row_6082.project;
+
+  SELECT project.* INTO v_project
   FROM public.projects AS project
   WHERE project.id = v_document.project_id
     AND project.designer_id = v_project.designer_id
@@ -6186,7 +6242,7 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT proposal INTO v_proposal
+  SELECT proposal.* INTO v_proposal
   FROM public.proposals AS proposal
   WHERE proposal.id = v_proposal.id
     AND proposal.client_id = v_project.client_id
@@ -6194,7 +6250,7 @@ BEGIN
     AND (proposal.project_id IS NULL OR proposal.project_id = v_project.id)
   FOR UPDATE;
 
-  SELECT document INTO v_document
+  SELECT document.* INTO v_document
   FROM public.project_commercial_documents AS document
   WHERE document.id = v_document.id
     AND document.proposal_id = v_proposal.id
@@ -6202,7 +6258,7 @@ BEGIN
     AND document.document_kind = 'trade_scope'
   FOR UPDATE;
 
-  SELECT draw INTO v_draw
+  SELECT draw.* INTO v_draw
   FROM public.trade_scope_draws AS draw
   WHERE draw.id = p_draw_id
     AND draw.proposal_id = v_proposal.id
@@ -6709,7 +6765,7 @@ BEGIN
              ),
              'hex'
            ) IS DISTINCT FROM
-             '2f89692c867a5bd0c7d44eea587b7a82d0715a1e542254b8e0870b98349abaf7'
+             'bdf903ba6445367c7f18551859a0a14aeaa2f0dfbec95d4304110e39b537c727'
       )
   ) OR to_regprocedure(
     'app_private.issue_invoice_for_actor(uuid,date,uuid)'
@@ -6750,9 +6806,9 @@ BEGIN
              extensions.digest(
                convert_to(routine.prosrc, 'UTF8'), 'sha256'
              ), 'hex'
-           ) IS DISTINCT FROM 'ae0f955f26b0cd4570f2b1dfe5d0762cdd387475033281f4abfddb1637f14000'
+           ) IS DISTINCT FROM '600c435c99acbb850b3b6a0f7f190aa62aa330e8281659b803abd38ef6c347c6'
         OR octet_length(convert_to(routine.prosrc, 'UTF8'))
-             IS DISTINCT FROM 11488
+             IS DISTINCT FROM 11492
       )
   ) OR EXISTS (
     WITH actual AS (
@@ -7129,20 +7185,20 @@ BEGIN
     RAISE EXCEPTION '00485 sign/accept sibling invoice audit drifted';
   END IF;
 
+  -- Compared as oids: pg_get_function_identity_arguments renders argument
+  -- names, so a hand-built signature string never matches these literals.
   IF EXISTS (
-    WITH expected(caller_signature) AS (
+    WITH expected(caller_oid) AS (
       VALUES
-        ('public.issue_trade_draw_invoice(uuid)'::text),
-        ('public._countersign_design_services_agreement_impl(uuid,text,jsonb)'::text),
-        ('public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)'::text),
-        ('public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)'::text),
-        ('public._execute_trade_scope_authorized(uuid,text,uuid,text)'::text),
-        ('public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)'::text)
+        (to_regprocedure('public.issue_trade_draw_invoice(uuid)')::oid),
+        (to_regprocedure('public._countersign_design_services_agreement_impl(uuid,text,jsonb)')::oid),
+        (to_regprocedure('public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)')::oid),
+        (to_regprocedure('public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)')::oid),
+        (to_regprocedure('public._execute_trade_scope_authorized(uuid,text,uuid,text)')::oid),
+        (to_regprocedure('public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)')::oid)
     ),
     actual AS (
-      SELECT
-        namespace.nspname || '.' || routine.proname || '(' ||
-          pg_get_function_identity_arguments(routine.oid) || ')' AS caller_signature
+      SELECT routine.oid AS caller_oid
       FROM pg_proc AS routine
       JOIN pg_namespace AS namespace ON namespace.oid = routine.pronamespace
       WHERE namespace.nspname <> 'information_schema'

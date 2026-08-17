@@ -75,7 +75,7 @@ VALUES
   (
     'public.close_project(uuid,jsonb,jsonb)',
     'p_project_id uuid, p_closure jsonb DEFAULT NULL::jsonb, p_snapshot jsonb DEFAULT NULL::jsonb',
-    'public.projects', 'v', ARRAY['search_path=public, pg_temp'],
+    'projects', 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '44c113df92bbfe30c596e7b1304b95338dd7a66883d79051da64b65395623d84',
     '4301647c39107e143774c434436248b3fc7946bf75b7b102c0ec335bc156d5d1', ARRAY['authenticated']
@@ -98,11 +98,11 @@ VALUES
   ),
   (
     'public.escalate_item_feedback_to_decision(uuid,uuid)',
-    'p_feedback_id uuid, p_decision_id uuid', 'public.item_feedback', 'v',
+    'p_feedback_id uuid, p_decision_id uuid', 'item_feedback', 'v',
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '059b9103fafdf467236077b4cbc3621cbe7f9aa7ce9bcd28121b585343fdd90a',
-    '84b6f8eccb9de7e2acba05f84707b56562b01fa595a89e1ada0b5a89e6a5a0dc', ARRAY['authenticated']
+    '484f9219d52297c4c04656b1283af3c0e18046b22d855cf94a4d1e37d121abcb', ARRAY['authenticated']
   ),
   (
     'public.expire_due_client_decisions(timestamp with time zone)',
@@ -114,7 +114,7 @@ VALUES
   ),
   (
     'public.finalize_spec_book_issue(uuid)', 'p_revision_id uuid',
-    'public.spec_book_revisions', 'v', ARRAY['search_path=public, pg_temp'],
+    'spec_book_revisions', 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '735b405a19ceae9279b50c992b20758a7084b4e733c9efee72a503888acb1f6b',
     'd86404d2a0eb529bc25cf48c86ad0b2e87bd91eb07d8f4d8699f2feea3b6d310', ARRAY['service_role']
@@ -175,7 +175,7 @@ VALUES
   (
     'public.reassign_project_lead(uuid,uuid,uuid)',
     'p_project_id uuid, p_expected_designer_id uuid, p_new_designer_id uuid',
-    'public.projects', 'v', ARRAY['search_path=public, pg_temp'],
+    'projects', 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '91863450160076979461b2fa4bb264e94c3f66ea7a7e1621e6ed6959e7942169',
     '31fe6ad2c1809d5abacb78c09cef814921814a1036977a7207436bfd4f08e3e9', ARRAY['authenticated']
@@ -190,7 +190,7 @@ VALUES
   ),
   (
     'public.reply_to_item_feedback(uuid,text)',
-    'p_feedback_id uuid, p_body text', 'public.item_feedback_events', 'v',
+    'p_feedback_id uuid, p_body text', 'item_feedback_events', 'v',
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '284fcc936b5e50f43fa3cb7ba47ab1c1de10191d57555762ff809b045ad1b711',
@@ -210,11 +210,11 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '65618f884498e0f66c8a71ca068a3c4fc10da0d119d855f2d42f14509196da05',
-    '97f87c14df99dbc9a5c45c02f63274715b3a16fdc82291609bf3930cdb4e5173', ARRAY['authenticated']
+    'a93473c3853da503db51e67e658481d5aa2085d1a8b2a4e8144ef80181da528d', ARRAY['authenticated']
   ),
   (
     'public.stamp_project_approval_reminder_delivery(uuid,uuid)',
-    'p_decision_id uuid, p_decision_lead_id uuid', 'public.client_decisions', 'v',
+    'p_decision_id uuid, p_decision_lead_id uuid', 'client_decisions', 'v',
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '9cfe593cefb0306ae0b4f656a56c0062ff82cf4abb0e4b7a937c5b80fd08741e',
@@ -223,7 +223,7 @@ VALUES
   (
     'public.submit_coordination_revision(uuid,jsonb,text,text,uuid)',
     'p_item_id uuid, p_attachments jsonb DEFAULT ''[]''::jsonb, p_note text DEFAULT NULL::text, p_status text DEFAULT ''submitted''::text, p_submitted_by uuid DEFAULT NULL::uuid',
-    'public.coordination_item_revisions', 'v',
+    'coordination_item_revisions', 'v',
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     'f85c5907da1d98d33061deb6c050098662576db9a53333ca6153f353a7e15eb2',
@@ -253,7 +253,13 @@ WHERE signature IN (
   'public.apply_scope_change(uuid)',
   'public.finalize_spec_book_issue(uuid)',
   'public.get_ab_variant_stats(uuid)',
-  'public.get_client_project_review_bundle(uuid)'
+  'public.get_client_project_review_bundle(uuid)',
+  -- These four also carry the public-schema ALTER DEFAULT PRIVILEGES grant to
+  -- service_role from creation; only 00486 narrows them to authenticated.
+  'public.escalate_item_feedback_to_decision(uuid,uuid)',
+  'public.generate_milestone_invoice(uuid)',
+  'public.reply_to_item_feedback(uuid,text)',
+  'public.review_sms_message(uuid,text,jsonb)'
 );
 
 CREATE TEMP TABLE _00486_dependency_profile (
@@ -275,7 +281,7 @@ CREATE TEMP TABLE _00486_dependency_profile (
 INSERT INTO _00486_dependency_profile VALUES
   (
     'public._finalize_spec_book_issue_00403(uuid)', 'p_revision_id uuid',
-    'public.spec_book_revisions', 'plpgsql', true, 'v',
+    'spec_book_revisions', 'plpgsql', true, 'v',
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '095109b82a35f52c551a203ecbf05b539180ad595644988e511c3af8841668d4',
@@ -306,7 +312,8 @@ INSERT INTO _00486_dependency_profile VALUES
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     'fd3a5657e3191045f8a93f119be4a44bf6d64b313b396850640e86765fd713b7',
     'f21792bc771560f38df42bd33300615dcc0625d43020b6707706470889aa8403',
-    ARRAY[]::text[], ARRAY[]::text[], true
+    -- Creation-time ALTER DEFAULT PRIVILEGES grant that 00486 revokes.
+    ARRAY['service_role'], ARRAY[]::text[], true
   ),
   (
     'public.send_scope_change_request(uuid,uuid)',
@@ -389,7 +396,7 @@ INSERT INTO _00486_dependency_profile VALUES
     'plpgsql', false, 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '4e8568994c57300bc7eef68e408fbd6956fc474ddf272bfaf96ccbfcf3687b56',
-    'fb3520a732378efe39f0e68838bcfada60cad47a1ac9c440fc3feedd1aa596b0',
+    '9f116a8aad7077b790c838992d8facaedf807801b3f4f85a55a9551882531c6f',
     ARRAY[]::text[], ARRAY[]::text[], true
   );
 
@@ -413,10 +420,10 @@ INSERT INTO _00486_lock_order_profile VALUES
   (
     'public.apply_client_decision(uuid,uuid,text,text,text,integer)',
     'p_decision_id uuid, p_selected_option_id uuid, p_client_consent_method text DEFAULT NULL::text, p_client_signature text DEFAULT NULL::text, p_client_note text DEFAULT NULL::text, p_quantity integer DEFAULT NULL::integer',
-    'public.client_decisions', 'plpgsql', true, 'v',
+    'client_decisions', 'plpgsql', true, 'v',
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
-    'ae85fc197a980c4599ca4d725330bd43c2af244b817706e10d0fcc1b99907e07',
+    '5d2ec91b7a1ad211709c0b7712f1e6e817331b22c7f6fc5b151e6c7d781ebda2',
     'e0f920c2c9fdc5cf02f7575e009890fc3f86c96223bbca7f6a804ee6c21a066e',
     ARRAY['authenticated'], ARRAY['authenticated'], true
   ),
@@ -424,17 +431,17 @@ INSERT INTO _00486_lock_order_profile VALUES
     'public.po_status_cascade_to_items()', '', 'trigger', 'plpgsql', true, 'v',
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
-    '09c307671846e16618a0c5b7d7213b4ff60344dbc989a92f04bb01480b6bac47',
+    '5062729fbabb3287b60d41797e4378c6f0ff6ff0e9545d7a445df712de3b4bee',
     '29a59ba5a0a33bb1253d52541539283ea4eca70b13ca33f52a98d0b199ba9ffe',
-    ARRAY[]::text[], ARRAY[]::text[], true
+    ARRAY['anon', 'authenticated', 'service_role'], ARRAY[]::text[], true
   ),
   (
     'public.draft_milestones_on_production_start()', '', 'trigger',
     'plpgsql', true, 'v', ARRAY['search_path=public'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
-    '9c3de79a28db81dc37ab42d0f05eb9557995887220d39bed97ea0fa058f90011',
-    '9c3de79a28db81dc37ab42d0f05eb9557995887220d39bed97ea0fa058f90011',
-    ARRAY[]::text[], ARRAY[]::text[], true
+    '85242f79e6f7eb220fae7c395e220b2e87cf8991e835f1b92b723dc80447b448',
+    '85242f79e6f7eb220fae7c395e220b2e87cf8991e835f1b92b723dc80447b448',
+    ARRAY['anon', 'authenticated', 'service_role'], ARRAY[]::text[], true
   ),
   (
     'public.guard_ffe_production_transition()', '', 'trigger',
@@ -635,8 +642,8 @@ BEGIN
                   ) IS NOT DISTINCT FROM expected.original_body_sha256
               AND COALESCE((
                     SELECT array_agg(
-                      COALESCE(grantee.rolname, 'PUBLIC')
-                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+                      COALESCE(grantee.rolname, 'PUBLIC')::text
+                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
                     )
                     FROM aclexplode(
                       COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -658,8 +665,8 @@ BEGIN
                   ) IS NOT DISTINCT FROM expected.final_body_sha256
               AND COALESCE((
                     SELECT array_agg(
-                      COALESCE(grantee.rolname, 'PUBLIC')
-                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+                      COALESCE(grantee.rolname, 'PUBLIC')::text
+                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
                     )
                     FROM aclexplode(
                       COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -717,8 +724,8 @@ BEGIN
                   ) IS NOT DISTINCT FROM expected.original_body_sha256
               AND COALESCE((
                     SELECT array_agg(
-                      COALESCE(grantee.rolname, 'PUBLIC')
-                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+                      COALESCE(grantee.rolname, 'PUBLIC')::text
+                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
                     )
                     FROM aclexplode(
                       COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -740,8 +747,8 @@ BEGIN
                   ) IS NOT DISTINCT FROM expected.final_body_sha256
               AND COALESCE((
                     SELECT array_agg(
-                      COALESCE(grantee.rolname, 'PUBLIC')
-                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+                      COALESCE(grantee.rolname, 'PUBLIC')::text
+                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
                     )
                     FROM aclexplode(
                       COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -804,8 +811,8 @@ BEGIN
                   ) IS NOT DISTINCT FROM expected.original_body_sha256
               AND COALESCE((
                     SELECT array_agg(
-                      COALESCE(grantee.rolname, 'PUBLIC')
-                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+                      COALESCE(grantee.rolname, 'PUBLIC')::text
+                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
                     )
                     FROM aclexplode(
                       COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -827,8 +834,8 @@ BEGIN
                   ) IS NOT DISTINCT FROM expected.final_body_sha256
               AND COALESCE((
                     SELECT array_agg(
-                      COALESCE(grantee.rolname, 'PUBLIC')
-                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+                      COALESCE(grantee.rolname, 'PUBLIC')::text
+                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
                     )
                     FROM aclexplode(
                       COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -3890,6 +3897,8 @@ DECLARE
   v_fb public.item_feedback;
   v_anchor_client_id uuid;
   v_anchor_project_id uuid;
+  -- plpgsql forbids a row variable in a multi-item INTO list.
+  v_fb_row record;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'feedback or decision not found or access denied'
@@ -3897,7 +3906,7 @@ BEGIN
   END IF;
 
   SELECT feedback, gate.client_id, proposal.project_id
-  INTO v_fb, v_anchor_client_id, v_anchor_project_id
+  INTO v_fb_row
   FROM public.item_feedback AS feedback
   CROSS JOIN LATERAL public.item_feedback_gate(
     feedback.proposal_item_id,
@@ -3914,6 +3923,10 @@ BEGIN
     RAISE EXCEPTION 'feedback or decision not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
+
+  v_fb := v_fb_row.feedback;
+  v_anchor_client_id := v_fb_row.client_id;
+  v_anchor_project_id := v_fb_row.project_id;
 
   PERFORM 1
   FROM public.client_decisions AS decision
@@ -4341,6 +4354,9 @@ DECLARE
   v_project public.projects%ROWTYPE;
   v_detach boolean := false;
   v_updated integer;
+  -- plpgsql forbids a row variable in a multi-item INTO list, so the paired
+  -- composites land in one record and are unpacked below.
+  v_row_4367 record;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     v_detach := OLD.milestone_id IS NOT NULL;
@@ -4364,10 +4380,13 @@ BEGIN
     WHERE id = OLD.invoice_id;
 
     SELECT milestone, project
-    INTO v_milestone, v_project
+    INTO v_row_4367
     FROM public.project_payment_milestones AS milestone
     JOIN public.projects AS project ON project.id = milestone.project_id
     WHERE milestone.id = OLD.milestone_id;
+
+    v_milestone := v_row_4367.milestone;
+    v_project := v_row_4367.project;
 
     IF v_previous_invoice.id IS NULL
        OR v_milestone.id IS NULL
@@ -4873,6 +4892,8 @@ DECLARE
   v_msg public.sms_messages;
   v_conversation public.sms_conversations;
   v_party public.project_parties;
+  -- plpgsql forbids a row variable in a multi-item INTO list.
+  v_msg_row record;
   v_party_id uuid;
   v_effect jsonb;
   v_result jsonb := '{}'::jsonb;
@@ -4883,7 +4904,7 @@ BEGIN
   END IF;
 
   SELECT message, conversation, party
-  INTO v_msg, v_conversation, v_party
+  INTO v_msg_row
   FROM public.sms_messages AS message
   JOIN public.sms_conversations AS conversation
     ON conversation.id = message.conversation_id
@@ -4930,6 +4951,10 @@ BEGIN
     RAISE EXCEPTION 'message not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
+
+  v_msg := v_msg_row.message;
+  v_conversation := v_msg_row.conversation;
+  v_party := v_msg_row.party;
 
   v_party_id := v_party.id;
 
@@ -5625,8 +5650,8 @@ BEGIN
           ) IS DISTINCT FROM expected.final_body_sha256
        OR COALESCE((
             SELECT array_agg(
-              COALESCE(grantee.rolname, 'PUBLIC')
-              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+              COALESCE(grantee.rolname, 'PUBLIC')::text
+              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
             )
             FROM aclexplode(
               COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -5718,8 +5743,8 @@ BEGIN
           ) IS DISTINCT FROM expected.final_body_sha256
        OR COALESCE((
             SELECT array_agg(
-              COALESCE(grantee.rolname, 'PUBLIC')
-              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+              COALESCE(grantee.rolname, 'PUBLIC')::text
+              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
             )
             FROM aclexplode(
               COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -5962,8 +5987,8 @@ BEGIN
           ) IS DISTINCT FROM expected.final_body_sha256
        OR COALESCE((
             SELECT array_agg(
-              COALESCE(grantee.rolname, 'PUBLIC')
-              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+              COALESCE(grantee.rolname, 'PUBLIC')::text
+              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
             )
             FROM aclexplode(
               COALESCE(routine.proacl, acldefault('f', routine.proowner))
@@ -6026,9 +6051,13 @@ BEGIN
               AND NOT attribute.attisdropped
           )
        OR (
+            -- pg_get_expr cannot deparse a WHEN clause spanning OLD and NEW,
+            -- so the guard is read back out of the trigger definition.
             expected.has_when
-            AND pg_get_expr(binding.tgqual, binding.tgrelid)
-                IS DISTINCT FROM '(old.status IS DISTINCT FROM new.status)'
+            AND position(
+                  'WHEN (old.status IS DISTINCT FROM new.status)'
+                  IN pg_get_triggerdef(binding.oid, true)
+                ) = 0
           )
   ) OR EXISTS (
     SELECT 1
