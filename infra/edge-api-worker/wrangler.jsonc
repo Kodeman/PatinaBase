@@ -45,18 +45,17 @@
       "name": "patina-edge-api-staging",
       "workers_dev": true,
       "vars": {
-        "SUPABASE_UPSTREAM_URL": "http://127.0.0.1:54321",
-        "SUPABASE_JWT_ISSUER": "http://127.0.0.1:54321/auth/v1",
+        "SUPABASE_UPSTREAM_URL": "https://vuesoyhfrjabfxbrzekd.supabase.co",
+        "SUPABASE_JWT_ISSUER": "https://vuesoyhfrjabfxbrzekd.supabase.co/auth/v1",
         "SUPABASE_JWT_AUDIENCE": "authenticated",
-        "SUPABASE_JWKS_URL": "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json",
+        "SUPABASE_JWKS_URL": "https://vuesoyhfrjabfxbrzekd.supabase.co/auth/v1/.well-known/jwks.json",
         "CATALOG_SOURCE": "legacy",
         "CATALOG_HYPERDRIVE_PERCENT": "0",
         "LEGACY_FETCH_TIMEOUT_MS": "3000",
         "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
         "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
       },
-      // Replace the local-only URLs and add both real staging Hyperdrive IDs
-      // after the persistent branch is provisioned. No staging branch exists yet.
+      // Add both real staging Hyperdrive IDs after Wrangler returns them.
       "hyperdrive": [],
     },
     "production": {
