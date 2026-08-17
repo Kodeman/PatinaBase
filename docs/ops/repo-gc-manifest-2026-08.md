@@ -6,24 +6,42 @@ directories timed out at 2 minutes in a prior attempt and was skipped here by de
 **a20** in W6 executes retirement on the RETIRE rows below, and only **after** the merges for
 Thread A (`security/public-sd-caller-hardening`) and Thread B (`infra/staging-environment`) land.
 
-## Methodology — ancestry was tried and rejected; `git cherry` is the operative test
+⚠ **Sandbox footgun for anyone scripting this repo's git state, including a20:** unquoted
+`for f in $files` does not word-split in this zsh sandbox, so the loop silently runs once instead
+of iterating — use `for f in $(...)` (command substitution splits) or iterate a real array.
+Separately, invoking `git` as a subprocess inside a `while read` loop in this same sandbox
+intermittently returned silently-corrupted/empty output with no visible error during this
+manifest's construction; the workaround used here was generating a flat *sequential* script
+(loop only for text-building, never wrapping the actual `git` invocation) and cross-checking
+results against known values before trusting a batch. Budget for both quirks before writing any
+git-in-a-loop tooling against this repo.
 
-The first pass of this manifest classified merge status with
-`git merge-base --is-ancestor <branch> main`. **That method is unsound for this repo and its
-result was thrown out.** This repo squashes and rebases onto `main`, so a branch whose work has
-genuinely landed does not show its tip as an ancestor of `main` — the ancestry test reported
-**0 of 35** branch-carrying `.codex/` worktrees as merged, which is wrong: two of those branches
-turned out to be fully landed (all commits patch-equivalent to something already on `main`), and
-twenty more are landed except for one to three residual commits each.
+## Methodology — three layers, each correcting the one before: ancestry → `git cherry` → content
 
-**`git cherry main <branch>` is the correct test and is what this table uses.** It compares
-commits by patch-id, not by ancestry, so it correctly identifies work that reached `main` via
-squash or rebase:
-- `-` = a commit whose patch is already on `main` (**already-on-main**)
-- `+` = a commit whose patch is **not** on `main` under any equivalent form (**genuinely-new**)
+**Layer 1 (rejected): `git merge-base --is-ancestor <branch> main`.** Unsound for this repo — it
+squashes and rebases onto `main`, so a branch whose work genuinely landed does not show its tip
+as an ancestor. This test reported **0 of 35** branch-carrying `.codex/` worktrees as merged,
+which was wrong.
 
-**a20: do not fall back to `--is-ancestor` for this repo.** Use `git cherry main <branch>` (or
-`git cherry -v main <branch>` for subject lines) as the merge-status test going forward.
+**Layer 2 (also insufficient on its own): `git cherry main <branch>`.** Compares commits by
+patch-id rather than ancestry, so it correctly recognizes work that reached `main` via squash or
+rebase: `-` = a commit whose patch is already on `main` (**already-on-main**), `+` = a commit
+whose patch has no exact match on `main` (**genuinely-new**). This is a real improvement over
+ancestry, but patch-id is still exact-match only — **it over-reports orphans whenever a commit
+landed and `main` then evolved past it, or a migration got renumbered on the way in.** Content
+comparison against `main`'s current tree caught three "genuinely-new" commits that patch-id
+flagged but that had, in fact, already landed (see Layer 3 findings below): `d6175631` (landed
+verbatim, `main` just moved on around it), `f887a2b5` (landed as a renumbered migration, 2-line
+diff), and `f59fbd51`/`49d06348` (landed except for two documentation files).
+
+**Layer 3 (the one that actually settled it): content comparison.** For every commit `git cherry`
+flagged as genuinely-new, diff its changed files against `main`'s current versions — byte-identical
+or drifted-by-later-evolution means it landed; a file with no counterpart on `main` at all is the
+only real signal of orphaned work. This is what actually distinguishes RETIRE from TRIAGE below.
+
+**a20: do not stop at `git cherry`, and do not fall back to `--is-ancestor`.** Patch-id is
+necessary but not sufficient here — confirm any `+` commit's content actually has no home on
+`main` before treating a branch as carrying real orphaned work.
 
 Dirty/clean is `git status --porcelain | head -1` per worktree, unchanged from the first pass.
 
@@ -31,22 +49,29 @@ Total worktrees (including main checkout): **47**. Non-main worktrees: **46**.
 
 ## Verdict rules
 
-- **RETIRE** — `genuinely-new == 0` **and** working tree clean. Ancestry does not matter.
-- **TRIAGE** — `genuinely-new > 0` but `already-on-main > 0`. Nearly all the branch's work has
-  landed, but it retains commits that have not, in some form, reached `main`. A bulk retire would
-  silently destroy those commits; treating it as a flat "unmerged, keep" would bury the same risk
-  under 46 look-alike rows. The genuinely-new commits are listed inline for a human to triage —
-  this manifest does not judge whether they should be rescued or discarded.
+- **RETIRE** — after content comparison, no genuinely-orphaned content remains **and** working
+  tree clean. A `git cherry` `+` commit does not by itself block RETIRE if its content is
+  confirmed present on `main` (verbatim, evolved-in-place, or renumbered).
+- **TRIAGE** — after content comparison, real orphaned content remains: file(s) with no
+  counterpart anywhere on `main`. Listed inline for a human to decide rescue-or-discard — this
+  manifest does not judge that call.
 - **KEEP** — everything else: dirty trees, wholly-unmerged branches (`already-on-main == 0`,
   i.e. no work has landed under any form yet), the detached worktree, and the
   protected/in-flight set below.
 
-**Revised counts vs. the ancestry-based first pass:** RETIRE 5 → **7** (feat/workflow-spine-db
-and feat/workflow-stage0-contract move off KEEP once cherry proves they're fully landed).
-**22 of the 41 first-pass KEEPs reclassify to TRIAGE** — every `.codex/` branch that carries a
-generic `fix(workflow): close runtime invalidation gaps` or `test: pin workflow privacy
-authority contracts`-shaped landed history plus 1–3 leftover commits. All 22 verdict changes are
-in the `.codex/` set — none of the 10 `.claude/` worktrees or the protected/in-flight set changed.
+**Revised counts, three passes:**
+- Ancestry (rejected): RETIRE 5 / KEEP 41 / TRIAGE 0
+- `git cherry` (superseded): RETIRE 7 / TRIAGE 22 / KEEP 17
+- **Content comparison (final): RETIRE 27 / TRIAGE 2 / KEEP 17**
+
+The cherry pass over-reported 20 branches as TRIAGE on the strength of one commit
+(`d6175631` — content-confirmed landed, just drifted from later `main` evolution) and one more
+branch's blocking reason turned out to be a renumbered migration (`f887a2b5` → `00462`, landed).
+Those 20 branches plus the 2 fully-landed-by-cherry branches from pass 2 (`feat/workflow-spine-db`,
+`feat/workflow-stage0-contract`) make up the 27 RETIRE. Only 2 branches (`fix/workflow-privacy-authority`,
+`test/workflow-privacy-contract`) carry content that genuinely has no home on `main` — see
+**Orphaned content** below. All verdict changes are in the `.codex`/`.claude` branch-carrying set;
+the protected/in-flight/wholly-unmerged KEEP set (17 rows) is unchanged from pass 2.
 
 ## Protected / in-flight (override the rules above regardless of cherry/dirty result)
 
@@ -76,11 +101,11 @@ in the `.codex/` set — none of the 10 `.claude/` worktrees or the protected/in
 | `.claude/worktrees/agent-aaa96f9f1199fa4ac` | `worktree-agent-aaa96f9f1199fa4ac` | 0 | 0 | clean | RETIRE |
 | `.claude/worktrees/agent-acbd9da63988fb664` | `worktree-agent-acbd9da63988fb664` | 0 | 0 | clean | RETIRE |
 | `.claude/worktrees/agent-ad8d82de50432d762` | `worktree-agent-ad8d82de50432d762` | 0 | 0 | clean | RETIRE |
-| `.claude/worktrees/agent-site-binder-privacy` | `fix/site-binder-privacy` | 37 | 1 | clean | **TRIAGE** |
-| `.claude/worktrees/agent-workflow-approval-authority` | `feat/workflow-approval-authority` | 20 | 1 | clean | **TRIAGE** |
-| `.claude/worktrees/agent-workflow-approval-lifecycle` | `feat/workflow-approval-lifecycle` | 21 | 1 | clean | **TRIAGE** |
-| `.claude/worktrees/agent-workflow-approval-notifications` | `feat/workflow-approval-notifications` | 22 | 1 | clean | **TRIAGE** |
-| `.claude/worktrees/agent-workflow-privacy-contract` | `test/workflow-privacy-contract` | 10 | 1 | clean | **TRIAGE** |
+| `.claude/worktrees/agent-site-binder-privacy` | `fix/site-binder-privacy` | 37 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.claude/worktrees/agent-workflow-approval-authority` | `feat/workflow-approval-authority` | 20 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.claude/worktrees/agent-workflow-approval-lifecycle` | `feat/workflow-approval-lifecycle` | 21 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.claude/worktrees/agent-workflow-approval-notifications` | `feat/workflow-approval-notifications` | 22 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.claude/worktrees/agent-workflow-privacy-contract` | `test/workflow-privacy-contract` | 10 | 1 | clean | **TRIAGE** — 2 orphaned docs |
 | `.codex/worktrees/agent-a1` | `phase1-close/acl-residual-census` | 0 | 1 | clean | KEEP — in-flight |
 | `.codex/worktrees/agent-a2` | `phase1-close/claude-md-truth` | 0 | 2 | clean | KEEP — in-flight |
 | `.codex/worktrees/agent-a3r` | `phase1-close/gc-manifest` | 0 | 1 | clean | KEEP — this agent, in-flight |
@@ -98,56 +123,79 @@ in the `.codex/` set — none of the 10 `.claude/` worktrees or the protected/in
 | `.codex/worktrees/agent-cf-public-acl-test-harness` | `cloudflare-phase1/public-acl-test-harness` | 0 | 70 | clean | KEEP — wholly unmerged |
 | `.codex/worktrees/agent-cf-public-acl-tests` | `cloudflare-phase1/public-acl-tests` | 0 | 68 | clean | KEEP — wholly unmerged |
 | `.codex/worktrees/agent-cf-public-rpc-hardening` | `cloudflare-phase1/public-rpc-hardening` | 0 | 73 | clean | KEEP — wholly unmerged |
-| `.codex/worktrees/agent-contextual-handoff-final-ui` | `fix/contextual-handoff-final-ui-remediation` | 37 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/agent-contextual-handoff-remediation` | `fix/contextual-handoff-remediation` | 36 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/agent-project-contextual-handoffs-00440` | `feat/project-contextual-handoffs-db` | 29 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/agent-project-contextual-handoffs-db` | `fix/workflow-approval-notification-requeue` | 24 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/agent-site-request-awaiting-consent-00442` | `fix/site-request-awaiting-consent-handoff` | 33 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/agent-stage2-client-access` | `fix/stage2-client-access` | 25 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/agent-stage2-client-attention-discussion` | `fix/stage2-client-attention-discussion` | 28 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/agent-stage2-client-authority-ui` | `fix/stage2-client-authority-ui` | 26 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/agent-stage2-option-privacy-00440` | `fix/stage2-option-frozen-authority` | 28 | 1 | clean | **TRIAGE** |
+| `.codex/worktrees/agent-contextual-handoff-final-ui` | `fix/contextual-handoff-final-ui-remediation` | 37 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/agent-contextual-handoff-remediation` | `fix/contextual-handoff-remediation` | 36 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/agent-project-contextual-handoffs-00440` | `feat/project-contextual-handoffs-db` | 29 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/agent-project-contextual-handoffs-db` | `fix/workflow-approval-notification-requeue` | 24 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/agent-site-request-awaiting-consent-00442` | `fix/site-request-awaiting-consent-handoff` | 33 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/agent-stage2-client-access` | `fix/stage2-client-access` | 25 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/agent-stage2-client-attention-discussion` | `fix/stage2-client-attention-discussion` | 28 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/agent-stage2-client-authority-ui` | `fix/stage2-client-authority-ui` | 26 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/agent-stage2-option-privacy-00440` | `fix/stage2-option-frozen-authority` | 28 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
 | `.codex/worktrees/agent-workflow-spine-db` | `feat/workflow-spine-db` | 10 | 0 | clean | RETIRE (fully landed by cherry, despite failing ancestry) |
-| `.codex/worktrees/approval-realtime-closure` | `feat/approval-realtime-closure` | 30 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/contextual-handoff-designer` | `feat/contextual-handoff-designer` | 33 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/designer-stage2-approval` | `feat/designer-stage2-approval-cutover` | 24 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/designer-stage2-remediation` | `fix/designer-stage2-remediation` | 26 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/site-request-authority-detail` | `fix/site-request-authority-detail` | 35 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/stage2-client-approval` | `feat/stage2-client-approval-cutover` | 22 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/workflow-approval-contract` | `test/workflow-approval-authority` | 16 | 1 | clean | **TRIAGE** |
-| `.codex/worktrees/workflow-privacy-fix` | `fix/workflow-privacy-authority` | 16 | 3 | clean | **TRIAGE** |
+| `.codex/worktrees/approval-realtime-closure` | `feat/approval-realtime-closure` | 30 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/contextual-handoff-designer` | `feat/contextual-handoff-designer` | 33 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/designer-stage2-approval` | `feat/designer-stage2-approval-cutover` | 24 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/designer-stage2-remediation` | `fix/designer-stage2-remediation` | 26 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/site-request-authority-detail` | `fix/site-request-authority-detail` | 35 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/stage2-client-approval` | `feat/stage2-client-approval-cutover` | 22 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/workflow-approval-contract` | `test/workflow-approval-authority` | 16 | 1 | clean | RETIRE (d6175631 content-confirmed landed) |
+| `.codex/worktrees/workflow-privacy-fix` | `fix/workflow-privacy-authority` | 16 | 3 | clean | **TRIAGE** — 2 orphaned docs (d6175631 and f887a2b5 content-confirmed landed) |
 | `.codex/worktrees/workflow-stage0` | `feat/workflow-stage0-contract` | 9 | 0 | clean | RETIRE (fully landed by cherry, despite failing ancestry) |
 
-## TRIAGE detail — genuinely-new commits per branch
+## Content-comparison findings — why 20 of 22 `git cherry` flags turned out to be false positives
 
-21 of the 22 TRIAGE branches carry the **same single genuinely-new commit**:
+`git cherry` flagged three distinct commits (by content, across 22 branches) as genuinely-new.
+Content diff against `main`'s current tree resolved all three:
 
-- `d6175631` — `fix(workflow): close runtime invalidation gaps`
+- **`d6175631` "fix(workflow): close runtime invalidation gaps" — LANDED, not an orphan.** All
+  three symbols it introduces are present on `main`: `WorkflowInvalidationClient` in
+  `packages/supabase/src/hooks/use-project-workflow.ts` (confirmed present on `main` directly),
+  plus `invalidateProjectWorkflow` and `projectWorkflowQueryKey` in the hook tests. Of its 21
+  files, 5 are byte-identical to `main` and 16 differ only because `main` evolved further after
+  the merge. Patch-id diverged from context drift, nothing more. This is the commit gating 21 of
+  the 22 cherry-flagged branches; 20 of those 21 had it as their *only* genuinely-new commit and
+  move straight to RETIRE.
 
-on: `fix/site-binder-privacy`, `feat/workflow-approval-authority`,
-`feat/workflow-approval-lifecycle`, `feat/workflow-approval-notifications`,
-`fix/contextual-handoff-final-ui-remediation`, `fix/contextual-handoff-remediation`,
-`feat/project-contextual-handoffs-db`, `fix/workflow-approval-notification-requeue`,
-`fix/site-request-awaiting-consent-handoff`, `fix/stage2-client-access`,
-`fix/stage2-client-attention-discussion`, `fix/stage2-client-authority-ui`,
-`fix/stage2-option-frozen-authority`, `feat/approval-realtime-closure`,
-`feat/contextual-handoff-designer`, `feat/designer-stage2-approval-cutover`,
-`fix/designer-stage2-remediation`, `fix/site-request-authority-detail`,
-`feat/stage2-client-approval-cutover`, `test/workflow-approval-authority`.
+- **`f887a2b5` "fix: enforce workflow privacy authority" — LANDED, renumbered.** 46 files: 29
+  identical to `main`, 16 evolved, 1 "absent" as a literal path —
+  `supabase/migrations/00434_workflow_privacy_authority.sql`. `main` carries the same migration
+  renumbered as `00462_workflow_privacy_authority.sql` (confirmed present on `main`), and the two
+  differ by exactly two lines: the header comment and one inline `pre-00434` → `pre-00462`
+  reference. Renumber, not loss.
 
-The remaining two branches carry different genuinely-new commits:
+- **`49d06348` / `f59fbd51` "test: pin workflow privacy authority contracts" — LANDED except two
+  documentation files.** Two different commits, same subject line, carried on divergent parents
+  of `test/workflow-privacy-contract` and `fix/workflow-privacy-authority` respectively — same
+  logical change. Both are landed except for the two files in **Orphaned content** below.
 
-- `test/workflow-privacy-contract` — 1 genuinely-new commit:
-  - `49d06348` — `test: pin workflow privacy authority contracts`
-- `fix/workflow-privacy-authority` — 3 genuinely-new commits:
-  - `d6175631` — `fix(workflow): close runtime invalidation gaps`
-  - `f59fbd51` — `test: pin workflow privacy authority contracts`
-  - `f887a2b5` — `fix: enforce workflow privacy authority`
+**Net effect:** `fix/workflow-privacy-authority`'s three cherry-flagged commits are now all
+accounted for — `d6175631` landed, `f887a2b5` landed as `00462`, `f59fbd51` landed except the two
+orphaned docs. `test/workflow-privacy-contract`'s one cherry-flagged commit (`49d06348`) is the
+same story. **Verdict for both: TRIAGE, sole remaining reason is the two orphaned docs — nothing
+else in either branch needs rescuing.**
 
-Note `49d06348` and `f59fbd51` are two **different commits with the identical subject line**
-("test: pin workflow privacy authority contracts") on two different branches — likely the same
-logical change carried on divergent parents. This manifest does not judge whether any of these
-commits should be rescued or discarded; that call belongs to a20 or a human reviewer.
+## Orphaned content — 2 files, 111 lines
+
+This is the **single actionable rescue in the entire 46-worktree inventory**. Everything else is
+either already landed on `main` (safe to RETIRE) or wholly unmerged work still in progress (KEEP).
+Both files live identically in `test/workflow-privacy-contract`
+(`.claude/worktrees/agent-workflow-privacy-contract`) and `fix/workflow-privacy-authority`
+(`.codex/worktrees/workflow-privacy-fix`), under `supabase/tests/workflow/`, and neither exists
+on `main`:
+
+1. **`supabase/tests/workflow/README.md`** — 52 lines. How to run the workflow privacy contract
+   tests. `main` already has the test files this README documents
+   (`board_privacy_contract_test.sql`, `commercial_privacy_contract_test.sql`,
+   `configuration_privacy_contract_test.sql`, `storage_privacy_contract_test.ts`, confirmed
+   present in `supabase/tests/workflow/` on `main`) but **no runner instructions**.
+2. **`supabase/tests/workflow/storage_http_followup.md`** — 59 lines. The spec for the Deno
+   storage harness. `main` already has `storage_privacy_contract_test.ts` — the work this spec
+   called for got built, but the spec that called for it never landed.
+
+Both are documentation only — no code, no schema, no test logic is orphaned. Whether to rescue
+either doc onto `main` (or let them stay lost) is a call for a20 or a human reviewer; this
+manifest does not make it.
 
 ## Other notes
 
