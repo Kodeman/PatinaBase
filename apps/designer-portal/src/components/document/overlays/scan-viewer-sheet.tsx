@@ -1,35 +1,30 @@
 'use client';
 
 /**
- * ScanViewerSheet (R90) — the interactive room scan over the Document. The
- * shared full-screen ground owns dialog behavior; RoomScanViewer retains its
- * own live chrome, tools, and WebGL lifecycle without a nested dialog/header.
+ * ScanViewerSheet (R90) — the room scan over the Document. The shared
+ * full-screen ground owns dialog behavior; the content below owns its own
+ * visible chrome without a nested dialog/header.
  *
- * The model URL must be signed before the interactive viewer mounts: iOS wrote
- * public-style URLs for a private bucket, so handing the raw row to WebGL would
- * issue a guaranteed 400. The ErrorBoundary still degrades to the scan still
- * until the React-19-compatible fiber stack is in place.
+ * ⚠ THE INTERACTIVE VIEWER IS GONE FROM THIS SHEET, AND THAT IS THE POINT
+ * (Rendered Room v2, W2). It was `RoomScanViewer` on @react-three/fiber@8,
+ * which reads a React internal removed in React 19 — under React 19 it could
+ * only ever throw on mount and fall through the ErrorBoundary to `ScanStill`.
+ * The whole r3f stack has been deleted rather than kept as a lazy chunk that
+ * always fails; the still it degraded to is now simply the sheet's content, so
+ * this surface behaves exactly as it did in practice and costs no WebGL. A
+ * follow-up may point the sheet at Room View's `ModelStage` (plain three.js,
+ * React-19-safe) — that is a separate item, not this one.
+ *
+ * The model URL is still signed here: iOS wrote public-style URLs for a private
+ * bucket, and the still's own preparation state depends on that resolution.
  */
 
-import dynamic from 'next/dynamic';
-import {
-  useRoomScan,
-  useSignedScanModelUrl,
-  type RoomScan,
-} from '@patina/supabase';
-import { ErrorBoundary } from '@patina/design-system';
+import { useRoomScan, type RoomScan } from '@patina/supabase';
 import {
   FullScreenViewerHeader,
   FullScreenViewerShell,
   FullScreenViewerState,
 } from './full-screen-viewer-shell';
-
-// Keep @react-three/fiber out of every document bundle. fiber@8 reads a React
-// internal removed in React 19; the boundary below catches that init failure.
-const RoomScanViewer = dynamic(
-  () => import('@/components/rooms/viewer').then((m) => m.RoomScanViewer),
-  { ssr: false, loading: () => <ViewerLoading /> },
-);
 
 export function ScanViewerSheet({
   scanId,
@@ -38,9 +33,10 @@ export function ScanViewerSheet({
   scanId: string;
   onClose: () => void;
 }) {
+  // No `useSignedScanModelUrl` here any more: signing existed solely to hand a
+  // private-bucket URL to the WebGL viewer, and its "Preparing the 3D file…"
+  // state now gates nothing — the still comes off the scan row itself.
   const { data: scan, isError } = useRoomScan(scanId);
-  const { data: signedModelUrl, isLoading: signingModel } =
-    useSignedScanModelUrl(scan);
   const title = scan?.name ?? 'Room scan';
 
   if (!scan) {
@@ -59,18 +55,6 @@ export function ScanViewerSheet({
     );
   }
 
-  if (signingModel) {
-    return (
-      <FullScreenViewerShell
-        title={title}
-        onClose={onClose}
-        actionKey="close-scan-viewer"
-      >
-        <FullScreenViewerState>Preparing the 3D file…</FullScreenViewerState>
-      </FullScreenViewerShell>
-    );
-  }
-
   return (
     <FullScreenViewerShell
       title={title}
@@ -82,33 +66,16 @@ export function ScanViewerSheet({
         data-overlay-scan-viewer
         className="flex min-h-0 flex-1 flex-col [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-offset-2 [&_button]:focus-visible:outline-[var(--color-clay)]"
       >
-        <ErrorBoundary fallback={<ScanStill scan={scan} onClose={onClose} />}>
-          <RoomScanViewer
-            scan={{
-              ...scan,
-              model_url: signedModelUrl ?? null,
-              model_url_gltf: signedModelUrl ?? null,
-            }}
-            onClose={onClose}
-          />
-        </ErrorBoundary>
+        <ScanStill scan={scan} onClose={onClose} />
       </div>
     </FullScreenViewerShell>
   );
 }
 
-/** The lazy viewer's paper state while its heavy WebGL chunk downloads. */
-function ViewerLoading() {
-  return (
-    <FullScreenViewerState withHeader>
-      Opening the 3D scan…
-    </FullScreenViewerState>
-  );
-}
-
 /**
- * Degrade path when the interactive viewer cannot run. This is only content
- * inside the owning dialog, so it does not introduce nested dialog semantics.
+ * The sheet's content: the scan's own still. This is only content inside the
+ * owning dialog, so it does not introduce nested dialog semantics. It supplies
+ * its own header, which is why the shell above runs `showHeader={false}`.
  */
 function ScanStill({ scan, onClose }: { scan: RoomScan; onClose: () => void }) {
   const title = scan.name ?? 'Room scan';

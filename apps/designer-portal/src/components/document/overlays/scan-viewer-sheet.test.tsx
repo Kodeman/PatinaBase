@@ -1,38 +1,19 @@
+/**
+ * ScanViewerSheet — one dialog owner, the scan's still as content.
+ *
+ * The r3f `RoomScanViewer` this sheet used to lazy-load was deleted with the rest
+ * of the React-19-incompatible viewer stack (Rendered Room v2, W2), so there is no
+ * `next/dynamic` boundary and no ErrorBoundary left to mock: what the sheet renders
+ * in practice — the still it always degraded to — it now renders directly.
+ */
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { ScanViewerSheet } from './scan-viewer-sheet';
 
 const mockUseRoomScan = jest.fn();
-const mockUseSignedScanModelUrl = jest.fn();
-
-jest.mock('next/dynamic', () => {
-  const MockRoomScanViewer = ({
-    scan,
-    onClose,
-  }: {
-    scan: { model_url: string | null; model_url_gltf: string | null };
-    onClose: () => void;
-  }) => (
-    <div
-      data-testid="room-scan-viewer"
-      data-model-url={scan.model_url}
-      data-model-url-gltf={scan.model_url_gltf}
-    >
-      <button type="button" onClick={onClose}>
-        Close viewer
-      </button>
-    </div>
-  );
-  return { __esModule: true, default: () => MockRoomScanViewer };
-});
 
 jest.mock('@patina/supabase', () => ({
   useRoomScan: (...args: unknown[]) => mockUseRoomScan(...args),
-  useSignedScanModelUrl: (...args: unknown[]) =>
-    mockUseSignedScanModelUrl(...args),
-}));
-
-jest.mock('@patina/design-system', () => ({
-  ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -43,7 +24,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
 }));
 
 describe('ScanViewerSheet', () => {
-  it('keeps one dialog owner and gives the interactive viewer only the signed model URL', () => {
+  it('keeps one dialog owner and shows the scan still, with no WebGL viewer', () => {
     const onClose = jest.fn();
     mockUseRoomScan.mockReturnValue({
       data: {
@@ -51,13 +32,9 @@ describe('ScanViewerSheet', () => {
         name: 'Studio scan',
         model_url: 'https://storage.invalid/raw-model',
         model_url_gltf: 'https://storage.invalid/raw-gltf',
-        thumbnail_url: null,
+        thumbnail_url: 'https://storage.example/still.jpg',
       },
       isError: false,
-    });
-    mockUseSignedScanModelUrl.mockReturnValue({
-      data: 'https://storage.example/signed-model',
-      isLoading: false,
     });
 
     render(<ScanViewerSheet scanId="scan-1" onClose={onClose} />);
@@ -66,21 +43,45 @@ describe('ScanViewerSheet', () => {
     expect(screen.getByRole('dialog', { name: 'Studio scan' })).toHaveAttribute(
       'data-overlay-viewer-shell',
     );
-    expect(
-      screen.queryByRole('button', { name: 'Back to the document' }),
-    ).not.toBeInTheDocument();
-    const viewer = screen.getByTestId('room-scan-viewer');
-    expect(viewer).toHaveAttribute(
-      'data-model-url',
-      'https://storage.example/signed-model',
-    );
-    expect(viewer).toHaveAttribute(
-      'data-model-url-gltf',
-      'https://storage.example/signed-model',
-    );
-    expect(viewer.parentElement).toHaveClass('[&_button]:min-h-11');
+    expect(screen.queryByTestId('room-scan-viewer')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close viewer' }));
+    const still = screen.getByAltText('Studio scan');
+    expect(still).toHaveAttribute('src', 'https://storage.example/still.jpg');
+    expect(still.closest('[data-overlay-scan-still]')).toBeInTheDocument();
+    // The sheet's touch-target chrome is unchanged by the viewer's removal.
+    expect(
+      screen.getByRole('dialog').querySelector('[data-overlay-scan-viewer]'),
+    ).toHaveClass('[&_button]:min-h-11');
+  });
+
+  it('says so plainly when the scan carries no still', () => {
+    mockUseRoomScan.mockReturnValue({
+      data: { id: 'scan-2', name: 'Bare scan', thumbnail_url: null },
+      isError: false,
+    });
+
+    render(<ScanViewerSheet scanId="scan-2" onClose={jest.fn()} />);
+
+    expect(
+      screen.getByText('No preview image is available for this scan.'),
+    ).toBeInTheDocument();
+  });
+
+  it('holds a paper state while the scan row is unresolved', () => {
+    mockUseRoomScan.mockReturnValue({ data: undefined, isError: false });
+    render(<ScanViewerSheet scanId="scan-3" onClose={jest.fn()} />);
+    expect(screen.getByText('Opening the scan…')).toBeInTheDocument();
+  });
+
+  it('closes from the still’s own header', () => {
+    const onClose = jest.fn();
+    mockUseRoomScan.mockReturnValue({
+      data: { id: 'scan-1', name: 'Studio scan', thumbnail_url: null },
+      isError: false,
+    });
+
+    render(<ScanViewerSheet scanId="scan-1" onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the document' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
