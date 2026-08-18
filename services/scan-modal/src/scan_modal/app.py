@@ -210,11 +210,48 @@ if modal is not None:
             "git", "build-essential", "curl", "ffmpeg",
             # Open3D/OpenCV transitive loaders nerfstudio pulls in.
             "libgl1", "libglib2.0-0", "libsm6", "libxext6",
+            # clang/cmake/ninja for the two nerfstudio HARD deps (no extras
+            # marker excludes them) that build native extensions on install:
+            # `fpsample` (scikit-build-core + CMake + pybind11, imported
+            # unconditionally by nerfstudio's full_images_datamanager.py — the
+            # datamanager splatfacto's own config wires up, so it loads at
+            # `ns-train` startup regardless of method) and `pyliblzfse`
+            # (viser's Record3D loader; plain distutils Extension, pulled in
+            # transitively by viser==0.2.7 with no Linux wheel on PyPI, so it
+            # always builds from sdist here). Root cause verified 2026-08-18
+            # against a live build: Modal's `add_python` provisions a
+            # python-build-standalone CPython built with clang, so
+            # `sysconfig`'s baked-in CC is clang — distutils (pyliblzfse) and
+            # CMake's Python-aware compiler detection (fpsample) both go
+            # looking for `clang`, not `gcc`, and fail with "can't find a C++
+            # compiler" when it isn't on PATH. A same-recipe repro against
+            # apt's own (gcc-built) python3.11 builds both cleanly, isolating
+            # the failure to the interpreter's compiler, not the extension
+            # code. `build-essential` stays too: nvcc wants a gcc/g++ host
+            # compiler for gsplat's CUDA kernels, a different toolchain need.
+            "clang", "cmake", "ninja-build",
         )
         .pip_install(
             "torch==2.5.1", "torchvision==0.20.1",
             extra_index_url="https://download.pytorch.org/whl/cu124",
         )
+        # Rust BEFORE the nerfstudio/spz pip layer, not after. The PyPI `spz`
+        # Python package (installed below, for load/build) has no cp311 wheel
+        # — only cp313 and an sdist — and its sdist build-backend is
+        # `maturin` (a Rust/pyo3 extension). With no `cargo` on PATH yet,
+        # maturin's own toolchain bootstrap hung silently for 20+ minutes
+        # against a live build (2026-08-18) — plausibly it reaching out for a
+        # Rust toolchain over a network Modal's build sandbox doesn't clear
+        # fast, if at all, rather than failing fast the way a plain
+        # "cargo: not found" would. Installing rustup here, and putting
+        # `/root/.cargo/bin` on PATH for just this build stage, means
+        # maturin finds a real cargo immediately instead of guessing at one.
+        .run_commands(
+            "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs "
+            "| sh -s -- -y --profile minimal"
+        )
+        .env({"PATH": "/root/.cargo/bin:/usr/local/bin:/usr/local/nvidia/bin:"
+                      "/usr/local/cuda/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"})
         .pip_install(
             # nerfstudio 1.1.5 pins gsplat==1.4.0 exactly (pip's resolver
             # refuses 1.5.3 as a ResolutionImpossible conflict — verified
@@ -230,9 +267,10 @@ if modal is not None:
             "httpx>=0.24,<1.0",
             "spz>=0.0.1",
         )
-        # The SPZ 4 compressor. The PyPI `spz` wheel exposes load/build, not a
-        # PLY→SPZ entry point, so the CONVERTER is the Rust CLI. Ubuntu 22.04's
-        # packaged cargo is too old for a 2026 crate, hence rustup.
+        # The SPZ compressor CLI. The PyPI `spz` wheel (above) exposes
+        # load/build, not a PLY→SPZ entry point, so the CONVERTER is this
+        # separate Rust CLI. Ubuntu 22.04's packaged cargo is too old for a
+        # 2026 crate, hence rustup (now already installed, above).
         #
         # The crate is `spz`, NOT `spz-cli` — `spz-cli` does not exist on
         # crates.io (verified 2026-08 against the registry API; the earlier
@@ -247,10 +285,12 @@ if modal is not None:
         # `spz` binary. `--locked` so the crate's own Cargo.lock decides its
         # transitive versions rather than whatever resolves on build day.
         .run_commands(
-            "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs "
-            "| sh -s -- -y --profile minimal",
-            "/root/.cargo/bin/cargo install spz --version 0.0.5 --locked --root /usr/local",
+            "cargo install spz --version 0.0.5 --locked --root /usr/local",
         )
+        # Final runtime PATH: cargo drops out again. Nothing at runtime needs
+        # `rustc`/`cargo` themselves — only the `spz` BINARY they built,
+        # which `--root /usr/local` already placed in /usr/local/bin, already
+        # on this PATH.
         .env({"PATH": "/usr/local/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:"
                       "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"})
         .add_local_python_source("scan_modal")
