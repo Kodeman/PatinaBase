@@ -949,12 +949,14 @@ BEGIN
     CROSS JOIN LATERAL aclexplode(d.defaclacl) AS acl
    WHERE acl.grantee = 0;
 
-  -- Re-scoped to the three owners `postgres` can lawfully SET. Demanding a
-  -- pg_default_acl row for supabase_admin, supabase_auth_admin or
-  -- supabase_storage_admin was unsatisfiable: ALTER DEFAULT PRIVILEGES FOR ROLE
-  -- needs membership in that role, and `postgres` has none of the three and
-  -- cannot grant itself any. 00483 hardens exactly these three; this asserts
-  -- exactly that and claims nothing about the platform's own owners.
+  -- Same predicate as catalog_roles_remote_conformance_test.sql's
+  -- owner_default_recurrence, kept identical for parity. An owner is scored red
+  -- only if `postgres` could have hardened its future-default (holds SET on it)
+  -- and it is still unhardened; a missing reserved role stays red. This mirrors
+  -- 00483, which hardens a reserved-admin default only when `postgres` holds
+  -- SET and otherwise records an accepted residual. This gate is local-only,
+  -- where `postgres` holds SET on all three, so the value is 0 exactly as
+  -- before — the discriminator only changes behaviour on a hosted branch.
   SELECT count(*)
     INTO unhardened_owner_defaults
     FROM unnest(ARRAY[
@@ -968,12 +970,17 @@ BEGIN
      AND d.defaclnamespace = 0
      AND d.defaclobjtype = 'f'
    WHERE owner.oid IS NULL
-      OR d.oid IS NULL
-      OR EXISTS (
-        SELECT 1
-        FROM aclexplode(d.defaclacl) AS acl
-        WHERE acl.grantee = 0
-          AND acl.privilege_type = 'EXECUTE'
+      OR (
+        pg_has_role('postgres', expected.role_name, 'SET')
+        AND (
+          d.oid IS NULL
+          OR EXISTS (
+            SELECT 1
+            FROM aclexplode(d.defaclacl) AS acl
+            WHERE acl.grantee = 0
+              AND acl.privilege_type = 'EXECUTE'
+          )
+        )
       );
 
   SELECT has_schema_privilege('edge_catalog_reader', 'public', 'USAGE')

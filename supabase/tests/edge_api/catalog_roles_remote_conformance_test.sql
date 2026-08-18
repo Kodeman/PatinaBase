@@ -272,13 +272,26 @@ default_acl_public AS (
   WHERE acl.grantee = 0
 ),
 owner_default_recurrence AS (
-  -- Re-scoped. The original form demanded a pg_default_acl row for six reserved
-  -- owners including supabase_auth_admin, supabase_storage_admin and
-  -- supabase_admin. ALTER DEFAULT PRIVILEGES FOR ROLE <owner> requires
-  -- membership in that owner, which `postgres` does not hold on Supabase Cloud
-  -- and cannot grant itself, so those three were unsatisfiable by construction.
-  -- What remains is exactly what 00483 asserts it did: the three owners this
-  -- principal can lawfully SET are private-by-default for future routines.
+  -- Re-scoped twice. The original form demanded a pg_default_acl row for six
+  -- reserved owners including supabase_auth_admin, supabase_storage_admin and
+  -- supabase_admin; ALTER DEFAULT PRIVILEGES FOR ROLE <owner> requires
+  -- membership `postgres` does not hold on Supabase Cloud, so those three were
+  -- unsatisfiable and were dropped.
+  --
+  -- The second re-scope applies the SAME platform discriminator 00483 itself
+  -- uses. 00483 hardens the future-default of an owner only when `postgres`
+  -- holds SET on it; on a hosted branch `postgres` is not a member of
+  -- supabase_functions_admin / supabase_realtime_admin, so 00483 records those
+  -- two as accepted residuals and leaves their future-default intact. A gate
+  -- that then demanded the hardening would fail a migration that behaved
+  -- correctly and did exactly what Kody's Blocker-1 ruling requires. So an
+  -- owner is scored red only if `postgres` COULD have hardened it and it is
+  -- still unhardened. A missing reserved role stays red unconditionally.
+  --
+  -- Local behaviour is unchanged: locally `postgres` holds SET on all three,
+  -- the discriminator admits all three, and 00483 hardened all three, so this
+  -- counter is 0 exactly as before. On a hosted branch only postgres is
+  -- required, postgres is hardened, and the counter is 0 there too.
   SELECT count(*) AS unexpected
   FROM unnest(ARRAY[
     'postgres',
@@ -291,12 +304,17 @@ owner_default_recurrence AS (
    AND d.defaclnamespace = 0
    AND d.defaclobjtype = 'f'
   WHERE owner.oid IS NULL
-     OR d.oid IS NULL
-     OR EXISTS (
-       SELECT 1
-       FROM aclexplode(d.defaclacl) AS acl
-       WHERE acl.grantee = 0
-         AND acl.privilege_type = 'EXECUTE'
+     OR (
+       pg_has_role('postgres', expected.role_name, 'SET')
+       AND (
+         d.oid IS NULL
+         OR EXISTS (
+           SELECT 1
+           FROM aclexplode(d.defaclacl) AS acl
+           WHERE acl.grantee = 0
+             AND acl.privilege_type = 'EXECUTE'
+         )
+       )
      )
 ),
 counts AS (

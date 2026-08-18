@@ -58,11 +58,22 @@ BEGIN
     END IF;
   END LOOP;
 
-  IF NOT pg_has_role(current_user, 'postgres', 'SET')
-     OR NOT pg_has_role(current_user, 'supabase_functions_admin', 'SET')
-     OR NOT pg_has_role(current_user, 'supabase_realtime_admin', 'SET') THEN
+  -- Only the mandatory hardening this principal OWNS must be achievable here.
+  -- The postgres-owned future-default revoke is unconditional and postgres
+  -- always holds SET on itself. The two reserved-admin future-default
+  -- hardenings (supabase_functions_admin, supabase_realtime_admin) are
+  -- defense-in-depth over FUTURE functions those platform roles create, not a
+  -- current-exposure closure; on Supabase-hosted branches `postgres` is not a
+  -- member of them and cannot ALTER DEFAULT PRIVILEGES FOR them. Per Kody's
+  -- Blocker-1 ruling the ordinary phase does what it can and records what it
+  -- cannot, so those two degrade to a recorded NOTICE in $ordinary_defaults$
+  -- rather than failing the migration. The conformance gate measures
+  -- current-state exposure and is unaffected by a skipped future-default
+  -- hardening. Failing the whole migration here (as an earlier revision did)
+  -- is what blocked the staging apply — the F10 Cloud-vs-local gap.
+  IF NOT pg_has_role(current_user, 'postgres', 'SET') THEN
     RAISE EXCEPTION
-      '00483 migration principal % cannot harden the ordinary-phase owner defaults',
+      '00483 migration principal % lacks SET on postgres and cannot harden the mandatory owner defaults',
       current_user;
   END IF;
 
@@ -227,8 +238,21 @@ BEGIN
   ]
   LOOP
     IF NOT pg_has_role(current_user, owner_name, 'SET') THEN
-      RAISE EXCEPTION
-        '00483 lost SET authority for routine owner %', owner_name;
+      -- postgres is mandatory and always holds SET on itself; losing it is a
+      -- broken assumption, not a platform limitation, and must stop here.
+      IF owner_name = 'postgres' THEN
+        RAISE EXCEPTION
+          '00483 lost SET authority for mandatory routine owner %', owner_name;
+      END IF;
+      -- Reserved-admin future-default hardening degrades: record and continue.
+      -- This is future-object defense-in-depth, not current exposure, and the
+      -- conformance gate scores it with the same platform discriminator
+      -- (owner_default_recurrence), so a skipped owner here does not fail the
+      -- gate on a hosted branch.
+      RAISE NOTICE
+        '00483 accepted residual: principal % lacks SET on %; its future-function PUBLIC EXECUTE default is left intact (hosted platform; future-object defense-in-depth only, current-state exposure unaffected)',
+        current_user, owner_name;
+      CONTINUE;
     END IF;
 
     EXECUTE format(
@@ -374,6 +398,15 @@ BEGIN
     'supabase_realtime_admin'
   ]
   LOOP
+    -- Assert the hardening only where $ordinary_defaults$ performed it. For a
+    -- reserved admin this principal lacks SET on, the future-default was
+    -- intentionally left intact, so its PUBLIC EXECUTE default is expected to
+    -- remain and must not fail the migration. postgres is always asserted.
+    IF owner_name <> 'postgres'
+       AND NOT pg_has_role(current_user, owner_name, 'SET') THEN
+      CONTINUE;
+    END IF;
+
     owner_oid := to_regrole(owner_name)::oid;
 
     IF EXISTS (
