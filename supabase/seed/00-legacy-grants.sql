@@ -11023,3 +11023,111 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.materialize_schedule_dates(uuid, jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.media_objects TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.media_objects TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.register_media_object(text, text, text, text, text, text, bigint, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.register_media_object(text, text, text, text, text, text, bigint, uuid, uuid, jsonb) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_media_object_state(uuid, text, text, text, bigint) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_media_object_state(uuid, text, text, text, bigint) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.scan_worker_complete_task(uuid, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.scan_worker_complete_task(uuid, jsonb) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.scan_worker_fail_task(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.scan_worker_fail_task(uuid, text) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.scan_worker_append_event(uuid, uuid, text, text, text, integer, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.scan_worker_append_event(uuid, uuid, text, text, text, integer, jsonb) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.scan_worker_update_room_file(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.scan_worker_update_room_file(uuid, jsonb, jsonb) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA public TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA public TO scan_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON TABLE public.scan_media_read FROM PUBLIC, anon, authenticated, service_role, scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.scan_media_read TO scan_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
