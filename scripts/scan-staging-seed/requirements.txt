@@ -1,0 +1,10 @@
+# scripts/scan-staging-seed — self-contained venv requirements.
+#
+# numpy: services/scan-modal/tests/_synthetic.py's mesh generation (imported,
+#        not duplicated — see seed_scan.py's Provenance note).
+# httpx: the real (non-dry-run) staging execution path only (lazy-imported in
+#        execute_plan, so --dry-run and the unit tests never need it).
+# pytest: test_seed_scan.py.
+numpy>=1.26
+httpx>=0.24,<1.0
+pytest>=7.4
