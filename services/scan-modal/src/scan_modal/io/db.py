@@ -39,7 +39,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-__all__ = ["DbError", "LeaseRejected", "ScanWorkerDb"]
+__all__ = ["DbError", "LeaseRejected", "StaleVersion", "ScanWorkerDb"]
 
 _DSN_ENV = "SCAN_WORKER_DSN"
 
@@ -49,9 +49,18 @@ _RPC_COMPLETE = "scan_worker_complete_task"
 _RPC_FAIL = "scan_worker_fail_task"
 _RPC_EVENT = "scan_worker_append_event"
 _RPC_ROOM_FILE = "scan_worker_update_room_file"
+# The 00489 media registry — also granted to scan_worker. No lease parameter:
+# these RPCs are bound to the object key, not to a task.
+_RPC_REGISTER_MEDIA = "register_media_object"
+_RPC_MARK_MEDIA = "mark_media_object_state"
 
 # 00490 raises the lease mismatch with this SQLSTATE, and nothing else does.
 LEASE_REJECTED_SQLSTATE = "P0403"
+# 00492 raises the version-monotonicity refusal with this one, and nothing else
+# does. Deliberately a DIFFERENT code from P0403: "your lease is gone" and "the
+# room file you were dispatched for has been superseded" are different facts,
+# and a stage that could not tell them apart would report the wrong one.
+STALE_VERSION_SQLSTATE = "P0404"
 
 
 class DbError(RuntimeError):
@@ -60,6 +69,17 @@ class DbError(RuntimeError):
 
 class LeaseRejected(RuntimeError):
     """The ledger refused this write — stale lease, or an already-terminal task."""
+
+
+class StaleVersion(RuntimeError):
+    """The target room_file is no longer the newest version for its scan.
+
+    A newer solve has produced a newer room_file since this task was dispatched,
+    so whatever this invocation computed is about superseded geometry. Treated
+    exactly like `LeaseRejected` by the job glue: exit clean, write nothing, and
+    never `fail_task` — the work is obsolete, not broken, and requeueing it
+    would just spend another GPU hour reproducing the same obsolete answer.
+    """
 
 
 class ScanWorkerDb:
@@ -139,6 +159,46 @@ class ScanWorkerDb:
             (task_id, lease_token, room_file_id, self._json(verify), self._json(artifacts)),
         )
 
+    # ── the 00489 media registry (no lease parameter — see _RPC_REGISTER_MEDIA) ──
+
+    def register_media_object(
+        self,
+        bucket: str,
+        object_key: str,
+        access_class: str,
+        sha256: str | None = None,
+        etag: str | None = None,
+        mime: str | None = None,
+        size_bytes: int | None = None,
+        scan_id: str | None = None,
+        owner_user_id: str | None = None,
+        provenance: dict[str, Any] | None = None,
+    ) -> Any:
+        """Upsert the registry row for one artifact key; returns its object id.
+
+        Called BEFORE the bytes are proved: the RPC lands the row `pending`, and
+        `mark_media_object_state(..., 'stored')` is what asserts the object
+        actually exists in R2. Registering after the PUT instead would leave an
+        orphaned object with no row if the process died between the two.
+        """
+        return self._call(
+            _RPC_REGISTER_MEDIA,
+            (
+                bucket, object_key, access_class, sha256, etag, mime,
+                size_bytes, scan_id, owner_user_id, self._json(provenance or {}),
+            ),
+        )
+
+    def mark_media_object_state(
+        self,
+        object_id: str,
+        state: str,
+        sha256: str | None = None,
+        etag: str | None = None,
+        size_bytes: int | None = None,
+    ) -> Any:
+        return self._call(_RPC_MARK_MEDIA, (object_id, state, sha256, etag, size_bytes))
+
     # ── plumbing ─────────────────────────────────────────────────────────────
 
     @staticmethod
@@ -164,7 +224,10 @@ class ScanWorkerDb:
         except psycopg.Error as exc:
             # The lease is gone. Surfaced as its own type so callers never
             # mistake it for a stage failure and requeue live work.
-            if getattr(exc, "sqlstate", None) == LEASE_REJECTED_SQLSTATE:
+            sqlstate = getattr(exc, "sqlstate", None)
+            if sqlstate == LEASE_REJECTED_SQLSTATE:
                 raise LeaseRejected(f"{rpc} refused: lease no longer held") from exc
+            if sqlstate == STALE_VERSION_SQLSTATE:
+                raise StaleVersion(f"{rpc} refused: room file superseded by a newer version") from exc
             raise
         return row[0] if row else None

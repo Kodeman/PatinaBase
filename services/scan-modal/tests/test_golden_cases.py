@@ -20,7 +20,12 @@ import json
 
 import pytest
 
-from scan_modal.io.db import LEASE_REJECTED_SQLSTATE, LeaseRejected
+from scan_modal.io.db import (
+    LEASE_REJECTED_SQLSTATE,
+    STALE_VERSION_SQLSTATE,
+    LeaseRejected,
+    StaleVersion,
+)
 from scan_modal.jobs import verify_job
 
 from test_verify_job import (  # noqa: F401 — `fetches` is a fixture, imported for pytest to resolve
@@ -104,37 +109,70 @@ def test_duplicate_delivery_second_spawn_is_lease_rejected_no_double_write(fetch
 
 # ─── golden case: stale content (roomFileVersion) ──────────────────────────
 #
-# A task payload naming an OLDER roomFileVersion than the room_file's current
-# version — e.g. a re-dispatch racing a newer solve — should not be allowed
-# to overwrite `room_files.verify` with data computed against a stale
-# revision. Nothing in `run_verify` or `scan_worker_update_room_file` (00490)
-# checks the payload's `roomFileVersion` against the room_file row's current
-# state today: `update_room_file` merges unconditionally by `room_file_id`,
-# and `roomFileVersion` is otherwise only ever carried into telemetry/detail.
-# Documented as an xfail rather than a silently-passing assertion — W2 item:
-# add monotonic version gating to scan_worker_update_room_file (or to the job,
-# by reading the room_file's current version first) before merging verify.
+# A task dispatched against an OLDER room_file than the scan's current one —
+# a 25-minute stage racing a newer solve — must not merge results computed
+# against superseded geometry. W1 recorded this as a strict xfail because
+# nothing enforced it: `scan_worker_update_room_file` merged unconditionally
+# by `room_file_id`, and `roomFileVersion` was only ever telemetry.
+#
+# 00492 closes it. The RPC now reads the target room file's own `version` and
+# refuses (dedicated ERRCODE **P0404**) unless it is still `max(version)` for
+# its `scan_id` — the check and the merge share one `FOR UPDATE` lock, so a
+# newer room file landing concurrently cannot slip between them.
+#
+# The lease gate does NOT cover this case, which is why it needed its own:
+# a lease proves the CALLER is still the live worker for its task; it says
+# nothing about whether the GEOMETRY that task was dispatched for is current.
+# Both tasks can hold perfectly valid leases on different rows at once.
+#
+# The RESPONSE is the same as a lost lease and for a related reason: the work
+# is obsolete, not broken. Failing the task would requeue it, and the next
+# dispatcher tick would spend another GPU run reproducing the same obsolete
+# answer.
 
 
-@pytest.mark.xfail(
-    reason="W2 item: nothing enforces roomFileVersion monotonicity — neither "
-    "run_verify nor 00490's scan_worker_update_room_file reads the room_file's "
-    "CURRENT version before merging verify onto it. This test documents the "
-    "gap rather than passing silently; remove the xfail once W2 adds the gate.",
-    strict=True,
-)
-def test_stale_room_file_version_is_not_yet_rejected(fetches):
-    db = RecordingDb()
-    # A payload naming version 2, dispatched against a room_file that (per
-    # this fake ledger's out-of-band knowledge) has already advanced to
-    # version 9 — nothing in run_verify ever asks, so nothing catches it.
-    db.current_room_file_version = 9  # unread by run_verify; documents intent only
+class StaleVersionDb(RecordingDb):
+    """The ledger 00492 describes: the room file this task names is no longer
+    the newest for its scan, so `scan_worker_update_room_file` raises P0404 —
+    which `scan_modal.io.db._call` maps to `StaleVersion`."""
 
-    verify_job.run_verify(payload(roomFileVersion=2), db=db)
+    def update_room_file(self, task_id, lease_token, *args, **kwargs):
+        raise StaleVersion(
+            "scan_worker_update_room_file refused: room file superseded by a newer version"
+        )
 
-    # If version gating existed, a stale delivery's write would have been
-    # refused rather than landing.
-    assert db.room_files == [], "a stale roomFileVersion write should have been rejected"
+
+def test_a_superseded_room_file_version_is_refused_and_exits_clean(fetches, capsys):
+    db = StaleVersionDb()
+
+    result = verify_job.run_verify(payload(roomFileVersion=2), db=db)
+
+    assert result == {"skipped": "stale_version"}
+    # THE assertion the W1 xfail was holding open: the stale write never lands.
+    assert db.room_files == [], "a superseded roomFileVersion write must be refused"
+    # And it is not treated as a failure — no requeue, no second GPU run.
+    assert db.failed == []
+    assert db.completed == []
+    # The started event ran before the refusal and stands.
+    assert db.events[0] == ("verify", "started", "started")
+
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert line["event"] == "stale_version"
+    assert line["taskId"] == "task-1"
+    assert line["roomFileVersion"] == 2
+
+
+def test_stale_version_and_lease_rejection_are_distinguishable(fetches):
+    """Two different facts, two different SQLSTATEs, two different markers.
+    A worker that could not tell them apart would report the wrong cause."""
+    assert STALE_VERSION_SQLSTATE == "P0404"
+    assert LEASE_REJECTED_SQLSTATE == "P0403"
+    assert STALE_VERSION_SQLSTATE != LEASE_REJECTED_SQLSTATE
+
+    stale = verify_job.run_verify(payload(), db=StaleVersionDb())
+    lost = verify_job.run_verify(payload(), db=LeaseRejectingDb("update_room_file"))
+    assert stale == {"skipped": "stale_version"}
+    assert lost == {"skipped": "lease_rejected"}
 
 
 # ─── golden case: lease expiry mid-run ─────────────────────────────────────

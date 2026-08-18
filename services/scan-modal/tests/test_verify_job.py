@@ -23,12 +23,19 @@ LEASE = "dispatch-scan-modal:lease-1"
 
 
 class RecordingDb:
+    """The shared fake ledger. `verify` uses the four lease-gated RPCs; `splat`
+    and `renders` also use the two 00489 media-registry RPCs, which take no
+    lease token — so those are recorded here too and the whole suite has one
+    fake to reason about."""
+
     def __init__(self):
         self.events: list[tuple] = []
         self.room_files: list[tuple] = []
         self.completed: list[tuple] = []
         self.failed: list[tuple] = []
         self.leases: list[str] = []
+        self.registered: list[dict] = []
+        self.marked: list[tuple] = []
 
     def append_event(
         self, task_id, lease_token, scan_id, room_file_id, stage, event, status,
@@ -48,6 +55,15 @@ class RecordingDb:
     def fail_task(self, task_id, lease_token, error):
         self.leases.append(lease_token)
         self.failed.append((task_id, error))
+
+    # ── the 00489 media registry (no lease token by design) ─────────────────
+
+    def register_media_object(self, **kwargs):
+        self.registered.append(kwargs)
+        return f"object-{len(self.registered)}"
+
+    def mark_media_object_state(self, object_id, state, **kwargs):
+        self.marked.append((object_id, state, kwargs))
 
     def close(self):
         pass
