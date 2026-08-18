@@ -115,7 +115,12 @@ export async function proxySupabaseRequest(
   // "//evil.com/rest/v1/x") resolves against upstreamBase to a *different*
   // origin entirely. Re-validate here so a future routing change can't
   // silently reopen an open-redirect-style proxy to an attacker origin.
-  if (upstreamUrl.origin !== upstreamBase.origin) {
+  // Origin re-validation is not path re-validation, so the resolved path is
+  // checked too, making this function safe fully independent of the router.
+  if (
+    upstreamUrl.origin !== upstreamBase.origin ||
+    !isCompatibilityPath(upstreamUrl.pathname)
+  ) {
     structuredLog({
       event: ALERT_EVENTS.proxyOriginRejected,
       severity: 'error',

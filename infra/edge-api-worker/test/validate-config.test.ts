@@ -60,9 +60,13 @@ function urlSchemeErrors(label: string, scope: unknown): string[] {
 }
 
 function withUpstreamUrl(scope: object, value: string): object {
+  return withVar(scope, 'SUPABASE_UPSTREAM_URL', value);
+}
+
+function withVar(scope: object, name: string, value: string): object {
   return {
     ...scope,
-    vars: { ...(scope as { vars: object }).vars, SUPABASE_UPSTREAM_URL: value },
+    vars: { ...(scope as { vars: object }).vars, [name]: value },
   };
 }
 
@@ -74,6 +78,28 @@ describe('validate-config https scheme contract', () => {
     );
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain('SUPABASE_UPSTREAM_URL');
+  });
+
+  it('rejects a non-loopback http:// SUPABASE_JWT_ISSUER', () => {
+    const errors = urlSchemeErrors(
+      'env.staging',
+      withVar(config.env.staging, 'SUPABASE_JWT_ISSUER', 'http://api.patina.cloud/auth/v1'),
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('SUPABASE_JWT_ISSUER');
+  });
+
+  it('rejects a non-loopback http:// SUPABASE_JWKS_URL', () => {
+    const errors = urlSchemeErrors(
+      'env.staging',
+      withVar(
+        config.env.staging,
+        'SUPABASE_JWKS_URL',
+        'http://api.patina.cloud/auth/v1/.well-known/jwks.json',
+      ),
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('SUPABASE_JWKS_URL');
   });
 
   it('accepts http://127.0.0.1:54321 (local Supabase CLI)', () => {

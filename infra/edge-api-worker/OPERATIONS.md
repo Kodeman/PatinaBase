@@ -152,6 +152,7 @@ logging catalog data.
 | `edge_api_compatibility_timeout` | `error` | Supabase compatibility upstream did not complete before its deadline. |
 | `edge_api_configuration_invalid` | `critical` | Runtime variables encode an invalid catalog state or incomplete configuration. |
 | `edge_api_request_failure` | `error` | An otherwise unclassified request failure reached the router boundary. |
+| `edge_api_proxy_origin_rejected` | `error` | The proxy refused to forward a request whose resolved upstream escaped the pinned origin or the compatibility path set. Expected count is zero — any occurrence is a probe or a bug. Action: investigate the `traceId`; no notification wiring change. |
 
 Cloudflare email notification provisioning remains an operator action. The Worker
 does not send external email.
