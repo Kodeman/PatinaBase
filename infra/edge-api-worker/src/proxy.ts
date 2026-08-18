@@ -1,5 +1,6 @@
 import { fetchWithDeadline } from './deadline';
 import type { EdgeApiEnv, RuntimeConfig } from './env';
+import { ALERT_EVENTS, routeClassFor, structuredLog } from './security';
 
 export const COMPATIBILITY_PREFIXES = [
   '/auth/v1/',
@@ -109,6 +110,21 @@ export async function proxySupabaseRequest(
     `${incoming.pathname}${incoming.search}`,
     upstreamBase,
   );
+  // Defense-in-depth: the router's isCompatibilityPath prefix gate already
+  // keeps arbitrary paths out, but a scheme-relative pathname (e.g.
+  // "//evil.com/rest/v1/x") resolves against upstreamBase to a *different*
+  // origin entirely. Re-validate here so a future routing change can't
+  // silently reopen an open-redirect-style proxy to an attacker origin.
+  if (upstreamUrl.origin !== upstreamBase.origin) {
+    structuredLog({
+      event: ALERT_EVENTS.proxyOriginRejected,
+      severity: 'error',
+      traceId,
+      routeClass: routeClassFor(incoming.pathname),
+      status: 400,
+    });
+    return proxyError(400, 'invalid_upstream_path', traceId);
+  }
   const requestInit: RequestInit & { duplex?: 'half' } = {
     method: request.method,
     headers: compatibilityUpstreamHeaders(request),

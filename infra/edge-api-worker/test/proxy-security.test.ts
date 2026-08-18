@@ -184,6 +184,41 @@ describe('Supabase compatibility proxy', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('rejects a scheme-relative pathname that would resolve to a different origin', async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const response = await proxySupabaseRequest(
+      new Request('https://api.patina.cloud//evil.com/rest/v1/x'),
+      env,
+      config,
+      'trace-0000000005',
+      fetcher,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'invalid_upstream_path' });
+    expect(fetcher).not.toHaveBeenCalled();
+    for (const call of fetcher.mock.calls) {
+      const [input] = call;
+      const url = input instanceof Request ? input.url : String(input);
+      expect(url).not.toContain('evil.com');
+    }
+  });
+
+  it('still proxies a normal /rest/v1 path (control)', async () => {
+    let forwarded: Request | undefined;
+    const response = await proxySupabaseRequest(
+      new Request('https://api.patina.cloud/rest/v1/products'),
+      env,
+      config,
+      'trace-0000000006',
+      async (input, init) => {
+        forwarded = new Request(input, init);
+        return new Response('ok', { status: 200 });
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(forwarded?.url).toBe('https://project.supabase.co/rest/v1/products');
+  });
+
   it('times out a never-settling compatibility fetch independently', async () => {
     await expect(
       proxySupabaseRequest(

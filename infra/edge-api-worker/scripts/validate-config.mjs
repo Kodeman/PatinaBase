@@ -54,9 +54,17 @@ export function validateScope(label, scope, errors) {
   ]) {
     try {
       const url = new URL(scope.vars?.[name]);
-      if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error();
+      const isLoopbackHost = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+      // https is required everywhere except loopback (mirrors requiredHttpUrl
+      // in src/env.ts) so env.local keeps http://127.0.0.1:54321 while a
+      // committed http:// value for staging/production fails closed here.
+      if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopbackHost)) {
+        throw new Error();
+      }
     } catch {
-      errors.push(`${label}: ${name} must be an HTTP(S) URL`);
+      errors.push(
+        `${label}: ${name} must be an HTTPS URL (http allowed only for 127.0.0.1/localhost)`,
+      );
     }
   }
   const source = scope.vars?.CATALOG_SOURCE;

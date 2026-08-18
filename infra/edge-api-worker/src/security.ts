@@ -7,6 +7,7 @@ export const ALERT_EVENTS = {
   compatibilityTimeout: 'edge_api_compatibility_timeout',
   configurationInvalid: 'edge_api_configuration_invalid',
   requestFailure: 'edge_api_request_failure',
+  proxyOriginRejected: 'edge_api_proxy_origin_rejected',
 } as const;
 
 export type AlertEventName = (typeof ALERT_EVENTS)[keyof typeof ALERT_EVENTS];
