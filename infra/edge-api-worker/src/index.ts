@@ -304,28 +304,37 @@ function logComparison(
   return matched;
 }
 
+type BindingCheck = 'ok' | 'unavailable' | 'not_applicable';
+
+async function checkBinding(
+  binding: Hyperdrive | undefined,
+  required: boolean,
+  dependencies: WorkerDependencies,
+): Promise<BindingCheck> {
+  // An unbound binding on rung one is the correct steady state, not a fault.
+  // A binding the config declares must answer, whatever the source is.
+  if (!binding && !required) return 'not_applicable';
+  return (await dependencies.probe(binding)) ? 'ok' : 'unavailable';
+}
+
 async function handleHealth(
   request: Request,
   env: EdgeApiEnv,
+  config: RuntimeConfig,
   traceId: string,
   dependencies: WorkerDependencies,
 ): Promise<Response> {
   if (!(await dependencies.authorizeHealth(request, env))) {
     return privateJson({ error: 'not_found' }, 404, traceId);
   }
+  const required = config.catalogSource !== 'legacy';
   const [fresh, publicCache] = await Promise.all([
-    dependencies.probe(env.DB_FRESH),
-    dependencies.probe(env.DB_PUBLIC_CACHE),
+    checkBinding(env.DB_FRESH, required, dependencies),
+    checkBinding(env.DB_PUBLIC_CACHE, required, dependencies),
   ]);
-  const healthy = fresh && publicCache;
+  const healthy = fresh !== 'unavailable' && publicCache !== 'unavailable';
   return privateJson(
-    {
-      status: healthy ? 'ok' : 'degraded',
-      checks: {
-        fresh: fresh ? 'ok' : 'unavailable',
-        publicCache: publicCache ? 'ok' : 'unavailable',
-      },
-    },
+    { status: healthy ? 'ok' : 'degraded', checks: { fresh, publicCache } },
     healthy ? 200 : 503,
     traceId,
   );
@@ -372,7 +381,7 @@ export function createWorker(
           );
         }
         if (request.method === 'GET' && url.pathname === '/_internal/health') {
-          return await handleHealth(request, env, traceId, dependencies);
+          return await handleHealth(request, env, config, traceId, dependencies);
         }
         if (isCompatibilityPath(url.pathname)) {
           return await proxySupabaseRequest(

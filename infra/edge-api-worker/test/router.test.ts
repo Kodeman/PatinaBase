@@ -6,10 +6,11 @@ import {
 } from '../src/catalog';
 import { probeBinding } from '../src/database';
 import type { EdgeApiEnv } from '../src/env';
-import { ALERT_EVENTS, rolloutBucket } from '../src/security';
+import { ALERT_EVENTS, rolloutBucket, structuredLog } from '../src/security';
 
 const ID = '00000000-0000-4000-8000-000000000001';
 const OTHER_ID = '00000000-0000-4000-8000-000000000002';
+const SECRET_SENTINEL = 'sb_publishable_do-not-log-4c1f9ae2';
 const product: CatalogProductSummary = {
   id: ID,
   name: 'Catalog Chair',
@@ -307,11 +308,56 @@ describe('catalog route', () => {
         routeClass: 'catalog.products',
         status: 503,
       });
-      expect(JSON.stringify(vi.mocked(deps.log).mock.calls)).not.toContain(
-        'SUPABASE_ANON_KEY',
-      );
     },
   );
+
+  it('never serializes the publishable secret when the upstream echoes it back', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const deps = dependencies({
+      log: structuredLog,
+      queryLegacy: (requestEnv, ids, signal) =>
+        queryCatalogViaLegacy(requestEnv, ids, signal, async (_input, init) =>
+          Response.json(
+            {
+              message: `Invalid API key: ${new Headers(init?.headers).get('apikey')}`,
+            },
+            { status: 401 },
+          ),
+        ),
+    });
+    const { response } = await request(
+      createWorker(deps),
+      env({ SUPABASE_ANON_KEY: SECRET_SENTINEL }),
+    );
+    const logged = consoleSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    consoleSpy.mockRestore();
+
+    expect(response.status).toBe(503);
+    // Guard against a vacuous assertion: prove the logging path actually ran.
+    expect(logged).toContain(ALERT_EVENTS.catalogLegacyFailure);
+    expect(logged).not.toContain(SECRET_SENTINEL);
+  });
+
+  it('never serializes the publishable secret when a compatibility upstream throws it', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const deps = dependencies({
+      log: structuredLog,
+      fetcher: () => {
+        throw new Error(`connect ECONNREFUSED apikey=${SECRET_SENTINEL}`);
+      },
+    });
+    const { response } = await request(
+      createWorker(deps),
+      env({ SUPABASE_ANON_KEY: SECRET_SENTINEL }),
+      'https://api.patina.cloud/rest/v1/products',
+    );
+    const logged = consoleSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    consoleSpy.mockRestore();
+
+    expect(response.status).toBe(500);
+    expect(logged).toContain(ALERT_EVENTS.requestFailure);
+    expect(logged).not.toContain(SECRET_SENTINEL);
+  });
 });
 
 describe('promotion ladder binding gate', () => {
@@ -552,11 +598,53 @@ describe('health, proxy deadline, and default response policy', () => {
     expect(deps.probe).toHaveBeenCalledTimes(2);
   });
 
-  it('reports missing bindings as unavailable without probing a database', async () => {
+  it('reports an unprovisioned rung one as healthy and not applicable', async () => {
     const deps = dependencies({ probe: probeBinding });
     const { response } = await request(
       createWorker(deps),
       env({ DB_FRESH: undefined, DB_PUBLIC_CACHE: undefined }),
+      'https://api.patina.cloud/_internal/health',
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      status: 'ok',
+      checks: { fresh: 'not_applicable', publicCache: 'not_applicable' },
+    });
+  });
+
+  it('does not open a database connection for a rung one with no bindings', async () => {
+    const deps = dependencies();
+    const { response } = await request(
+      createWorker(deps),
+      env({ DB_FRESH: undefined, DB_PUBLIC_CACHE: undefined }),
+      'https://api.patina.cloud/_internal/health',
+    );
+    expect(response.status).toBe(200);
+    expect(deps.probe).not.toHaveBeenCalled();
+  });
+
+  it('still fails a promoted rung whose provisioned probe does not answer', async () => {
+    const deps = dependencies({
+      probe: vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false),
+    });
+    const { response } = await request(
+      createWorker(deps),
+      env({ CATALOG_SOURCE: 'shadow' }),
+      'https://api.patina.cloud/_internal/health',
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      status: 'degraded',
+      checks: { fresh: 'ok', publicCache: 'unavailable' },
+    });
+    expect(deps.probe).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails a rung one whose declared binding does not answer', async () => {
+    const deps = dependencies({ probe: vi.fn(async () => false) });
+    const { response } = await request(
+      createWorker(deps),
+      env(),
       'https://api.patina.cloud/_internal/health',
     );
     expect(response.status).toBe(503);
