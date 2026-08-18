@@ -248,6 +248,62 @@ BEGIN
     );
   END IF;
 
+  -- ── Phase 3c — invariant C catches a SELECT→ALL command widening (F-h1-1) ──
+  -- Drop a registered SELECT {public} policy and recreate it as ALL {public}
+  -- with the IDENTICAL USING and no WITH CHECK. qual is unchanged and with_check
+  -- stays NULL, so the pre-cmd hash was byte-identical and this widening — which
+  -- silently grants {public} INSERT/UPDATE/DELETE — rode the exemption (proven:
+  -- the cmd-less gate returned 0 findings for exactly this mutation). Folding cmd
+  -- into the pinned identity must now score it red. Restored to the exact SELECT
+  -- policy afterwards so the Phase 7 deltas still hold.
+  SELECT qual INTO registered_qual
+    FROM pg_catalog.pg_policies
+   WHERE schemaname = 'storage'
+     AND tablename = 'objects'
+     AND policyname = 'Studio logos are publicly readable';
+
+  EXECUTE 'DROP POLICY "Studio logos are publicly readable" ON storage.objects';
+  EXECUTE format(
+    'CREATE POLICY "Studio logos are publicly readable" ON storage.objects FOR ALL TO public USING (%s)',
+    registered_qual
+  );
+
+  SELECT count(*) INTO body_mismatch
+    FROM public_acl_capability_findings
+   WHERE invariant = 'C'
+     AND object_signature = 'storage.objects."Studio logos are publicly readable"'
+     AND detail LIKE '%body hash no longer matches%';
+  IF body_mismatch <> 1 THEN
+    RAISE EXCEPTION USING MESSAGE = format(
+      'ANTI-VACUITY FAILURE (invariant C cmd pin): a SELECT {public} policy recreated as ALL {public} with the same USING produced %s body-mismatch finding(s), expected exactly 1. The cmd-less hash returned 0 and let the {public} write widening through',
+      body_mismatch
+    );
+  END IF;
+
+  SELECT count(*) INTO caught
+    FROM public_acl_capability_findings WHERE invariant = 'C';
+  IF caught <> b.invariant_c + 2 THEN
+    RAISE EXCEPTION USING MESSAGE = format(
+      'invariant C did not rise to baseline+2 under a command-widened registered policy (delta %s)',
+      caught - b.invariant_c
+    );
+  END IF;
+
+  EXECUTE 'DROP POLICY "Studio logos are publicly readable" ON storage.objects';
+  EXECUTE format(
+    'CREATE POLICY "Studio logos are publicly readable" ON storage.objects FOR SELECT TO public USING (%s)',
+    registered_qual
+  );
+
+  SELECT count(*) INTO caught
+    FROM public_acl_capability_findings WHERE invariant = 'C';
+  IF caught <> b.invariant_c + 1 THEN
+    RAISE EXCEPTION USING MESSAGE = format(
+      'invariant C did not return to baseline+1 after restoring the SELECT command (delta %s); the cmd pin is not reversible',
+      caught - b.invariant_c
+    );
+  END IF;
+
   -- ── Phase 4 — a routine_invoker row must NOT excuse a SECURITY DEFINER ────
   -- This is the regression probe for the specific hole a10 found: 151 of the
   -- 193 registry rows are routine_invoker, and if invariant A honoured that

@@ -173,6 +173,18 @@
 
 \set ON_ERROR_STOP on
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- PIN THE SESSION search_path. pg_policies deparses qual/with_check with
+-- pg_get_expr, which omits a schema qualifier for any object visible under the
+-- current search_path — so the SAME policy body hashes differently under
+-- `pg_catalog` vs the default vs empty (a10 showed a subquery policy drift). The
+-- storage_policy body hashes below are pinned under exactly this path, and every
+-- consumer \ir's this file before evaluating invariant C, so this one SET makes
+-- the gate return identical counters regardless of the invoker's session path.
+-- Change it only in lockstep with regenerating the 28 pins under the new value.
+-- ═══════════════════════════════════════════════════════════════════════════
+SET search_path = pg_catalog, public, extensions;
+
 CREATE TEMP TABLE public_acl_exception_registry (
   schema_name       text,
   object_signature  text,
@@ -612,50 +624,58 @@ VALUES
 -- never given — the exact shape of this programme's mood-board false pass, where
 -- a policy proved only that a proposal existed yet admitted every caller.
 --
--- The hash is sha256(coalesce(qual,'') || coalesce(with_check,'')) in lowercase
--- hex, the deparsed predicate exactly as pg_policies reports it. The 28 values
+-- The hash is, in lowercase hex,
+--   sha256( cmd || chr(10) || coalesce(qual,'') || chr(10) || coalesce(with_check,'') )
+-- where cmd/qual/with_check are the deparsed policy as pg_policies reports it
+-- under the pinned search_path above. `cmd` is folded into the identity so a
+-- registered SELECT {public} policy dropped and recreated as ALL {public} with
+-- the identical USING predicate — which leaves qual unchanged and with_check
+-- NULL, and therefore hashed identically before this — no longer rides the
+-- exemption (a10 F-h1-1: a silent widening of {public} writes). The 28 values
 -- below were read read-only from staging (vuesoyhfrjabfxbrzekd) on 2026-08-18
--- and confirmed byte-identical on a fresh local `supabase db reset`, so the
--- pinned value is staging reality and the local gate stays green against it.
+-- under `SET search_path = pg_catalog, public, extensions` and confirmed
+-- byte-identical on a fresh local `supabase db reset`, so the pinned value is
+-- staging reality and the local gate stays green against it.
 --
--- REGENERATION RULE. A mismatch is a body change, and a body change withdraws
--- the census's section-E acceptance. Do not repin to silence a red gate: the
--- policy was signed on its old predicate, and the new one needs a fresh ruling
--- exactly as a new object would. Repin only from a re-signed body.
+-- REGENERATION RULE. A mismatch is a body OR command change, and either
+-- withdraws the census's section-E acceptance. Do not repin to silence a red
+-- gate: the policy was signed on its old command and predicate, and the new one
+-- needs a fresh ruling exactly as a new object would. Repin only from a
+-- re-signed body, and only under the pinned search_path.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 UPDATE public_acl_exception_registry AS r
    SET body_hash = v.body_hash
   FROM (
     VALUES
-      ('storage.objects."Active participants can upload attachments"', 'a72a8520e9e45f85d1eb6e4691120f92c112fe1a94168c6a7fe4e0d9acf10942'),
-      ('storage.objects."Anyone can view thumbnails"', '6c80f11162ca779b43ef7ffc22ca4a9825dc2d894f6f566455c1783bd3273362'),
-      ('storage.objects."Authenticated users can delete thumbnails"', '0a32e1c85406375c5a26b23856326b601463a51d387953940c3ed55df1659cf6'),
-      ('storage.objects."Authenticated users can upload thumbnails"', '0a32e1c85406375c5a26b23856326b601463a51d387953940c3ed55df1659cf6'),
-      ('storage.objects."Avatar images are publicly readable"', 'ea7c57e7503973444b1c12f9bc34a5e4e55a3294cb9fccc01032c615b8657328'),
-      ('storage.objects."Designers can read shared scan artifacts"', 'f635cebc0006c8d7672a70597b8b7496407300a83cb0815c6c0b6b6d927df112'),
-      ('storage.objects."Designers delete project documents"', '939b19fd397c444b94d351a262346b251bfc60a8c5becee56b5b02ad65c03a7f'),
-      ('storage.objects."Designers update project documents"', '939b19fd397c444b94d351a262346b251bfc60a8c5becee56b5b02ad65c03a7f'),
-      ('storage.objects."Designers upload project documents"', '939b19fd397c444b94d351a262346b251bfc60a8c5becee56b5b02ad65c03a7f'),
-      ('storage.objects."Org admins manage studio logos (delete)"', '41befff2a667a9e4a48774e29335821dc6291de9b203df9535a5d9baac5ac335'),
-      ('storage.objects."Org admins manage studio logos (insert)"', '41befff2a667a9e4a48774e29335821dc6291de9b203df9535a5d9baac5ac335'),
-      ('storage.objects."Org admins manage studio logos (update)"', '41befff2a667a9e4a48774e29335821dc6291de9b203df9535a5d9baac5ac335'),
-      ('storage.objects."Product images are publicly accessible"', '114de5b2af8105ddbbd5e207f795f4671fcca4a5fa51d61a6eb61272481ef63f'),
-      ('storage.objects."Project members can read documents"', '60a37b4429d9fc4abe782d57b2e2ec2ebd3d34ebdee1c535277620f46998c42f'),
-      ('storage.objects."Proposal assets are publicly readable"', '1312be3a0c9b3ab3403b0073e0801bdbaf4ae1f7641270e7e693932cb98f437f'),
-      ('storage.objects."Public read access for hero frames"', 'f1f4e1c7e131066bc91b03eefb842476275b81b394594e29ef3f76f4ecc05239'),
-      ('storage.objects."Studio logos are publicly readable"', '6f9774990347e339476bf49d78e0b0893c093bdbae60524476ca636cb8b4c5e2'),
-      ('storage.objects."Thread participants can read attachments"', 'd406e801029efef0c0f3b71bb43a78e9c9dc627f4e51d11904d1f1d10d42693d'),
-      ('storage.objects."Users can delete their hero frames"', 'b649717363ab414480d1451d5c19d0654a14c2b2b076bc42d11b7d2678f8aa5a'),
-      ('storage.objects."Users can delete their own avatar"', 'abc54788ec59aad33dd6eeb09f3027dc9ce41bc1cf86e8f097f2cf55b821ad2f'),
-      ('storage.objects."Users can delete their own scan artifacts"', 'a54ef4b0746957a8fe594e611c9bca6d078751572adc66a0b592a940698966b6'),
-      ('storage.objects."Users can read their own scan artifacts"', 'a54ef4b0746957a8fe594e611c9bca6d078751572adc66a0b592a940698966b6'),
-      ('storage.objects."Users can update their hero frames"', 'b649717363ab414480d1451d5c19d0654a14c2b2b076bc42d11b7d2678f8aa5a'),
-      ('storage.objects."Users can update their own avatar"', 'abc54788ec59aad33dd6eeb09f3027dc9ce41bc1cf86e8f097f2cf55b821ad2f'),
-      ('storage.objects."Users can update their own scan artifacts"', 'a54ef4b0746957a8fe594e611c9bca6d078751572adc66a0b592a940698966b6'),
-      ('storage.objects."Users can upload hero frames"', 'b649717363ab414480d1451d5c19d0654a14c2b2b076bc42d11b7d2678f8aa5a'),
-      ('storage.objects."Users can upload their own avatar"', 'abc54788ec59aad33dd6eeb09f3027dc9ce41bc1cf86e8f097f2cf55b821ad2f'),
-      ('storage.objects."Users can upload their own scan artifacts"', 'a54ef4b0746957a8fe594e611c9bca6d078751572adc66a0b592a940698966b6')
+      ('storage.objects."Active participants can upload attachments"', '500a17073434d6fa1be66634b1ca5bc75fb10e2f6f3d94a1eb2a110deb160a6b'),
+      ('storage.objects."Anyone can view thumbnails"', '22d9458cca1f8f0daab64f787b517dbc270eb941415408b2a4a764d9751ab5c4'),
+      ('storage.objects."Authenticated users can delete thumbnails"', 'caa91ebafda3abe40fb7f361494d5655e985eaeb35902d99b29f26a73d846d76'),
+      ('storage.objects."Authenticated users can upload thumbnails"', '705ed04f6ef745954fcd988374b05009ae1cf99b0fba28f98d6d83d80626884b'),
+      ('storage.objects."Avatar images are publicly readable"', '2c7b004f8343e945e68423505ca1c89cab3ed9f8183f6b339d2ebafe18b163dc'),
+      ('storage.objects."Designers can read shared scan artifacts"', 'c0af903c06b94b2e2b1edf1b575518d0503083fe4331ded63ad0959f32254539'),
+      ('storage.objects."Designers delete project documents"', '92c9947852ae4ed90811a813115e56cb5e6f63a395c9ac02a88c30ae0ea71ffe'),
+      ('storage.objects."Designers update project documents"', 'aa762fed7e54b0f71a6131a4326d0ce4f678f5760859d751dd61e565809845a6'),
+      ('storage.objects."Designers upload project documents"', 'a7deba84af0742b079b80b7133e8b5d63f7f0f977c65f7924abae139635fb024'),
+      ('storage.objects."Org admins manage studio logos (delete)"', '977e33fa9f42e189de7b081c624ee9e7ddc8c394fdd765ac8351a2b9b01a3e74'),
+      ('storage.objects."Org admins manage studio logos (insert)"', '82ed32d7323f477e5ae7dcb04543bd8c92aab6f561ff6cfc0cda81f298fee24e'),
+      ('storage.objects."Org admins manage studio logos (update)"', 'ba10f6e806faf4f70b8ed9ad385d3e419d9c4a12b379d60bf73fe271efa8a9df'),
+      ('storage.objects."Product images are publicly accessible"', '374dbe9ac0e555e8d4a8667f99cd5df03c70d717cc9dd21848d4dd2c7dbbe246'),
+      ('storage.objects."Project members can read documents"', '06aa6543aa5a892022ba2c6c1da917eb1c63d01199c539817f25a9d0bc846cb0'),
+      ('storage.objects."Proposal assets are publicly readable"', '5ccf3710ec7d8a716cbb513d660d38636330fa7819b5280edc087d59bcaec300'),
+      ('storage.objects."Public read access for hero frames"', '1dc34f457a4d028a43d28a4d9c59180a6847e20787f475c7f5a1c9c4d5604bb3'),
+      ('storage.objects."Studio logos are publicly readable"', '56d276ca1255f6126bd5a8bbb6478a39e622489cf052b552236185839a3f5f07'),
+      ('storage.objects."Thread participants can read attachments"', '03811e369c7972df9bea9abe8dff97979bebc313d561c2e7205abf2f14369cd8'),
+      ('storage.objects."Users can delete their hero frames"', '1714919deb41113e509c954de951d7a04e2078f58b2ad1ededd398731a06d2de'),
+      ('storage.objects."Users can delete their own avatar"', 'd974dc16a0d20aa89258f5087e256cd41a0b49b00edd99fe286337f7803b2f5c'),
+      ('storage.objects."Users can delete their own scan artifacts"', 'f6644da875954246c36eaa7a480a32f15be1c48681b1dd4a4e991ed0695d28c7'),
+      ('storage.objects."Users can read their own scan artifacts"', '8a81fe4cb4819bbd2073596c9ff8ac359422e92d744a4b1e30d6c211dfdc60c0'),
+      ('storage.objects."Users can update their hero frames"', '03794d026fc73629aadb22873c01f882d773745282cf2dcaff3edaabd6716547'),
+      ('storage.objects."Users can update their own avatar"', '484570c062e24d6966882da6daa3a2e3f3ec6d84b09c4ef2e7cfb682170a9c5d'),
+      ('storage.objects."Users can update their own scan artifacts"', '9ddaf75380ec9d112bea0893eb9b99027f62a2b6d57f43791db8df23490b116e'),
+      ('storage.objects."Users can upload hero frames"', '0a637bf1c4bd0c890d2f9c0e0b8186a773f49fcc62595b1f80db8406ac71538b'),
+      ('storage.objects."Users can upload their own avatar"', '66a54ef2f02b2c7886b97698d5887a2ea16b8fd795213a54b90b10c77809ed25'),
+      ('storage.objects."Users can upload their own scan artifacts"', 'a87b51a141df270b904bc1fa8bd5615dbb056702a8fcc549b499290f174ff279')
   ) AS v(object_signature, body_hash)
  WHERE r.kind = 'storage_policy'
    AND r.schema_name = 'storage'
@@ -1003,10 +1023,12 @@ UNION ALL
 --
 --    The control is NOT "is this policy name on the signed list" — that was the
 --    hole. It is "does a signed row match this policy's name AND its pinned body
---    hash". A registered name whose live USING/WITH CHECK body no longer hashes
---    to the pinned value is scored red with a distinct detail, so widening a
---    registered policy in place (the mood-board false-pass class) cannot inherit
---    the old signature.
+--    hash", where the hash covers cmd + USING + WITH CHECK. A registered name
+--    whose live command or predicate no longer hashes to the pinned value is
+--    scored red with a distinct detail, so neither widening a registered policy
+--    in place (the mood-board false-pass class) nor dropping a SELECT {public}
+--    policy and recreating it as ALL {public} with the same USING (a10 F-h1-1)
+--    can inherit the old signature.
 SELECT
   'C'::text,
   'storage'::text,
@@ -1047,7 +1069,10 @@ WHERE pol.schemaname = 'storage'
        )
        AND x.body_hash = pg_catalog.encode(
          pg_catalog.sha256(pg_catalog.convert_to(
-           COALESCE(pol.qual, '') || COALESCE(pol.with_check, ''), 'utf8'
+           pol.cmd || pg_catalog.chr(10)
+             || COALESCE(pol.qual, '') || pg_catalog.chr(10)
+             || COALESCE(pol.with_check, ''),
+           'utf8'
          )), 'hex'
        )
   );
