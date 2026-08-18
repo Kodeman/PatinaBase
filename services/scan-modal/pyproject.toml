@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "patina-scan-modal"
+version = "0.1.0"
+description = "Patina Rendered Room v2 Modal pipeline (verify on CPU; splat/renders land in W2)."
+requires-python = ">=3.11"
+license = { text = "UNLICENSED" }
+authors = [{ name = "Patina" }]
+
+# ── Runtime dependencies ────────────────────────────────────────────────────
+# The pure geometry core (scan_modal.core) needs numpy and nothing else, so a
+# unit-test run never pulls Modal, Open3D, boto3 or psycopg. Everything a
+# specific SEAM imports is an OPTIONAL EXTRA below, SEAM-NAMED, exactly as
+# services/scan-pipeline does — the Modal image installs the union, a laptop
+# installs the slice it actually exercises.
+dependencies = [
+  "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# verify's plane segmentation. Open3D is PREFERRED (mac/linux wheels exist) but
+# never required: core/verify.py carries a numpy RANSAC fallback so the stage is
+# testable on any interpreter Open3D has not shipped a wheel for yet.
+verify = ["open3d>=0.18"]
+# The IO seam: presigned-URL downloads (httpx), R2 (boto3), direct Postgres
+# against the scan_worker role (psycopg v3).
+io = ["httpx>=0.24,<1.0", "boto3>=1.34", "psycopg[binary]>=3.1"]
+# The Modal client itself — only `modal deploy` and the Modal container need it.
+# scan_modal.app imports it defensively so the module stays importable without.
+modal = ["modal>=1.0"]
+
+dev = [
+  "pytest>=7.4",
+  "patina-scan-modal[io,verify]",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]

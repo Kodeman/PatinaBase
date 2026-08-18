@@ -1,0 +1,8 @@
+# venv + build/test artifacts — never committed
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+build/
+dist/
