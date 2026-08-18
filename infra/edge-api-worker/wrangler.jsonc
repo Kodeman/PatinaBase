@@ -97,7 +97,7 @@
         "SUPABASE_JWT_ISSUER": "https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1",
         "SUPABASE_JWT_AUDIENCE": "authenticated",
         "SUPABASE_JWKS_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1/.well-known/jwks.json",
-        "CATALOG_SOURCE": "legacy",
+        "CATALOG_SOURCE": "shadow",
         "CATALOG_HYPERDRIVE_PERCENT": "0",
         "LEGACY_FETCH_TIMEOUT_MS": "3000",
         // review finding W-1 — a 10s proxy abort in front of stripe-webhook (sync DB writes + email sends) risks silent event loss inside Stripe's ~30s window.
