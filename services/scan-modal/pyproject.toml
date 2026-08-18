@@ -52,9 +52,11 @@ modal = ["modal>=1.0"]
 #
 # SPZ: the PyPI `spz` wheel is a Rust binding whose documented surface is
 # load-an-.spz / build-from-numpy — there is no published PLY→SPZ entry point as
-# of 2026-08. The converter is therefore the `spz-cli` Rust binary (installed
-# via rustup in the image), driven through core/spz.py's `SPZ_COMMAND` argv
-# TEMPLATE so the exact spelling is an environment value, not a code change.
+# of 2026-08. The converter is therefore the `spz` Rust BINARY, from the
+# crates.io crate `spz` pinned at 0.0.5 (installed via rustup in the image; see
+# app.py's _SPLAT_IMAGE for why 0.0.5 and not 0.0.6, and why not `spz-cli`),
+# driven through core/spz.py's `SPZ_COMMAND` argv TEMPLATE so the exact spelling
+# is an environment value, not a code change.
 splat = ["pillow-heif>=0.18", "spz>=0.0.1"]
 
 # ── renders (Modal L40S) ────────────────────────────────────────────────────

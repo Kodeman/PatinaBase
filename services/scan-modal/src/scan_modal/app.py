@@ -18,6 +18,8 @@ import hmac
 import os
 from typing import Any, Callable
 
+from . import SPLAT_CACHE_MOUNT
+
 __all__ = [
     "AUTH_SECRET_NAME",
     "TASK_FUNCTIONS",
@@ -36,7 +38,22 @@ AUTH_SECRET_NAME = "scan-modal-auth"
 AUTH_TOKEN_ENV = "SCAN_MODAL_AUTH_TOKEN"
 # Modal Secret holding SCAN_WORKER_DSN (the scan_worker LOGIN role; R2 of the plan).
 DB_SECRET_NAME = "scan-worker-db"
-# Modal Secret holding R2_ENDPOINT / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY.
+
+# Modal Secret for R2. It must carry ALL FOUR of these keys:
+#
+#   R2_ENDPOINT             https://<account_id>.r2.cloudflarestorage.com
+#   R2_ACCESS_KEY_ID        R2 API token id
+#   R2_SECRET_ACCESS_KEY    R2 API token secret
+#   R2_ARTIFACTS_BUCKET     patina-staging-media-artifacts-us (staging)
+#
+# The BUCKET is the one that gets missed at provisioning, because the first three
+# read as "the credential" and the fourth reads as configuration. It is neither
+# defaulted nor hard-coded on purpose (`io/r2.artifacts_bucket()` raises without
+# it): the staging and production buckets differ by one word, and a literal
+# fallback is how a staging run ends up writing production artifacts. A missing
+# value fails the task at upload time with `R2_ARTIFACTS_BUCKET is not set` —
+# after the GPU has already been paid for, which is the cost of getting this
+# wrong and the reason it is written down here.
 R2_SECRET_NAME = "scan-r2"
 
 VERIFY_TIMEOUT_SECONDS = 1800
@@ -52,8 +69,11 @@ RENDERS_GPU = "L40S"
 # The preemption-resume Volume. `splat` keeps its whole job-keyed workspace
 # here — transcoded frames, transforms.json, and nerfstudio's checkpoints — so a
 # preempted run resumes instead of restarting. See jobs/splat_job.py.
+#
+# SPLAT_CACHE_MOUNT is imported from the package root rather than restated: this
+# module mounts the Volume there and splat_job builds its workspace under it, and
+# two literals that must agree are one literal that will eventually not.
 SPLAT_CACHE_VOLUME = "patina-scan-splat-cache"
-SPLAT_CACHE_MOUNT = "/splat-cache"
 
 # taskType (as it appears in agent_tasks) → the Modal function that serves it.
 TASK_FUNCTIONS: dict[str, str] = {
@@ -209,10 +229,23 @@ if modal is not None:
         # The SPZ 4 compressor. The PyPI `spz` wheel exposes load/build, not a
         # PLY→SPZ entry point, so the CONVERTER is the Rust CLI. Ubuntu 22.04's
         # packaged cargo is too old for a 2026 crate, hence rustup.
+        #
+        # The crate is `spz`, NOT `spz-cli` — `spz-cli` does not exist on
+        # crates.io (verified 2026-08 against the registry API; the earlier
+        # spelling here came from the GitHub README's `cargo install spz-cli`
+        # line and would have failed at image build).
+        #
+        # Pinned to 0.0.5, which is NOT the newest: 0.0.6 (2025-12-23) ships
+        # `bin_names: []` — it dropped the binary target and is library-only, so
+        # installing it would leave `spz` missing from PATH and every conversion
+        # would fail at runtime with a much less obvious error than a build
+        # failure. 0.0.5 (2025-12-22) is the newest version that still ships the
+        # `spz` binary. `--locked` so the crate's own Cargo.lock decides its
+        # transitive versions rather than whatever resolves on build day.
         .run_commands(
             "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs "
             "| sh -s -- -y --profile minimal",
-            "/root/.cargo/bin/cargo install spz-cli --root /usr/local",
+            "/root/.cargo/bin/cargo install spz --version 0.0.5 --locked --root /usr/local",
         )
         .env({"PATH": "/usr/local/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:"
                       "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"})
@@ -225,7 +258,12 @@ if modal is not None:
     # built for CPython 3.11, which is why PYTHON_VERSION is pinned there.
     _RENDERS_IMAGE = (
         modal.Image.debian_slim(python_version=PYTHON_VERSION)
-        .apt_install("xorg", "libxkbcommon0")
+        # libgl1/libegl1 beyond Modal's published pair: the bpy wheel links
+        # libGL/libEGL at IMPORT time even headless, and debian_slim ships
+        # neither. Without them `import bpy` dies with
+        # "libGL.so.1: cannot open shared object file" — the classic
+        # bpy-in-a-container failure, and one that only shows up on the L40S.
+        .apt_install("xorg", "libxkbcommon0", "libgl1", "libegl1")
         .pip_install(
             "bpy==4.5.0",
             "psycopg[binary]>=3.1",
