@@ -87,6 +87,11 @@ def test_convert_empty_bytes_is_decode_error():
         convert_heic_to_jpeg(b"")
 
 
+def test_convert_rejects_heic_dimensions_over_decoded_pixel_cap():
+    with pytest.raises(PhotoDecodeError, match="too large"):
+        convert_heic_to_jpeg(fixture_bytes(), max_pixels=100)
+
+
 # ── HTTP route ──────────────────────────────────────────────────────────────
 
 
@@ -98,7 +103,11 @@ def convert_transport(heic: bytes) -> httpx.MockTransport:
         if path == "/room.heic":
             return httpx.Response(200, content=heic, headers={"content-type": "image/heic"})
         if path == "/garbage.heic":
-            return httpx.Response(200, content=b"not a heic file at all")
+            return httpx.Response(
+                200,
+                content=b"not a heic file at all",
+                headers={"content-type": "application/octet-stream"},
+            )
         if path == "/missing.heic":
             return httpx.Response(404, content=b"nope")
         return httpx.Response(500, content=b"unhandled fixture route")
@@ -109,7 +118,14 @@ def convert_transport(heic: bytes) -> httpx.MockTransport:
 def convert_client(heic: bytes):
     from fastapi.testclient import TestClient
 
-    app = create_app(make_settings(), embedder=FakeEmbedder(), http_transport=convert_transport(heic))
+    from conftest import public_test_resolver
+
+    app = create_app(
+        make_settings(),
+        embedder=FakeEmbedder(),
+        http_transport=convert_transport(heic),
+        hostname_resolver=public_test_resolver,
+    )
     return TestClient(app)
 
 

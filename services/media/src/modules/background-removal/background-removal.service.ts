@@ -41,8 +41,8 @@ export class BackgroundRemovalService {
     private readonly vendor: BackgroundRemovalVendor,
   ) {}
 
-  async capability(userJwt: string, boardId: string) {
-    const board = await this.access.authorizeBoard(userJwt, boardId);
+  async capability(subject: string, boardId: string) {
+    const board = await this.access.authorizeBoard(subject, boardId);
     if (!this.vendor.isConfigured()) {
       return {
         available: false,
@@ -53,14 +53,8 @@ export class BackgroundRemovalService {
     return { available: true, quota };
   }
 
-  async removeBackground(
-    userJwt: string,
-    requestedBy: string,
-    boardId: string,
-    itemId: string,
-    idempotencyKey: string,
-  ) {
-    const context = await this.access.authorizeBoardItem(userJwt, boardId, itemId);
+  async removeBackground(subject: string, boardId: string, itemId: string, idempotencyKey: string) {
+    const context = await this.access.authorizeBoardItem(subject, boardId, itemId);
     if (!this.vendor.isConfigured()) {
       throw new ServiceUnavailableException({
         code: 'background_removal_not_configured',
@@ -73,7 +67,7 @@ export class BackgroundRemovalService {
       reservation = await this.ledger.reserve({
         quotaOwnerId: context.quotaOwnerId,
         studioId: context.studioId,
-        requestedBy,
+        requestedBy: subject,
         boardId,
         itemId,
         idempotencyKey,

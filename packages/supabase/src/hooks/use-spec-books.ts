@@ -497,28 +497,6 @@ export function usePrepareSpecBookIssue() {
   });
 }
 
-export function useFinalizeSpecBookIssue(projectId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (revisionId: string) => {
-      const { data, error } = await getSupabase().rpc(
-        "finalize_spec_book_issue",
-        { p_revision_id: revisionId },
-      );
-      if (error) throw error;
-      return data as SpecBookRevision;
-    },
-    onSuccess: (revision) => {
-      void queryClient.invalidateQueries({
-        queryKey: specBookKeys.workbench(projectId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: specBookKeys.revision(revision.id),
-      });
-    },
-  });
-}
-
 /** Retries one audience artifact in place; no revision is created. */
 export function useRenderSpecBookArtifact(projectId: string) {
   const queryClient = useQueryClient();
@@ -529,7 +507,15 @@ export function useRenderSpecBookArtifact(projectId: string) {
         { body: { artifactId } },
       );
       if (error) throw error;
-      return data as { artifact: SpecBookArtifact };
+      return data as {
+        artifactId: string;
+        revisionId: string;
+        audience: SpecBookAudience;
+        storagePath: string;
+        checksumSha256: string;
+        sizeBytes: number;
+        finalized: boolean;
+      };
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({

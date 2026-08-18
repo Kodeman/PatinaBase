@@ -1,18 +1,21 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { Public } from '@patina/auth';
+import { RequireAnyPermission } from '@patina/auth';
+import { ORDER_PERMISSIONS } from '../../common/authorization/orders-authorization.resolver';
 
 /**
- * Build version info — stamped into the image at build time
- * (GIT_SHA / BUILD_TIME / APP_VERSION via infra/build-and-push.sh).
- * Public so the admin portal can fan out to it without auth.
+ * Build version info supplied by the active Container deployment environment.
  * Served at /v1/version (global prefix applies).
  */
 @ApiTags('version')
 @Controller('version')
-@Public()
 export class VersionController {
   @Get()
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.READ_OWN,
+    ORDER_PERMISSIONS.READ_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'Build version info' })
   version() {
     return {

@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
 import { v4 as uuidv4 } from 'uuid';
 import { assertStripeConfigured } from '../../config/stripe.module';
+import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 @Injectable()
 export class RefundsService {
@@ -11,25 +12,29 @@ export class RefundsService {
     private prisma: PrismaClient,
     @Inject('STRIPE_CLIENT') private stripe: Stripe,
     @Inject('EVENTS_SERVICE') private eventsService: any,
+    private readonly authorization: OrdersAuthorizationResolver,
   ) {}
 
   /**
    * Create a full or partial refund
    */
-  async createRefund(orderId: string, amount?: number, reason?: string, actor?: string) {
+  async createRefund(
+    orderId: string,
+    amount: number | undefined,
+    reason: string | undefined,
+    subject: string,
+  ) {
     assertStripeConfigured(this.stripe);
 
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: {
-        payments: true,
-        refunds: true,
-      },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
+    const order = await this.authorization.authorize(
+      subject,
+      'staff',
+      (database, _auth, scope) =>
+        this.authorization.requireOrder(database, scope, { id: orderId }, {
+          payments: true,
+          refunds: true,
+        }),
+    );
 
     if (order.paymentStatus !== 'captured') {
       throw new BadRequestException('Cannot refund order that is not paid');
@@ -72,61 +77,57 @@ export class RefundsService {
       },
     });
 
-    // Create refund record
-    const refund = await this.prisma.refund.create({
-      data: {
-        orderId,
-        amount: refundAmount,
-        currency: order.currency,
-        reason,
-        status: 'succeeded',
-        provider: 'stripe',
-        providerRefundId: stripeRefund.id,
-        chargeId: payment.chargeId,
-        paymentIntentId: payment.paymentIntentId,
-        description: isFullRefund ? 'Full refund' : `Partial refund: $${refundAmount.toString()}`,
-        processedAt: new Date(),
-        createdBy: actor,
-        raw: stripeRefund as any,
+    const refund = await this.authorization.authorize(
+      subject,
+      'staff',
+      async (database, _auth, scope) => {
+        const current = await this.authorization.requireOrder(database, scope, {
+          id: orderId,
+          paymentStatus: 'captured',
+        }, { refunds: true });
+        const currentRefunded = current.refunds
+          .filter((entry) => entry.status === 'succeeded')
+          .reduce((sum, entry) => sum.add(entry.amount), new Decimal(0));
+        if (refundAmount.gt(current.total.sub(currentRefunded))) {
+          throw new BadRequestException('Refund amount exceeds available amount');
+        }
+        const refund = await database.refund.create({
+          data: {
+            orderId,
+            amount: refundAmount,
+            currency: order.currency,
+            reason,
+            status: 'succeeded',
+            provider: 'stripe',
+            providerRefundId: stripeRefund.id,
+            chargeId: payment.chargeId,
+            paymentIntentId: payment.paymentIntentId,
+            description: isFullRefund ? 'Full refund' : 'Partial refund',
+            processedAt: new Date(),
+            createdBy: subject,
+            raw: stripeRefund as any,
+          },
+        });
+        const newTotalRefunded = currentRefunded.add(refundAmount);
+        await database.order.update({
+          where: { id: orderId },
+          data: newTotalRefunded.eq(current.total)
+            ? { paymentStatus: 'refunded', status: 'refunded' }
+            : { paymentStatus: 'partially_refunded' },
+        });
+        await database.auditLog.create({
+          data: {
+            entityType: 'order',
+            entityId: orderId,
+            action: isFullRefund ? 'refund_full' : 'refund_partial',
+            actor: subject,
+            actorType: 'user',
+            changes: { amount: refundAmount.toString(), reason },
+          },
+        });
+        return refund;
       },
-    });
-
-    // Update order status based on refund type
-    const newTotalRefunded = totalRefunded.add(refundAmount);
-    if (newTotalRefunded.eq(order.total)) {
-      // Full refund
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: {
-          paymentStatus: 'refunded',
-          status: 'refunded',
-        },
-      });
-    } else {
-      // Partial refund - update payment status but keep order in current state
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: {
-          paymentStatus: 'partially_refunded',
-        },
-      });
-    }
-
-    // Create audit log
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'order',
-        entityId: orderId,
-        action: isFullRefund ? 'refund_full' : 'refund_partial',
-        actor: actor || 'system',
-        actorType: actor ? 'admin' : 'system',
-        changes: {
-          refundId: refund.id,
-          amount: refundAmount.toString(),
-          reason,
-        },
-      },
-    });
+    );
 
     // Emit event
     await this.eventsService.publish('refund.created', {
@@ -147,25 +148,26 @@ export class RefundsService {
     return refund;
   }
 
-  async findByOrder(orderId: string) {
-    return this.prisma.refund.findMany({
-      where: { orderId },
-      orderBy: { createdAt: 'desc' },
+  async findByOrder(orderId: string, subject: string) {
+    return this.authorization.authorize(subject, 'read', async (database, _auth, scope) => {
+      await this.authorization.requireOrder(database, scope, { id: orderId });
+      return database.refund.findMany({
+        where: { orderId },
+        orderBy: { createdAt: 'desc' },
+      });
     });
   }
 
   /**
    * Get refund statistics for an order
    */
-  async getRefundStats(orderId: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { refunds: true },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
+  async getRefundStats(orderId: string, subject: string) {
+    const order = await this.authorization.authorize(
+      subject,
+      'read',
+      (database, _auth, scope) =>
+        this.authorization.requireOrder(database, scope, { id: orderId }, { refunds: true }),
+    );
 
     const totalRefunded = order.refunds
       .filter(r => r.status === 'succeeded')

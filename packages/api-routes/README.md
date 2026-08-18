@@ -77,7 +77,6 @@ export const GET = createRouteHandler(
       },
       retry: { maxRetries: 3 },
       timeout: { read: 10_000 },
-      cache: { maxAge: 60, staleWhileRevalidate: 300 },
     }),
   { method: 'GET', path: '/api/catalog/products' },
 );
@@ -91,7 +90,7 @@ export const GET = createRouteHandler(
 
 **Proxy verifies JWT signatures (A5).** Before forwarding a request to a NestJS service, the proxy calls `verifyJwtToken` from `@patina/auth` to verify the reassembled token. If verification fails, the proxy returns 401 instead of forwarding. This is defense-in-depth on top of `@patina/auth`'s service-side verification — the same `jose.jwtVerify` runs on both sides, but failing fast at the portal saves a round-trip and clarifies the failure source.
 
-**Chunked-cookie reassembly is load-bearing.** Inside `proxy-to-backend.ts`, the `extractAuthToken` helper reassembles auth tokens from chunked cookies — NextAuth chunks large JWTs across `next-auth.session-token.0`, `.1`, ...; Supabase chunks session payloads across `sb-<host>-auth-token.0`, `.1`, ... with an optional `base64-` prefix. No library replaces this; do not refactor it without keeping all test cases green.
+**Chunked-cookie reassembly is load-bearing.** Inside `proxy-to-backend.ts`, the `extractAuthToken` helper reassembles Supabase session payloads across `sb-<host>-auth-token.0`, `.1`, ... with an optional `base64-` prefix. No library replaces this; do not refactor it without keeping all test cases green.
 
 ## Type stubs (transient)
 
@@ -104,7 +103,6 @@ export const GET = createRouteHandler(
 ## Dependencies
 
 - `next` >= 15.0.0 (peer)
-- `next-auth` 5.0.0-beta.29 — used only by `proxy-to-backend.ts` for reassembling NextAuth chunked session tokens
 - `@patina/auth` (workspace) — supplies `verifyJwtToken` for A5
 - `@patina/types` (workspace) — domain types
 - `zod` — validation

@@ -6,7 +6,7 @@ Enterprise-grade proxy middleware for routing Next.js API requests to NestJS bac
 
 - **Retry Logic**: Exponential backoff with configurable retry strategies
 - **Circuit Breaker**: Automatic failure detection and fast-fail for unhealthy services
-- **Authentication**: Automatic JWT token forwarding from NextAuth sessions
+- **Authentication**: Automatic verified Supabase JWT forwarding
 - **Request ID Propagation**: Full request tracing across service boundaries
 - **Error Handling**: Standardized error format with custom error code mapping
 - **Response Transformation**: Transform backend responses to frontend format
@@ -268,6 +268,7 @@ return proxyToBackend(request, context, {
   cache: {
     ttl: 300, // Cache for 5 minutes
     visibility: 'public',
+    reviewedPublic: true,
     swr: 600, // Stale-while-revalidate for 10 minutes
   },
 });
@@ -520,8 +521,8 @@ Be conservative with retries to avoid amplifying load on struggling services.
 
 **Solutions**:
 1. Verify `withAuth` middleware is applied
-2. Check NextAuth configuration
-3. Ensure access token is in user session
+2. Check Supabase Auth configuration
+3. Ensure a Supabase access token is in the session
 4. Verify backend JWT validation
 
 ### High Retry Rates

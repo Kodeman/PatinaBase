@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import {
   useCreateSpecBookShare,
-  useFinalizeSpecBookIssue,
   usePrepareSpecBookIssue,
   useProjectFfeReadiness,
   useProjectV2,
@@ -76,6 +75,18 @@ const AUDIENCES: Array<{
 type WorkspaceView = "workbench" | "preview" | "preflight" | "history";
 type DerivedReadiness = "ready" | "incomplete" | "checking" | "unavailable";
 type ReadinessFilter = "all" | "ready" | "incomplete" | "unassigned" | "drift";
+
+export function specBookArtifactRetryLabel(
+  artifactStatus: SpecBookArtifact["status"],
+  revisionStatus: string,
+): "Render" | "Retry" | "Finalize" | null {
+  if (artifactStatus === "pending") return "Render";
+  if (artifactStatus === "failed") return "Retry";
+  if (artifactStatus === "ready" && revisionStatus !== "issued") {
+    return "Finalize";
+  }
+  return null;
+}
 
 function readinessLabel(value: DerivedReadiness): string {
   return value;
@@ -734,7 +745,6 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   };
   const updateSetting = useUpdateSpecBookItemSetting(projectId);
   const prepareIssue = usePrepareSpecBookIssue();
-  const finalizeIssue = useFinalizeSpecBookIssue(projectId);
   const renderArtifact = useRenderSpecBookArtifact(projectId);
   const createShare = useCreateSpecBookShare(projectId);
 
@@ -896,17 +906,18 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
           reason: warningReason.trim(),
         })),
       });
-      await Promise.all(
+      const rendered = await Promise.all(
         prepared.artifacts.map(async (artifact) => {
           const renderStarted = performance.now();
           try {
-            await renderArtifact.mutateAsync(artifact.id);
+            const result = await renderArtifact.mutateAsync(artifact.id);
             specBookEvents.artifactRendered({
               project_id: projectId,
               artifact_id: artifact.id,
               audience: artifact.audience,
               duration_ms: Math.round(performance.now() - renderStarted),
             });
+            return result;
           } catch (error) {
             specBookEvents.artifactFailed({
               project_id: projectId,
@@ -918,14 +929,17 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
           }
         }),
       );
-      await finalizeIssue.mutateAsync(prepared.revision.id);
       specBookEvents.issued({
         project_id: projectId,
         revision_id: prepared.revision.id,
         issue_type: issueType,
         duration_ms: Math.round(performance.now() - issueStarted),
       });
-      setIssueFeedback("Revision issued. Every audience artifact is durable.");
+      setIssueFeedback(
+        rendered.some((result) => result.finalized)
+          ? "Revision issued. Every audience artifact is durable."
+          : "Every audience artifact rendered. Issue status is refreshing.",
+      );
       setView("history");
     } catch (error) {
       setIssueFeedback(
@@ -937,7 +951,6 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   }, [
     audiences,
     data,
-    finalizeIssue,
     issueReason,
     issueType,
     latestIssued?.id,
@@ -956,13 +969,16 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
       audience: artifact.audience,
     });
     try {
-      await renderArtifact.mutateAsync(artifact.id);
-      try {
-        await finalizeIssue.mutateAsync(artifact.revision_id);
+      const result = await renderArtifact.mutateAsync(artifact.id);
+      if (result.finalized) {
         setIssueFeedback(
-          `${artifact.audience} artifact rendered and the revision is issued.`,
+          `${artifact.audience} artifact finalized and the revision is issued.`,
         );
-      } catch {
+      } else if (artifact.status === "ready") {
+        setIssueFeedback(
+          `${artifact.audience} artifact remains ready. Other editions must finish before the revision can issue.`,
+        );
+      } else {
         setIssueFeedback(
           `${artifact.audience} artifact rendered. Other editions still need attention.`,
         );
@@ -1041,8 +1057,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   const projectName = project.data?.name ?? project.data?.title ?? "Project";
   const issueBusy =
     prepareIssue.isPending ||
-    renderArtifact.isPending ||
-    finalizeIssue.isPending;
+    renderArtifact.isPending;
 
   return (
     <main className="min-h-screen bg-[var(--doc-paper)] text-[var(--color-charcoal)]">
@@ -1561,8 +1576,10 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                               ? ` · ${artifact.error_message}`
                               : ""}
                           </span>
-                          {(artifact.status === "failed" ||
-                            artifact.status === "pending") && (
+                          {specBookArtifactRetryLabel(
+                            artifact.status,
+                            revision.status,
+                          ) && (
                             <Button
                               size="sm"
                               variant="secondary"
@@ -1570,9 +1587,10 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                               onClick={() => void retryArtifact(artifact)}
                             >
                               <RefreshCw className="h-3 w-3" />
-                              {artifact.status === "failed"
-                                ? "Retry"
-                                : "Render"}
+                              {specBookArtifactRetryLabel(
+                                artifact.status,
+                                revision.status,
+                              )}
                             </Button>
                           )}
                           {artifact.status === "ready" && (

@@ -1,18 +1,23 @@
-import { NextRequest } from 'next/server';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
+import { NextRequest } from "next/server";
+import {
+  createRouteHandler,
+  proxyToBackend,
+  apiError,
+  type RouteContext,
+} from "@patina/api-routes";
 
-const ORDERS_URL = process.env.ORDERS_SERVICE_URL || 'http://localhost:3015';
+const ORDERS_URL = process.env.ORDERS_SERVICE_URL || "http://localhost:3015";
 
 // GET /api/orders/[id] - Get single order
 export const GET = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    const { id } = await context.params;
+  async (request: NextRequest, context: RouteContext) => {
+    const id = context.custom?.params?.id as string;
     try {
       return await proxyToBackend(request, context, {
         service: {
-          name: 'orders',
+          name: "orders",
           baseUrl: ORDERS_URL,
-          path: `/v1/orders/${id}`,
+          path: `/v1/orders/${encodeURIComponent(id)}`,
         },
         requireAuth: true,
         retry: { maxRetries: 3 },
@@ -22,19 +27,19 @@ export const GET = createRouteHandler(
       return apiError(error);
     }
   },
-  { method: 'GET' }
+  { method: "GET" },
 );
 
 // PATCH /api/orders/[id] - Update order
 export const PATCH = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    const { id } = await context.params;
+  async (request: NextRequest, context: RouteContext) => {
+    const id = context.custom?.params?.id as string;
     try {
       return await proxyToBackend(request, context, {
         service: {
-          name: 'orders',
+          name: "orders",
           baseUrl: ORDERS_URL,
-          path: `/v1/orders/${id}`,
+          path: `/v1/orders/${encodeURIComponent(id)}`,
         },
         requireAuth: true,
         retry: { maxRetries: 1 }, // No retry for order updates
@@ -44,5 +49,5 @@ export const PATCH = createRouteHandler(
       return apiError(error);
     }
   },
-  { method: 'PATCH' }
+  { method: "PATCH" },
 );

@@ -105,7 +105,7 @@ export const POST = createRouteHandler(
   compose(
     withAuth(auth), // Verify user is authenticated
     async (request, context) => {
-      // NextAuth handles session cleanup
+      // Supabase Auth handles session cleanup
       // You could also notify backend to invalidate tokens
       return apiSuccess({ message: 'Logged out successfully' });
     }
@@ -213,9 +213,10 @@ export const GET = createRouteHandler(
         retry: { maxRetries: 3 },
         timeout: { read: 10000 },
         cache: {
-          maxAge: 300, // 5 minutes
-          staleWhileRevalidate: 60,
           visibility: 'public',
+          reviewedPublic: true,
+          ttl: 300, // 5 minutes
+          swr: 60,
         },
       });
     }
@@ -248,7 +249,7 @@ export const GET = createRouteHandler(
         },
         requireAuth: false,
         retry: { maxRetries: 3 },
-        cache: { maxAge: 300, visibility: 'public' },
+        cache: { visibility: 'public', reviewedPublic: true, ttl: 300 },
       });
     }
   ),
@@ -408,7 +409,6 @@ const { GET, POST } = createMultiMethodHandler({
       return proxyToBackend(request, context, {
         service: { name: 'catalog', baseUrl: CATALOG_URL },
         retry: { maxRetries: 3 },
-        cache: { maxAge: 60 },
       });
     },
     POST: compose(
@@ -465,7 +465,6 @@ export const GET = createRouteHandler(
           path: `/api/v1/projects/${id}/tasks`,
         },
         retry: { maxRetries: 3 },
-        cache: { maxAge: 30 }, // 30 seconds
       });
     }
   ),
@@ -530,7 +529,6 @@ export const GET = createRouteHandler(
           path: `/api/v1/threads/${id}/messages`,
         },
         retry: { maxRetries: 3 },
-        cache: { maxAge: 15, visibility: 'private' }, // 15 seconds
       });
     }
   ),
@@ -598,7 +596,6 @@ export const GET = createRouteHandler(
           path: `/api/v1/projects/${projectId}/milestones/${milestoneId}/deliverables`,
         },
         retry: { maxRetries: 3 },
-        cache: { maxAge: 60 },
       });
     }
   ),
@@ -685,10 +682,6 @@ export const GET = createRouteHandler(
         },
         retry: { maxRetries: 2 },
         timeout: { read: 30000 },
-        cache: {
-          maxAge: 3600, // Cache for 1 hour
-          visibility: 'private',
-        },
       });
     }
   ),
@@ -762,10 +755,6 @@ export const GET = createRouteHandler(
           path: '/api/v1/cart',
         },
         retry: { maxRetries: 3 },
-        cache: {
-          maxAge: 15, // 15 seconds
-          visibility: 'private',
-        },
       });
     }
   ),
@@ -793,11 +782,6 @@ export const GET = createRouteHandler(
           path: '/api/v1/projects',
         },
         retry: { maxRetries: 3 },
-        cache: {
-          maxAge: 60, // 1 minute
-          staleWhileRevalidate: 30,
-          visibility: 'private',
-        },
       });
     }
   ),
@@ -824,9 +808,10 @@ export const GET = createRouteHandler(
       requireAuth: false,
       retry: { maxRetries: 3 },
       cache: {
-        maxAge: 300, // 5 minutes
-        staleWhileRevalidate: 120, // 2 minutes
         visibility: 'public', // Public cache
+        reviewedPublic: true,
+        ttl: 300, // 5 minutes
+        swr: 120, // 2 minutes
       },
     });
   },
@@ -867,7 +852,6 @@ export const POST = createRouteHandler(
         },
         retry: { maxRetries: 1 }, // No retry for checkout
         timeout: { write: 30000 },
-        cache: { noCache: true }, // No caching for payments
       });
     }
   ),
@@ -904,8 +888,8 @@ export const GET = createRouteHandler(
         requireAuth: false,
         retry: { maxRetries: 3 },
         cache: shouldCache === 'true'
-          ? { maxAge: 180, visibility: 'public' }
-          : { noCache: true },
+          ? { visibility: 'public', reviewedPublic: true, ttl: 180 }
+          : undefined,
       });
     }
   ),
@@ -1355,7 +1339,6 @@ export const catalogProxy = createProxyHandler(
     retry: { maxRetries: 3 },
     timeout: { read: 10000, write: 30000 },
     circuitBreaker: { failureThreshold: 5, resetTimeout: 60000 },
-    cache: { maxAge: 300, visibility: 'public' },
   }
 );
 
@@ -1532,7 +1515,6 @@ export const POST = createRouteHandler(
           },
           retry: { maxRetries: 1 }, // NO RETRY for checkout
           timeout: { write: 30000 },
-          cache: { noCache: true },
           errorMapping: {
             402: {
               code: 'PAYMENT_FAILED',

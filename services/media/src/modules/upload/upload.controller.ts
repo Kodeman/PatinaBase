@@ -6,11 +6,17 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  Param,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { UploadService, UploadIntent } from './upload.service';
-import { JwtAuthGuard, RequirePermissions } from '@patina/auth';
-import { CurrentUser } from '@patina/auth';
+import {
+  AuthenticatedUserIdentity,
+  CurrentUser,
+  JwtAuthGuard,
+  RequireAnyPermission,
+} from '@patina/auth';
+import { MEDIA_MANAGE_PERMISSIONS } from '../authorization/media-authorization.constants';
 
 @ApiTags('Media Upload')
 @Controller('v1/media')
@@ -20,7 +26,7 @@ export class UploadController {
   constructor(private uploadService: UploadService) {}
 
   @Post('upload')
-  @RequirePermissions('media.upload')
+  @RequireAnyPermission(...MEDIA_MANAGE_PERMISSIONS)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Create upload intent and generate Pre-Authenticated Request (PAR)',
@@ -57,20 +63,25 @@ export class UploadController {
     },
   })
   async createUploadIntent(
-    @CurrentUser('userId') userId: string,
+    @CurrentUser() identity: AuthenticatedUserIdentity,
     @Body() intent: UploadIntent,
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
-    return this.uploadService.createUploadIntent(userId, intent, idempotencyKey);
+    return this.uploadService.createUploadIntent(identity.sub, intent, idempotencyKey);
   }
 
   @Post('upload/:sessionId/confirm')
+  @RequireAnyPermission(...MEDIA_MANAGE_PERMISSIONS)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Confirm upload completion',
     description: 'Called after client successfully uploads to PAR URL',
   })
-  async confirmUpload(@CurrentUser('userId') userId: string, @Body() body: { sessionId: string }) {
-    return this.uploadService.confirmUpload(body.sessionId);
+  async confirmUpload(
+    @CurrentUser() identity: AuthenticatedUserIdentity,
+    @Param('sessionId') sessionId: string,
+    @Body() body: { sessionId?: string },
+  ) {
+    return this.uploadService.confirmUpload(identity.sub, sessionId, body.sessionId);
   }
 }

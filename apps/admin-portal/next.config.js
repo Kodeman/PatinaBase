@@ -79,7 +79,7 @@ const nextConfig = {
       "img-src 'self' data: https: blob:",
       "font-src 'self' data: http://192.168.1.36:* http://192.168.1.18:* http://192.168.1.16:* http://localhost:* http://127.0.0.1:*",
       // Allow connections based on environment
-      // Development: localhost, local network IPs, AND patina.cloud domains (for Cloudflare tunnel access)
+      // Development: localhost, local network IPs, and approved patina.cloud preview domains
       // Production: patina.cloud API gateway and WebSocket connections
       isDevelopment
         ? "connect-src 'self' http://localhost:* ws://localhost:* http://*.localhost ws://*.localhost http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io"

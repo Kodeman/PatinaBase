@@ -119,7 +119,7 @@ export class MockCarrier implements ICarrier {
    * Get mock tracking information
    */
   async getTracking(trackingNumber: string, carrier?: string): Promise<TrackingDetails> {
-    this.logger.debug(`[MockCarrier] Fetching mock tracking for ${trackingNumber}`);
+    this.logger.debug('[MockCarrier] Fetching mock tracking');
 
     const events = this.generateTrackingEvents();
 
@@ -157,7 +157,7 @@ export class MockCarrier implements ICarrier {
    * Refund a shipment (mock - always succeeds)
    */
   async refundShipment(shipmentId: string): Promise<{ refunded: boolean; refundAmount?: number }> {
-    this.logger.debug(`[MockCarrier] Mock refund for shipment ${shipmentId}`);
+    this.logger.debug('[MockCarrier] Mock shipment refund');
 
     return {
       refunded: true,

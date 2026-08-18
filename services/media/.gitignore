@@ -8,6 +8,16 @@ dist/
 build/
 *.tsbuildinfo
 
+# Stray tsc output landing next to sources instead of in /dist
+# (phase1-close artifact-gc cleanup removed 9 + 22 committed instances
+# across two passes — the second pass found the same failure mode in
+# src/**/*.spec.d.ts.map, not just test/).
+src/**/*.d.ts.map
+test/**/*.js
+test/**/*.d.ts
+test/**/*.js.map
+test/**/*.d.ts.map
+
 # Environment
 .env
 .env.local

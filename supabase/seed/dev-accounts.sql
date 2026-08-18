@@ -16,7 +16,7 @@ DECLARE
   uid_manufacturer  UUID := 'a0000000-0000-0000-0000-000000000006';
   uid_support       UUID := 'a0000000-0000-0000-0000-000000000007';
   -- Generate bcrypt hash of 'password123' at seed time
-  pw_hash TEXT := crypt('password123', gen_salt('bf'));
+  pw_hash TEXT := extensions.crypt('password123', extensions.gen_salt('bf'));
   ts TIMESTAMPTZ := NOW();
 BEGIN
 

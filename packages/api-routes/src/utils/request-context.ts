@@ -70,7 +70,7 @@ export interface RouteUser {
  */
 export function createContext(request: Request): RouteContext {
   const requestId = generateRequestId();
-  const ip = extractIpAddress(request);
+  const ip = extractTrustedIpAddress(request);
   const userAgent = request.headers.get('user-agent') || undefined;
 
   return {
@@ -207,29 +207,9 @@ function generateRequestId(): string {
 }
 
 /**
- * Extract IP address from request
- * Handles various proxy headers
+ * Cloudflare overwrites this header at the trusted edge. Caller-controlled
+ * forwarding headers are deliberately ignored.
  */
-function extractIpAddress(request: Request): string {
-  // Check X-Forwarded-For header (load balancers, proxies)
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const ips = forwarded.split(',').map((ip) => ip.trim());
-    return ips[0]; // Return first IP (client)
-  }
-
-  // Check X-Real-IP header
-  const realIp = request.headers.get('x-real-ip');
-  if (realIp) {
-    return realIp;
-  }
-
-  // Check CF-Connecting-IP (Cloudflare)
-  const cfIp = request.headers.get('cf-connecting-ip');
-  if (cfIp) {
-    return cfIp;
-  }
-
-  // Fallback to '0.0.0.0' (unknown)
-  return '0.0.0.0';
+export function extractTrustedIpAddress(request: Request): string {
+  return request.headers.get('cf-connecting-ip')?.trim() || '0.0.0.0';
 }

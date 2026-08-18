@@ -27,6 +27,10 @@ class Settings:
     # §12.1: image fetch via httpx with a 10 s timeout and a 15 MB size cap.
     image_fetch_timeout_s: float = 10.0
     image_max_bytes: int = 15 * 1024 * 1024
+    image_max_pixels: int = 16_000_000
+    image_batch_max_pixels: int = 32_000_000
+    image_batch_max_bytes: int = 64 * 1024 * 1024
+    image_fetch_concurrency: int = 4
     # Token truncation cap for text embeds. nomic-embed-text-v1.5 was trained
     # to 2048 positions (8192 via rotary scaling); 2048 is a deliberate CPU
     # latency guard — captions/quiz profiles are far shorter in practice.
@@ -43,6 +47,7 @@ class Settings:
     # ConcurrencyGate slot while the CPU-bound decode+encode runs in the threadpool.
     photo_fetch_timeout_s: float = 15.0
     photo_max_bytes: int = 20 * 1024 * 1024
+    photo_max_pixels: int = 32_000_000
 
 
 def settings_from_env() -> Settings:
@@ -61,9 +66,16 @@ def settings_from_env() -> Settings:
         intra_op_threads=int(os.environ.get("ORT_INTRA_OP_THREADS", "2")),
         image_fetch_timeout_s=float(os.environ.get("IMAGE_FETCH_TIMEOUT_S", "10")),
         image_max_bytes=int(os.environ.get("IMAGE_MAX_BYTES", str(15 * 1024 * 1024))),
+        image_max_pixels=int(os.environ.get("IMAGE_MAX_PIXELS", "16000000")),
+        image_batch_max_pixels=int(os.environ.get("IMAGE_BATCH_MAX_PIXELS", "32000000")),
+        image_batch_max_bytes=int(
+            os.environ.get("IMAGE_BATCH_MAX_BYTES", str(64 * 1024 * 1024))
+        ),
+        image_fetch_concurrency=int(os.environ.get("IMAGE_FETCH_CONCURRENCY", "4")),
         text_max_tokens=int(os.environ.get("TEXT_MAX_TOKENS", "2048")),
         usdz_fetch_timeout_s=float(os.environ.get("USDZ_FETCH_TIMEOUT_S", "30")),
         usdz_max_bytes=int(os.environ.get("USDZ_MAX_BYTES", str(64 * 1024 * 1024))),
         photo_fetch_timeout_s=float(os.environ.get("PHOTO_FETCH_TIMEOUT_S", "15")),
         photo_max_bytes=int(os.environ.get("PHOTO_MAX_BYTES", str(20 * 1024 * 1024))),
+        photo_max_pixels=int(os.environ.get("PHOTO_MAX_PIXELS", "32000000")),
     )

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -21,6 +21,8 @@ test("command policy blocks dangerous shortcuts and retired production paths", a
     "git add .",
     "pnpm dev",
     "./infra/build-and-push.sh designer-portal",
+    "ssh kody@192.168.1.14",
+    "ssh -i retired.pem kody@192.168.1.14 'docker ps'",
     "supabase db push",
     "npx wrangler deploy",
     "cd apps/designer-portal && npx opennextjs-cloudflare build",
@@ -37,6 +39,25 @@ test("command policy blocks dangerous shortcuts and retired production paths", a
       command,
     );
   }
+});
+
+test("Claude permissions explicitly deny SSH to the retired host", async () => {
+  const settings = JSON.parse(
+    await readFile(path.join(repoRoot, ".claude/settings.json"), "utf8"),
+  );
+  assert.ok(
+    settings.permissions.deny.includes("Bash(ssh *192.168.1.14*)"),
+  );
+
+  const findings = await evaluateCommand("ssh example.com", {
+    root: repoRoot,
+    cwd: repoRoot,
+    env: {},
+  });
+  assert.equal(
+    findings.some((finding) => finding.id === "retired-production-path"),
+    false,
+  );
 });
 
 test("command policy allows scoped development, staging, and explicit emergency deploy sessions", async () => {

@@ -2,3 +2,10 @@
 # out of node_modules so the Light Table can load it same-origin. Never commit
 # it — it belongs to the installed pdfjs-dist version.
 public/vendor/
+
+# Stray tsc output landing next to test/e2e sources instead of being
+# discarded (phase1-close artifact-gc cleanup removed 10 committed
+# instances).
+src/**/*.d.ts.map
+tests/**/*.d.ts.map
+e2e/**/*.d.ts.map

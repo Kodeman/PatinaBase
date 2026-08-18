@@ -3,7 +3,7 @@
 # deploy-portal.sh — build a portal's workspace dependencies, then build and
 # deploy that portal to Cloudflare Workers via OpenNext.
 #
-# Usage: ./infra/deploy-portal.sh <client|designer|admin|manufacturer>
+# Usage: ./infra/deploy-portal.sh <client|designer|admin|manufacturer> [production|staging]
 #
 # WHY THIS SCRIPT EXISTS
 # ----------------------
@@ -22,10 +22,20 @@
 set -euo pipefail
 
 PORTAL="${1:-}"
+TARGET_ENV="${2:-production}"
 case "$PORTAL" in
   client|designer|admin|manufacturer) ;;
   *)
     echo "Usage: $0 <client|designer|admin|manufacturer>" >&2
+    exit 2
+    ;;
+esac
+
+case "$TARGET_ENV" in
+  production) WRANGLER_ENV_ARGS=() ;;
+  staging) WRANGLER_ENV_ARGS=(--env staging) ;;
+  *)
+    echo "Usage: $0 <client|designer|admin|manufacturer> [production|staging]" >&2
     exit 2
     ;;
 esac
@@ -45,7 +55,7 @@ if [ -z "$PKG_NAME" ]; then
   exit 1
 fi
 
-echo "==> Deploying portal '${PORTAL}'  (workspace package: ${PKG_NAME})"
+echo "==> Deploying portal '${PORTAL}' to '${TARGET_ENV}'  (workspace package: ${PKG_NAME})"
 echo
 
 # ---------------------------------------------------------------------------
@@ -132,6 +142,23 @@ case "$PREFLIGHT_URL" in
     ;;
 esac
 
+# A staging build must be compiled against the Strata staging branch. Portal
+# env files have historically pointed at production, and NEXT_PUBLIC_* values
+# are baked into the bundle, so Wrangler's staging vars cannot repair a build
+# that was compiled against the wrong Supabase project.
+if [ "$TARGET_ENV" = "staging" ]; then
+  EXPECTED_STAGING_SUPABASE_URL="https://vuesoyhfrjabfxbrzekd.supabase.co"
+  if [ "$PREFLIGHT_URL" != "$EXPECTED_STAGING_SUPABASE_URL" ]; then
+    echo "ERROR: refusing to build ${PORTAL} portal for staging — resolved" >&2
+    echo "       NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL}" >&2
+    echo "       Expected the Strata staging branch at" >&2
+    echo "       ${EXPECTED_STAGING_SUPABASE_URL}." >&2
+    echo "       Export the staging NEXT_PUBLIC_SUPABASE_URL and anon key before" >&2
+    echo "       invoking this script; do not rely on a production .env.local." >&2
+    exit 1
+  fi
+fi
+
 echo "==> [0/3] Preflight OK: NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL}"
 echo
 
@@ -176,7 +203,7 @@ fi
 # ---------------------------------------------------------------------------
 echo
 echo "==> [3/3] Deploying the ${PORTAL} portal to Cloudflare Workers"
-CLOUDFLARE_ACCOUNT_ID=be3aaeed18a81b5d90ee2263b62219ea npx wrangler deploy
+CLOUDFLARE_ACCOUNT_ID=be3aaeed18a81b5d90ee2263b62219ea npx wrangler deploy "${WRANGLER_ENV_ARGS[@]}"
 
 echo
-echo "==> Done: ${PORTAL} portal deployed."
+echo "==> Done: ${PORTAL} portal deployed to ${TARGET_ENV}."

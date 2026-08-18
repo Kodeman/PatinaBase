@@ -56,6 +56,12 @@ for service in orders media projects; do
   fi
 done
 
+if matches '^infra/edge-api-worker/'; then
+  run pnpm --filter patina-edge-api-worker type-check
+  run pnpm --filter patina-edge-api-worker test
+  run pnpm --filter patina-edge-api-worker test:workerd
+fi
+
 if matches '^packages/'; then
   while IFS= read -r package_dir; do
     [[ -f "$package_dir/package.json" ]] || continue

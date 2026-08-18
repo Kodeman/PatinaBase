@@ -1,18 +1,23 @@
-import { NextRequest } from 'next/server';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
+import { NextRequest } from "next/server";
+import {
+  createRouteHandler,
+  proxyToBackend,
+  apiError,
+  type RouteContext,
+} from "@patina/api-routes";
 
-const ORDERS_URL = process.env.ORDERS_SERVICE_URL || 'http://localhost:3015';
+const ORDERS_URL = process.env.ORDERS_SERVICE_URL || "http://localhost:3015";
 
 // POST /api/admin/orders/[id]/shipments - Create shipment
 export const POST = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    const { id } = await context.params;
+  async (request: NextRequest, context: RouteContext) => {
+    const id = context.custom?.params?.id as string;
     try {
       return await proxyToBackend(request, context, {
         service: {
-          name: 'orders',
+          name: "orders",
           baseUrl: ORDERS_URL,
-          path: `/v1/orders/${id}/shipments`,
+          path: `/v1/orders/${encodeURIComponent(id)}/shipments`,
         },
         requireAuth: true,
         retry: { maxRetries: 2 },
@@ -22,19 +27,19 @@ export const POST = createRouteHandler(
       return apiError(error);
     }
   },
-  { method: 'POST' }
+  { method: "POST" },
 );
 
 // PATCH /api/admin/orders/[id]/shipments - Update shipment
 export const PATCH = createRouteHandler(
-  async (request: NextRequest, context: any) => {
-    const { id } = await context.params;
+  async (request: NextRequest, context: RouteContext) => {
+    const id = context.custom?.params?.id as string;
     try {
       return await proxyToBackend(request, context, {
         service: {
-          name: 'orders',
+          name: "orders",
           baseUrl: ORDERS_URL,
-          path: `/v1/orders/${id}/shipments`,
+          path: `/v1/orders/${encodeURIComponent(id)}/shipments`,
         },
         requireAuth: true,
         retry: { maxRetries: 2 },
@@ -44,5 +49,5 @@ export const PATCH = createRouteHandler(
       return apiError(error);
     }
   },
-  { method: 'PATCH' }
+  { method: "PATCH" },
 );

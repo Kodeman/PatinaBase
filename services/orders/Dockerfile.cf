@@ -1,7 +1,7 @@
 # =============================================================================
 # PATINA ORDERS SERVICE — CLOUDFLARE CONTAINER DOCKERFILE
-# Copy of infra/Dockerfile.nestjs with SERVICE_NAME defaulted to `orders` so
-# wrangler (which cannot pass --build-arg through its `containers[].image`
+# SERVICE_NAME is defaulted to `orders` because Wrangler cannot pass
+# --build-arg through its `containers[].image`
 # pointer) builds the right service. Build context MUST be the monorepo root
 # (see infra/orders-worker/wrangler.jsonc `image_build_context: "../../"`).
 # =============================================================================
@@ -26,6 +26,7 @@ COPY packages/types/package.json ./packages/types/
 COPY packages/utils/package.json ./packages/utils/
 COPY packages/cache/package.json ./packages/cache/
 COPY packages/auth/package.json ./packages/auth/
+COPY packages/agent-queue/package.json ./packages/agent-queue/
 
 ARG SERVICE_NAME
 COPY services/${SERVICE_NAME}/package.json ./services/${SERVICE_NAME}/
@@ -33,8 +34,7 @@ COPY services/${SERVICE_NAME}/package.json ./services/${SERVICE_NAME}/
 # Copy Prisma schema so postinstall `prisma generate` succeeds
 COPY services/${SERVICE_NAME}/prisma ./services/${SERVICE_NAME}/prisma
 
-# Force NODE_ENV=development so devDependencies (prisma, typescript, etc.) are installed
-# Coolify injects NODE_ENV=production as a build-arg which would skip them
+# Install build-time dependencies (Prisma and TypeScript) in the dependency stage.
 ENV NODE_ENV=development
 RUN pnpm install --frozen-lockfile --filter @patina/${SERVICE_NAME}...
 
@@ -52,6 +52,7 @@ COPY --from=deps /app/packages/types/node_modules ./packages/types/node_modules
 COPY --from=deps /app/packages/utils/node_modules ./packages/utils/node_modules
 COPY --from=deps /app/packages/cache/node_modules ./packages/cache/node_modules
 COPY --from=deps /app/packages/auth/node_modules ./packages/auth/node_modules
+COPY --from=deps /app/packages/agent-queue/node_modules ./packages/agent-queue/node_modules
 
 ARG SERVICE_NAME
 COPY --from=deps /app/services/${SERVICE_NAME}/node_modules ./services/${SERVICE_NAME}/node_modules
@@ -64,6 +65,7 @@ COPY packages/types/ ./packages/types/
 COPY packages/utils/ ./packages/utils/
 COPY packages/cache/ ./packages/cache/
 COPY packages/auth/ ./packages/auth/
+COPY packages/agent-queue/ ./packages/agent-queue/
 
 # Copy service source
 COPY services/${SERVICE_NAME}/ ./services/${SERVICE_NAME}/

@@ -19,5 +19,22 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["InferenceEngine"] }],
 
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "env": {
+    "staging": {
+      "workers_dev": true,
+      "containers": [
+        {
+          "name": "patina-inference-engine-staging",
+          "class_name": "InferenceEngine",
+          "image": "../../services/aesthete-inference/Dockerfile.cf",
+          "instance_type": "standard-3",
+          "max_instances": 3
+        }
+      ],
+      "durable_objects": {
+        "bindings": [{ "name": "INFERENCE", "class_name": "InferenceEngine" }]
+      }
+    }
+  }
 }

@@ -48,7 +48,51 @@ enabled = true
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory. For example:
 # sql_paths = ['./seeds/*.sql', '../project-src/seeds/*-load-testing.sql']
-sql_paths = ['./seed/00-legacy-grants.sql', './seed/dev-accounts.sql', './seed/organizations.sql', './seed/vendors.sql', './seed/products.sql', './seed/designer-clients.sql', './seed/leads_room_scans.sql', './seed/proposals.sql', './seed/proposal-captures.sql', './seed/decisions.sql', './seed/schedule.sql', './seed/schedule-extremes.sql', './seed/project_documents_tasks.sql', './seed/paint_colors_seed.sql', './seed/procurement_workspace_dev.sql', './seed/procurement_receiving_dev.sql', './seed/procurement_notifications_dev.sql', './seed/aesthete_demo.sql', './seed/agent-tasks-dev.sql', './seed/fulfillment-vendor-profiles.sql', './seed/fulfillment-catalog-dev.sql', './seed/99-local-edge-settings.sql']
+#
+# DERIVATION RULE (keep [remotes.staging.db.seed].sql_paths in sync by hand —
+# the CLI does not derive one array from the other):
+#   staging = local, minus `00-legacy-grants.sql` (blanket GRANT ALL;
+#   local-only, restores pre-2026-05-30 creation-time defaults), minus
+#   `99-local-edge-settings.sql` (local-only Vault credentials), plus
+#   `cloudflare-phase1-staging.sql`.
+# Any edit to this array must be re-applied to the remote one below under the
+# same rule, or staging silently drifts from what this comment documents.
+sql_paths = ['./seed/00-legacy-grants.sql', './seed/dev-accounts.sql', './seed/organizations.sql', './seed/vendors.sql', './seed/products.sql', './seed/designer-clients.sql', './seed/leads_room_scans.sql', './seed/proposals.sql', './seed/proposal-captures.sql', './seed/decisions.sql', './seed/schedule.sql', './seed/schedule-extremes.sql', './seed/project_documents_tasks.sql', './seed/paint_colors_seed.sql', './seed/procurement_workspace_dev.sql', './seed/procurement_receiving_dev.sql', './seed/procurement_notifications_dev.sql', './seed/aesthete_demo.sql', './seed/agent-tasks-dev.sql', './seed/fulfillment-vendor-profiles.sql', './seed/fulfillment-catalog-dev.sql', './seed/cloudflare-phase1-staging.sql', './seed/99-local-edge-settings.sql']
+
+# A persistent remote requires the literal 20-character branch project ref;
+# add this block after `staging` is provisioned (environment interpolation is
+# rejected for remotes.<branch>.project_id by the pinned Supabase CLI):
+# [remotes.staging]
+# project_id = "<staging-branch-ref>"
+# [remotes.staging.db.seed]
+# enabled = true
+# sql_paths = ['./seed/00-legacy-grants.sql', './seed/cloudflare-phase1-staging.sql']
+
+# Long-lived, data-less staging branch under the Strata project. Staging uses
+# representative seed data but never the local-only Vault credentials from
+# 99-local-edge-settings.sql.
+[remotes.staging]
+project_id = "vuesoyhfrjabfxbrzekd"
+
+[remotes.staging.db.seed]
+enabled = true
+# DERIVATION RULE (see [db.seed] above — kept in sync by hand):
+#   staging = local, minus `00-legacy-grants.sql` (blanket GRANT ALL;
+#   local-only, restores pre-2026-05-30 creation-time defaults), minus
+#   `99-local-edge-settings.sql` (local-only Vault credentials), plus
+#   `cloudflare-phase1-staging.sql`.
+# NEVER put `00-legacy-grants.sql` here: it is 11k lines of blanket GRANT ALL
+# to anon/authenticated/service_role on every public relation/routine, and it
+# would undo the least-privilege ACL posture migrations 00483-00486 establish
+# on staging. Its own header says "Local-only: seeds never run on prod."
+sql_paths = ['./seed/dev-accounts.sql', './seed/organizations.sql', './seed/vendors.sql', './seed/products.sql', './seed/designer-clients.sql', './seed/leads_room_scans.sql', './seed/proposals.sql', './seed/proposal-captures.sql', './seed/decisions.sql', './seed/schedule.sql', './seed/schedule-extremes.sql', './seed/project_documents_tasks.sql', './seed/paint_colors_seed.sql', './seed/procurement_workspace_dev.sql', './seed/procurement_receiving_dev.sql', './seed/procurement_notifications_dev.sql', './seed/aesthete_demo.sql', './seed/agent-tasks-dev.sql', './seed/fulfillment-vendor-profiles.sql', './seed/fulfillment-catalog-dev.sql', './seed/cloudflare-phase1-staging.sql']
+
+[remotes.staging.auth]
+site_url = "https://patina-designer-portal-staging.kody-be3.workers.dev"
+additional_redirect_urls = ["https://patina-designer-portal-staging.kody-be3.workers.dev/**", "https://patina-client-portal-staging.kody-be3.workers.dev/**", "https://patina-admin-portal-staging.kody-be3.workers.dev/**", "field://auth/callback"]
+
+[remotes.staging.auth.external.apple]
+enabled = false
 
 [realtime]
 enabled = true

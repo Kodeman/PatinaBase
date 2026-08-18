@@ -27,7 +27,7 @@ The Patina Media & 3D Pipeline Service is a cloud-native, microservices-based sy
 │                           ▼                                          │
 │  ┌────────────────────────────────────────────────────────────────┐ │
 │  │  OCI API Gateway                                                │ │
-│  │  • JWT Validation (OIDC via Identity Domains)                  │ │
+│  │  • Supabase access-token validation                            │ │
 │  │  • Rate Limiting (per-user, per-IP)                            │ │
 │  │  • Request Routing & Path Rewrite                              │ │
 │  │  • CORS Policy Enforcement                                      │ │
@@ -403,15 +403,14 @@ The Patina Media & 3D Pipeline Service is a cloud-native, microservices-based sy
 
 ### Authentication & Authorization
 
-**OCI Identity Domains (OIDC/OAuth2)**
-- JWT access tokens (15-min expiry)
-- Refresh tokens (7-day expiry)
-- Standard scopes: `media:read`, `media:write`, `media:admin`
-- Service-to-service: Client credentials flow
+**Supabase Auth**
+- User access tokens are verified against the configured Strata issuer and audience
+- Authenticated tokens must carry a nonempty subject and the `authenticated` role
+- Route permissions come only from trusted `app_metadata` claims
 
-**API Gateway**
-- JWT validation at edge
-- Scope-based route authorization
+**Cloudflare edge and service guard**
+- The edge preserves the user access token without logging it
+- `@patina/auth` validates the token before protected service routes run
 - Rate limiting: 60/min per user, 1000/min per IP
 
 ### Data Protection

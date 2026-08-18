@@ -3,6 +3,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateIssueDto, IssueStatus } from './dto/create-issue.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
+import { ProjectsAuthorizationResolver } from '../common/authorization/projects-authorization.resolver';
 
 @Injectable()
 export class IssuesService {
@@ -11,25 +12,33 @@ export class IssuesService {
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
+    private readonly authorization: ProjectsAuthorizationResolver,
   ) {}
 
   async create(projectId: string, createDto: CreateIssueDto, reportedBy: string) {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true },
-    });
-
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    const issue = await this.prisma.issue.create({
-      data: {
-        ...createDto,
-        projectId,
-        reportedBy,
+    const issue = await this.authorization.withProjectAccess(
+      reportedBy,
+      projectId,
+      'read',
+      async (tx) => {
+        const project = await tx.project.findUnique({
+          where: { id: projectId },
+          select: { id: true },
+        });
+        if (!project) throw new NotFoundException('Project not found');
+        const created = await tx.issue.create({ data: { ...createDto, projectId, reportedBy } });
+        await tx.auditLog.create({
+          data: {
+            entityType: 'issue',
+            entityId: created.id,
+            action: 'created',
+            actor: reportedBy,
+            metadata: { projectId },
+          },
+        });
+        return created;
       },
-    });
+    );
 
     this.eventEmitter.emit('issue.created', {
       issueId: issue.id,
@@ -39,68 +48,74 @@ export class IssuesService {
       timestamp: new Date(),
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'issue',
-        entityId: issue.id,
-        action: 'created',
-        actor: reportedBy,
-        metadata: { projectId },
-      },
-    });
-
     return issue;
   }
 
-  async findAll(projectId: string, status?: IssueStatus) {
+  async findAll(projectId: string, userId: string, status?: IssueStatus) {
     const where: any = { projectId };
     if (status) {
       where.status = status;
     }
 
-    return this.prisma.issue.findMany({
-      where,
-      orderBy: [
-        { severity: 'desc' },
-        { createdAt: 'desc' },
-      ],
-    });
+    return this.authorization.withProjectAccess(userId, projectId, 'read', (tx) =>
+      tx.issue.findMany({
+        where,
+        orderBy: [{ severity: 'desc' }, { createdAt: 'desc' }],
+      }),
+    );
   }
 
-  async findOne(id: string) {
-    const issue = await this.prisma.issue.findUnique({
-      where: { id },
-      include: {
-        project: {
-          select: { id: true, title: true },
+  async findOne(projectId: string, id: string, userId: string) {
+    return this.authorization.withProjectAccess(userId, projectId, 'read', async (tx) => {
+      const issue = await tx.issue.findFirst({
+        where: { id, projectId },
+        include: {
+          project: {
+            select: { id: true, title: true },
+          },
         },
-      },
+      });
+
+      if (!issue) {
+        throw new NotFoundException('Issue not found');
+      }
+
+      return issue;
     });
-
-    if (!issue) {
-      throw new NotFoundException('Issue not found');
-    }
-
-    return issue;
   }
 
-  async update(id: string, updateDto: UpdateIssueDto, userId: string) {
-    const existing = await this.prisma.issue.findUnique({
-      where: { id },
-      select: { id: true, status: true, projectId: true },
-    });
-
-    if (!existing) {
-      throw new NotFoundException('Issue not found');
-    }
-
-    const issue = await this.prisma.issue.update({
-      where: { id },
-      data: {
-        ...updateDto,
-        resolvedAt: updateDto.status === IssueStatus.RESOLVED ? new Date() : undefined,
+  async update(projectId: string, id: string, updateDto: UpdateIssueDto, userId: string) {
+    const { existing, issue } = await this.authorization.withProjectAccess(
+      userId,
+      projectId,
+      'manage',
+      async (tx) => {
+        const existing = await tx.issue.findFirst({
+          where: { id, projectId },
+          select: { id: true, status: true, projectId: true },
+        });
+        if (!existing) throw new NotFoundException('Issue not found');
+        await tx.issue.updateMany({
+          where: { id, projectId },
+          data: {
+            ...updateDto,
+            resolvedAt: updateDto.status === IssueStatus.RESOLVED ? new Date() : undefined,
+          },
+        });
+        const issue = await tx.issue.findFirstOrThrow({ where: { id, projectId } });
+        await tx.auditLog.create({
+          data: {
+            entityType: 'issue',
+            entityId: id,
+            action: 'updated',
+            actor: userId,
+            changes: updateDto as any,
+            metadata: { projectId },
+          },
+        });
+        return { existing, issue };
       },
-    });
+    );
 
     if (updateDto.status && updateDto.status !== existing.status) {
       this.eventEmitter.emit('issue.status_changed', {
@@ -121,16 +136,6 @@ export class IssuesService {
         });
       }
     }
-
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'issue',
-        entityId: id,
-        action: 'updated',
-        actor: userId,
-        changes: updateDto as any,
-      },
-    });
 
     return issue;
   }

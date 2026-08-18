@@ -7,6 +7,7 @@ export * from './product';
 export * from './product-configuration';
 export * from './catalog';
 export * from './catalog-search';
+export * from './catalog-product-summary';
 export * from './order';
 export * from './style-profile';
 export * from './api';

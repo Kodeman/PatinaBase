@@ -12,10 +12,10 @@ Read the PRD first. This document tells you *how*; the PRD is the authority on *
 ## 0. House rules that bind this build
 
 1. **Modular monolith.** `@strata/threads` is a package, not a service. The only new deployment surface is one Supabase Edge Function (webhook receiver). Everything else runs inside the existing Next.js app and its scheduled jobs.
-2. **Edge Function for third-party webhooks.** Twilio callbacks must survive a Proxmox/homelab reboot — they terminate at self-hosted Supabase Edge Functions, which enqueue and return fast. No business logic at the edge beyond validation + STOP/HELP fast-path.
+2. **Edge Function for third-party webhooks.** Twilio callbacks terminate at Supabase Strata Edge Functions, which enqueue and return fast. No business logic at the edge beyond validation + STOP/HELP fast-path.
 3. **The channel is never the record.** Our Postgres tables are truth; Twilio logs are reconciled against them (TH-62), same posture as Stripe vs. the ledger.
 4. **No client-side access to thread tables.** Service-role only; RLS locked down. All UI reads go through server routes.
-5. **Deploy** via the established flow: local build → GHCR image → Coolify. Migrations live in `supabase/migrations/`.
+5. **Deploy** the webhook with `supabase functions deploy <name>` against linked Strata. Migrations live in `supabase/migrations/`; portals use `infra/deploy-portal.sh`.
 6. **Language rule (Round3 canon):** no client-visible copy ever says "AI". Escalation copy says "a person."
 
 ## 1. Monorepo placement
@@ -54,7 +54,7 @@ strata/
               outbound send  │                          │ inbound msg + status callbacks
                              │                          ▼
    ┌─────────────────────────┴───────┐   ┌──────────────────────────────────┐
-   │ apps/web (Next.js, homelab)     │   │ supabase/functions/twilio-inbound│
+   │ Next.js portals (Cloudflare)    │   │ supabase/functions/twilio-inbound│
    │  @strata/threads send pipeline  │   │  1. validate X-Twilio-Signature  │
    │  scheduled jobs (drain, nudge,  │   │  2. STOP/HELP fast-path reply    │
    │  reconcile)                     │   │  3. INSERT INTO thread_inbound_  │
@@ -62,7 +62,7 @@ strata/
                │                         └───────────────┬──────────────────┘
                ▼                                          │ (pg NOTIFY / poll)
    ┌───────────────────────────────────────────────────────▼────────────────┐
-   │ Postgres (self-hosted Supabase) — SOURCE OF TRUTH                      │
+   │ Strata Postgres (Supabase Cloud) — SOURCE OF TRUTH                     │
    │ threads · messages · prompts · consent_events · escalations · links   │
    └───────┬───────────────┬───────────────┬───────────────┬───────────────┘
            │               │               │               │

@@ -84,7 +84,11 @@ def convert_transport(usdz: bytes) -> httpx.MockTransport:
         if path == "/room.usdz":
             return httpx.Response(200, content=usdz, headers={"content-type": "model/vnd.usdz+zip"})
         if path == "/garbage.usdz":
-            return httpx.Response(200, content=b"not a usd file at all")
+            return httpx.Response(
+                200,
+                content=b"not a usd file at all",
+                headers={"content-type": "application/octet-stream"},
+            )
         if path == "/missing.usdz":
             return httpx.Response(404, content=b"nope")
         return httpx.Response(500, content=b"unhandled fixture route")
@@ -95,7 +99,14 @@ def convert_transport(usdz: bytes) -> httpx.MockTransport:
 def convert_client(usdz: bytes):
     from fastapi.testclient import TestClient
 
-    app = create_app(make_settings(), embedder=FakeEmbedder(), http_transport=convert_transport(usdz))
+    from conftest import public_test_resolver
+
+    app = create_app(
+        make_settings(),
+        embedder=FakeEmbedder(),
+        http_transport=convert_transport(usdz),
+        hostname_resolver=public_test_resolver,
+    )
     return TestClient(app)
 
 

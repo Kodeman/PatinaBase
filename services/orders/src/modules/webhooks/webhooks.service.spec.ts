@@ -33,6 +33,11 @@ describe('WebhooksService', () => {
     auditLog: {
       create: jest.fn(),
     },
+    stripeWebhookReceipt: {
+      create: jest.fn(),
+      updateMany: jest.fn(),
+      findUnique: jest.fn(),
+    },
     address: {
       findUnique: jest.fn().mockResolvedValue(null),
     },
@@ -40,6 +45,7 @@ describe('WebhooksService', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
     },
+    $transaction: jest.fn(),
   };
 
   const mockNotificationDispatch = {
@@ -94,6 +100,15 @@ describe('WebhooksService', () => {
     prisma = module.get<PrismaClient>(PrismaClient);
     stripe = module.get('STRIPE_CLIENT');
     eventsService = module.get('EVENTS_SERVICE');
+
+    mockPrismaClient.stripeWebhookReceipt.create.mockResolvedValue({
+      status: 'processing',
+    });
+    mockPrismaClient.stripeWebhookReceipt.updateMany.mockResolvedValue({
+      count: 1,
+    });
+    mockPrismaClient.stripeWebhookReceipt.findUnique.mockResolvedValue(null);
+    mockPrismaClient.$transaction.mockImplementation((operation) => operation(mockPrismaClient));
   });
 
   afterEach(() => {
@@ -135,8 +150,11 @@ describe('WebhooksService', () => {
         orderNumber: 'ORD-001',
         paymentIntentId: 'pi_123',
         cartId: 'cart-123',
+        userId: 'user-123',
         status: 'created',
         paymentStatus: 'pending',
+        total: new Decimal(100),
+        currency: 'USD',
       };
 
       const mockEvent = {
@@ -400,10 +418,14 @@ describe('WebhooksService', () => {
       };
 
       mockStripe.webhooks.constructEvent.mockReturnValue(mockEvent);
-      mockPrismaClient.idempotencyKey.findUnique.mockResolvedValue({
-        id: 'idem-1',
-        key: 'webhook:evt_duplicate',
-        response: {},
+      mockPrismaClient.stripeWebhookReceipt.create.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+      );
+      mockPrismaClient.stripeWebhookReceipt.updateMany.mockResolvedValue({
+        count: 0,
+      });
+      mockPrismaClient.stripeWebhookReceipt.findUnique.mockResolvedValue({
+        status: 'succeeded',
       });
 
       const result = await service.handleStripeWebhook(
@@ -412,6 +434,7 @@ describe('WebhooksService', () => {
       );
 
       expect(result.received).toBe(true);
+      expect(result.duplicate).toBe(true);
       // Should not create new payment or update order
       expect(mockPrismaClient.payment.create).not.toHaveBeenCalled();
       expect(mockPrismaClient.order.update).not.toHaveBeenCalled();

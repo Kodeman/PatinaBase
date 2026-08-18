@@ -130,15 +130,17 @@ jest.mock('next/navigation', () => ({
 }));
 ```
 
-### Next Auth
+### Supabase Auth
 
-Mock `next-auth/react` in your tests:
+Mock the shared Supabase auth hook in component tests:
 
 ```tsx
-jest.mock('next-auth/react', () => ({
-  useSession: jest.fn(),
-  signIn: jest.fn(),
-  signOut: jest.fn(),
+jest.mock('@patina/supabase', () => ({
+  useAuth: jest.fn(() => ({
+    user: null,
+    isAuthenticated: false,
+    isLoading: false,
+  })),
 }));
 ```
 

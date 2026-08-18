@@ -1,10 +1,16 @@
-import { Container, getRandom } from '@cloudflare/containers';
+import { Container, getRandom } from "@cloudflare/containers";
 
 interface Env {
   ORDERS_SVC: DurableObjectNamespace<OrdersService>;
   // Secrets (wrangler secret put …) — Supabase Cloud pooler connection.
   DATABASE_URL: string;
   SUPABASE_URL: string;
+  STRIPE_SECRET_KEY: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  EASYPOST_API_KEY?: string;
+  EASYPOST_WEBHOOK_SECRET?: string;
+  EASYPOST_DEFAULT_FROM_ADDRESS_ID?: string;
+  EASYPOST_MODE?: string;
 }
 
 /**
@@ -24,16 +30,33 @@ interface Env {
  */
 export class OrdersService extends Container<Env> {
   defaultPort = 8080;
-  sleepAfter = '10m';
+  sleepAfter = "10m";
 
   constructor(ctx: DurableObjectState<Env>, env: Env) {
     super(ctx, env);
     this.envVars = {
-      PORT: '8080',
-      NODE_ENV: 'production',
+      PORT: "8080",
+      NODE_ENV: "production",
       DATABASE_URL: env.DATABASE_URL,
       SUPABASE_URL: env.SUPABASE_URL,
-      REDIS_DISABLED: 'true',
+      STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
+      ...(env.STRIPE_WEBHOOK_SECRET
+        ? { STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET }
+        : {}),
+      ...(env.EASYPOST_API_KEY
+        ? { EASYPOST_API_KEY: env.EASYPOST_API_KEY }
+        : {}),
+      ...(env.EASYPOST_WEBHOOK_SECRET
+        ? { EASYPOST_WEBHOOK_SECRET: env.EASYPOST_WEBHOOK_SECRET }
+        : {}),
+      ...(env.EASYPOST_DEFAULT_FROM_ADDRESS_ID
+        ? {
+            EASYPOST_DEFAULT_FROM_ADDRESS_ID:
+              env.EASYPOST_DEFAULT_FROM_ADDRESS_ID,
+          }
+        : {}),
+      EASYPOST_MODE: env.EASYPOST_MODE ?? "test",
+      REDIS_DISABLED: "true",
     };
   }
 }

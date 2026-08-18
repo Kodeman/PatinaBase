@@ -8,13 +8,17 @@ fails the batch.
 
 from __future__ import annotations
 
-from io import BytesIO
-
 import httpx
 from PIL import Image
 
-# Guard against decompression bombs before Pillow's own (much higher) default.
-Image.MAX_IMAGE_PIXELS = 64_000_000
+from .image_safety import DecodedPixelBudget, UnsafeImageError, load_image_bytes
+from .safe_fetch import (
+    EncodedByteBudget,
+    HostnameResolver,
+    SafeFetchError,
+    fetch_public_bytes,
+    resolve_hostname,
+)
 
 # Retailer CDNs are sloppy about content types; accept obvious image types and
 # generic byte streams (Pillow decode is the real arbiter), reject clear
@@ -32,52 +36,36 @@ async def fetch_image(
     *,
     timeout_s: float,
     max_bytes: int,
+    max_pixels: int = 16_000_000,
+    pixel_budget: DecodedPixelBudget | None = None,
+    byte_budget: EncodedByteBudget | None = None,
+    resolver: HostnameResolver = resolve_hostname,
 ) -> Image.Image:
-    if not url.lower().startswith(("http://", "https://")):
-        raise ImageFetchError("url must be http(s)")
-
     try:
-        async with client.stream(
-            "GET", url, timeout=timeout_s, follow_redirects=True
-        ) as resp:
-            if resp.status_code != 200:
-                raise ImageFetchError(f"fetch failed: HTTP {resp.status_code}")
+        data = await fetch_public_bytes(
+            client,
+            url,
+            timeout_s=timeout_s,
+            max_bytes=max_bytes,
+            allowed_content_types=_ACCEPTABLE_OPAQUE_TYPES,
+            allowed_content_prefixes=("image/",),
+            byte_budget=byte_budget,
+            resolver=resolver,
+        )
+    except SafeFetchError as exc:
+        reason = str(exc).replace(" is not allowed", " is not an image")
+        raise ImageFetchError(reason) from None
 
-            ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
-            if not ctype.startswith("image/") and ctype not in _ACCEPTABLE_OPAQUE_TYPES:
-                raise ImageFetchError(f"content-type {ctype!r} is not an image")
-
-            declared = resp.headers.get("content-length")
-            if declared is not None and declared.isdigit() and int(declared) > max_bytes:
-                raise ImageFetchError(
-                    f"content-length {declared} exceeds limit of {max_bytes} bytes"
-                )
-
-            buf = BytesIO()
-            total = 0
-            async for chunk in resp.aiter_bytes():
-                total += len(chunk)
-                if total > max_bytes:
-                    raise ImageFetchError(
-                        f"body exceeds limit of {max_bytes} bytes"
-                    )
-                buf.write(chunk)
-    except ImageFetchError:
-        raise
-    except httpx.TimeoutException:
-        raise ImageFetchError(f"fetch timed out after {timeout_s:g}s") from None
-    except httpx.HTTPError as exc:
-        raise ImageFetchError(f"fetch failed: {exc.__class__.__name__}") from None
-
-    return decode_image(buf.getvalue())
+    return decode_image(data, max_pixels=max_pixels, pixel_budget=pixel_budget)
 
 
-def decode_image(data: bytes) -> Image.Image:
+def decode_image(
+    data: bytes,
+    *,
+    max_pixels: int = 16_000_000,
+    pixel_budget: DecodedPixelBudget | None = None,
+) -> Image.Image:
     try:
-        img = Image.open(BytesIO(data))
-        img.load()
-        return img
-    except Image.DecompressionBombError:
-        raise ImageFetchError("image too large to decode safely") from None
-    except Exception:
-        raise ImageFetchError("body is not a decodable image") from None
+        return load_image_bytes(data, max_pixels=max_pixels, budget=pixel_budget)
+    except UnsafeImageError as exc:
+        raise ImageFetchError(str(exc)) from None

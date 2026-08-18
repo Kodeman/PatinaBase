@@ -27,5 +27,23 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProjectsService"] }],
 
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "env": {
+    "staging": {
+      "workers_dev": true,
+      "containers": [
+        {
+          "name": "patina-projects-service-staging",
+          "class_name": "ProjectsService",
+          "image": "../../services/projects/Dockerfile.cf",
+          "image_build_context": "../../",
+          "instance_type": "basic",
+          "max_instances": 2
+        }
+      ],
+      "durable_objects": {
+        "bindings": [{ "name": "PROJECTS_SVC", "class_name": "ProjectsService" }]
+      }
+    }
+  }
 }

@@ -19,6 +19,12 @@ export interface SystemHealth {
 
 const PING_TIMEOUT_MS = 3000;
 const DEGRADED_LATENCY_MS = 1500;
+const PRIVATE_NO_STORE = 'private, no-store';
+
+function privateNoStore<T extends Response>(response: T): T {
+  response.headers.set('Cache-Control', PRIVATE_NO_STORE);
+  return response;
+}
 
 interface ServiceTarget {
   name: string;
@@ -138,7 +144,7 @@ function rollUp(services: ServiceHealth[]): ServiceStatus {
 
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedAdmin(request);
-  if ('error' in auth) return auth.error;
+  if ('error' in auth && auth.error) return privateNoStore(auth.error);
 
   try {
     const services = await Promise.all([
@@ -152,15 +158,10 @@ export async function GET(request: NextRequest) {
       checkedAt: new Date().toISOString(),
     };
 
-    return NextResponse.json(
-      { data: payload },
-      {
-        headers: {
-          'Cache-Control': 'private, max-age=5',
-        },
-      },
-    );
+    return privateNoStore(NextResponse.json({ data: payload }));
   } catch (err) {
-    return serverError((err as Error).message ?? 'Failed to load system health');
+    return privateNoStore(
+      serverError((err as Error).message ?? 'Failed to load system health'),
+    );
   }
 }

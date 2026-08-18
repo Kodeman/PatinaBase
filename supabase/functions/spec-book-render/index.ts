@@ -163,7 +163,7 @@ function repository(
       const { data: current, error: lookupError } = await admin
         .from("spec_book_artifacts")
         .select(
-          "id, revision_id, audience, format, status, attempt_count, render_started_at",
+          "id, revision_id, audience, format, status, attempt_count, render_started_at, storage_path, checksum_sha256, size_bytes",
         )
         .eq("id", artifactId)
         .maybeSingle();
@@ -176,15 +176,6 @@ function repository(
       if (!current) {
         return null;
       }
-      const renderStartedAt = current.render_started_at
-        ? Date.parse(current.render_started_at)
-        : Number.NaN;
-      const staleRendering = current.status === "rendering" &&
-        Number.isFinite(renderStartedAt) &&
-        renderStartedAt < Date.now() - STALE_RENDER_MS;
-      if (!["pending", "failed"].includes(current.status) && !staleRendering) {
-        return null;
-      }
       if (
         !SPEC_BOOK_AUDIENCES.includes(current.audience as SpecBookAudience) ||
         current.format !== "pdf"
@@ -193,6 +184,41 @@ function repository(
           "invalid_artifact",
           "Artifact audience or format is invalid",
         );
+      }
+      if (current.status === "ready") {
+        if (
+          typeof current.storage_path !== "string" ||
+          current.storage_path.length === 0 ||
+          typeof current.checksum_sha256 !== "string" ||
+          !/^[0-9a-f]{64}$/i.test(current.checksum_sha256) ||
+          !Number.isSafeInteger(current.size_bytes) ||
+          current.size_bytes <= 0
+        ) {
+          throw new SpecBookRenderError(
+            "invalid_ready_artifact",
+            "Ready artifact is missing durable storage identity",
+          );
+        }
+        return {
+          id: current.id,
+          revisionId: current.revision_id,
+          audience: current.audience as SpecBookAudience,
+          format: "pdf",
+          attemptCount: current.attempt_count ?? 0,
+          mode: "finalize",
+          storagePath: current.storage_path,
+          checksumSha256: current.checksum_sha256.toLowerCase(),
+          sizeBytes: current.size_bytes,
+        };
+      }
+      const renderStartedAt = current.render_started_at
+        ? Date.parse(current.render_started_at)
+        : Number.NaN;
+      const staleRendering = current.status === "rendering" &&
+        Number.isFinite(renderStartedAt) &&
+        renderStartedAt < Date.now() - STALE_RENDER_MS;
+      if (!["pending", "failed"].includes(current.status) && !staleRendering) {
+        return null;
       }
       const now = new Date().toISOString();
       let claimQuery = admin
@@ -226,6 +252,7 @@ function repository(
         audience: data.audience as SpecBookAudience,
         format: data.format as "pdf",
         attemptCount: data.attempt_count,
+        mode: "render",
       };
     },
 

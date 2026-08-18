@@ -147,9 +147,9 @@ export class EventsService {
           },
         },
       });
-      this.logger.debug(`Outbox event created: ${type}`);
-    } catch (error) {
-      this.logger.error(`Failed to create outbox event: ${type}`, error);
+      this.logger.debug('Outbox event created');
+    } catch {
+      this.logger.error('Failed to create outbox event');
     }
   }
 

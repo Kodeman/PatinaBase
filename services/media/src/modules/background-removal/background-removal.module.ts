@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaClient } from '../../generated/prisma-client';
 import { BackgroundRemovalConfig } from './background-removal.config';
 import { BackgroundRemovalController } from './background-removal.controller';
 import { BackgroundRemovalLedgerService } from './background-removal-ledger.service';
@@ -25,13 +24,6 @@ import { SupabaseBoardStorageService } from './supabase-board-storage.service';
   imports: [ConfigModule],
   controllers: [BackgroundRemovalController],
   providers: [
-    {
-      provide: PrismaClient,
-      useFactory: () =>
-        new PrismaClient({
-          log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-        }),
-    },
     { provide: BACKGROUND_REMOVAL_CLOCK, useValue: () => new Date() },
     { provide: BACKGROUND_REMOVAL_DNS, useClass: NodeBackgroundRemovalDns },
     {

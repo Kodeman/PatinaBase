@@ -1,9 +1,11 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { PrismaClient, AssetKind, AssetRole } from '../../generated/prisma-client';
-import { OCIStorageService } from '../storage/oci-storage.service';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { v4 as uuidv4 } from 'uuid';
+import { createHash } from 'crypto';
 import * as mime from 'mime-types';
+import { v4 as uuidv4 } from 'uuid';
+import { AssetKind, AssetRole } from '../../generated/prisma-client';
+import { MediaAuthorizationResolver } from '../authorization/media-authorization.resolver';
+import { OCIStorageService } from '../storage/oci-storage.service';
 
 export interface UploadIntent {
   kind: AssetKind;
@@ -12,6 +14,7 @@ export interface UploadIntent {
   mimeType?: string;
   productId?: string;
   variantId?: string;
+  projectId?: string;
   role?: AssetRole;
 }
 
@@ -26,240 +29,233 @@ export interface UploadResponse {
 
 @Injectable()
 export class UploadService {
-  private readonly logger = new Logger(UploadService.name);
-
-  // Validation constants from PRD
-  private readonly ALLOWED_IMAGE_MIMES = [
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/avif',
-  ];
-
+  private readonly ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
   private readonly ALLOWED_3D_MIMES = [
     'model/gltf-binary',
     'model/gltf+json',
     'model/vnd.usdz+zip',
-    'application/octet-stream', // For GLB/USDZ
+    'application/octet-stream',
   ];
-
-  private readonly MAX_IMAGE_SIZE = 50 * 1024 * 1024; // 50MB
-  private readonly MAX_3D_SIZE = 500 * 1024 * 1024; // 500MB
+  private readonly ALLOWED_DOCUMENT_MIMES = [
+    'application/pdf',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ];
+  private readonly MAX_IMAGE_SIZE = 50 * 1024 * 1024;
+  private readonly MAX_3D_SIZE = 500 * 1024 * 1024;
+  private readonly MAX_DOCUMENT_SIZE = 100 * 1024 * 1024;
   private readonly PAR_TTL_MINUTES = 15;
 
   constructor(
-    private prisma: PrismaClient,
-    private ociStorage: OCIStorageService,
-    private config: ConfigService,
+    private readonly ociStorage: OCIStorageService,
+    private readonly config: ConfigService,
+    private readonly authorization: MediaAuthorizationResolver,
   ) {}
 
-  /**
-   * Create upload intent and generate PAR for direct upload
-   */
   async createUploadIntent(
-    userId: string,
+    subject: string,
     intent: UploadIntent,
     idempotencyKey?: string,
   ): Promise<UploadResponse> {
-    // Validate intent
-    this.validateUploadIntent(intent);
+    const normalized = this.normalizeIntent(intent);
+    const actorKey = idempotencyKey
+      ? createHash('sha256').update(subject).update('\0').update(idempotencyKey).digest('hex')
+      : undefined;
 
-    // Check for existing session with idempotency key
-    if (idempotencyKey) {
-      const existing = await this.prisma.uploadSession.findUnique({
-        where: { idempotencyKey },
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      await this.authorization.requireProduct(
+        transaction,
+        scope,
+        normalized.productId,
+        normalized.variantId,
+      );
+      await this.authorization.requireProject(transaction, scope, normalized.projectId);
+
+      if (actorKey) {
+        const existing = await transaction.uploadSession.findUnique({
+          where: { idempotencyKey: actorKey },
+        });
+        if (existing) {
+          if (
+            existing.userId !== subject ||
+            existing.filename !== normalized.filename ||
+            existing.mimeType !== normalized.mimeType ||
+            existing.fileSize !== (normalized.fileSize ?? null) ||
+            existing.productId !== (normalized.productId ?? null) ||
+            existing.variantId !== (normalized.variantId ?? null) ||
+            existing.kind !== normalized.kind ||
+            existing.role !== (normalized.role ?? null)
+          ) {
+            throw new ConflictException('Idempotency key was already used');
+          }
+          const existingAsset = await this.authorization.requireAsset(
+            transaction,
+            scope,
+            existing.assetId ?? '',
+          );
+          if ((existingAsset.projectId ?? null) !== (normalized.projectId ?? null)) {
+            throw new ConflictException('Idempotency key was already used');
+          }
+          return {
+            assetId: existing.assetId as string,
+            uploadSessionId: existing.id,
+            parUrl: existing.parUrl,
+            targetKey: existing.targetKey,
+            headers: this.getUploadHeaders(normalized.mimeType),
+            expiresAt: existing.expiresAt,
+          };
+        }
+      }
+
+      const assetId = uuidv4();
+      const targetKey = this.ociStorage.generateObjectKey(
+        assetId,
+        normalized.kind === AssetKind.IMAGE
+          ? 'image'
+          : normalized.kind === AssetKind.DOCUMENT
+            ? 'document'
+            : '3d',
+        normalized.filename,
+      );
+      const expiresAt = new Date(Date.now() + this.PAR_TTL_MINUTES * 60 * 1000);
+      const rawBucket = this.config.get<string>('OCI_BUCKET_RAW');
+      if (!rawBucket) throw new BadRequestException('Media upload is unavailable');
+      const par = await this.ociStorage.createPAR({
+        bucketName: rawBucket,
+        objectName: targetKey,
+        accessType: 'ObjectWrite',
+        timeExpires: expiresAt,
       });
 
-      if (existing) {
-        this.logger.log(`Returning existing upload session for idempotency key: ${idempotencyKey}`);
-        return {
-          assetId: existing.assetId as string,
-          uploadSessionId: existing.id,
-          parUrl: existing.parUrl,
-          targetKey: existing.targetKey,
-          headers: this.getUploadHeaders(intent.mimeType),
-          expiresAt: existing.expiresAt,
-        };
-      }
-    }
-
-    // Create asset record
-    const assetId = uuidv4();
-    const asset = await this.prisma.mediaAsset.create({
-      data: {
-        id: assetId,
-        kind: intent.kind,
-        productId: intent.productId,
-        variantId: intent.variantId,
-        role: intent.role,
-        rawKey: '', // Will be set when upload completes
-        status: 'PENDING',
-        uploadedBy: userId,
-        mimeType: intent.mimeType,
-        sizeBytes: intent.fileSize,
-      },
-    });
-
-    // Generate object key
-    const targetKey = this.ociStorage.generateObjectKey(
-      assetId,
-      intent.kind === 'IMAGE' ? 'image' : '3d',
-      intent.filename,
-    );
-
-    // Generate PAR for upload
-    const expiresAt = new Date(Date.now() + this.PAR_TTL_MINUTES * 60 * 1000);
-    const rawBucket = this.config.get('OCI_BUCKET_RAW');
-
-    const par = await this.ociStorage.createPAR({
-      bucketName: rawBucket,
-      objectName: targetKey,
-      accessType: 'ObjectWrite',
-      timeExpires: expiresAt,
-    });
-
-    // Create upload session
-    const session = await this.prisma.uploadSession.create({
-      data: {
+      await transaction.mediaAsset.create({
+        data: {
+          id: assetId,
+          kind: normalized.kind,
+          productId: normalized.productId,
+          variantId: normalized.variantId,
+          projectId: normalized.projectId,
+          role: normalized.role,
+          rawKey: targetKey,
+          status: 'PENDING',
+          uploadedBy: subject,
+          mimeType: normalized.mimeType,
+          sizeBytes: normalized.fileSize,
+        },
+      });
+      const session = await transaction.uploadSession.create({
+        data: {
+          assetId,
+          filename: normalized.filename,
+          fileSize: normalized.fileSize,
+          mimeType: normalized.mimeType,
+          kind: normalized.kind,
+          parUrl: par.fullUrl,
+          targetKey,
+          expiresAt,
+          status: 'PENDING',
+          userId: subject,
+          productId: normalized.productId,
+          variantId: normalized.variantId,
+          role: normalized.role,
+          idempotencyKey: actorKey,
+        },
+      });
+      return {
         assetId,
-        filename: intent.filename,
-        fileSize: intent.fileSize,
-        mimeType: intent.mimeType as string,
-        kind: intent.kind,
+        uploadSessionId: session.id,
         parUrl: par.fullUrl,
         targetKey,
+        headers: this.getUploadHeaders(normalized.mimeType),
         expiresAt,
-        status: 'PENDING',
-        userId,
-        productId: intent.productId,
-        variantId: intent.variantId,
-        role: intent.role,
-        idempotencyKey,
-      },
+      };
     });
-
-    this.logger.log(
-      `Created upload intent for asset ${assetId}, session ${session.id}, expires at ${expiresAt}`,
-    );
-
-    return {
-      assetId,
-      uploadSessionId: session.id,
-      parUrl: par.fullUrl,
-      targetKey,
-      headers: this.getUploadHeaders(intent.mimeType),
-      expiresAt,
-    };
   }
 
-  /**
-   * Validate upload intent
-   */
-  private validateUploadIntent(intent: UploadIntent) {
-    // Validate mime type
-    const allowedMimes =
-      intent.kind === 'IMAGE' ? this.ALLOWED_IMAGE_MIMES : this.ALLOWED_3D_MIMES;
-
-    if (intent.mimeType && !allowedMimes.includes(intent.mimeType)) {
-      throw new BadRequestException(
-        `Invalid MIME type for ${intent.kind}. Allowed: ${allowedMimes.join(', ')}`,
-      );
+  async confirmUpload(
+    subject: string,
+    routeSessionId: string,
+    bodySessionId?: string,
+  ): Promise<{ assetId: string; targetKey: string }> {
+    if (bodySessionId !== undefined && bodySessionId !== routeSessionId) {
+      throw new BadRequestException('Upload session does not match route');
     }
-
-    // Validate file size
-    if (intent.fileSize) {
-      const maxSize = intent.kind === 'IMAGE' ? this.MAX_IMAGE_SIZE : this.MAX_3D_SIZE;
-      if (intent.fileSize > maxSize) {
-        throw new BadRequestException(
-          `File size exceeds maximum allowed (${maxSize} bytes for ${intent.kind})`,
-        );
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const session = await transaction.uploadSession.findFirst({
+        where: { id: routeSessionId, userId: subject },
+      });
+      if (!session?.assetId) throw this.authorization.notFound();
+      const asset = await this.authorization.requireAsset(transaction, scope, session.assetId);
+      if (session.status === 'UPLOADED') {
+        return { assetId: asset.id, targetKey: session.targetKey };
       }
-    }
+      if (session.status !== 'PENDING' || session.expiresAt.getTime() <= Date.now()) {
+        throw new BadRequestException('Upload session is not confirmable');
+      }
 
-    // Validate filename
+      const rawBucket = this.config.get<string>('OCI_BUCKET_RAW');
+      if (!rawBucket) throw new BadRequestException('Media upload is unavailable');
+      const uploaded = await this.ociStorage.headObject(rawBucket, session.targetKey);
+      if (
+        (session.fileSize !== null && uploaded.sizeBytes !== session.fileSize) ||
+        (uploaded.contentType && uploaded.contentType !== session.mimeType)
+      ) {
+        throw new BadRequestException('Uploaded object does not match the upload intent');
+      }
+
+      await transaction.uploadSession.update({
+        where: { id: session.id },
+        data: { status: 'UPLOADED', uploadedAt: new Date() },
+      });
+      await transaction.mediaAsset.update({
+        where: { id: asset.id },
+        data: { rawKey: session.targetKey },
+      });
+      return { assetId: asset.id, targetKey: session.targetKey };
+    });
+  }
+
+  private normalizeIntent(
+    intent: UploadIntent,
+  ): Required<Pick<UploadIntent, 'kind' | 'filename'>> &
+    Omit<UploadIntent, 'kind' | 'filename' | 'mimeType'> & { mimeType: string } {
     if (!intent.filename || intent.filename.length > 255) {
       throw new BadRequestException('Invalid filename');
     }
-
-    // Validate role if provided
-    if (intent.role === 'HERO' && intent.kind !== 'IMAGE') {
-      throw new BadRequestException('HERO role only valid for images');
+    if (!Object.values(AssetKind).includes(intent.kind)) {
+      throw new BadRequestException('Invalid media kind');
     }
+    if (intent.productId && intent.projectId) {
+      throw new BadRequestException('Media cannot belong to both a product and a project');
+    }
+    const mimeType = intent.mimeType || mime.lookup(intent.filename) || 'application/octet-stream';
+    const allowed =
+      intent.kind === AssetKind.IMAGE
+        ? this.ALLOWED_IMAGE_MIMES
+        : intent.kind === AssetKind.DOCUMENT
+          ? this.ALLOWED_DOCUMENT_MIMES
+          : this.ALLOWED_3D_MIMES;
+    if (!allowed.includes(mimeType)) throw new BadRequestException('Invalid media MIME type');
+    const maximum =
+      intent.kind === AssetKind.IMAGE
+        ? this.MAX_IMAGE_SIZE
+        : intent.kind === AssetKind.DOCUMENT
+          ? this.MAX_DOCUMENT_SIZE
+          : this.MAX_3D_SIZE;
+    if (intent.fileSize !== undefined && (intent.fileSize < 0 || intent.fileSize > maximum)) {
+      throw new BadRequestException('Invalid media file size');
+    }
+    if (intent.role === AssetRole.HERO && intent.kind !== AssetKind.IMAGE) {
+      throw new BadRequestException('HERO role is only valid for images');
+    }
+    if (intent.kind === AssetKind.DOCUMENT && intent.role) {
+      throw new BadRequestException('Document uploads do not accept media roles');
+    }
+    return { ...intent, filename: intent.filename, mimeType };
   }
 
-  /**
-   * Get required headers for upload
-   */
-  private getUploadHeaders(mimeType?: string): Record<string, string> {
-    const headers: Record<string, string> = {
-      'x-content-type': mimeType || 'application/octet-stream',
-    };
-
-    return headers;
-  }
-
-  /**
-   * Confirm upload completion (called via webhook or polling)
-   */
-  async confirmUpload(sessionId: string): Promise<{ assetId: string; targetKey: string }> {
-    const session = await this.prisma.uploadSession.findUnique({
-      where: { id: sessionId },
-    });
-
-    if (!session) {
-      throw new BadRequestException('Upload session not found');
-    }
-
-    if (session.status === 'UPLOADED') {
-      this.logger.log(`Upload session ${sessionId} already confirmed`);
-      return { assetId: session.assetId as string, targetKey: session.targetKey };
-    }
-
-    // Update session and asset
-    await this.prisma.$transaction([
-      this.prisma.uploadSession.update({
-        where: { id: sessionId },
-        data: {
-          status: 'UPLOADED',
-          uploadedAt: new Date(),
-        },
-      }),
-      this.prisma.mediaAsset.update({
-        where: { id: session.assetId as string },
-        data: {
-          rawKey: session.targetKey,
-        },
-      }),
-    ]);
-
-    this.logger.log(`Confirmed upload for session ${sessionId}, asset ${session.assetId}`);
-
-    // Enqueue processing job (will be handled by job service)
-    return { assetId: session.assetId as string, targetKey: session.targetKey };
-  }
-
-  /**
-   * Clean up expired upload sessions
-   */
-  async cleanupExpiredSessions() {
-    const expired = await this.prisma.uploadSession.findMany({
-      where: {
-        expiresAt: { lt: new Date() },
-        status: 'PENDING',
-      },
-    });
-
-    if (expired.length > 0) {
-      await this.prisma.uploadSession.updateMany({
-        where: {
-          id: { in: expired.map((s) => s.id) },
-        },
-        data: {
-          status: 'EXPIRED',
-        },
-      });
-
-      this.logger.log(`Marked ${expired.length} upload sessions as expired`);
-    }
+  private getUploadHeaders(mimeType: string): Record<string, string> {
+    return { 'x-content-type': mimeType };
   }
 }

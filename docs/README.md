@@ -23,9 +23,9 @@ The canonical reference for **what Patina is, as built** is the 12 Detailed PRDs
 
 These stay authoritative — the PRDs point to them rather than replace them:
 
-- **Runbooks** — `operations/email-system-runbook.md`, `operations/e2e-local-test.md`, `infra/runbooks/**` (auth, email, domains, local-dev), `prds/AE/aesthete-engine-runbook.md`, `prds/AE/aesthete-engine-prod-readiness.md`.
+- **Runbooks** — `operations/e2e-local-test.md` and the active email/domain/local-development files under `infra/runbooks/`.
 - **Maintenance** — `maintenance/stale-files-audit.md` (dead-code/removable-file audit; separate from this doc consolidation).
-- **Deploy** — `infra/DEPLOYMENT_GUIDE.md`, `infra/QUICKSTART.md`, `infra/PORT_REFERENCE.md`, `architecture/cloudflare-migration.html`, `architecture/supabase-cloud-migration.html`.
+- **Deploy** — root `AGENTS.md` plus `.agents/skills/patina-deploy/SKILL.md`; retired self-hosted procedures live only under `_archive/`.
 - **Analytics** — `specs/Data Tracking/`, `handoffs/sprint-2-posthog-dashboards/`.
 - **Design references** — the-document prototypes + `CODEBASE-MAP.md` / `DECISIONS.md` under `design/the-document/`, `product/portal-vs-desk-feature-gap-matrix-v2.md`.
 

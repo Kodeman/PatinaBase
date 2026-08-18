@@ -44,6 +44,7 @@ jest.mock('@nestjs/swagger', () => ({
   ApiQuery: () => () => {},
   ApiProperty: () => () => {},
   ApiPropertyOptional: () => () => {},
+  PartialType: (Base: any) => class extends Base {},
 }));
 
 // Mock guards and decorators
@@ -119,21 +120,32 @@ describe('TimelineController', () => {
 
   describe('createSegment', () => {
     it('should create a new timeline segment', async () => {
-      const createDto = { title: 'Design Phase', phase: 'design', startDate: '2024-01-01', endDate: '2024-03-31' };
+      const createDto = {
+        title: 'Design Phase',
+        phase: 'design',
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+      };
       mockTimelineService.createSegment.mockResolvedValue(mockSegment);
 
       const result = await controller.createSegment('project-123', createDto as any, 'user-123');
 
       expect(result).toEqual(mockSegment);
-      expect(mockTimelineService.createSegment).toHaveBeenCalledWith('project-123', createDto, 'user-123');
+      expect(mockTimelineService.createSegment).toHaveBeenCalledWith(
+        'project-123',
+        createDto,
+        'user-123',
+      );
     });
 
     it('should pass through service errors', async () => {
-      mockTimelineService.createSegment.mockRejectedValue(new NotFoundException('Project not found'));
+      mockTimelineService.createSegment.mockRejectedValue(
+        new NotFoundException('Project not found'),
+      );
 
-      await expect(
-        controller.createSegment('project-123', {} as any, 'user-123'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(controller.createSegment('project-123', {} as any, 'user-123')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -141,16 +153,21 @@ describe('TimelineController', () => {
     it('should return project timeline', async () => {
       mockTimelineService.getProjectTimeline.mockResolvedValue(mockTimeline);
 
-      const result = await controller.getTimeline('project-123');
+      const result = await controller.getTimeline('project-123', 'user-123');
 
       expect(result).toEqual(mockTimeline);
-      expect(mockTimelineService.getProjectTimeline).toHaveBeenCalledWith('project-123');
+      expect(mockTimelineService.getProjectTimeline).toHaveBeenCalledWith(
+        'project-123',
+        'user-123',
+      );
     });
 
     it('should throw NotFoundException for invalid project', async () => {
       mockTimelineService.getProjectTimeline.mockRejectedValue(new NotFoundException());
 
-      await expect(controller.getTimeline('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(controller.getTimeline('nonexistent', 'user-123')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should handle timeline with segments', async () => {
@@ -160,7 +177,7 @@ describe('TimelineController', () => {
       };
       mockTimelineService.getProjectTimeline.mockResolvedValue(timelineWithSegments);
 
-      const result = await controller.getTimeline('project-123');
+      const result = await controller.getTimeline('project-123', 'user-123');
 
       expect(result.segments).toHaveLength(2);
     });
@@ -170,16 +187,22 @@ describe('TimelineController', () => {
     it('should return specific segment', async () => {
       mockTimelineService.getSegment.mockResolvedValue(mockSegment);
 
-      const result = await controller.getSegment('project-123', 'segment-123');
+      const result = await controller.getSegment('project-123', 'segment-123', 'user-123');
 
       expect(result).toEqual(mockSegment);
-      expect(mockTimelineService.getSegment).toHaveBeenCalledWith('project-123', 'segment-123');
+      expect(mockTimelineService.getSegment).toHaveBeenCalledWith(
+        'project-123',
+        'segment-123',
+        'user-123',
+      );
     });
 
     it('should throw NotFoundException for invalid segment', async () => {
       mockTimelineService.getSegment.mockRejectedValue(new NotFoundException());
 
-      await expect(controller.getSegment('project-123', 'nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(controller.getSegment('project-123', 'nonexistent', 'user-123')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should return segment with full details', async () => {
@@ -191,7 +214,7 @@ describe('TimelineController', () => {
       };
       mockTimelineService.getSegment.mockResolvedValue(detailedSegment);
 
-      const result = await controller.getSegment('project-123', 'segment-123');
+      const result = await controller.getSegment('project-123', 'segment-123', 'user-123');
 
       expect(result.description).toBe('Detailed description');
       expect(result.deliverables).toHaveLength(2);
@@ -204,10 +227,20 @@ describe('TimelineController', () => {
       const updatedSegment = { ...mockSegment, ...updateDto };
       mockTimelineService.updateSegment.mockResolvedValue(updatedSegment);
 
-      const result = await controller.updateSegment('project-123', 'segment-123', updateDto as any, 'user-123');
+      const result = await controller.updateSegment(
+        'project-123',
+        'segment-123',
+        updateDto as any,
+        'user-123',
+      );
 
       expect(result).toEqual(updatedSegment);
-      expect(mockTimelineService.updateSegment).toHaveBeenCalledWith('project-123', 'segment-123', updateDto, 'user-123');
+      expect(mockTimelineService.updateSegment).toHaveBeenCalledWith(
+        'project-123',
+        'segment-123',
+        updateDto,
+        'user-123',
+      );
     });
 
     it('should throw NotFoundException for non-existent segment', async () => {
@@ -223,7 +256,12 @@ describe('TimelineController', () => {
       const updatedSegment = { ...mockSegment, progress: 90 };
       mockTimelineService.updateSegment.mockResolvedValue(updatedSegment);
 
-      const result = await controller.updateSegment('project-123', 'segment-123', updateDto as any, 'user-123');
+      const result = await controller.updateSegment(
+        'project-123',
+        'segment-123',
+        updateDto as any,
+        'user-123',
+      );
 
       expect(result.title).toBe('Design Phase'); // Original title preserved
       expect(result.progress).toBe(90);
@@ -241,7 +279,12 @@ describe('TimelineController', () => {
 
       mockTimelineService.logActivity.mockResolvedValue({ id: 'activity-123' });
 
-      const result = await controller.logActivity('project-123', logDto as any, 'user-123', mockRequest);
+      const result = await controller.logActivity(
+        'project-123',
+        logDto as any,
+        'user-123',
+        mockRequest,
+      );
 
       expect(result).toHaveProperty('id');
       expect(mockTimelineService.logActivity).toHaveBeenCalledWith(
@@ -301,27 +344,39 @@ describe('TimelineController', () => {
       const mockUpcoming = { segments: [], milestones: [], approvals: [] };
       mockTimelineService.getUpcomingEvents.mockResolvedValue(mockUpcoming);
 
-      const result = await controller.getUpcoming('project-123');
+      const result = await controller.getUpcoming('project-123', 'user-123');
 
       expect(result).toEqual(mockUpcoming);
-      expect(mockTimelineService.getUpcomingEvents).toHaveBeenCalledWith('project-123', 30);
+      expect(mockTimelineService.getUpcomingEvents).toHaveBeenCalledWith(
+        'project-123',
+        'user-123',
+        30,
+      );
     });
 
     it('should accept custom days parameter', async () => {
       const mockUpcoming = { segments: [], milestones: [], approvals: [] };
       mockTimelineService.getUpcomingEvents.mockResolvedValue(mockUpcoming);
 
-      await controller.getUpcoming('project-123', '60');
+      await controller.getUpcoming('project-123', 'user-123', '60');
 
-      expect(mockTimelineService.getUpcomingEvents).toHaveBeenCalledWith('project-123', 60);
+      expect(mockTimelineService.getUpcomingEvents).toHaveBeenCalledWith(
+        'project-123',
+        'user-123',
+        60,
+      );
     });
 
     it('should parse string days to integer', async () => {
       mockTimelineService.getUpcomingEvents.mockResolvedValue({});
 
-      await controller.getUpcoming('project-123', '14');
+      await controller.getUpcoming('project-123', 'user-123', '14');
 
-      expect(mockTimelineService.getUpcomingEvents).toHaveBeenCalledWith('project-123', 14);
+      expect(mockTimelineService.getUpcomingEvents).toHaveBeenCalledWith(
+        'project-123',
+        'user-123',
+        14,
+      );
     });
 
     it('should return events with data', async () => {
@@ -332,7 +387,7 @@ describe('TimelineController', () => {
       };
       mockTimelineService.getUpcomingEvents.mockResolvedValue(mockUpcoming);
 
-      const result = await controller.getUpcoming('project-123', '7');
+      const result = await controller.getUpcoming('project-123', 'user-123', '7');
 
       expect(result.segments).toHaveLength(1);
       expect(result.milestones).toHaveLength(1);
@@ -345,16 +400,21 @@ describe('TimelineController', () => {
       const mockMetrics = { overallProgress: 50, phaseProgress: {} };
       mockTimelineService.getProgressMetrics.mockResolvedValue(mockMetrics);
 
-      const result = await controller.getProgress('project-123');
+      const result = await controller.getProgress('project-123', 'user-123');
 
       expect(result).toEqual(mockMetrics);
-      expect(mockTimelineService.getProgressMetrics).toHaveBeenCalledWith('project-123');
+      expect(mockTimelineService.getProgressMetrics).toHaveBeenCalledWith(
+        'project-123',
+        'user-123',
+      );
     });
 
     it('should throw NotFoundException for invalid project', async () => {
       mockTimelineService.getProgressMetrics.mockRejectedValue(new NotFoundException());
 
-      await expect(controller.getProgress('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(controller.getProgress('nonexistent', 'user-123')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should return detailed progress metrics', async () => {
@@ -372,7 +432,7 @@ describe('TimelineController', () => {
       };
       mockTimelineService.getProgressMetrics.mockResolvedValue(detailedMetrics);
 
-      const result = await controller.getProgress('project-123');
+      const result = await controller.getProgress('project-123', 'user-123');
 
       expect(result.overallProgress).toBe(65);
       expect(result.phaseProgress.design).toBe(100);

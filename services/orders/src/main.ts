@@ -1,6 +1,5 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import compression from 'compression';
 import helmet from 'helmet';
@@ -9,7 +8,7 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const configService = app.get(ConfigService);
   const env = configService.get('NODE_ENV', 'development');
 
@@ -47,29 +46,10 @@ async function bootstrap() {
   // API prefix
   app.setGlobalPrefix('v1');
 
-  // OpenAPI/Swagger
-  const config = new DocumentBuilder()
-    .setTitle('Patina Orders & Payments API')
-    .setDescription('Orders, Payments, Cart, and Checkout service for Patina OCI platform')
-    .setVersion('1.0')
-    .addTag('carts', 'Shopping cart management')
-    .addTag('checkout', 'Checkout and payment initiation')
-    .addTag('orders', 'Order management')
-    .addTag('payments', 'Payment processing')
-    .addTag('refunds', 'Refund management')
-    .addTag('shipments', 'Fulfillment and shipping')
-    .addTag('webhooks', 'Stripe webhooks')
-    .addBearerAuth()
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
-
   const port = configService.get('PORT', 3015);
   await app.listen(port);
 
-  console.log(`Orders service listening on port ${port}`);
-  console.log(`API documentation available at http://localhost:${port}/api/docs`);
+  logger.log(`Orders service listening on port ${port}`);
 }
 
 bootstrap();

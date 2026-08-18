@@ -203,6 +203,20 @@ async function verify() {
 }
 
 async function prePush() {
+  for (const gate of [
+    "scripts/check-retired-deploy-references.mjs",
+    "scripts/check-markdown-paths.mjs",
+  ]) {
+    const result = spawnSync(process.execPath, [path.join(root, gate)], {
+      cwd: root,
+      stdio: "inherit",
+    });
+    if (result.status !== 0) {
+      process.exitCode = result.status ?? 1;
+      return;
+    }
+  }
+
   const base = option("--base", defaultBase());
   const head = option("--head", "HEAD");
   const paths = changedPaths({ root, base, head });

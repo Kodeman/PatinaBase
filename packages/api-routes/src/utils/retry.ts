@@ -11,7 +11,7 @@
  * RetryExhaustedError, TimeoutError) so proxy-to-backend.ts and any future
  * consumer keep working unchanged.
  */
-import { logger } from './logger';
+import { logger } from "./logger";
 
 export interface RetryConfig {
   /** Maximum number of retry attempts (default: 3) */
@@ -49,7 +49,7 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxDelay: 30000,
   backoffMultiplier: 2,
   retryableStatuses: [408, 429, 500, 502, 503, 504],
-  retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET'],
+  retryableErrors: ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "ECONNRESET"],
   shouldRetryMutation: false,
 };
 
@@ -60,8 +60,8 @@ const DEFAULT_TIMEOUT_CONFIG: TimeoutConfig = {
   delete: 30000,
 };
 
-const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const READ_METHODS = new Set(['GET', 'HEAD']);
+const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const READ_METHODS = new Set(["GET", "HEAD"]);
 
 export class RetryExhaustedError extends Error {
   constructor(
@@ -70,37 +70,41 @@ export class RetryExhaustedError extends Error {
     public readonly lastError: unknown,
   ) {
     super(message);
-    this.name = 'RetryExhaustedError';
+    this.name = "RetryExhaustedError";
   }
 }
 
 export class TimeoutError extends Error {
-  constructor(message: string, public readonly timeoutMs: number) {
+  constructor(
+    message: string,
+    public readonly timeoutMs: number,
+  ) {
     super(message);
-    this.name = 'TimeoutError';
+    this.name = "TimeoutError";
   }
 }
 
 function getStatusFromError(error: unknown): number | null {
-  if (!error || typeof error !== 'object') return null;
+  if (!error || typeof error !== "object") return null;
   const e = error as Record<string, any>;
-  if (typeof e.status === 'number') return e.status;
-  if (typeof e.statusCode === 'number') return e.statusCode;
-  if (e.response && typeof e.response.status === 'number') return e.response.status;
+  if (typeof e.status === "number") return e.status;
+  if (typeof e.statusCode === "number") return e.statusCode;
+  if (e.response && typeof e.response.status === "number")
+    return e.response.status;
   return null;
 }
 
 function getRetryAfterMs(error: unknown): number | null {
-  if (!error || typeof error !== 'object') return null;
+  if (!error || typeof error !== "object") return null;
   const e = error as Record<string, any>;
   const headers = e.response?.headers ?? e.headers;
   if (!headers) return null;
 
   let value: string | null = null;
   if (headers instanceof Headers) {
-    value = headers.get('retry-after');
-  } else if (typeof headers === 'object') {
-    value = headers['retry-after'] ?? headers['Retry-After'] ?? null;
+    value = headers.get("retry-after");
+  } else if (typeof headers === "object") {
+    value = headers["retry-after"] ?? headers["Retry-After"] ?? null;
   }
   if (!value) return null;
 
@@ -115,25 +119,36 @@ function getRetryAfterMs(error: unknown): number | null {
 
 function isRetryable(error: unknown, config: RetryConfig): boolean {
   // Network errors (Node error codes)
-  if (error && typeof error === 'object' && 'code' in error) {
+  if (error && typeof error === "object" && "code" in error) {
     const code = (error as { code: unknown }).code;
-    if (typeof code === 'string' && config.retryableErrors.includes(code)) {
+    if (typeof code === "string" && config.retryableErrors.includes(code)) {
       return true;
     }
   }
   // Generic fetch failures
-  if (error instanceof TypeError && error.message.toLowerCase().includes('fetch')) {
+  if (
+    error instanceof TypeError &&
+    error.message.toLowerCase().includes("fetch")
+  ) {
     return true;
   }
   // HTTP status codes (never retry 501 Not Implemented)
   const status = getStatusFromError(error);
-  if (status !== null && status !== 501 && config.retryableStatuses.includes(status)) {
+  if (
+    status !== null &&
+    status !== 501 &&
+    config.retryableStatuses.includes(status)
+  ) {
     return true;
   }
   return false;
 }
 
-function backoffDelay(attempt: number, config: RetryConfig, error: unknown): number {
+function backoffDelay(
+  attempt: number,
+  config: RetryConfig,
+  error: unknown,
+): number {
   // Retry-After takes precedence over backoff (capped at maxDelay)
   const retryAfter = getRetryAfterMs(error);
   if (retryAfter !== null) return Math.min(retryAfter, config.maxDelay);
@@ -160,10 +175,11 @@ export async function retryRequest<T>(
 ): Promise<T> {
   const c: RetryConfig = { ...DEFAULT_RETRY_CONFIG, ...config };
 
-  if (c.maxRetries < 0) throw new Error('maxRetries must be non-negative');
-  if (c.initialDelay <= 0) throw new Error('initialDelay must be positive');
-  if (c.maxDelay <= 0) throw new Error('maxDelay must be positive');
-  if (c.backoffMultiplier <= 0) throw new Error('backoffMultiplier must be positive');
+  if (c.maxRetries < 0) throw new Error("maxRetries must be non-negative");
+  if (c.initialDelay <= 0) throw new Error("initialDelay must be positive");
+  if (c.maxDelay <= 0) throw new Error("maxDelay must be positive");
+  if (c.backoffMultiplier <= 0)
+    throw new Error("backoffMultiplier must be positive");
 
   const isMutation = MUTATION_METHODS.has(context.method.toUpperCase());
   const allowRetryForThisMethod = !isMutation || c.shouldRetryMutation;
@@ -173,10 +189,9 @@ export async function retryRequest<T>(
     try {
       const result = await requestFn();
       if (attempt > 0) {
-        logger.info('Request succeeded after retry', {
+        logger.info("Request succeeded after retry", {
           requestId: context.requestId,
           method: context.method,
-          url: context.url,
           attempt,
           totalAttempts: attempt + 1,
         });
@@ -189,24 +204,22 @@ export async function retryRequest<T>(
       const exhausted = attempt >= c.maxRetries;
 
       if (!retryable) {
-        logger.warn('Request failed with non-retryable error', {
+        logger.warn("Request failed with non-retryable error", {
           requestId: context.requestId,
           method: context.method,
-          url: context.url,
           attempt: attempt + 1,
-          error: error instanceof Error ? error.message : String(error),
+          errorType: error instanceof Error ? error.name : "UnknownError",
           status: getStatusFromError(error),
         });
         throw error;
       }
 
       if (exhausted) {
-        logger.error('Request failed after all retries exhausted', {
+        logger.error("Request failed after all retries exhausted", {
           requestId: context.requestId,
           method: context.method,
-          url: context.url,
           totalAttempts: attempt + 1,
-          lastError: error instanceof Error ? error.message : String(error),
+          errorType: error instanceof Error ? error.name : "UnknownError",
           status: getStatusFromError(error),
         });
         throw new RetryExhaustedError(
@@ -217,14 +230,13 @@ export async function retryRequest<T>(
       }
 
       const delay = backoffDelay(attempt, c, error);
-      logger.warn('Request failed, retrying', {
+      logger.warn("Request failed, retrying", {
         requestId: context.requestId,
         method: context.method,
-        url: context.url,
         attempt: attempt + 1,
         maxRetries: c.maxRetries,
         retryIn: delay,
-        error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.name : "UnknownError",
         status: getStatusFromError(error),
       });
       await sleep(delay);
@@ -232,7 +244,7 @@ export async function retryRequest<T>(
   }
 
   // Unreachable — loop always returns or throws — but TypeScript wants it
-  throw new RetryExhaustedError('unreachable', c.maxRetries, lastError);
+  throw new RetryExhaustedError("unreachable", c.maxRetries, lastError);
 }
 
 /** Get timeout duration for an HTTP method (read/write/delete/default tiers). */
@@ -243,25 +255,25 @@ export function getTimeoutForMethod(
   const c: TimeoutConfig = { ...DEFAULT_TIMEOUT_CONFIG, ...config };
   const m = method.toUpperCase();
   if (READ_METHODS.has(m)) return c.read;
-  if (m === 'DELETE') return c.delete;
+  if (m === "DELETE") return c.delete;
   if (MUTATION_METHODS.has(m)) return c.write;
   return c.default;
 }
 
 /** Create an AbortSignal that aborts after timeoutMs with a TimeoutError reason. */
 export function createTimeoutSignal(timeoutMs: number): AbortSignal {
-  if (timeoutMs <= 0) throw new Error('Timeout must be positive');
+  if (timeoutMs <= 0) throw new Error("Timeout must be positive");
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
-    controller.abort(new TimeoutError(`Request timed out after ${timeoutMs}ms`, timeoutMs));
+    controller.abort(
+      new TimeoutError(`Request timed out after ${timeoutMs}ms`, timeoutMs),
+    );
   }, timeoutMs);
 
-  controller.signal.addEventListener(
-    'abort',
-    () => clearTimeout(timeoutId),
-    { once: true },
-  );
+  controller.signal.addEventListener("abort", () => clearTimeout(timeoutId), {
+    once: true,
+  });
 
   return controller.signal;
 }
@@ -274,7 +286,9 @@ function mergeAbortSignals(signals: AbortSignal[]): AbortSignal {
       controller.abort(signal.reason);
       break;
     }
-    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+    signal.addEventListener("abort", () => controller.abort(signal.reason), {
+      once: true,
+    });
   }
   return controller.signal;
 }
@@ -300,7 +314,10 @@ export async function fetchWithTimeout(
     return await fetchImpl(url, { ...options, signal });
   } catch (error) {
     if (timeoutSignal.aborted) {
-      throw new TimeoutError(`Request timed out after ${timeoutMs}ms`, timeoutMs);
+      throw new TimeoutError(
+        `Request timed out after ${timeoutMs}ms`,
+        timeoutMs,
+      );
     }
     throw error;
   }

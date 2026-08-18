@@ -135,14 +135,13 @@ This checklist should be reviewed before each production deployment and during s
 
 ## 5. Authentication & Authorization
 
-### NextAuth Configuration
-- [ ] JWT secret is strong and randomly generated
-- [ ] JWT secret is stored securely (environment variable)
-- [ ] Session cookies are HTTP-only
-- [ ] Session cookies are Secure (HTTPS only)
-- [ ] Session cookies have SameSite=Lax or Strict
-- [ ] Session timeout is reasonable (24 hours default)
-- [ ] Refresh token rotation enabled
+### Supabase Auth Configuration
+- [ ] The portal points to the intended Supabase project
+- [ ] Only the public anon key is exposed to browser code
+- [ ] Service-role credentials remain server-side
+- [ ] Server routes verify the configured issuer and audience
+- [ ] Session cookies are HTTP-only, Secure, and scoped to the configured project
+- [ ] Refresh and sign-out flows invalidate the expected session
 
 ### Password Policy
 - [ ] Minimum password length enforced (12+ characters)

@@ -18,8 +18,8 @@
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
 --     -v ON_ERROR_STOP=1 < supabase/tests/field/field_links_test.sql
 --
--- Transaction-wrapped + ROLLBACK. The RPCs are SECURITY DEFINER and resolve the
--- caller via auth.uid() = request.jwt.claims->>'sub'.
+-- Transaction-wrapped + ROLLBACK. The RPCs are SECURITY DEFINER and require
+-- both an active authenticated DB role and auth.uid() for caller authority.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -69,14 +69,6 @@ INSERT INTO project_ffe_items (id, project_id, name, status, quantity, line_tota
 VALUES ('f1000000-0000-4000-8000-000000000006', 'f1000000-0000-4000-8000-0000000000a1', 'Sofa', 'ordered', 1, 50000, 'f1000000-0000-4000-8000-000000000007');
 
 -- ─── helpers ───────────────────────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id UUID)
-RETURNS VOID AS $$
-BEGIN
-  PERFORM set_config('request.jwt.claims',
-    json_build_object('sub', p_user_id::text, 'role', 'authenticated')::text, true);
-END;
-$$ LANGUAGE plpgsql;
-
 CREATE OR REPLACE FUNCTION pg_temp.assume_user_role(p_user_id UUID)
 RETURNS VOID AS $$
 BEGIN
@@ -106,7 +98,7 @@ DECLARE
   v_count   INTEGER;
   v_raised  BOOLEAN;
 BEGIN
-  PERFORM pg_temp.assume_user('f1000000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.assume_user_role('f1000000-0000-4000-8000-000000000001');
 
   -- ── Case 1: create returns a raw token once; hash-only at rest ───────────
   SELECT id, token INTO v_id, v_token FROM public.create_field_link('f1000000-0000-4000-8000-0000000000b1');
@@ -165,7 +157,7 @@ DECLARE
   v_count  INTEGER;
 BEGIN
   -- 8a: a non-owner create_field_link raises.
-  PERFORM pg_temp.assume_user('f1000000-0000-4000-8000-000000000002');
+  PERFORM pg_temp.assume_user_role('f1000000-0000-4000-8000-000000000002');
   v_raised := false;
   BEGIN
     PERFORM public.create_field_link('f1000000-0000-4000-8000-0000000000b1');

@@ -18,7 +18,7 @@ export class ProjectCacheInvalidationListener {
     }
 
     await this.cacheService.invalidateProject(projectId);
-    this.logger.debug(`Invalidated cache for project ${projectId}`);
+    this.logger.debug('Invalidated project cache');
   }
 
   @OnEvent('project.created')

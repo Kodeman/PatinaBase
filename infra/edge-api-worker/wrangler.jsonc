@@ -1,0 +1,104 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "patina-edge-api-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  // invocation_logs:false suppresses the Cloudflare platform channel that
+  // captures full request URLs — /auth/v1/verify?token=<OTP>,
+  // /rest/v1/...?email=... — into Workers Logs. Structured app logs are the
+  // only telemetry; they carry no raw URLs (see src/security.ts allowlist).
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } },
+  // SUPABASE_ANON_KEY and health service-token values are Wrangler/.dev.vars
+  // secrets. ACCESS_TEAM_DOMAIN and ACCESS_AUDIENCE are added with the Access app.
+  "vars": {
+    "SUPABASE_UPSTREAM_URL": "http://127.0.0.1:54321",
+    "SUPABASE_JWT_ISSUER": "http://127.0.0.1:54321/auth/v1",
+    "SUPABASE_JWT_AUDIENCE": "authenticated",
+    "SUPABASE_JWKS_URL": "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json",
+    "CATALOG_SOURCE": "legacy",
+    "CATALOG_HYPERDRIVE_PERCENT": "0",
+    "LEGACY_FETCH_TIMEOUT_MS": "3000",
+    "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
+    "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+  },
+  // Phase 1 Wave 2 inserts DB_FRESH and DB_PUBLIC_CACHE after Wrangler returns
+  // the real Hyperdrive IDs. Empty bindings keep legacy compatibility mode
+  // deployable. CATALOG_SOURCE may only leave "legacy" once both bindings are
+  // listed here: config:check and validateRuntimeConfig both reject a promoted
+  // source with an unprovisioned binding.
+  "hyperdrive": [],
+  "env": {
+    "local": {
+      "name": "patina-edge-api-local",
+      "workers_dev": true,
+      "observability": { "enabled": true, "logs": { "invocation_logs": false } },
+      "vars": {
+        "SUPABASE_UPSTREAM_URL": "http://127.0.0.1:54321",
+        "SUPABASE_JWT_ISSUER": "http://127.0.0.1:54321/auth/v1",
+        "SUPABASE_JWT_AUDIENCE": "authenticated",
+        "SUPABASE_JWKS_URL": "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json",
+        "CATALOG_SOURCE": "legacy",
+        "CATALOG_HYPERDRIVE_PERCENT": "0",
+        "LEGACY_FETCH_TIMEOUT_MS": "3000",
+        "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
+        "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+      },
+      // Add both real binding IDs here. Each local binding also gets
+      // localConnectionString=postgresql://postgres:postgres@127.0.0.1:54322/postgres.
+      // Promote CATALOG_SOURCE in the same edit that adds the IDs; a promoted
+      // source with hyperdrive: [] now fails config:check and boots 503.
+      "hyperdrive": [],
+    },
+    "staging": {
+      "name": "patina-edge-api-staging",
+      "workers_dev": true,
+      "observability": { "enabled": true, "logs": { "invocation_logs": false } },
+      "vars": {
+        "SUPABASE_UPSTREAM_URL": "https://vuesoyhfrjabfxbrzekd.supabase.co",
+        "SUPABASE_JWT_ISSUER": "https://vuesoyhfrjabfxbrzekd.supabase.co/auth/v1",
+        "SUPABASE_JWT_AUDIENCE": "authenticated",
+        "SUPABASE_JWKS_URL": "https://vuesoyhfrjabfxbrzekd.supabase.co/auth/v1/.well-known/jwks.json",
+        "CATALOG_SOURCE": "hyperdrive",
+        "CATALOG_HYPERDRIVE_PERCENT": "100",
+        "LEGACY_FETCH_TIMEOUT_MS": "3000",
+        "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
+        "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+      },
+      // Replace the local-only URLs and add both real staging Hyperdrive IDs
+      // after the persistent branch is provisioned. No staging branch exists yet.
+      // Promote CATALOG_SOURCE in the same edit that adds the IDs; a promoted
+      // source with hyperdrive: [] now fails config:check and boots 503.
+      "hyperdrive": [
+        { "binding": "DB_FRESH", "id": "5cda0d8adbd346febf2f8d528cfaea4e" },
+        { "binding": "DB_PUBLIC_CACHE", "id": "114f7421d13e487eb023e144b90e58d5" },
+      ],
+    },
+    "production": {
+      "name": "patina-edge-api",
+      // Production is reachable only via the future api.patina.cloud route; a
+      // *.workers.dev origin would be a second, unauthenticated proxy to prod
+      // Supabase outside the patina.cloud zone. validate-config requires false
+      // here and true everywhere else. Staging/local deploys are unaffected.
+      "workers_dev": false,
+      "observability": { "enabled": true, "logs": { "invocation_logs": false } },
+      "vars": {
+        "SUPABASE_UPSTREAM_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
+        "SUPABASE_JWT_ISSUER": "https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1",
+        "SUPABASE_JWT_AUDIENCE": "authenticated",
+        "SUPABASE_JWKS_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1/.well-known/jwks.json",
+        "CATALOG_SOURCE": "legacy",
+        "CATALOG_HYPERDRIVE_PERCENT": "0",
+        "LEGACY_FETCH_TIMEOUT_MS": "3000",
+        "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
+        "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+      },
+      // Add DB_FRESH=strata-prod-fresh and DB_PUBLIC_CACHE=strata-prod-public-cache
+      // using the literal IDs returned by Cloudflare provisioning, then enable shadowing.
+      // Promote CATALOG_SOURCE in the same edit that adds the IDs; a promoted
+      // source with hyperdrive: [] now fails config:check and boots 503.
+      "hyperdrive": [],
+    },
+  },
+}

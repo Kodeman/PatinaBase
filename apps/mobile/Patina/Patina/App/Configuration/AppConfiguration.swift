@@ -29,17 +29,15 @@ public enum AppConfiguration {
 
     public static var supabaseURL: URL {
         // Resolved per deployment target by APIConfiguration. The default
-        // target is `.cloud` = Supabase Cloud "Strata"; the retired
-        // self-hosted Coolify box (api.patina.cloud) is no longer the
-        // default and nothing points at it unless a UserDefaults override
-        // forces `.selfHosted`.
+        // target is `.cloud` = Supabase Cloud "Strata". Local development
+        // selects the Supabase CLI stack explicitly.
         APIConfiguration.apiURL
     }
 
     public static var supabaseAnonKey: String {
-        // Resolved per deployment target by APIConfiguration. The cloud /
-        // self-hosted anon key comes from the gitignored Secrets.swift;
-        // the local CLI-stack key is a well-known constant. Safe to expose.
+        // Resolved per deployment target by APIConfiguration. The cloud anon
+        // key comes from the gitignored Secrets.swift; the local CLI-stack key
+        // is a well-known constant. Safe to expose.
         APIConfiguration.anonKey
     }
 

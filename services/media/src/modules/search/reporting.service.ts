@@ -161,7 +161,7 @@ export class ReportingService {
    * Generate comprehensive media usage report
    */
   async generateUsageReport(startDate: Date, endDate: Date): Promise<MediaUsageReport> {
-    this.logger.log(`Generating usage report from ${startDate} to ${endDate}`);
+    this.logger.log('Generating media usage report');
 
     // Get all assets
     const assets = await this.prisma.mediaAsset.findMany({} as any);
@@ -178,8 +178,14 @@ export class ReportingService {
 
     // Calculate summary
     const totalViews = analytics.reduce((sum: number, a: any) => sum + (a.viewCount || 0), 0);
-    const totalDownloads = analytics.reduce((sum: number, a: any) => sum + (a.downloadCount || 0), 0);
-    const totalBandwidth = analytics.reduce((sum: number, a: any) => sum + (a.bandwidthBytes || 0), 0);
+    const totalDownloads = analytics.reduce(
+      (sum: number, a: any) => sum + (a.downloadCount || 0),
+      0,
+    );
+    const totalBandwidth = analytics.reduce(
+      (sum: number, a: any) => sum + (a.bandwidthBytes || 0),
+      0,
+    );
     const totalStorage = assets.reduce((sum: number, a: any) => sum + (a.sizeBytes || 0), 0);
 
     // Breakdown by product
@@ -251,12 +257,12 @@ export class ReportingService {
       const dayStart = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
-      const dayAnalytics = analytics.filter(
-        (a: any) => a.period >= dayStart && a.period < dayEnd,
-      );
+      const dayAnalytics = analytics.filter((a: any) => a.period >= dayStart && a.period < dayEnd);
 
       viewsTrend.push(dayAnalytics.reduce((sum: number, a: any) => sum + (a.viewCount || 0), 0));
-      downloadsTrend.push(dayAnalytics.reduce((sum: number, a: any) => sum + (a.downloadCount || 0), 0));
+      downloadsTrend.push(
+        dayAnalytics.reduce((sum: number, a: any) => sum + (a.downloadCount || 0), 0),
+      );
 
       const dayUploads = assets.filter(
         (a) => a.createdAt >= dayStart && a.createdAt < dayEnd,
@@ -345,18 +351,18 @@ export class ReportingService {
       }));
 
     // Quality distribution
-    const highQuality = assets.filter((a: any) => ((a as any).quality as any)?.sharpness >= 0.7).length;
+    const highQuality = assets.filter(
+      (a: any) => ((a as any).quality as any)?.sharpness >= 0.7,
+    ).length;
     const lowQuality = assets.filter((a: any) => ((a as any).quality as any)?.isLowQuality).length;
     const mediumQuality = assets.length - highQuality - lowQuality;
 
     const avgSharpness =
-      assets
-        .map((a) => ((a as any).quality as any)?.sharpness || 0)
-        .reduce((a, b) => a + b, 0) / assets.length;
+      assets.map((a) => ((a as any).quality as any)?.sharpness || 0).reduce((a, b) => a + b, 0) /
+      assets.length;
     const avgExposure =
-      assets
-        .map((a) => ((a as any).quality as any)?.brightness || 0.5)
-        .reduce((a, b) => a + b, 0) / assets.length;
+      assets.map((a) => ((a as any).quality as any)?.brightness || 0.5).reduce((a, b) => a + b, 0) /
+      assets.length;
 
     // Health metrics
     const missingReports = await this.intelligence.detectMissingAssets();
@@ -422,9 +428,7 @@ export class ReportingService {
     const processingTotal = transformCost + aiCost;
 
     const totalCost =
-      storageMetrics.costEstimate.storage +
-      bandwidthMetrics.costEstimate +
-      processingTotal;
+      storageMetrics.costEstimate.storage + bandwidthMetrics.costEstimate + processingTotal;
 
     // Calculate projections
     const daysInPeriod = (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000);
@@ -443,10 +447,7 @@ export class ReportingService {
     );
 
     if (largeImages.length > 0) {
-      const potentialSavings = largeImages.reduce(
-        (sum, a) => sum + (a.sizeBytes || 0) * 0.3,
-        0,
-      );
+      const potentialSavings = largeImages.reduce((sum, a) => sum + (a.sizeBytes || 0) * 0.3, 0);
       recommendations.push({
         type: 'storage',
         description: `Convert ${largeImages.length} large images to WebP format`,
@@ -629,7 +630,9 @@ export class ReportingService {
 
     // By Kind
     Object.entries(report.breakdown.byKind).forEach(([kind, data]) => {
-      rows.push(`Kind,${kind},Assets: ${data.count} Views: ${data.views} Downloads: ${data.downloads}`);
+      rows.push(
+        `Kind,${kind},Assets: ${data.count} Views: ${data.views} Downloads: ${data.downloads}`,
+      );
     });
 
     return rows.join('\n');

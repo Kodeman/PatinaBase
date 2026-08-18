@@ -104,8 +104,8 @@ function inMemoryPrisma() {
 
   const transaction = {
     backgroundRemovalRequest: model,
-    $queryRawUnsafe: jest.fn(async (_query: string, key: string) => {
-      lockCalls.push(key);
+    $queryRaw: jest.fn(async (query: { values: unknown[] }) => {
+      lockCalls.push(String(query.values[0]));
       return [{ pg_advisory_xact_lock: null }];
     }),
   };

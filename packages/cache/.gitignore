@@ -1,0 +1,4 @@
+# Stray tsc output landing next to test sources instead of being discarded
+# (phase1-close artifact-gc cleanup removed 4 committed instances).
+src/**/*.d.ts.map
+test/**/*.d.ts.map

@@ -40,5 +40,36 @@
     { "binding": "PROCESSED", "bucket_name": "patina-processed" }
   ],
 
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "env": {
+    "staging": {
+      "workers_dev": true,
+      "containers": [
+        {
+          "name": "patina-media-processor-staging",
+          "class_name": "MediaProcessor",
+          "image": "./container/Dockerfile",
+          "instance_type": "standard-2",
+          "max_instances": 5
+        }
+      ],
+      "durable_objects": {
+        "bindings": [{ "name": "MEDIA_PROCESSOR", "class_name": "MediaProcessor" }]
+      },
+      "queues": {
+        "producers": [{ "binding": "MEDIA_JOBS", "queue": "media-jobs-staging" }],
+        "consumers": [{
+          "queue": "media-jobs-staging",
+          "max_batch_size": 10,
+          "max_batch_timeout": 5,
+          "max_retries": 3,
+          "dead_letter_queue": "media-jobs-staging-dlq"
+        }]
+      },
+      "r2_buckets": [
+        { "binding": "RAW", "bucket_name": "patina-raw-staging" },
+        { "binding": "PROCESSED", "bucket_name": "patina-processed-staging" }
+      ]
+    }
+  }
 }

@@ -35,6 +35,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Stray tsc output landing next to __tests__ sources instead of being
+# discarded (phase1-close artifact-gc cleanup removed 4 committed
+# instances).
+src/**/*.d.ts.map
+
 # playwright
 test-results/
 playwright-report/

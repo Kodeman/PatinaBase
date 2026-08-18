@@ -9,16 +9,17 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { CurrentUser, JwtAuthGuard } from '@patina/auth';
+import {
+  AuthenticatedUserIdentity,
+  CurrentUser,
+  JwtAuthGuard,
+  RequireAnyPermission,
+} from '@patina/auth';
+import { MEDIA_MANAGE_PERMISSIONS } from '../authorization/media-authorization.constants';
 import { BackgroundRemovalService } from './background-removal.service';
-
-interface AuthenticatedUser {
-  userId: string;
-}
 
 @ApiTags('Mood Boards')
 @ApiBearerAuth()
@@ -28,25 +29,26 @@ export class BackgroundRemovalController {
   constructor(private readonly backgroundRemoval: BackgroundRemovalService) {}
 
   @Get(':boardId/background-removal-capability')
+  @RequireAnyPermission(...MEDIA_MANAGE_PERMISSIONS)
   @ApiOperation({ summary: 'Get background-removal availability and quota' })
   @ApiResponse({ status: 200, description: 'Capability and durable quota windows' })
   async capability(
+    @CurrentUser() identity: AuthenticatedUserIdentity,
     @Param('boardId', new ParseUUIDPipe()) boardId: string,
-    @Headers('authorization') authorization?: string,
   ) {
-    return this.backgroundRemoval.capability(this.bearerToken(authorization), boardId);
+    return this.backgroundRemoval.capability(identity.sub, boardId);
   }
 
   @Post(':boardId/items/:itemId/remove-background')
+  @RequireAnyPermission(...MEDIA_MANAGE_PERMISSIONS)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Create a background-removed cutout for one board item' })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiResponse({ status: 200, description: 'Canonical original/cutout URLs and quota' })
   async removeBackground(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentUser() identity: AuthenticatedUserIdentity,
     @Param('boardId', new ParseUUIDPipe()) boardId: string,
     @Param('itemId', new ParseUUIDPipe()) itemId: string,
-    @Headers('authorization') authorization?: string,
     @Headers('idempotency-key') idempotencyKey?: string,
     @Body() body?: unknown,
   ) {
@@ -69,19 +71,6 @@ export class BackgroundRemovalController {
         message: 'A valid Idempotency-Key header is required.',
       });
     }
-    return this.backgroundRemoval.removeBackground(
-      this.bearerToken(authorization),
-      user.userId,
-      boardId,
-      itemId,
-      key,
-    );
-  }
-
-  private bearerToken(authorization?: string): string {
-    if (!authorization?.startsWith('Bearer ') || authorization.length <= 7) {
-      throw new UnauthorizedException();
-    }
-    return authorization.slice(7);
+    return this.backgroundRemoval.removeBackground(identity.sub, boardId, itemId, key);
   }
 }

@@ -1,0 +1,220 @@
+import { ExecutionContext, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { PERMISSIONS_KEY, PermissionsGuard } from '@patina/auth';
+import { PrismaClient } from '../../generated/prisma-client';
+import { MediaAuthorizationResolver } from './media-authorization.resolver';
+
+const SUBJECT_A = '11111111-1111-4111-8111-111111111111';
+const SUBJECT_B = '22222222-2222-4222-8222-222222222222';
+
+describe('MediaAuthorizationResolver', () => {
+  function harness(queryResults: unknown[]) {
+    const queryRaw = jest.fn();
+    for (const result of queryResults) queryRaw.mockResolvedValueOnce(result);
+    const transaction = {
+      $queryRaw: queryRaw,
+      mediaAsset: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+      },
+    };
+    const prisma = {
+      $queryRaw: queryRaw,
+      $transaction: jest.fn(async (operation: any) => operation(transaction)),
+    } as unknown as PrismaClient;
+    return { resolver: new MediaAuthorizationResolver(prisma), queryRaw, transaction };
+  }
+
+  it('resolves only current Strata roles, permissions, and active organizations', async () => {
+    const { resolver } = harness([
+      [
+        { role_name: 'independent_designer', permission_name: 'media.read.own' },
+        { role_name: 'independent_designer', permission_name: 'media.manage.own' },
+      ],
+      [{ organization_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }],
+    ]);
+
+    await expect(resolver.resolve(SUBJECT_A)).resolves.toEqual({
+      subject: SUBJECT_A,
+      roles: ['independent_designer'],
+      permissions: ['media.read.own', 'media.manage.own'],
+      organizationIds: ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],
+    });
+  });
+
+  it('does not retain authorization across successive pooled subjects', async () => {
+    const { resolver } = harness([
+      [{ role_name: 'independent_designer', permission_name: 'media.read.own' }],
+      [],
+      [{ role_name: 'super_admin', permission_name: 'media.admin.all' }],
+      [],
+    ]);
+
+    const first = await resolver.resolve(SUBJECT_A);
+    const second = await resolver.resolve(SUBJECT_B);
+    expect(first.permissions).toEqual(['media.read.own']);
+    expect(second.permissions).toEqual(['media.admin.all']);
+    expect(second.subject).toBe(SUBJECT_B);
+  });
+
+  it('denies a missing permission instead of broadening scope', async () => {
+    const { resolver } = harness([[{ role_name: 'unknown', permission_name: null }], []]);
+    await expect(
+      resolver.withAssetScope(SUBJECT_A, 'read', async () => true),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('does not authorize an unsupported role even if it is mapped to a canonical permission', async () => {
+    const { resolver } = harness([
+      [{ role_name: 'caller_invented_role', permission_name: 'media.admin.all' }],
+      [],
+    ]);
+    await expect(resolver.resolve(SUBJECT_A)).resolves.toMatchObject({
+      roles: ['caller_invented_role'],
+      permissions: [],
+    });
+  });
+
+  it('fails closed when a supported assignment is mixed with an unsupported role', async () => {
+    const { resolver } = harness([
+      [
+        { role_name: 'super_admin', permission_name: 'media.admin.all' },
+        { role_name: 'caller_invented_role', permission_name: 'media.admin.all' },
+      ],
+      [{ organization_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }],
+    ]);
+    await expect(resolver.resolve(SUBJECT_A)).resolves.toMatchObject({
+      roles: ['super_admin', 'caller_invented_role'],
+      permissions: [],
+      organizationIds: [],
+    });
+  });
+
+  it('ignores stale JWT metadata and denies from current Media database state', async () => {
+    const { resolver } = harness([
+      [{ role_name: 'independent_designer', permission_name: 'media.read.own' }],
+      [],
+    ]);
+    const handler = () => undefined;
+    Reflect.defineMetadata(PERMISSIONS_KEY, ['media.admin.all'], handler);
+    const request = {
+      user: {
+        id: SUBJECT_A,
+        sub: SUBJECT_A,
+        userId: SUBJECT_A,
+        role: 'authenticated',
+        roles: ['super_admin'],
+        permissions: ['media.admin.all'],
+        app_metadata: {
+          roles: ['super_admin'],
+          permissions: ['media.admin.all'],
+        },
+      },
+    };
+    const context = {
+      getHandler: () => handler,
+      getClass: () => class ProtectedMediaRoute {},
+      switchToHttp: () => ({ getRequest: () => request }),
+    } as unknown as ExecutionContext;
+
+    await expect(new PermissionsGuard(resolver).canActivate(context)).rejects.toMatchObject({
+      status: 403,
+      message: 'Authorization denied',
+    });
+    expect((request as any).authorization).toEqual({
+      subject: SUBJECT_A,
+      roles: ['independent_designer'],
+      permissions: ['media.read.own'],
+      organizationIds: [],
+    });
+  });
+
+  it('builds own scope from unbound uploader and owned product rows only', async () => {
+    const { resolver } = harness([
+      [{ role_name: 'independent_designer', permission_name: 'media.read.own' }],
+      [],
+      [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }],
+      [],
+    ]);
+
+    const where = await resolver.withAssetScope(
+      SUBJECT_A,
+      'read',
+      async (_transaction, scope) => scope.where,
+    );
+    expect(where).toEqual({
+      OR: [
+        { productId: null, projectId: null, uploadedBy: SUBJECT_A },
+        { productId: { in: ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'] } },
+      ],
+    });
+  });
+
+  it('includes only canonical projects assigned to the current subject', async () => {
+    const projectId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab';
+    const { resolver } = harness([
+      [{ role_name: 'independent_designer', permission_name: 'media.read.own' }],
+      [],
+      [],
+      [{ id: projectId }],
+    ]);
+
+    const scope = await resolver.withAssetScope(
+      SUBJECT_A,
+      'read',
+      async (_transaction, currentScope) => currentScope,
+    );
+
+    expect(scope.projectIds).toEqual([projectId]);
+    expect(scope.where).toEqual({
+      OR: [
+        { productId: null, projectId: null, uploadedBy: SUBJECT_A },
+        { projectId: { in: [projectId] } },
+      ],
+    });
+  });
+
+  it('requires all requested batch ids and emits a generic non-enumerating 404', async () => {
+    const { resolver, transaction } = harness([]);
+    transaction.mediaAsset.findMany.mockResolvedValue([{ id: 'allowed' }]);
+    const scope = {
+      subject: SUBJECT_A,
+      authorization: {
+        subject: SUBJECT_A,
+        roles: [],
+        permissions: ['media.read.own'],
+        organizationIds: [],
+      },
+      where: { uploadedBy: SUBJECT_A },
+      projectIds: [],
+      admin: false,
+    };
+
+    await expect(
+      resolver.requireAssets(transaction as any, scope, ['allowed', 'inaccessible']),
+    ).rejects.toEqual(new NotFoundException('Media object not found'));
+  });
+
+  it('parameterizes the verified subject instead of interpolating SQL text', async () => {
+    const { resolver, queryRaw } = harness([[], []]);
+    await resolver.resolve(SUBJECT_A);
+    const query = queryRaw.mock.calls[0][0];
+    expect(query.strings.join('')).not.toContain(SUBJECT_A);
+    expect(query.values).toContain(SUBJECT_A);
+  });
+
+  it('holds a parameterized share lock on the exact current admin proof rows', async () => {
+    const { resolver, queryRaw, transaction } = harness([[{ user_id: SUBJECT_A }]]);
+    const operation = jest.fn().mockResolvedValue('complete');
+
+    await expect(resolver.withAdminLease(SUBJECT_A, operation)).resolves.toBe('complete');
+
+    const query = queryRaw.mock.calls[0][0];
+    expect(query.strings.join('')).toContain(
+      'FOR SHARE OF user_role, role, role_permission, permission',
+    );
+    expect(query.strings.join('')).toContain('assigned_role.name NOT IN');
+    expect(query.strings.join('')).not.toContain(SUBJECT_A);
+    expect(query.values).toEqual(expect.arrayContaining([SUBJECT_A, 'media.admin.all']));
+    expect(operation).toHaveBeenCalledWith(transaction);
+  });
+});

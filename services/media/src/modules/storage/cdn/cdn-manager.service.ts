@@ -115,9 +115,7 @@ export class CDNManagerService {
   async purgeCache(options: PurgeOptions): Promise<{ invalidationId: string }> {
     const provider = this.getProvider();
 
-    this.logger.log(
-      `Purging CDN cache: ${options.purgeAll ? 'ALL' : JSON.stringify(options)}`,
-    );
+    this.logger.log('Purging CDN cache');
 
     return provider.purgeCache(options);
   }
@@ -370,7 +368,11 @@ export class CDNManagerService {
   /**
    * Get image lazy loading hints for HTML
    */
-  getImageLazyLoadingHints(key: string, width: number, height: number): {
+  getImageLazyLoadingHints(
+    key: string,
+    width: number,
+    height: number,
+  ): {
     src: string;
     srcset: string;
     loading: 'lazy' | 'eager';

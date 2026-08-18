@@ -145,6 +145,15 @@ BEGIN
     'EXECUTE'
   ), 'authenticated must execute prepare';
   ASSERT NOT has_function_privilege(
+    'authenticated',
+    'public.finalize_spec_book_issue(uuid)',
+    'EXECUTE'
+  ) AND has_function_privilege(
+    'service_role',
+    'public.finalize_spec_book_issue(uuid)',
+    'EXECUTE'
+  ), 'only service_role may finalize rendered issues';
+  ASSERT NOT has_function_privilege(
     'anon',
     'public.resolve_spec_book_share(text)',
     'EXECUTE'
@@ -422,10 +431,12 @@ BEGIN
   -- Finalization fails closed until every requested artifact is durable.
   v_raised := false;
   BEGIN
+    EXECUTE 'SET LOCAL ROLE service_role';
     PERFORM public.finalize_spec_book_issue(v_revision_id);
   EXCEPTION WHEN object_not_in_prerequisite_state THEN
     v_raised := true;
   END;
+  EXECUTE 'RESET ROLE';
   ASSERT v_raised, 'pending artifacts must block finalization';
 
   v_raised := false;
@@ -512,11 +523,13 @@ BEGIN
     WHERE revision_id = v_revision_id
   ), 'valid pending/failed rendering claims must preserve audience artifacts';
 
+  EXECUTE 'SET LOCAL ROLE service_role';
   v_revision := public.finalize_spec_book_issue(v_revision_id);
   ASSERT v_revision.status = 'issued' AND v_revision.issued_at IS NOT NULL,
     'fully durable revision must issue';
   ASSERT (public.finalize_spec_book_issue(v_revision_id)).id = v_revision_id,
     'finalization must be idempotent';
+  EXECUTE 'RESET ROLE';
 
   -- Hash-only valid share, wrong-audience denial, expiry, and revocation.
   v_share := public.create_spec_book_share(

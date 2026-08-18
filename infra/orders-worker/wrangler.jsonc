@@ -8,8 +8,7 @@
   // migration phase 3c, against Supabase Cloud (svc_orders schema via the
   // pooler). Built from the monorepo root (image_build_context) because
   // services/orders/Dockerfile.cf's COPY paths (pnpm-workspace.yaml,
-  // packages/{types,utils,cache,auth}, services/orders/) are root-relative —
-  // same Dockerfile the Coolify deploy used, just built by wrangler instead.
+  // packages/{types,utils,cache,auth}, services/orders/) are root-relative.
   "containers": [
     {
       "class_name": "OrdersService",
@@ -24,5 +23,23 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["OrdersService"] }],
 
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "env": {
+    "staging": {
+      "workers_dev": true,
+      "containers": [
+        {
+          "name": "patina-orders-service-staging",
+          "class_name": "OrdersService",
+          "image": "../../services/orders/Dockerfile.cf",
+          "image_build_context": "../../",
+          "instance_type": "basic",
+          "max_instances": 2
+        }
+      ],
+      "durable_objects": {
+        "bindings": [{ "name": "ORDERS_SVC", "class_name": "OrdersService" }]
+      }
+    }
+  }
 }

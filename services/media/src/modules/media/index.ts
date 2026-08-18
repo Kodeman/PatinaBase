@@ -9,7 +9,6 @@ export { MediaController } from './media.controller';
 export * from './dto';
 
 // Guards and Validators
-export { MediaAccessGuard } from './guards/media-access.guard';
 export { FileValidationPipe } from './validators/file-validation.pipe';
 export { MediaSecurityInterceptor } from './interceptors/security.interceptor';
 
