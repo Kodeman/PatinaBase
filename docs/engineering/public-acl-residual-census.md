@@ -372,27 +372,43 @@ EXECUTE closes the anonymous path to each.
 
 ---
 
-## Section D — unreachable
+## Section D — not flagged by the gate
 
-PUBLIC object privileges that sit inside schemas PUBLIC cannot enter. A naive audit
-counts these as exposure; they are inert. Recorded so a future reader recognises them
-and does not re-open the question. **Nothing in this section requires action.**
+PUBLIC object privileges the gate correctly leaves alone, for one of two reasons. A
+naive audit counts them all as exposure; neither reason makes them so. Recorded so a
+future reader recognises them and does not re-open the question. **Nothing in this
+section requires action.**
+
+- **Reachable but invoker-shaped (low-capability).** The five reserved schemas
+  `extensions`, `storage`, `realtime`, `auth`, and `graphql_public` grant `anon` (and
+  `authenticated`) explicit schema `USAGE`. A caller holding the anon key therefore
+  *can* reach these routines — the earlier "PUBLIC pseudo-role lacks `USAGE`, so
+  unreachable" reasoning was wrong, because reachability keys on the untrusted login
+  roles, not on the `PUBLIC` pseudo-role (the same distinction section E draws for the
+  `storage.objects` policies). What keeps them off the gate is *capability*, not
+  reach: every routine that actually carries PUBLIC EXECUTE here is SECURITY INVOKER
+  (`prosecdef = false`), so it runs with the *caller's own* near-zero privilege rather
+  than the owner's. Reachable, but not capability-bearing — correctly unflagged, and
+  not a live exposure.
+- **Genuinely unreachable.** `cron` and the `svc_*` schemas withhold `USAGE` from
+  `anon`/PUBLIC entirely, so those rows cannot be entered by an untrusted caller at
+  all.
 
 100 PUBLIC EXECUTE privileges across 9 schemas, plus 4 relation privileges:
 
 | Schema | Object | Owner | prosecdef | ACL | Why safe / accepted | reviewed_by |
 |---|---|---|---|---|---|---|
-| extensions | 55 routines (pgcrypto, uuid-ossp, pg_stat_statements, moddatetime, PostgREST watch, Supabase `grant_*_access` helpers) | supabase_admin | mixed | PUBLIC EXECUTE present | `extensions` withholds schema `USAGE` from PUBLIC (`{postgres=UC/postgres,anon=U/postgres,authenticated=U/postgres,service_role=U/postgres,dashboard_user=UC/postgres}`). Unreachable by PUBLIC. |  |
-| storage | 17 routines | supabase_admin | mixed | PUBLIC EXECUTE present | `storage` withholds schema `USAGE` from PUBLIC. Unreachable. |  |
-| realtime | 15 routines | supabase_admin | mixed | PUBLIC EXECUTE present | `realtime` withholds schema `USAGE` from PUBLIC. Unreachable. |  |
+| extensions | 55 routines (pgcrypto, uuid-ossp, pg_stat_statements, moddatetime, PostgREST watch, Supabase `grant_*_access` helpers) | supabase_admin | mixed | PUBLIC EXECUTE present | `anon`/`authenticated` hold explicit schema `USAGE` (`{postgres=UC/postgres,anon=U/postgres,authenticated=U/postgres,service_role=U/postgres,dashboard_user=UC/postgres}`), so these are reachable via the anon key — not unreachable. The PUBLIC-executable routines are SECURITY INVOKER, running at the caller's own near-zero privilege; reachable but low-capability, correctly unflagged. |  |
+| storage | 17 routines | supabase_admin | mixed | PUBLIC EXECUTE present | `anon`/`authenticated` hold explicit schema `USAGE` on `storage` (section E measures this directly), so these are reachable via the anon key — not unreachable. The PUBLIC-executable routines are SECURITY INVOKER, running at the caller's own near-zero privilege; reachable but low-capability, correctly unflagged. |  |
+| realtime | 15 routines | supabase_admin | mixed | PUBLIC EXECUTE present | `anon`/`authenticated` hold explicit schema `USAGE` on `realtime`, so these are reachable via the anon key — not unreachable. The PUBLIC-executable routines are SECURITY INVOKER, running at the caller's own near-zero privilege; reachable but low-capability, correctly unflagged. |  |
 | cron | 5 routines — `schedule` (2 overloads), `unschedule` (2 overloads), `job_cache_invalidate` | supabase_admin | false | `{=X/supabase_admin,supabase_admin=X/supabase_admin,postgres=X*/supabase_admin}` | Carries PUBLIC EXECUTE, but `cron` withholds schema `USAGE` from PUBLIC (`{supabase_admin=UC/supabase_admin,postgres=U*/supabase_admin}`). Reachable only by `postgres` and its members. Unreachable by PUBLIC. |  |
-| auth | 4 routines — `uid`, `role`, `email`, `jwt` | supabase_admin | false | PUBLIC EXECUTE present | `auth` withholds schema `USAGE` from PUBLIC. Unreachable. |  |
-| graphql_public | 1 routine — `graphql` | supabase_admin | false | PUBLIC EXECUTE present | `graphql_public` withholds schema `USAGE` from PUBLIC. Unreachable. |  |
+| auth | 4 routines — `uid`, `role`, `email`, `jwt` | supabase_admin | false | PUBLIC EXECUTE present | `anon`/`authenticated` hold explicit schema `USAGE` on `auth`, so these are reachable via the anon key — not unreachable. All four are SECURITY INVOKER (`prosecdef = false`), running at the caller's own near-zero privilege; they only read the caller's own JWT claims. Reachable but low-capability, correctly unflagged. |  |
+| graphql_public | 1 routine — `graphql` | supabase_admin | false | PUBLIC EXECUTE present | `anon`/`authenticated` hold explicit schema `USAGE` on `graphql_public`, so this is reachable via the anon key — not unreachable. It is SECURITY INVOKER (`prosecdef = false`), running at the caller's own near-zero privilege behind the same RLS every GraphQL request already honours. Reachable but low-capability, correctly unflagged. |  |
 | svc_media | 1 routine — `set_updated_at` | postgres | false | PUBLIC EXECUTE present | `svc_media` has no ACL, so only its owner holds `USAGE`. Unreachable by PUBLIC. |  |
 | svc_orders | 1 routine — `set_updated_at` | postgres | false | PUBLIC EXECUTE present | `svc_orders` has no ACL. Unreachable by PUBLIC. |  |
 | svc_projects | 1 routine — `set_updated_at` | postgres | false | PUBLIC EXECUTE present | `svc_projects` has no ACL. Unreachable by PUBLIC. |  |
 | cron | 2 relations | supabase_admin | n/a | PUBLIC table privileges present | Schema `USAGE` withheld from PUBLIC. Unreachable. |  |
-| extensions | 2 relations | supabase_admin | n/a | PUBLIC table privileges present | Schema `USAGE` withheld from PUBLIC. Unreachable. |  |
+| extensions | 2 relations | supabase_admin | n/a | PUBLIC table privileges present | `anon`/`authenticated` hold schema `USAGE` on `extensions`, so — unlike `cron` above — these are reachable via the anon key, not unreachable. They are supabase_admin-owned extension-internal relations exposing only aggregate extension state (not application rows); reachable but low-capability, accepted with no action. |  |
 
 ---
 
