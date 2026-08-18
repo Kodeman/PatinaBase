@@ -37,6 +37,15 @@ function requiredString(value: unknown): string {
   return value;
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === '127.0.0.1' || hostname === 'localhost';
+}
+
+// https is required everywhere except loopback so env.local (Supabase CLI on
+// http://127.0.0.1:54321) keeps working while a committed http:// value for
+// staging/production fails closed here. This also closes a side effect: the
+// proxy-loop guard in proxy.ts compares exact origin strings, so an
+// http://api.patina.cloud upstream would otherwise evade it.
 function requiredHttpUrl(value: unknown): string {
   const candidate = requiredString(value);
   let parsed: URL;
@@ -45,10 +54,13 @@ function requiredHttpUrl(value: unknown): string {
   } catch {
     throw new ConfigurationError();
   }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new ConfigurationError();
+  if (parsed.protocol === 'https:') {
+    return candidate;
   }
-  return candidate;
+  if (parsed.protocol === 'http:' && isLoopbackHostname(parsed.hostname)) {
+    return candidate;
+  }
+  throw new ConfigurationError();
 }
 
 function integerInRange(value: unknown, minimum: number, maximum: number): number {

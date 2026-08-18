@@ -53,6 +53,70 @@ describe('validate-config workers_dev contract', () => {
   });
 });
 
+function urlSchemeErrors(label: string, scope: unknown): string[] {
+  const errors: string[] = [];
+  validateScope(label, scope, errors);
+  return errors.filter((error) => error.includes('must be an HTTPS URL'));
+}
+
+function withUpstreamUrl(scope: object, value: string): object {
+  return withVar(scope, 'SUPABASE_UPSTREAM_URL', value);
+}
+
+function withVar(scope: object, name: string, value: string): object {
+  return {
+    ...scope,
+    vars: { ...(scope as { vars: object }).vars, [name]: value },
+  };
+}
+
+describe('validate-config https scheme contract', () => {
+  it('rejects a non-loopback http:// SUPABASE_UPSTREAM_URL', () => {
+    const errors = urlSchemeErrors(
+      'env.staging',
+      withUpstreamUrl(config.env.staging, 'http://api.patina.cloud'),
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('SUPABASE_UPSTREAM_URL');
+  });
+
+  it('rejects a non-loopback http:// SUPABASE_JWT_ISSUER', () => {
+    const errors = urlSchemeErrors(
+      'env.staging',
+      withVar(config.env.staging, 'SUPABASE_JWT_ISSUER', 'http://api.patina.cloud/auth/v1'),
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('SUPABASE_JWT_ISSUER');
+  });
+
+  it('rejects a non-loopback http:// SUPABASE_JWKS_URL', () => {
+    const errors = urlSchemeErrors(
+      'env.staging',
+      withVar(
+        config.env.staging,
+        'SUPABASE_JWKS_URL',
+        'http://api.patina.cloud/auth/v1/.well-known/jwks.json',
+      ),
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('SUPABASE_JWKS_URL');
+  });
+
+  it('accepts http://127.0.0.1:54321 (local Supabase CLI)', () => {
+    expect(
+      urlSchemeErrors(
+        'env.local',
+        withUpstreamUrl(config.env.local, 'http://127.0.0.1:54321'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('accepts the committed https:// scopes unaffected', () => {
+    expect(urlSchemeErrors('env.staging', config.env.staging)).toEqual([]);
+    expect(urlSchemeErrors('env.production', config.env.production)).toEqual([]);
+  });
+});
+
 // The shadow comparison reads DB_CATALOG_FRESH (fresh leg) + DB_PUBLIC_CACHE;
 // hyperdrive serves DB_PUBLIC_CACHE; any promoted rung binds DB_FRESH for the
 // authenticated path. Build scopes off the complete staging scope so the only
