@@ -449,6 +449,21 @@ verify_jwt = true
 [functions.fulfillment-po]
 verify_jwt = false
 
+# Rendered Room v2 · Modal dispatcher (W0-B, docs/architecture/CAD Generation
+# Pipeline/DELIVERY-PLAN.md §2 R1/R3, 00491). Cron-invoked every 5 min via
+# pg_cron -> invoke_edge_function (service-role Bearer, the standard cron->edge
+# bridge). Billing-guarded: a cheap existence check on agent_tasks
+# (scan_pipeline.verify|splat|renders, status=queued) runs BEFORE any claim or
+# outbound HTTP, so an empty queue never calls Modal. Claims via
+# claim_agent_tasks (00297) and spawns each claimed task on MODAL_SPAWN_URL with
+# presigned Storage input URLs; a 2xx leaves the task claimed/leased for Modal's
+# own writeback (R2, scan-worker-scoped role — never service_role in Modal). No
+# browser calls it; the function additionally requires a service_role claim
+# in-code (parse-room-scan idiom). verify_jwt = true is the platform default;
+# explicit here for intent, matching the other cron-invoked functions.
+[functions.dispatch-scan-modal]
+verify_jwt = true
+
 # BOH client evidence-upload flow (S7). Public, token-gated in-code: the
 # client-portal /evidence/[token] page calls this directly with the anon key
 # (no session — the 64-hex-char token minted by fulfillment_mint_evidence_token
