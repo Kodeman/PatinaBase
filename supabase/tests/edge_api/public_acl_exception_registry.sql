@@ -33,6 +33,51 @@
 -- excluded: they are not part of a routine's identity and change across
 -- extension versions.
 --
+-- PROVENANCE OF THE SIGNATURE. Every row reads `accepted_by = 'kody'`,
+-- `accepted_on = 2026-08-17`, but the 193 rows were not all signed the same way
+-- and a reader should not have to guess which is which. A signature on a
+-- considered security ruling and a signature on a benign block are worth
+-- different things, and flattening them is how the second quietly starts
+-- carrying the authority of the first. Two events:
+--
+--   EVENT 1 — 42 rows ruled on BEFORE this registry existed.
+--   Kody ruled on the `net` residual with the mechanism explicitly in front of
+--   him — that public.invoke_edge_function and four notify functions place the
+--   service_role JWT in pg_net request headers, that those headers transit
+--   net.http_request_queue on which PUBLIC holds full DML, and that a role with
+--   SELECT on that table and a sustained polling loop could harvest the key and
+--   bypass RLS entirely. He ruled on it twice, the second time after the census
+--   established that the first ruling's mitigating clause ("the queue drains to
+--   empty, so exposure is transient") is true of the queue and NOT of
+--   net._http_response, which holds a hard ~6-hour rolling window of response
+--   bodies and headers at rest. Accepted with a compensating action: a Supabase
+--   support request to revoke PUBLIC on net.*, the only channel that can close
+--   these. Carried by the census's section C ruling block and its C1/C2 tables.
+--   Covers: 1 `schema`, 2 `relation`, 1 `sequence`, 10 `routine_out_of_band`.
+--
+--   He separately ruled the 28 `storage_policy` rows into this list rather than
+--   fixing them — census section E, which found exactly one genuinely
+--   anon-reachable policy among them and left the question of whether `postgres`
+--   can narrow a supabase_storage_admin-owned policy unresolved. That one policy
+--   was then fixed by migration 00485 and is deliberately absent below.
+--
+--   EVENT 2 — 151 rows signed ON REVIEW OF THIS REGISTRY, 2026-08-17.
+--   The 118 `vector` 0.8.0 and 31 `pg_trgm` 1.6 routines in `public`, plus
+--   net._urlencode_string and net._encode_url_with_params_array. Characterized
+--   for him from the live catalog before signing: C-language extension
+--   internals — operator, comparison, I/O and index-support routines — zero
+--   SECURITY DEFINER, zero with a SQL body, so none can reach a table; and
+--   unreachable by PUBLIC in any case, because 00483 removed PUBLIC USAGE on
+--   schema `public`. Accepted as a benign block on that characterization, not
+--   as a risk judgement on 151 individual objects.
+--
+-- The practical consequence: a change that would move a row out of event 2's
+-- characterization — an extension shipping a SECURITY DEFINER routine, or
+-- PUBLIC USAGE returning to `public` — invalidates the basis these were signed
+-- on, and the row needs re-signing rather than inheriting this one. Invariant A
+-- enforces the first half of that automatically: a `routine_invoker` row does
+-- not excuse a SECURITY DEFINER routine.
+--
 -- CONSUMERS. `\ir` this file before the gate's read-only transaction; it
 -- creates three session-local objects and touches nothing persistent:
 --   • public_acl_exception_registry      — the signed rows
