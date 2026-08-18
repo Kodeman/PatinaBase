@@ -1,5 +1,7 @@
 // Deno tests for the pure dispatch-scan-modal lib.
-// Run: deno test --config supabase/functions/deno.json supabase/functions/dispatch-scan-modal/lib.test.ts
+// Run: deno test --allow-read --config supabase/functions/deno.json supabase/functions/dispatch-scan-modal/lib.test.ts
+// (--allow-read: the contract tests at the bottom read ./contract.json. CI's
+//  `deno test --allow-all ... supabase/functions` already covers it.)
 
 import {
   assert,
@@ -14,11 +16,16 @@ import {
   DISPATCH_TASK_TYPES,
   extractTaskInputIds,
   isSpawnSuccess,
+  KEY_PREFIX_REJECTED,
+  keyMatchesScanOwner,
   MAX_DISPATCH_ATTEMPTS,
+  newLeaseOwner,
   objectKeyFromRoomScansUrl,
   readDispatchAttempts,
   shouldSkipForNoWork,
+  SIGNED_URL_TTL_S,
   validateEnv,
+  WORKER_ID_PREFIX,
   type ClaimedTaskRow,
 } from "./lib.ts";
 
@@ -165,6 +172,7 @@ Deno.test("objectKeyFromRoomScansUrl: null/empty → null", () => {
 Deno.test("buildModalDispatchBody: exact minimal shape, nothing extra", () => {
   const body = buildModalDispatchBody({
     taskId: "task-1",
+    leaseToken: "dispatch-scan-modal:lease-1",
     scanId: "scan-1",
     roomFileId: "rf-1",
     roomFileVersion: 3,
@@ -177,6 +185,7 @@ Deno.test("buildModalDispatchBody: exact minimal shape, nothing extra", () => {
   });
   assertEquals(body, {
     taskId: "task-1",
+    leaseToken: "dispatch-scan-modal:lease-1",
     scanId: "scan-1",
     roomFileId: "rf-1",
     roomFileVersion: 3,
@@ -192,6 +201,7 @@ Deno.test("buildModalDispatchBody: exact minimal shape, nothing extra", () => {
 Deno.test("buildModalDispatchBody: never leaks the bearer token into the body", () => {
   const body = buildModalDispatchBody({
     taskId: "t",
+    leaseToken: "dispatch-scan-modal:lease-1",
     scanId: "s",
     roomFileId: "rf",
     roomFileVersion: 1,
@@ -200,6 +210,58 @@ Deno.test("buildModalDispatchBody: never leaks the bearer token into the body", 
     inputs: { meshUrl: "u1", capturedRoomJsonUrl: "u2" },
   });
   assertFalse(JSON.stringify(body).includes("Bearer"));
+});
+
+// ─── per-invocation lease owner ─────────────────────────────────────────────
+
+Deno.test("newLeaseOwner: prefixed, and never the same twice", () => {
+  const a = newLeaseOwner();
+  const b = newLeaseOwner();
+  assert(a.startsWith(`${WORKER_ID_PREFIX}:`));
+  assert(b.startsWith(`${WORKER_ID_PREFIX}:`));
+  // The whole point: two invocations must not share a lease identity, or a
+  // stale worker's token would still match the live lease.
+  assertFalse(a === b);
+});
+
+Deno.test("SIGNED_URL_TTL_S: outlasts the longest Modal stage", () => {
+  assertEquals(SIGNED_URL_TTL_S, 3600);
+});
+
+// ─── owner-prefix anchoring ─────────────────────────────────────────────────
+
+const UID = "faa8cb85-c74c-45d0-887c-d7826756c2b4";
+const RID = "11111111-2222-3333-4444-555555555555";
+
+Deno.test("keyMatchesScanOwner: the scan's own prefix is accepted", () => {
+  assert(keyMatchesScanOwner(`mesh/${UID}/${RID}/mesh.ply`, UID, RID));
+  assert(keyMatchesScanOwner(`captured_room/${UID}/${RID}/captured_room.json`, UID, RID));
+});
+
+Deno.test("keyMatchesScanOwner: a foreign user segment is rejected", () => {
+  const foreign = "00000000-0000-4000-8000-000000000000";
+  assertFalse(keyMatchesScanOwner(`mesh/${foreign}/${RID}/mesh.ply`, UID, RID));
+});
+
+Deno.test("keyMatchesScanOwner: a foreign room segment is rejected", () => {
+  const foreign = "99999999-9999-4999-8999-999999999999";
+  assertFalse(keyMatchesScanOwner(`mesh/${UID}/${foreign}/mesh.ply`, UID, RID));
+});
+
+Deno.test("keyMatchesScanOwner: a key too short to carry a prefix is rejected", () => {
+  assertFalse(keyMatchesScanOwner(`${UID}/${RID}/mesh.ply`, UID, RID));
+  assertFalse(keyMatchesScanOwner("mesh.ply", UID, RID));
+});
+
+Deno.test("keyMatchesScanOwner: an unprovable row (null user_id or room_id) fails closed", () => {
+  assertFalse(keyMatchesScanOwner(`mesh/${UID}/${RID}/mesh.ply`, null, RID));
+  assertFalse(keyMatchesScanOwner(`mesh/${UID}/${RID}/mesh.ply`, UID, null));
+  assertFalse(keyMatchesScanOwner(`mesh/${UID}/${RID}/mesh.ply`, "", ""));
+});
+
+Deno.test("KEY_PREFIX_REJECTED: a fixed literal that names no key", () => {
+  assertFalse(KEY_PREFIX_REJECTED.includes("/"));
+  assertFalse(KEY_PREFIX_REJECTED.includes("http"));
 });
 
 // ─── non-2xx / network-error release path ──────────────────────────────────
@@ -279,6 +341,21 @@ Deno.test("buildLogLine: unknown event name allow-lists nothing", () => {
   assertEquals(line.event, "totally_unknown_event");
 });
 
+Deno.test("buildLogLine: key_prefix_rejected can never carry the key", () => {
+  const line = JSON.parse(
+    buildLogLine("dispatch-scan-modal", "key_prefix_rejected", {
+      task_id: "t1",
+      scan_id: "s1",
+      task_type: "scan_pipeline.verify",
+      object_key: "mesh/someone-else/room/mesh.ply",
+      key: "mesh/someone-else/room/mesh.ply",
+    }),
+  );
+  assertEquals(line.task_id, "t1");
+  assertEquals(line.object_key, undefined);
+  assertEquals(line.key, undefined);
+});
+
 Deno.test("buildLogLine: env_missing carries only 'missing'", () => {
   const line = JSON.parse(
     buildLogLine("dispatch-scan-modal", "env_missing", {
@@ -288,4 +365,56 @@ Deno.test("buildLogLine: env_missing carries only 'missing'", () => {
   );
   assertEquals(line.missing, ["MODAL_SPAWN_URL"]);
   assertEquals(line.token, undefined);
+});
+
+// ─── the cross-language payload contract ───────────────────────────────────
+//
+// contract.json is the single canonical example body. This side asserts the
+// dispatcher BUILDS a body with exactly that key set; the pytest
+// (services/scan-modal/tests/test_contract.py) asserts the Modal side ACCEPTS
+// it. Two independently-drifting halves is precisely how the dispatcher came
+// to send `meshUrl`/`capturedRoomJsonUrl` while the job read
+// `meshPlyUrl`/`capturedRoomUrl` — a contract only one side can see is not a
+// contract.
+
+async function readContract(): Promise<Record<string, unknown>> {
+  const url = new URL("./contract.json", import.meta.url);
+  return JSON.parse(await Deno.readTextFile(url)) as Record<string, unknown>;
+}
+
+function contractKeys(o: Record<string, unknown>): string[] {
+  return Object.keys(o).filter((k) => k !== "_comment").sort();
+}
+
+Deno.test("contract.json: the built body has exactly the contract's key set", async () => {
+  const contract = await readContract();
+  const built = buildModalDispatchBody({
+    taskId: contract.taskId as string,
+    leaseToken: contract.leaseToken as string,
+    scanId: contract.scanId as string,
+    roomFileId: contract.roomFileId as string,
+    roomFileVersion: contract.roomFileVersion as number,
+    taskType: contract.taskType as string,
+    traceId: contract.traceId as string,
+    inputs: contract.inputs as { meshUrl: string; capturedRoomJsonUrl: string },
+  });
+
+  assertEquals(contractKeys(built), contractKeys(contract));
+  assertEquals(
+    Object.keys(built.inputs as Record<string, unknown>).sort(),
+    Object.keys(contract.inputs as Record<string, unknown>).sort(),
+  );
+  // And the values round-trip — the contract is a real example, not a schema.
+  assertEquals(built.leaseToken, contract.leaseToken);
+  assertEquals(built.inputs, contract.inputs);
+});
+
+Deno.test("contract.json: carries the lease token and the unified input keys", async () => {
+  const contract = await readContract();
+  assert(typeof contract.leaseToken === "string");
+  assert((contract.leaseToken as string).startsWith(`${WORKER_ID_PREFIX}:`));
+  assertEquals(
+    Object.keys(contract.inputs as Record<string, unknown>).sort(),
+    ["capturedRoomJsonUrl", "meshUrl"],
+  );
 });

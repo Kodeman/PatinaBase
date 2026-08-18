@@ -28,8 +28,23 @@ export const DISPATCH_TASK_TYPES = [
 export type DispatchTaskType = (typeof DISPATCH_TASK_TYPES)[number];
 
 export const BATCH_LIMIT = 3;
-export const SIGNED_URL_TTL_S = 600;
-export const WORKER_ID = "dispatch-scan-modal";
+// Must outlast the whole Modal stage, not just the download: the presigned URL
+// is fetched inside the job, and splat's run is 10–25 minutes. 600s expired
+// mid-run.
+export const SIGNED_URL_TTL_S = 3600;
+
+// The lease token's stable prefix. The token ITSELF is minted per invocation
+// (`newLeaseOwner()`), never reused: it is what `claim_agent_tasks` records as
+// `locked_by`, what Modal is handed as `leaseToken`, and what 00490's wrappers
+// check `locked_by` against before any write. A constant worker id would make
+// every invocation's token match every lease, so a stale Modal job could fail
+// or complete a task a live worker is running — the duplicate-spawn
+// amplification 00490's P0403 path exists to stop.
+export const WORKER_ID_PREFIX = "dispatch-scan-modal";
+
+export function newLeaseOwner(): string {
+  return `${WORKER_ID_PREFIX}:${crypto.randomUUID()}`;
+}
 
 // A spawn can be preempted/misconfigured a bounded number of times before the
 // dispatcher gives up and parks the task fatally, rather than retrying a spawn
@@ -136,6 +151,39 @@ export function objectKeyFromRoomScansUrl(url: string | null | undefined): strin
   return key.length > 0 ? key : null;
 }
 
+// ─── Owner-prefix anchoring ────────────────────────────────────────────────
+//
+// The key above comes out of a COLUMN (`room_scans.mesh_url` /
+// `captured_room_json_url`), and this function then presigns it with the
+// service role, which bypasses Storage RLS. So whatever that column says, we
+// sign. A row whose url column points anywhere else in the bucket would hand
+// Modal a presigned read of another tenant's object.
+//
+// The bucket layout is `<folder>/<user_id>/<room_id>/<filename>` (the same
+// layout services/scan-pipeline/src/patina_scan_worker/keys.py anchors on, and
+// the 00077 storage RLS guard before it). Segments 2 and 3 must equal the
+// SCAN ROW'S OWN user_id and room_id — read from the row we are dispatching
+// for, never from the key itself. A row missing either id cannot have its
+// prefix proved, so it fails closed rather than being waved through.
+export function keyMatchesScanOwner(
+  key: string,
+  userId: string | null | undefined,
+  roomId: string | null | undefined,
+): boolean {
+  if (typeof userId !== "string" || userId.length === 0) return false;
+  if (typeof roomId !== "string" || roomId.length === 0) return false;
+  const parts = key.split("/");
+  // folder / user_id / room_id / filename — a shorter key has no prefix to prove.
+  if (parts.length < 4) return false;
+  if (parts[0].length === 0) return false;
+  return parts[1] === userId && parts[2] === roomId;
+}
+
+/** Fixed literal. The rejected key never enters an error string or a log line
+ *  — that string lands in agent_tasks.last_error, which is far more widely
+ *  readable than the storage path it would disclose. */
+export const KEY_PREFIX_REJECTED = "input object key failed owner-prefix validation";
+
 // ─── Modal dispatch request body ────────────────────────────────────────────
 
 export interface DispatchInputs {
@@ -145,6 +193,7 @@ export interface DispatchInputs {
 
 export interface DispatchParams {
   taskId: string;
+  leaseToken: string;
   scanId: string;
   roomFileId: string;
   roomFileVersion: number;
@@ -154,10 +203,14 @@ export interface DispatchParams {
 }
 
 /** The exact minimal POST body sent to MODAL_SPAWN_URL (R1: "the message is
- *  minimal by design" — ids, revision, trace id, presigned inputs only). */
+ *  minimal by design" — ids, revision, trace id, presigned inputs only), plus
+ *  `leaseToken`: the per-invocation claim owner 00490's wrappers check every
+ *  write against. The canonical example of this body — the one contract both
+ *  sides' tests validate against — is ./contract.json. */
 export function buildModalDispatchBody(p: DispatchParams): Record<string, unknown> {
   return {
     taskId: p.taskId,
+    leaseToken: p.leaseToken,
     scanId: p.scanId,
     roomFileId: p.roomFileId,
     roomFileVersion: p.roomFileVersion,
@@ -210,8 +263,17 @@ const ALLOWED_LOG_FIELDS: Record<string, readonly string[]> = {
   no_work: ["eligible"],
   claimed: ["count"],
   task_input_invalid: ["task_id", "reason"],
+  // The rejected key is deliberately absent from this allow-list — see
+  // KEY_PREFIX_REJECTED. Only the ids that name the row are logged.
+  key_prefix_rejected: ["task_id", "scan_id", "task_type"],
   dispatch_spawned: ["task_id", "scan_id", "task_type", "http_status"],
+  // A spawn we could not confirm either way: the task stays LEASED and the
+  // visibility timeout recovers it. Not a failure, so it has its own event.
+  dispatch_deferred: ["task_id", "scan_id", "task_type", "error_kind"],
   dispatch_failed: ["task_id", "scan_id", "task_type", "http_status", "error_kind", "fatal", "dispatch_attempts"],
+  // PostgREST's error `code` only — never `message`/`details`, which can echo
+  // row content back into the log.
+  job_run_insert_failed: ["error_code"],
   run_error: ["error_kind"],
 };
 
