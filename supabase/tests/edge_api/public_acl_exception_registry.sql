@@ -44,12 +44,13 @@
 -- excluded: they are not part of a routine's identity and change across
 -- extension versions.
 --
--- PROVENANCE OF THE SIGNATURE. Every row reads `accepted_by = 'kody'`,
--- `accepted_on = 2026-08-17`, but the 193 rows were not all signed the same way
--- and a reader should not have to guess which is which. A signature on a
--- considered security ruling and a signature on a benign block are worth
--- different things, and flattening them is how the second quietly starts
--- carrying the authority of the first. Two events:
+-- PROVENANCE OF THE SIGNATURE. Every row reads `accepted_by = 'kody'`. Most
+-- carry `accepted_on = 2026-08-17`; two carry `accepted_on = 2026-08-18` (the
+-- prod-only `graphql` rows of EVENT 4 below). The 195 rows were not all
+-- signed the same way and a reader should not have to guess which is which.
+-- A signature on a considered security ruling and a signature on a benign
+-- block are worth different things, and flattening them is how the second
+-- quietly starts carrying the authority of the first. Four events:
 --
 --   EVENT 1 — 42 rows ruled on BEFORE this registry existed.
 --   Kody ruled on the `net` residual with the mechanism explicitly in front of
@@ -118,6 +119,28 @@
 --   GREEN on staging and RED on the local CLI image. See the runbook's Blocker 1
 --   section. A local rehearsal that is red on nine objects the target does not
 --   have is telling the truth about the local image.
+--
+--   EVENT 4 — 2026-08-18. TWO OF EVENT 3'S NINE, NOW REGISTERED FOR PROD.
+--   EVENT 3's "NOT registered because they DO NOT EXIST on the target" was
+--   measured against staging (vuesoyhfrjabfxbrzekd) and remains true of
+--   staging today — it is not being revised. Prod (bkvcixdmuyejfzcijpdg) is a
+--   different target and a different platform image. Read-only SELECT against
+--   prod on 2026-08-18 found two of the nine — `graphql.get_schema_version()`
+--   and `graphql.increment_schema_version()` — present: owned by
+--   supabase_admin, SECURITY DEFINER, EXECUTE granted to anon and
+--   authenticated via the bare `=X/supabase_admin` PUBLIC grant. This is
+--   exactly the "FRESH ruling" EVENT 3 said the platform upgrade would force,
+--   arriving on prod first. Kody ruled: accept via two signed rows, the same
+--   "supabase_admin-owned, not ours to change" pattern as the `net.*` and
+--   `vector`/`pg_trgm` rows — postgres is not the grantor and cannot revoke
+--   them, and the worst case is an anon or authenticated caller reading or
+--   bumping a pg_graphql schema-version counter: cache churn, no data path.
+--   The revoke ask for these two joins the standing Supabase support request
+--   to revoke PUBLIC on `net.*` (docs/engineering/public-acl-residual-census.md,
+--   docs/engineering/patina-cloudflare-phase-1-runbook.md). The other seven of
+--   EVENT 3's nine (4 storage prefix routines, 3 storage cleanup triggers) were
+--   NOT re-measured against prod as part of this ruling and stay unregistered
+--   pending that check.
 --
 -- The practical consequence: a change that would move a row out of event 2's
 -- characterization — an extension shipping a SECURITY DEFINER routine, or
@@ -609,7 +632,25 @@ VALUES
   ('storage', 'storage.objects."Users can upload their own avatar"', 'supabase_storage_admin', 'storage_policy',
    'Census section E — INSERT policy with role list {public} on a public bucket. Already narrow: the predicate binds the caller identity, so the {public} role list is cosmetic.', 'kody', DATE '2026-08-17'),
   ('storage', 'storage.objects."Users can upload their own scan artifacts"', 'supabase_storage_admin', 'storage_policy',
-   'Census section E — INSERT policy with role list {public} on a private bucket. Already narrow: the predicate binds the caller identity, so the {public} role list is cosmetic.', 'kody', DATE '2026-08-17');
+   'Census section E — INSERT policy with role list {public} on a private bucket. Already narrow: the predicate binds the caller identity, so the {public} role list is cosmetic.', 'kody', DATE '2026-08-17'),
+
+-- ── Kody's ruling, 2026-08-18 — prod-only `graphql` schema-version routines ─
+-- EVENT 3 (2026-08-17/18) measured these ABSENT on staging: the runbook's
+-- Blocker 1 table and this file's own EVENT 3 block record staging's
+-- `graphql` schema as holding exactly one routine, `graphql.graphql`,
+-- SECURITY INVOKER, and both graphql.get_schema_version() and
+-- graphql.increment_schema_version() as "Local image only. Not registered."
+-- That measurement stands, for staging. Prod is a different platform image:
+-- read-only SELECT against bkvcixdmuyejfzcijpdg on 2026-08-18 found both
+-- routines present, owned by supabase_admin, prosecdef = true, with EXECUTE
+-- granted to anon and authenticated via the bare `=X/supabase_admin` PUBLIC
+-- grant. This does not contradict the staging measurement — it is the
+-- platform-image divergence EVENT 3 warned would eventually need a fresh
+-- ruling, arriving on prod before staging. See EVENT 4 below.
+  ('graphql', 'graphql.get_schema_version()', 'supabase_admin', 'routine_security_definer',
+   'Kody''s ruling, 2026-08-18 (EVENT 4) — prod-only platform-image divergence: absent on staging per the 2026-08-17/18 census and runbook measurement, present on prod. Measured read-only against bkvcixdmuyejfzcijpdg on 2026-08-18: pg_graphql extension internal, SECURITY DEFINER, owned by supabase_admin, EXECUTE granted to anon and authenticated. postgres is not the grantor and cannot revoke it. Worst case: an anon or authenticated caller reads the pg_graphql schema-version counter — cache churn, no data path. Accepted; the revoke ask for these two routines is added to the Supabase support ticket alongside the net.* ask (docs/engineering/public-acl-residual-census.md, docs/engineering/patina-cloudflare-phase-1-runbook.md).', 'kody', DATE '2026-08-18'),
+  ('graphql', 'graphql.increment_schema_version()', 'supabase_admin', 'routine_security_definer',
+   'Kody''s ruling, 2026-08-18 (EVENT 4) — prod-only platform-image divergence, companion to graphql.get_schema_version() above: same schema, same owner, same measurement date, same disposition. SECURITY DEFINER, owned by supabase_admin, EXECUTE granted to anon and authenticated. `RETURNS event_trigger`, so it is not directly invocable via SQL (as with the storage cleanup triggers EVENT 3 also found and left unregistered because absent on staging) — but the EXECUTE grant is real and the routine is the bump side of the same schema-version counter get_schema_version() reads, so it is registered under the same ruling rather than left implicit. postgres is not the grantor and cannot revoke it. Worst case: an anon or authenticated caller advances the pg_graphql schema-version counter — cache churn, no data path. Accepted; same compensating action as get_schema_version() above.', 'kody', DATE '2026-08-18');
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
