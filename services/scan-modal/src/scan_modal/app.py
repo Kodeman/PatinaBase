@@ -208,12 +208,24 @@ if modal is not None:
     def _spawn_modal_function(function_name: str, payload: dict) -> Any:
         return _FUNCTIONS[function_name].spawn(payload)
 
+    # FastAPI decides "inject the Request" vs "bind a query parameter" from the
+    # ANNOTATION alone. Left unannotated, `request` was read as a REQUIRED QUERY
+    # PARAM, so every dispatch POST returned 422 before the bearer check ever
+    # ran. The name is bound defensively because fastapi lives only in
+    # _ENDPOINT_IMAGE — the verify/splat/renders images import this module too,
+    # and never touch `spawn`. `from __future__ import annotations` makes the
+    # annotation a string resolved against these module globals in-container.
+    try:
+        from fastapi import Request as _FastAPIRequest
+    except ImportError:  # verify image, and the unit-test environment
+        _FastAPIRequest = Any  # type: ignore[misc,assignment]
+
     @app.function(
         image=_ENDPOINT_IMAGE,
         secrets=[modal.Secret.from_name(AUTH_SECRET_NAME)],
     )
     @modal.fastapi_endpoint(method="POST")
-    async def spawn(request):  # noqa: ANN001 — fastapi.Request, resolved in-image
+    async def spawn(request: _FastAPIRequest):
         from fastapi.responses import JSONResponse
 
         try:
