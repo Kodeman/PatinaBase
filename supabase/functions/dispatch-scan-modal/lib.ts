@@ -27,6 +27,19 @@ export const DISPATCH_TASK_TYPES = [
 ] as const;
 export type DispatchTaskType = (typeof DISPATCH_TASK_TYPES)[number];
 
+/** The three stages, as the Modal side names them. */
+export type DispatchStage = "verify" | "splat" | "renders";
+
+/** `"scan_pipeline.splat"` → `"splat"`. Returns null for anything else, so an
+ *  unexpected task_type fails the one task rather than resolving the wrong
+ *  stage's inputs for it. */
+export function stageForTaskType(taskType: string): DispatchStage | null {
+  const bare = taskType.startsWith("scan_pipeline.")
+    ? taskType.slice("scan_pipeline.".length)
+    : taskType;
+  return bare === "verify" || bare === "splat" || bare === "renders" ? bare : null;
+}
+
 export const BATCH_LIMIT = 3;
 // Must outlast the whole Modal stage, not just the download: the presigned URL
 // is fetched inside the job, and splat's run is 10–25 minutes. 600s expired
@@ -186,10 +199,95 @@ export const KEY_PREFIX_REJECTED = "input object key failed owner-prefix validat
 
 // ─── Modal dispatch request body ────────────────────────────────────────────
 
-export interface DispatchInputs {
+// Each stage gets ITS OWN input shape and nothing else. A single union of
+// optional fields would let a renders task be dispatched with splat's photo
+// list — the Modal side would happily accept the body and only discover the
+// mismatch after allocating a GPU.
+export interface VerifyInputs {
+  kind: "verify";
   meshUrl: string;
   capturedRoomJsonUrl: string;
 }
+
+/** Where splat's camera poses came from.
+ *
+ *  `manifest` is the uploaded `photos/photos_metadata.ndjson` sidecar.
+ *  `rows` is the fallback: `room_scan_images.camera_transform` /
+ *  `camera_intrinsics`, inlined in the payload. The fallback is not an edge
+ *  case — the ingest stage STRIPS `photosManifest` as device-local
+ *  (capture-bundle-spec B-19), so `room_scans.photos_manifest_url` is null for
+ *  a large share of real scans and splat would otherwise never run for them.
+ *  Both carriers hold the same shapes (row-major flat-16 transform,
+ *  `{fx, fy, cx, cy, width, height}` intrinsics in the native sensor frame)
+ *  written by the same capture path, so the Modal side's convention handling —
+ *  including portrait-rotation detection — is identical either way. */
+export type PhotosSource = "manifest" | "rows";
+
+/** One pose-bearing `room_scan_images` row, reduced to what a nerfstudio frame
+ *  needs. Inlined in the payload rather than synthesized into an NDJSON blob
+ *  and uploaded: a dispatcher that writes storage objects would need write
+ *  scope it does not have and should not get, and the blob would be a second
+ *  copy of data the table already holds. */
+export interface PhotoRecord {
+  fileName: string;
+  cameraTransform: number[];
+  cameraIntrinsics: {
+    fx: number;
+    fy: number;
+    cx: number;
+    cy: number;
+    width: number;
+    height: number;
+  };
+  width: number;
+  height: number;
+}
+
+export interface SplatInputs {
+  kind: "splat";
+  photosSource: PhotosSource;
+  /** Present iff photosSource === "manifest". */
+  photosManifestUrl?: string;
+  /** Present iff photosSource === "rows". Parallel to `photoUrls` by fileName. */
+  photoRecords?: PhotoRecord[];
+  photoUrls: string[];
+  capturedRoomJsonUrl: string;
+  /** True when `photoUrls` is a prefix of the scan's photos, not all of them. */
+  photoUrlsCapped: boolean;
+  /** How many usable photo rows the scan actually has, cap or no cap. */
+  photoCount: number;
+}
+
+/** A `room_scan_images` row that carries a usable camera pose. Anything short
+ *  of all four numbers plus both extents cannot become a nerfstudio frame, so
+ *  the row is dropped rather than guessed at. */
+export function isPoseBearing(
+  record: Partial<PhotoRecord> | null | undefined,
+): record is PhotoRecord {
+  if (!record) return false;
+  const t = record.cameraTransform;
+  if (!Array.isArray(t) || t.length !== 16 || !t.every((v) => typeof v === "number" && Number.isFinite(v))) {
+    return false;
+  }
+  const i = record.cameraIntrinsics;
+  if (!i || typeof i !== "object") return false;
+  for (const key of ["fx", "fy", "cx", "cy", "width", "height"] as const) {
+    const v = (i as Record<string, unknown>)[key];
+    if (typeof v !== "number" || !Number.isFinite(v)) return false;
+  }
+  return (
+    typeof record.width === "number" && Number.isFinite(record.width) && record.width > 0 &&
+    typeof record.height === "number" && Number.isFinite(record.height) && record.height > 0 &&
+    typeof record.fileName === "string" && record.fileName.length > 0
+  );
+}
+
+export interface RendersInputs {
+  kind: "renders";
+  glbUrl: string;
+}
+
+export type DispatchInputs = VerifyInputs | SplatInputs | RendersInputs;
 
 export interface DispatchParams {
   taskId: string;
@@ -202,12 +300,64 @@ export interface DispatchParams {
   inputs: DispatchInputs;
 }
 
+// A room walk can leave hundreds of posed photos. The whole list would be a
+// large body on a POST that must return inside Modal's 150 s web cap, and
+// splatfacto gains very little past ~80 well-distributed views of one room. So
+// the list is capped BY MANIFEST ORDER (display_order, then captured_at) and
+// the payload SAYS SO — `photoUrlsCapped` — because a splat trained on a
+// truncated set that nobody recorded as truncated is the kind of quiet quality
+// regression that gets blamed on the model.
+export const PHOTO_URL_CAP = 80;
+
+export interface PhotoCap {
+  keys: string[];
+  capped: boolean;
+  total: number;
+}
+
+/** Cap an ordered photo-key list. Pure; the caller has already ordered it. */
+export function capPhotoKeys(keys: string[], cap = PHOTO_URL_CAP): PhotoCap {
+  return { keys: keys.slice(0, cap), capped: keys.length > cap, total: keys.length };
+}
+
 /** The exact minimal POST body sent to MODAL_SPAWN_URL (R1: "the message is
  *  minimal by design" — ids, revision, trace id, presigned inputs only), plus
  *  `leaseToken`: the per-invocation claim owner 00490's wrappers check every
- *  write against. The canonical example of this body — the one contract both
- *  sides' tests validate against — is ./contract.json. */
+ *  write against. `inputs` is built field-by-field per stage rather than spread
+ *  wholesale, so `kind` (a dispatcher-side discriminant, not part of the wire
+ *  contract) can never leak into the body. The canonical example of this body —
+ *  the one contract both sides' tests validate against — is ./contract.json. */
 export function buildModalDispatchBody(p: DispatchParams): Record<string, unknown> {
+  let inputs: Record<string, unknown>;
+  switch (p.inputs.kind) {
+    case "verify":
+      inputs = {
+        meshUrl: p.inputs.meshUrl,
+        capturedRoomJsonUrl: p.inputs.capturedRoomJsonUrl,
+      };
+      break;
+    case "splat": {
+      inputs = {
+        photosSource: p.inputs.photosSource,
+        photoUrls: p.inputs.photoUrls,
+        capturedRoomJsonUrl: p.inputs.capturedRoomJsonUrl,
+        photoUrlsCapped: p.inputs.photoUrlsCapped,
+        photoCount: p.inputs.photoCount,
+      };
+      // Exactly one pose carrier reaches the wire. Emitting both (or an
+      // explicit undefined) would let the Modal side's "manifest wins" branch
+      // pick a carrier the dispatcher did not intend.
+      if (p.inputs.photosSource === "manifest") {
+        inputs.photosManifestUrl = p.inputs.photosManifestUrl;
+      } else {
+        inputs.photoRecords = p.inputs.photoRecords;
+      }
+      break;
+    }
+    case "renders":
+      inputs = { glbUrl: p.inputs.glbUrl };
+      break;
+  }
   return {
     taskId: p.taskId,
     leaseToken: p.leaseToken,
@@ -216,10 +366,7 @@ export function buildModalDispatchBody(p: DispatchParams): Record<string, unknow
     roomFileVersion: p.roomFileVersion,
     taskType: p.taskType,
     traceId: p.traceId,
-    inputs: {
-      meshUrl: p.inputs.meshUrl,
-      capturedRoomJsonUrl: p.inputs.capturedRoomJsonUrl,
-    },
+    inputs,
   };
 }
 
@@ -266,7 +413,10 @@ const ALLOWED_LOG_FIELDS: Record<string, readonly string[]> = {
   // The rejected key is deliberately absent from this allow-list — see
   // KEY_PREFIX_REJECTED. Only the ids that name the row are logged.
   key_prefix_rejected: ["task_id", "scan_id", "task_type"],
-  dispatch_spawned: ["task_id", "scan_id", "task_type", "http_status"],
+  // `photos_source` is a two-value enum, never a key or a url — it is here so
+  // "which pose carrier fired" is answerable from the logs without reading the
+  // room file, which is the first question when a splat comes out wrong.
+  dispatch_spawned: ["task_id", "scan_id", "task_type", "http_status", "photos_source"],
   // A spawn we could not confirm either way: the task stays LEASED and the
   // visibility timeout recovers it. Not a failure, so it has its own event.
   dispatch_deferred: ["task_id", "scan_id", "task_type", "error_kind"],

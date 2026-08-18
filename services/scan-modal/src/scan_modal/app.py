@@ -18,6 +18,8 @@ import hmac
 import os
 from typing import Any, Callable
 
+from . import SPLAT_CACHE_MOUNT
+
 __all__ = [
     "AUTH_SECRET_NAME",
     "TASK_FUNCTIONS",
@@ -36,15 +38,42 @@ AUTH_SECRET_NAME = "scan-modal-auth"
 AUTH_TOKEN_ENV = "SCAN_MODAL_AUTH_TOKEN"
 # Modal Secret holding SCAN_WORKER_DSN (the scan_worker LOGIN role; R2 of the plan).
 DB_SECRET_NAME = "scan-worker-db"
-# Modal Secret holding R2_ENDPOINT / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY.
+
+# Modal Secret for R2. It must carry ALL FOUR of these keys:
+#
+#   R2_ENDPOINT             https://<account_id>.r2.cloudflarestorage.com
+#   R2_ACCESS_KEY_ID        R2 API token id
+#   R2_SECRET_ACCESS_KEY    R2 API token secret
+#   R2_ARTIFACTS_BUCKET     patina-staging-media-artifacts-us (staging)
+#
+# The BUCKET is the one that gets missed at provisioning, because the first three
+# read as "the credential" and the fourth reads as configuration. It is neither
+# defaulted nor hard-coded on purpose (`io/r2.artifacts_bucket()` raises without
+# it): the staging and production buckets differ by one word, and a literal
+# fallback is how a staging run ends up writing production artifacts. A missing
+# value fails the task at upload time with `R2_ARTIFACTS_BUCKET is not set` —
+# after the GPU has already been paid for, which is the cost of getting this
+# wrong and the reason it is written down here.
 R2_SECRET_NAME = "scan-r2"
 
 VERIFY_TIMEOUT_SECONDS = 1800
+# splatfacto is 10–25 minutes on an L4 (plan §4); 3600 s leaves room for the
+# download/transcode head and the export/compress tail without letting a wedged
+# run bill for an hour more than that.
+SPLAT_TIMEOUT_SECONDS = 3600
+RENDERS_TIMEOUT_SECONDS = 1800
 
 SPLAT_GPU = "L4"
 RENDERS_GPU = "L40S"
 
-_W2_MARKER = "[W2] not implemented — Rendered Room v2 DELIVERY-PLAN W2"
+# The preemption-resume Volume. `splat` keeps its whole job-keyed workspace
+# here — transcoded frames, transforms.json, and nerfstudio's checkpoints — so a
+# preempted run resumes instead of restarting. See jobs/splat_job.py.
+#
+# SPLAT_CACHE_MOUNT is imported from the package root rather than restated: this
+# module mounts the Volume there and splat_job builds its workspace under it, and
+# two literals that must agree are one literal that will eventually not.
+SPLAT_CACHE_VOLUME = "patina-scan-splat-cache"
 
 # taskType (as it appears in agent_tasks) → the Modal function that serves it.
 TASK_FUNCTIONS: dict[str, str] = {
@@ -165,6 +194,85 @@ if modal is not None:
         .add_local_python_source("scan_modal")
     )
 
+    # ── splat: CUDA + nerfstudio(splatfacto)/gsplat + the SPZ tooling ────────
+    #
+    # A *devel* CUDA base, not runtime: gsplat compiles its CUDA kernels at
+    # install/first-use and needs nvcc and the headers. This is the image the
+    # plan warns costs real engineering time — "there is no Modal template for
+    # Gaussian splatting" — and the pins are recorded in pyproject.toml's
+    # [project.optional-dependencies] comments alongside the date they were
+    # researched.
+    _SPLAT_IMAGE = (
+        modal.Image.from_registry(
+            "nvidia/cuda:12.4.1-devel-ubuntu22.04", add_python=PYTHON_VERSION
+        )
+        .apt_install(
+            "git", "build-essential", "curl", "ffmpeg",
+            # Open3D/OpenCV transitive loaders nerfstudio pulls in.
+            "libgl1", "libglib2.0-0", "libsm6", "libxext6",
+        )
+        .pip_install(
+            "torch==2.5.1", "torchvision==0.20.1",
+            extra_index_url="https://download.pytorch.org/whl/cu124",
+        )
+        .pip_install(
+            "gsplat==1.5.3",
+            "nerfstudio==1.1.5",
+            # HEIC decode for the captured photos (PosedPhotoService writes
+            # image/heic); PIL cannot read them without this opener.
+            "pillow-heif>=0.18",
+            "psycopg[binary]>=3.1",
+            "boto3>=1.34",
+            "httpx>=0.24,<1.0",
+            "spz>=0.0.1",
+        )
+        # The SPZ 4 compressor. The PyPI `spz` wheel exposes load/build, not a
+        # PLY→SPZ entry point, so the CONVERTER is the Rust CLI. Ubuntu 22.04's
+        # packaged cargo is too old for a 2026 crate, hence rustup.
+        #
+        # The crate is `spz`, NOT `spz-cli` — `spz-cli` does not exist on
+        # crates.io (verified 2026-08 against the registry API; the earlier
+        # spelling here came from the GitHub README's `cargo install spz-cli`
+        # line and would have failed at image build).
+        #
+        # Pinned to 0.0.5, which is NOT the newest: 0.0.6 (2025-12-23) ships
+        # `bin_names: []` — it dropped the binary target and is library-only, so
+        # installing it would leave `spz` missing from PATH and every conversion
+        # would fail at runtime with a much less obvious error than a build
+        # failure. 0.0.5 (2025-12-22) is the newest version that still ships the
+        # `spz` binary. `--locked` so the crate's own Cargo.lock decides its
+        # transitive versions rather than whatever resolves on build day.
+        .run_commands(
+            "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs "
+            "| sh -s -- -y --profile minimal",
+            "/root/.cargo/bin/cargo install spz --version 0.0.5 --locked --root /usr/local",
+        )
+        .env({"PATH": "/usr/local/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:"
+                      "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"})
+        .add_local_python_source("scan_modal")
+    )
+
+    # ── renders: Modal's published Blender pattern ───────────────────────────
+    # The `bpy` wheel rather than a Blender install, with the X libraries its
+    # headless startup still links against. bpy 4.5.x is the LTS line and is
+    # built for CPython 3.11, which is why PYTHON_VERSION is pinned there.
+    _RENDERS_IMAGE = (
+        modal.Image.debian_slim(python_version=PYTHON_VERSION)
+        # libgl1/libegl1 beyond Modal's published pair: the bpy wheel links
+        # libGL/libEGL at IMPORT time even headless, and debian_slim ships
+        # neither. Without them `import bpy` dies with
+        # "libGL.so.1: cannot open shared object file" — the classic
+        # bpy-in-a-container failure, and one that only shows up on the L40S.
+        .apt_install("xorg", "libxkbcommon0", "libgl1", "libegl1")
+        .pip_install(
+            "bpy==4.5.0",
+            "psycopg[binary]>=3.1",
+            "boto3>=1.34",
+            "httpx>=0.24,<1.0",
+        )
+        .add_local_python_source("scan_modal")
+    )
+
     _ENDPOINT_IMAGE = (
         modal.Image.debian_slim(python_version=PYTHON_VERSION)
         .pip_install("fastapi[standard]")
@@ -172,6 +280,8 @@ if modal is not None:
     )
 
     app = modal.App(APP_NAME)
+
+    _splat_cache = modal.Volume.from_name(SPLAT_CACHE_VOLUME, create_if_missing=True)
 
     @app.function(
         image=_VERIFY_IMAGE,
@@ -185,23 +295,36 @@ if modal is not None:
 
         return run_verify(payload)
 
-    # No `gpu=` on either stub: both raise immediately, and a gpu kwarg would
-    # have Modal allocate (and bill) an L4/L40S to reach a NotImplementedError.
-    # W2 adds `gpu=SPLAT_GPU` / `gpu=RENDERS_GPU` when there is a real body to
-    # run on it — the constants stay declared above so that choice is recorded.
     @app.function(
-        image=_VERIFY_IMAGE,
+        image=_SPLAT_IMAGE,
+        gpu=SPLAT_GPU,
+        timeout=SPLAT_TIMEOUT_SECONDS,
+        volumes={SPLAT_CACHE_MOUNT: _splat_cache},
+        # Preemption tolerance, cheaply: a preempted run is retried, finds its
+        # checkpoint on the Volume under the same job key, and resumes rather
+        # than paying for the first N thousand iterations twice. A retry whose
+        # lease has since expired is refused with P0403 at its first ledger
+        # write and exits clean, so this cannot double-write.
+        retries=modal.Retries(max_retries=2, initial_delay=10.0),
         secrets=[modal.Secret.from_name(DB_SECRET_NAME), modal.Secret.from_name(R2_SECRET_NAME)],
     )
     def splat(payload: dict) -> dict:
-        raise NotImplementedError(f"{_W2_MARKER}: splat (splatfacto → SPZ on {SPLAT_GPU})")
+        from .jobs.splat_job import run_splat
+
+        # `commit` is what makes the checkpoint survive the container, not just
+        # the process — an uncommitted Volume write is lost on preemption.
+        return run_splat(payload, checkpoint_commit=_splat_cache.commit)
 
     @app.function(
-        image=_VERIFY_IMAGE,
+        image=_RENDERS_IMAGE,
+        gpu=RENDERS_GPU,
+        timeout=RENDERS_TIMEOUT_SECONDS,
         secrets=[modal.Secret.from_name(DB_SECRET_NAME), modal.Secret.from_name(R2_SECRET_NAME)],
     )
     def renders(payload: dict) -> dict:
-        raise NotImplementedError(f"{_W2_MARKER}: renders (Cycles via bpy on {RENDERS_GPU})")
+        from .jobs.renders_job import run_renders
+
+        return run_renders(payload)
 
     _FUNCTIONS = {"verify": verify, "splat": splat, "renders": renders}
 

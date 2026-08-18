@@ -36,9 +36,11 @@ import {
   BATCH_LIMIT,
   buildLogLine,
   buildModalDispatchBody,
+  capPhotoKeys,
   DISPATCH_TASK_TYPES,
   decideDispatchFailure,
   extractTaskInputIds,
+  isPoseBearing,
   isSpawnSuccess,
   KEY_PREFIX_REJECTED,
   keyMatchesScanOwner,
@@ -47,8 +49,13 @@ import {
   readDispatchAttempts,
   shouldSkipForNoWork,
   SIGNED_URL_TTL_S,
+  stageForTaskType,
   validateEnv,
   type ClaimedTaskRow,
+  type DispatchInputs,
+  type DispatchStage,
+  type PhotoRecord,
+  type PhotosSource,
 } from "./lib.ts";
 
 const FN = "dispatch-scan-modal";
@@ -102,41 +109,143 @@ interface RoomScanRow {
   room_id: string | null;
   mesh_url: string | null;
   captured_room_json_url: string | null;
+  photos_manifest_url: string | null;
+  model_url_gltf: string | null;
 }
 
 interface RoomFileRow {
   id: string;
 }
 
-/** Resolve the two presigned input URLs a Modal stage needs for one task.
+interface RoomScanImageRow {
+  id: string;
+  image_url: string | null;
+  display_order: number | null;
+  captured_at: string | null;
+  camera_transform: number[] | null;
+  camera_intrinsics: Record<string, number> | null;
+  width: number | null;
+  height: number | null;
+}
+
+/** A photo object plus whatever pose the row carries. The pose half is only
+ *  read when the sidecar manifest is missing. */
+interface PhotoCandidate {
+  key: string;
+  record: PhotoRecord;
+}
+
+/** Derive a bucket key from a stored url column AND prove it belongs to this
+ *  scan's owner prefix, in one place. EVERY key that reaches createSignedUrl(s)
+ *  goes through here — the service role bypasses storage RLS, so this check is
+ *  the only thing standing between a mis-pointed url column (or a photo row
+ *  belonging to another scan) and a cross-tenant presigned read. */
+function ownedKey(url: string | null | undefined, scanRow: RoomScanRow): string | null {
+  const key = objectKeyFromRoomScansUrl(url);
+  if (!key) return null;
+  if (!keyMatchesScanOwner(key, scanRow.user_id, scanRow.room_id)) throw new KeyPrefixError();
+  return key;
+}
+
+/** Batch-sign an ordered key list, preserving order. Throws if ANY key fails —
+ *  a partially-signed photo set would train a splat on a silently truncated
+ *  view list, which is worse than not running. */
+async function signKeys(admin: Supa, keys: string[], what: string): Promise<string[]> {
+  if (keys.length === 0) return [];
+  const { data, error } = await admin.storage.from(BUCKET).createSignedUrls(keys, SIGNED_URL_TTL_S);
+  if (error || !data) throw new Error(`createSignedUrls failed for ${what}`);
+  const byPath = new Map<string, string>();
+  for (const row of data as Array<{ path?: string | null; signedUrl?: string | null }>) {
+    if (row?.path && row?.signedUrl) byPath.set(row.path, row.signedUrl);
+  }
+  return keys.map((key) => {
+    const signed = byPath.get(key);
+    // The key itself is never named in the error — it lands in
+    // agent_tasks.last_error, which is far more readable than a storage path.
+    if (!signed) throw new Error(`createSignedUrls returned no url for a ${what} object`);
+    return signed;
+  });
+}
+
+async function signOne(admin: Supa, key: string, what: string): Promise<string> {
+  const { data, error } = await admin.storage.from(BUCKET).createSignedUrl(key, SIGNED_URL_TTL_S);
+  if (error || !data?.signedUrl) throw new Error(`createSignedUrl failed for ${what} input`);
+  return data.signedUrl;
+}
+
+/** The scan's photo objects, in manifest order, deduped, owner-anchored.
+ *
+ *  "Full-res" here means the ORIGINAL object — `image_url` — as opposed to the
+ *  00340 derivative ladder (`preview_url` 1600 px, `thumbnail_url` 512 px).
+ *  It is deliberately NOT a filter on `is_full_resolution`: that column marks a
+ *  v2 user-shutter capture property and defaults false, so filtering on it
+ *  would hand splat an empty photo list for most existing scans.
+ *
+ *  Order is `display_order, captured_at, id` — the same ordering
+ *  packages/supabase's use-room-scan-photos hook uses, so "manifest order"
+ *  means one thing across the product, plus `id` as a total tie-break. Without
+ *  the tie-break, rows sharing a display_order and captured_at come back in
+ *  whatever order Postgres feels like, which decides WHICH photos fall off the
+ *  80-item cap — so the same scan could dispatch a different 80 on each retry.
+ *  Duplicate (scan_id, image_url) rows exist in prod from retried batch
+ *  inserts; the key set is deduped.
+ *
+ *  The pose columns come back too. They are read only on the fallback path, but
+ *  they ride the same query because a second round trip to fetch them would be
+ *  a second chance for the two result sets to disagree about order. */
+async function resolvePhotoCandidates(
+  admin: Supa,
+  scanRow: RoomScanRow,
+): Promise<PhotoCandidate[]> {
+  const { data, error } = await admin
+    .from("room_scan_images")
+    .select("id, image_url, display_order, captured_at, camera_transform, camera_intrinsics, width, height")
+    .eq("scan_id", scanRow.id)
+    .order("display_order", { ascending: true })
+    .order("captured_at", { ascending: true })
+    .order("id", { ascending: true });
+  if (error) throw new Error("room_scan_images lookup failed");
+  const candidates: PhotoCandidate[] = [];
+  const seen = new Set<string>();
+  for (const row of (data ?? []) as RoomScanImageRow[]) {
+    const key = ownedKey(row.image_url, scanRow);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({
+      key,
+      record: {
+        // The Modal side keys frames on the object's basename, which is what
+        // the manifest's `relativePath` reduces to as well — so both carriers
+        // agree on how a photo is named.
+        fileName: key.split("/").pop() ?? key,
+        cameraTransform: row.camera_transform as number[],
+        cameraIntrinsics: row.camera_intrinsics as PhotoRecord["cameraIntrinsics"],
+        width: row.width as number,
+        height: row.height as number,
+      },
+    });
+  }
+  return candidates;
+}
+
+/** Resolve the presigned inputs one Modal STAGE needs for one task.
  *  Throws with a short, safe (no-URL, no-body) reason on any failure. */
 async function resolveDispatchInputs(
   admin: Supa,
+  stage: DispatchStage,
   scanId: string,
   roomFileVersion: number,
-): Promise<{ roomFileId: string; meshUrl: string; capturedRoomJsonUrl: string }> {
+): Promise<{ roomFileId: string; inputs: DispatchInputs }> {
   const { data: scan, error: scanErr } = await admin
     .from("room_scans")
-    .select("id, user_id, room_id, mesh_url, captured_room_json_url")
+    .select(
+      "id, user_id, room_id, mesh_url, captured_room_json_url, photos_manifest_url, model_url_gltf",
+    )
     .eq("id", scanId)
     .maybeSingle();
   if (scanErr) throw new Error("room_scans lookup failed");
   const scanRow = scan as RoomScanRow | null;
   if (!scanRow) throw new Error("room_scans row not found");
-
-  const meshKey = objectKeyFromRoomScansUrl(scanRow.mesh_url);
-  const capturedRoomKey = objectKeyFromRoomScansUrl(scanRow.captured_room_json_url);
-  if (!meshKey || !capturedRoomKey) throw new Error("missing mesh or captured_room input key");
-
-  // Owner-prefix anchoring, BEFORE anything is presigned. createSignedUrl runs
-  // with service_role and bypasses storage RLS, so this is the only thing
-  // standing between a mis-pointed url column and a cross-tenant presigned read.
-  if (
-    !keyMatchesScanOwner(meshKey, scanRow.user_id, scanRow.room_id) ||
-    !keyMatchesScanOwner(capturedRoomKey, scanRow.user_id, scanRow.room_id)
-  ) {
-    throw new KeyPrefixError();
-  }
 
   const { data: roomFile, error: rfErr } = await admin
     .from("room_files")
@@ -147,23 +256,81 @@ async function resolveDispatchInputs(
   if (rfErr) throw new Error("room_files lookup failed");
   const roomFileRow = roomFile as RoomFileRow | null;
   if (!roomFileRow) throw new Error("room_files row not found for scan/version");
+  const roomFileId = roomFileRow.id;
 
-  const [meshSigned, capturedRoomSigned] = await Promise.all([
-    admin.storage.from(BUCKET).createSignedUrl(meshKey, SIGNED_URL_TTL_S),
-    admin.storage.from(BUCKET).createSignedUrl(capturedRoomKey, SIGNED_URL_TTL_S),
+  if (stage === "renders") {
+    // Bare-key tolerant via objectKeyFromRoomScansUrl: model_url_gltf is
+    // stamped by convert-room-scan-glb and carries the I104 public-url shape on
+    // older rows.
+    const glbKey = ownedKey(scanRow.model_url_gltf, scanRow);
+    if (!glbKey) throw new Error("missing model_url_gltf input key");
+    return {
+      roomFileId,
+      inputs: { kind: "renders", glbUrl: await signOne(admin, glbKey, "glb") },
+    };
+  }
+
+  const capturedRoomKey = ownedKey(scanRow.captured_room_json_url, scanRow);
+  if (!capturedRoomKey) throw new Error("missing captured_room input key");
+
+  if (stage === "splat") {
+    // A null/unusable photos_manifest_url is the COMMON case, not a fault: the
+    // ingest stage strips `photosManifest` as device-local, so the sidecar was
+    // never uploaded for a large share of scans. Falling back to the rows is
+    // what makes splat runnable for them at all. (A manifest url that IS set
+    // but points outside the scan's own prefix still throws KeyPrefixError from
+    // ownedKey — that is a mis-pointed column, not an absent sidecar.)
+    const manifestKey = ownedKey(scanRow.photos_manifest_url, scanRow);
+    const photosSource: PhotosSource = manifestKey ? "manifest" : "rows";
+
+    const candidates = await resolvePhotoCandidates(admin, scanRow);
+    if (candidates.length === 0) throw new Error("scan has no room_scan_images rows");
+
+    // On the manifest path the sidecar supplies the poses, so every photo is
+    // usable. On the fallback path a row without a transform or intrinsics
+    // cannot become a frame, and is dropped rather than guessed at. Filtering
+    // BEFORE the cap matters: capping first would spend cap slots on rows that
+    // are then discarded, leaving fewer than 80 trainable views.
+    const usable = manifestKey ? candidates : candidates.filter((c) => isPoseBearing(c.record));
+    if (usable.length === 0) {
+      // Only now is it a hard failure: no sidecar AND not one pose-bearing row.
+      throw new Error("scan has no photos manifest and no pose-bearing room_scan_images rows");
+    }
+
+    const cap = capPhotoKeys(usable.map((c) => c.key));
+    const capped = usable.slice(0, cap.keys.length);
+
+    // One batched call for the photos (up to PHOTO_URL_CAP); the manifest is
+    // only signed on the path that has one.
+    const [photoUrls, capturedRoomJsonUrl, photosManifestUrl] = await Promise.all([
+      signKeys(admin, cap.keys, "photo"),
+      signOne(admin, capturedRoomKey, "captured_room"),
+      manifestKey ? signOne(admin, manifestKey, "photos_manifest") : Promise.resolve(undefined),
+    ]);
+
+    return {
+      roomFileId,
+      inputs: {
+        kind: "splat",
+        photosSource,
+        ...(photosSource === "manifest"
+          ? { photosManifestUrl }
+          : { photoRecords: capped.map((c) => c.record) }),
+        photoUrls,
+        capturedRoomJsonUrl,
+        photoUrlsCapped: cap.capped,
+        photoCount: cap.total,
+      },
+    };
+  }
+
+  const meshKey = ownedKey(scanRow.mesh_url, scanRow);
+  if (!meshKey) throw new Error("missing mesh input key");
+  const [meshUrl, capturedRoomJsonUrl] = await Promise.all([
+    signOne(admin, meshKey, "mesh"),
+    signOne(admin, capturedRoomKey, "captured_room"),
   ]);
-  if (meshSigned.error || !meshSigned.data?.signedUrl) {
-    throw new Error("createSignedUrl failed for mesh input");
-  }
-  if (capturedRoomSigned.error || !capturedRoomSigned.data?.signedUrl) {
-    throw new Error("createSignedUrl failed for captured_room input");
-  }
-
-  return {
-    roomFileId: roomFileRow.id,
-    meshUrl: meshSigned.data.signedUrl,
-    capturedRoomJsonUrl: capturedRoomSigned.data.signedUrl,
-  };
+  return { roomFileId, inputs: { kind: "verify", meshUrl, capturedRoomJsonUrl } };
 }
 
 /** Report a dispatch failure through the existing lease/backoff RPC (00378) —
@@ -210,9 +377,19 @@ async function dispatchOne(
   }
   const { scanId, roomFileVersion } = idCheck.ids;
 
-  let inputs: { roomFileId: string; meshUrl: string; capturedRoomJsonUrl: string };
+  const stage = stageForTaskType(task.task_type);
+  if (stage === null) {
+    // claim_agent_tasks was asked for exactly DISPATCH_TASK_TYPES, so this is
+    // unreachable short of a queue-side change — park it rather than guessing
+    // which stage's inputs to resolve.
+    log("task_input_invalid", { task_id: task.id, reason: "unknown task_type" });
+    await failDispatch(admin, task, "invalid_payload: unknown task_type", leaseOwner, true);
+    return "failed";
+  }
+
+  let resolved: { roomFileId: string; inputs: DispatchInputs };
   try {
-    inputs = await resolveDispatchInputs(admin, scanId, roomFileVersion);
+    resolved = await resolveDispatchInputs(admin, stage, scanId, roomFileVersion);
   } catch (err) {
     // An owner-prefix rejection is terminal, not a retry candidate: the row's
     // url column points outside this scan's own prefix, and no number of
@@ -245,11 +422,11 @@ async function dispatchOne(
     taskId: task.id,
     leaseToken: leaseOwner,
     scanId,
-    roomFileId: inputs.roomFileId,
+    roomFileId: resolved.roomFileId,
     roomFileVersion,
     taskType: task.task_type,
     traceId,
-    inputs: { meshUrl: inputs.meshUrl, capturedRoomJsonUrl: inputs.capturedRoomJsonUrl },
+    inputs: resolved.inputs,
   });
 
   let httpStatus: number | null = null;
@@ -280,6 +457,8 @@ async function dispatchOne(
       scan_id: scanId,
       task_type: task.task_type,
       http_status: httpStatus,
+      // Which pose carrier splat got. Null for the stages that have none.
+      photos_source: resolved.inputs.kind === "splat" ? resolved.inputs.photosSource : null,
     });
     return "spawned";
   }
