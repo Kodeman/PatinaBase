@@ -266,9 +266,11 @@ async function handleCatalog(
 function failingBinding(
   freshFailed: boolean,
   cachedFailed: boolean,
-): 'DB_FRESH' | 'DB_PUBLIC_CACHE' | 'both' {
+): 'DB_CATALOG_FRESH' | 'DB_PUBLIC_CACHE' | 'both' {
   if (freshFailed && cachedFailed) return 'both';
-  return freshFailed ? 'DB_FRESH' : 'DB_PUBLIC_CACHE';
+  // The shadow fresh leg reads DB_CATALOG_FRESH (the catalog reader), not
+  // DB_FRESH (the RLS login) — point an operator at the binding that failed.
+  return freshFailed ? 'DB_CATALOG_FRESH' : 'DB_PUBLIC_CACHE';
 }
 
 function logComparison(
@@ -360,13 +362,25 @@ async function handleHealth(
     return privateJson({ error: 'not_found' }, 404, traceId);
   }
   const required = config.catalogSource !== 'legacy';
-  const [fresh, publicCache] = await Promise.all([
+  // Only shadow reads the fresh leg (DB_CATALOG_FRESH); legacy and hyperdrive
+  // never do, so the reader is not_applicable there even if it is bound. In
+  // shadow it must answer, or every comparison silently runs one-legged.
+  const [fresh, publicCache, catalogFresh] = await Promise.all([
     checkBinding(env.DB_FRESH, required, dependencies),
     checkBinding(env.DB_PUBLIC_CACHE, required, dependencies),
+    config.catalogSource === 'shadow'
+      ? checkBinding(env.DB_CATALOG_FRESH, true, dependencies)
+      : Promise.resolve<BindingCheck>('not_applicable'),
   ]);
-  const healthy = fresh !== 'unavailable' && publicCache !== 'unavailable';
+  const healthy =
+    fresh !== 'unavailable' &&
+    publicCache !== 'unavailable' &&
+    catalogFresh !== 'unavailable';
   return privateJson(
-    { status: healthy ? 'ok' : 'degraded', checks: { fresh, publicCache } },
+    {
+      status: healthy ? 'ok' : 'degraded',
+      checks: { fresh, publicCache, catalogFresh },
+    },
     healthy ? 200 : 503,
     traceId,
   );

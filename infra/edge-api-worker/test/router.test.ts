@@ -515,7 +515,7 @@ describe('shadow verification evidence', () => {
     expect(deps.log).toHaveBeenCalledWith(
       expect.objectContaining({
         event: ALERT_EVENTS.catalogHyperdriveFailure,
-        binding: 'DB_FRESH',
+        binding: 'DB_CATALOG_FRESH',
         fallback: 'legacy',
       }),
     );
@@ -626,7 +626,7 @@ describe('health, proxy deadline, and default response policy', () => {
     expect(response.status).toBe(503);
     expect(body).toEqual({
       status: 'degraded',
-      checks: { fresh: 'ok', publicCache: 'unavailable' },
+      checks: { fresh: 'ok', publicCache: 'unavailable', catalogFresh: 'not_applicable' },
     });
     expect(JSON.stringify(body)).not.toMatch(/postgres|version|schema|credential/i);
     expect(deps.probe).toHaveBeenCalledTimes(2);
@@ -642,7 +642,11 @@ describe('health, proxy deadline, and default response policy', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       status: 'ok',
-      checks: { fresh: 'not_applicable', publicCache: 'not_applicable' },
+      checks: {
+        fresh: 'not_applicable',
+        publicCache: 'not_applicable',
+        catalogFresh: 'not_applicable',
+      },
     });
   });
 
@@ -659,7 +663,11 @@ describe('health, proxy deadline, and default response policy', () => {
 
   it('still fails a promoted rung whose provisioned probe does not answer', async () => {
     const deps = dependencies({
-      probe: vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false),
+      probe: vi
+        .fn()
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true),
     });
     const { response } = await request(
       createWorker(deps),
@@ -669,8 +677,63 @@ describe('health, proxy deadline, and default response policy', () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
       status: 'degraded',
-      checks: { fresh: 'ok', publicCache: 'unavailable' },
+      checks: { fresh: 'ok', publicCache: 'unavailable', catalogFresh: 'ok' },
     });
+    expect(deps.probe).toHaveBeenCalledTimes(3);
+  });
+
+  it('degrades shadow mode when only the DB_CATALOG_FRESH fresh leg cannot answer', async () => {
+    const deps = dependencies({
+      probe: vi
+        .fn()
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false),
+    });
+    const { response } = await request(
+      createWorker(deps),
+      env({ CATALOG_SOURCE: 'shadow' }),
+      'https://api.patina.cloud/_internal/health',
+    );
+    // Before health probed DB_CATALOG_FRESH this returned 200 ok while every
+    // shadow comparison ran one-legged; now the fresh leg gates the rung.
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      status: 'degraded',
+      checks: { fresh: 'ok', publicCache: 'ok', catalogFresh: 'unavailable' },
+    });
+    expect(deps.probe).toHaveBeenCalledTimes(3);
+  });
+
+  it('reports a healthy shadow rung with all three legs answering', async () => {
+    const deps = dependencies({ probe: vi.fn(async () => true) });
+    const { response } = await request(
+      createWorker(deps),
+      env({ CATALOG_SOURCE: 'shadow' }),
+      'https://api.patina.cloud/_internal/health',
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      status: 'ok',
+      checks: { fresh: 'ok', publicCache: 'ok', catalogFresh: 'ok' },
+    });
+    expect(deps.probe).toHaveBeenCalledTimes(3);
+  });
+
+  it('never probes DB_CATALOG_FRESH outside shadow mode even when it is bound', async () => {
+    const deps = dependencies({ probe: vi.fn(async () => true) });
+    const { response } = await request(
+      createWorker(deps),
+      env({ CATALOG_SOURCE: 'hyperdrive', CATALOG_HYPERDRIVE_PERCENT: '100' }),
+      'https://api.patina.cloud/_internal/health',
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      status: 'ok',
+      checks: { fresh: 'ok', publicCache: 'ok', catalogFresh: 'not_applicable' },
+    });
+    // DB_CATALOG_FRESH is bound in env() but the fresh leg is unused at rung
+    // three, so only DB_FRESH and DB_PUBLIC_CACHE are probed.
     expect(deps.probe).toHaveBeenCalledTimes(2);
   });
 
@@ -684,7 +747,11 @@ describe('health, proxy deadline, and default response policy', () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
       status: 'degraded',
-      checks: { fresh: 'unavailable', publicCache: 'unavailable' },
+      checks: {
+        fresh: 'unavailable',
+        publicCache: 'unavailable',
+        catalogFresh: 'not_applicable',
+      },
     });
   });
 
