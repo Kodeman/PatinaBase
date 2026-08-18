@@ -21,6 +21,35 @@
 -- task was dispatched for is still current. Both tasks can hold perfectly valid
 -- leases on different rows at the same time.
 --
+-- ─── WHAT THIS ACTUALLY GUARANTEES, AND WHAT IT DOES NOT ────────────────────
+-- Read the claim narrowly, because the difference matters operationally.
+--
+-- What it closes: the ~25-MINUTE window. Before this migration a stage that
+-- started before a newer solve landed would merge its result whenever it
+-- finished, minutes or tens of minutes later. That is the real, routinely-hit
+-- race, and it is now gone — the target row is read FOR UPDATE, the max is
+-- computed, and the merge happens under that same lock.
+--
+-- What REMAINS: a microsecond-scale window between the max(version) read and
+-- this transaction's commit. The version-INSERT path (the worker's
+-- `reserve_room_file`, services/scan-pipeline/src/patina_scan_worker/db.py)
+-- takes no shared lock against the scan, so a concurrent insert of version N+1
+-- can land in that gap and this transaction will still commit against version N
+-- believing it was current. Nothing here can prevent that: FOR UPDATE locks
+-- rows that EXIST, and the racing row does not exist yet when the max is read.
+-- Closing it fully needs the insert side to serialize too — an advisory lock or
+-- a lock on the parent room_scans row taken by BOTH paths.
+--
+-- That residual is ACCEPTED, deliberately, not overlooked. The exposure shrinks
+-- from tens of minutes to the length of one UPDATE, and buying the last of it
+-- means changing a function this migration does not own, in a service with its
+-- own deploy cycle, for a race that requires an insert to land inside a
+-- microsecond window. It is a W3 item: the Python worker's credential migration
+-- (plan §3 W3) already reworks `storage.py` and the worker's DB access, so
+-- `reserve_room_file` is being touched there anyway and the shared lock costs
+-- almost nothing to add in that pass. Until then, treat "the newest version
+-- wins" as true at minute scale and not provable at microsecond scale.
+--
 -- W1 documented the hole as a strict xfail in
 -- services/scan-modal/tests/test_golden_cases.py
 -- (`test_stale_room_file_version_is_not_yet_rejected`). This migration is the
@@ -93,7 +122,8 @@ BEGIN
   END IF;
 
   -- FOR UPDATE on the target row: the version check and the merge share one
-  -- lock, so a newer room_file landing concurrently cannot slip between them.
+  -- lock, so nothing can modify THIS row between them. It does not lock rows
+  -- that do not exist yet — see the header on the residual insert-side window.
   SELECT rf.scan_id, rf.version INTO v_room_file_scan, v_room_file_version
     FROM public.room_files rf WHERE rf.id = p_room_file_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -126,6 +156,8 @@ BEGIN
   -- row with a NULL scan_id has no sibling set to be newest within, so it is
   -- exempt rather than refused — refusing it would break a legitimate write on
   -- a technicality of a nullable column.
+  -- This max() is a plain read: it cannot see, or wait for, an uncommitted
+  -- insert of a newer version. Header, "what remains".
   IF v_room_file_scan IS NOT NULL THEN
     SELECT max(rf.version) INTO v_max_version
       FROM public.room_files rf WHERE rf.scan_id = v_room_file_scan;
