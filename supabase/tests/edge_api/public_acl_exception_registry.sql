@@ -180,7 +180,13 @@ CREATE TEMP TABLE public_acl_exception_registry (
   kind              text,
   reason            text,
   accepted_by       text,
-  accepted_on       date
+  accepted_on       date,
+  -- body_hash pins the CONTENT of a storage_policy row, not just its name.
+  -- NULL for every other kind; a 64-char sha256 hex for storage_policy rows,
+  -- set by the UPDATE below. Invariant C matches name AND this hash, so a
+  -- migration that keeps a registered policy's name but widens its
+  -- USING/WITH CHECK body scores red instead of riding the name match.
+  body_hash         text
 );
 
 INSERT INTO public_acl_exception_registry
@@ -595,6 +601,68 @@ VALUES
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- PINNED POLICY BODIES for the 28 storage_policy rows.
+--
+-- A name is not an identity for a policy any more than it is for a routine. The
+-- census's section E signed these 28 {public} policies as safe on the strength
+-- of what their USING/WITH CHECK predicates DO — "the predicate binds the caller
+-- identity, so the {public} role list is cosmetic." That signature is void the
+-- moment the predicate changes. Invariant C used to exempt by name alone, so a
+-- migration that kept the name and widened the body inherited a signature it was
+-- never given — the exact shape of this programme's mood-board false pass, where
+-- a policy proved only that a proposal existed yet admitted every caller.
+--
+-- The hash is sha256(coalesce(qual,'') || coalesce(with_check,'')) in lowercase
+-- hex, the deparsed predicate exactly as pg_policies reports it. The 28 values
+-- below were read read-only from staging (vuesoyhfrjabfxbrzekd) on 2026-08-18
+-- and confirmed byte-identical on a fresh local `supabase db reset`, so the
+-- pinned value is staging reality and the local gate stays green against it.
+--
+-- REGENERATION RULE. A mismatch is a body change, and a body change withdraws
+-- the census's section-E acceptance. Do not repin to silence a red gate: the
+-- policy was signed on its old predicate, and the new one needs a fresh ruling
+-- exactly as a new object would. Repin only from a re-signed body.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+UPDATE public_acl_exception_registry AS r
+   SET body_hash = v.body_hash
+  FROM (
+    VALUES
+      ('storage.objects."Active participants can upload attachments"', 'a72a8520e9e45f85d1eb6e4691120f92c112fe1a94168c6a7fe4e0d9acf10942'),
+      ('storage.objects."Anyone can view thumbnails"', '6c80f11162ca779b43ef7ffc22ca4a9825dc2d894f6f566455c1783bd3273362'),
+      ('storage.objects."Authenticated users can delete thumbnails"', '0a32e1c85406375c5a26b23856326b601463a51d387953940c3ed55df1659cf6'),
+      ('storage.objects."Authenticated users can upload thumbnails"', '0a32e1c85406375c5a26b23856326b601463a51d387953940c3ed55df1659cf6'),
+      ('storage.objects."Avatar images are publicly readable"', 'ea7c57e7503973444b1c12f9bc34a5e4e55a3294cb9fccc01032c615b8657328'),
+      ('storage.objects."Designers can read shared scan artifacts"', 'f635cebc0006c8d7672a70597b8b7496407300a83cb0815c6c0b6b6d927df112'),
+      ('storage.objects."Designers delete project documents"', '939b19fd397c444b94d351a262346b251bfc60a8c5becee56b5b02ad65c03a7f'),
+      ('storage.objects."Designers update project documents"', '939b19fd397c444b94d351a262346b251bfc60a8c5becee56b5b02ad65c03a7f'),
+      ('storage.objects."Designers upload project documents"', '939b19fd397c444b94d351a262346b251bfc60a8c5becee56b5b02ad65c03a7f'),
+      ('storage.objects."Org admins manage studio logos (delete)"', '41befff2a667a9e4a48774e29335821dc6291de9b203df9535a5d9baac5ac335'),
+      ('storage.objects."Org admins manage studio logos (insert)"', '41befff2a667a9e4a48774e29335821dc6291de9b203df9535a5d9baac5ac335'),
+      ('storage.objects."Org admins manage studio logos (update)"', '41befff2a667a9e4a48774e29335821dc6291de9b203df9535a5d9baac5ac335'),
+      ('storage.objects."Product images are publicly accessible"', '114de5b2af8105ddbbd5e207f795f4671fcca4a5fa51d61a6eb61272481ef63f'),
+      ('storage.objects."Project members can read documents"', '60a37b4429d9fc4abe782d57b2e2ec2ebd3d34ebdee1c535277620f46998c42f'),
+      ('storage.objects."Proposal assets are publicly readable"', '1312be3a0c9b3ab3403b0073e0801bdbaf4ae1f7641270e7e693932cb98f437f'),
+      ('storage.objects."Public read access for hero frames"', 'f1f4e1c7e131066bc91b03eefb842476275b81b394594e29ef3f76f4ecc05239'),
+      ('storage.objects."Studio logos are publicly readable"', '6f9774990347e339476bf49d78e0b0893c093bdbae60524476ca636cb8b4c5e2'),
+      ('storage.objects."Thread participants can read attachments"', 'd406e801029efef0c0f3b71bb43a78e9c9dc627f4e51d11904d1f1d10d42693d'),
+      ('storage.objects."Users can delete their hero frames"', 'b649717363ab414480d1451d5c19d0654a14c2b2b076bc42d11b7d2678f8aa5a'),
+      ('storage.objects."Users can delete their own avatar"', 'abc54788ec59aad33dd6eeb09f3027dc9ce41bc1cf86e8f097f2cf55b821ad2f'),
+      ('storage.objects."Users can delete their own scan artifacts"', 'a54ef4b0746957a8fe594e611c9bca6d078751572adc66a0b592a940698966b6'),
+      ('storage.objects."Users can read their own scan artifacts"', 'a54ef4b0746957a8fe594e611c9bca6d078751572adc66a0b592a940698966b6'),
+      ('storage.objects."Users can update their hero frames"', 'b649717363ab414480d1451d5c19d0654a14c2b2b076bc42d11b7d2678f8aa5a'),
+      ('storage.objects."Users can update their own avatar"', 'abc54788ec59aad33dd6eeb09f3027dc9ce41bc1cf86e8f097f2cf55b821ad2f'),
+      ('storage.objects."Users can update their own scan artifacts"', 'a54ef4b0746957a8fe594e611c9bca6d078751572adc66a0b592a940698966b6'),
+      ('storage.objects."Users can upload hero frames"', 'b649717363ab414480d1451d5c19d0654a14c2b2b076bc42d11b7d2678f8aa5a'),
+      ('storage.objects."Users can upload their own avatar"', 'abc54788ec59aad33dd6eeb09f3027dc9ce41bc1cf86e8f097f2cf55b821ad2f'),
+      ('storage.objects."Users can upload their own scan artifacts"', 'a54ef4b0746957a8fe594e611c9bca6d078751572adc66a0b592a940698966b6')
+  ) AS v(object_signature, body_hash)
+ WHERE r.kind = 'storage_policy'
+   AND r.schema_name = 'storage'
+   AND r.object_signature = v.object_signature;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- The registry asserts itself. An unsigned, empty, or pattern-shaped list must
 -- fail here rather than reach a gate and pass it.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -608,6 +676,8 @@ DECLARE
   malformed_routine    text;
   malformed_relation   text;
   duplicated           text;
+  unpinned_storage     text;
+  mispinned_nonstorage text;
 BEGIN
   SELECT count(*) INTO row_count FROM public_acl_exception_registry;
   IF row_count = 0 THEN
@@ -700,6 +770,35 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = format(
       'PUBLIC ACL EXCEPTION REGISTRY has duplicate signature(s): %s. Two rows for one object means two reasons, and a reader cannot tell which was signed',
       duplicated
+    );
+  END IF;
+
+  -- Every storage_policy row must carry a pinned 64-char sha256 body hash. An
+  -- unpinned storage row would fall back to name-only exemption — the hole this
+  -- change closes — so a missing or malformed hash must fail here.
+  SELECT string_agg(object_signature, ', ' ORDER BY object_signature)
+    INTO unpinned_storage
+    FROM public_acl_exception_registry
+   WHERE kind = 'storage_policy'
+     AND (body_hash IS NULL OR body_hash !~ '^[0-9a-f]{64}$');
+  IF unpinned_storage IS NOT NULL THEN
+    RAISE EXCEPTION USING MESSAGE = format(
+      'PUBLIC ACL EXCEPTION REGISTRY storage_policy row(s) missing a valid pinned body hash: %s. A name-only storage exception is the exact hole invariant C now closes',
+      unpinned_storage
+    );
+  END IF;
+
+  -- Only storage_policy rows are content-pinned; a body_hash anywhere else is a
+  -- copy-paste error that no consumer reads and must not pass silently.
+  SELECT string_agg(object_signature, ', ' ORDER BY object_signature)
+    INTO mispinned_nonstorage
+    FROM public_acl_exception_registry
+   WHERE kind <> 'storage_policy'
+     AND body_hash IS NOT NULL;
+  IF mispinned_nonstorage IS NOT NULL THEN
+    RAISE EXCEPTION USING MESSAGE = format(
+      'PUBLIC ACL EXCEPTION REGISTRY non-storage row(s) carry a body_hash no consumer reads: %s',
+      mispinned_nonstorage
     );
   END IF;
 END
@@ -900,17 +999,38 @@ UNION ALL
 --    cannot ride invariant A's reachability: `anon` holds its own explicit
 --    USAGE on `storage` and SELECT/INSERT/UPDATE/DELETE on storage.objects,
 --    and a policy whose role list is {public} applies to every role including
---    `anon`. Reachability is therefore assumed, not tested, and the whole
---    control is "is this policy on the signed list".
+--    `anon`. Reachability is therefore assumed, not tested.
+--
+--    The control is NOT "is this policy name on the signed list" — that was the
+--    hole. It is "does a signed row match this policy's name AND its pinned body
+--    hash". A registered name whose live USING/WITH CHECK body no longer hashes
+--    to the pinned value is scored red with a distinct detail, so widening a
+--    registered policy in place (the mood-board false-pass class) cannot inherit
+--    the old signature.
 SELECT
   'C'::text,
   'storage'::text,
   pg_catalog.format('storage.objects."%s"', pol.policyname),
   'supabase_storage_admin'::text,
-  pg_catalog.format(
-    '%s policy on storage.objects with role list {public}, not on the signed list',
-    pol.cmd
-  )
+  CASE
+    WHEN EXISTS (
+      SELECT 1
+        FROM public_acl_exception_registry AS x
+       WHERE x.kind = 'storage_policy'
+         AND x.schema_name = 'storage'
+         AND x.object_signature = pg_catalog.format(
+           'storage.objects."%s"', pol.policyname
+         )
+    )
+    THEN pg_catalog.format(
+      '%s policy on storage.objects is registered but its body hash no longer matches the signed value (USING/WITH CHECK changed); re-sign the body, do not repin',
+      pol.cmd
+    )
+    ELSE pg_catalog.format(
+      '%s policy on storage.objects with role list {public}, not on the signed list',
+      pol.cmd
+    )
+  END
 FROM pg_catalog.pg_policies AS pol
 WHERE pol.schemaname = 'storage'
   AND pol.tablename = 'objects'
@@ -924,6 +1044,11 @@ WHERE pol.schemaname = 'storage'
        AND x.schema_name = 'storage'
        AND x.object_signature = pg_catalog.format(
          'storage.objects."%s"', pol.policyname
+       )
+       AND x.body_hash = pg_catalog.encode(
+         pg_catalog.sha256(pg_catalog.convert_to(
+           COALESCE(pol.qual, '') || COALESCE(pol.with_check, ''), 'utf8'
+         )), 'hex'
        )
   );
 

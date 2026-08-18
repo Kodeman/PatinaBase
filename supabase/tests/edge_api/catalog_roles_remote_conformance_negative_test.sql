@@ -141,10 +141,12 @@ GRANT EXECUTE ON FUNCTION public.cf_acl_negative_trigger_definer() TO PUBLIC;
 
 DO $probe$
 DECLARE
-  b            record;
-  caught       integer;
-  hidden_from  integer;
-  trigger_state text;
+  b               record;
+  caught          integer;
+  hidden_from     integer;
+  trigger_state   text;
+  registered_qual text;
+  body_mismatch   integer;
 BEGIN
   SELECT * INTO b FROM cf_acl_negative_baseline;
 
@@ -184,6 +186,65 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = format(
       'ANTI-VACUITY FAILURE (invariant C): a new {public} policy on storage.objects produced %s findings, expected exactly 1. The 28 storage_policy registry rows would be decorative',
       caught
+    );
+  END IF;
+
+  -- ── Phase 3b — invariant C catches a REGISTERED policy whose body widened ──
+  -- The mood-board false-pass class, exactly: keep a registered {public}
+  -- policy's NAME, widen its predicate. The name still matches a registry row;
+  -- the pinned body hash does not. A name-only exemption (the hole this closes)
+  -- would score green; the content pin must score red. The policy is restored
+  -- immediately so the Phase 7 deltas still hold — and on any failure here
+  -- ON_ERROR_STOP rolls the whole transaction back regardless.
+  SELECT qual INTO registered_qual
+    FROM pg_catalog.pg_policies
+   WHERE schemaname = 'storage'
+     AND tablename = 'objects'
+     AND policyname = 'Product images are publicly accessible';
+
+  EXECUTE format(
+    'ALTER POLICY %I ON storage.objects USING (%s OR true)',
+    'Product images are publicly accessible', registered_qual
+  );
+
+  SELECT count(*) INTO body_mismatch
+    FROM public_acl_capability_findings
+   WHERE invariant = 'C'
+     AND object_signature
+         = 'storage.objects."Product images are publicly accessible"'
+     AND detail LIKE '%body hash no longer matches%';
+  IF body_mismatch <> 1 THEN
+    RAISE EXCEPTION USING MESSAGE = format(
+      'ANTI-VACUITY FAILURE (invariant C body pin): widening a REGISTERED {public} storage policy produced %s body-mismatch finding(s), expected exactly 1. A name-only exemption would have hidden the widened body — the exact mood-board false pass',
+      body_mismatch
+    );
+  END IF;
+
+  -- Total invariant C is now baseline + 2 (the unregistered cf policy AND this
+  -- widened registered one); confirm, then restore.
+  SELECT count(*) INTO caught
+    FROM public_acl_capability_findings WHERE invariant = 'C';
+  IF caught <> b.invariant_c + 2 THEN
+    RAISE EXCEPTION USING MESSAGE = format(
+      'invariant C did not rise to baseline+2 under a widened registered policy (delta %s)',
+      caught - b.invariant_c
+    );
+  END IF;
+
+  EXECUTE format(
+    'ALTER POLICY %I ON storage.objects USING (%s)',
+    'Product images are publicly accessible', registered_qual
+  );
+
+  -- Restored: the registered policy hashes to its pinned value again, so
+  -- invariant C returns to baseline + 1 (only the unregistered cf policy). This
+  -- proves the pin is content-addressed, not a one-way tripwire.
+  SELECT count(*) INTO caught
+    FROM public_acl_capability_findings WHERE invariant = 'C';
+  IF caught <> b.invariant_c + 1 THEN
+    RAISE EXCEPTION USING MESSAGE = format(
+      'invariant C did not return to baseline+1 after restoring the registered policy body (delta %s); the pin is not content-addressed',
+      caught - b.invariant_c
     );
   END IF;
 
