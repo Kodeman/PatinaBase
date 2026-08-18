@@ -9,6 +9,7 @@ import type { EdgeApiEnv } from '../src/env';
 import { ALERT_EVENTS, rolloutBucket } from '../src/security';
 
 const ID = '00000000-0000-4000-8000-000000000001';
+const OTHER_ID = '00000000-0000-4000-8000-000000000002';
 const product: CatalogProductSummary = {
   id: ID,
   name: 'Catalog Chair',
@@ -62,6 +63,7 @@ function dependencies(
   return {
     fetcher: vi.fn(async () => new Response('upstream')),
     queryHyperdrive: vi.fn(async () => [product]),
+    queryFresh: vi.fn(async () => [product]),
     queryLegacy: vi.fn(async () => [product]),
     probe: vi.fn(async () => true),
     authorizeHealth: vi.fn(async () => true),
@@ -195,7 +197,7 @@ describe('catalog route', () => {
     );
   });
 
-  it('returns the approved Hyperdrive result when the legacy body misses its deadline', async () => {
+  it('returns an uncacheable Hyperdrive result when the legacy body misses its deadline', async () => {
     const deps = dependencies({
       queryLegacy: (requestEnv, ids, signal) =>
         queryCatalogViaLegacy(
@@ -216,30 +218,12 @@ describe('catalog route', () => {
     );
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual([product]);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(deps.log).toHaveBeenCalledWith(
       expect.objectContaining({
-        event: ALERT_EVENTS.catalogLegacyFailure,
+        event: ALERT_EVENTS.catalogUnverified,
+        severity: 'critical',
         fallback: 'hyperdrive_public_view',
-      }),
-    );
-  });
-
-  it('fails a missing public-cache binding safely to the legacy catalog', async () => {
-    const deps = dependencies({ queryHyperdrive: queryCatalogViaHyperdrive });
-    const { response } = await request(
-      createWorker(deps),
-      env({
-        DB_PUBLIC_CACHE: undefined,
-        CATALOG_SOURCE: 'hyperdrive',
-        CATALOG_HYPERDRIVE_PERCENT: '100',
-      }),
-    );
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual([product]);
-    expect(deps.log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: ALERT_EVENTS.catalogHyperdriveFailure,
-        fallback: 'legacy',
       }),
     );
   });
@@ -328,6 +312,213 @@ describe('catalog route', () => {
       );
     },
   );
+});
+
+describe('promotion ladder binding gate', () => {
+  it.each([
+    { CATALOG_SOURCE: 'shadow', CATALOG_HYPERDRIVE_PERCENT: '0', DB_FRESH: undefined },
+    {
+      CATALOG_SOURCE: 'shadow',
+      CATALOG_HYPERDRIVE_PERCENT: '0',
+      DB_PUBLIC_CACHE: undefined,
+    },
+    {
+      CATALOG_SOURCE: 'shadow',
+      CATALOG_HYPERDRIVE_PERCENT: '0',
+      DB_FRESH: undefined,
+      DB_PUBLIC_CACHE: undefined,
+    },
+    {
+      CATALOG_SOURCE: 'hyperdrive',
+      CATALOG_HYPERDRIVE_PERCENT: '100',
+      DB_PUBLIC_CACHE: undefined,
+    },
+    {
+      CATALOG_SOURCE: 'hyperdrive',
+      CATALOG_HYPERDRIVE_PERCENT: '5',
+      DB_FRESH: undefined,
+    },
+    {
+      CATALOG_SOURCE: 'hyperdrive',
+      CATALOG_HYPERDRIVE_PERCENT: '100',
+      DB_FRESH: undefined,
+      DB_PUBLIC_CACHE: undefined,
+    },
+  ])(
+    'refuses to boot a promoted catalog source without its Hyperdrive bindings: %o',
+    async (state) => {
+      const deps = dependencies();
+      const { response } = await request(createWorker(deps), env(state));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: 'service_unavailable' });
+      expect(deps.queryLegacy).not.toHaveBeenCalled();
+      expect(deps.queryFresh).not.toHaveBeenCalled();
+      expect(deps.queryHyperdrive).not.toHaveBeenCalled();
+      expect(deps.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: ALERT_EVENTS.configurationInvalid,
+          severity: 'critical',
+          routeClass: 'catalog.products',
+        }),
+      );
+    },
+  );
+
+  it('still serves rung one with no Hyperdrive bindings at all', async () => {
+    const deps = dependencies();
+    const { response } = await request(
+      createWorker(deps),
+      env({ DB_FRESH: undefined, DB_PUBLIC_CACHE: undefined }),
+    );
+    expect(response.status).toBe(200);
+    expect(deps.queryLegacy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('shadow verification evidence', () => {
+  it('compares legacy, fresh, and cached before ruling a shadow run clean', async () => {
+    const deps = dependencies();
+    const { response, waits } = await request(
+      createWorker(deps),
+      env({ CATALOG_SOURCE: 'shadow' }),
+    );
+    expect(response.status).toBe(200);
+    await Promise.all(waits);
+    expect(deps.queryFresh).toHaveBeenCalledWith(expect.anything(), [ID]);
+    expect(deps.queryHyperdrive).toHaveBeenCalledWith(expect.anything(), [ID]);
+    expect(deps.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: ALERT_EVENTS.catalogShadowMatch,
+        severity: 'info',
+        traceId: 'trace-0000000000000000000000001',
+        routeClass: 'catalog.products',
+        comparison: 'legacy_vs_fresh_vs_cached',
+        legacyCount: 1,
+        freshCount: 1,
+        hyperdriveCount: 1,
+      }),
+    );
+  });
+
+  it('alerts when only the fresh read disagrees with legacy and cached', async () => {
+    const deps = dependencies({
+      queryFresh: vi.fn(async () => [{ ...product, retailCents: 999 }]),
+    });
+    const { waits } = await request(
+      createWorker(deps),
+      env({ CATALOG_SOURCE: 'shadow' }),
+    );
+    await Promise.all(waits);
+    expect(deps.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: ALERT_EVENTS.catalogShadowMismatch,
+        severity: 'critical',
+        comparison: 'legacy_vs_fresh_vs_cached',
+        freshCount: 1,
+        mismatchedIdCount: 1,
+      }),
+    );
+    expect(deps.log).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: ALERT_EVENTS.catalogShadowMatch }),
+    );
+  });
+
+  it('names the failing binding when a shadow leg cannot be read', async () => {
+    const deps = dependencies({
+      queryFresh: vi.fn(async () => Promise.reject(new Error('pool exhausted'))),
+    });
+    const { waits } = await request(
+      createWorker(deps),
+      env({ CATALOG_SOURCE: 'shadow' }),
+    );
+    await Promise.all(waits);
+    expect(deps.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: ALERT_EVENTS.catalogHyperdriveFailure,
+        binding: 'DB_FRESH',
+        fallback: 'legacy',
+      }),
+    );
+    expect(deps.log).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: ALERT_EVENTS.catalogShadowMatch }),
+    );
+  });
+
+  it('records a positive verification when the canary comparison agrees', async () => {
+    const deps = dependencies();
+    const { response } = await request(
+      createWorker(deps),
+      env({ CATALOG_SOURCE: 'hyperdrive', CATALOG_HYPERDRIVE_PERCENT: '100' }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe(
+      'public, max-age=60, stale-while-revalidate=15',
+    );
+    expect(deps.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: ALERT_EVENTS.catalogShadowMatch,
+        severity: 'info',
+        comparison: 'legacy_vs_cached',
+        legacyCount: 1,
+        hyperdriveCount: 1,
+      }),
+    );
+  });
+
+  it('discriminates a stale value from an entirely different result set', async () => {
+    async function mismatchEvent(rows: CatalogProductSummary[]) {
+      const deps = dependencies({ queryHyperdrive: vi.fn(async () => rows) });
+      await request(
+        createWorker(deps),
+        env({ CATALOG_SOURCE: 'hyperdrive', CATALOG_HYPERDRIVE_PERCENT: '100' }),
+      );
+      return vi
+        .mocked(deps.log)
+        .mock.calls.map(([event]) => event)
+        .find((event) => event.event === ALERT_EVENTS.catalogShadowMismatch);
+    }
+
+    const staleValue = await mismatchEvent([{ ...product, retailCents: 999 }]);
+    const differentSet = await mismatchEvent([
+      { ...product, id: OTHER_ID, name: 'Other Chair' },
+    ]);
+
+    expect(staleValue).toEqual(
+      expect.objectContaining({
+        legacyCount: 1,
+        hyperdriveCount: 1,
+        mismatchedIdCount: 1,
+        legacyDigest: expect.stringMatching(/^[0-9a-f]{8}$/),
+        hyperdriveDigest: expect.stringMatching(/^[0-9a-f]{8}$/),
+      }),
+    );
+    expect(differentSet).toEqual(
+      expect.objectContaining({ mismatchedIdCount: 2 }),
+    );
+    expect(staleValue).not.toEqual(differentSet);
+  });
+});
+
+describe('unverified degradation policy', () => {
+  it('never publicly caches a Hyperdrive body whose comparison did not run', async () => {
+    const deps = dependencies({
+      queryLegacy: vi.fn(async () => Promise.reject(new Error('upstream 401'))),
+    });
+    const { response } = await request(
+      createWorker(deps),
+      env({ CATALOG_SOURCE: 'hyperdrive', CATALOG_HYPERDRIVE_PERCENT: '100' }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([product]);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(deps.log).toHaveBeenCalledWith({
+      event: ALERT_EVENTS.catalogUnverified,
+      severity: 'critical',
+      traceId: 'trace-0000000000000000000000001',
+      routeClass: 'catalog.products',
+      fallback: 'hyperdrive_public_view',
+    });
+  });
 });
 
 describe('health, proxy deadline, and default response policy', () => {

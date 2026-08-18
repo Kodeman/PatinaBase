@@ -35,6 +35,11 @@ export function parseCatalogIds(url: URL): string[] {
   if (!raw) throw new CatalogRequestError('ids must contain 1 to 50 UUIDs');
 
   const pieces = raw.split(',');
+  // Bound the raw count before parsing: duplicates collapse in `unique`, so the
+  // size check alone accepts an unbounded list.
+  if (pieces.length > 50) {
+    throw new CatalogRequestError('ids must contain 1 to 50 unique UUIDs');
+  }
   if (pieces.some((piece) => piece.length === 0)) {
     throw new CatalogRequestError('ids must contain 1 to 50 UUIDs');
   }
@@ -123,15 +128,14 @@ export function normalizeCatalogRows(
   return normalized.sort((left, right) => left.id.localeCompare(right.id));
 }
 
-export async function queryCatalogViaHyperdrive(
-  env: EdgeApiEnv,
+async function queryCatalogViaBinding(
+  binding: Hyperdrive | undefined,
   ids: string[],
   createClient?: DatabaseClientFactory,
 ): Promise<CatalogProductSummary[]> {
-  if (!env.DB_PUBLIC_CACHE)
-    throw new CatalogSourceError('catalog database unavailable');
+  if (!binding) throw new CatalogSourceError('catalog database unavailable');
   const rows = await withClient(
-    env.DB_PUBLIC_CACHE,
+    binding,
     async (client) => {
       const result = await client.query<CatalogRow & Record<string, unknown>>(
         CATALOG_SELECT_SQL,
@@ -142,6 +146,22 @@ export async function queryCatalogViaHyperdrive(
     createClient,
   );
   return normalizeCatalogRows(rows, ids, false);
+}
+
+export async function queryCatalogViaHyperdrive(
+  env: EdgeApiEnv,
+  ids: string[],
+  createClient?: DatabaseClientFactory,
+): Promise<CatalogProductSummary[]> {
+  return queryCatalogViaBinding(env.DB_PUBLIC_CACHE, ids, createClient);
+}
+
+export async function queryCatalogViaFresh(
+  env: EdgeApiEnv,
+  ids: string[],
+  createClient?: DatabaseClientFactory,
+): Promise<CatalogProductSummary[]> {
+  return queryCatalogViaBinding(env.DB_FRESH, ids, createClient);
 }
 
 export async function queryCatalogViaLegacy(
@@ -254,4 +274,36 @@ export function catalogResultsMatch(
   right: readonly CatalogProductSummary[],
 ): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function catalogResultsDigest(
+  products: readonly CatalogProductSummary[],
+): string {
+  const serialized = JSON.stringify(products);
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < serialized.length; index += 1) {
+    hash ^= serialized.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+export function catalogDisagreeingIdCount(
+  sources: readonly (readonly CatalogProductSummary[])[],
+): number {
+  const ids = new Set<string>();
+  const bySource = sources.map((source) => {
+    const records = new Map<string, string>();
+    for (const product of source) {
+      records.set(product.id, JSON.stringify(product));
+      ids.add(product.id);
+    }
+    return records;
+  });
+  let disagreeing = 0;
+  for (const id of ids) {
+    const first = bySource[0]?.get(id);
+    if (bySource.some((records) => records.get(id) !== first)) disagreeing += 1;
+  }
+  return disagreeing;
 }

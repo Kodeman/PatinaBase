@@ -1,14 +1,16 @@
 export const ALERT_EVENTS = {
+  catalogShadowMatch: 'edge_api_catalog_shadow_match',
   catalogShadowMismatch: 'edge_api_catalog_shadow_mismatch',
   catalogHyperdriveFailure: 'edge_api_catalog_hyperdrive_failure',
   catalogLegacyFailure: 'edge_api_catalog_legacy_failure',
+  catalogUnverified: 'edge_api_catalog_unverified_response',
   compatibilityTimeout: 'edge_api_compatibility_timeout',
   configurationInvalid: 'edge_api_configuration_invalid',
   requestFailure: 'edge_api_request_failure',
 } as const;
 
 export type AlertEventName = (typeof ALERT_EVENTS)[keyof typeof ALERT_EVENTS];
-export type AlertSeverity = 'warning' | 'error' | 'critical';
+export type AlertSeverity = 'info' | 'warning' | 'error' | 'critical';
 export type RouteClass =
   | 'catalog.products'
   | 'internal.health'
@@ -20,30 +22,52 @@ export type RouteClass =
   | 'compat.storage'
   | 'unknown';
 
+export type CatalogComparison = 'legacy_vs_cached' | 'legacy_vs_fresh_vs_cached';
+export type CatalogBinding = 'DB_FRESH' | 'DB_PUBLIC_CACHE' | 'both';
+
 export interface AlertLogEvent {
   event: AlertEventName;
   severity: AlertSeverity;
   traceId: string;
   routeClass: RouteClass;
   fallback?: 'legacy' | 'hyperdrive_public_view' | 'unavailable';
+  comparison?: CatalogComparison;
+  binding?: CatalogBinding;
   legacyCount?: number;
+  freshCount?: number;
   hyperdriveCount?: number;
+  mismatchedIdCount?: number;
+  legacyDigest?: string;
+  freshDigest?: string;
+  hyperdriveDigest?: string;
   status?: number;
 }
 
+const OPTIONAL_LOG_FIELDS = [
+  'fallback',
+  'comparison',
+  'binding',
+  'legacyCount',
+  'freshCount',
+  'hyperdriveCount',
+  'mismatchedIdCount',
+  'legacyDigest',
+  'freshDigest',
+  'hyperdriveDigest',
+  'status',
+] as const satisfies readonly (keyof AlertLogEvent)[];
+
 export function structuredLog(input: AlertLogEvent): void {
-  const event: AlertLogEvent = {
+  const event: Record<string, unknown> = {
     event: input.event,
     severity: input.severity,
     traceId: input.traceId,
     routeClass: input.routeClass,
   };
-  if (input.fallback !== undefined) event.fallback = input.fallback;
-  if (input.legacyCount !== undefined) event.legacyCount = input.legacyCount;
-  if (input.hyperdriveCount !== undefined) {
-    event.hyperdriveCount = input.hyperdriveCount;
+  for (const field of OPTIONAL_LOG_FIELDS) {
+    const value = input[field];
+    if (value !== undefined) event[field] = value;
   }
-  if (input.status !== undefined) event.status = input.status;
   console.log(JSON.stringify(event));
 }
 

@@ -73,6 +73,11 @@ export function validateRuntimeConfig(env: EdgeApiEnv): RuntimeConfig {
   ) {
     throw new ConfigurationError();
   }
+  // A promoted rung that boots without its Hyperdrive bindings serves 100%
+  // legacy while reporting success; refuse it so a failed cutover is visible.
+  if (source !== 'legacy' && (!env.DB_FRESH || !env.DB_PUBLIC_CACHE)) {
+    throw new ConfigurationError();
+  }
 
   return {
     catalogSource: source,
