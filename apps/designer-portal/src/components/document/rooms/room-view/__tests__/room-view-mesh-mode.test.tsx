@@ -12,12 +12,24 @@
  */
 
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { RoomGeometryDocument } from '@patina/supabase';
 import { RoomView } from '../room-view';
 import { prototypeRoom } from '@/lib/room-view/__fixtures__/room-fixture';
 
 const mockUseRoomScan = jest.fn();
+const mockUseSignedScanModelUrl = jest.fn(() => ({ data: null, isFetching: false }));
+
+// Keeps the real `model-canvas` chunk (three + the ESM-only `three/examples`
+// loaders) out of the Jest module graph when MESH actually mounts — the same
+// mock `model/__tests__/model-stage.test.tsx` uses.
+jest.mock('next/dynamic', () => ({
+  __esModule: true,
+  default: () => function MockModelCanvas() {
+    return <div data-testid="model-canvas" />;
+  },
+}));
 
 jest.mock('@/lib/analytics', () => ({
   roomEvents: {
@@ -31,8 +43,13 @@ jest.mock('@patina/supabase', () => ({
   useRoomFiles: () => ({ data: [] }),
   useScanRefineArtifacts: () => ({ data: undefined }),
   useRoomScan: (...args: unknown[]) => mockUseRoomScan(...args),
-  useSignedScanModelUrl: () => ({ data: null, isFetching: false }),
+  useSignedScanModelUrl: (...args: unknown[]) => mockUseSignedScanModelUrl(...args),
 }));
+
+beforeEach(() => {
+  mockUseSignedScanModelUrl.mockClear();
+  mockUseSignedScanModelUrl.mockReturnValue({ data: null, isFetching: false });
+});
 
 function parsedDoc(): RoomGeometryDocument {
   return {
@@ -104,5 +121,56 @@ describe('RoomView — MESH mode gate', () => {
     renderRoomView();
 
     expect(screen.queryByRole('button', { name: 'Mesh' })).not.toBeInTheDocument();
+  });
+});
+
+describe('RoomView — signing is deferred until MESH is activated', () => {
+  const scan = {
+    id: 'scan-1',
+    model_url: 'https://storage.invalid/room.usdz',
+    model_url_gltf: 'https://storage.invalid/room.glb',
+  };
+
+  /** What every call to the signing hook was handed, in order. */
+  function sourcesPassed(): unknown[] {
+    return mockUseSignedScanModelUrl.mock.calls.map((call) => call[0]);
+  }
+
+  it('never asks Storage to sign anything on a Plan-only visit', () => {
+    mockUseRoomScan.mockReturnValue({ data: scan });
+
+    renderRoomView();
+
+    // The hook is still CALLED (it is a hook; it must be), but with a null
+    // source, which is what leaves the underlying query disabled. A Plan-only
+    // visit costs zero Storage calls.
+    expect(mockUseSignedScanModelUrl).toHaveBeenCalled();
+    expect(sourcesPassed().every((s) => s == null)).toBe(true);
+  });
+
+  it('passes the scan through only once MESH is switched on', async () => {
+    mockUseRoomScan.mockReturnValue({ data: scan });
+    const user = userEvent.setup();
+
+    renderRoomView();
+    const callsBeforeSwitch = sourcesPassed().length;
+
+    await user.click(screen.getByRole('button', { name: 'Mesh' }));
+
+    const after = sourcesPassed().slice(callsBeforeSwitch);
+    expect(after.length).toBeGreaterThan(0);
+    expect(after.at(-1)).toBe(scan);
+  });
+
+  it('still defers signing for a scan with no GLB, even after other switches', async () => {
+    mockUseRoomScan.mockReturnValue({ data: { ...scan, model_url_gltf: null } });
+    const user = userEvent.setup();
+
+    renderRoomView();
+    await user.click(screen.getByRole('button', { name: 'Orbit' }));
+
+    // No GLB means no MESH control and nothing to sign — switching elsewhere
+    // must not start signing a URL that cannot be loaded anyway.
+    expect(sourcesPassed().every((s) => s == null)).toBe(true);
   });
 });
