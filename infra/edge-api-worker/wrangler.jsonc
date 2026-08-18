@@ -5,7 +5,11 @@
   "compatibility_date": "2026-08-15",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
-  "observability": { "enabled": true },
+  // invocation_logs:false suppresses the Cloudflare platform channel that
+  // captures full request URLs — /auth/v1/verify?token=<OTP>,
+  // /rest/v1/...?email=... — into Workers Logs. Structured app logs are the
+  // only telemetry; they carry no raw URLs (see src/security.ts allowlist).
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } },
   // SUPABASE_ANON_KEY and health service-token values are Wrangler/.dev.vars
   // secrets. ACCESS_TEAM_DOMAIN and ACCESS_AUDIENCE are added with the Access app.
   "vars": {
@@ -29,6 +33,7 @@
     "local": {
       "name": "patina-edge-api-local",
       "workers_dev": true,
+      "observability": { "enabled": true, "logs": { "invocation_logs": false } },
       "vars": {
         "SUPABASE_UPSTREAM_URL": "http://127.0.0.1:54321",
         "SUPABASE_JWT_ISSUER": "http://127.0.0.1:54321/auth/v1",
@@ -49,6 +54,7 @@
     "staging": {
       "name": "patina-edge-api-staging",
       "workers_dev": true,
+      "observability": { "enabled": true, "logs": { "invocation_logs": false } },
       "vars": {
         "SUPABASE_UPSTREAM_URL": "https://vuesoyhfrjabfxbrzekd.supabase.co",
         "SUPABASE_JWT_ISSUER": "https://vuesoyhfrjabfxbrzekd.supabase.co/auth/v1",
@@ -72,6 +78,7 @@
     "production": {
       "name": "patina-edge-api",
       "workers_dev": true,
+      "observability": { "enabled": true, "logs": { "invocation_logs": false } },
       "vars": {
         "SUPABASE_UPSTREAM_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
         "SUPABASE_JWT_ISSUER": "https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1",
