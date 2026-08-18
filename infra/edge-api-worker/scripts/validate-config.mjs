@@ -1,16 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parse, printParseErrorCode } from 'jsonc-parser';
-
-const errors = [];
-const configText = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
-const parseErrors = [];
-const config = parse(configText, parseErrors, { allowTrailingComma: true });
-
-for (const error of parseErrors) {
-  errors.push(`wrangler.jsonc: ${printParseErrorCode(error.error)}`);
-}
 
 const requiredVars = [
   'SUPABASE_UPSTREAM_URL',
@@ -25,8 +16,17 @@ const requiredVars = [
 ];
 const requiredSecrets = ['SUPABASE_ANON_KEY'];
 
-function validateScope(label, scope) {
-  if (scope.workers_dev !== true) {
+export function validateScope(label, scope, errors) {
+  // Production must NOT expose a second, unauthenticated *.workers.dev origin:
+  // it is reachable only via the future api.patina.cloud route. Every other
+  // scope keeps workers_dev true until a route attachment is approved.
+  if (label === 'env.production') {
+    if (scope.workers_dev !== false) {
+      errors.push(
+        `${label}: workers_dev must be false — production must not expose a second unauthenticated *.workers.dev origin`,
+      );
+    }
+  } else if (scope.workers_dev !== true) {
     errors.push(`${label}: workers_dev must be true until route attachment is approved`);
   }
   if ('routes' in scope || 'route' in scope) {
@@ -107,47 +107,62 @@ function validateScope(label, scope) {
   }
 }
 
-validateScope('default', config);
-for (const name of ['local', 'staging', 'production']) {
-  if (!config.env?.[name]) errors.push(`missing env.${name}`);
-  else validateScope(`env.${name}`, config.env[name]);
-}
+function main() {
+  const errors = [];
+  const configText = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
+  const parseErrors = [];
+  const config = parse(configText, parseErrors, { allowTrailingComma: true });
 
-const provisionedFlag = process.argv.indexOf('--provisioned');
-if (provisionedFlag !== -1 && errors.length === 0) {
-  const environment = process.argv[provisionedFlag + 1];
-  if (!['default', 'local', 'staging', 'production'].includes(environment)) {
-    errors.push('provisioned secret check requires default, local, staging, or production');
-  } else {
-    const wrangler = fileURLToPath(
-      new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url),
-    );
-    const args = [wrangler, 'secret', 'list', '--format', 'json'];
-    if (environment === 'default') args.push('--env=');
-    else args.push('--env', environment);
-    const result = spawnSync(process.execPath, args, { encoding: 'utf8' });
-    if (result.status !== 0) {
-      errors.push(`env.${environment}: unable to verify Wrangler secrets`);
+  for (const error of parseErrors) {
+    errors.push(`wrangler.jsonc: ${printParseErrorCode(error.error)}`);
+  }
+
+  validateScope('default', config, errors);
+  for (const name of ['local', 'staging', 'production']) {
+    if (!config.env?.[name]) errors.push(`missing env.${name}`);
+    else validateScope(`env.${name}`, config.env[name], errors);
+  }
+
+  const provisionedFlag = process.argv.indexOf('--provisioned');
+  if (provisionedFlag !== -1 && errors.length === 0) {
+    const environment = process.argv[provisionedFlag + 1];
+    if (!['default', 'local', 'staging', 'production'].includes(environment)) {
+      errors.push('provisioned secret check requires default, local, staging, or production');
     } else {
-      try {
-        const parsed = JSON.parse(result.stdout);
-        const secrets = Array.isArray(parsed) ? parsed : parsed.secrets;
-        const names = new Set(secrets.map((secret) => secret.name));
-        for (const name of requiredSecrets) {
-          if (!names.has(name)) errors.push(`env.${environment}: missing Wrangler secret ${name}`);
+      const wrangler = fileURLToPath(
+        new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url),
+      );
+      const args = [wrangler, 'secret', 'list', '--format', 'json'];
+      if (environment === 'default') args.push('--env=');
+      else args.push('--env', environment);
+      const result = spawnSync(process.execPath, args, { encoding: 'utf8' });
+      if (result.status !== 0) {
+        errors.push(`env.${environment}: unable to verify Wrangler secrets`);
+      } else {
+        try {
+          const parsed = JSON.parse(result.stdout);
+          const secrets = Array.isArray(parsed) ? parsed : parsed.secrets;
+          const names = new Set(secrets.map((secret) => secret.name));
+          for (const name of requiredSecrets) {
+            if (!names.has(name)) errors.push(`env.${environment}: missing Wrangler secret ${name}`);
+          }
+        } catch {
+          errors.push(`env.${environment}: Wrangler secret inventory was malformed`);
         }
-      } catch {
-        errors.push(`env.${environment}: Wrangler secret inventory was malformed`);
       }
     }
   }
+
+  if (errors.length > 0) {
+    for (const error of errors) console.error(error);
+    process.exit(1);
+  }
+
+  console.log(
+    'Wrangler config contract: 4 environments complete; no attached routes; SUPABASE_ANON_KEY required as an environment-specific secret',
+  );
 }
 
-if (errors.length > 0) {
-  for (const error of errors) console.error(error);
-  process.exit(1);
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
 }
-
-console.log(
-  'Wrangler config contract: 4 environments complete; no attached routes; SUPABASE_ANON_KEY required as an environment-specific secret',
-);

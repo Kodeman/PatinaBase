@@ -77,7 +77,11 @@
     },
     "production": {
       "name": "patina-edge-api",
-      "workers_dev": true,
+      // Production is reachable only via the future api.patina.cloud route; a
+      // *.workers.dev origin would be a second, unauthenticated proxy to prod
+      // Supabase outside the patina.cloud zone. validate-config requires false
+      // here and true everywhere else. Staging/local deploys are unaffected.
+      "workers_dev": false,
       "observability": { "enabled": true, "logs": { "invocation_logs": false } },
       "vars": {
         "SUPABASE_UPSTREAM_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
