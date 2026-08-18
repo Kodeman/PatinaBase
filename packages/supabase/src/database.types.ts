@@ -28983,6 +28983,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      can_client_read_issued_board_media: {
+        Args: { p_object_name: string }
+        Returns: boolean
+      }
       can_dispatch_proposal_send: {
         Args: { p_owner: string }
         Returns: boolean
@@ -32133,23 +32137,31 @@ export type Database = {
           p_detail?: Json
           p_duration_ms?: number
           p_event: string
+          p_lease_owner: string
           p_room_file_id: string
           p_scan_id: string
           p_stage: string
           p_status?: string
+          p_task_id: string
         }
         Returns: string
       }
       scan_worker_complete_task: {
-        Args: { p_result?: Json; p_task_id: string }
+        Args: { p_lease_owner: string; p_result?: Json; p_task_id: string }
         Returns: undefined
       }
       scan_worker_fail_task: {
-        Args: { p_error: string; p_task_id: string }
+        Args: { p_error: string; p_lease_owner: string; p_task_id: string }
         Returns: undefined
       }
       scan_worker_update_room_file: {
-        Args: { p_artifacts?: Json; p_room_file_id: string; p_verify?: Json }
+        Args: {
+          p_artifacts?: Json
+          p_lease_owner: string
+          p_room_file_id: string
+          p_task_id: string
+          p_verify?: Json
+        }
         Returns: undefined
       }
       search_products: {

@@ -11146,6 +11146,18 @@ END $g$;
 
 -- 00489_media_registry_kernel.sql
 DO $g$ BEGIN
+  REVOKE ALL ON public.media_objects FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.media_objects FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.register_media_object(text, text, text, text, text, text, bigint, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -11170,49 +11182,49 @@ END $g$;
 
 -- 00490_scan_worker_roles.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.scan_worker_complete_task(uuid, jsonb) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.scan_worker_complete_task(uuid, text, jsonb) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00490_scan_worker_roles.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.scan_worker_complete_task(uuid, jsonb) TO scan_worker;
+  GRANT EXECUTE ON FUNCTION public.scan_worker_complete_task(uuid, text, jsonb) TO scan_worker;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00490_scan_worker_roles.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.scan_worker_fail_task(uuid, text) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.scan_worker_fail_task(uuid, text, text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00490_scan_worker_roles.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.scan_worker_fail_task(uuid, text) TO scan_worker;
+  GRANT EXECUTE ON FUNCTION public.scan_worker_fail_task(uuid, text, text) TO scan_worker;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00490_scan_worker_roles.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.scan_worker_append_event(uuid, uuid, text, text, text, integer, jsonb) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.scan_worker_append_event(uuid, text, uuid, uuid, text, text, text, integer, jsonb) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00490_scan_worker_roles.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.scan_worker_append_event(uuid, uuid, text, text, text, integer, jsonb) TO scan_worker;
+  GRANT EXECUTE ON FUNCTION public.scan_worker_append_event(uuid, text, uuid, uuid, text, text, text, integer, jsonb) TO scan_worker;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00490_scan_worker_roles.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.scan_worker_update_room_file(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.scan_worker_update_room_file(uuid, text, uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00490_scan_worker_roles.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.scan_worker_update_room_file(uuid, jsonb, jsonb) TO scan_worker;
+  GRANT EXECUTE ON FUNCTION public.scan_worker_update_room_file(uuid, text, uuid, jsonb, jsonb) TO scan_worker;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

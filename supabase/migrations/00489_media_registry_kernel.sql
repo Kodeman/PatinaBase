@@ -122,6 +122,16 @@ CREATE POLICY media_objects_select ON public.media_objects
 GRANT SELECT ON public.media_objects TO authenticated;
 GRANT ALL    ON public.media_objects TO service_role;
 
+-- Explicit negative space. A policy only filters rows the GRANT already lets a
+-- role reach, so the grant surface is the real boundary: anon reaches nothing
+-- at all, and authenticated reaches SELECT and only SELECT. Written as REVOKEs
+-- rather than assumed from creation-time defaults (Supabase flipped those on
+-- 2026-05-30) so both prod (pre-flip, legacy-granted) and a fresh local stack
+-- land on the same posture.
+REVOKE ALL ON public.media_objects FROM anon;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON public.media_objects FROM authenticated;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- register_media_object — upsert on (bucket, object_key); returns id.
 -- A fresh key inserts version 1. A re-registration of the same key bumps the
@@ -148,6 +158,7 @@ SET search_path TO 'public'
 AS $$
 DECLARE
   v_id uuid;
+  v_existing public.media_objects;
 BEGIN
   IF p_bucket IS NULL OR btrim(p_bucket) = '' THEN
     RAISE EXCEPTION 'register_media_object: p_bucket must be non-empty';
@@ -157,6 +168,41 @@ BEGIN
   END IF;
   IF p_access_class NOT IN ('authenticated_project', 'released_deliverable') THEN
     RAISE EXCEPTION 'register_media_object: invalid p_access_class %', p_access_class;
+  END IF;
+
+  -- Identity fields are write-once. (bucket, object_key) is the row's natural
+  -- key, so a re-registration is a NEW GENERATION OF THE SAME OBJECT — never a
+  -- chance to repoint that object at a different scan, owner, or access class.
+  -- Without this a worker (or anything that ever reaches this RPC) could take
+  -- an existing key and silently move another tenant's registry row under its
+  -- own scan, which is the whole tenancy boundary media_objects_select rests
+  -- on. An update may only FILL A NULL or RESTATE THE SAME VALUE.
+  -- FOR UPDATE holds the row for the upsert below, so two concurrent
+  -- registrations of the same key cannot both pass this check.
+  SELECT * INTO v_existing
+    FROM public.media_objects
+   WHERE bucket = p_bucket AND object_key = p_object_key
+     FOR UPDATE;
+
+  IF FOUND THEN
+    IF p_scan_id IS NOT NULL AND v_existing.scan_id IS NOT NULL
+       AND p_scan_id IS DISTINCT FROM v_existing.scan_id THEN
+      RAISE EXCEPTION
+        'register_media_object: scan_id is write-once (% is already bound to scan %)',
+        p_object_key, v_existing.scan_id;
+    END IF;
+    IF p_owner_user_id IS NOT NULL AND v_existing.owner_user_id IS NOT NULL
+       AND p_owner_user_id IS DISTINCT FROM v_existing.owner_user_id THEN
+      RAISE EXCEPTION
+        'register_media_object: owner_user_id is write-once (% is already owned)',
+        p_object_key;
+    END IF;
+    IF p_access_class IS NOT NULL AND v_existing.access_class IS NOT NULL
+       AND p_access_class IS DISTINCT FROM v_existing.access_class THEN
+      RAISE EXCEPTION
+        'register_media_object: access_class is write-once (% is already %)',
+        p_object_key, v_existing.access_class;
+    END IF;
   END IF;
 
   INSERT INTO public.media_objects AS m (
@@ -190,6 +236,12 @@ GRANT  EXECUTE ON FUNCTION public.register_media_object(text, text, text, text, 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- mark_media_object_state — advance lifecycle_state; optionally land the
 -- checksum/etag/size the confirm step observed.
+--
+-- FORWARD-ONLY: pending → stored → verified, with 'deleted' reachable from any
+-- state and terminal. Restating the current state is allowed (a retried confirm
+-- must be idempotent, not an error). A backward move is refused because
+-- 'verified' is an ASSERTION the confirm step made about bytes that exist — a
+-- stale or replayed call must not be able to un-say it.
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.mark_media_object_state(
   p_id       uuid,
@@ -203,9 +255,32 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
+DECLARE
+  v_current text;
+  v_rank    constant jsonb := '{"pending":0,"stored":1,"verified":2}'::jsonb;
 BEGIN
   IF p_state NOT IN ('pending', 'stored', 'verified', 'deleted') THEN
     RAISE EXCEPTION 'mark_media_object_state: invalid p_state %', p_state;
+  END IF;
+
+  SELECT lifecycle_state INTO v_current
+    FROM public.media_objects WHERE id = p_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'mark_media_object_state: media object % not found', p_id;
+  END IF;
+
+  IF v_current <> p_state THEN
+    IF v_current = 'deleted' THEN
+      RAISE EXCEPTION
+        'mark_media_object_state: % is deleted; deleted is terminal (refused move to %)',
+        p_id, p_state;
+    ELSIF p_state <> 'deleted'
+      AND (v_rank ->> p_state)::int < (v_rank ->> v_current)::int THEN
+      RAISE EXCEPTION
+        'mark_media_object_state: lifecycle_state is forward-only (refused % -> %)',
+        v_current, p_state;
+    END IF;
   END IF;
 
   UPDATE public.media_objects SET
@@ -215,10 +290,6 @@ BEGIN
     size_bytes      = coalesce(p_size, size_bytes),
     updated_at      = now()
   WHERE id = p_id;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'mark_media_object_state: media object % not found', p_id;
-  END IF;
 END;
 $$;
 

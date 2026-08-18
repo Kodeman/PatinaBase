@@ -41,19 +41,41 @@
 -- TASK_TYPE_PREFIX) so a compromised scan_worker_login credential can only
 -- ever touch scan-pipeline queue rows, never any other agent_tasks lane.
 --
--- KNOWN LIMITATION (documented, not silently assumed away): the dispatcher's
--- Modal payload is minimal by design (plan §2 R1: taskId/scanId/
--- roomFileVersion/traceId/objectRefs) and does not currently carry the
--- claim's lease-owner token. These wrappers therefore forward the ROW's
--- current locked_by straight through as complete_agent_task's p_actor, which
--- satisfies that RPC's non-empty/must-be-running checks but does not by
--- itself distinguish a stale Modal invocation from the current lease holder
--- the way 00378 distinguishes two direct queue callers. The room-file-version
--- job key is what actually makes a duplicate/stale delivery a no-op today
--- (plan §2 R1); a real per-invocation lease token should be added to the
--- dispatcher payload before W1's duplicate-delivery golden cases are
--- considered a full closure of this gap.
+-- ─── LEASE INTEGRITY (p_lease_owner) — the reason every wrapper takes it ────
+-- Every wrapper takes `p_lease_owner` and refuses unless it equals the task
+-- row's CURRENT `locked_by`, read `FOR UPDATE` so the check and the act share
+-- one lock (no TOCTOU window between "is my lease live?" and "write").
+--
+-- The token is minted PER DISPATCHER INVOCATION
+-- (`dispatch-scan-modal:<uuid>`), used as `claim_agent_tasks`' `p_worker`, and
+-- handed to Modal in the spawn body as `leaseToken`. So a Modal invocation
+-- whose lease has since expired and been re-claimed by a later dispatcher tick
+-- carries a token that no longer matches `locked_by`, and every one of its
+-- writes is refused.
+--
+-- That refusal is raised with the dedicated ERRCODE 'P0403' precisely so the
+-- worker can tell it apart from a real failure: a stale invocation that caught
+-- a generic error would call `scan_worker_fail_task` and requeue a task
+-- another worker is actively running — the duplicate-GPU-spawn amplification
+-- this whole mechanism exists to prevent. `scan_modal.io.db` maps P0403 to
+-- `LeaseRejected`, and `verify_job` exits clean on it without failing anything.
+--
+-- An earlier draft forwarded the row's own `locked_by` as `p_actor`, which
+-- satisfied `complete_agent_task`'s non-empty check but could never
+-- distinguish a stale invocation from the live lease holder. `p_lease_owner`
+-- replaces that: it is both the gate AND what is forwarded as `p_actor`, so
+-- the audit trail names the invocation that actually did the work.
 -- ═══════════════════════════════════════════════════════════════════════════
+
+-- The pre-amendment signatures (00490 as first authored, before the lease
+-- parameter) never reached staging or prod, but may exist on a developer's
+-- local database. Dropping them keeps a stale body from lingering as an
+-- OVERLOAD of the same name — which would still satisfy the conformance
+-- test's proname-keyed grant assertions while being callable without a lease.
+DROP FUNCTION IF EXISTS public.scan_worker_complete_task(uuid, jsonb);
+DROP FUNCTION IF EXISTS public.scan_worker_fail_task(uuid, text);
+DROP FUNCTION IF EXISTS public.scan_worker_append_event(uuid, uuid, text, text, text, integer, jsonb);
+DROP FUNCTION IF EXISTS public.scan_worker_update_room_file(uuid, jsonb, jsonb);
 
 -- ─── scan_pipeline_events.stage — add verify/renders (R3 Modal stage names) ──
 -- 'splat' already exists (00376/P2); 'verify' and 'renders' are new to this
@@ -75,8 +97,9 @@ COMMENT ON COLUMN public.scan_pipeline_events.stage IS
 -- scan_worker_complete_task — report a scan-pipeline task done.
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.scan_worker_complete_task(
-  p_task_id uuid,
-  p_result  jsonb DEFAULT '{}'::jsonb
+  p_task_id     uuid,
+  p_lease_owner text,
+  p_result      jsonb DEFAULT '{}'::jsonb
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -86,7 +109,9 @@ AS $$
 DECLARE
   v_task public.agent_tasks;
 BEGIN
-  SELECT * INTO v_task FROM public.agent_tasks WHERE id = p_task_id;
+  -- FOR UPDATE: the lease check and the completion share one row lock, so a
+  -- concurrent re-claim cannot slip between them.
+  SELECT * INTO v_task FROM public.agent_tasks WHERE id = p_task_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'scan_worker_complete_task: task % not found', p_task_id;
   END IF;
@@ -95,21 +120,23 @@ BEGIN
       'scan_worker_complete_task: task % is task_type % — outside the scan_pipeline.%% namespace',
       p_task_id, v_task.task_type;
   END IF;
-  IF v_task.locked_by IS NULL THEN
-    RAISE EXCEPTION 'scan_worker_complete_task: task % has no active lease', p_task_id;
+  IF p_lease_owner IS NULL OR btrim(p_lease_owner) = ''
+     OR v_task.locked_by IS DISTINCT FROM p_lease_owner THEN
+    RAISE EXCEPTION 'scan_worker_complete_task: task % is not held by this lease', p_task_id
+      USING ERRCODE = 'P0403';
   END IF;
 
   PERFORM public.complete_agent_task(
     p_id         => p_task_id,
     p_outcome    => 'done',
     p_artifacts  => coalesce(p_result, '{}'::jsonb),
-    p_actor      => v_task.locked_by
+    p_actor      => p_lease_owner
   );
 END;
 $$;
 
-REVOKE ALL   ON FUNCTION public.scan_worker_complete_task(uuid, jsonb) FROM PUBLIC, anon, authenticated;
-GRANT  EXECUTE ON FUNCTION public.scan_worker_complete_task(uuid, jsonb) TO scan_worker;
+REVOKE ALL   ON FUNCTION public.scan_worker_complete_task(uuid, text, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.scan_worker_complete_task(uuid, text, jsonb) TO scan_worker;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- scan_worker_fail_task — report a scan-pipeline task failure. Non-fatal by
@@ -118,8 +145,9 @@ GRANT  EXECUTE ON FUNCTION public.scan_worker_complete_task(uuid, jsonb) TO scan
 -- needs the worker to mark a class of error unrecoverable.
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.scan_worker_fail_task(
-  p_task_id uuid,
-  p_error   text
+  p_task_id     uuid,
+  p_lease_owner text,
+  p_error       text
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -129,7 +157,7 @@ AS $$
 DECLARE
   v_task public.agent_tasks;
 BEGIN
-  SELECT * INTO v_task FROM public.agent_tasks WHERE id = p_task_id;
+  SELECT * INTO v_task FROM public.agent_tasks WHERE id = p_task_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'scan_worker_fail_task: task % not found', p_task_id;
   END IF;
@@ -138,8 +166,12 @@ BEGIN
       'scan_worker_fail_task: task % is task_type % — outside the scan_pipeline.%% namespace',
       p_task_id, v_task.task_type;
   END IF;
-  IF v_task.locked_by IS NULL THEN
-    RAISE EXCEPTION 'scan_worker_fail_task: task % has no active lease', p_task_id;
+  -- The most important of the four gates: without it a stale invocation could
+  -- requeue a task a live worker is running, doubling the GPU spend.
+  IF p_lease_owner IS NULL OR btrim(p_lease_owner) = ''
+     OR v_task.locked_by IS DISTINCT FROM p_lease_owner THEN
+    RAISE EXCEPTION 'scan_worker_fail_task: task % is not held by this lease', p_task_id
+      USING ERRCODE = 'P0403';
   END IF;
 
   PERFORM public.complete_agent_task(
@@ -147,18 +179,20 @@ BEGIN
     p_outcome  => 'failed',
     p_error    => p_error,
     p_fatal    => false,
-    p_actor    => v_task.locked_by
+    p_actor    => p_lease_owner
   );
 END;
 $$;
 
-REVOKE ALL   ON FUNCTION public.scan_worker_fail_task(uuid, text) FROM PUBLIC, anon, authenticated;
-GRANT  EXECUTE ON FUNCTION public.scan_worker_fail_task(uuid, text) TO scan_worker;
+REVOKE ALL   ON FUNCTION public.scan_worker_fail_task(uuid, text, text) FROM PUBLIC, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.scan_worker_fail_task(uuid, text, text) TO scan_worker;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- scan_worker_append_event — append a scan_pipeline_events row.
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.scan_worker_append_event(
+  p_task_id      uuid,
+  p_lease_owner  text,
   p_scan_id      uuid,
   p_room_file_id uuid,
   p_stage        text,
@@ -173,10 +207,36 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE
-  v_id uuid;
+  v_id   uuid;
+  v_task public.agent_tasks;
 BEGIN
+  SELECT * INTO v_task FROM public.agent_tasks WHERE id = p_task_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'scan_worker_append_event: task % not found', p_task_id;
+  END IF;
+  IF v_task.task_type NOT LIKE 'scan_pipeline.%' THEN
+    RAISE EXCEPTION
+      'scan_worker_append_event: task % is task_type % — outside the scan_pipeline.%% namespace',
+      p_task_id, v_task.task_type;
+  END IF;
+  IF p_lease_owner IS NULL OR btrim(p_lease_owner) = ''
+     OR v_task.locked_by IS DISTINCT FROM p_lease_owner THEN
+    RAISE EXCEPTION 'scan_worker_append_event: task % is not held by this lease', p_task_id
+      USING ERRCODE = 'P0403';
+  END IF;
+
   IF NOT EXISTS (SELECT 1 FROM public.room_scans WHERE id = p_scan_id) THEN
     RAISE EXCEPTION 'scan_worker_append_event: scan % not found', p_scan_id;
+  END IF;
+  -- A room file belongs to exactly one scan; an event that names both must not
+  -- be able to file one scan's progress under another scan's room file.
+  IF p_room_file_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.room_files rf
+     WHERE rf.id = p_room_file_id AND rf.scan_id = p_scan_id
+  ) THEN
+    RAISE EXCEPTION
+      'scan_worker_append_event: room file % does not belong to scan %',
+      p_room_file_id, p_scan_id;
   END IF;
   IF p_status NOT IN ('started', 'succeeded', 'failed', 'info') THEN
     RAISE EXCEPTION 'scan_worker_append_event: invalid p_status %', p_status;
@@ -193,8 +253,8 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL   ON FUNCTION public.scan_worker_append_event(uuid, uuid, text, text, text, integer, jsonb) FROM PUBLIC, anon, authenticated;
-GRANT  EXECUTE ON FUNCTION public.scan_worker_append_event(uuid, uuid, text, text, text, integer, jsonb) TO scan_worker;
+REVOKE ALL   ON FUNCTION public.scan_worker_append_event(uuid, text, uuid, uuid, text, text, text, integer, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.scan_worker_append_event(uuid, text, uuid, uuid, text, text, text, integer, jsonb) TO scan_worker;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- scan_worker_update_room_file — merge verify/artifacts onto one room_files
@@ -203,8 +263,21 @@ GRANT  EXECUTE ON FUNCTION public.scan_worker_append_event(uuid, uuid, text, tex
 -- clobbering another stage's already-landed artifact. verify is likewise
 -- merged so a partial/duplicate verify delivery composes rather than
 -- overwrites. Touches ONLY these two columns.
+--
+-- Doubly bound. The lease gate proves the CALLER is the live worker; the
+-- task-binding check proves the ROOM FILE is the one this task was dispatched
+-- for. Neither implies the other: a live lease on task A must not be usable to
+-- write task B's room file, so the task payload's own roomFileId/scanId is the
+-- authority for which row this call may touch. A payload naming neither is
+-- refused rather than trusted.
+--
+-- `||` on a jsonb SCALAR is array concatenation, not a merge, so a non-object
+-- p_verify/p_artifacts would corrupt the column into an array instead of
+-- erroring. Both are type-checked before the merge.
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.scan_worker_update_room_file(
+  p_task_id      uuid,
+  p_lease_owner  text,
   p_room_file_id uuid,
   p_verify       jsonb DEFAULT NULL,
   p_artifacts    jsonb DEFAULT NULL
@@ -214,7 +287,63 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
+DECLARE
+  v_task            public.agent_tasks;
+  v_payload_rf      text;
+  v_payload_scan    text;
+  v_room_file_scan  uuid;
 BEGIN
+  IF p_verify IS NOT NULL AND jsonb_typeof(p_verify) <> 'object' THEN
+    RAISE EXCEPTION 'scan_worker_update_room_file: p_verify must be a jsonb object, got %',
+      jsonb_typeof(p_verify);
+  END IF;
+  IF p_artifacts IS NOT NULL AND jsonb_typeof(p_artifacts) <> 'object' THEN
+    RAISE EXCEPTION 'scan_worker_update_room_file: p_artifacts must be a jsonb object, got %',
+      jsonb_typeof(p_artifacts);
+  END IF;
+
+  SELECT * INTO v_task FROM public.agent_tasks WHERE id = p_task_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'scan_worker_update_room_file: task % not found', p_task_id;
+  END IF;
+  IF v_task.task_type NOT LIKE 'scan_pipeline.%' THEN
+    RAISE EXCEPTION
+      'scan_worker_update_room_file: task % is task_type % — outside the scan_pipeline.%% namespace',
+      p_task_id, v_task.task_type;
+  END IF;
+  IF p_lease_owner IS NULL OR btrim(p_lease_owner) = ''
+     OR v_task.locked_by IS DISTINCT FROM p_lease_owner THEN
+    RAISE EXCEPTION 'scan_worker_update_room_file: task % is not held by this lease', p_task_id
+      USING ERRCODE = 'P0403';
+  END IF;
+
+  SELECT rf.scan_id INTO v_room_file_scan
+    FROM public.room_files rf WHERE rf.id = p_room_file_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'scan_worker_update_room_file: room_files % not found', p_room_file_id;
+  END IF;
+
+  v_payload_rf   := v_task.payload ->> 'roomFileId';
+  v_payload_scan := v_task.payload ->> 'scanId';
+
+  IF v_payload_rf IS NOT NULL THEN
+    IF v_payload_rf <> p_room_file_id::text THEN
+      RAISE EXCEPTION
+        'scan_worker_update_room_file: task % is not dispatched for room file %',
+        p_task_id, p_room_file_id;
+    END IF;
+  ELSIF v_payload_scan IS NOT NULL THEN
+    IF v_room_file_scan IS NULL OR v_payload_scan <> v_room_file_scan::text THEN
+      RAISE EXCEPTION
+        'scan_worker_update_room_file: task % is not dispatched for room file %''s scan',
+        p_task_id, p_room_file_id;
+    END IF;
+  ELSE
+    RAISE EXCEPTION
+      'scan_worker_update_room_file: task % payload names neither roomFileId nor scanId',
+      p_task_id;
+  END IF;
+
   UPDATE public.room_files SET
     verify     = CASE WHEN p_verify    IS NULL THEN verify
                        ELSE coalesce(verify, '{}'::jsonb) || p_verify END,
@@ -222,15 +351,11 @@ BEGIN
                        ELSE artifacts || p_artifacts END,
     updated_at = now()
   WHERE id = p_room_file_id;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'scan_worker_update_room_file: room_files % not found', p_room_file_id;
-  END IF;
 END;
 $$;
 
-REVOKE ALL   ON FUNCTION public.scan_worker_update_room_file(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
-GRANT  EXECUTE ON FUNCTION public.scan_worker_update_room_file(uuid, jsonb, jsonb) TO scan_worker;
+REVOKE ALL   ON FUNCTION public.scan_worker_update_room_file(uuid, text, uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.scan_worker_update_room_file(uuid, text, uuid, jsonb, jsonb) TO scan_worker;
 
 -- ─── Negative-space: schema USAGE only as needed ────────────────────────────
 GRANT USAGE ON SCHEMA public TO scan_worker;
@@ -241,6 +366,22 @@ GRANT USAGE ON SCHEMA public TO scan_reader;
 -- Resolves room_files.artifacts (kind -> {object_id, version}) against
 -- media_objects, so a reader gets kind/bucket/object_key/access_class without
 -- ever touching a signed URL or the base tables directly.
+--
+-- ⚠ W2 MUST ADD A TENANT PREDICATE BEFORE scan_reader_login IS PROVISIONED —
+-- as built this is a service-shaped full-inventory view. `security_invoker =
+-- false` means it runs as the OWNER, so the base tables' RLS never applies to
+-- the reader, and there is no WHERE clause binding rows to a caller: any role
+-- holding SELECT on it sees EVERY registered scan artifact in the database.
+-- That is survivable only while the sole grantee (`scan_reader`) is a NOLOGIN
+-- role no credential can reach. The moment a LOGIN role inherits it, this view
+-- is a cross-tenant inventory read.
+--
+-- The version leg is deliberately NOT part of the join: media_objects.version
+-- is informational (it counts re-registrations of the same key), so matching
+-- on it made an artifact ref silently resolve to NOTHING the moment the object
+-- was re-registered — a stale pointer read as "no such artifact" rather than
+-- as the artifact it names. The ref's own recorded version is not carried
+-- here; `id` is the identity.
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE VIEW public.scan_media_read
 WITH (security_barrier = true, security_invoker = false)
@@ -256,10 +397,12 @@ FROM public.room_files rf
 CROSS JOIN LATERAL jsonb_each(rf.artifacts) AS af(kind, ref)
 JOIN public.media_objects mo
   ON mo.id = (af.ref ->> 'object_id')::uuid
- AND mo.version = coalesce((af.ref ->> 'version')::int, mo.version);
+-- jsonb_each() errors on a non-object; artifacts is jsonb, so a scalar written
+-- into it would take the whole view down rather than skipping one row.
+WHERE jsonb_typeof(rf.artifacts) = 'object';
 
 COMMENT ON VIEW public.scan_media_read IS
-  '00490: minimal future read surface over media_objects, resolved through room_files.artifacts. W0 provisioning only — W2 extends it with the typed /v1/scan/* routes (plan §2 R5, §3 W2).';
+  '00490: minimal future read surface over media_objects, resolved through room_files.artifacts. W0 provisioning only — W2 extends it with the typed /v1/scan/* routes (plan §2 R5, §3 W2). ⚠ NO TENANT PREDICATE: runs as owner over every room_files row, so W2 must add one before scan_reader_login is provisioned.';
 
 REVOKE ALL PRIVILEGES ON TABLE public.scan_media_read
   FROM PUBLIC, anon, authenticated, service_role, scan_worker;

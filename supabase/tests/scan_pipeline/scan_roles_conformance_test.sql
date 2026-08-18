@@ -24,6 +24,10 @@
 --   6. Caller-binding negative test for media_objects RLS — the mood-board bug
 --      class: a second, unrelated user must get ZERO rows for another owner's
 --      scan media, not merely "the scan exists" (00337-shape delegation).
+--   7. media_objects GRANT surface, asserted in the catalog per privilege:
+--      anon holds nothing, authenticated holds SELECT and only SELECT. This
+--      replaces an earlier anon row-count probe, which could not discriminate
+--      — RLS returns zero rows for anon whether or not the GRANT exists.
 --
 -- How to run (after `pnpm supabase:reset`):
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -49,14 +53,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION pg_temp.assume_anon()
-RETURNS VOID AS $$
-BEGIN
-  PERFORM set_config('request.jwt.claims', '{}', true);
-  EXECUTE 'SET LOCAL ROLE anon';
-END;
-$$ LANGUAGE plpgsql;
-
 CREATE OR REPLACE FUNCTION pg_temp.reset_role()
 RETURNS VOID AS $$
 BEGIN
@@ -64,6 +60,17 @@ BEGIN
   PERFORM set_config('request.jwt.claims', NULL, true);
 END;
 $$ LANGUAGE plpgsql;
+
+-- Supabase's 2026-05-30 grant-default flip dropped PUBLIC's implicit EXECUTE on
+-- newly created functions — pg_temp ones included. `reset_role` is called from
+-- inside a DO block AFTER `SET LOCAL ROLE authenticated`, i.e. as a role that
+-- now holds nothing on it, so without this the RLS section dies on
+-- "permission denied for function reset_role" against a fresh `supabase:reset`.
+-- (The same latent break sits in supabase/tests/rls/products_three_layer_test.sql
+-- and every other pg_temp-helper test in the repo; fixing those is not this
+-- lane's to do, but the cause is identical.)
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
 -- Exact-set assertions, key on EXPLICIT grantee (never PUBLIC's implicit
 -- default). Both raise a stable, greppable message on mismatch so the
@@ -243,14 +250,33 @@ BEGIN
   ASSERT visible_count = 0, 'FAIL 6b: Bob must NOT see Alice''s scan media object (mood-board bug class), got ' || visible_count;
   PERFORM pg_temp.reset_role();
 
-  -- Case 6c: anon gets zero rows too — media_objects grants SELECT to
-  -- authenticated only (00489), never anon.
-  PERFORM pg_temp.assume_anon();
-  SELECT COUNT(*) INTO visible_count FROM media_objects WHERE id = 'd4444444-4444-4444-8444-444444444444';
-  ASSERT visible_count = 0, 'FAIL 6c: anon must NOT see any media_objects row, got ' || visible_count;
-  PERFORM pg_temp.reset_role();
-
   RAISE NOTICE 'PASS 6: media_objects RLS correctly binds the caller, not merely the scan''s existence';
+END $$;
+
+-- ─── 7: media_objects grant surface (00489 negative space) ───────────────────
+-- A row-count probe as anon proves almost nothing: RLS alone returns zero rows
+-- for anon whether or not anon holds SELECT, so the probe passes identically on
+-- a table anon can read and one it cannot. The grant surface is the real
+-- boundary — assert it in the catalog instead, per privilege, in both
+-- directions: anon holds NOTHING, authenticated holds SELECT and ONLY SELECT.
+
+DO $$
+DECLARE
+  priv text;
+BEGIN
+  FOREACH priv IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'] LOOP
+    ASSERT NOT has_table_privilege('anon', 'public.media_objects', priv),
+      'FAIL 7a: anon must hold NO privilege on media_objects, holds ' || priv;
+  END LOOP;
+  RAISE NOTICE 'PASS 7a: anon holds zero privileges on media_objects';
+
+  ASSERT has_table_privilege('authenticated', 'public.media_objects', 'SELECT'),
+    'FAIL 7b: authenticated must hold SELECT on media_objects';
+  FOREACH priv IN ARRAY ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'] LOOP
+    ASSERT NOT has_table_privilege('authenticated', 'public.media_objects', priv),
+      'FAIL 7b: authenticated must hold SELECT only on media_objects, also holds ' || priv;
+  END LOOP;
+  RAISE NOTICE 'PASS 7b: authenticated holds SELECT and only SELECT on media_objects';
 END $$;
 
 -- ─── done — rollback so this file is re-runnable ────────────────────────────
