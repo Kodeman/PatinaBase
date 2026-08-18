@@ -13,12 +13,45 @@ This runbook authorizes no hidden credentials. Password-bearing database logins,
 
 ## Current provisioning blockers
 
-Do not create staging or production database logins, Hyperdrive configurations, Workers, or routes until every blocker below is independently reviewed and closed. Both repository contracts are implemented. Blocker 1 has a per-environment read-only conformance gate that must pass against the target database; it has not been run against staging or production:
+Do not create staging or production database logins, Hyperdrive configurations, Workers, or routes until every blocker below is independently reviewed and closed.
 
-1. **CLOSED 2026-08-17 — database `PUBLIC` ACLs.** Migration `00483` withdraws every `PUBLIC` ACL the ordinary migration principal owns and hardens the owner-global routine defaults it can lawfully change. What it cannot withdraw is permanently out of reach: schema `net`, its two tables, its sequence and its twelve routines are owned by `supabase_admin`, and `postgres` is `rolsuper = false` on Supabase Cloud. That residual is now a named, signed exception list rather than an open promise. The aggregate-only remote gate is authoritative for each environment.
+1. **OPEN — database `PUBLIC` ACLs.** Migration `00483` withdraws every `PUBLIC` ACL the ordinary migration principal owns, and that part is done and verified. The blocker stays open on two counts: the conformance gate **currently fails** with 11 measured, unsigned residuals (see "the open residual" below), and the gate **has never been run against staging or production**. An earlier revision of this runbook recorded Blocker 1 as `CLOSED IN REPOSITORY` two lines after stating the remote apply had not happened; that contradiction is resolved in favour of open.
 2. **CLOSED 2026-08-15 — retained Container authorization.** Orders, projects, and media now treat verified Supabase JWTs as identity only, resolve current permissions and memberships through their own Prisma/Supavisor connections, and enforce own/organization/admin scope in protected database operations. No JWT `app_metadata`, caller identity field, JSON metadata, or compatibility fallback grants access.
 
 Neither blocker permits a compatibility fallback to broaden authorization. Before any login is created, the target database must have migrations `00481`–`00485` applied and the read-only remote conformance gate must exit zero.
+
+### Blocker 1 — what is accepted, stated plainly
+
+Two facts are easy to lose inside the registry's prose, and both are live today:
+
+- **`PUBLIC` holds full DML (`arwdDxtm`) on `net.http_request_queue` and `net._http_response`, and RLS is off on both.** Any role that can enter `net` — which is every role, since `net` grants `PUBLIC` `USAGE` — can read, insert, update, delete and truncate those tables.
+- **The credential transiting `net.http_request_queue` is a live `service_role` JWT.** `public.invoke_edge_function` and four notify functions put it in the request headers (`supabase/migrations/00258_edge_settings_vault.sql:74-75`). `service_role` is `BYPASSRLS`. A caller with a polling loop against that table can harvest it and read the entire database.
+
+Neither is fixable by `postgres`; both are owned by `supabase_admin`. The compensating action is a Supabase support request to revoke `PUBLIC` on `net.*`, and until that lands this is an accepted, signed exposure — not an absent one.
+
+### Blocker 1 — the open residual (11 findings, unsigned)
+
+Adversarial review on 2026-08-17 found that the gate's reachability test was keyed on the pseudo-role `PUBLIC` holding schema `USAGE`. `00483` revokes `PUBLIC`'s `USAGE` on `public` and re-grants it to `anon` by name, so the invariants were structurally unable to fire on `public` — where every application object lives. Corrected to "any untrusted role (`anon`, `authenticated`) holds `USAGE`", the gate now measures 11 residuals that were previously invisible. All are platform-owned and none are `postgres`-owned, so `00483` remains fully effective at what it covers:
+
+| Finding | Owner | Note |
+|---|---|---|
+| `storage.add_prefixes(text,text)` | `supabase_storage_admin` | **Verified live: `anon` is denied a direct `INSERT` into `storage.prefixes` by RLS, then writes the identical row through this `SECURITY DEFINER` helper.** A working RLS bypass for any holder of the publishable anon key. |
+| `storage.delete_prefix(text,text)` | `supabase_storage_admin` | Same shape, deletion. |
+| `storage.delete_leaf_prefixes(text[],text[])` | `supabase_storage_admin` | Same shape, bulk deletion. |
+| `storage.lock_top_prefixes(text[],text[])` | `supabase_storage_admin` | Same shape, locking. |
+| `graphql.get_schema_version()` | `supabase_admin` | Confirmed callable by `anon`. Information only. |
+| `graphql.increment_schema_version()` | `supabase_admin` | `RETURNS event_trigger`; not directly invocable. |
+| `storage.objects_delete_cleanup()` | `supabase_storage_admin` | `RETURNS trigger`; not directly invocable — PostgreSQL refuses with SQLSTATE `0A000`. |
+| `storage.objects_update_cleanup()` | `supabase_storage_admin` | As above. |
+| `storage.prefixes_delete_cleanup()` | `supabase_storage_admin` | As above. |
+| `extensions.pg_stat_statements` | `supabase_admin` | `PUBLIC` `SELECT`. Verified: `anon` reads 4,933 rows of query statistics. Literals are normalised; table and column names are not. |
+| `extensions.pg_stat_statements_info` | `supabase_admin` | `PUBLIC` `SELECT`. |
+
+**These are not in the exception registry and must not be added to it without Kody's ruling.** The registry's value is that every row carries a real signature; inventing one for eleven findings he has never seen would destroy exactly the property that makes the other 193 rows worth anything.
+
+Measured only on the local Supabase CLI stack (Storage image with the `prefixes` feature). **None of the eleven exist on staging `vuesoyhfrjabfxbrzekd`** — its Storage and graphql schemas predate them. They arrive with the next platform upgrade, so this is a decision to make before that upgrade reaches staging, not after.
+
+A second consequence, not yet acted on: the census's section D declares 100 `PUBLIC` `EXECUTE` privileges across `extensions`, `storage`, `realtime`, `auth` and `graphql_public` "inert" on the same mistaken reasoning. `anon` holds explicit `USAGE` on all five. **Section D needs re-measuring.**
 
 ### Blocker 1 — the ruling
 
@@ -28,7 +61,7 @@ Neither blocker permits a compatibility fallback to broaden authorization. Befor
 - `supabase/tests/edge_api/public_acl_residual_census.sql` — re-run this to regenerate every number in the prose
 - `supabase/tests/edge_api/public_acl_exception_registry.sql` — the machine-readable, signed allow-list the gates consume
 
-**The reading rule.** A `PUBLIC` privilege matters only if `PUBLIC` can also enter the object's schema. Audits that count object privileges without testing schema `USAGE` overstate this exposure by roughly an order of magnitude, because Supabase ships many `PUBLIC` object privileges inside schemas that withhold `USAGE`. Every check in every gate now applies both tests.
+**The reading rule, corrected 2026-08-17.** A `PUBLIC` privilege matters only if an **untrusted role** can enter the object's schema — `anon` or `authenticated`, the two roles handed to anyone with the publishable key or a signed-up account. The first version of this rule said "if `PUBLIC` can enter the schema", which is wrong in a way that disabled the gate: a `PUBLIC` object grant flows to every role, and `00483` deliberately moves `public`'s schema `USAGE` off `PUBLIC` and onto named roles including `anon`. Keying on `PUBLIC` therefore made the invariants blind to `public` itself. Every check in every gate now tests the untrusted-role form.
 
 ### Blocker 1 — the measured residual
 
@@ -38,6 +71,7 @@ Measured after a clean `pnpm supabase:reset` through `00485`:
 |---|---|---|
 | Non-system schemas granting `PUBLIC` `USAGE` | `public`, `net` | `net` only |
 | `postgres`-owned `PUBLIC`-executable routines in `public` | 136 (80 `SECURITY DEFINER`) | **0** |
+| Platform-owned `SECURITY DEFINER` routines reachable by `anon` | not measured — the old reading rule hid them | **9, unsigned** (see the open residual above) |
 | `supabase_admin`-owned `PUBLIC`-executable routines in `public` | 149 (0 definer) | 149, but unreachable by `PUBLIC` — `public` no longer grants `PUBLIC` `USAGE` |
 | `PUBLIC`-executable routines in `net` | 12 (0 definer) | 12 — `supabase_admin`-owned, not ours to change |
 | `PUBLIC`-writable relations in `net` | 3 | 3 — `supabase_admin`-owned, not ours to change |
@@ -45,7 +79,7 @@ Measured after a clean `pnpm supabase:reset` through `00485`:
 
 The `PUBLIC` EXECUTE withdrawal cost no caller anything: all 136 already carried explicit `anon` / `authenticated` / `service_role` EXECUTE grants before the revoke, and `00483` re-asserts that in its postconditions.
 
-**No tail migration was written.** `00483` already drives the `postgres`-owned, `PUBLIC`-executable, `prosecdef = true` count to zero, so a `00486_public_acl_owner_sweep.sql` would have had nothing to sweep. `00483` is byte-stable and was not edited.
+**No tail migration was written.** `00483` already drives the `postgres`-owned, `PUBLIC`-executable, `prosecdef = true` count to zero, so a `00486_public_acl_owner_sweep.sql` would have had nothing to sweep. `00483` is byte-stable and was not edited. The corrected reachability rule does not change that: all nine new routine findings are owned by `supabase_admin` or `supabase_storage_admin`, so no migration this principal can write would remove them.
 
 ### Blocker 1 — the gate
 
@@ -53,8 +87,9 @@ Two invariants, both **capability-shaped rather than definer-shaped**, defined o
 
 - **A. Zero `PUBLIC`-reachable routines that can act outside the caller's own privilege.** That is every `SECURITY DEFINER` routine, **plus** a named out-of-band-effect set. `net.http_post` is `prosecdef = false`, yet the request it enqueues is performed by the privileged pg_net background worker, outside the caller's transaction and outside RLS. Keying the gate on `prosecdef` would bless the actual hole, so it keys on effect.
 - **B. Zero `PUBLIC`-writable relations.**
+- **C. Zero `storage.objects` policies with role list `{public}` outside the registry.** Storage policies are not schema-gated, so they cannot ride A's reachability filter: `anon` holds its own explicit `USAGE` on `storage` and privileges on `storage.objects`, and a `{public}` role list applies to it. Added because the 28 `storage_policy` registry rows were otherwise decorative — no predicate referenced them — and an ungated storage policy is exactly what produced this programme's earlier false pass.
 
-Both minus the registry, matched on **exact signature — never a pattern**. A wildcard exception admits objects nobody reviewed. Every registry row carries a `reason` and an `accepted_by`, and the registry asserts that about itself: an unsigned list fails rather than ships green.
+All three minus the registry, matched on **exact signature — never a pattern**. A wildcard exception admits objects nobody reviewed. Every registry row carries a `reason` and an `accepted_by`, and the registry asserts that about itself: an unsigned list fails rather than ships green.
 
 Registry contents, 193 rows, all accepted by Kody on 2026-08-17:
 
@@ -73,7 +108,9 @@ Compensating action for the `net` rows, unchanged: file a Supabase support reque
 
 ### Blocker 1 — proof the gate is not vacuous
 
-`supabase/tests/edge_api/catalog_roles_remote_conformance_negative_test.sql` builds a deliberately broken database inside a transaction that is unconditionally rolled back — a `PUBLIC`-executable `SECURITY DEFINER` routine and a `PUBLIC`-writable relation in a schema `PUBLIC` can enter — and requires the predicate to **fail**. It also requires the predicate **not** to fire on the same objects when they are unreachable or ungranted, because a gate that flags everything is as useless as one that flags nothing.
+`supabase/tests/edge_api/catalog_roles_remote_conformance_negative_test.sql` builds a deliberately broken database inside a transaction that is unconditionally rolled back — a `PUBLIC`-executable `SECURITY DEFINER` routine, a `PUBLIC`-writable relation, and an unregistered `{public}` policy on `storage.objects` — and requires the predicate to **fail**. It also requires the predicate **not** to fire on the same objects when they are unreachable or ungranted, because a gate that flags everything is as useless as one that flags nothing.
+
+**The probes go in `public`, and that is load-bearing.** The first revision of this file created its own schema and granted `PUBLIC` `USAGE` to it — a shape no migration produces — so it verified the invariants in the one place they could fire and nowhere real. That is how the reachability bug survived a test written specifically to catch vacuity. It now also refuses to run at all if `public` is missing from the reachable set, and it measures **deltas** against a baseline rather than requiring a clean database, so the proof stays available while the gate is red for the reasons above.
 
 This is not ceremony. Earlier in this same programme the mood-board security test passed, the vulnerable policy was reinstalled, and it passed again: its deny probes had been measuring an unrelated `permission denied for function is_project_team_member` error rather than the policy under test. Rewriting a gate that is red by construction into one that is green by construction looks identical to fixing it. Note also that `00483`'s revoke of `USAGE` on schema `public` means a denied call now reports `permission denied for schema public`, not `permission denied for function …` — no assertion anywhere may match on that message text.
 
@@ -99,7 +136,7 @@ Two counters were added: `capability_acl` (A) and `writable_acl` (B).
 - The signed Stripe boundary passed its three real-Postgres claim, rollback/reclaim, and stale-lease cases. The Media completion callback verifies a timestamped HMAC over the exact raw body before any job transition.
 - Active route inventories classify 44 Orders, 108 Projects, and 61 Media handlers. The only public exceptions are the exact health and signature-verified callback paths documented in the retained Container authorization contract; all other active handlers declare canonical permissions and fail closed.
 - Required Auth, Orders, Projects, Media, API-route, portal-proxy, and Media Worker builds/tests passed. Separate-context adversarial review returned `APPROVE` after checking cross-user and cross-organization access, list/count/batch leakage, freshness, pooled state and rollback, authorization/query TOCTOU, SQL parameterization, caller-controlled fields, admin scope, public bypasses, and sensitive logging.
-- The separate database-wide `PUBLIC` ACL blocker above remains open and was not widened, remediated, or reclassified by this work.
+- The separate database-wide `PUBLIC` ACL blocker above remains open — see Blocker 1 — and was not widened, remediated, or reclassified by this work.
 
 ## Scope
 
@@ -312,7 +349,9 @@ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
 pnpm db:generate
 ```
 
-All three must exit 0. The negative test exits 0 by **successfully detecting** a broken state, not by finding nothing.
+The negative test exits 0 by **successfully detecting** a broken state, not by finding nothing.
+
+⚠ As of 2026-08-17 the first two exit **nonzero** on a clean local reset: `capability_acl=9` and `relation_acl=2`, the eleven unsigned residuals listed under "the open residual". That is the blocker, correctly reported. Do not silence it by adding registry rows — those eleven need Kody's ruling first.
 
 `catalog_roles_test.sql` and the negative test are local-only and both refuse a non-local target: the first transactionally exercises migration reconciliation and creates exception-cleaned disposable login sessions, the second creates and rolls back probe objects. Never point either at a remote database. The remote conformance file is the only ACL gate intended for an ordinary staging/production connection.
 

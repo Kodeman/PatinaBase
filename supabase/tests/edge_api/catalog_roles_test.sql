@@ -859,6 +859,7 @@ DECLARE
   public_grant_residual integer;
   out_of_band_reachable integer;
   public_writable_relations integer;
+  unregistered_storage_policies integer;
   unexpected_memberships integer;
   public_default_privileges integer;
   unhardened_owner_defaults integer;
@@ -889,6 +890,11 @@ BEGIN
             ))::integer
     INTO missing_catalog_grants;
 
+  -- NO role_name FILTER. An earlier revision narrowed this to
+  -- role_name = 'edge_catalog_reader' while the remote gate counted the whole
+  -- view, so `GRANT USAGE ON SCHEMA x TO edge_rls_user` scored remote 1, local
+  -- 0 — a green local and a red staging, which is the precise failure the
+  -- shared predicate was introduced to prevent. Both gates count every row.
   SELECT
     count(*) FILTER (WHERE object_class = 'schema'),
     count(*) FILTER (WHERE object_class = 'relation'),
@@ -897,16 +903,17 @@ BEGIN
     count(*) FILTER (WHERE object_class = 'routine')
     INTO unexpected_schemas, unexpected_relations, unexpected_columns,
          unexpected_sequences, unexpected_routines
-    FROM public_acl_role_effective_finding
-   WHERE role_name = 'edge_catalog_reader';
+    FROM public_acl_role_effective_finding;
 
   SELECT count(*) INTO public_grant_residual
     FROM public_acl_public_grant_finding;
 
   SELECT
     count(*) FILTER (WHERE invariant = 'A'),
-    count(*) FILTER (WHERE invariant = 'B')
-    INTO out_of_band_reachable, public_writable_relations
+    count(*) FILTER (WHERE invariant = 'B'),
+    count(*) FILTER (WHERE invariant = 'C')
+    INTO out_of_band_reachable, public_writable_relations,
+         unregistered_storage_policies
     FROM public_acl_capability_findings;
 
   SELECT count(*)
@@ -987,12 +994,13 @@ BEGIN
      OR public_grant_residual <> 0
      OR out_of_band_reachable <> 0
      OR public_writable_relations <> 0
+     OR unregistered_storage_policies <> 0
      OR unexpected_memberships <> 0
      OR public_default_privileges <> 0
      OR unhardened_owner_defaults <> 0
      OR unsafe_role_grant THEN
     RAISE EXCEPTION USING MESSAGE = format(
-      'PROVISIONING BLOCKED: database=%s, missing_catalog_grants=%s, schemas=%s, relation_objects=%s, column_privileges=%s, sequence_objects=%s, routines=%s, unregistered_public_grants=%s, public_reachable_out_of_band=%s, public_writable_relations=%s, memberships=%s, public_default_privileges=%s, unhardened_owner_defaults=%s, grant_role_to_user=%s',
+      'PROVISIONING BLOCKED: database=%s, missing_catalog_grants=%s, schemas=%s, relation_objects=%s, column_privileges=%s, sequence_objects=%s, routines=%s, unregistered_public_grants=%s, public_reachable_out_of_band=%s, public_writable_relations=%s, unregistered_storage_policies=%s, memberships=%s, public_default_privileges=%s, unhardened_owner_defaults=%s, grant_role_to_user=%s',
       unexpected_database,
       missing_catalog_grants,
       unexpected_schemas,
@@ -1003,6 +1011,7 @@ BEGIN
       public_grant_residual,
       out_of_band_reachable,
       public_writable_relations,
+      unregistered_storage_policies,
       unexpected_memberships,
       public_default_privileges,
       unhardened_owner_defaults,

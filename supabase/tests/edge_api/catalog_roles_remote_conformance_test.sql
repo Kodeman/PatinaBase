@@ -58,6 +58,14 @@
 --
 --   B. Zero PUBLIC-writable relations.
 --
+--   C. Zero storage.objects policies with role list {public} outside the
+--      registry. Storage policies are not schema-gated, so they cannot ride A's
+--      reachability filter; `anon` holds its own explicit privileges on
+--      storage.objects and a {public} role list applies to it. Added because
+--      the 28 storage_policy registry rows were otherwise decorative — nothing
+--      referenced them — and that is the class that produced this programme's
+--      earlier false pass.
+--
 -- Both are defined once in public_acl_exception_registry.sql and are counted
 -- identically by catalog_roles_test.sql, so the local gate and this one cannot
 -- diverge — a divergence is how a green local becomes a broken staging.
@@ -193,7 +201,8 @@ role_effective AS (
 capability AS (
   SELECT
     count(*) FILTER (WHERE invariant = 'A') AS out_of_band_reachable,
-    count(*) FILTER (WHERE invariant = 'B') AS public_writable
+    count(*) FILTER (WHERE invariant = 'B') AS public_writable,
+    count(*) FILTER (WHERE invariant = 'C') AS unregistered_storage_policies
   FROM public_acl_capability_findings
 ),
 catalog_shape AS (
@@ -312,7 +321,8 @@ counts AS (
     default_acl_public.unexpected
       + owner_default_recurrence.unexpected AS default_acl,
     capability.out_of_band_reachable AS capability_acl,
-    capability.public_writable AS writable_acl
+    capability.public_writable AS writable_acl,
+    capability.unregistered_storage_policies AS policy_acl
   FROM role_oids
   CROSS JOIN surface
   CROSS JOIN role_shape
@@ -344,9 +354,10 @@ SELECT
     AND default_acl = 0
     AND capability_acl = 0
     AND writable_acl = 0
+    AND policy_acl = 0
   ) AS cf_remote_acl_ok,
   format(
-    'REMOTE ACL CONFORMANCE FAILED: missing_roles=%s missing_surfaces=%s role_shape=%s database_acl=%s schema_acl=%s relation_acl=%s column_acl=%s surface_shape=%s sequence_acl=%s routine_acl=%s membership_acl=%s default_acl=%s capability_acl=%s writable_acl=%s',
+    'REMOTE ACL CONFORMANCE FAILED: missing_roles=%s missing_surfaces=%s role_shape=%s database_acl=%s schema_acl=%s relation_acl=%s column_acl=%s surface_shape=%s sequence_acl=%s routine_acl=%s membership_acl=%s default_acl=%s capability_acl=%s writable_acl=%s policy_acl=%s',
     missing_roles,
     missing_surfaces,
     role_shape,
@@ -360,7 +371,8 @@ SELECT
     membership_acl,
     default_acl,
     capability_acl,
-    writable_acl
+    writable_acl,
+    policy_acl
   ) AS cf_remote_acl_failure
 FROM counts
 \gset
