@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Rendered Room</title>
+<style>
+  /* ============================================================
+     TOKENS — three-state theme contract
+     :root = light (default). prefers-color-scheme(dark), guarded
+     against an explicit light stamp, then [data-theme="dark"] wins
+     outright. Every color used anywhere in this file is defined
+     here, never invented inline.
+     ============================================================ */
+  :root{
+    --ground:        #F6F3EC;
+    --ground-raised: #FBF9F4;
+    --ink:            #262019;
+    --ink-dim:        #6E6656;
+    --line:           #DAD2C0;
+    --line-strong:    #C4B9A2;
+
+    --accent:         #3E7A6C; /* verdigris */
+    --accent-soft:    #E3ECE7;
+    --accent-strong:  #2C5147;
+
+    --cad-blue:       #4A6B8A; /* CAD lane only */
+    --cad-blue-soft:  #E6EBF0;
+
+    --amber:          #93611C;
+    --amber-soft:     #F1E5CE;
+    --red:            #9C3529;
+    --red-soft:       #F1DDD7;
+
+    --font-display: ui-serif, 'Iowan Old Style', 'Palatino', Georgia, serif;
+    --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:        #201E1A;
+      --ground-raised: #29271F;
+      --ink:            #EDE7D9;
+      --ink-dim:        #A79E8B;
+      --line:           #423E33;
+      --line-strong:    #57503F;
+
+      --accent:         #5FAF99;
+      --accent-soft:    #223A34;
+      --accent-strong:  #8FCBB8;
+
+      --cad-blue:       #86A9C9;
+      --cad-blue-soft:  #253442;
+
+      --amber:          #D89A4B;
+      --amber-soft:     #3A2E1C;
+      --red:            #D97A65;
+      --red-soft:       #3B221D;
+    }
+  }
+
+  :root[data-theme="dark"]{
+    --ground:        #201E1A;
+    --ground-raised: #29271F;
+    --ink:            #EDE7D9;
+    --ink-dim:        #A79E8B;
+    --line:           #423E33;
+    --line-strong:    #57503F;
+
+    --accent:         #5FAF99;
+    --accent-soft:    #223A34;
+    --accent-strong:  #8FCBB8;
+
+    --cad-blue:       #86A9C9;
+    --cad-blue-soft:  #253442;
+
+    --amber:          #D89A4B;
+    --amber-soft:     #3A2E1C;
+    --red:            #D97A65;
+    --red-soft:       #3B221D;
+  }
+
+  /* ============================================================
+     RESET / BASE
+     ============================================================ */
+  *, *::before, *::after{ box-sizing:border-box; }
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    margin:0;
+    background:var(--ground);
+    color:var(--ink);
+    font-family:var(--font-display);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4,p,ul,ol,dl,dd,figure,table{ margin:0; }
+  img,svg{ max-width:100%; }
+  a{ color:inherit; }
+  button{ font:inherit; color:inherit; background:none; border:none; padding:0; cursor:default; }
+
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .skip-link{
+    position:absolute; left:1rem; top:-3rem;
+    background:var(--ground-raised); color:var(--ink);
+    border:1px solid var(--line-strong); padding:.5rem .9rem;
+    font-family:var(--font-mono); font-size:.75rem; text-decoration:none;
+    z-index:100; transition:top .15s ease;
+  }
+  .skip-link:focus{ top:.75rem; }
+
+  /* ============================================================
+     NAV / SHEET INDEX
+     ============================================================ */
+  .index-bar{
+    position:sticky; top:0; z-index:20;
+    background:var(--ground);
+    border-bottom:1px solid var(--line);
+  }
+  .index-inner{
+    max-width:1100px; margin:0 auto;
+    display:flex; align-items:center; gap:1.1rem;
+    padding:.65rem 1.5rem;
+    overflow-x:auto;
+    white-space:nowrap;
+    font-family:var(--font-mono);
+  }
+  .index-label{
+    font-size:.66rem; letter-spacing:.1em; color:var(--ink-dim);
+    text-transform:uppercase; flex:0 0 auto; padding-right:.3rem;
+    border-right:1px solid var(--line); margin-right:.2rem;
+  }
+  .index-inner a{
+    font-size:.7rem; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none;
+    padding-bottom:.15rem; border-bottom:1px solid transparent;
+    flex:0 0 auto;
+  }
+  .index-inner a:hover, .index-inner a:focus-visible{
+    color:var(--accent); border-bottom-color:var(--accent);
+  }
+
+  /* ============================================================
+     LAYOUT / SHEETS
+     ============================================================ */
+  main{
+    display:flex; flex-direction:column; gap:3.5rem;
+    padding:2.5rem 1.25rem 7rem;
+  }
+  .sheet{
+    max-width:1100px; margin:0 auto; width:100%;
+    border:1px solid var(--line);
+    background:var(--ground-raised);
+    padding:clamp(1.5rem,4vw,3rem);
+    scroll-margin-top:4.5rem;
+    opacity:0; transform:translateY(14px);
+    transition:opacity .6s ease, transform .6s ease;
+  }
+  .sheet.is-visible{ opacity:1; transform:translateY(0); }
+  @media (prefers-reduced-motion: reduce){
+    .sheet{ opacity:1 !important; transform:none !important; transition:none !important; }
+  }
+
+  .title-block{
+    display:flex; align-items:baseline; justify-content:space-between;
+    gap:1.25rem; flex-wrap:wrap;
+    border-bottom:2px solid var(--line-strong);
+    padding-bottom:.85rem; margin-bottom:2.25rem;
+  }
+  .sheet-no{
+    font-family:var(--font-mono); font-size:.82rem; font-weight:600;
+    letter-spacing:.08em; color:var(--accent); flex:0 0 auto;
+  }
+  .sheet-title{
+    margin:0;
+    font-family:var(--font-display); font-weight:600;
+    font-size:clamp(1.35rem,2.3vw,1.9rem);
+    text-wrap:balance; flex:1 1 260px; min-width:200px;
+  }
+  .sheet-meta{
+    font-family:var(--font-mono); font-size:.66rem;
+    text-transform:uppercase; letter-spacing:.06em; color:var(--ink-dim);
+    display:flex; flex-direction:column; gap:.2rem; text-align:right;
+    flex:0 0 auto;
+  }
+  .sheet-meta .proj{ color:var(--ink); font-weight:600; }
+
+  .sheet-body{ display:flex; flex-direction:column; gap:1.75rem; }
+
+  .prose{ max-width:65ch; display:flex; flex-direction:column; gap:1rem; }
+  .prose p{ font-size:1rem; line-height:1.7; }
+  .lede{ font-size:1.08rem; line-height:1.7; color:var(--ink); }
+
+  h3.sub-head{
+    margin:0;
+    font-family:var(--font-mono); font-size:.72rem; font-weight:700;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim);
+  }
+
+  .mono{ font-family:var(--font-mono); }
+  .mono-label{
+    font-family:var(--font-mono); font-size:.68rem; font-weight:700;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim);
+  }
+
+  /* ============================================================
+     COVER
+     ============================================================ */
+  .cover .title-block{ margin-bottom:3rem; }
+  .cover-title{
+    font-family:var(--font-display); font-weight:600;
+    font-size:clamp(2.5rem,6.4vw,4.3rem); line-height:1.03;
+    letter-spacing:-0.01em; text-wrap:balance; margin-bottom:.6rem;
+  }
+  .cover-sub{
+    font-family:var(--font-display); font-weight:400; color:var(--accent-strong);
+    font-size:clamp(1.1rem,2.4vw,1.55rem); text-wrap:balance; margin-bottom:1.75rem;
+  }
+  .dek{
+    font-family:var(--font-display); font-style:italic; color:var(--ink-dim);
+    font-size:clamp(1.05rem,2vw,1.3rem); max-width:46ch; line-height:1.55;
+    text-wrap:balance;
+  }
+  .cover-footer{
+    margin-top:3rem; padding-top:1.25rem; border-top:1px solid var(--line);
+    font-family:var(--font-mono); font-size:.72rem; color:var(--ink-dim);
+    letter-spacing:.02em; display:flex; flex-wrap:wrap; gap:.4rem 1rem;
+  }
+  .cover-footer .status{ color:var(--amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+
+  /* ============================================================
+     CALLOUTS
+     ============================================================ */
+  .callout{
+    border:1px solid var(--line-strong);
+    padding:1rem 1.25rem;
+    display:flex; flex-direction:column; gap:.4rem;
+  }
+  .callout .mono-label{ display:block; }
+  .callout p{ font-size:.98rem; line-height:1.6; max-width:60ch; }
+  .callout.punch{ border-left:3px solid var(--accent); background:var(--accent-soft); }
+  .callout.punch .mono-label{ color:var(--accent-strong); }
+  .callout.defect{ border-left:3px solid var(--amber); background:var(--amber-soft); }
+  .callout.defect .mono-label{ color:var(--amber); }
+
+  /* ============================================================
+     MANIFEST (RR-01 bundle listing)
+     ============================================================ */
+  .table-wrap{ overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  table caption{ text-align:left; }
+  th, td{ padding:.55rem .8rem; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; font-size:.78rem; line-height:1.5; }
+  th{
+    font-size:.66rem; text-transform:uppercase; letter-spacing:.07em;
+    color:var(--ink-dim); font-weight:700; border-bottom:1px solid var(--line-strong);
+    white-space:nowrap;
+  }
+  td.path{ color:var(--accent-strong); white-space:nowrap; }
+  tr:last-child td{ border-bottom:none; }
+
+  .bucket-line{
+    font-family:var(--font-mono); font-size:.85rem; padding:.85rem 1rem;
+    border:1px dashed var(--line-strong); background:var(--ground);
+  }
+  .bucket-line b{ color:var(--accent-strong); font-weight:700; }
+
+  /* ============================================================
+     DIAGRAMS — pure CSS grid/flex boxes, triangle connectors
+     ============================================================ */
+  .diagram{
+    border:1px solid var(--line); background:var(--ground);
+    padding:1.35rem 1.5rem; overflow-x:auto;
+  }
+  .diagram-caption{
+    font-family:var(--font-mono); font-size:.72rem; color:var(--ink-dim);
+    margin-top:.85rem; letter-spacing:.01em; max-width:70ch;
+  }
+  .flow-row{ display:flex; align-items:stretch; gap:.4rem; min-width:max-content; }
+  .flow-col{ display:flex; flex-direction:column; align-items:center; gap:.15rem; min-width:max-content; }
+
+  .arrow-h{ display:flex; align-items:center; flex:0 0 auto; color:var(--ink-dim); align-self:center; }
+  .arrow-h .ln{ width:18px; height:1px; background:currentColor; }
+  .tri-r{ width:0; height:0; border-top:4px solid transparent; border-bottom:4px solid transparent; border-left:6px solid currentColor; flex:0 0 auto; }
+  .arrow-v{ display:flex; flex-direction:column; align-items:center; color:var(--ink-dim); }
+  .arrow-v .ln{ width:1px; height:16px; background:currentColor; }
+  .tri-d{ width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-top:6px solid currentColor; flex:0 0 auto; }
+
+  .box{
+    border:1px solid var(--line-strong); background:var(--ground-raised);
+    padding:.55rem .8rem; font-family:var(--font-mono); font-size:.72rem;
+    line-height:1.4; min-width:max-content;
+  }
+  .box .t{ font-weight:700; color:var(--ink); display:block; }
+  .box .n{ color:var(--ink-dim); display:block; font-size:.68rem; margin-top:.1rem; }
+  .box.parked{ border-style:dashed; color:var(--ink-dim); background:transparent; opacity:.85; }
+  .box.parked .t{ color:var(--ink-dim); }
+  .box.dest{ border-width:2px; border-color:var(--accent-strong); }
+  .box.worker{ border-color:var(--line-strong); padding:.7rem .9rem .55rem; }
+  .worker-label{ font-family:var(--font-mono); font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:.5rem; display:block; }
+
+  .new-flag{
+    display:inline-block; font-family:var(--font-mono); font-size:.58rem;
+    font-weight:700; letter-spacing:.06em; color:var(--accent-strong);
+    border:1px solid var(--accent); padding:0 .3rem; margin-left:.35rem;
+    vertical-align:middle; background:var(--accent-soft);
+  }
+  .parked-flag{
+    display:inline-block; font-family:var(--font-mono); font-size:.58rem;
+    font-weight:700; letter-spacing:.06em; color:var(--ink-dim);
+    border:1px solid var(--line-strong); padding:0 .3rem; margin-left:.35rem;
+  }
+
+  .side-lanes{ display:flex; flex-wrap:wrap; gap:.6rem; margin-top:.9rem; }
+
+  /* ============================================================
+     VERDICT CARDS (RR-03)
+     ============================================================ */
+  .verdict-grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(240px,1fr));
+    gap:1rem;
+  }
+  .verdict-card{
+    border:1px solid var(--line-strong); background:var(--ground);
+    padding:1.1rem 1.2rem; display:flex; flex-direction:column; gap:.7rem;
+  }
+  .verdict-card.adopt{ border-left:3px solid var(--accent); }
+  .verdict-card.decline{ border-left:3px solid var(--ink-dim); }
+  .verdict-card.correct{ border-left:3px solid var(--ink); }
+  .verdict-head{ display:flex; align-items:center; gap:.5rem; }
+  .verdict-head .mono-label{ font-size:.72rem; }
+  .verdict-card.adopt .verdict-head .mono-label{ color:var(--accent-strong); }
+  .verdict-card ul{ list-style:none; display:flex; flex-direction:column; gap:.55rem; }
+  .verdict-card li{ font-size:.88rem; line-height:1.55; padding-left:.9rem; position:relative; }
+  .verdict-card li::before{ content:"\2013"; position:absolute; left:0; color:var(--ink-dim); }
+  .badge{
+    font-family:var(--font-mono); font-size:.6rem; font-weight:700; letter-spacing:.05em;
+    border:1px solid var(--line-strong); padding:.1rem .4rem; color:var(--ink-dim);
+    text-transform:uppercase; white-space:nowrap;
+  }
+
+  .tier-list{ display:flex; flex-direction:column; gap:.5rem; }
+  .tier-row{
+    display:flex; gap:.9rem; align-items:baseline;
+    padding:.5rem 0; border-bottom:1px solid var(--line);
+    font-size:.92rem;
+  }
+  .tier-row .tier-no{ font-family:var(--font-mono); color:var(--ink-dim); font-size:.75rem; flex:0 0 3.2rem; }
+
+  .pull{
+    border-top:2px solid var(--line-strong); border-bottom:2px solid var(--line-strong);
+    padding:1.1rem 0; display:flex; gap:.9rem; align-items:flex-start;
+  }
+  .pull .mark{ font-family:var(--font-display); font-size:1.6rem; color:var(--accent); line-height:1; flex:0 0 auto; }
+  .pull p{ font-family:var(--font-display); font-style:italic; font-size:1.08rem; line-height:1.55; max-width:62ch; }
+
+  /* ============================================================
+     LANES (RR-04)
+     ============================================================ */
+  .spine-stack{ display:flex; flex-direction:column; align-items:center; gap:0; }
+  .spine-band{
+    border:1px dashed var(--line-strong); background:var(--ground-raised);
+    padding:.75rem 1.1rem; font-family:var(--font-mono); font-size:.7rem;
+    color:var(--ink-dim); text-align:center; letter-spacing:.02em; width:100%;
+  }
+  .spine-band b{ display:block; font-size:.62rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink); margin-bottom:.3rem; }
+  .fan{ display:flex; justify-content:space-around; width:100%; padding:.15rem 0; }
+
+  .lane-row{
+    border-left:4px solid var(--line-strong);
+    background:var(--ground); padding:1rem 1.1rem 1.1rem 1.3rem;
+    display:flex; flex-direction:column; gap:.75rem;
+  }
+  .lane-row.cad{ border-left-color:var(--cad-blue); }
+  .lane-row.model{ border-left-color:var(--accent); }
+  .lane-row.image{ border-left-color:var(--ink-dim); }
+  .lane-tag{ font-family:var(--font-mono); font-size:.74rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+  .lane-row.cad .lane-tag{ color:var(--cad-blue); }
+  .lane-row.model .lane-tag{ color:var(--accent-strong); }
+  .lane-row.image .lane-tag{ color:var(--ink); }
+  .lane-desc{ font-family:var(--font-display); font-size:.92rem; color:var(--ink-dim); max-width:60ch; }
+  .flow-scroll{ overflow-x:auto; padding-bottom:.2rem; }
+  .deferred{ list-style:none; display:flex; flex-direction:column; gap:.35rem; }
+  .deferred li{ font-size:.83rem; color:var(--ink-dim); padding-left:1.1rem; position:relative; }
+  .deferred li::before{ content:"defer \2192"; position:absolute; left:0; font-family:var(--font-mono); font-size:.6rem; letter-spacing:.03em; top:.18rem; }
+  .deferred li span.term{ color:var(--ink); font-family:var(--font-mono); font-size:.78rem; }
+
+  /* ============================================================
+     RR-05 mode row mock
+     ============================================================ */
+  .mode-row{ display:flex; border:1px solid var(--line-strong); width:max-content; max-width:100%; overflow-x:auto; }
+  .mode-btn{
+    font-family:var(--font-mono); font-size:.72rem; letter-spacing:.05em;
+    text-transform:uppercase; padding:.55rem 1rem; border-right:1px solid var(--line-strong);
+    color:var(--ink-dim); white-space:nowrap;
+  }
+  .mode-btn:last-child{ border-right:none; }
+  .mode-btn.active{ background:var(--accent-soft); color:var(--accent-strong); font-weight:700; }
+  .mock-note{ font-family:var(--font-display); font-style:italic; font-size:.82rem; color:var(--ink-dim); margin-top:.5rem; }
+
+  .compose-list{ display:flex; flex-direction:column; gap:.5rem; }
+  .compose-list li{ font-size:.9rem; line-height:1.55; padding-left:1rem; position:relative; }
+  .compose-list li::before{ content:"\2022"; position:absolute; left:0; color:var(--accent); }
+
+  /* ============================================================
+     STAGE GRAPH (RR-06)
+     ============================================================ */
+  .stage-graph{ display:flex; align-items:center; gap:.35rem; min-width:max-content; }
+  .stage-pill{
+    font-family:var(--font-mono); font-size:.76rem; font-weight:600;
+    padding:.5rem .85rem; border:1px solid var(--line-strong); background:var(--ground-raised);
+  }
+  .stage-pill.branch{ border-style:dashed; color:var(--ink-dim); }
+
+  .placement-table td.owner{ color:var(--ink); font-weight:600; }
+
+  .schema-delta{
+    display:flex; flex-direction:column; gap:.4rem;
+    border:1px solid var(--line); background:var(--ground); padding:1rem 1.2rem;
+  }
+  .schema-delta code{ font-family:var(--font-mono); font-size:.82rem; color:var(--accent-strong); }
+  .no-new{
+    font-family:var(--font-mono); font-size:.82rem; font-weight:700; letter-spacing:.02em;
+    border:1px solid var(--line-strong); padding:.7rem 1rem; background:var(--ground-raised);
+  }
+
+  /* ============================================================
+     RR-07 phasing + risk
+     ============================================================ */
+  .chip{
+    display:inline-block; font-family:var(--font-mono); font-size:.62rem;
+    font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    border:1px solid currentColor; padding:.08rem .4rem;
+  }
+  .chip.amber{ color:var(--amber); background:var(--amber-soft); }
+  .chip.red{ color:var(--red); background:var(--red-soft); }
+
+  .closing{
+    margin-top:.5rem; padding-top:1.5rem; border-top:2px solid var(--line-strong);
+    display:flex; flex-direction:column; gap:.6rem;
+  }
+  .closing p{
+    font-family:var(--font-display); font-style:italic; font-size:1.15rem;
+    line-height:1.6; max-width:62ch; text-wrap:balance;
+  }
+  .end-mark{ font-family:var(--font-mono); font-size:.68rem; color:var(--ink-dim); letter-spacing:.08em; text-transform:uppercase; }
+
+  @media (max-width:640px){
+    .title-block{ align-items:flex-start; }
+    .sheet-meta{ text-align:left; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<nav class="index-bar" aria-label="Sheet index">
+  <div class="index-inner">
+    <span class="index-label">Sheets</span>
+    <a href="#rr-00">RR-00 Cover</a>
+    <a href="#rr-01">RR-01 Capture</a>
+    <a href="#rr-02">RR-02 Process</a>
+    <a href="#rr-03">RR-03 Audit</a>
+    <a href="#rr-04">RR-04 Proposal</a>
+    <a href="#rr-05">RR-05 Portal</a>
+    <a href="#rr-06">RR-06 Schema</a>
+    <a href="#rr-07">RR-07 Phasing</a>
+  </div>
+</nav>
+
+<main id="main">
+
+  <!-- ============================================================ RR-00 COVER ============================================================ -->
+  <section id="rr-00" class="sheet cover" aria-labelledby="rr-00-title">
+    <div class="title-block">
+      <span class="sheet-no">RR&#8209;00</span>
+      <h2 class="sheet-title" id="rr-00-title">Cover</h2>
+      <span class="sheet-meta"><span class="proj">Patina &mdash; Scan Pipeline v2</span><span>2026&#8209;08&#8209;18</span></span>
+    </div>
+    <div class="sheet-body">
+      <h1 class="cover-title">The Rendered Room</h1>
+      <p class="cover-sub">Scan Processing Pipeline v2</p>
+      <p class="dek">One capture. Three lanes: the CAD file, the model, the imagery &mdash; the whole record of the room, on the designer&rsquo;s desk.</p>
+      <div class="cover-footer">
+        <span>responds to <span class="mono">ARCHITECTURE.md</span> (outside recommendation)</span>
+        <span>&middot;</span>
+        <span>companion doc <span class="mono">PROPOSAL.md</span></span>
+        <span>&middot;</span>
+        <span>2026&#8209;08&#8209;18</span>
+        <span>&middot;</span>
+        <span class="status">proposed, not ruled</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ RR-01 WHAT WE CAPTURE TODAY ============================================================ -->
+  <section id="rr-01" class="sheet" aria-labelledby="rr-01-title">
+    <div class="title-block">
+      <span class="sheet-no">RR&#8209;01</span>
+      <h2 class="sheet-title" id="rr-01-title">What we capture today</h2>
+      <span class="sheet-meta"><span class="proj">Patina &mdash; Scan Pipeline v2</span><span>2026&#8209;08&#8209;18</span></span>
+    </div>
+    <div class="sheet-body">
+      <div class="prose">
+        <p class="lede">Both iOS apps write the same schema&#8209;v3 scan bundle. Nothing proposed below changes what the phone captures &mdash; it changes what we do with what&rsquo;s already there.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <caption class="mono-label" style="margin-bottom:.6rem;">Bundle manifest &mdash; schema v3</caption>
+          <thead>
+            <tr><th>File</th><th>Contents</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="path">captured_room.json</td><td>Parametric CapturedRoom (RoomPlan)</td></tr>
+            <tr><td class="path">scan.usdz</td><td>AR Quick Look reference geometry</td></tr>
+            <tr><td class="path">mesh.ply</td><td>ARMeshAnchor mesh</td></tr>
+            <tr><td class="path">depth.zip</td><td>Scene depth frames, ~1&nbsp;Hz</td></tr>
+            <tr><td class="path">world_map.arworldmap</td><td>ARKit world map</td></tr>
+            <tr><td class="path">*.heic (posed)</td><td>Photos with camera transforms + intrinsics</td></tr>
+            <tr><td class="path">coverage heatmap</td><td>Capture coverage record</td></tr>
+            <tr><td class="path">annotations</td><td>User&#8209;placed notes / markers</td></tr>
+            <tr><td class="path">manifest.json</td><td>Bundle index</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="bucket-line">Stored in the private Supabase <b>room-scans</b> bucket &middot; keys <b>{folder}/{userId}/{roomId}/{file}</b></div>
+
+      <div class="callout punch">
+        <span class="mono-label">Punchline</span>
+        <p>The bundle already contains everything the richer deliverables need. Capture changes: none.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ RR-02 WHAT WE PROCESS TODAY ============================================================ -->
+  <section id="rr-02" class="sheet" aria-labelledby="rr-02-title">
+    <div class="title-block">
+      <span class="sheet-no">RR&#8209;02</span>
+      <h2 class="sheet-title" id="rr-02-title">What we process today</h2>
+      <span class="sheet-meta"><span class="proj">Patina &mdash; Scan Pipeline v2</span><span>2026&#8209;08&#8209;18</span></span>
+    </div>
+    <div class="sheet-body">
+
+      <div class="diagram">
+        <div class="flow-row">
+          <div class="box"><span class="t">iOS bundle</span><span class="n">schema v3</span></div>
+          <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+          <div class="box"><span class="t">Supabase Storage</span><span class="n">room-scans</span></div>
+          <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+          <div class="box worker">
+            <span class="worker-label">services/scan-pipeline &middot; Python worker &middot; agent_tasks queue</span>
+            <div class="flow-row" style="gap:.3rem;">
+              <div class="box"><span class="t">ingest</span></div>
+              <div class="arrow-h"><span class="ln" style="width:10px;"></span><span class="tri-r"></span></div>
+              <div class="box"><span class="t">solve</span><span class="n">scale fit vs. scan_anchors</span></div>
+              <div class="arrow-h"><span class="ln" style="width:10px;"></span><span class="tri-r"></span></div>
+              <div class="box"><span class="t">drawings</span><span class="n">plan + 4 elevations</span></div>
+            </div>
+          </div>
+          <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+          <div class="box dest"><span class="t">Room File</span><span class="n">versioned, + accuracy certificate</span></div>
+        </div>
+
+        <div class="side-lanes">
+          <div class="box"><span class="t">parse-room-scan</span><span class="n">portal geometry</span></div>
+          <div class="box"><span class="t">convert-room-scan-glb</span><span class="n">USDZ &rarr; GLB</span></div>
+          <div class="box"><span class="t">derive-scan-photo-media</span><span class="n">HEIC derivatives</span></div>
+          <div class="box parked"><span class="t">COLMAP pose&#8209;refine<span class="parked-flag">parked</span></span><span class="n">fail&#8209;closed, unused today</span></div>
+        </div>
+
+        <p class="diagram-caption">The scan bundle lands in Storage, then <span class="mono">scan-pipeline</span> runs ingest &rarr; solve &rarr; drawings and writes a versioned Room File. Three side lanes derive portal-facing assets from the same bundle; a parked COLMAP engine sits fail&#8209;closed and unused.</p>
+      </div>
+
+      <div class="prose">
+        <p><b>solve</b> fits scale against typed <span class="mono">scan_anchors</span>; every dimension is classed <span class="mono">verified</span> / <span class="mono">measured</span> / <span class="mono">estimated</span>. <b>drawings</b> emits a plan plus four elevations, each as SVG, PDF, and DXF&nbsp;R2010.</p>
+        <p>On the portal today: an SVG plan, a synthetic three.js Orbit that loads no real model, and photos. Room File sheets are downloads only.</p>
+      </div>
+
+      <div class="callout defect">
+        <span class="mono-label">Defect</span>
+        <p>The client portal still ships the react-three-fiber viewer with no scan-specific fallback &mdash; no ErrorBoundary/ScanStill degrade like the designer portal&rsquo;s &mdash; so a crash falls through to the route&rsquo;s generic error page.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ RR-03 OUTSIDE RECOMMENDATION, AUDITED ============================================================ -->
+  <section id="rr-03" class="sheet" aria-labelledby="rr-03-title">
+    <div class="title-block">
+      <span class="sheet-no">RR&#8209;03</span>
+      <h2 class="sheet-title" id="rr-03-title">The outside recommendation, audited</h2>
+      <span class="sheet-meta"><span class="proj">Patina &mdash; Scan Pipeline v2</span><span>2026&#8209;08&#8209;18</span></span>
+    </div>
+    <div class="sheet-body">
+      <div class="prose">
+        <p class="lede">An outside spec (<span class="mono">ARCHITECTURE.md</span>) proposes scan&#8209;to&#8209;CAD as three tiers, orchestrated by a new Cloudflare stack.</p>
+      </div>
+
+      <div class="tier-list">
+        <div class="tier-row"><span class="tier-no">Tier 1</span><span>On&#8209;device R12 DXF</span></div>
+        <div class="tier-row"><span class="tier-no">Tier 2</span><span>Cloudflare Container &middot; Open3D RANSAC floor plan</span></div>
+        <div class="tier-row"><span class="tier-no">Tier 3</span><span>GPU ML &middot; RoomFormer&#8209;PolyRoom</span></div>
+      </div>
+      <p class="mono" style="font-size:.8rem; color:var(--ink-dim);">orchestration: new Worker + R2 + Queues + D1</p>
+
+      <div class="verdict-grid">
+        <div class="verdict-card adopt">
+          <div class="verdict-head"><span class="mono-label">Adopt</span></div>
+          <ul>
+            <li>Point cloud as a <b>dimension cross-check</b>, not a replacement for the parametric solve &mdash; mesh and parametric model share the same ARKit session&rsquo;s tracking error, so it catches RoomPlan-specific mistakes while typed <span class="mono" style="font-size:.78rem;">scan_anchors</span> stay the real ground truth.</li>
+            <li>Tiered fidelity, and the honesty of a &ldquo;QA note,&rdquo; not a mangled polygon, when a tier can&rsquo;t deliver.</li>
+            <li>DXF craft gotchas worth carrying forward.</li>
+            <li>Async retries / DLQ thinking.</li>
+            <li>Scale&#8209;to&#8209;zero GPU.</li>
+            <li>Framework&#8209;agnostic core with thin adapters.</li>
+          </ul>
+        </div>
+        <div class="verdict-card decline">
+          <div class="verdict-head"><span class="mono-label">Decline</span></div>
+          <ul>
+            <li>A second orchestration stack &mdash; Worker / R2 / Queues / D1 &mdash; parallel to the Supabase spine we already run: <span class="mono" style="font-size:.78rem;">agent_tasks</span> is the queue, <span class="mono" style="font-size:.78rem;">room_files</span> is job state.</li>
+            <li>Point&#8209;cloud&#8209;<b>first</b> reconstruction, which discards the parametric CapturedRoom our solve already anchor&#8209;corrects and provenance&#8209;classes.</li>
+            <li>2D&#8209;DXF&#8209;only scope &mdash; nothing toward rich 3D or imagery.</li>
+          </ul>
+        </div>
+        <div class="verdict-card correct">
+          <div class="verdict-head"><span class="mono-label">Correct (2026)</span><span class="badge">re&#8209;dated</span></div>
+          <ul>
+            <li>Cloudflare Containers are long&#8209;running, DO&#8209;backed, with idle&#8209;sleep &mdash; not request&#8209;scoped as written.</li>
+            <li>Still no customer GPU on Cloudflare.</li>
+            <li>Simultaneous RoomPlan + sceneDepth needs the <span class="mono" style="font-size:.78rem;">didStart</span> re&#8209;enable workaround &mdash; our ~1&nbsp;Hz depth recorder already navigates it.</li>
+            <li>The spec predates Gaussian splatting and the Khronos <span class="mono" style="font-size:.78rem;">KHR_gaussian_splatting</span> glTF extension (RC Feb&nbsp;2026) &mdash; the single most important development for the rich&#8209;3D ask.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="pull">
+        <span class="mark">&ldquo;</span>
+        <p>Implemented in the repo: none of it. Patina already shipped a different &mdash; and for our bar, better &mdash; CAD pipeline. The spec&rsquo;s best ideas become extensions, not replacements.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ RR-04 THE PROPOSAL ============================================================ -->
+  <section id="rr-04" class="sheet" aria-labelledby="rr-04-title">
+    <div class="title-block">
+      <span class="sheet-no">RR&#8209;04</span>
+      <h2 class="sheet-title" id="rr-04-title">The proposal: one capture, three lanes</h2>
+      <span class="sheet-meta"><span class="proj">Patina &mdash; Scan Pipeline v2</span><span>2026&#8209;08&#8209;18</span></span>
+    </div>
+    <div class="sheet-body">
+
+      <div class="diagram">
+        <div class="spine-stack">
+          <div class="box dest"><span class="t">Capture bundle</span><span class="n">schema v3, one scan</span></div>
+          <div class="arrow-v"><span class="ln"></span><span class="tri-d"></span></div>
+          <div class="spine-band">
+            <b>Shared spine</b>
+            agent_tasks successor stages &middot; room_files versions &middot; scan_pipeline_events &middot; pg_cron billing&#8209;guarded sweeps
+          </div>
+          <div class="fan">
+            <div class="arrow-v"><span class="ln"></span><span class="tri-d"></span></div>
+            <div class="arrow-v"><span class="ln"></span><span class="tri-d"></span></div>
+            <div class="arrow-v"><span class="ln"></span><span class="tri-d"></span></div>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:.75rem; margin-top:.25rem;">
+
+          <div class="lane-row cad">
+            <span class="lane-tag">Lane C &mdash; CAD</span>
+            <p class="lane-desc">solve &rarr; verify (new) &rarr; drawings, IFC alongside DXF.</p>
+            <div class="flow-scroll">
+              <div class="flow-row">
+                <div class="box"><span class="t">solve</span></div>
+                <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+                <div class="box"><span class="t">verify<span class="new-flag">new</span></span><span class="n">mesh.ply sampled to a point cloud &middot; seeded RANSAC plane&#8209;fit spans cross&#8209;check dims</span></div>
+                <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+                <div class="box"><span class="t">drawings</span><span class="n">+ IFC (IfcOpenShell) &middot; DXF stays R2010</span></div>
+              </div>
+            </div>
+            <ul class="deferred">
+              <li><span class="term">DWG</span> &mdash; ODA license lock&#8209;in.</li>
+              <li><span class="term">Native SketchUp / Revit exports</span> &mdash; Twindo market signal: DXF is commodity (~$0.18/sqft, Twindo&rsquo;s published pricing, 2026), native formats are premium.</li>
+              <li><span class="term">ML reconstruction</span> &mdash; only if verify data justifies it.</li>
+            </ul>
+          </div>
+
+          <div class="lane-row model">
+            <span class="lane-tag">Lane M &mdash; Model</span>
+            <p class="lane-desc">Phase A makes GLB real; Phase B adds a Gaussian splat stage.</p>
+            <div class="flow-scroll">
+              <div class="flow-row">
+                <div class="box"><span class="t">GLB optimize</span><span class="n">gltf&#8209;transform &middot; Draco / meshopt + KTX2</span></div>
+                <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+                <div class="box"><span class="t">splat<span class="new-flag">new</span></span><span class="n">posed keyframes + depth &middot; CUDA box &middot; 7&ndash;45 min/scene, $0.04&ndash;0.12/scene GPU</span></div>
+                <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+                <div class="box"><span class="t">.spz</span><span class="n">15&ndash;60 MB &rarr; KHR_gaussian_splatting glTF as it ratifies</span></div>
+              </div>
+            </div>
+            <p style="font-size:.83rem; color:var(--ink-dim); max-width:64ch;">GLB is the canonical web asset; USDZ stays iOS AR Quick Look only. Poses are free from ARKit &mdash; the parked COLMAP refine un&#8209;parks as a pose&#8209;prior improver. Modal / RunPod thin adapter is the later scale&#8209;out escape hatch.</p>
+          </div>
+
+          <div class="lane-row image">
+            <span class="lane-tag">Lane I &mdash; Images</span>
+            <p class="lane-desc">Existing HEIC ladder, plus a new headless render stage.</p>
+            <div class="flow-scroll">
+              <div class="flow-row">
+                <div class="box"><span class="t">hero / photos / HEIC</span><span class="n">existing ladder</span></div>
+                <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+                <div class="box"><span class="t">renders<span class="new-flag">new</span></span><span class="n">4 corner perspectives + top&#8209;down + turntable strip</span></div>
+                <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+                <div class="box dest"><span class="t">JPEGs</span><span class="n">on Room File manifest</span></div>
+              </div>
+            </div>
+            <p style="font-size:.83rem; color:var(--ink-dim); max-width:64ch;">three.js + headless Chromium first; Blender Cycles photoreal later, only after benchmarking.</p>
+          </div>
+
+        </div>
+        <p class="diagram-caption">One bundle feeds a shared Supabase spine; three lanes read from it independently. Blue codes the CAD lane, verdigris the model lane, ink the image lane.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ RR-05 THE PORTAL ============================================================ -->
+  <section id="rr-05" class="sheet" aria-labelledby="rr-05-title">
+    <div class="title-block">
+      <span class="sheet-no">RR&#8209;05</span>
+      <h2 class="sheet-title" id="rr-05-title">The portal: what the designer sees</h2>
+      <span class="sheet-meta"><span class="proj">Patina &mdash; Scan Pipeline v2</span><span>2026&#8209;08&#8209;18</span></span>
+    </div>
+    <div class="sheet-body">
+      <div class="prose">
+        <p class="lede">ModelStage: one viewer substrate, extending the proven plain&#8209;three.js Orbit infrastructure &mdash; React&#8209;19&#8209;safe, dynamic import, imperative renderer, on&#8209;demand frames, wrapped in an ErrorBoundary.</p>
+      </div>
+
+      <div>
+        <h3 class="sub-head" style="margin-bottom:.6rem; display:block;">Mode row (concept)</h3>
+        <div class="mode-row" role="group" aria-label="ModelStage view modes, concept only">
+          <span class="mode-btn">Plan</span>
+          <span class="mode-btn active">Orbit</span>
+          <span class="mode-btn">Mesh</span>
+          <span class="mode-btn">Splat</span>
+          <span class="mode-btn">Photos</span>
+        </div>
+        <p class="mock-note">Styled toggle, not wired &mdash; a mock of the mode row, not a control.</p>
+      </div>
+
+      <div class="prose">
+        <p><b>Room File page.</b> Plan SVG renders inline &mdash; stop shipping it download&#8209;only. A render gallery strip sits alongside. DXF remains a download; our SVG is the preview.</p>
+        <p><b>Client portal.</b> Kill or guard the dead r3f viewer now. Port ModelStage in at Phase A.</p>
+      </div>
+
+      <div>
+        <h3 class="sub-head" style="margin-bottom:.6rem; display:block;">Composes with existing chrome</h3>
+        <ul class="compose-list">
+          <li>Bordered stage + mono stagecap</li>
+          <li>FullScreenViewerShell</li>
+          <li>Region primitives</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ RR-06 ORCHESTRATION & SCHEMA ============================================================ -->
+  <section id="rr-06" class="sheet" aria-labelledby="rr-06-title">
+    <div class="title-block">
+      <span class="sheet-no">RR&#8209;06</span>
+      <h2 class="sheet-title" id="rr-06-title">Orchestration &amp; schema</h2>
+      <span class="sheet-meta"><span class="proj">Patina &mdash; Scan Pipeline v2</span><span>2026&#8209;08&#8209;18</span></span>
+    </div>
+    <div class="sheet-body">
+
+      <div class="diagram">
+        <div class="spine-stack">
+          <div class="stage-pill">ingest</div>
+          <div class="arrow-v"><span class="ln"></span><span class="tri-d"></span></div>
+          <div class="fan">
+            <div class="arrow-v"><span class="ln"></span><span class="tri-d"></span></div>
+            <div class="arrow-v"><span class="ln"></span><span class="tri-d"></span></div>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-wrap:wrap; gap:1.5rem; margin-top:.25rem; align-items:flex-start;">
+          <div>
+            <span class="mono-label" style="display:block; margin-bottom:.4rem;">Lane C &mdash; CPU box, serial within itself</span>
+            <div class="flow-scroll">
+              <div class="flow-row">
+                <div class="stage-pill">solve</div>
+                <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+                <div class="stage-pill">verify</div>
+                <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+                <div class="stage-pill">drawings</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <span class="mono-label" style="display:block; margin-bottom:.4rem;">Lane M &mdash; Phase B only</span>
+            <div class="flow-row">
+              <div class="stage-pill branch">splat &middot; CUDA worker variant only</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-scroll" style="margin-top:1.1rem;">
+          <div class="flow-row" style="align-items:center;">
+            <div class="box"><span class="t">convert&#8209;room&#8209;scan&#8209;glb</span><span class="n">edge fn + aesthete&#8209;inference container &middot; billing&#8209;guarded pg_cron sweep &middot; not part of ingest&rsquo;s fan&#8209;out</span></div>
+            <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+            <div class="box"><span class="t">optimized GLB lands</span><span class="n">enqueue_agent_task RPC</span></div>
+            <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
+            <div class="stage-pill">renders</div>
+          </div>
+        </div>
+
+        <p class="diagram-caption">Ingest fans out &mdash; it does not chain. <span class="mono">solve &rarr; verify &rarr; drawings</span> is Lane C&rsquo;s serial run; <span class="mono">splat</span> (Phase B) is claimed only by the CUDA worker variant, via <span class="mono">claim_agent_tasks(p_task_types)</span>. There is no <span class="mono">scan_pipeline.model</span> stage &mdash; GLB optimization happens inside the conversion endpoint, not the queue. <span class="mono">renders</span> is enqueued by the edge function once a GLB lands, or by <span class="mono">splat</span> on a Phase B refresh; a <span class="mono">drawings</span> failure never blocks it, and vice versa.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table class="placement-table">
+          <thead><tr><th>Compute</th><th>Owns</th></tr></thead>
+          <tbody>
+            <tr><td class="owner">CPU box</td><td>ingest &middot; solve &middot; verify &middot; drawings &middot; renders</td></tr>
+            <tr><td class="owner">CUDA box</td><td>splat (+ optional Cycles)</td></tr>
+            <tr><td class="owner">aesthete-inference container</td><td>USDZ&rarr;GLB conversion + gltf&#8209;transform optimization (billing&#8209;guarded)</td></tr>
+            <tr><td class="owner">portal</td><td>viewing only</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="schema-delta">
+        <span class="mono-label">Schema deltas</span>
+        <p style="font-family:var(--font-display); font-size:.94rem; max-width:62ch;"><code>room_files</code> gains <code>splat_url</code>, <code>renders jsonb</code>, <code>verify jsonb</code>. Reconcile the GLB URL home &mdash; <code>room_scans.model_url_gltf</code> vs. a room_files version.</p>
+      </div>
+
+      <div class="no-new">No new NestJS services. No Cloudflare Queues / D1 / R2 for scans.</div>
+    </div>
+  </section>
+
+  <!-- ============================================================ RR-07 PHASING & RISKS ============================================================ -->
+  <section id="rr-07" class="sheet" aria-labelledby="rr-07-title">
+    <div class="title-block">
+      <span class="sheet-no">RR&#8209;07</span>
+      <h2 class="sheet-title" id="rr-07-title">Phasing &amp; risks</h2>
+      <span class="sheet-meta"><span class="proj">Patina &mdash; Scan Pipeline v2</span><span>2026&#8209;08&#8209;18</span></span>
+    </div>
+    <div class="sheet-body">
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Phase</th><th>Duration</th><th>Theme</th><th>Scope</th></tr></thead>
+          <tbody>
+            <tr><td>P1</td><td>~1&ndash;2 wk</td><td>&ldquo;See the real room&rdquo;</td><td>GLB optimize, ModelStage, inline SVG, client&#8209;portal fix</td></tr>
+            <tr><td>P2</td><td>~2&ndash;3 wk</td><td>&ldquo;Trust the numbers&rdquo;</td><td>verify stage, IFC</td></tr>
+            <tr><td>P3</td><td>~3&ndash;4 wk</td><td>&ldquo;The rich record&rdquo;</td><td>splat lane, render gallery, splat viewer</td></tr>
+            <tr><td>P4</td><td>demand&#8209;driven</td><td>&mdash;</td><td>premium exports, StructureBuilder multi&#8209;room (Apple ~2,000 sq ft ceiling), ML only if justified</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Severity</th><th>Risk</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td><span class="chip red">High</span></td><td>RoomPlan API frozen since WWDC23</td><td>Vendor dependency &mdash; no mitigation available.</td></tr>
+            <tr><td><span class="chip amber">Watch</span></td><td>sceneDepth coexistence fragility</td><td>Across iOS releases; already navigated via the <span class="mono">didStart</span> workaround.</td></tr>
+            <tr><td><span class="chip amber">Med</span></td><td>verify determinism</td><td>RANSAC must be seeded; two runs over the same bundle must produce identical residuals.</td></tr>
+            <tr><td><span class="chip amber">Watch</span></td><td>Splat sizes on designer hardware</td><td>15&ndash;60&nbsp;MB .spz per scene.</td></tr>
+            <tr><td><span class="chip amber">Watch</span></td><td>Single GPU box</td><td>Escape hatch: Modal / RunPod thin adapter.</td></tr>
+            <tr><td><span class="chip amber">Watch</span></td><td>Private&#8209;bucket URL&#8209;shape history</td><td>Store bare keys, sign at read.</td></tr>
+            <tr><td><span class="chip red">High</span></td><td><span class="mono">room_files</span> RLS asymmetry</td><td>Noted in code comments during P2 (<span class="mono" style="font-size:.78rem;">use-room-files.ts</span>); unresolved.</td></tr>
+            <tr><td><span class="chip amber">Watch</span></td><td>Billing guards</td><td>Mandatory on every container lane.</td></tr>
+            <tr><td><span class="chip amber">Watch</span></td><td>ODA lock&#8209;in</td><td>Only if DWG ships.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="closing">
+        <p>The outside spec answered &ldquo;how do we build scan&#8209;to&#8209;CAD from nothing.&rdquo; Our question was &ldquo;how does the pipeline we already shipped grow into the full record of the room.&rdquo; This is that answer.</p>
+        <span class="end-mark">End of set &mdash; RR&#8209;07 / 07</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  var sheets = document.querySelectorAll('.sheet');
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce || !('IntersectionObserver' in window)) {
+    sheets.forEach(function(s){ s.classList.add('is-visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+  sheets.forEach(function(s){ io.observe(s); });
+})();
+</script>
+</body>
+</html>
