@@ -26,7 +26,11 @@ dependencies = [
 # `solve` was declared for the least-squares fit; P1 solve is pure-Python so it
 # stays unused today (kept as shipped). `drawings` = the item-11 SVG/PDF/DXF path.
 solve = ["numpy>=1.26", "scipy>=1.11"]
-drawings = ["ezdxf>=1.1", "cairosvg>=2.7"]
+# ifcopenshell 0.8.5: current 0.8.x, real wheels for linux (manylinux_2_31
+# x86_64/aarch64) and macOS arm64, py311-py314 — no source build needed on any
+# box this worker targets. Pulls its own numpy; pinned explicitly too since
+# drawing/ifc.py imports numpy directly for placement matrices.
+drawings = ["ezdxf>=1.1", "cairosvg>=2.7", "ifcopenshell==0.8.5", "numpy>=1.26"]
 
 # ── P2 GPU stages (item 3) — each pulls ONLY what its stage imports ──────────
 # refine (§10.2 / I87): target COLMAP 4.0.2 known-pose triangulation + BA;
