@@ -229,7 +229,7 @@ Complete the risk-ordered compatibility migration and retire direct REST/Storage
 
 ## Phase 1 acceptance
 
-- Clean database replay plus the separate platform-admin ACL phase prove zero non-system `PUBLIC` schema/relation/column/sequence/routine exposure, owner-global future-routine hardening, exact named compatibility grants, view predicates, RLS claims, pgvector behavior, and transaction reset. The aggregate read-only conformance gate must pass in each target environment before login creation.
+- Clean database replay proves zero non-system `PUBLIC` schema/relation/column/sequence/routine exposure **except the signed exceptions in `supabase/tests/edge_api/public_acl_exception_registry.sql`** — the `supabase_admin`-owned `net` residual that `postgres` (`rolsuper = false`) cannot withdraw on Supabase Cloud. There is no separate platform-admin ACL phase; it was retired as unrunnable. Replay also proves future-routine hardening for the three owners this principal can `SET`, exact named compatibility grants, view predicates, RLS claims, pgvector behavior, and transaction reset. The aggregate read-only conformance gate must pass in each target environment before login creation, and its companion negative test must prove that gate still fails against a deliberately broken database.
 - Worker install, generated bindings, TypeScript, unit/contract tests, and `wrangler deploy --dry-run` pass.
 - Shared packages and all consumers pass their real type gates, including the strict admin build.
 - Client pilot passes targeted tests and a live-data route probe.

@@ -1,15 +1,43 @@
--- Supabase platform ACL compatibility after database-wide PUBLIC lockdown.
--- Run locally after a full reset and after the verified local runner applies
--- supabase/platform-admin/00483_public_acl_allowlist.sql as supabase_admin:
+-- Supabase platform ACL compatibility after the 00483 PUBLIC lockdown.
+-- Run locally after a full reset:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
 --     -X -v ON_ERROR_STOP=1 \
 --     -f supabase/tests/edge_api/platform_acl_compatibility_test.sql
 --
--- This is the named, diagnostic companion to the aggregate-only remote gate.
--- It is read-only: platform functions are inspected, never invoked, because
--- several are mutating administrative or trigger routines.
+-- There is no privileged second phase to run first; the platform-admin artifact
+-- was retired as unrunnable on Supabase Cloud. See the $public_lockdown$ block
+-- below for what replaced its assertions.
+--
+-- This is the named, DIAGNOSTIC companion to the aggregate-only remote gate.
+-- It is NOT a provisioning gate and nothing blocks on it. It is read-only:
+-- platform functions are inspected, never invoked, because several are
+-- mutating administrative or trigger routines. The \ir below creates
+-- session-local temporary objects only, before the read-only transaction opens.
+--
+-- ⚠ EXPECTED-RED, measured 2026-08-17 on a fresh local reset: 6 of the 14 DO
+-- blocks pass, 8 fail. The two blocks re-scoped under Kody's PUBLIC-residual
+-- ruling ($public_lockdown$, $platform_schema_usage$) pass. The other eight
+-- assert the END STATE OF THE RETIRED PRIVILEGED PHASE and cannot be satisfied
+-- by the ordinary `postgres` principal:
+--
+--   $auth_helpers$        named EXECUTE on auth.uid/role/email/jwt — auth is
+--                         owned by supabase_auth_admin
+--   $storage_routines$    named EXECUTE on storage routines — supabase_storage_admin
+--   $extension_helpers$   named EXECUTE on extensions.gen_random_uuid() etc.
+--   $cron_routines$       "no generic role may execute" — true only via PUBLIC
+--   $graphql_routines$    same, for graphql_public
+--   $realtime_routines$   same, for realtime.topic()
+--   $net_contract$        same, for internal pg_net routines
+--   $public_rpc_surface$  drift baselines (>=310/597/635 named grants) recorded
+--                         against a database that had the privileged phase
+--                         applied; this database measures 294/591/612
+--
+-- Re-scoping those eight is a separate, un-ruled piece of work. Until it is
+-- done, read this file's output per block, not as a pass/fail.
 
 \set ON_ERROR_STOP on
+
+\ir public_acl_exception_registry.sql
 
 BEGIN READ ONLY;
 
@@ -96,66 +124,42 @@ BEGIN
 END
 $platform_roles$;
 
+-- ── PUBLIC residual, re-scoped to what this principal can actually assert ──
+--
+-- This block used to assert that PUBLIC held ZERO non-system schema, relation,
+-- sequence, column and routine privileges. That is unreachable on Supabase
+-- Cloud: schema `net`, its two tables, its sequence and its twelve routines are
+-- owned by supabase_admin, `postgres` is rolsuper = false and cannot become
+-- supabase_admin, and the platform-admin script that was supposed to close them
+-- was retired as unrunnable through any customer channel. The assertions were
+-- therefore red by construction, which is how a mandatory gate turns into a
+-- waived one.
+--
+-- What replaces them is the same predicate the two conformance gates assert:
+-- PUBLIC privileges are counted only where PUBLIC can enter the schema, and
+-- only when they are not an exact, signed row in the exception registry.
+-- Sources: supabase/tests/edge_api/public_acl_exception_registry.sql and
+-- docs/engineering/public-acl-residual-census.md.
 DO $public_lockdown$
+DECLARE
+  unregistered_public_grants integer;
+  out_of_band_reachable integer;
+  public_writable_relations integer;
 BEGIN
-  ASSERT NOT EXISTS (
-    SELECT 1
-    FROM pg_namespace AS n
-    CROSS JOIN LATERAL aclexplode(
-      COALESCE(n.nspacl, acldefault('n', n.nspowner))
-    ) AS acl
-    WHERE n.nspname !~ '^pg_'
-      AND n.nspname <> 'information_schema'
-      AND acl.grantee = 0
-  ), 'PUBLIC must have no non-system schema privilege';
+  SELECT count(*) INTO unregistered_public_grants
+    FROM public_acl_public_grant_finding;
+  ASSERT unregistered_public_grants = 0,
+    'PUBLIC holds a reachable schema, relation, sequence or column privilege that is not a signed registry exception';
 
-  ASSERT NOT EXISTS (
-    SELECT 1
-    FROM pg_class AS c
-    JOIN pg_namespace AS n ON n.oid = c.relnamespace
-    CROSS JOIN LATERAL aclexplode(
-      COALESCE(
-        c.relacl,
-        acldefault(
-          (CASE WHEN c.relkind = 'S' THEN 'S' ELSE 'r' END)::"char",
-          c.relowner
-        )
-      )
-    ) AS acl
-    WHERE n.nspname !~ '^pg_'
-      AND n.nspname <> 'information_schema'
-      AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
-      AND acl.grantee = 0
-  ), 'PUBLIC must have no non-system relation or sequence privilege';
-
-  ASSERT NOT EXISTS (
-    SELECT 1
-    FROM pg_attribute AS a
-    JOIN pg_class AS c ON c.oid = a.attrelid
-    JOIN pg_namespace AS n ON n.oid = c.relnamespace
-    CROSS JOIN LATERAL aclexplode(a.attacl) AS acl
-    WHERE a.attnum > 0
-      AND NOT a.attisdropped
-      AND a.attacl IS NOT NULL
-      AND n.nspname !~ '^pg_'
-      AND n.nspname <> 'information_schema'
-      AND acl.grantee = 0
-  ), 'PUBLIC must have no non-system column privilege';
-
-  -- Check EXECUTE even when a role lacks schema USAGE. A later schema grant
-  -- must not turn a dormant PUBLIC function ACL back into a capability.
-  ASSERT NOT EXISTS (
-    SELECT 1
-    FROM pg_proc AS p
-    JOIN pg_namespace AS n ON n.oid = p.pronamespace
-    CROSS JOIN LATERAL aclexplode(
-      COALESCE(p.proacl, acldefault('f', p.proowner))
-    ) AS acl
-    WHERE n.nspname !~ '^pg_'
-      AND n.nspname <> 'information_schema'
-      AND acl.grantee = 0
-      AND acl.privilege_type = 'EXECUTE'
-  ), 'PUBLIC must have no EXECUTE on any non-system routine';
+  SELECT
+    count(*) FILTER (WHERE invariant = 'A'),
+    count(*) FILTER (WHERE invariant = 'B')
+    INTO out_of_band_reachable, public_writable_relations
+    FROM public_acl_capability_findings;
+  ASSERT out_of_band_reachable = 0,
+    'a PUBLIC-reachable routine can act outside the caller privilege and is not a signed registry exception';
+  ASSERT public_writable_relations = 0,
+    'a PUBLIC-writable relation is reachable and is not a signed registry exception';
 END
 $public_lockdown$;
 
@@ -253,6 +257,16 @@ BEGIN
       AND (
         has_schema_privilege('edge_catalog_reader', n.oid, 'USAGE')
         OR has_schema_privilege('edge_rls_user', n.oid, 'USAGE')
+      )
+      -- A schema whose PUBLIC USAGE is a signed registry exception reaches
+      -- every role, the edge roles included. That is the accepted residual,
+      -- not a grant made to these roles; the objects inside it are covered by
+      -- $public_lockdown$ above.
+      AND NOT EXISTS (
+        SELECT 1 FROM public_acl_exception_registry AS x
+         WHERE x.kind = 'schema'
+           AND x.schema_name = n.nspname
+           AND x.object_signature = n.nspname
       )
   ), 'an edge capability role can use a non-public helper schema';
 END
@@ -956,13 +970,16 @@ BEGIN
     WHERE acl.grantee = 0
   ), 'a default ACL explicitly grants a future privilege to PUBLIC';
 
-  -- This assertion is intentionally expected-red after the normal migration.
-  -- The local platform-admin runner must execute its companion SQL as the
-  -- verified CLI supabase_admin principal before this full compatibility gate.
-  -- The six owners below cover app/service objects plus the Auth, Storage,
-  -- Realtime, Functions, and shared Supabase extension surfaces. Current
-  -- routines are independently covered by public_lockdown above, so a later
-  -- platform upgrade with a PUBLIC default reopens provisioning immediately.
+  -- EXPECTED-RED, permanently. Three of the six owners below cannot be
+  -- hardened: ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin /
+  -- supabase_auth_admin / supabase_storage_admin needs membership in that role,
+  -- which `postgres` does not hold on Supabase Cloud and cannot grant itself,
+  -- and the privileged runner that once did it is deleted as unrunnable. The
+  -- three owners 00483 CAN set are asserted by the two conformance gates; this
+  -- assertion is kept unmodified as the standing record of what the platform
+  -- still owes. Current routines are independently covered by
+  -- $public_lockdown$ above, so a later platform upgrade that ships a PUBLIC
+  -- default reopens provisioning immediately through those gates.
   ASSERT NOT EXISTS (
     SELECT 1
     FROM unnest(ARRAY[

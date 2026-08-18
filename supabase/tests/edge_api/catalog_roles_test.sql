@@ -1,14 +1,23 @@
 -- Cloudflare Phase 1 database contract conformance (migration 00481).
--- Run only against the local CLI database after pnpm supabase:reset and the
--- verified local runner has applied
--- supabase/platform-admin/00483_public_acl_allowlist.sql as supabase_admin:
+-- Run only against the local CLI database after pnpm supabase:reset:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
 --     -X -v ON_ERROR_STOP=1 -f supabase/tests/edge_api/catalog_roles_test.sql
+--
+-- There is no privileged second phase to run first. The platform-admin artifact
+-- this header used to require was retired as unrunnable on Supabase Cloud
+-- (`postgres` is rolsuper = false and cannot become supabase_admin), and its
+-- surviving record is supabase/tests/edge_api/public_acl_exception_registry.sql
+-- plus docs/engineering/public-acl-residual-census.md.
 --
 -- Every direct role/data/extension mutation is enclosed by the outer
 -- transaction and rolled back. The two disposable LOGIN roles must commit so
 -- separate backends can authenticate; their complete lifecycle instead lives
 -- in one exception-cleaned dblink block below.
+--
+-- The provisioning guard at the end of this file asserts the SAME predicate as
+-- catalog_roles_remote_conformance_test.sql, from the same shared definitions,
+-- because a local gate that is easier to satisfy than the remote one is how a
+-- green local becomes a broken staging.
 
 \set ON_ERROR_STOP on
 
@@ -24,6 +33,11 @@ SELECT (
   \warn 'catalog_roles_test.sql refused: destructive reconciliation probes are local-only'
   SELECT 1 / 0 AS cf481_local_target_required;
 \endif
+
+-- Shared with the remote gate: the signed exception registry and the two
+-- predicate views derived from it. Included before the outer transaction so the
+-- session-local objects survive its ROLLBACK.
+\ir public_acl_exception_registry.sql
 
 BEGIN;
 SAVEPOINT cf481_role_reconciliation;
@@ -818,29 +832,43 @@ $cf481_login_lifecycle$;
 
 \echo 'edge_api/catalog_roles_test.sql: functional assertions passed; running provisioning guard'
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Provisioning guard — the same predicate the remote gate asserts.
+--
+-- Every ACL question below is answered out of the three shared objects created
+-- by public_acl_exception_registry.sql, so this guard and
+-- catalog_roles_remote_conformance_test.sql cannot answer it differently:
+--
+--   public_acl_role_effective_finding  — is a capability role too broad?
+--   public_acl_public_grant_finding    — what is PUBLIC still carrying?
+--   public_acl_capability_findings     — invariants A and B
+--
+-- Each of those filters on schema USAGE as well as the object grant, and
+-- exempts only exact, signed registry signatures.
+-- ═══════════════════════════════════════════════════════════════════════════
+
 DO $$
 DECLARE
   unexpected_database integer;
+  missing_catalog_grants integer;
   unexpected_schemas integer;
   unexpected_relations integer;
   unexpected_columns integer;
   unexpected_sequences integer;
-  executable_routines integer;
-  callable_routines integer;
-  callable_definers integer;
+  unexpected_routines integer;
+  public_grant_residual integer;
+  out_of_band_reachable integer;
+  public_writable_relations integer;
   unexpected_memberships integer;
   public_default_privileges integer;
   unhardened_owner_defaults integer;
   unsafe_role_grant boolean;
 BEGIN
+  -- Database level. Not covered by the shared views: there is no schema to
+  -- filter on, so it stays a direct probe.
   SELECT count(*) FILTER (
            WHERE has_database_privilege(
              'edge_catalog_reader', d.oid, privilege.name
-           )
-         )
-         + count(DISTINCT d.oid) FILTER (
-           WHERE NOT has_database_privilege(
-             'edge_catalog_reader', d.oid, 'CONNECT'
            )
          )
     INTO unexpected_database
@@ -848,86 +876,38 @@ BEGIN
     CROSS JOIN LATERAL (VALUES ('CREATE'), ('TEMP')) AS privilege(name)
    WHERE d.datname = current_database();
 
-  SELECT count(*)
-         + (
-           NOT has_schema_privilege(
-             'edge_catalog_reader', 'public', 'USAGE'
-           )
-         )::integer
-    INTO unexpected_schemas
-    FROM pg_namespace AS n
-   WHERE n.nspname !~ '^pg_'
-     AND n.nspname <> 'information_schema'
-     AND (
-       has_schema_privilege('edge_catalog_reader', n.oid, 'CREATE')
-       OR (
-         has_schema_privilege('edge_catalog_reader', n.oid, 'USAGE')
-         AND n.nspname <> 'public'
-       )
-     );
+  -- The capability role must still HAVE what it is provisioned for. A gate that
+  -- only counts excess privileges passes a role that lost its one grant.
+  SELECT (NOT has_database_privilege(
+            'edge_catalog_reader', current_database(), 'CONNECT'
+          ))::integer
+         + (NOT has_schema_privilege(
+              'edge_catalog_reader', 'public', 'USAGE'
+            ))::integer
+         + (NOT has_table_privilege(
+              'edge_catalog_reader', 'public.edge_catalog_products', 'SELECT'
+            ))::integer
+    INTO missing_catalog_grants;
 
-  SELECT count(*)
-    INTO unexpected_columns
-    FROM pg_attribute AS a
-    JOIN pg_class AS c ON c.oid = a.attrelid
-    JOIN pg_namespace AS n ON n.oid = c.relnamespace
-    CROSS JOIN LATERAL (
-      VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('REFERENCES')
-    ) AS privilege(name)
-   WHERE a.attnum > 0
-     AND NOT a.attisdropped
-     AND n.nspname !~ '^pg_'
-     AND n.nspname <> 'information_schema'
-     AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
-     AND has_column_privilege(
-       'edge_catalog_reader', c.oid, a.attnum, privilege.name
-     )
-     AND NOT (
-       c.oid = 'public.edge_catalog_products'::regclass
-       AND privilege.name = 'SELECT'
-     );
+  SELECT
+    count(*) FILTER (WHERE object_class = 'schema'),
+    count(*) FILTER (WHERE object_class = 'relation'),
+    count(*) FILTER (WHERE object_class = 'column'),
+    count(*) FILTER (WHERE object_class = 'sequence'),
+    count(*) FILTER (WHERE object_class = 'routine')
+    INTO unexpected_schemas, unexpected_relations, unexpected_columns,
+         unexpected_sequences, unexpected_routines
+    FROM public_acl_role_effective_finding
+   WHERE role_name = 'edge_catalog_reader';
 
-  SELECT count(DISTINCT c.oid)
-    INTO unexpected_relations
-    FROM pg_class AS c
-    JOIN pg_namespace AS n ON n.oid = c.relnamespace
-    CROSS JOIN LATERAL (
-      VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
-             ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')
-    ) AS privilege(name)
-   WHERE n.nspname !~ '^pg_'
-     AND n.nspname <> 'information_schema'
-     AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
-     AND has_table_privilege('edge_catalog_reader', c.oid, privilege.name)
-     AND NOT (
-       c.oid = 'public.edge_catalog_products'::regclass
-       AND privilege.name = 'SELECT'
-     );
+  SELECT count(*) INTO public_grant_residual
+    FROM public_acl_public_grant_finding;
 
-  SELECT count(DISTINCT c.oid)
-    INTO unexpected_sequences
-    FROM pg_class AS c
-    JOIN pg_namespace AS n ON n.oid = c.relnamespace
-    CROSS JOIN LATERAL (VALUES ('USAGE'), ('SELECT'), ('UPDATE')) AS privilege(name)
-   WHERE c.relkind = 'S'
-     AND n.nspname !~ '^pg_'
-     AND n.nspname <> 'information_schema'
-     AND has_sequence_privilege('edge_catalog_reader', c.oid, privilege.name);
-
-  SELECT count(*),
-         count(*) FILTER (
-           WHERE has_schema_privilege('edge_catalog_reader', n.oid, 'USAGE')
-         ),
-         count(*) FILTER (
-           WHERE has_schema_privilege('edge_catalog_reader', n.oid, 'USAGE')
-             AND p.prosecdef
-         )
-    INTO executable_routines, callable_routines, callable_definers
-    FROM pg_proc AS p
-    JOIN pg_namespace AS n ON n.oid = p.pronamespace
-   WHERE n.nspname !~ '^pg_'
-     AND n.nspname <> 'information_schema'
-     AND has_function_privilege('edge_catalog_reader', p.oid, 'EXECUTE');
+  SELECT
+    count(*) FILTER (WHERE invariant = 'A'),
+    count(*) FILTER (WHERE invariant = 'B')
+    INTO out_of_band_reachable, public_writable_relations
+    FROM public_acl_capability_findings;
 
   SELECT count(*)
     INTO unexpected_memberships
@@ -962,15 +942,18 @@ BEGIN
     CROSS JOIN LATERAL aclexplode(d.defaclacl) AS acl
    WHERE acl.grantee = 0;
 
+  -- Re-scoped to the three owners `postgres` can lawfully SET. Demanding a
+  -- pg_default_acl row for supabase_admin, supabase_auth_admin or
+  -- supabase_storage_admin was unsatisfiable: ALTER DEFAULT PRIVILEGES FOR ROLE
+  -- needs membership in that role, and `postgres` has none of the three and
+  -- cannot grant itself any. 00483 hardens exactly these three; this asserts
+  -- exactly that and claims nothing about the platform's own owners.
   SELECT count(*)
     INTO unhardened_owner_defaults
     FROM unnest(ARRAY[
       'postgres',
-      'supabase_admin',
-      'supabase_auth_admin',
-      'supabase_storage_admin',
-      'supabase_realtime_admin',
-      'supabase_functions_admin'
+      'supabase_functions_admin',
+      'supabase_realtime_admin'
     ]::text[]) AS expected(role_name)
     LEFT JOIN pg_roles AS owner ON owner.rolname = expected.role_name
     LEFT JOIN pg_default_acl AS d
@@ -995,25 +978,31 @@ BEGIN
     INTO unsafe_role_grant;
 
   IF unexpected_database <> 0
+     OR missing_catalog_grants <> 0
      OR unexpected_schemas <> 0
      OR unexpected_relations <> 0
      OR unexpected_columns <> 0
      OR unexpected_sequences <> 0
-     OR executable_routines <> 0
+     OR unexpected_routines <> 0
+     OR public_grant_residual <> 0
+     OR out_of_band_reachable <> 0
+     OR public_writable_relations <> 0
      OR unexpected_memberships <> 0
      OR public_default_privileges <> 0
      OR unhardened_owner_defaults <> 0
      OR unsafe_role_grant THEN
     RAISE EXCEPTION USING MESSAGE = format(
-      'PROVISIONING BLOCKED: edge_catalog_reader is not SELECT-only because ACL drift exposes database=%s, schemas=%s, relation_objects=%s, column_privileges=%s, sequence_objects=%s, executable_routines=%s, callable_routines=%s, callable_security_definers=%s, memberships=%s, public_default_privileges=%s, unhardened_owner_defaults=%s, grant_role_to_user=%s',
+      'PROVISIONING BLOCKED: database=%s, missing_catalog_grants=%s, schemas=%s, relation_objects=%s, column_privileges=%s, sequence_objects=%s, routines=%s, unregistered_public_grants=%s, public_reachable_out_of_band=%s, public_writable_relations=%s, memberships=%s, public_default_privileges=%s, unhardened_owner_defaults=%s, grant_role_to_user=%s',
       unexpected_database,
+      missing_catalog_grants,
       unexpected_schemas,
       unexpected_relations,
       unexpected_columns,
       unexpected_sequences,
-      executable_routines,
-      callable_routines,
-      callable_definers,
+      unexpected_routines,
+      public_grant_residual,
+      out_of_band_reachable,
+      public_writable_relations,
       unexpected_memberships,
       public_default_privileges,
       unhardened_owner_defaults,
