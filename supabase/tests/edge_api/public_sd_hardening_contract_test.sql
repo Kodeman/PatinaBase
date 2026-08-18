@@ -6080,11 +6080,12 @@ END
 $roleless_studio_member_denial$;
 
 RESET ROLE;
-SET LOCAL ROLE authenticated;
-SELECT pg_temp.assume_actor(
-  'd4850000-0000-4000-8000-000000000001', 'authenticated'
-);
-
+-- set_project_studio_id's FOR SHARE OF user_role is invisible under RLS to a
+-- direct authenticated writer (pre-existing FOR SHARE+RLS finding, flagged for
+-- review; the real project-creation flow is a SECURITY DEFINER RPC), so seed
+-- this fixture project as postgres, which takes the trigger's documented
+-- migration bypass. created_by = 001 is what the provenance-denial probes below
+-- assert; the direct authenticated INSERT is fixture setup, not the probe target.
 INSERT INTO public.projects (
   id, name, designer_id, created_by, studio_id
 )
@@ -6096,6 +6097,7 @@ VALUES (
   'd4851000-0000-4000-8000-000000000001'
 );
 
+SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
   'd4850000-0000-4000-8000-000000000002', 'authenticated'
 );
@@ -6157,10 +6159,12 @@ BEGIN
 END
 $cross_studio_created_by_reassignment_denial$;
 
-SELECT pg_temp.assume_actor(
-  'd4850000-0000-4000-8000-000000000002', 'authenticated'
-);
-
+-- set_invoice_studio_id's FOR SHARE OF user_role can't see designer 001's role
+-- under RLS from a direct authenticated writer (pre-existing FOR SHARE+RLS
+-- finding, flagged for review; real flow uses SECURITY DEFINER RPCs), so seed
+-- the draft invoice as postgres. The immutable draft edits below still run as
+-- co-member 002 — immutable updates skip the trigger's caller checks.
+RESET ROLE;
 INSERT INTO public.invoices (
   id, project_id, designer_id, client_id, studio_id,
   status, currency, subtotal_cents, total_cents
@@ -6171,6 +6175,11 @@ VALUES (
   'd4850000-0000-4000-8000-000000000001',
   'd4850000-0000-4000-8000-000000000004',
   NULL, 'draft', 'USD', 0, 0
+);
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000002', 'authenticated'
 );
 
 UPDATE public.invoices
