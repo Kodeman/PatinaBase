@@ -100,16 +100,23 @@
         "CATALOG_SOURCE": "legacy",
         "CATALOG_HYPERDRIVE_PERCENT": "0",
         "LEGACY_FETCH_TIMEOUT_MS": "3000",
-        "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
+        // review finding W-1 — a 10s proxy abort in front of stripe-webhook (sync DB writes + email sends) risks silent event loss inside Stripe's ~30s window.
+        "COMPATIBILITY_FETCH_TIMEOUT_MS": "30000",
         "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
       },
-      // Add DB_FRESH=strata-prod-fresh (edge_rls_login), DB_CATALOG_FRESH
-      // (strata-prod catalog reader, edge_catalog_login uncached), and
-      // DB_PUBLIC_CACHE=strata-prod-public-cache using the literal IDs returned
-      // by Cloudflare provisioning, then enable shadowing. Promote CATALOG_SOURCE
-      // in the same edit that adds the IDs; a promoted source missing the
-      // bindings it reads now fails config:check and boots 503.
-      "hyperdrive": [],
+      // Provisioned against Strata's direct endpoint
+      // (db.bkvcixdmuyejfzcijpdg.supabase.co:5432, never the pooler).
+      // DB_FRESH=strata-prod-fresh (edge_rls_login, caching disabled),
+      // DB_CATALOG_FRESH=strata-prod-catalog-fresh (edge_catalog_login, caching
+      // disabled — the shadow fresh leg), DB_PUBLIC_CACHE=strata-prod-public-cache
+      // (edge_catalog_login, max_age 60 / swr 15). CATALOG_SOURCE stays legacy:
+      // promote it in a later, deliberate edit — a promoted source missing the
+      // bindings it reads fails config:check and boots 503.
+      "hyperdrive": [
+        { "binding": "DB_FRESH", "id": "f19990d0765043ff842bd95e52875edd" },
+        { "binding": "DB_CATALOG_FRESH", "id": "3832e8f8857549c1bfb76a8f2f42f2ec" },
+        { "binding": "DB_PUBLIC_CACHE", "id": "b55e02bfab174b08ada96892acae2618" },
+      ],
     },
   },
 }
