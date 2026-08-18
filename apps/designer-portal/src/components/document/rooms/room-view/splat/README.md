@@ -37,7 +37,7 @@ Verified against the registry and the published `dist/spark.module.js` (2.1.0):
 | Formats | `.spz`, `.ply` (standard + SuperSplat-packed), `.splat`, `.ksplat`, `.sog`, `.zip`, `.rad` — one `SplatLoader` that sniffs magic bytes |
 | Runtime deps | `fflate` only |
 | **Remote fetches** | **None.** The only `https://` strings in the whole shipped bundle are Wikipedia links inside code comments. It fetches exactly the `url` you hand a `SplatMesh` and nothing else — no CDN, no telemetry. |
-| **WASM** | Yes (Rust splat decode/LOD) — but **inlined as a `data:application/wasm;base64,…` URI inside the JS**. There is no separate `.wasm` file to serve and no `setDecoderPath` equivalent, so **the `public/three/` vendoring pattern does not apply and nothing needs to be committed.** This is strictly better than Draco/Basis for our CSP: there is no second request to allow. |
+| **WASM** | Yes (Rust splat decode/LOD) — but **inlined as a `data:application/wasm;base64,…` URI inside the JS**. There is no separate `.wasm` file to serve and no `setDecoderPath` equivalent, so **the `public/three/` vendoring pattern does not apply and nothing needs to be committed.** ⚠ **The CSP conclusion this table originally drew from that — "there is no second request to allow" — was wrong**, and the browser is what caught it: wasm-bindgen `fetch()`es the data: URI, and a fetch of a data: URL is still governed by `connect-src`. See "The one thing the evaluation got wrong" below. |
 | Disposal | `SplatMesh.dispose()` frees its packed buffers; `SparkRenderer.dispose()` frees the renderer's. (Open upstream issue [#237] reports memory not always dropping — worth watching when the canvas lands.) |
 | Render loop | Splat sorting is async. The quick-start uses `setAnimationLoop`, but on-demand works: `await spark.update({ scene, camera })` before each `renderer.render(...)`. That is one `await` inside our existing `invalidate()` coalescer. |
 | Packaging | ESM + CJS, ships its own `.d.ts`, no `window`/`document` at module scope |
@@ -158,8 +158,34 @@ no three geometry for `Box3.setFromObject` to measure; the bounds come from the 
 
 **Nothing was vendored into `public/three/` for Spark, and nothing needs to be.** Its
 Rust splat-decode WASM ships inlined as a `data:application/wasm;base64,…` URI inside
-the JS, so there is no second request and no CSP allowance to make — strictly better
-than Draco/Basis on that axis.
+the JS, so there is no file to serve and no decoder path to configure.
+
+## The one thing the evaluation got wrong
+
+The evaluation concluded that the inlined WASM meant "no second request, so no CSP
+allowance to make." **That is false, and only a browser could have shown it.** The
+inlining removes the *file*, not the *fetch*: wasm-bindgen's init does
+
+```js
+module_or_path = new URL("data:application/wasm;base64,…");
+…
+await fetch(module_or_path)
+```
+
+and a `fetch()` of a `data:` URL is governed by `connect-src` exactly like any other.
+The portal's `connect-src` had no `data:`, so `SplatMesh.staticInitialize()` rejected
+with a bare `TypeError: Failed to fetch` — thrown from inside the library, out of
+reach of the stage's ErrorBoundary — and the stage sat on "Bringing the walkthrough
+up…" forever. Every unit test was green throughout; jsdom has no CSP.
+
+`next.config.js` now carries `data:` in `connect-src` for both environments, with the
+reasoning at the directive, and `lib/__tests__/next-config-csp.test.ts` pins it in
+both. The grant is narrow: a `data:` URL carries bytes the document already holds, so
+it reaches no network origin and is not an exfiltration path.
+
+This is the same class of trap as the `worker-src 'self' blob:` line the Mesh
+projection's Draco/KTX2 transcoders needed — a renderer's real request surface not
+matching the one its packaging implies.
 
 ## Driving it
 
