@@ -80,6 +80,7 @@
       // stays config-valid until auth2 adds it.
       "hyperdrive": [
         { "binding": "DB_FRESH", "id": "5cda0d8adbd346febf2f8d528cfaea4e" },
+        { "binding": "DB_CATALOG_FRESH", "id": "d0e0e6d2c3de4d4aa13fdefdfa1232ab" },
         { "binding": "DB_PUBLIC_CACHE", "id": "114f7421d13e487eb023e144b90e58d5" },
       ],
     },
