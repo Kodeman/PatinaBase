@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "THE canonical dispatch-scan-modal → Modal request body. One example, both",
+    "sides. The Deno test (lib.test.ts) asserts the dispatcher builds a body with",
+    "exactly this key set; the pytest (services/scan-modal/tests/test_contract.py)",
+    "asserts scan_modal's parse_spawn_body accepts it and verify_job finds its",
+    "input keys. Neither side owns the contract, so neither can drift alone —",
+    "which is how meshPlyUrl/capturedRoomUrl on one side and",
+    "meshUrl/capturedRoomJsonUrl on the other went unnoticed until now.",
+    "Every value here is a placeholder; only the SHAPE is normative.",
+    "_comment itself is not part of the contract and is ignored by both readers."
+  ],
+  "taskId": "11111111-1111-4111-8111-111111111111",
+  "leaseToken": "dispatch-scan-modal:99999999-9999-4999-8999-999999999999",
+  "scanId": "22222222-2222-4222-8222-222222222222",
+  "roomFileId": "33333333-3333-4333-8333-333333333333",
+  "roomFileVersion": 4,
+  "taskType": "scan_pipeline.verify",
+  "traceId": "44444444-4444-4444-8444-444444444444",
+  "inputs": {
+    "meshUrl": "https://example.invalid/storage/v1/object/sign/room-scans/mesh/u/r/mesh.ply?token=placeholder",
+    "capturedRoomJsonUrl": "https://example.invalid/storage/v1/object/sign/room-scans/captured_room/u/r/captured_room.json?token=placeholder"
+  }
+}

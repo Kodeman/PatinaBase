@@ -51,6 +51,12 @@ const nextConfig = {
         ? "connect-src 'self' http://localhost:* ws://localhost:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : '')
         : "connect-src 'self' https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : ''),
       "media-src 'self' blob:",
+      // The MESH projection's GLTFLoader spins up DRACO/KTX2 transcoder workers
+      // from blob: URLs (see public/three/). Without this they fall back to
+      // script-src, which has no blob:, and every Draco-compressed scan fails
+      // to decode — as a worker construction error in the console, not as
+      // anything the page can show.
+      "worker-src 'self' blob:",
       ["frame-src 'self'", supabaseFrameOrigin].filter(Boolean).join(' '),
       "object-src 'none'",
       "base-uri 'self'",
