@@ -111,13 +111,38 @@ SET status = 'sent', sent_at = now()
 WHERE id = '48710000-0000-4000-8000-000000000001';
 SELECT set_config('app.proposal_send_id', '', true);
 
+-- ── Boards under the issued proposal ──────────────────────────────────────
+-- The client leg is reference-scoped to the currently-ACTIVE issued board
+-- (00485 tightening). Board 001 is that active board. Board 003 is an archived
+-- (superseded) board under the SAME issued proposal — its media must stay
+-- invisible to the client even though it shares the proposal prefix.
+-- Fixture boards are inserted with triggers suspended: the proposal_boards
+-- guard triggers enforce mutation-path invariants (copy-only, lineage,
+-- reparenting) that are orthogonal to the storage RLS policy under test.
+SET session_replication_role = replica;
+INSERT INTO public.proposal_boards (id, proposal_id, name, status, cover_image_url)
+VALUES
+  ('48720000-0000-4000-8000-000000000001',
+   '48710000-0000-4000-8000-000000000001', 'Issued active board', 'active',
+   '48710000-0000-4000-8000-000000000001/boards/48720000-0000-4000-8000-000000000001/asset-1.png'),
+  ('48720000-0000-4000-8000-000000000003',
+   '48710000-0000-4000-8000-000000000001', 'Superseded board', 'archived',
+   '48710000-0000-4000-8000-000000000001/boards/48720000-0000-4000-8000-000000000003/asset-3.png');
+SET session_replication_role = DEFAULT;
+
 -- ── Objects under each proposal's prefix ──────────────────────────────────
 -- Canonical shape written by apps/designer-portal/src/lib/mood-board-assets/
 -- upload-board-assets.ts: {proposalId}/boards/{boardId}/{assetId}.ext
+--   asset-1 → active issued board (client may read)
+--   asset-3 → archived board under the SAME issued proposal (client may NOT)
+--   asset-2 → the never-issued proposal (client may NOT)
 INSERT INTO storage.objects (bucket_id, name, owner)
 VALUES
   ('proposal-mood-boards',
    '48710000-0000-4000-8000-000000000001/boards/48720000-0000-4000-8000-000000000001/asset-1.png',
+   '48700000-0000-4000-8000-000000000001'),
+  ('proposal-mood-boards',
+   '48710000-0000-4000-8000-000000000001/boards/48720000-0000-4000-8000-000000000003/asset-3.png',
    '48700000-0000-4000-8000-000000000001'),
   ('proposal-mood-boards',
    '48710000-0000-4000-8000-000000000002/boards/48720000-0000-4000-8000-000000000002/asset-2.png',
@@ -208,6 +233,7 @@ DECLARE
   v_stranger  uuid := '48700000-0000-4000-8000-000000000004';
   v_comember  uuid := '48700000-0000-4000-8000-000000000005';
   v_issued    text := '48710000-0000-4000-8000-000000000001/boards/48720000-0000-4000-8000-000000000001/asset-1.png';
+  v_issued_archived text := '48710000-0000-4000-8000-000000000001/boards/48720000-0000-4000-8000-000000000003/asset-3.png';
   v_draft     text := '48710000-0000-4000-8000-000000000002/boards/48720000-0000-4000-8000-000000000002/asset-2.png';
   v_read      record;
   v_count     integer;
@@ -241,8 +267,11 @@ BEGIN
     format('the read policy must name authenticated, not %s', v_read.roles);
   ASSERT v_read.qual LIKE '%is_design_studio_comember%',
     'the read policy must bind the owning design studio';
-  ASSERT v_read.qual LIKE '%client_id%' AND v_read.qual LIKE '%auth.uid()%',
-    'the read policy must bind the proposal''s client to auth.uid()';
+  -- The client binding moved into can_client_read_issued_board_media (00485
+  -- tightening): the policy qual now names the reference-scope helper rather
+  -- than an inline client_id/auth.uid() prefix predicate.
+  ASSERT v_read.qual LIKE '%can_client_read_issued_board_media%',
+    'the read policy must bind the client through the active-board reference helper';
 
   -- No policy on this bucket may be reachable by an unauthenticated caller.
   SELECT count(*) INTO v_count
@@ -281,6 +310,10 @@ BEGIN
     'the owning designer must be able to read their proposal''s mood-board media';
   ASSERT pg_temp.visible_objects(v_draft) = 1,
     'the owning designer must reach their own draft''s mood-board media';
+  -- The designer leg is prefix-scoped and UNCHANGED: they own everything under
+  -- the prefix, superseded/archived boards included.
+  ASSERT pg_temp.visible_objects(v_issued_archived) = 1,
+    'the owning designer must reach a superseded board''s media under their own proposal prefix';
   PERFORM pg_temp.reset_actor();
 
   -- ── ALLOW: an active co-member of the owning studio ───────────────────
@@ -294,10 +327,18 @@ BEGIN
   -- both sign these objects with the CLIENT'S own session.
   PERFORM pg_temp.assume_role(v_client, 'authenticated');
   ASSERT pg_temp.visible_objects(v_issued) = 1,
-    'the client of an issued proposal must be able to read its mood-board media';
+    'the client of an issued proposal must be able to read its ACTIVE board''s mood-board media';
   -- ── DENY: the same client against an unsent proposal ──────────────────
   ASSERT pg_temp.visible_objects(v_draft) = 0,
     'the named client must not reach a draft proposal''s mood-board media';
+  -- ── DENY: the same client against a SUPERSEDED board under their OWN
+  -- issued proposal (F-h1-3, Kody's tightening ruling). The old prefix-wide
+  -- client leg admitted any object under the issued proposal's folder; the
+  -- reference-scoped leg admits only the currently-active issued board, so an
+  -- archived board's media is denied even though the proposal is issued and the
+  -- object shares the client's proposal prefix.
+  ASSERT pg_temp.visible_objects(v_issued_archived) = 0,
+    'the issued proposal''s client must not reach a superseded (non-active) board''s media under their own proposal prefix';
   PERFORM pg_temp.reset_actor();
 
   -- ── Shares are NOT a storage-layer grant ──────────────────────────────
