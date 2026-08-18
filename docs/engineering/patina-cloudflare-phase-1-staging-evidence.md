@@ -1,10 +1,18 @@
 # Patina Cloudflare — Phase 1 Staging Deployment Evidence
 
-**Pass:** `phase1-close` final staging pass (agent w5c)
+**Pass:** `phase1-close` final staging pass (agent w5c, completed by w5c2)
 **Date:** 2026-08-18 (UTC)
-**Verdict:** ⛔ **NOT PROMOTED to Phase-1 target (hyperdrive/100).** A hard blocker at the
-shadow rung prevents the required legacy = fresh = cached evidence from being produced.
-Staging rests at the safe, known-good **rung 1 (legacy)** state.
+**Verdict:** ✅ **PROMOTED to the Phase-1 target (hyperdrive/100).** The `DB_FRESH` shadow
+blocker (§6) was resolved by repointing the fresh Hyperdrive config to the catalog reader
+role; rung 2 (shadow) then produced clean `legacy == fresh == cached` evidence, rung 3
+(hyperdrive/100) serves the public catalog from Hyperdrive with legacy parity, and the
+config-flip rollback drill met its SLO. **Staging rests at hyperdrive/100.**
+
+> **Prior state (superseded):** w5c's pass halted at ⛔ NOT PROMOTED because `DB_FRESH`
+> connected as `edge_rls_login`, which has no `SELECT` on `public.edge_catalog_products`
+> (§6). w5c2 was authorized (by Kody) to repoint `DB_FRESH` to the catalog reader as the
+> interim design and finish the ladder. This record reflects the resolved state throughout;
+> §6 documents the fix.
 
 This record follows the Evidence-record fields in
 `docs/engineering/patina-cloudflare-phase-1-runbook.md` (§ Evidence record). No secrets,
@@ -21,7 +29,7 @@ Every claim cites a command that was actually run.
 | Reviewed commit SHA | `7ab7007822fdadf58f7d657e572bc648aaa6fad9` (`chore(edge-api): wire staging Hyperdrive bindings`) |
 | Worker | `patina-edge-api-staging` · account `be3aaeed18a81b5d90ee2263b62219ea` · env `staging` |
 | Worker URL | `https://patina-edge-api-staging.kody-be3.workers.dev` |
-| Config on disk | `infra/edge-api-worker/wrangler.jsonc`, staging block (net unchanged: legacy → shadow → legacy) |
+| Config on disk | `infra/edge-api-worker/wrangler.jsonc`, staging block ends at `CATALOG_SOURCE=hyperdrive`, `CATALOG_HYPERDRIVE_PERCENT=100` (matches the resting deploy) |
 
 ## 2. Staging database
 
@@ -34,12 +42,15 @@ Every claim cites a command that was actually run.
 
 ## 3. Hyperdrive configuration
 
-| Binding | Config ID | Name | Cache mode |
-| --- | --- | --- | --- |
-| `DB_FRESH` | `5cda0d8adbd346febf2f8d528cfaea4e` | `strata-staging-fresh` | **caching disabled** (uncached) |
-| `DB_PUBLIC_CACHE` | `114f7421d13e487eb023e144b90e58d5` | `strata-staging-public-cache` | **caching enabled** |
+| Binding | Config ID | Name | Origin role | Cache mode |
+| --- | --- | --- | --- | --- |
+| `DB_FRESH` | `5cda0d8adbd346febf2f8d528cfaea4e` | `strata-staging-fresh` | `edge_catalog_login` (**repointed** — was `edge_rls_login`) | **caching disabled** (uncached) |
+| `DB_PUBLIC_CACHE` | `114f7421d13e487eb023e144b90e58d5` | `strata-staging-public-cache` | `edge_catalog_login` | **caching enabled** (max-age 60 / swr 15) |
 
 Source: `wrangler hyperdrive get <id>` (connection details deliberately omitted from this record).
+Config IDs are unchanged — the repoint used `wrangler hyperdrive update <id> --connection-string=…`
+(see §6). Both configs now authenticate as `edge_catalog_login`; its password was rotated during the
+repoint so both configs carry the current credential (secret value not recorded here).
 
 ## 4. Worker deployment timeline (this pass)
 
@@ -50,13 +61,19 @@ Source: `wrangler hyperdrive get <id>` (connection details deliberately omitted 
 | `54b39fca-196e-46cb-a178-f314380f35ba` | 2026-08-18T09:47:39Z | deployment | **Rung 1 (legacy)** — pre-existing (w5b); baseline probed here |
 | `557a407b-38d0-4bf4-b11b-6a4ed5580a8f` | 2026-08-18T10:15:05Z | Secret Change | Health token **rotation** — `HEALTH_SERVICE_TOKEN_ID` |
 | `85094dbd-e7fd-4802-bda1-55c5384bf9e5` | 2026-08-18T10:15:07Z | Secret Change | Health token **rotation** — `HEALTH_SERVICE_TOKEN_SECRET` |
-| `8961e9c9-78ea-4357-8b17-cc8e5bd2e9c4` | 2026-08-18T10:15:49Z | deployment | **Rung 2 (shadow)** — `CATALOG_SOURCE=shadow`, percent 0 |
-| `0fbe766b-cb42-42d5-95d7-402f5f605497` | 2026-08-18T10:24:50Z | deployment | **Rollback → legacy** — final resting state (bottom row) |
+| `8961e9c9-78ea-4357-8b17-cc8e5bd2e9c4` | 2026-08-18T10:15:49Z | deployment | **Rung 2 (shadow)** — w5c first attempt (blocked; see §6) |
+| `0fbe766b-cb42-42d5-95d7-402f5f605497` | 2026-08-18T10:24:50Z | deployment | Rollback → legacy — w5c's safe resting handoff |
+| — (Hyperdrive config change) | 2026-08-18T10:39:07Z | `hyperdrive update` | **`DB_FRESH` repointed** to `edge_catalog_login` uncached; `DB_PUBLIC_CACHE` credential refreshed (60/15 cache) |
+| `0a421b34-5d1f-4e75-9c70-62f4a4e8ff31` | 2026-08-18T10:39Z | deployment | **Rung 2 (shadow) — re-run (w5c2)**, `CATALOG_SOURCE=shadow`, percent 0 — PASS (§6) |
+| `79ed9d97-cb30-44a3-8787-823b22860000` | 2026-08-18T10:47:48Z | deployment | **Rung 3 (hyperdrive/100)** — `CATALOG_SOURCE=hyperdrive`, percent 100 |
+| (Secret Change ×2) | 2026-08-18T10:47Z | Secret Change | Health token **re-rotation** (w5c2) — `HEALTH_SERVICE_TOKEN_ID` / `_SECRET` |
+| `0fb5c0d9-e754-40e1-8558-3ce8ccd63808` | 2026-08-18T10:48:26Z | deployment | **Rollback drill → legacy** (§8) |
+| `8f0f1211-f6bc-49da-9798-3e1496995db6` | 2026-08-18T10:56:19Z | deployment | **Restore → hyperdrive/100 — final resting state (bottom row)** |
 
-> **Health-token rotation:** w5b set `HEALTH_SERVICE_TOKEN_ID`/`_SECRET`; those values were not
-> available to this pass. Per the pass instructions, a fresh id+secret pair was generated and set via
-> `wrangler secret put ... --env staging` (versions `557a407b`, `85094dbd`), then used for all health
-> probes below. The rotated values are held only in the session scratchpad — not in this record.
+> **Health-token rotation:** w5b set `HEALTH_SERVICE_TOKEN_ID`/`_SECRET`; the value was not carried
+> forward to w5c or w5c2. w5c2 generated a fresh id+secret pair and set it via
+> `wrangler secret put ... --env staging` (the two "Secret Change" entries above), then used it for all
+> health probes below. The rotated values are held only in the session scratchpad — not in this record.
 > `wrangler secret list --env staging` shows `HEALTH_SERVICE_TOKEN_ID`, `HEALTH_SERVICE_TOKEN_SECRET`,
 > `SUPABASE_ANON_KEY` present.
 
@@ -68,76 +85,108 @@ products in **ascending id order** (`a0000000-…-0001`, `cf130000-…-0001`, `c
 
 ---
 
-## 6. ⛔ BLOCKER — Rung 2 shadow cannot produce the legacy = fresh = cached record
+## 6. ✅ RESOLVED — `DB_FRESH` repointed; Rung 2 shadow produces legacy = fresh = cached
 
-This is the single most important check in the pass, and it **fails closed**.
+This is the single most important check in the pass. w5c halted here (blocker preserved below);
+w5c2 applied the authorized interim fix (option **A**) and rung 2 now passes clean.
 
-### What was observed
+### The original blocker (w5c)
 
-Rung 2 (shadow) was deployed (`8961e9c9`) and 19 catalog requests (14 singles + 5 batches, all HTTP
-200 served from legacy) were generated while `wrangler tail --format json` captured worker output.
-The shadow comparison runs in `ctx.waitUntil`. Across the served requests the tail showed:
+Rung 2 (shadow) deployed as `8961e9c9`, but every request logged
+`edge_api_catalog_hyperdrive_failure` with `binding: "DB_FRESH"` (fallback `legacy`), and **zero**
+`shadow_match`. Root cause, proven at the grant level:
+
+- `DB_FRESH` (`strata-staging-fresh`) connected as login role `edge_rls_login`.
+- `src/catalog.ts` `queryCatalogViaFresh → queryCatalogViaBinding` runs a plain
+  `SELECT … FROM public.edge_catalog_products …` with **no `SET ROLE`**.
+- `edge_rls_login` is a member of `edge_rls_user` (SET-ROLE-only), and `00481` deliberately
+  `REVOKE ALL … FROM edge_rls_user` on the view →
+  `has_table_privilege('edge_rls_login','public.edge_catalog_products','SELECT') = false`
+  (re-confirmed this pass). So the direct fresh read was denied on every request.
+
+`env.DB_FRESH` was **overloaded**: the shadow fresh read needs a direct catalog reader, whereas the
+future `withAuthenticatedTransaction` path needs `edge_rls_login` (which can `SET ROLE authenticated`
+for RLS). No single role serves both, and the authenticated path is **not reachable in the deployed
+worker** (`index.ts` routes only catalog, health, and the compat proxy; `withAuthenticatedTransaction`
+has no caller — verified by grep).
+
+### The fix (w5c2, authorized) — option A: repoint the fresh config
+
+Kody authorized repointing `DB_FRESH` to the catalog reader as the interim design, deferring the
+RLS/authenticated path (currently dead code) until it is actually wired. Applied via the `update`
+path (config IDs unchanged, so no `wrangler.jsonc` binding-id edit):
+
+```
+wrangler hyperdrive update 5cda0d8adbd346febf2f8d528cfaea4e \
+  --connection-string="postgres://edge_catalog_login:<rotated>@db.<ref>.supabase.co:5432/postgres" \
+  --caching-disabled
+wrangler hyperdrive update 114f7421d13e487eb023e144b90e58d5 \
+  --connection-string="postgres://edge_catalog_login:<rotated>@db.<ref>.supabase.co:5432/postgres" \
+  --max-age 60 --swr 15
+```
+
+`edge_catalog_login`'s password was rotated first (`ALTER ROLE edge_catalog_login WITH PASSWORD …`
+via MCP against `vuesoyhfrjabfxbrzekd`); both configs were updated to the new credential so the cached
+`DB_PUBLIC_CACHE` config keeps working. `edge_catalog_login` → `edge_catalog_reader` (INHERIT true) →
+`has_table_privilege(...,'SELECT') = true` (verified). `edge_rls_login` is left provisioned but now
+**unbound** — reserved for the future authenticated path. `DB_FRESH` stays uncached; `DB_PUBLIC_CACHE`
+keeps its 60/15 cache.
+
+> **Interim-design note:** `DB_FRESH` no longer means "fresh authenticated/RLS read"; it is now a
+> second **uncached catalog reader** identical in role to `DB_PUBLIC_CACHE` but with caching disabled.
+> This is intentional: the shadow/promotion ladder only ever asks it for the public catalog view. When
+> the authenticated path is wired, it must get its **own** binding (`edge_rls_login`) rather than
+> reclaiming `DB_FRESH`.
+
+### What was observed after the fix (rung 2 re-run — PASS)
+
+Rung 2 re-deployed as `0a421b34` (`CATALOG_SOURCE=shadow`, percent 0). 23 catalog requests
+(singles + batches, up to the full 8-id set, all HTTP 200 served from legacy) were generated while
+`wrangler tail --format json` captured worker output; the shadow comparison runs in `ctx.waitUntil`.
 
 | Event | Count |
 | --- | --- |
-| `edge_api_catalog_shadow_match` (the required positive record) | **0** |
-| `edge_api_catalog_shadow_mismatch` (a real legacy-vs-Hyperdrive divergence) | **0** |
-| `edge_api_catalog_hyperdrive_failure`, `binding: "DB_FRESH"` | **18 / 18** |
+| `edge_api_catalog_shadow_match` (comparison `legacy_vs_fresh_vs_cached`) | **23** |
+| `edge_api_catalog_shadow_mismatch` | **0** |
+| `edge_api_catalog_hyperdrive_failure` | **0** |
 
-Representative event (trace IDs are random UUIDs, safe to record):
+Every match event has `legacyDigest == freshDigest == hyperdriveDigest` (verified programmatically
+across all 23). Representative full events (trace IDs are random UUIDs, safe to record):
 
 ```json
-{"event":"edge_api_catalog_hyperdrive_failure","severity":"error",
- "traceId":"107af150-a4de-4d89-ba69-79a07dcd47d8","routeClass":"catalog.products",
- "fallback":"legacy","binding":"DB_FRESH"}
+{"event":"edge_api_catalog_shadow_match","severity":"info",
+ "traceId":"aff05326-cd94-4bb0-b22a-67b84420114c","routeClass":"catalog.products",
+ "comparison":"legacy_vs_fresh_vs_cached","legacyCount":1,"freshCount":1,"hyperdriveCount":1,
+ "legacyDigest":"f7a564e8","freshDigest":"f7a564e8","hyperdriveDigest":"f7a564e8"}
 ```
 
-So there is **no legacy-vs-Hyperdrive divergence** (zero mismatch), but the **`DB_FRESH` leg of the
-three-way comparison is rejected on every request**, so the positive `shadow_match` record with
-`legacyDigest == freshDigest == hyperdriveDigest` **can never be emitted as deployed**. The
-`DB_PUBLIC_CACHE` leg succeeds (the failure is reported as `DB_FRESH`, not `both`/`DB_PUBLIC_CACHE`).
+```json
+{"event":"edge_api_catalog_shadow_match","severity":"info",
+ "traceId":"a7f8f0da-7fb5-464a-8816-72c2139ae61e","routeClass":"catalog.products",
+ "comparison":"legacy_vs_fresh_vs_cached","legacyCount":8,"freshCount":8,"hyperdriveCount":8,
+ "legacyDigest":"eaa52628","freshDigest":"eaa52628","hyperdriveDigest":"eaa52628"}
+```
 
-### Root cause (proven at the grant level)
+The `DB_FRESH` denial is gone (zero `hyperdrive_failure`), and the required positive record — all
+three sources byte-identical — is present on every served request.
 
-`src/catalog.ts` `queryCatalogViaFresh → queryCatalogViaBinding` runs a plain
-`SELECT … FROM public.edge_catalog_products …` over `DB_FRESH` with **no `SET ROLE`**. `DB_FRESH`
-(`strata-staging-fresh`) connects as login role `edge_rls_login`. Read-only `SELECT` probes on
-`vuesoyhfrjabfxbrzekd` show:
+### Rung 3 (hyperdrive/100) — PROMOTED
 
-- `edge_catalog_login` → member of `edge_catalog_reader` with **INHERIT true** → `has_table_privilege('edge_catalog_reader','public.edge_catalog_products','SELECT') = true`. This is `DB_PUBLIC_CACHE`'s role — its catalog `SELECT` works.
-- `edge_rls_login` → member of `edge_rls_user` with **INHERIT false, SET true** (SET-ROLE-only). `has_table_privilege('edge_rls_user','public.edge_catalog_products','SELECT') = false`. Migration `00481` deliberately `REVOKE ALL … FROM … edge_rls_user` on the view. A direct `SELECT` (no `SET ROLE`) as `edge_rls_login` is therefore **denied** → `queryFresh` rejects.
-- Confirmed by elimination: only `edge_catalog_login` and `edge_rls_login` are provisioned edge login roles; `edge_catalog_login` cannot `SET ROLE authenticated` (not a member), so if `DB_FRESH` were `edge_catalog_login` the (currently-uncalled) authenticated path would break and the fresh read would succeed — the opposite of what is observed. Hence `DB_FRESH = edge_rls_login`.
-
-### Why this is a genuine design conflict, not a one-line provisioning typo
-
-`env.DB_FRESH` is **overloaded** for two mutually incompatible role requirements:
-
-1. `queryCatalogViaFresh` (shadow) needs a **direct catalog reader** — i.e. `edge_catalog_reader`, uncached (matching the Hyperdrive name "fresh").
-2. `withAuthenticatedTransaction` (`src/auth.ts`/`database.ts`) needs `edge_rls_login`, which can `SET ROLE authenticated` for RLS + JWT claims.
-
-No single role satisfies both. Note (2) is **not reachable in the deployed worker** — `index.ts`
-routes only catalog, health, and the compat proxy; `withAuthenticatedTransaction` /
-`withVerifiedSupabaseTransaction` have **no caller** (verified by grep). So today `DB_FRESH`'s only
-live consumer is the shadow fresh read, which its provisioned role cannot serve.
-
-### Required decision before promotion (owning thread, not this pass)
-
-Pick one and re-run rung 2:
-
-- **(A) Provisioning:** point `strata-staging-fresh` (`DB_FRESH`) at `edge_catalog_login` (uncached catalog reader) and give the future authenticated path its own separate binding (e.g. `DB_RLS = edge_rls_login`); **or**
-- **(B) Worker code:** have the shadow fresh read `SET LOCAL ROLE authenticated` + set claims (heavier; changes what "fresh" reads and needs a claims source); **or**
-- **(C) Grants:** grant the fresh path `SELECT` on `edge_catalog_products` (contradicts `00481`'s deliberate SET-ROLE-only posture for `edge_rls_user` — least preferred).
-
-Per this pass's RAILS (no `apply_migration`; this is a verification pass, not a code/infra change),
-no fix was applied. **Promotion to rung 3 (hyperdrive/100) was NOT performed** — doing so would wave
-through the missing shadow evidence.
+Deployed as `79ed9d97` (`CATALOG_SOURCE=hyperdrive`, `CATALOG_HYPERDRIVE_PERCENT=100`). The catalog
+now serves from Hyperdrive (`DB_PUBLIC_CACHE`) with legacy verification on every request. Tail over
+the promoted rung showed **8 `edge_api_catalog_shadow_match`** events with `comparison`
+`legacy_vs_cached`, **0** `shadow_mismatch`, **0** `hyperdrive_failure`, **0**
+`unverified_response`; every event `legacyDigest == hyperdriveDigest` (8-id batch digest `eaa52628`,
+matching the shadow rung). The served body for the full 8-id set was **byte-identical** to the
+legacy-mode body for the same ids (8 products, ascending id order, all `status=published`) — see §8.
 
 ---
 
 ## 7. Verification matrix
 
-Run against the deployed staging worker. Shadow mode serves the legacy body, so the catalog / proxy /
-health / logging rows are valid regardless of rung; the Sources row is the blocker above.
+Run against the deployed staging worker. The catalog / proxy / health / logging rows are valid
+regardless of rung (legacy and hyperdrive/100 serve byte-identical bodies); the Sources row is now
+PASS (§6). Rows below marked from w5c's pass were re-confirmed to still hold at hyperdrive/100.
 
 | Area | Result | Evidence |
 | --- | --- | --- |
@@ -150,7 +199,7 @@ health / logging rows are valid regardless of rung; the Sources row is the block
 | **Catalog — injection-shaped** | ✅ PASS | `' OR 1=1--` and `1;DROP TABLE products;--` → HTTP 400 `ids must be UUIDs` (UUID-regex rejects before any DB call) |
 | **Catalog — deterministic order** | ✅ PASS | 50-id response ids equal their own sorted order |
 | **Catalog — personal/studio/draft absent** | ✅ PASS | personal `cf13…0003`, studio `cf13…0004`, draft `cf13…0002` each → HTTP 200, **0** products; mixed `0001,0003,0004` → only published `…0001` returned |
-| **Sources — legacy = fresh = cached** | ⛔ **FAIL (blocker)** | 0 `shadow_match`, 0 `shadow_mismatch`, 18/18 `DB_FRESH` `hyperdrive_failure` — see §6. **DB_PUBLIC_CACHE (cached) leg succeeds; FRESH leg denied.** |
+| **Sources — legacy = fresh = cached** | ✅ **PASS** | Rung 2 shadow: **23** `shadow_match` (`legacy_vs_fresh_vs_cached`), **0** `shadow_mismatch`, **0** `hyperdrive_failure`; every event `legacyDigest == freshDigest == hyperdriveDigest` (e.g. 8-id batch all `eaa52628`). Rung 3: 8 `legacy_vs_cached` matches, `legacyDigest == hyperdriveDigest`, served body byte-identical to legacy. See §6/§8. **DB_FRESH repointed to `edge_catalog_login` (uncached) — the `edge_rls_login` denial is resolved.** |
 | **Proxy — Auth passthrough** | ✅ PASS | worker `GET /auth/v1/health` → 401 `No API key found`, byte-identical to direct upstream 401; `/auth/v1/settings` → 401 |
 | **Proxy — REST passthrough** | ✅ PASS | worker `/rest/v1/` no-apikey → 401, matches direct-upstream 401 |
 | **Proxy — Functions / Storage / GraphQL** | ✅ PASS | `/functions/v1/` → 404 (upstream router), `/storage/v1/bucket` → 400 upstream body preserved, `/graphql/v1` → 401 |
@@ -168,33 +217,34 @@ health / logging rows are valid regardless of rung; the Sources row is the block
 
 ## 8. Rollback drill
 
-Config-flip rollback exercised **shadow → legacy** (`0fbe766b`). (A hyperdrive → legacy drill was not
-applicable because rung 3 was never promoted — see §6.)
+Config-flip rollback exercised **hyperdrive/100 → legacy** (`0fb5c0d9`), the real Phase-1 rollback path.
 
 | Field | Value |
 | --- | --- |
-| Method | edit `wrangler.jsonc` `CATALOG_SOURCE=legacy` → `validate-config.mjs` pass → `wrangler deploy --env staging` |
-| **Wall-clock duration** | **5 seconds** (10:24:47Z → 10:24:52Z), well within the 5-minute target |
-| Probe 1 — legacy result restored | ✅ 3 products, ascending order, matches §5 baseline |
-| Probe 2 — no personal/studio/draft data | ✅ `cf13…0003/0004/0002` → 0 products |
-| Probe 3 — health | ✅ 404 without token, 200 with token, both bindings `ok` |
-| Probe 4 — deployments bottom row = rollback | ✅ newest row `0fbe766b-…` @ 2026-08-18T10:24:50Z |
+| Method | edit `wrangler.jsonc` `CATALOG_SOURCE=legacy`, `PERCENT=0` → `validate-config.mjs` pass → `wrangler deploy --env staging` |
+| **Wall-clock duration** | **8 seconds** (10:48:23Z → 10:48:31Z), well within the 5-minute target |
+| Probe 1 — legacy result restored | ✅ 8 products, ascending id order; body **byte-identical** to the hyperdrive/100 served body for the same 8 ids |
+| Probe 2 — no personal/studio/draft data | ✅ every row `status=published`, only the allowed public fields present (no extra keys) |
+| Probe 3 — health | ✅ 404 without token; 200 with rotated token → `{"status":"ok","checks":{"fresh":"ok","publicCache":"ok"}}` |
+| Probe 4 — deployments bottom row = rollback | ✅ newest row `0fb5c0d9-…` @ 2026-08-18T10:48:26Z |
 
-**Resting state:** staging rests at **legacy** (`0fbe766b`). The instructed restore to hyperdrive/100
-was intentionally **not** performed — the rung-3 promotion is gated by the §6 blocker. Committed
-`wrangler.jsonc` matches this deployed state (legacy).
+**Restore to resting state:** after the drill, staging was restored to the Phase-1 target
+**hyperdrive/100** (`8f0f1211`, deployed 2026-08-18T10:56:19Z — the deployments bottom row). The
+restored hyperdrive body was byte-identical to the pre-rollback hyperdrive body. **Committed
+`wrangler.jsonc` matches this resting deploy** (`CATALOG_SOURCE=hyperdrive`, `PERCENT=100`).
 
 ## 9. What a prod go authorizes — and what it does NOT
 
-**Prod is NOT done.** Even once the §6 blocker is resolved and staging is genuinely promoted, a
-Phase-1 prod go would authorize only the staging-equivalent chain. It explicitly does **not** cover,
-and each remains outstanding:
+**Prod is NOT done.** Staging is now genuinely promoted (hyperdrive/100), but a Phase-1 prod go would
+authorize only the staging-equivalent chain. It explicitly does **not** cover, and each remains
+outstanding:
 
 - **Prod public ACL apply** — migrations `00481`–`00486` and the effective-PUBLIC-ACL preflight have run only on staging (`vuesoyhfrjabfxbrzekd`), never on prod Strata (`bkvcixdmuyejfzcijpdg`).
 - **Prod login roles / Hyperdrive** — prod `edge_catalog_login` / `edge_rls_login` and prod `strata-prod-fresh` / `strata-prod-public-cache` Hyperdrive configs are unprovisioned; prod `wrangler.jsonc` still `hyperdrive: []`, `CATALOG_SOURCE: legacy`.
 - **Prod logins / authenticated path** — no authenticated sign-in/refresh/claims verification has run against prod; the worker's authenticated transaction path is still uncalled.
 - **The `api.patina.cloud` route** — no route is attached in any env (`validate-config.mjs` forbids a committed `routes` key; `workers_dev: true`). Attaching the prod hostname is a separate, explicit step.
-- **The §6 shadow blocker itself** must be fixed and rung 2 re-verified (shadow_match with three equal digests, zero mismatch) before any promotion, on staging first and then prod.
+- **The `DB_FRESH` interim design** (§6) — on staging, `DB_FRESH` is repointed to the catalog reader (`edge_catalog_login`, uncached) and `edge_rls_login` is left unbound because the authenticated/RLS worker path is **dead code** (no caller). Prod must make the same explicit choice: either replicate the interim repoint, or, if/when the authenticated path is wired, give it a **separate** binding (`edge_rls_login`) rather than overloading `DB_FRESH`. This is a deferred design decision, not a completed prod step.
+- **Authenticated/RLS live verification** — because that path is uncalled, no `SET LOCAL ROLE authenticated` / claims / two-user RLS probe was run live (staging or prod). It remains owed once the path has a caller.
 
 ---
 
