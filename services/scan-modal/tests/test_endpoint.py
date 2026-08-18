@@ -16,12 +16,13 @@ TOKEN = "s3cret-dispatcher-token"
 def body(**overrides) -> dict:
     payload = {
         "taskId": "task-1",
+        "leaseToken": "dispatch-scan-modal:lease-1",
         "scanId": "scan-1",
         "roomFileId": "rf-1",
         "roomFileVersion": 3,
         "taskType": "scan_pipeline.verify",
         "traceId": "trace-1",
-        "inputs": {"meshPlyUrl": "https://example/mesh.ply"},
+        "inputs": {"meshUrl": "https://example/mesh.ply"},
     }
     payload.update(overrides)
     return payload
@@ -58,7 +59,8 @@ def test_spawns_verify_and_returns_202():
     assert name == "verify"
     assert payload["roomFileVersion"] == 3
     assert payload["traceId"] == "trace-1"
-    assert payload["inputs"] == {"meshPlyUrl": "https://example/mesh.ply"}
+    assert payload["leaseToken"] == "dispatch-scan-modal:lease-1"
+    assert payload["inputs"] == {"meshUrl": "https://example/mesh.ply"}
 
 
 @pytest.mark.parametrize(
@@ -127,7 +129,10 @@ def test_missing_secret_fails_closed_as_503():
     assert spawner.calls == []
 
 
-@pytest.mark.parametrize("field", ["taskId", "scanId", "roomFileId", "roomFileVersion", "taskType"])
+@pytest.mark.parametrize(
+    "field",
+    ["taskId", "leaseToken", "scanId", "roomFileId", "roomFileVersion", "taskType"],
+)
 def test_missing_required_field_is_400(field):
     spawner = FakeSpawner()
     payload = body()

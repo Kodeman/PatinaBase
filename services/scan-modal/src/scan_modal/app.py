@@ -53,7 +53,14 @@ TASK_FUNCTIONS: dict[str, str] = {
     "scan_pipeline.renders": "renders",
 }
 
-_REQUIRED_FIELDS = ("taskId", "scanId", "roomFileId", "roomFileVersion", "taskType")
+# `leaseToken` is required, not optional. It is the per-invocation claim owner
+# 00490's wrappers check `agent_tasks.locked_by` against before ANY write, so a
+# job spawned without one could not write its outcome at all — better to refuse
+# the dispatch with a 400 than to burn a GPU on work that cannot be recorded.
+# The canonical example of this body is
+# supabase/functions/dispatch-scan-modal/contract.json; tests/test_contract.py
+# holds both sides to it.
+_REQUIRED_FIELDS = ("taskId", "leaseToken", "scanId", "roomFileId", "roomFileVersion", "taskType")
 
 
 # ── the pure dispatch seam ──────────────────────────────────────────────────
@@ -85,6 +92,7 @@ def parse_spawn_body(body: Any) -> tuple[dict[str, Any] | None, str]:
     return (
         {
             "taskId": body["taskId"],
+            "leaseToken": body["leaseToken"],
             "scanId": body["scanId"],
             "roomFileId": body["roomFileId"],
             "roomFileVersion": body["roomFileVersion"],
@@ -177,9 +185,12 @@ if modal is not None:
 
         return run_verify(payload)
 
+    # No `gpu=` on either stub: both raise immediately, and a gpu kwarg would
+    # have Modal allocate (and bill) an L4/L40S to reach a NotImplementedError.
+    # W2 adds `gpu=SPLAT_GPU` / `gpu=RENDERS_GPU` when there is a real body to
+    # run on it — the constants stay declared above so that choice is recorded.
     @app.function(
         image=_VERIFY_IMAGE,
-        gpu=SPLAT_GPU,
         secrets=[modal.Secret.from_name(DB_SECRET_NAME), modal.Secret.from_name(R2_SECRET_NAME)],
     )
     def splat(payload: dict) -> dict:
@@ -187,7 +198,6 @@ if modal is not None:
 
     @app.function(
         image=_VERIFY_IMAGE,
-        gpu=RENDERS_GPU,
         secrets=[modal.Secret.from_name(DB_SECRET_NAME), modal.Secret.from_name(R2_SECRET_NAME)],
     )
     def renders(payload: dict) -> dict:
