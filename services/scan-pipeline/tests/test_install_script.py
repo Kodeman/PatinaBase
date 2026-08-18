@@ -52,6 +52,7 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/drawing/__init__.py",
     "src/patina_scan_worker/drawing/brand.py",
     "src/patina_scan_worker/drawing/dxf.py",
+    "src/patina_scan_worker/drawing/ifc.py",
     "src/patina_scan_worker/drawing/model.py",
     "src/patina_scan_worker/drawing/pdf.py",
     "src/patina_scan_worker/drawing/svg.py",
