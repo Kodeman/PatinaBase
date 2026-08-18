@@ -72,8 +72,8 @@ export const roomEvents = {
   roomOpened: (properties: { room_id: string; source: 'index' | 'document' }) =>
     track('room_opened', properties),
 
-  /** Fired when the Plan/Orbit/Mesh mode-row switches modes (room-view.tsx). */
-  modeSwitched: (properties: { room_id: string; mode: 'plan' | 'orbit' | 'mesh' }) =>
+  /** Fired when the Plan/Orbit/Mesh/Splat mode-row switches modes (room-view.tsx). */
+  modeSwitched: (properties: { room_id: string; mode: 'plan' | 'orbit' | 'mesh' | 'splat' }) =>
     track('mode_switched', properties),
 
   /** Fired when the two-point measure tool completes a measurement (the

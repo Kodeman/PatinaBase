@@ -180,6 +180,19 @@ export interface RoomFile {
   present_status: RoomFilePresentStatus | null;
   /** Set only when `present_status` reaches `'ready'`. */
   presented_at: string | null;
+  // ── Media registry (00489). The canonical home for artifacts minted after the
+  //    registry kernel landed; the url columns above stay legacy until the W3
+  //    originals cutover. ──
+  /**
+   * `artifact kind -> { object_id, version }` pointing at `public.media_objects`
+   * — mesh GLB, `.spz` splat, renders. `NOT NULL DEFAULT '{}'`, so a row minted
+   * before 00489 carries `{}` rather than null. Read the `splat` entry through
+   * `readSplatArtifactRef` / `useSplatUrl` (use-splat-url.ts) rather than
+   * indexing it here — the shape is jsonb and unconstrained.
+   */
+  artifacts: Record<string, unknown>;
+  /** Verify-stage output (residuals, QA notes). NULL until the stage has run. */
+  verify: Record<string, unknown> | null;
 }
 
 /**

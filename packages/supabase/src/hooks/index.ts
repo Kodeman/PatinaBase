@@ -599,6 +599,13 @@ export type {
   ScanContextCapture,
   ToleranceClass,
 } from './use-room-files';
+export { useSplatUrl, readSplatArtifactRef, SPLAT_ARTIFACT_KIND } from './use-splat-url';
+export type {
+  SplatArtifactRef,
+  SplatSource,
+  SplatUnavailableReason,
+  UseSplatUrlOptions,
+} from './use-splat-url';
 export {
   useOpenDesignRequests,
   useClaimDesignRequest,
