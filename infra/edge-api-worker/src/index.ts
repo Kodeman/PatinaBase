@@ -9,8 +9,8 @@ import {
   queryCatalogViaHyperdrive,
   queryCatalogViaLegacy,
 } from './catalog';
-import { isHealthAuthorized } from './auth';
-import { probeBinding } from './database';
+import { isHealthAuthorized, withVerifiedSupabaseTransaction } from './auth';
+import { probeBinding, type DatabaseClient } from './database';
 import { UpstreamAbortError, UpstreamTimeoutError } from './deadline';
 import {
   ConfigurationError,
@@ -46,6 +46,11 @@ export interface WorkerDependencies {
   ): Promise<CatalogProductSummary[]>;
   probe(binding: Hyperdrive | undefined): Promise<boolean>;
   authorizeHealth(request: Request, env: EdgeApiEnv): Promise<boolean>;
+  verifyAuthenticated<T>(
+    request: Request,
+    env: EdgeApiEnv,
+    work: (client: DatabaseClient) => Promise<T>,
+  ): Promise<T>;
   randomUUID(): string;
   cohortKey(request: Request): string;
   log(event: AlertLogEvent): void;
@@ -58,6 +63,8 @@ const defaultDependencies: WorkerDependencies = {
   queryLegacy: queryCatalogViaLegacy,
   probe: probeBinding,
   authorizeHealth: isHealthAuthorized,
+  verifyAuthenticated: (request, env, work) =>
+    withVerifiedSupabaseTransaction(request, env, work),
   randomUUID: () => crypto.randomUUID(),
   cohortKey: trustedRolloutKey,
   log: structuredLog,
@@ -259,9 +266,11 @@ async function handleCatalog(
 function failingBinding(
   freshFailed: boolean,
   cachedFailed: boolean,
-): 'DB_FRESH' | 'DB_PUBLIC_CACHE' | 'both' {
+): 'DB_CATALOG_FRESH' | 'DB_PUBLIC_CACHE' | 'both' {
   if (freshFailed && cachedFailed) return 'both';
-  return freshFailed ? 'DB_FRESH' : 'DB_PUBLIC_CACHE';
+  // The shadow fresh leg reads DB_CATALOG_FRESH (the catalog reader), not
+  // DB_FRESH (the RLS login) — point an operator at the binding that failed.
+  return freshFailed ? 'DB_CATALOG_FRESH' : 'DB_PUBLIC_CACHE';
 }
 
 function logComparison(
@@ -304,6 +313,31 @@ function logComparison(
   return matched;
 }
 
+async function handleAuthCheck(
+  request: Request,
+  env: EdgeApiEnv,
+  traceId: string,
+  dependencies: WorkerDependencies,
+): Promise<Response> {
+  try {
+    await dependencies.verifyAuthenticated(request, env, async (client) => {
+      // Data-free: this exercises the verified-JWT -> SET ROLE authenticated ->
+      // set_config('request.jwt.claims', ...) chain without reading any
+      // application table. The row is discarded and never returned.
+      await client.query(
+        "SELECT current_user, current_setting('request.jwt.claims', true)",
+      );
+    });
+  } catch {
+    // Every failure mode — missing/invalid/expired/wrong-issuer/wrong-audience/
+    // wrong-role token, or an unavailable RLS login — collapses to the worker's
+    // non-enumerating not_found. Never a 500, and never any detail about which
+    // check failed or the claims/user behind a valid token.
+    return privateJson({ error: 'not_found' }, 404, traceId);
+  }
+  return privateJson({ ok: true }, 200, traceId);
+}
+
 type BindingCheck = 'ok' | 'unavailable' | 'not_applicable';
 
 async function checkBinding(
@@ -328,13 +362,25 @@ async function handleHealth(
     return privateJson({ error: 'not_found' }, 404, traceId);
   }
   const required = config.catalogSource !== 'legacy';
-  const [fresh, publicCache] = await Promise.all([
+  // Only shadow reads the fresh leg (DB_CATALOG_FRESH); legacy and hyperdrive
+  // never do, so the reader is not_applicable there even if it is bound. In
+  // shadow it must answer, or every comparison silently runs one-legged.
+  const [fresh, publicCache, catalogFresh] = await Promise.all([
     checkBinding(env.DB_FRESH, required, dependencies),
     checkBinding(env.DB_PUBLIC_CACHE, required, dependencies),
+    config.catalogSource === 'shadow'
+      ? checkBinding(env.DB_CATALOG_FRESH, true, dependencies)
+      : Promise.resolve<BindingCheck>('not_applicable'),
   ]);
-  const healthy = fresh !== 'unavailable' && publicCache !== 'unavailable';
+  const healthy =
+    fresh !== 'unavailable' &&
+    publicCache !== 'unavailable' &&
+    catalogFresh !== 'unavailable';
   return privateJson(
-    { status: healthy ? 'ok' : 'degraded', checks: { fresh, publicCache } },
+    {
+      status: healthy ? 'ok' : 'degraded',
+      checks: { fresh, publicCache, catalogFresh },
+    },
     healthy ? 200 : 503,
     traceId,
   );
@@ -379,6 +425,9 @@ export function createWorker(
             traceId,
             dependencies,
           );
+        }
+        if (request.method === 'GET' && url.pathname === '/v1/_authcheck') {
+          return await handleAuthCheck(request, env, traceId, dependencies);
         }
         if (request.method === 'GET' && url.pathname === '/_internal/health') {
           return await handleHealth(request, env, config, traceId, dependencies);

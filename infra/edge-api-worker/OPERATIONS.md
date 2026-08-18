@@ -111,8 +111,11 @@ means "both bindings live" — the W5 matrix Health row can now distinguish them
 
 ## Shadow acceptance evidence
 
-Shadow mode reads legacy (served), `DB_FRESH`, and `DB_PUBLIC_CACHE`, and
-compares all three. Every successfully-served catalog request emits exactly one
+Shadow mode reads legacy (served), `DB_CATALOG_FRESH` (the uncached catalog
+reader, `edge_catalog_login`), and `DB_PUBLIC_CACHE`, and compares all three.
+The fresh leg is `DB_CATALOG_FRESH`, not `DB_FRESH` — `DB_FRESH` is the
+authenticated RLS login (`edge_rls_login`) reserved for the `/v1/_authcheck`
+path and never read by a catalog comparison. Every successfully-served catalog request emits exactly one
 of `edge_api_catalog_shadow_match`, `edge_api_catalog_shadow_mismatch`, or
 `edge_api_catalog_hyperdrive_failure`. Acceptance is therefore a *positive*
 count, not an absence of alerts: compare the `shadow_match` count against
@@ -143,7 +146,7 @@ logging catalog data.
 | --- | --- | --- |
 | `edge_api_catalog_shadow_match` | `info` | A comparison ran and all compared sources agreed. Evidence record, not an alert — do not attach a notification. |
 | `edge_api_catalog_shadow_mismatch` | `critical` | Compared sources differ. `comparison` names the pair or triple; `mismatchedIdCount` and the per-source digests distinguish a stale value from a different result set. |
-| `edge_api_catalog_hyperdrive_failure` | `error` | A Hyperdrive read failed and the safe legacy fallback was used. In shadow mode `binding` names the failing leg (`DB_FRESH`, `DB_PUBLIC_CACHE`, or `both`). |
+| `edge_api_catalog_hyperdrive_failure` | `error` | A Hyperdrive read failed and the safe legacy fallback was used. In shadow mode `binding` names the failing leg (`DB_CATALOG_FRESH`, `DB_PUBLIC_CACHE`, or `both`). |
 | `edge_api_catalog_legacy_failure` | `error` | Legacy public catalog read failed. |
 | `edge_api_catalog_unverified_response` | `critical` | Rung 3 served the public view after the legacy comparison leg failed. The response was **not** verified and is returned `private, no-store`. |
 | `edge_api_compatibility_timeout` | `error` | Supabase compatibility upstream did not complete before its deadline. |

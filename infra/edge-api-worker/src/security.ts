@@ -14,6 +14,7 @@ export type AlertSeverity = 'info' | 'warning' | 'error' | 'critical';
 export type RouteClass =
   | 'catalog.products'
   | 'internal.health'
+  | 'auth.check'
   | 'compat.auth'
   | 'compat.realtime'
   | 'compat.rest'
@@ -23,7 +24,11 @@ export type RouteClass =
   | 'unknown';
 
 export type CatalogComparison = 'legacy_vs_cached' | 'legacy_vs_fresh_vs_cached';
-export type CatalogBinding = 'DB_FRESH' | 'DB_PUBLIC_CACHE' | 'both';
+export type CatalogBinding =
+  | 'DB_FRESH'
+  | 'DB_CATALOG_FRESH'
+  | 'DB_PUBLIC_CACHE'
+  | 'both';
 
 export interface AlertLogEvent {
   event: AlertEventName;
@@ -79,6 +84,7 @@ export function createTraceId(
 
 export function routeClassFor(pathname: string): RouteClass {
   if (pathname === '/v1/catalog/products') return 'catalog.products';
+  if (pathname === '/v1/_authcheck') return 'auth.check';
   if (pathname === '/_internal/health') return 'internal.health';
   if (pathname === '/auth/v1' || pathname.startsWith('/auth/v1/')) {
     return 'compat.auth';

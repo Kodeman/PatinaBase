@@ -172,7 +172,7 @@ describe('catalog sources', () => {
     ]);
   });
 
-  it('reads the fresh leg through DB_FRESH with the same approved statement', async () => {
+  it('reads the fresh leg through DB_CATALOG_FRESH with the same approved statement', async () => {
     const query = vi.fn(async (_text: string, _values?: unknown[]) => ({
       rows: [row(A, { layer: undefined })],
       command: '',
@@ -187,8 +187,8 @@ describe('catalog sources', () => {
     })) as unknown as DatabaseClientFactory;
     const result = await queryCatalogViaFresh(
       {
-        DB_FRESH: {
-          connectionString: 'postgres://edge_catalog_login@fresh',
+        DB_CATALOG_FRESH: {
+          connectionString: 'postgres://edge_catalog_login@catalog-fresh',
         } as Hyperdrive,
         DB_PUBLIC_CACHE: {
           connectionString: 'postgres://edge_catalog_login@public-cache',
@@ -198,7 +198,7 @@ describe('catalog sources', () => {
       createClient,
     );
     expect(createClient).toHaveBeenCalledWith(
-      'postgres://edge_catalog_login@fresh',
+      'postgres://edge_catalog_login@catalog-fresh',
     );
     expect(query.mock.calls[0][0]).toBe(CATALOG_SELECT_SQL);
     expect(query.mock.calls[0][1]).toEqual([[A]]);
@@ -209,7 +209,7 @@ describe('catalog sources', () => {
 
   it('refuses either Hyperdrive read when its binding is absent', async () => {
     await expect(
-      queryCatalogViaFresh({ DB_FRESH: undefined } as EdgeApiEnv, [A]),
+      queryCatalogViaFresh({ DB_CATALOG_FRESH: undefined } as EdgeApiEnv, [A]),
     ).rejects.toThrow(CatalogSourceError);
     await expect(
       queryCatalogViaHyperdrive({ DB_PUBLIC_CACHE: undefined } as EdgeApiEnv, [
