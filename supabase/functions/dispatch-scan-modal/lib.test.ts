@@ -12,6 +12,7 @@ import {
   BATCH_LIMIT,
   buildLogLine,
   buildModalDispatchBody,
+  capPhotoKeys,
   decideDispatchFailure,
   DISPATCH_TASK_TYPES,
   extractTaskInputIds,
@@ -21,12 +22,15 @@ import {
   MAX_DISPATCH_ATTEMPTS,
   newLeaseOwner,
   objectKeyFromRoomScansUrl,
+  PHOTO_URL_CAP,
   readDispatchAttempts,
   shouldSkipForNoWork,
   SIGNED_URL_TTL_S,
+  stageForTaskType,
   validateEnv,
   WORKER_ID_PREFIX,
   type ClaimedTaskRow,
+  type DispatchInputs,
 } from "./lib.ts";
 
 const FULL_ENV = {
@@ -176,14 +180,33 @@ Deno.test("buildModalDispatchBody: exact minimal shape, nothing extra", () => {
     scanId: "scan-1",
     roomFileId: "rf-1",
     roomFileVersion: 3,
-    taskType: "scan_pipeline.splat",
+    taskType: "scan_pipeline.verify",
+    traceId: "trace-1",
+    inputs: {
+      kind: "verify",
+      meshUrl: "https://signed.example/mesh.ply?sig=1",
+      capturedRoomJsonUrl: "https://signed.example/captured_room.json?sig=2",
+    },
+  });
+  // `kind` is the dispatcher-side discriminant and must NOT survive into the
+  // wire body — an exact-equality assertion is what proves it.
+  assertEquals(body, {
+    taskId: "task-1",
+    leaseToken: "dispatch-scan-modal:lease-1",
+    scanId: "scan-1",
+    roomFileId: "rf-1",
+    roomFileVersion: 3,
+    taskType: "scan_pipeline.verify",
     traceId: "trace-1",
     inputs: {
       meshUrl: "https://signed.example/mesh.ply?sig=1",
       capturedRoomJsonUrl: "https://signed.example/captured_room.json?sig=2",
     },
   });
-  assertEquals(body, {
+});
+
+Deno.test("buildModalDispatchBody: a splat body carries the cap fields verbatim", () => {
+  const body = buildModalDispatchBody({
     taskId: "task-1",
     leaseToken: "dispatch-scan-modal:lease-1",
     scanId: "scan-1",
@@ -192,9 +215,20 @@ Deno.test("buildModalDispatchBody: exact minimal shape, nothing extra", () => {
     taskType: "scan_pipeline.splat",
     traceId: "trace-1",
     inputs: {
-      meshUrl: "https://signed.example/mesh.ply?sig=1",
-      capturedRoomJsonUrl: "https://signed.example/captured_room.json?sig=2",
+      kind: "splat",
+      photosManifestUrl: "https://signed.example/photos_metadata.ndjson?sig=1",
+      photoUrls: ["https://signed.example/a.heic?sig=2"],
+      capturedRoomJsonUrl: "https://signed.example/captured_room.json?sig=3",
+      photoUrlsCapped: true,
+      photoCount: 214,
     },
+  });
+  assertEquals(body.inputs, {
+    photosManifestUrl: "https://signed.example/photos_metadata.ndjson?sig=1",
+    photoUrls: ["https://signed.example/a.heic?sig=2"],
+    capturedRoomJsonUrl: "https://signed.example/captured_room.json?sig=3",
+    photoUrlsCapped: true,
+    photoCount: 214,
   });
 });
 
@@ -207,7 +241,7 @@ Deno.test("buildModalDispatchBody: never leaks the bearer token into the body", 
     roomFileVersion: 1,
     taskType: "scan_pipeline.verify",
     traceId: "tr",
-    inputs: { meshUrl: "u1", capturedRoomJsonUrl: "u2" },
+    inputs: { kind: "verify", meshUrl: "u1", capturedRoomJsonUrl: "u2" },
   });
   assertFalse(JSON.stringify(body).includes("Bearer"));
 });
@@ -377,44 +411,142 @@ Deno.test("buildLogLine: env_missing carries only 'missing'", () => {
 // `meshPlyUrl`/`capturedRoomUrl` — a contract only one side can see is not a
 // contract.
 
-async function readContract(): Promise<Record<string, unknown>> {
+type ContractBody = Record<string, unknown>;
+
+async function readContract(): Promise<Record<string, ContractBody>> {
   const url = new URL("./contract.json", import.meta.url);
-  return JSON.parse(await Deno.readTextFile(url)) as Record<string, unknown>;
+  const doc = JSON.parse(await Deno.readTextFile(url)) as Record<string, unknown>;
+  return doc.stages as Record<string, ContractBody>;
 }
 
 function contractKeys(o: Record<string, unknown>): string[] {
   return Object.keys(o).filter((k) => k !== "_comment").sort();
 }
 
-Deno.test("contract.json: the built body has exactly the contract's key set", async () => {
-  const contract = await readContract();
-  const built = buildModalDispatchBody({
-    taskId: contract.taskId as string,
-    leaseToken: contract.leaseToken as string,
-    scanId: contract.scanId as string,
-    roomFileId: contract.roomFileId as string,
-    roomFileVersion: contract.roomFileVersion as number,
-    taskType: contract.taskType as string,
-    traceId: contract.traceId as string,
-    inputs: contract.inputs as { meshUrl: string; capturedRoomJsonUrl: string },
-  });
+/** `kind` is the dispatcher-side discriminant, not part of the wire body — the
+ *  contract file carries the wire shape, so it is added back here. */
+function paramsFor(stage: string, body: ContractBody) {
+  return {
+    taskId: body.taskId as string,
+    leaseToken: body.leaseToken as string,
+    scanId: body.scanId as string,
+    roomFileId: body.roomFileId as string,
+    roomFileVersion: body.roomFileVersion as number,
+    taskType: body.taskType as string,
+    traceId: body.traceId as string,
+    inputs: { kind: stage, ...(body.inputs as ContractBody) } as DispatchInputs,
+  };
+}
 
-  assertEquals(contractKeys(built), contractKeys(contract));
-  assertEquals(
-    Object.keys(built.inputs as Record<string, unknown>).sort(),
-    Object.keys(contract.inputs as Record<string, unknown>).sort(),
-  );
-  // And the values round-trip — the contract is a real example, not a schema.
-  assertEquals(built.leaseToken, contract.leaseToken);
-  assertEquals(built.inputs, contract.inputs);
+Deno.test("contract.json: every stage's built body has exactly that stage's key set", async () => {
+  const stages = await readContract();
+  assertEquals(Object.keys(stages).sort(), ["renders", "splat", "verify"]);
+
+  for (const [stage, body] of Object.entries(stages)) {
+    const built = buildModalDispatchBody(paramsFor(stage, body));
+    assertEquals(contractKeys(built), contractKeys(body), `envelope drift on ${stage}`);
+    assertEquals(
+      Object.keys(built.inputs as Record<string, unknown>).sort(),
+      Object.keys(body.inputs as Record<string, unknown>).sort(),
+      `inputs drift on ${stage}`,
+    );
+    // Values round-trip — the contract is a real example, not a schema. This
+    // also proves `kind` never reaches the wire body.
+    assertEquals(built.inputs, body.inputs);
+    assertEquals(built.leaseToken, body.leaseToken);
+    assertEquals(built.taskType, `scan_pipeline.${stage}`);
+  }
 });
 
-Deno.test("contract.json: carries the lease token and the unified input keys", async () => {
-  const contract = await readContract();
-  assert(typeof contract.leaseToken === "string");
-  assert((contract.leaseToken as string).startsWith(`${WORKER_ID_PREFIX}:`));
+Deno.test("contract.json: each stage's inputs are closed — no cross-stage keys", async () => {
+  const stages = await readContract();
   assertEquals(
-    Object.keys(contract.inputs as Record<string, unknown>).sort(),
+    Object.keys(stages.verify.inputs as ContractBody).sort(),
     ["capturedRoomJsonUrl", "meshUrl"],
   );
+  assertEquals(
+    Object.keys(stages.splat.inputs as ContractBody).sort(),
+    ["capturedRoomJsonUrl", "photoCount", "photoUrls", "photoUrlsCapped", "photosManifestUrl"],
+  );
+  assertEquals(Object.keys(stages.renders.inputs as ContractBody).sort(), ["glbUrl"]);
+});
+
+Deno.test("contract.json: every stage carries the lease token", async () => {
+  const stages = await readContract();
+  for (const body of Object.values(stages)) {
+    assert(typeof body.leaseToken === "string");
+    assert((body.leaseToken as string).startsWith(`${WORKER_ID_PREFIX}:`));
+  }
+});
+
+// ─── per-stage input resolution (W2) ───────────────────────────────────────
+
+Deno.test("stageForTaskType: maps the three dispatch task types", () => {
+  assertEquals(stageForTaskType("scan_pipeline.verify"), "verify");
+  assertEquals(stageForTaskType("scan_pipeline.splat"), "splat");
+  assertEquals(stageForTaskType("scan_pipeline.renders"), "renders");
+});
+
+Deno.test("stageForTaskType: tolerates the bare stage name", () => {
+  assertEquals(stageForTaskType("splat"), "splat");
+});
+
+Deno.test("stageForTaskType: anything else is null, never a guess", () => {
+  assertEquals(stageForTaskType("scan_pipeline.ingest"), null);
+  assertEquals(stageForTaskType("scan_pipeline.solve"), null);
+  assertEquals(stageForTaskType(""), null);
+  assertEquals(stageForTaskType("verify.scan_pipeline"), null);
+});
+
+Deno.test("stageForTaskType: covers exactly DISPATCH_TASK_TYPES and nothing more", () => {
+  for (const t of DISPATCH_TASK_TYPES) assert(stageForTaskType(t) !== null);
+});
+
+Deno.test("capPhotoKeys: under the cap passes through uncapped", () => {
+  const keys = ["a", "b", "c"];
+  const cap = capPhotoKeys(keys);
+  assertEquals(cap.keys, keys);
+  assertFalse(cap.capped);
+  assertEquals(cap.total, 3);
+});
+
+Deno.test("capPhotoKeys: exactly at the cap is NOT capped", () => {
+  const keys = Array.from({ length: PHOTO_URL_CAP }, (_, i) => `k${i}`);
+  const cap = capPhotoKeys(keys);
+  assertEquals(cap.keys.length, PHOTO_URL_CAP);
+  assertFalse(cap.capped);
+});
+
+Deno.test("capPhotoKeys: over the cap truncates in order and says so", () => {
+  const keys = Array.from({ length: PHOTO_URL_CAP + 25 }, (_, i) => `k${i}`);
+  const cap = capPhotoKeys(keys);
+  assertEquals(cap.keys.length, PHOTO_URL_CAP);
+  assertEquals(cap.keys[0], "k0");
+  assertEquals(cap.keys[PHOTO_URL_CAP - 1], `k${PHOTO_URL_CAP - 1}`);
+  assert(cap.capped);
+  // The FULL count survives into the payload, so a truncated splat is visible
+  // rather than silently smaller than the capture.
+  assertEquals(cap.total, PHOTO_URL_CAP + 25);
+});
+
+Deno.test("capPhotoKeys: an empty list is uncapped and empty", () => {
+  const cap = capPhotoKeys([]);
+  assertEquals(cap.keys, []);
+  assertFalse(cap.capped);
+  assertEquals(cap.total, 0);
+});
+
+Deno.test("buildModalDispatchBody: a splat body carries no verify/renders keys", async () => {
+  const stages = await readContract();
+  const built = buildModalDispatchBody(paramsFor("splat", stages.splat));
+  const inputs = built.inputs as Record<string, unknown>;
+  assertEquals(inputs.meshUrl, undefined);
+  assertEquals(inputs.glbUrl, undefined);
+  assertEquals((inputs as { kind?: unknown }).kind, undefined);
+});
+
+Deno.test("buildModalDispatchBody: a renders body carries only glbUrl", async () => {
+  const stages = await readContract();
+  const built = buildModalDispatchBody(paramsFor("renders", stages.renders));
+  assertEquals(Object.keys(built.inputs as Record<string, unknown>), ["glbUrl"]);
 });

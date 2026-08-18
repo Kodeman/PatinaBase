@@ -27,6 +27,19 @@ export const DISPATCH_TASK_TYPES = [
 ] as const;
 export type DispatchTaskType = (typeof DISPATCH_TASK_TYPES)[number];
 
+/** The three stages, as the Modal side names them. */
+export type DispatchStage = "verify" | "splat" | "renders";
+
+/** `"scan_pipeline.splat"` → `"splat"`. Returns null for anything else, so an
+ *  unexpected task_type fails the one task rather than resolving the wrong
+ *  stage's inputs for it. */
+export function stageForTaskType(taskType: string): DispatchStage | null {
+  const bare = taskType.startsWith("scan_pipeline.")
+    ? taskType.slice("scan_pipeline.".length)
+    : taskType;
+  return bare === "verify" || bare === "splat" || bare === "renders" ? bare : null;
+}
+
 export const BATCH_LIMIT = 3;
 // Must outlast the whole Modal stage, not just the download: the presigned URL
 // is fetched inside the job, and splat's run is 10–25 minutes. 600s expired
@@ -186,10 +199,33 @@ export const KEY_PREFIX_REJECTED = "input object key failed owner-prefix validat
 
 // ─── Modal dispatch request body ────────────────────────────────────────────
 
-export interface DispatchInputs {
+// Each stage gets ITS OWN input shape and nothing else. A single union of
+// optional fields would let a renders task be dispatched with splat's photo
+// list — the Modal side would happily accept the body and only discover the
+// mismatch after allocating a GPU.
+export interface VerifyInputs {
+  kind: "verify";
   meshUrl: string;
   capturedRoomJsonUrl: string;
 }
+
+export interface SplatInputs {
+  kind: "splat";
+  photosManifestUrl: string;
+  photoUrls: string[];
+  capturedRoomJsonUrl: string;
+  /** True when `photoUrls` is a prefix of the scan's photos, not all of them. */
+  photoUrlsCapped: boolean;
+  /** How many photo rows the scan actually has, cap or no cap. */
+  photoCount: number;
+}
+
+export interface RendersInputs {
+  kind: "renders";
+  glbUrl: string;
+}
+
+export type DispatchInputs = VerifyInputs | SplatInputs | RendersInputs;
 
 export interface DispatchParams {
   taskId: string;
@@ -202,12 +238,55 @@ export interface DispatchParams {
   inputs: DispatchInputs;
 }
 
+// A room walk can leave hundreds of posed photos. The whole list would be a
+// large body on a POST that must return inside Modal's 150 s web cap, and
+// splatfacto gains very little past ~80 well-distributed views of one room. So
+// the list is capped BY MANIFEST ORDER (display_order, then captured_at) and
+// the payload SAYS SO — `photoUrlsCapped` — because a splat trained on a
+// truncated set that nobody recorded as truncated is the kind of quiet quality
+// regression that gets blamed on the model.
+export const PHOTO_URL_CAP = 80;
+
+export interface PhotoCap {
+  keys: string[];
+  capped: boolean;
+  total: number;
+}
+
+/** Cap an ordered photo-key list. Pure; the caller has already ordered it. */
+export function capPhotoKeys(keys: string[], cap = PHOTO_URL_CAP): PhotoCap {
+  return { keys: keys.slice(0, cap), capped: keys.length > cap, total: keys.length };
+}
+
 /** The exact minimal POST body sent to MODAL_SPAWN_URL (R1: "the message is
  *  minimal by design" — ids, revision, trace id, presigned inputs only), plus
  *  `leaseToken`: the per-invocation claim owner 00490's wrappers check every
- *  write against. The canonical example of this body — the one contract both
- *  sides' tests validate against — is ./contract.json. */
+ *  write against. `inputs` is built field-by-field per stage rather than spread
+ *  wholesale, so `kind` (a dispatcher-side discriminant, not part of the wire
+ *  contract) can never leak into the body. The canonical example of this body —
+ *  the one contract both sides' tests validate against — is ./contract.json. */
 export function buildModalDispatchBody(p: DispatchParams): Record<string, unknown> {
+  let inputs: Record<string, unknown>;
+  switch (p.inputs.kind) {
+    case "verify":
+      inputs = {
+        meshUrl: p.inputs.meshUrl,
+        capturedRoomJsonUrl: p.inputs.capturedRoomJsonUrl,
+      };
+      break;
+    case "splat":
+      inputs = {
+        photosManifestUrl: p.inputs.photosManifestUrl,
+        photoUrls: p.inputs.photoUrls,
+        capturedRoomJsonUrl: p.inputs.capturedRoomJsonUrl,
+        photoUrlsCapped: p.inputs.photoUrlsCapped,
+        photoCount: p.inputs.photoCount,
+      };
+      break;
+    case "renders":
+      inputs = { glbUrl: p.inputs.glbUrl };
+      break;
+  }
   return {
     taskId: p.taskId,
     leaseToken: p.leaseToken,
@@ -216,10 +295,7 @@ export function buildModalDispatchBody(p: DispatchParams): Record<string, unknow
     roomFileVersion: p.roomFileVersion,
     taskType: p.taskType,
     traceId: p.traceId,
-    inputs: {
-      meshUrl: p.inputs.meshUrl,
-      capturedRoomJsonUrl: p.inputs.capturedRoomJsonUrl,
-    },
+    inputs,
   };
 }
 
