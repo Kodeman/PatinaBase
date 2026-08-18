@@ -49,6 +49,8 @@ export const ROOM_FILE_COPY = {
   drawingsTitle: 'Drawings',
   drawingsSubtitle: (n: number, date: string | null) =>
     `${n} sheet${n === 1 ? '' : 's'}${date ? ` · generated ${date}` : ''}`,
+  /** Alt text for the inline floor-plan sheet (Rendered Room v2, P1). */
+  planPreviewAlt: (room: string) => `Floor plan of ${room}, drawn from the scan`,
   dxfLabel: 'CAD drawing (DXF)',
   dxfHint: 'Layered walls · openings · dimensions — opens in your CAD tool',
   sheetSvg: 'SVG',
