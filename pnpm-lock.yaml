@@ -714,8 +714,8 @@ importers:
         specifier: ^2.2.1
         version: 2.6.1
       three:
-        specifier: ^0.159.0
-        version: 0.159.0
+        specifier: 0.180.0
+        version: 0.180.0
       uuid:
         specifier: ^10.0.0
         version: 10.0.0
@@ -763,8 +763,8 @@ importers:
         specifier: ^19.2.2
         version: 19.2.3(@types/react@19.2.14)
       '@types/three':
-        specifier: '0.159'
-        version: 0.159.0
+        specifier: 0.180.0
+        version: 0.180.0
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.0.0
         version: 8.63.0(@typescript-eslint/parser@8.63.0(eslint@9.39.3(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.3(jiti@1.21.7))(typescript@5.9.3)
