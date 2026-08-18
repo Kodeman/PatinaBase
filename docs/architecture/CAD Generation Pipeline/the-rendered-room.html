@@ -159,6 +159,7 @@
   .sheet.is-visible{ opacity:1; transform:translateY(0); }
   @media (prefers-reduced-motion: reduce){
     .sheet{ opacity:1 !important; transform:none !important; transition:none !important; }
+    .skip-link{ transition:none !important; }
   }
 
   .title-block{
@@ -464,26 +465,27 @@
     <a href="#rr-05">RR-05 Portal</a>
     <a href="#rr-06">RR-06 Schema</a>
     <a href="#rr-07">RR-07 Phasing</a>
+    <a href="#rr-08">RR-08 Delivery</a>
   </div>
 </nav>
 
 <main id="main">
 
   <!-- ============================================================ RR-00 COVER ============================================================ -->
-  <section id="rr-00" class="sheet cover" aria-labelledby="rr-00-title">
+  <section id="rr-00" class="sheet cover" aria-labelledby="rr-00-name">
     <div class="title-block">
       <span class="sheet-no">RR&#8209;00</span>
-      <h2 class="sheet-title" id="rr-00-title">Cover</h2>
+      <span class="sheet-title" id="rr-00-title">Cover</span>
       <span class="sheet-meta"><span class="proj">Patina &mdash; Scan Pipeline v2</span><span>2026&#8209;08&#8209;18</span></span>
     </div>
     <div class="sheet-body">
-      <h1 class="cover-title">The Rendered Room</h1>
+      <h1 class="cover-title" id="rr-00-name">The Rendered Room</h1>
       <p class="cover-sub">Scan Processing Pipeline v2</p>
       <p class="dek">One capture. Three lanes: the CAD file, the model, the imagery &mdash; the whole record of the room, on the designer&rsquo;s desk.</p>
       <div class="cover-footer">
         <span>responds to <span class="mono">ARCHITECTURE.md</span> (outside recommendation)</span>
         <span>&middot;</span>
-        <span>companion doc <span class="mono">PROPOSAL.md</span></span>
+        <span>companion docs <span class="mono">PROPOSAL.md</span> + <span class="mono">DELIVERY-PLAN.md</span></span>
         <span>&middot;</span>
         <span>2026&#8209;08&#8209;18</span>
         <span>&middot;</span>
@@ -674,7 +676,7 @@
               <div class="flow-row">
                 <div class="box"><span class="t">solve</span></div>
                 <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
-                <div class="box"><span class="t">verify<span class="new-flag">new</span></span><span class="n">mesh.ply sampled to a point cloud &middot; seeded RANSAC plane&#8209;fit spans cross&#8209;check dims</span></div>
+                <div class="box"><span class="t">verify<span class="new-flag">new</span></span><span class="n">mesh.ply sampled to a point cloud &middot; seeded RANSAC plane&#8209;fit spans cross&#8209;check dims &middot; CPU&#8209;only Modal function</span></div>
                 <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
                 <div class="box"><span class="t">drawings</span><span class="n">+ IFC (IfcOpenShell) &middot; DXF stays R2010</span></div>
               </div>
@@ -693,12 +695,12 @@
               <div class="flow-row">
                 <div class="box"><span class="t">GLB optimize</span><span class="n">gltf&#8209;transform &middot; Draco / meshopt + KTX2</span></div>
                 <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
-                <div class="box"><span class="t">splat<span class="new-flag">new</span></span><span class="n">posed keyframes + depth &middot; CUDA box &middot; 7&ndash;45 min/scene, $0.04&ndash;0.12/scene GPU</span></div>
+                <div class="box"><span class="t">splat<span class="new-flag">new</span></span><span class="n">posed keyframes + depth &middot; Modal L4, preemptible/resumable &middot; ~10&ndash;25 min/room</span></div>
                 <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
                 <div class="box"><span class="t">.spz</span><span class="n">15&ndash;60 MB &rarr; KHR_gaussian_splatting glTF as it ratifies</span></div>
               </div>
             </div>
-            <p style="font-size:.83rem; color:var(--ink-dim); max-width:64ch;">GLB is the canonical web asset; USDZ stays iOS AR Quick Look only. Poses are free from ARKit &mdash; the parked COLMAP refine un&#8209;parks as a pose&#8209;prior improver. Modal / RunPod thin adapter is the later scale&#8209;out escape hatch.</p>
+            <p style="font-size:.83rem; color:var(--ink-dim); max-width:64ch;">GLB is the canonical web asset; USDZ stays iOS AR Quick Look only. Poses are free from ARKit &mdash; splatfacto+gsplat trains directly from them, no COLMAP solve required; the parked COLMAP refine un&#8209;parks only as an optional pose&#8209;prior improver. Modal is the deploy adapter around a framework&#8209;agnostic core &mdash; the spec&rsquo;s idea, reused as designed.</p>
           </div>
 
           <div class="lane-row image">
@@ -708,12 +710,12 @@
               <div class="flow-row">
                 <div class="box"><span class="t">hero / photos / HEIC</span><span class="n">existing ladder</span></div>
                 <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
-                <div class="box"><span class="t">renders<span class="new-flag">new</span></span><span class="n">4 corner perspectives + top&#8209;down + turntable strip</span></div>
+                <div class="box"><span class="t">renders<span class="new-flag">new</span></span><span class="n">4 corner perspectives + top&#8209;down + turntable strip &middot; Modal L40S</span></div>
                 <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
                 <div class="box dest"><span class="t">JPEGs</span><span class="n">on Room File manifest</span></div>
               </div>
             </div>
-            <p style="font-size:.83rem; color:var(--ink-dim); max-width:64ch;">three.js + headless Chromium first; Blender Cycles photoreal later, only after benchmarking.</p>
+            <p style="font-size:.83rem; color:var(--ink-dim); max-width:64ch;">Blender Cycles via the bpy wheel on Modal &mdash; Modal&rsquo;s own published example for this workload, ~6&nbsp;s/frame, cents per image.</p>
           </div>
 
         </div>
@@ -783,21 +785,21 @@
 
         <div style="display:flex; flex-wrap:wrap; gap:1.5rem; margin-top:.25rem; align-items:flex-start;">
           <div>
-            <span class="mono-label" style="display:block; margin-bottom:.4rem;">Lane C &mdash; CPU box, serial within itself</span>
+            <span class="mono-label" style="display:block; margin-bottom:.4rem;">Lane C &mdash; serial within itself, split across compute</span>
             <div class="flow-scroll">
               <div class="flow-row">
-                <div class="stage-pill">solve</div>
+                <div class="stage-pill">solve &middot; CPU box</div>
                 <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
-                <div class="stage-pill">verify</div>
+                <div class="stage-pill branch">verify &middot; Modal CPU</div>
                 <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
-                <div class="stage-pill">drawings</div>
+                <div class="stage-pill">drawings &middot; CPU box</div>
               </div>
             </div>
           </div>
           <div>
             <span class="mono-label" style="display:block; margin-bottom:.4rem;">Lane M &mdash; Phase B only</span>
             <div class="flow-row">
-              <div class="stage-pill branch">splat &middot; CUDA worker variant only</div>
+              <div class="stage-pill branch">splat &middot; Modal L4, preemptible/resumable</div>
             </div>
           </div>
         </div>
@@ -808,19 +810,21 @@
             <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
             <div class="box"><span class="t">optimized GLB lands</span><span class="n">enqueue_agent_task RPC</span></div>
             <div class="arrow-h"><span class="ln"></span><span class="tri-r"></span></div>
-            <div class="stage-pill">renders</div>
+            <div class="stage-pill branch">renders &middot; Modal L40S</div>
           </div>
         </div>
 
-        <p class="diagram-caption">Ingest fans out &mdash; it does not chain. <span class="mono">solve &rarr; verify &rarr; drawings</span> is Lane C&rsquo;s serial run; <span class="mono">splat</span> (Phase B) is claimed only by the CUDA worker variant, via <span class="mono">claim_agent_tasks(p_task_types)</span>. There is no <span class="mono">scan_pipeline.model</span> stage &mdash; GLB optimization happens inside the conversion endpoint, not the queue. <span class="mono">renders</span> is enqueued by the edge function once a GLB lands, or by <span class="mono">splat</span> on a Phase B refresh; a <span class="mono">drawings</span> failure never blocks it, and vice versa.</p>
+        <p class="diagram-caption"><span class="mono">agent_tasks</span> remains the single queue. Ingest fans out &mdash; it does not chain. <span class="mono">solve &rarr; verify &rarr; drawings</span> is Lane C&rsquo;s serial run, split across the CPU box and Modal; <span class="mono">splat</span> (Phase B) runs on Modal L4. Modal is a <b>spawn target</b>, reached via a billing&#8209;guarded dispatcher that claims <span class="mono">verify</span>/<span class="mono">splat</span>/<span class="mono">renders</span> tasks and POSTs to a bearer&#8209;secret Modal <span class="mono">fastapi_endpoint</span>, which <span class="mono">.spawn()</span>s the function (Modal web endpoints cap at 150s). Writeback runs over direct Postgres via a new least&#8209;privilege <span class="mono">scan_worker</span> role &mdash; never <span class="mono">service_role</span>. There is no <span class="mono">scan_pipeline.model</span> stage &mdash; GLB optimization happens inside the conversion endpoint, not the queue. <span class="mono">renders</span> is enqueued by the edge function once a GLB lands, or by <span class="mono">splat</span> on a Phase B refresh; a <span class="mono">drawings</span> failure never blocks it, and vice versa.</p>
       </div>
 
       <div class="table-wrap">
         <table class="placement-table">
           <thead><tr><th>Compute</th><th>Owns</th></tr></thead>
           <tbody>
-            <tr><td class="owner">CPU box</td><td>ingest &middot; solve &middot; verify &middot; drawings &middot; renders</td></tr>
-            <tr><td class="owner">CUDA box</td><td>splat (+ optional Cycles)</td></tr>
+            <tr><td class="owner">systemd CPU box</td><td>ingest &middot; solve &middot; drawings</td></tr>
+            <tr><td class="owner">Modal CPU</td><td>verify (CPU&#8209;only &mdash; segment_plane is CPU&#8209;backed)</td></tr>
+            <tr><td class="owner">Modal L4</td><td>splat &mdash; preemptible/resumable</td></tr>
+            <tr><td class="owner">Modal L40S</td><td>renders &mdash; Blender Cycles via bpy, ~6&nbsp;s/frame</td></tr>
             <tr><td class="owner">aesthete-inference container</td><td>USDZ&rarr;GLB conversion + gltf&#8209;transform optimization (billing&#8209;guarded)</td></tr>
             <tr><td class="owner">portal</td><td>viewing only</td></tr>
           </tbody>
@@ -829,10 +833,10 @@
 
       <div class="schema-delta">
         <span class="mono-label">Schema deltas</span>
-        <p style="font-family:var(--font-display); font-size:.94rem; max-width:62ch;"><code>room_files</code> gains <code>splat_url</code>, <code>renders jsonb</code>, <code>verify jsonb</code>. Reconcile the GLB URL home &mdash; <code>room_scans.model_url_gltf</code> vs. a room_files version.</p>
+        <p style="font-family:var(--font-display); font-size:.94rem; max-width:62ch;"><code>room_files</code> gains <code>glb_url</code>, <code>splat_url</code>, <code>renders jsonb</code>, <code>verify jsonb</code>. Reconcile the GLB URL home &mdash; <code>room_scans.model_url_gltf</code> vs. a room_files version.</p>
       </div>
 
-      <div class="no-new">No new NestJS services. No Cloudflare Queues / D1 / R2 for scans.</div>
+      <div class="no-new">No new NestJS services. No Cloudflare Queues / D1 for scans. Artifacts land on R2 (Phase 2 pilot); originals cut over behind shadow evidence.</div>
     </div>
   </section>
 
@@ -865,18 +869,57 @@
             <tr><td><span class="chip amber">Watch</span></td><td>sceneDepth coexistence fragility</td><td>Across iOS releases; already navigated via the <span class="mono">didStart</span> workaround.</td></tr>
             <tr><td><span class="chip amber">Med</span></td><td>verify determinism</td><td>RANSAC must be seeded; two runs over the same bundle must produce identical residuals.</td></tr>
             <tr><td><span class="chip amber">Watch</span></td><td>Splat sizes on designer hardware</td><td>15&ndash;60&nbsp;MB .spz per scene.</td></tr>
-            <tr><td><span class="chip amber">Watch</span></td><td>Single GPU box</td><td>Escape hatch: Modal / RunPod thin adapter.</td></tr>
+            <tr><td><span class="chip amber">Watch</span></td><td>Modal preemption mid&#8209;training</td><td>Resumable&#8209;training checkpoint/resume + task&#8209;lease retry.</td></tr>
+            <tr><td><span class="chip amber">Watch</span></td><td>Modal single&#8209;vendor</td><td>Framework&#8209;agnostic core + thin adapter seam holds the escape hatch.</td></tr>
+            <tr><td><span class="chip amber">Med</span></td><td>Scoped DB creds in a third&#8209;party cloud</td><td>Least&#8209;privilege <span class="mono">scan_worker</span> role, rotation, static&#8209;IP allowlist option.</td></tr>
+            <tr><td><span class="chip amber">Watch</span></td><td>R2/boto3 checksum&#8209;matrix drift</td><td>Pin checksum calculation to <span class="mono" style="font-size:.78rem;">when_required</span>.</td></tr>
             <tr><td><span class="chip amber">Watch</span></td><td>Private&#8209;bucket URL&#8209;shape history</td><td>Store bare keys, sign at read.</td></tr>
             <tr><td><span class="chip red">High</span></td><td><span class="mono">room_files</span> RLS asymmetry</td><td>Noted in code comments during P2 (<span class="mono" style="font-size:.78rem;">use-room-files.ts</span>); unresolved.</td></tr>
             <tr><td><span class="chip amber">Watch</span></td><td>Billing guards</td><td>Mandatory on every container lane.</td></tr>
             <tr><td><span class="chip amber">Watch</span></td><td>ODA lock&#8209;in</td><td>Only if DWG ships.</td></tr>
+            <tr><td><span class="chip amber">Watch</span></td><td>Accepted <span class="mono" style="font-size:.78rem;">net.*</span> residual</td><td><span class="mono" style="font-size:.78rem;">PUBLIC</span> DML on <span class="mono" style="font-size:.78rem;">net.http_request_queue</span>; a live <span class="mono" style="font-size:.78rem;">service_role</span> JWT transits it &mdash; inherited by any new pg_net use.</td></tr>
+            <tr><td><span class="chip amber">Watch</span></td><td>No standalone Phase&nbsp;2/3 register doc</td><td>The runbook&rsquo;s sections are the source of truth for the media matrix and upload&#8209;intent contract.</td></tr>
+            <tr><td><span class="chip amber">Med</span></td><td><span class="mono">room&#8209;scans</span> RLS / key&#8209;shape coupling</td><td>Segment order is load&#8209;bearing today; the R2 registry must preserve an authorization derivation, not the path&#8209;parsing pattern.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ RR-08 DELIVERY ============================================================ -->
+  <section id="rr-08" class="sheet" aria-labelledby="rr-08-title">
+    <div class="title-block">
+      <span class="sheet-no">RR&#8209;08</span>
+      <h2 class="sheet-title" id="rr-08-title">Delivery</h2>
+      <span class="sheet-meta"><span class="proj">Patina &mdash; Scan Pipeline v2</span><span>2026&#8209;08&#8209;18</span></span>
+    </div>
+    <div class="sheet-body">
+      <div class="prose">
+        <p class="lede">Modal and the R2 pilot land in five waves, staging&#8209;only throughout. Full sequencing, task-level detail, and rollback notes live in <span class="mono">DELIVERY-PLAN.md</span>; this sheet is the compact schedule.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Wave</th><th>Duration</th><th>Theme</th><th>Scope</th></tr></thead>
+          <tbody>
+            <tr><td>W0</td><td>~1&nbsp;wk</td><td>&ldquo;Foundations&rdquo;</td><td>Modal <span class="mono">patina-staging</span> env + budget cap (production not created here), staging R2 pair + registry kernel migration, scan roles + ACL coverage, dispatcher skeleton</td></tr>
+            <tr><td>W1</td><td>~1&ndash;2&nbsp;wk</td><td>&ldquo;Accuracy lane&rdquo;</td><td><span class="mono">verify</span> on Modal, certificate QA, determinism test</td></tr>
+            <tr><td>W2</td><td>~2&ndash;3&nbsp;wk</td><td>&ldquo;Rich record&rdquo;</td><td>splat (L4) + Cycles renders (L40S) &rarr; R2 + registry, IFC export (drawings, CPU box), typed <span class="mono">/v1/scan</span> capability reads, ModelStage on staging</td></tr>
+            <tr><td>W3</td><td>~2&nbsp;wk</td><td>&ldquo;Originals cutover&rdquo;</td><td>upload&#8209;intent + presigned R2 PUT, shadow dual&#8209;write w/ sha256 match evidence, storage.py R2 backend, capability URLs replace <span class="mono">createSignedUrl</span></td></tr>
+            <tr><td>W4</td><td>~1&nbsp;wk</td><td>&ldquo;Hardening + prod package&rdquo;</td><td>golden set, evidence doc &mdash; <b>prod deploy explicitly out of scope, awaits authorization</b></td></tr>
           </tbody>
         </table>
       </div>
 
+      <div class="bucket-line">Per&#8209;scan Modal cost &asymp; well under <b>$0.50</b> &middot; verify &lt;$0.01 &middot; splat $0.13&ndash;0.33 &middot; renders &lt;$0.10 &mdash; against a <b>$45&ndash;73</b> market deliverable</div>
+
+      <div class="prose">
+        <p>PROPOSAL P1 portal work &mdash; GLB optimize, ModelStage, inline SVG &mdash; proceeds in parallel and is storage&#8209;agnostic: it does not wait on the R2 pilot waves.</p>
+      </div>
+
       <div class="closing">
         <p>The outside spec answered &ldquo;how do we build scan&#8209;to&#8209;CAD from nothing.&rdquo; Our question was &ldquo;how does the pipeline we already shipped grow into the full record of the room.&rdquo; This is that answer.</p>
-        <span class="end-mark">End of set &mdash; RR&#8209;07 / 07</span>
+        <span class="end-mark">End of set &mdash; RR&#8209;08 / 08</span>
       </div>
     </div>
   </section>

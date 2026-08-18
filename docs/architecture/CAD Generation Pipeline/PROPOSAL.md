@@ -1,6 +1,8 @@
 # The Rendered Room — Scan Processing Pipeline v2
 
 > **Status:** proposed, not ruled · **Date:** 2026-08-18 · **Companion presentation:** `the-rendered-room.html` (same folder) · **Responds to:** `ARCHITECTURE.md`
+>
+> **Revised 2026-08-18:** GPU stages ruled onto Modal; storage/read paths re-targeted to the Workers + R2 architecture (phase1-close). Delivery sequencing in `DELIVERY-PLAN.md`.
 
 ---
 
@@ -111,13 +113,13 @@ The point cloud's right role here is **verifier and enricher, not primary source
 
 **The principle:** the schema-v3 bundle already contains everything the three lanes need. Nothing new is asked of capture. One optional check only — confirm the USDZ we export is the mesh variant rather than the parametric one, or simply export both.
 
-Everything rides the existing spine. `scan_pipeline.ingest` completes and fans out — not chains — into the lanes below: it enqueues `scan_pipeline.solve` for Lane C, and, in Phase B, `scan_pipeline.splat` for Lane M. `agent_tasks` successor-enqueue within a lane, `room_files` status and versioning, `scan_pipeline_events` telemetry, billing-guarded pg_cron sweeps for edge lanes. Lanes fail independently — a `drawings` failure never blocks `renders`, and vice versa. **No new NestJS services. No Cloudflare Queues, D1, or R2 for scans.**
+Everything rides the existing spine. `scan_pipeline.ingest` completes and fans out — not chains — into the lanes below: it enqueues `scan_pipeline.solve` for Lane C, and, in Phase B, `scan_pipeline.splat` for Lane M. `agent_tasks` successor-enqueue within a lane, `room_files` status and versioning, `scan_pipeline_events` telemetry, billing-guarded pg_cron sweeps for edge lanes. Lanes fail independently — a `drawings` failure never blocks `renders`, and vice versa. **No new NestJS services. No Cloudflare Queues or D1 for scans.** Derived artifacts do land on R2 — see §5, piloting the phase1-close target platform, not standing up a parallel one.
 
 ### Lane C — CAD (exists; extend)
 
 Keep `solve` → `drawings` as the primary path. The parametric model with anchor correction stays the source of truth for dimensions.
 
-**New `verify` stage, between solve and drawings.** Open3D's plane segmentation operates on point clouds, not meshes, so the stage first samples `mesh.ply` into a point cloud (vertex sampling / poisson-disk over faces), then runs seeded RANSAC to fit wall planes, extract their spans, and compare against the parametric dimensions.
+**New `verify` stage, between solve and drawings.** Open3D's plane segmentation operates on point clouds, not meshes, so the stage first samples `mesh.ply` into a point cloud (vertex sampling / poisson-disk over faces), then runs seeded RANSAC to fit wall planes, extract their spans, and compare against the parametric dimensions. It deploys as a **CPU-only Modal function** — Open3D's `segment_plane` is CPU-backed even in its tensor API, so GPU is irrelevant here, not merely optional.
 
 - Divergence beyond tolerance lands as a QA note on the accuracy certificate. The designer learns that the mesh disagrees with the parametric model about the north wall by 40 mm, which is exactly the kind of thing they want to know before ordering millwork.
 - Where the mesh is confidently better, it can **source** per-dimension rows as `mesh`. The P2 schema widening of `room_file_measurements.source` already anticipates this value.
@@ -144,11 +146,11 @@ This phase asks for no new infrastructure whatsoever. The asset exists. We are c
 
 **Phase B (rich): a Gaussian-splat stage.**
 
-The inputs are already in the bundle: posed keyframes with intrinsics, depth, and ARKit world poses. That means **COLMAP-free** training — the poses are the hard part of splatting and we get them for free from ARKit. Optionally, un-park the refine engine as a pose-*prior* improver rather than a full SfM solve; that is its natural justification and a much smaller claim than what it was originally built to do.
+The inputs are already in the bundle: posed keyframes with intrinsics, depth, and ARKit world poses. That means **COLMAP-free** training — the poses are the hard part of splatting and we get them for free from ARKit.
 
-Training runs 7–45 minutes on a modest GPU, on the order of $0.04–0.12 per scene in equivalent compute. Output is `.spz` at 15–60 MB compressed, migrating to `KHR_gaussian_splatting` glTF as the extension ratifies.
+Training runs ~10–25 minutes per room on Modal L4. Output is `.spz` at 15–60 MB compressed, migrating to `KHR_gaussian_splatting` glTF as the extension ratifies.
 
-**GPU placement: the DeskDev CUDA box first.** scan-pipeline already ships a CUDA-qualified worker variant (`patina-scan-worker.gpu.conf`, `patina-scan-worker-nvidia-prepare.service`, the pycolmap CUDA smoke test). A splat stage is therefore just another `agent_tasks` claim from a GPU-capable worker — no new orchestration, no new deploy target. A Modal or RunPod thin adapter is the scale-out escape hatch later, and it is the spec's framework-agnostic-core idea reused exactly as written. It is not the starting point.
+**GPU placement: Modal, ruled.** The splat stage deploys as a Modal function on an **L4**, preemptible/resumable — splatfacto+gsplat training directly from ARKit poses, no COLMAP solve required. Modal's preemption model means the training loop checkpoints and resumes rather than restarting from zero, so a reclaimed L4 costs wall-clock, not the run. Output compresses `.ply` → SPZ before it leaves the function. COLMAP pose-prior refine — the parked engine from §1 — stays the optional upstream mitigation for raw-ARKit-pose misalignment, not a hard dependency; it un-parks only if `verify` or splat quality shows the raw poses are the bottleneck. This reuses the spec's framework-agnostic-core idea exactly as written (§2): `reconstruct`/`train` stays a pure function, Modal is the thin deploy adapter around it, not the core.
 
 ### Lane I — Images
 
@@ -156,7 +158,7 @@ Training runs 7–45 minutes on a modest GPU, on the order of $0.04–0.12 per s
 
 **New `renders` stage, enqueued when the optimized GLB lands.** The `convert-room-scan-glb` edge function calls the `enqueue_agent_task` RPC (edge functions already have that doorway) to fan out `scan_pipeline.renders` once the optimized GLB is written — no dependency on a `model` queue stage, because there isn't one. In Phase B, the splat stage enqueues a renders refresh the same way. Headless renders of the GLB (and later the splat): four corner perspectives, one top-down, and a short turntable strip. Stored as JPEGs, referenced from the Room File manifest.
 
-Start with proven three.js plus headless-Chromium rasterization on the CPU box — well-trodden, no GPU required, adequate for a gallery strip. A Blender Cycles photoreal upgrade on the GPU box is a plausible later move, but it must be benchmarked before it is planned: there are no credible public render-time figures for this specific workload, and guessing at Cycles throughput is how render farms get budgeted wrong.
+Renders run **Blender Cycles on Modal L40S**, via the bpy wheel — Modal's own published example for this exact workload, at roughly 6 seconds per frame. That number answers the benchmarking question directly, so the earlier three.js-plus-headless-Chromium-first ladder is unnecessary: there is no need to stand up a CPU rasterization path and defer photoreal rendering to "later, after benchmarking" when Modal's published figures already price the photoreal path in cents per image.
 
 ---
 
@@ -199,9 +201,11 @@ scan_pipeline.ingest ┤
                     └─→ Lane M (Phase B only):  splat
 ```
 
-`scan_pipeline.ingest` completing enqueues both branches independently: `scan_pipeline.solve` starts the CAD chain (Lane C), and, in Phase B, `scan_pipeline.splat` starts alongside it — claimed only by the CUDA worker variant, via the `claim_agent_tasks(p_task_types)` predicate. That predicate *is* the placement mechanism, so no separate dispatcher is needed. Lanes fail independently: a `drawings` failure never blocks `renders`, and vice versa.
+`scan_pipeline.ingest` completing enqueues both branches independently: `scan_pipeline.solve` starts the CAD chain (Lane C), and, in Phase B, `scan_pipeline.splat` starts alongside it. Lanes fail independently: a `drawings` failure never blocks `renders`, and vice versa.
 
-Within Lane C, `solve → verify → drawings` is successor-enqueue on success, exactly as today.
+Within Lane C, `solve → verify → drawings` is successor-enqueue on success, exactly as today. `solve` and `drawings` stay on the systemd CPU box; `verify`, `splat`, and `renders` are Modal-placed (below), so — unlike Lane C's original single-worker-variant story — they need a dispatcher rather than a bare `claim_agent_tasks(p_task_types)` predicate.
+
+**Modal is a spawn target, not a second queue.** `agent_tasks` remains the single queue, full stop. A small billing-guarded dispatcher process claims `verify`/`splat`/`renders` tasks from `agent_tasks` and POSTs each to a bearer-secret-protected Modal `fastapi_endpoint`, which immediately `.spawn()`s the actual function — Modal web endpoints hard-cap at 150 seconds, so a splat or render job that runs minutes has to spawn, not run inline behind the HTTP response. The Modal function does its work, then writes its completion and event rows back over a direct Postgres connection, authenticated as a new least-privilege `scan_worker` role — never `service_role` — so a Modal-side credential leak exposes exactly the scan tables it needs and nothing else. Modal Environments `patina-staging` and `patina-production` carry separate secrets and hard budget caps, so a runaway job fails closed on cost before it fails closed on anything else.
 
 There is no `scan_pipeline.model` stage. Lane M's GLB optimization is not a queue stage at all — it folds into the `convert-room-scan-glb` edge function's call to the aesthete-inference container's conversion endpoint (gltf-transform CLI baked into the container image), so the lane emits an optimized GLB directly. When that GLB lands, the edge function enqueues `scan_pipeline.renders` (Lane I) itself, via the `enqueue_agent_task` RPC — edge functions already have that doorway. In Phase B, the splat stage enqueues a renders refresh the same way.
 
@@ -226,10 +230,18 @@ Versioning and append-only rules are unchanged. A new lane produces a new Room F
 
 | Where | Runs |
 |---|---|
-| CPU box (systemd worker) | `ingest`, `solve`, `verify`, `drawings`, `renders` |
-| DeskDev CUDA box | splat training; optionally Blender Cycles later |
+| systemd CPU box | `ingest`, `solve`, `drawings` |
+| Modal CPU | `verify` (CPU-only — Open3D's `segment_plane` is CPU-backed) |
+| Modal L4 (preemptible/resumable) | `splat` — splatfacto+gsplat from ARKit poses |
+| Modal L40S | `renders` — Blender Cycles via the bpy wheel, ~6 s/frame |
 | aesthete-inference Container | USDZ→GLB conversion + gltf-transform optimization, billing-guarded |
 | Portal | viewing only — no compute, no conversion |
+
+### Storage and reads: piloting the R2 target
+
+`ARCHITECTURE.md`'s object store was one of the pieces we declined in §2(a) — but the ground it stood on has since shifted. The phase1-close program (PR #28, staging-live) has already ruled the *portal's* target platform: Supabase Postgres stays system of record behind the edge-api-worker's dual Hyperdrive bindings, but Supabase Storage is being replaced by R2, per the runbook's Phase 2 media design — an originals/artifacts bucket pair, an object registry, an access-class matrix, and capability URLs served from `assets.patina.cloud`. The scan pipeline does not join that program; it **pilots** that design, the same way it copies the runbook's Phase 3 capture-contract principles (a DB ledger deciding idempotency, minimal message shape) without joining Phase 3 itself, which explicitly excludes LiDAR/site-scan.
+
+New derived artifacts — GLB, splat, renders — land on R2 with registry rows from day one: access class *authenticated project* for GLB and splat, *released deliverable* for Room File render sheets. Portal reads move from `createSignedUrl` to short-lived capability URLs issued by typed `/v1/scan/*` routes on the edge-api-worker, using scan-specific NOLOGIN roles and security_barrier views — the 00481 pattern. Scan **originals** — the `room-scans` Supabase bucket — cut over in a later wave, behind a shadow rung that requires positive sha256-match evidence before anything reads from R2 instead of Supabase Storage. Everything here is staging-only until Kody authorizes prod — the stop-at-staging rule applies to the scan pipeline exactly as it does to the rest of phase1-close. Wave sequencing for both the Modal rollout and the R2 pilot is in `DELIVERY-PLAN.md`.
 
 ---
 
@@ -242,10 +254,12 @@ GLB optimization pass in `convert-room-scan-glb`. ModelStage with the GLB viewer
 The `verify` stage: Open3D cross-check against `mesh.ply`, curved-wall flagging into the accuracy certificate, `mesh`-sourced dimension rows. IFC export in `drawings`.
 
 **P3 — The rich record. (~3–4 weeks)**
-The splat lane on the CUDA box. The render gallery. The splat view mode in ModelStage.
+The splat lane on Modal. The render gallery. The splat view mode in ModelStage.
 
 **P4 — Demand-driven, optional.**
 Premium native-format exports (SketchUp, Revit) if clients ask. `StructureBuilder` multi-room merge — noting Apple's practical ceiling of roughly 2,000 sq ft per structure. ML reconstruction only if the `verify` data from P2 shows parametric failures at a rate that justifies it.
+
+P1–P4 above are the product framing. `DELIVERY-PLAN.md`'s W0–W4 waves are the authoritative execution sequencing — including where P2's `verify` and IFC actually split across waves.
 
 ---
 
@@ -257,7 +271,13 @@ Premium native-format exports (SketchUp, Revit) if clients ask. `StructureBuilde
 
 **Splat asset sizes on real hardware.** 15–60 MB is fine on a designer's laptop over office wifi and questionable on a phone in a client's living room. Needs a size budget and a mobile fallback to the GLB before Phase B ships to the client portal.
 
-**The DeskDev GPU box is a single point.** One machine, one location. The escape hatch is the thin Modal/RunPod adapter — the one idea in `ARCHITECTURE.md` that is directly reusable as designed, and worth building the splat core to accommodate from day one even if we never deploy it.
+**Modal preemption mid-training.** An L4 splat run can be reclaimed under load. Mitigation is the resumable-training pattern (checkpoint + resume) plus task-lease retry at the `agent_tasks` level, so a preempted run picks back up rather than restarting or silently vanishing.
+
+**Modal is a single vendor.** The framework-agnostic core from `ARCHITECTURE.md` — `reconstruct`/`train` as a pure function behind a thin deploy adapter — is exactly the seam that keeps this from being a hard lock-in; it is worth holding that seam even though Modal is the only adapter we ship today.
+
+**Scoped DB credentials leaving our network.** The new `scan_worker` role writes completion/events back over direct Postgres from inside Modal — a third-party cloud. Mitigation: least-privilege grants scoped to exactly the scan tables it touches, credential rotation, and a static-IP allowlist option if Modal's egress IPs are stable enough to pin.
+
+**R2/boto3 checksum-matrix drift.** boto3's checksum behavior has shifted across versions and can silently change whether a request or response checksum is computed, which breaks integrity assumptions quietly rather than loudly. Pin checksum calculation to `when_required` explicitly rather than trusting the SDK default.
 
 **RANSAC seeding.** `verify` must be deterministic or its QA notes are noise. Seed it, and test that two runs over the same bundle produce identical residuals.
 
