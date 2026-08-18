@@ -4,16 +4,80 @@
 --   psql "$REMOTE_DB_URL" -X -v ON_ERROR_STOP=1 \
 --     -f supabase/tests/edge_api/catalog_roles_remote_conformance_test.sql
 --
--- Run only after the normal migration and separately authorized platform-admin
--- ACL step have both completed. This script is intentionally SELECT-only. It
--- is safe for staging/production
--- preflight because it creates no objects, changes no roles or data, includes no
--- seed, and derives its target database from the active connection. Failures
--- report aggregate counts only; no catalog object or customer identifier is
--- emitted.
+-- Run after migrations 00481-00485 have been applied to the target database.
+-- There is no privileged second phase to wait for: the platform-admin artifact
+-- that this gate used to require was retired as unrunnable on Supabase Cloud
+-- (`postgres` is rolsuper = false and cannot become supabase_admin), and its
+-- surviving record is the signed exception registry plus
+-- docs/engineering/public-acl-residual-census.md.
+--
+-- The gate reads the catalog only. It creates three session-local temporary
+-- objects (the registry and its two derived views, via the \ir below) before
+-- the read-only transaction opens, and nothing persistent: no role, no data, no
+-- ACL, no seed. The temporary objects need database TEMP, which the database
+-- owner holds intrinsically — 00483's revoke of TEMPORARY from PUBLIC does not
+-- affect the `postgres` connection this gate is run on. Failures report
+-- aggregate counts only; no catalog object or customer identifier is emitted.
+--
+-- ── WHAT CHANGED, AND WHY ───────────────────────────────────────────────────
+--
+-- This gate used to compute twelve counters, two of which could never reach
+-- zero on Supabase Cloud. A gate that is red by construction is a gate that
+-- gets waived, so the two were re-scoped rather than deleted:
+--
+--   • `owner_default_recurrence` required a pg_default_acl row for each of six
+--     reserved owners. `ALTER DEFAULT PRIVILEGES FOR ROLE supabase_auth_admin`
+--     needs membership in that role, which `postgres` does not have and cannot
+--     grant itself. 00483 hardens the three owners it can lawfully SET
+--     (postgres, supabase_functions_admin, supabase_realtime_admin) and that is
+--     the whole of what this principal can assert. The counter now covers those
+--     three; the other three are the platform's, not ours.
+--
+--   • `routine_public` counted every PUBLIC EXECUTE privilege in every
+--     non-system schema, reachable or not. Post-00483 the residual is entirely
+--     supabase_admin-owned and permanent from this side. The raw count is
+--     replaced by two capability-shaped invariants (below), and the reachable,
+--     unregistered part of it is what those invariants measure.
+--
+-- Everything else is kept, including all six *_effective counters — they are
+-- the only proof that `edge_catalog_reader` reaches exactly one view — plus
+-- membership_shape, required_rls_membership and catalog_shape.
+--
+-- Every check now filters on schema USAGE as well as the object grant. A PUBLIC
+-- privilege inside a schema PUBLIC cannot enter is inert; counting it overstates
+-- the exposure by roughly an order of magnitude and buries the real residual.
+--
+-- ── THE TWO NEW INVARIANTS ──────────────────────────────────────────────────
+--
+--   A. Zero PUBLIC-reachable routines that can act outside the caller's own
+--      privilege: every SECURITY DEFINER routine, plus a named
+--      out-of-band-effect set. `net.http_post` is SECURITY INVOKER, yet the
+--      request it enqueues is performed by the privileged pg_net background
+--      worker, outside the caller's transaction and outside RLS. Keying this
+--      gate on `prosecdef` would bless the actual hole, so it keys on effect.
+--
+--   B. Zero PUBLIC-writable relations.
+--
+--   C. Zero storage.objects policies with role list {public} outside the
+--      registry. Storage policies are not schema-gated, so they cannot ride A's
+--      reachability filter; `anon` holds its own explicit privileges on
+--      storage.objects and a {public} role list applies to it. Added because
+--      the 28 storage_policy registry rows were otherwise decorative — nothing
+--      referenced them — and that is the class that produced this programme's
+--      earlier false pass.
+--
+-- Both are defined once in public_acl_exception_registry.sql and are counted
+-- identically by catalog_roles_test.sql, so the local gate and this one cannot
+-- diverge — a divergence is how a green local becomes a broken staging.
+--
+-- The registry is the exception list, matched by exact signature and signed.
+-- Its companion catalog_roles_remote_conformance_negative_test.sql proves this
+-- predicate still fails against a deliberately broken database.
 
 \set ON_ERROR_STOP on
 \set QUIET 1
+
+\ir public_acl_exception_registry.sql
 
 BEGIN READ ONLY;
 
@@ -114,155 +178,32 @@ catalog_required AS (
   CROSS JOIN pg_database AS d
   WHERE d.datname = current_database()
 ),
-schema_public AS (
-  SELECT count(*) AS unexpected
-  FROM pg_namespace AS n
-  CROSS JOIN LATERAL aclexplode(
-    COALESCE(n.nspacl, acldefault('n', n.nspowner))
-  ) AS acl
-  WHERE n.nspname !~ '^pg_'
-    AND n.nspname <> 'information_schema'
-    AND acl.grantee = 0
+-- ── PUBLIC-derived counters, reachability-filtered and registry-exempt ──────
+public_grants AS (
+  SELECT
+    count(*) FILTER (WHERE object_class = 'schema') AS schema_public,
+    count(*) FILTER (WHERE object_class = 'relation') AS relation_public,
+    count(*) FILTER (WHERE object_class = 'sequence') AS sequence_public,
+    count(*) FILTER (WHERE object_class = 'column') AS column_public
+  FROM public_acl_public_grant_finding
 ),
-schema_effective AS (
-  SELECT count(*) AS unexpected
-  FROM role_oids AS r
-  CROSS JOIN pg_namespace AS n
-  CROSS JOIN LATERAL (VALUES ('USAGE'), ('CREATE')) AS privilege(name)
-  WHERE n.nspname !~ '^pg_'
-    AND n.nspname <> 'information_schema'
-    AND (
-      (
-        COALESCE(
-          has_schema_privilege(r.catalog_oid, n.oid, privilege.name), false
-        )
-        AND NOT (
-          n.nspname = 'public' AND privilege.name = 'USAGE'
-        )
-      )
-      OR (
-        COALESCE(
-          has_schema_privilege(r.rls_oid, n.oid, privilege.name), false
-        )
-        AND NOT COALESCE(
-          has_schema_privilege(
-            r.authenticated_oid, n.oid, privilege.name
-          ),
-          false
-        )
-      )
-    )
+-- ── Effective-ACL counters for the two capability roles ─────────────────────
+role_effective AS (
+  SELECT
+    count(*) FILTER (WHERE object_class = 'schema') AS schema_effective,
+    count(*) FILTER (WHERE object_class = 'relation') AS relation_effective,
+    count(*) FILTER (WHERE object_class = 'sequence') AS sequence_effective,
+    count(*) FILTER (WHERE object_class = 'column') AS column_effective,
+    count(*) FILTER (WHERE object_class = 'routine') AS routine_effective
+  FROM public_acl_role_effective_finding
 ),
-relation_public AS (
-  SELECT count(*) AS unexpected
-  FROM pg_class AS c
-  JOIN pg_namespace AS n ON n.oid = c.relnamespace
-  CROSS JOIN LATERAL aclexplode(
-    COALESCE(c.relacl, acldefault('r', c.relowner))
-  ) AS acl
-  WHERE n.nspname !~ '^pg_'
-    AND n.nspname <> 'information_schema'
-    AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
-    AND acl.grantee = 0
-),
-relation_effective AS (
-  SELECT count(*) AS unexpected
-  FROM role_oids AS r
-  CROSS JOIN surface AS s
-  CROSS JOIN pg_class AS c
-  JOIN pg_namespace AS n ON n.oid = c.relnamespace
-  CROSS JOIN LATERAL unnest(
-    CASE
-      WHEN current_setting('server_version_num')::integer >= 170000 THEN
-        ARRAY[
-          'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE',
-          'REFERENCES', 'TRIGGER', 'MAINTAIN'
-        ]::text[]
-      ELSE
-        ARRAY[
-          'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE',
-          'REFERENCES', 'TRIGGER'
-        ]::text[]
-    END
-  ) AS privilege(name)
-  WHERE n.nspname !~ '^pg_'
-    AND n.nspname <> 'information_schema'
-    AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
-    AND (
-      (
-        COALESCE(
-          has_table_privilege(r.catalog_oid, c.oid, privilege.name), false
-        )
-        AND NOT (
-          c.oid = s.catalog_view_oid AND privilege.name = 'SELECT'
-        )
-      )
-      OR (
-        COALESCE(
-          has_table_privilege(r.rls_oid, c.oid, privilege.name), false
-        )
-        AND NOT COALESCE(
-          has_table_privilege(
-            r.authenticated_oid, c.oid, privilege.name
-          ),
-          false
-        )
-      )
-    )
-),
-column_public AS (
-  SELECT count(*) AS unexpected
-  FROM pg_attribute AS a
-  JOIN pg_class AS c ON c.oid = a.attrelid
-  JOIN pg_namespace AS n ON n.oid = c.relnamespace
-  CROSS JOIN LATERAL aclexplode(a.attacl) AS acl
-  WHERE a.attnum > 0
-    AND NOT a.attisdropped
-    AND a.attacl IS NOT NULL
-    AND n.nspname !~ '^pg_'
-    AND n.nspname <> 'information_schema'
-    AND acl.grantee = 0
-),
-column_effective AS (
-  SELECT count(*) AS unexpected
-  FROM role_oids AS r
-  CROSS JOIN surface AS s
-  CROSS JOIN pg_attribute AS a
-  JOIN pg_class AS c ON c.oid = a.attrelid
-  JOIN pg_namespace AS n ON n.oid = c.relnamespace
-  CROSS JOIN LATERAL (
-    VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('REFERENCES')
-  ) AS privilege(name)
-  WHERE a.attnum > 0
-    AND NOT a.attisdropped
-    AND n.nspname !~ '^pg_'
-    AND n.nspname <> 'information_schema'
-    AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
-    AND (
-      (
-        COALESCE(
-          has_column_privilege(
-            r.catalog_oid, c.oid, a.attnum, privilege.name
-          ),
-          false
-        )
-        AND NOT (
-          c.oid = s.catalog_view_oid AND privilege.name = 'SELECT'
-        )
-      )
-      OR (
-        COALESCE(
-          has_column_privilege(r.rls_oid, c.oid, a.attnum, privilege.name),
-          false
-        )
-        AND NOT COALESCE(
-          has_column_privilege(
-            r.authenticated_oid, c.oid, a.attnum, privilege.name
-          ),
-          false
-        )
-      )
-    )
+-- ── Invariants A and B ──────────────────────────────────────────────────────
+capability AS (
+  SELECT
+    count(*) FILTER (WHERE invariant = 'A') AS out_of_band_reachable,
+    count(*) FILTER (WHERE invariant = 'B') AS public_writable,
+    count(*) FILTER (WHERE invariant = 'C') AS unregistered_storage_policies
+  FROM public_acl_capability_findings
 ),
 catalog_shape AS (
   SELECT
@@ -286,76 +227,6 @@ catalog_shape AS (
     )::integer AS unexpected
   FROM surface AS s
   LEFT JOIN pg_class AS c ON c.oid = s.catalog_view_oid
-),
-sequence_public AS (
-  SELECT count(*) AS unexpected
-  FROM pg_class AS c
-  JOIN pg_namespace AS n ON n.oid = c.relnamespace
-  CROSS JOIN LATERAL aclexplode(
-    COALESCE(c.relacl, acldefault('S', c.relowner))
-  ) AS acl
-  WHERE c.relkind = 'S'
-    AND n.nspname !~ '^pg_'
-    AND n.nspname <> 'information_schema'
-    AND acl.grantee = 0
-),
-sequence_effective AS (
-  SELECT count(*) AS unexpected
-  FROM role_oids AS r
-  CROSS JOIN pg_class AS c
-  JOIN pg_namespace AS n ON n.oid = c.relnamespace
-  CROSS JOIN LATERAL (VALUES ('USAGE'), ('SELECT'), ('UPDATE')) AS privilege(name)
-  WHERE c.relkind = 'S'
-    AND n.nspname !~ '^pg_'
-    AND n.nspname <> 'information_schema'
-    AND (
-      COALESCE(
-        has_sequence_privilege(r.catalog_oid, c.oid, privilege.name), false
-      )
-      OR (
-        COALESCE(
-          has_sequence_privilege(r.rls_oid, c.oid, privilege.name), false
-        )
-        AND NOT COALESCE(
-          has_sequence_privilege(
-            r.authenticated_oid, c.oid, privilege.name
-          ),
-          false
-        )
-      )
-    )
-),
-routine_public AS (
-  SELECT count(*) AS unexpected
-  FROM pg_proc AS p
-  JOIN pg_namespace AS n ON n.oid = p.pronamespace
-  CROSS JOIN LATERAL aclexplode(
-    COALESCE(p.proacl, acldefault('f', p.proowner))
-  ) AS acl
-  WHERE n.nspname !~ '^pg_'
-    AND n.nspname <> 'information_schema'
-    AND acl.grantee = 0
-    AND acl.privilege_type = 'EXECUTE'
-),
-routine_effective AS (
-  SELECT count(*) AS unexpected
-  FROM role_oids AS r
-  CROSS JOIN pg_proc AS p
-  JOIN pg_namespace AS n ON n.oid = p.pronamespace
-  WHERE n.nspname !~ '^pg_'
-    AND n.nspname <> 'information_schema'
-    AND (
-      COALESCE(has_function_privilege(r.catalog_oid, p.oid, 'EXECUTE'), false)
-      OR (
-        COALESCE(has_function_privilege(r.rls_oid, p.oid, 'EXECUTE'), false)
-        AND NOT COALESCE(
-          has_function_privilege(
-            r.authenticated_oid, p.oid, 'EXECUTE'
-          ),
-          false
-        )
-      )
-    )
 ),
 membership_shape AS (
   SELECT count(*) AS unexpected
@@ -401,17 +272,18 @@ default_acl_public AS (
   WHERE acl.grantee = 0
 ),
 owner_default_recurrence AS (
-  -- This full remote gate is expected-red until the separately reviewed
-  -- platform-admin step hardens reserved Supabase owners that the normal
-  -- migration principal cannot alter.
+  -- Re-scoped. The original form demanded a pg_default_acl row for six reserved
+  -- owners including supabase_auth_admin, supabase_storage_admin and
+  -- supabase_admin. ALTER DEFAULT PRIVILEGES FOR ROLE <owner> requires
+  -- membership in that owner, which `postgres` does not hold on Supabase Cloud
+  -- and cannot grant itself, so those three were unsatisfiable by construction.
+  -- What remains is exactly what 00483 asserts it did: the three owners this
+  -- principal can lawfully SET are private-by-default for future routines.
   SELECT count(*) AS unexpected
   FROM unnest(ARRAY[
     'postgres',
-    'supabase_admin',
-    'supabase_auth_admin',
-    'supabase_storage_admin',
-    'supabase_realtime_admin',
-    'supabase_functions_admin'
+    'supabase_functions_admin',
+    'supabase_realtime_admin'
   ]::text[]) AS expected(role_name)
   LEFT JOIN pg_roles AS owner ON owner.rolname = expected.role_name
   LEFT JOIN pg_default_acl AS d
@@ -435,35 +307,32 @@ counts AS (
     (database_public.connect_grants <> 1)::integer
       + database_public.unexpected + database_effective.unexpected
       + catalog_required.database_missing AS database_acl,
-    schema_public.unexpected + schema_effective.unexpected
+    public_grants.schema_public + role_effective.schema_effective
       + catalog_required.schema_missing AS schema_acl,
-    relation_public.unexpected + relation_effective.unexpected
+    public_grants.relation_public + role_effective.relation_effective
       + catalog_required.relation_missing AS relation_acl,
-    column_public.unexpected + column_effective.unexpected AS column_acl,
+    public_grants.column_public + role_effective.column_effective AS column_acl,
     catalog_shape.unexpected AS surface_shape,
-    sequence_public.unexpected + sequence_effective.unexpected AS sequence_acl,
-    routine_public.unexpected + routine_effective.unexpected AS routine_acl,
+    public_grants.sequence_public + role_effective.sequence_effective
+      AS sequence_acl,
+    role_effective.routine_effective AS routine_acl,
     membership_shape.unexpected
       + (required_rls_membership.actual <> 1)::integer AS membership_acl,
     default_acl_public.unexpected
-      + owner_default_recurrence.unexpected AS default_acl
+      + owner_default_recurrence.unexpected AS default_acl,
+    capability.out_of_band_reachable AS capability_acl,
+    capability.public_writable AS writable_acl,
+    capability.unregistered_storage_policies AS policy_acl
   FROM role_oids
   CROSS JOIN surface
   CROSS JOIN role_shape
   CROSS JOIN database_public
   CROSS JOIN database_effective
   CROSS JOIN catalog_required
-  CROSS JOIN schema_public
-  CROSS JOIN schema_effective
-  CROSS JOIN relation_public
-  CROSS JOIN relation_effective
-  CROSS JOIN column_public
-  CROSS JOIN column_effective
+  CROSS JOIN public_grants
+  CROSS JOIN role_effective
+  CROSS JOIN capability
   CROSS JOIN catalog_shape
-  CROSS JOIN sequence_public
-  CROSS JOIN sequence_effective
-  CROSS JOIN routine_public
-  CROSS JOIN routine_effective
   CROSS JOIN membership_shape
   CROSS JOIN required_rls_membership
   CROSS JOIN default_acl_public
@@ -483,9 +352,12 @@ SELECT
     AND routine_acl = 0
     AND membership_acl = 0
     AND default_acl = 0
+    AND capability_acl = 0
+    AND writable_acl = 0
+    AND policy_acl = 0
   ) AS cf_remote_acl_ok,
   format(
-    'REMOTE ACL CONFORMANCE FAILED: missing_roles=%s missing_surfaces=%s role_shape=%s database_acl=%s schema_acl=%s relation_acl=%s column_acl=%s surface_shape=%s sequence_acl=%s routine_acl=%s membership_acl=%s default_acl=%s',
+    'REMOTE ACL CONFORMANCE FAILED: missing_roles=%s missing_surfaces=%s role_shape=%s database_acl=%s schema_acl=%s relation_acl=%s column_acl=%s surface_shape=%s sequence_acl=%s routine_acl=%s membership_acl=%s default_acl=%s capability_acl=%s writable_acl=%s policy_acl=%s',
     missing_roles,
     missing_surfaces,
     role_shape,
@@ -497,7 +369,10 @@ SELECT
     sequence_acl,
     routine_acl,
     membership_acl,
-    default_acl
+    default_acl,
+    capability_acl,
+    writable_acl,
+    policy_acl
   ) AS cf_remote_acl_failure
 FROM counts
 \gset

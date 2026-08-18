@@ -662,10 +662,14 @@ BEGIN
             )::oid
           )
       )
-      -- The same four policies 00484 exempts in its own preflight: they are
-      -- owned by supabase_storage_admin, so neither the ordinary migration
-      -- principal nor supabase/platform-admin/00483_public_acl_allowlist.sql
-      -- (which contains no policy DDL at all) narrows them. Still open.
+      -- The same four policies 00484 exempts in its own preflight. 00484's
+      -- comment defers them to "the privileged 00483 platform-admin phase";
+      -- that phase is retired as unrunnable on Supabase Cloud and its script
+      -- contained no policy DDL in any case, so the deferral pointed at a step
+      -- that will never happen. All four are recorded instead as signed
+      -- storage_policy rows in
+      -- supabase/tests/edge_api/public_acl_exception_registry.sql — each is
+      -- already narrow, because its predicate binds the caller identity.
       AND NOT (
         policy.polrelid = 'storage.objects'::regclass
         AND policy.polname IN (
