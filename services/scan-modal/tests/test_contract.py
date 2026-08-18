@@ -27,6 +27,7 @@ from pathlib import Path
 import pytest
 
 from scan_modal import app as modal_app
+from scan_modal.core.transforms import parse_photo_rows
 from scan_modal.jobs import renders_job, splat_job, verify_job
 
 # tests/ → scan-modal/ → services/ → repo root
@@ -38,6 +39,10 @@ STAGES = ("verify", "splat", "renders")
 
 def load_stages() -> dict:
     return json.loads(_CONTRACT.read_text())["stages"]
+
+
+def load_variants() -> dict:
+    return json.loads(_CONTRACT.read_text())["variants"]
 
 
 def load_contract(stage: str = "verify") -> dict:
@@ -93,10 +98,62 @@ def test_each_stages_inputs_are_closed_no_cross_stage_keys():
     stages = load_stages()
     assert set(stages["verify"]["inputs"]) == {"meshUrl", "capturedRoomJsonUrl"}
     assert set(stages["splat"]["inputs"]) == {
-        "photosManifestUrl", "photoUrls", "capturedRoomJsonUrl",
+        "photosSource", "photosManifestUrl", "photoUrls", "capturedRoomJsonUrl",
         "photoUrlsCapped", "photoCount",
     }
     assert set(stages["renders"]["inputs"]) == {"glbUrl"}
+
+
+# ─── the splat pose-carrier fallback ────────────────────────────────────────
+
+
+def test_the_splat_rows_variant_is_accepted_and_spawns_splat():
+    variant = load_variants()["splat_rows"]
+    payload, reason = modal_app.parse_spawn_body(variant)
+    assert reason == "ok" and payload is not None
+    assert payload["inputs"] == variant["inputs"]
+
+    calls: list[tuple[str, dict]] = []
+    status, _ = modal_app.handle_spawn(
+        {"Authorization": "Bearer tok"}, variant,
+        lambda name, p: calls.append((name, p)), expected_token="tok",
+    )
+    assert status == 202 and calls[0][0] == "splat"
+
+
+def test_the_splat_rows_variant_carries_records_and_no_manifest_url():
+    inputs = load_variants()["splat_rows"]["inputs"]
+    assert set(inputs) == {
+        "photosSource", "photoRecords", "photoUrls", "capturedRoomJsonUrl",
+        "photoUrlsCapped", "photoCount",
+    }
+    assert inputs["photosSource"] == "rows"
+    assert "photosManifestUrl" not in inputs
+
+
+def test_the_two_splat_carriers_differ_only_in_the_carrier():
+    """Everything except the pose carrier must be identical across the two
+    splat shapes — if the fallback drifted into a second dialect, the job would
+    need two readers instead of one."""
+    manifest = set(load_stages()["splat"]["inputs"])
+    rows = set(load_variants()["splat_rows"]["inputs"])
+    assert manifest - rows == {"photosManifestUrl"}
+    assert rows - manifest == {"photoRecords"}
+
+
+def test_splat_job_reads_the_rows_variant_without_touching_the_network(tmp_path, monkeypatch):
+    """The fallback's whole point: no sidecar to download. The job must build
+    its poses from the inlined records and reach the network only for the
+    photos and the parametric room."""
+    monkeypatch.setattr(splat_job, "CACHE_ROOT", tmp_path / "cache")
+    variant = load_variants()["splat_rows"]
+    reached = _urls_reached(splat_job, variant)
+
+    assert reached, "splat never resolved an input URL from the rows variant"
+    assert reached <= _contract_urls(variant)
+    # And the poses it would have used parse cleanly from the contract's records.
+    poses = parse_photo_rows(variant["inputs"]["photoRecords"])
+    assert [p.relative_path for p in poses] == ["hero.heic", "auto_001.50.heic"]
 
 
 class _StopHere(RuntimeError):

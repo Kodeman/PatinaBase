@@ -16,6 +16,7 @@ import {
   decideDispatchFailure,
   DISPATCH_TASK_TYPES,
   extractTaskInputIds,
+  isPoseBearing,
   isSpawnSuccess,
   KEY_PREFIX_REJECTED,
   keyMatchesScanOwner,
@@ -216,6 +217,7 @@ Deno.test("buildModalDispatchBody: a splat body carries the cap fields verbatim"
     traceId: "trace-1",
     inputs: {
       kind: "splat",
+      photosSource: "manifest",
       photosManifestUrl: "https://signed.example/photos_metadata.ndjson?sig=1",
       photoUrls: ["https://signed.example/a.heic?sig=2"],
       capturedRoomJsonUrl: "https://signed.example/captured_room.json?sig=3",
@@ -224,6 +226,7 @@ Deno.test("buildModalDispatchBody: a splat body carries the cap fields verbatim"
     },
   });
   assertEquals(body.inputs, {
+    photosSource: "manifest",
     photosManifestUrl: "https://signed.example/photos_metadata.ndjson?sig=1",
     photoUrls: ["https://signed.example/a.heic?sig=2"],
     capturedRoomJsonUrl: "https://signed.example/captured_room.json?sig=3",
@@ -413,10 +416,17 @@ Deno.test("buildLogLine: env_missing carries only 'missing'", () => {
 
 type ContractBody = Record<string, unknown>;
 
-async function readContract(): Promise<Record<string, ContractBody>> {
+async function readContractDoc(): Promise<Record<string, Record<string, ContractBody>>> {
   const url = new URL("./contract.json", import.meta.url);
-  const doc = JSON.parse(await Deno.readTextFile(url)) as Record<string, unknown>;
-  return doc.stages as Record<string, ContractBody>;
+  return JSON.parse(await Deno.readTextFile(url)) as Record<string, Record<string, ContractBody>>;
+}
+
+async function readContract(): Promise<Record<string, ContractBody>> {
+  return (await readContractDoc()).stages;
+}
+
+async function readVariants(): Promise<Record<string, ContractBody>> {
+  return (await readContractDoc()).variants;
 }
 
 function contractKeys(o: Record<string, unknown>): string[] {
@@ -466,9 +476,122 @@ Deno.test("contract.json: each stage's inputs are closed — no cross-stage keys
   );
   assertEquals(
     Object.keys(stages.splat.inputs as ContractBody).sort(),
-    ["capturedRoomJsonUrl", "photoCount", "photoUrls", "photoUrlsCapped", "photosManifestUrl"],
+    [
+      "capturedRoomJsonUrl", "photoCount", "photoUrls", "photoUrlsCapped",
+      "photosManifestUrl", "photosSource",
+    ],
   );
   assertEquals(Object.keys(stages.renders.inputs as ContractBody).sort(), ["glbUrl"]);
+});
+
+// ─── the splat pose-carrier fallback ───────────────────────────────────────
+
+Deno.test("contract.json: the splat_rows variant round-trips through the builder", async () => {
+  const variant = (await readVariants()).splat_rows;
+  const built = buildModalDispatchBody(paramsFor("splat", variant));
+  assertEquals(contractKeys(built), contractKeys(variant));
+  assertEquals(built.inputs, variant.inputs);
+  assertEquals(built.taskType, "scan_pipeline.splat");
+});
+
+Deno.test("contract.json: splat_rows carries photoRecords and NO manifest url", async () => {
+  const variant = (await readVariants()).splat_rows;
+  const inputs = variant.inputs as ContractBody;
+  assertEquals(Object.keys(inputs).sort(), [
+    "capturedRoomJsonUrl", "photoCount", "photoRecords", "photoUrls",
+    "photoUrlsCapped", "photosSource",
+  ]);
+  assertEquals(inputs.photosSource, "rows");
+  assertEquals(inputs.photosManifestUrl, undefined);
+});
+
+Deno.test("buildModalDispatchBody: exactly one pose carrier reaches the wire", async () => {
+  const stages = await readContract();
+  const variants = await readVariants();
+
+  const manifestBody = buildModalDispatchBody(paramsFor("splat", stages.splat));
+  const manifestInputs = manifestBody.inputs as Record<string, unknown>;
+  assertEquals(manifestInputs.photosSource, "manifest");
+  assert("photosManifestUrl" in manifestInputs);
+  assertFalse("photoRecords" in manifestInputs);
+
+  const rowsBody = buildModalDispatchBody(paramsFor("splat", variants.splat_rows));
+  const rowsInputs = rowsBody.inputs as Record<string, unknown>;
+  assertEquals(rowsInputs.photosSource, "rows");
+  assert("photoRecords" in rowsInputs);
+  // Not merely undefined — ABSENT. The Modal side branches on truthiness of
+  // photosManifestUrl, so an explicit undefined key would be equivalent here,
+  // but an explicit *null* would not, and absence is the shape that cannot be
+  // read as "there is a manifest".
+  assertFalse("photosManifestUrl" in rowsInputs);
+});
+
+Deno.test("isPoseBearing: a complete row is usable", async () => {
+  const variant = (await readVariants()).splat_rows;
+  for (const record of (variant.inputs as ContractBody).photoRecords as unknown[]) {
+    assert(isPoseBearing(record as never));
+  }
+});
+
+Deno.test("isPoseBearing: a null or absent pose is dropped, never guessed at", () => {
+  assertFalse(isPoseBearing(null));
+  assertFalse(isPoseBearing(undefined));
+  assertFalse(isPoseBearing({} as never));
+});
+
+Deno.test("isPoseBearing: a wrong-length or non-finite transform is dropped", () => {
+  const good = {
+    fileName: "a.heic",
+    cameraTransform: Array.from({ length: 16 }, () => 1),
+    cameraIntrinsics: { fx: 1, fy: 1, cx: 1, cy: 1, width: 2, height: 2 },
+    width: 2,
+    height: 2,
+  };
+  assert(isPoseBearing(good));
+  assertFalse(isPoseBearing({ ...good, cameraTransform: [1, 2, 3] }));
+  assertFalse(isPoseBearing({
+    ...good,
+    cameraTransform: [...Array.from({ length: 15 }, () => 1), Number.NaN],
+  }));
+});
+
+Deno.test("isPoseBearing: incomplete intrinsics are dropped", () => {
+  const base = {
+    fileName: "a.heic",
+    cameraTransform: Array.from({ length: 16 }, () => 1),
+    width: 2,
+    height: 2,
+  };
+  assertFalse(isPoseBearing({ ...base, cameraIntrinsics: { fx: 1, fy: 1, cx: 1, cy: 1 } } as never));
+  assertFalse(isPoseBearing({ ...base, cameraIntrinsics: null } as never));
+});
+
+Deno.test("isPoseBearing: a zero or missing image extent is dropped", () => {
+  const base = {
+    fileName: "a.heic",
+    cameraTransform: Array.from({ length: 16 }, () => 1),
+    cameraIntrinsics: { fx: 1, fy: 1, cx: 1, cy: 1, width: 2, height: 2 },
+    width: 2,
+    height: 2,
+  };
+  assertFalse(isPoseBearing({ ...base, width: 0 }));
+  assertFalse(isPoseBearing({ ...base, height: undefined } as never));
+  assertFalse(isPoseBearing({ ...base, fileName: "" }));
+});
+
+Deno.test("buildLogLine: dispatch_spawned carries photos_source and still no url", () => {
+  const line = JSON.parse(
+    buildLogLine("dispatch-scan-modal", "dispatch_spawned", {
+      task_id: "t1",
+      scan_id: "s1",
+      task_type: "scan_pipeline.splat",
+      http_status: 202,
+      photos_source: "rows",
+      photos_manifest_url: "https://signed.example/x?token=leak",
+    }),
+  );
+  assertEquals(line.photos_source, "rows");
+  assertEquals(line.photos_manifest_url, undefined);
 });
 
 Deno.test("contract.json: every stage carries the lease token", async () => {

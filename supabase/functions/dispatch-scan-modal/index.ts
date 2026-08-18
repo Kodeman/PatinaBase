@@ -40,6 +40,7 @@ import {
   DISPATCH_TASK_TYPES,
   decideDispatchFailure,
   extractTaskInputIds,
+  isPoseBearing,
   isSpawnSuccess,
   KEY_PREFIX_REJECTED,
   keyMatchesScanOwner,
@@ -53,6 +54,8 @@ import {
   type ClaimedTaskRow,
   type DispatchInputs,
   type DispatchStage,
+  type PhotoRecord,
+  type PhotosSource,
 } from "./lib.ts";
 
 const FN = "dispatch-scan-modal";
@@ -115,9 +118,21 @@ interface RoomFileRow {
 }
 
 interface RoomScanImageRow {
+  id: string;
   image_url: string | null;
   display_order: number | null;
   captured_at: string | null;
+  camera_transform: number[] | null;
+  camera_intrinsics: Record<string, number> | null;
+  width: number | null;
+  height: number | null;
+}
+
+/** A photo object plus whatever pose the row carries. The pose half is only
+ *  read when the sidecar manifest is missing. */
+interface PhotoCandidate {
+  key: string;
+  record: PhotoRecord;
 }
 
 /** Derive a bucket key from a stored url column AND prove it belongs to this
@@ -166,27 +181,51 @@ async function signOne(admin: Supa, key: string, what: string): Promise<string> 
  *  v2 user-shutter capture property and defaults false, so filtering on it
  *  would hand splat an empty photo list for most existing scans.
  *
- *  Order is `display_order, captured_at` — the same ordering
+ *  Order is `display_order, captured_at, id` — the same ordering
  *  packages/supabase's use-room-scan-photos hook uses, so "manifest order"
- *  means one thing across the product. Duplicate (scan_id, image_url) rows
- *  exist in prod from retried batch inserts; the key set is deduped. */
-async function resolvePhotoKeys(admin: Supa, scanRow: RoomScanRow): Promise<string[]> {
+ *  means one thing across the product, plus `id` as a total tie-break. Without
+ *  the tie-break, rows sharing a display_order and captured_at come back in
+ *  whatever order Postgres feels like, which decides WHICH photos fall off the
+ *  80-item cap — so the same scan could dispatch a different 80 on each retry.
+ *  Duplicate (scan_id, image_url) rows exist in prod from retried batch
+ *  inserts; the key set is deduped.
+ *
+ *  The pose columns come back too. They are read only on the fallback path, but
+ *  they ride the same query because a second round trip to fetch them would be
+ *  a second chance for the two result sets to disagree about order. */
+async function resolvePhotoCandidates(
+  admin: Supa,
+  scanRow: RoomScanRow,
+): Promise<PhotoCandidate[]> {
   const { data, error } = await admin
     .from("room_scan_images")
-    .select("image_url, display_order, captured_at")
+    .select("id, image_url, display_order, captured_at, camera_transform, camera_intrinsics, width, height")
     .eq("scan_id", scanRow.id)
     .order("display_order", { ascending: true })
-    .order("captured_at", { ascending: true });
+    .order("captured_at", { ascending: true })
+    .order("id", { ascending: true });
   if (error) throw new Error("room_scan_images lookup failed");
-  const keys: string[] = [];
+  const candidates: PhotoCandidate[] = [];
   const seen = new Set<string>();
   for (const row of (data ?? []) as RoomScanImageRow[]) {
     const key = ownedKey(row.image_url, scanRow);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    keys.push(key);
+    candidates.push({
+      key,
+      record: {
+        // The Modal side keys frames on the object's basename, which is what
+        // the manifest's `relativePath` reduces to as well — so both carriers
+        // agree on how a photo is named.
+        fileName: key.split("/").pop() ?? key,
+        cameraTransform: row.camera_transform as number[],
+        cameraIntrinsics: row.camera_intrinsics as PhotoRecord["cameraIntrinsics"],
+        width: row.width as number,
+        height: row.height as number,
+      },
+    });
   }
-  return keys;
+  return candidates;
 }
 
 /** Resolve the presigned inputs one Modal STAGE needs for one task.
@@ -235,23 +274,48 @@ async function resolveDispatchInputs(
   if (!capturedRoomKey) throw new Error("missing captured_room input key");
 
   if (stage === "splat") {
+    // A null/unusable photos_manifest_url is the COMMON case, not a fault: the
+    // ingest stage strips `photosManifest` as device-local, so the sidecar was
+    // never uploaded for a large share of scans. Falling back to the rows is
+    // what makes splat runnable for them at all. (A manifest url that IS set
+    // but points outside the scan's own prefix still throws KeyPrefixError from
+    // ownedKey — that is a mis-pointed column, not an absent sidecar.)
     const manifestKey = ownedKey(scanRow.photos_manifest_url, scanRow);
-    if (!manifestKey) throw new Error("missing photos_manifest input key");
-    const allKeys = await resolvePhotoKeys(admin, scanRow);
-    if (allKeys.length === 0) throw new Error("scan has no room_scan_images rows");
-    const cap = capPhotoKeys(allKeys);
-    // One batched call for the photos (up to PHOTO_URL_CAP), two singles for
-    // the manifest and the parametric room.
-    const [photoUrls, photosManifestUrl, capturedRoomJsonUrl] = await Promise.all([
+    const photosSource: PhotosSource = manifestKey ? "manifest" : "rows";
+
+    const candidates = await resolvePhotoCandidates(admin, scanRow);
+    if (candidates.length === 0) throw new Error("scan has no room_scan_images rows");
+
+    // On the manifest path the sidecar supplies the poses, so every photo is
+    // usable. On the fallback path a row without a transform or intrinsics
+    // cannot become a frame, and is dropped rather than guessed at. Filtering
+    // BEFORE the cap matters: capping first would spend cap slots on rows that
+    // are then discarded, leaving fewer than 80 trainable views.
+    const usable = manifestKey ? candidates : candidates.filter((c) => isPoseBearing(c.record));
+    if (usable.length === 0) {
+      // Only now is it a hard failure: no sidecar AND not one pose-bearing row.
+      throw new Error("scan has no photos manifest and no pose-bearing room_scan_images rows");
+    }
+
+    const cap = capPhotoKeys(usable.map((c) => c.key));
+    const capped = usable.slice(0, cap.keys.length);
+
+    // One batched call for the photos (up to PHOTO_URL_CAP); the manifest is
+    // only signed on the path that has one.
+    const [photoUrls, capturedRoomJsonUrl, photosManifestUrl] = await Promise.all([
       signKeys(admin, cap.keys, "photo"),
-      signOne(admin, manifestKey, "photos_manifest"),
       signOne(admin, capturedRoomKey, "captured_room"),
+      manifestKey ? signOne(admin, manifestKey, "photos_manifest") : Promise.resolve(undefined),
     ]);
+
     return {
       roomFileId,
       inputs: {
         kind: "splat",
-        photosManifestUrl,
+        photosSource,
+        ...(photosSource === "manifest"
+          ? { photosManifestUrl }
+          : { photoRecords: capped.map((c) => c.record) }),
         photoUrls,
         capturedRoomJsonUrl,
         photoUrlsCapped: cap.capped,
@@ -393,6 +457,8 @@ async function dispatchOne(
       scan_id: scanId,
       task_type: task.task_type,
       http_status: httpStatus,
+      // Which pose carrier splat got. Null for the stages that have none.
+      photos_source: resolved.inputs.kind === "splat" ? resolved.inputs.photosSource : null,
     });
     return "spawned";
   }
