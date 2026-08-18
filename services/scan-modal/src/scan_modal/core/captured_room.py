@@ -84,12 +84,20 @@ def parse_captured_room_meters(json: Any) -> RoomModel:
         dx = d[0]
         tx, ty, tz = t[12], t[13], t[14]
         hx, hz = t[0], t[2]  # wall local +x basis, XZ components
-        if not all(math.isfinite(v) for v in (dx, tx, ty, tz, hx, hz)):
+        # `ty` is deliberately NOT in this guard — it matches the reference
+        # parser, which keeps a wall with a non-finite vertical translation and
+        # degrades `base_y_m` to NaN. `verify` drops such a wall at
+        # `_wall_frame` anyway (it needs a finite base to band points against),
+        # but it drops it as an UNMATCHED WALL with a warning, which is a
+        # reported gap. Skipping it here instead made the wall vanish from the
+        # model entirely, so the room silently verified as having fewer walls
+        # than it has.
+        if not all(math.isfinite(v) for v in (dx, tx, tz, hx, hz)):
             rm.warnings.append(f"wall {_identifier(w)} non-finite; skipped")
             continue
         half = dx / 2.0
         height = d[1] if len(d) > 1 and math.isfinite(d[1]) else math.nan
-        base_y = (ty - height / 2.0) if math.isfinite(height) else math.nan
+        base_y = (ty - height / 2.0) if (math.isfinite(ty) and math.isfinite(height)) else math.nan
         rm.walls.append(
             WallDim(
                 apple_id=_identifier(w),

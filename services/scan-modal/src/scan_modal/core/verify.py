@@ -60,6 +60,13 @@ class VerifyConfig:
     orient_tol_deg: float = 20.0
     # ...and its surface sits within this distance of the wall centreline.
     match_dist_m: float = 0.35
+    # ...and its inliers actually RUN ALONG the wall: at least this fraction of
+    # the parametric span must be covered by the plane's extent. Orientation
+    # and centreline distance alone cannot tell a wall from a short parallel
+    # surface a few centimetres in front of it (a closet face, a wardrobe back,
+    # a chimney breast) — that surface passes both tests and then reports its
+    # own length as the wall's.
+    min_extent_overlap: float = 0.40
     # A wall's span residual is acceptable within this many mm.
     tolerance_mm: float = 50.0
     # Planarity RMS above this many mm means the wall is not flat.
@@ -380,6 +387,20 @@ def _orient_outward(frames: list[_WallFrame]) -> list[_WallFrame]:
     the same physical displacement would report opposite signs. Anchoring on the
     centroid of the wall centres makes "+" mean "the mesh wall sits outside the
     model" for every wall in the room.
+
+    CAVEAT — non-convex rooms. The authoritative facing for a wall is its own
+    RoomPlan transform's local +z basis, but the parser this module reads
+    (`captured_room.parse_captured_room_meters`, and the reference it copies,
+    `services/scan-pipeline/.../stages/captured_room.py`) carries only the +x
+    basis and the endpoints; no facing basis reaches `WallDim`, so there is
+    nothing here to orient by. The centroid stands in for it, and it is exact
+    only while the room is convex. In an L-shaped or U-shaped room the centroid
+    can fall OUTSIDE the wall's own leg, and the two walls flanking a reflex
+    corner can have their normals flipped inward. That inverts the SIGN of
+    `offset_mm` for those walls; the magnitude, `delta_mm`, `within_tolerance`
+    and `curved_flag` are all unaffected, since matching keys on |cos| and
+    every residual below is taken as an absolute value. Carrying the facing
+    basis through the parser is the real fix, and it belongs with the parser.
     """
     if not frames:
         return frames
@@ -394,8 +415,35 @@ def _orient_outward(frames: list[_WallFrame]) -> list[_WallFrame]:
     return oriented
 
 
+def _extent_overlap(frame: _WallFrame, plane: Plane) -> float:
+    """Fraction of the wall's parametric span the plane's inliers actually cover.
+
+    Projects the plane's own inlier points onto the wall's length axis and
+    intersects that interval with the parametric span [-L/2, +L/2]. A full-width
+    wall scores ~1; a 1.5 m closet face standing in front of a 4 m wall scores
+    ~0.37 and is refused by the gate in `_match`.
+    """
+    if not math.isfinite(frame.length_m) or frame.length_m <= 0:
+        return 0.0
+    if len(plane.points) == 0:
+        return 0.0
+    half = frame.length_m / 2.0
+    lateral = (plane.points - frame.center) @ frame.direction
+    lo = float(lateral.min())
+    hi = float(lateral.max())
+    overlap = min(hi, half) - max(lo, -half)
+    return max(overlap, 0.0) / frame.length_m
+
+
 def _match(frames: list[_WallFrame], planes: list[Plane], cfg: VerifyConfig) -> dict[int, int]:
-    """Greedy nearest-plane assignment, one plane per wall and vice versa."""
+    """Greedy nearest-plane assignment, one plane per wall and vice versa.
+
+    Three gates, and all three are necessary: orientation (the plane faces the
+    same way), centreline distance (it is where the wall is), and extent overlap
+    (it runs the wall's length). Without the third, any parallel surface inside
+    `match_dist_m` — a closet face 30 cm proud of the wall behind it — passes,
+    and the wall then reports that surface's length as its own.
+    """
     orient_cos = math.cos(math.radians(cfg.orient_tol_deg))
     candidates: list[tuple[float, int, int]] = []
     for wi, frame in enumerate(frames):
@@ -404,6 +452,8 @@ def _match(frames: list[_WallFrame], planes: list[Plane], cfg: VerifyConfig) -> 
                 continue
             dist = abs(float(plane.normal @ frame.center + plane.offset))
             if dist > cfg.match_dist_m:
+                continue
+            if _extent_overlap(frame, plane) < cfg.min_extent_overlap:
                 continue
             candidates.append((dist, wi, pi))
     # Sorting on (distance, wall index, plane index) makes ties resolve the same
@@ -421,30 +471,76 @@ def _match(frames: list[_WallFrame], planes: list[Plane], cfg: VerifyConfig) -> 
     return pairs
 
 
-def _wall_points(
+@dataclass(frozen=True)
+class _WallPoints:
+    """One matched wall's exclusively-owned points, in wall coordinates."""
+
+    residual: np.ndarray   # perpendicular distance to the matched plane
+    lateral: np.ndarray    # position along the wall's length axis
+    owned: np.ndarray      # boolean mask into the downsampled cloud
+
+
+def _assign_wall_points(
     points: np.ndarray,
-    plane: Plane,
-    frame: _WallFrame,
+    matched: list[tuple[_WallFrame, Plane]],
     cfg: VerifyConfig,
-    lateral_half: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Points belonging to this wall: (perpendicular residuals, lateral coords).
+) -> list[_WallPoints]:
+    """Split the cloud among the matched walls — each point to AT MOST ONE.
 
     Banded on the matched plane rather than taken from RANSAC's inlier set,
     because RANSAC inliers are by construction within `ransac_dist` — measuring
     planarity on them could never see a bow.
+
+    Exclusive because the bands OVERLAP AT CORNERS. `wall_band_m` is 15 cm, so
+    within 15 cm of a corner the points of wall A sit inside wall B's band and
+    were counted toward both: each wall measured itself as running past its own
+    corner and into its neighbour, inflating both spans by up to the band width
+    and pulling the neighbour's junction into its planarity RMS. A point now
+    goes to the wall whose plane it is nearest, perpendicular distance deciding.
+
+    THE ONE EXCEPTION, and why it is not the bug being fixed. Two walls meeting
+    at a corner share their intersection line, and a point ON that line is
+    exactly equidistant from both planes — it is not "wall B's point leaking
+    into wall A", it is the ENDPOINT OF BOTH WALLS. Awarding it to whichever
+    wall happened to be matched first robs the other of its own last sample: on
+    the 4 m × 3 m synthetic room, strict nearest-wins made every 3 m wall
+    measure 2.90 m — a 100 mm error invented out of a pixel-perfect capture.
+    So the winner must be nearer by a real margin (`ransac_dist`, the same 2 cm
+    band a plane fit is trusted within) before a point is taken away. Inside
+    that margin the point sits on the shared corner line, where it cannot
+    stretch either wall past its own parametric length; outside it, ownership
+    is strict and a neighbour's surface is fully excluded.
     """
-    delta = points - frame.center
-    residual = points @ plane.normal + plane.offset
-    lateral = delta @ frame.direction
-    y = points[:, 1]
-    mask = (
-        (np.abs(residual) <= cfg.wall_band_m)
-        & (np.abs(lateral) <= lateral_half)
-        & (y >= frame.base_y_m + cfg.wall_margin_m)
-        & (y <= frame.base_y_m + frame.height_m - cfg.wall_margin_m)
-    )
-    return residual[mask], lateral[mask]
+    n = len(points)
+    best = np.full(n, np.inf)
+    per_wall: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
+
+    for frame, plane in matched:
+        residual = points @ plane.normal + plane.offset
+        lateral = (points - frame.center) @ frame.direction
+        y = points[:, 1]
+        eligible = (
+            (np.abs(residual) <= cfg.wall_band_m)
+            # The widest band any consumer below asks for; the planarity set is
+            # a narrower subset of the same owned points.
+            & (np.abs(lateral) <= frame.length_m / 2.0 + cfg.wall_band_m)
+            & (y >= frame.base_y_m + cfg.wall_margin_m)
+            & (y <= frame.base_y_m + frame.height_m - cfg.wall_margin_m)
+        )
+        distance = np.where(eligible, np.abs(residual), np.inf)
+        np.minimum(best, distance, out=best)
+        per_wall.append((residual, lateral, distance))
+
+    # Second pass: a wall keeps a point unless some other wall's plane is
+    # nearer by more than the tie margin.
+    return [
+        _WallPoints(
+            residual=residual,
+            lateral=lateral,
+            owned=np.isfinite(distance) & (distance <= best + cfg.ransac_dist),
+        )
+        for residual, lateral, distance in per_wall
+    ]
 
 
 def verify_room(
@@ -488,6 +584,14 @@ def verify_room(
 
     pairs = _match(frames, vertical_planes, cfg)
 
+    # One exclusive split of the cloud across every matched wall, done once —
+    # a per-wall pass could not know what its neighbours had already claimed.
+    matched_order = [wi for wi in range(len(frames)) if wi in pairs]
+    wall_points = _assign_wall_points(
+        points, [(frames[wi], vertical_planes[pairs[wi]]) for wi in matched_order], cfg
+    )
+    slot_of = {wi: slot for slot, wi in enumerate(matched_order)}
+
     checks: list[WallCheck] = []
     for wi, frame in enumerate(frames):
         pi = pairs.get(wi)
@@ -495,12 +599,15 @@ def verify_room(
             unmatched_walls.append(frame.ref)
             continue
         plane = vertical_planes[pi]
-        span_residual, span_lateral = _wall_points(
-            points, plane, frame, cfg, frame.length_m / 2.0 + cfg.wall_band_m
-        )
-        flat_residual, _ = _wall_points(
-            points, plane, frame, cfg, max(frame.length_m / 2.0 - cfg.wall_margin_m, 0.0)
-        )
+        owned = wall_points[slot_of[wi]]
+        span_mask = owned.owned
+        span_residual = owned.residual[span_mask]
+        span_lateral = owned.lateral[span_mask]
+        # Planarity is read strictly inside the wall — the lateral margin keeps
+        # the perpendicular walls' junction points out of the RMS.
+        flat_half = max(frame.length_m / 2.0 - cfg.wall_margin_m, 0.0)
+        flat_mask = span_mask & (np.abs(owned.lateral) <= flat_half)
+        flat_residual = owned.residual[flat_mask]
         if len(span_lateral) == 0:
             unmatched_walls.append(frame.ref)
             warnings.append(f"wall {frame.ref} matched a plane with no wall-band points")

@@ -142,6 +142,73 @@ def test_sparse_cloud_degrades_instead_of_throwing(parametric, backend):
     assert any("too sparse" in w for w in result.warnings)
 
 
+# ── matching: extent overlap and exclusive point ownership ──────────────────
+
+
+def test_l_shaped_room_matches_all_six_walls(backend):
+    """Six walls, two of them meeting at a 270° reflex corner, and three
+    different lengths. Every one must match its own plane and measure true —
+    the corner bands overlap here just as they do in a rectangle, and one wall
+    stealing a neighbour's points would show up immediately as a bad span."""
+    parametric = parse_captured_room_meters(syn.l_room_json())
+    assert [w.apple_id for w in parametric.walls] == syn.L_ROOM_WALL_REFS
+
+    result = verify_room(syn.l_room_points(), parametric, cfg(backend))
+
+    assert result.unmatched_walls == []
+    assert result.walls_checked == 6
+    assert [w.wall_ref for w in result.walls] == syn.L_ROOM_WALL_REFS
+    assert result.walls_within_tolerance == 6
+    assert result.curved_walls == []
+    for wall, ref in zip(result.walls, syn.L_ROOM_WALL_REFS):
+        expected = next(w for w in parametric.walls if w.apple_id == ref).length_m * 1000.0
+        assert wall.parametric_mm == pytest.approx(expected)
+        assert wall.mesh_mm == pytest.approx(expected, abs=5.0)
+    # Six walls, six distinct planes — no plane serves two walls.
+    assert result.unmatched_planes == []
+
+
+def test_short_parallel_closet_face_is_not_matched_as_the_wall_behind_it(backend):
+    """The north wall is unscanned and a 1.5 m closet face stands 30 cm in front
+    of it — inside `match_dist_m`, parallel, and the nearest vertical plane
+    there is. Only extent overlap can refuse it."""
+    parametric = parse_captured_room_meters(syn.captured_room_json())
+    points = syn.closet_room_points()
+
+    result = verify_room(points, parametric, cfg(backend))
+
+    assert result.unmatched_walls == ["wall-north"]
+    assert {w.wall_ref for w in result.walls} == WALL_REFS - {"wall-north"}
+    assert result.walls_within_tolerance == 3
+    # The closet face is a real vertical plane, so it surfaces as unmatched
+    # rather than vanishing.
+    assert len(result.unmatched_planes) == 1
+
+
+def test_the_closet_gate_is_the_extent_overlap_and_nothing_else(backend):
+    """The negative half — and the reason this gate is worth having.
+
+    Open the gate and the SAME input verifies CLEAN: the north wall matches the
+    closet face, and because the closet plane extends through the west and east
+    walls' corner points it even measures the full 4 m and reports
+    `within_tolerance`. A wall that was never scanned comes back perfect. The
+    only trace is a 300 mm `offset_mm`, and nothing looks at that.
+
+    So the failure this closes is not a wrong number — it is a CONFIDENT wrong
+    number, which is the one thing a verification stage may not produce."""
+    parametric = parse_captured_room_meters(syn.captured_room_json())
+    points = syn.closet_room_points()
+
+    ungated = verify_room(points, parametric, cfg(backend, min_extent_overlap=0.0))
+
+    assert ungated.unmatched_walls == []
+    assert ungated.walls_within_tolerance == 4          # every one a false pass
+    north = next(w for w in ungated.walls if w.wall_ref == "wall-north")
+    assert north.within_tolerance is True
+    # The standoff is the only evidence, and it is the thing the gate keys on.
+    assert north.offset_mm == pytest.approx(-300.0, abs=5.0)
+
+
 def test_degenerate_wall_degrades_out(backend):
     doc = syn.captured_room_json()
     doc["walls"].append(
