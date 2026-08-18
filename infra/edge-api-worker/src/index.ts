@@ -1,8 +1,11 @@
 import type { CatalogProductSummary } from '@patina/types';
 import {
   CatalogRequestError,
+  catalogDisagreeingIdCount,
+  catalogResultsDigest,
   catalogResultsMatch,
   parseCatalogIds,
+  queryCatalogViaFresh,
   queryCatalogViaHyperdrive,
   queryCatalogViaLegacy,
 } from './catalog';
@@ -32,6 +35,10 @@ export interface WorkerDependencies {
     env: EdgeApiEnv,
     ids: string[],
   ): Promise<CatalogProductSummary[]>;
+  queryFresh(
+    env: EdgeApiEnv,
+    ids: string[],
+  ): Promise<CatalogProductSummary[]>;
   queryLegacy(
     env: EdgeApiEnv,
     ids: string[],
@@ -47,6 +54,7 @@ export interface WorkerDependencies {
 const defaultDependencies: WorkerDependencies = {
   fetcher: (input, init) => fetch(input, init),
   queryHyperdrive: queryCatalogViaHyperdrive,
+  queryFresh: queryCatalogViaFresh,
   queryLegacy: queryCatalogViaLegacy,
   probe: probeBinding,
   authorizeHealth: isHealthAuthorized,
@@ -65,9 +73,10 @@ function privateJson(body: unknown, status: number, traceId: string): Response {
   });
 }
 
-async function publicCatalogResponse(
+async function catalogResponse(
   products: CatalogProductSummary[],
   traceId: string,
+  verified = true,
 ): Promise<Response> {
   const body = JSON.stringify(products);
   const digest = await crypto.subtle.digest(
@@ -81,7 +90,11 @@ async function publicCatalogResponse(
     status: 200,
     headers: {
       'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'public, max-age=60, stale-while-revalidate=15',
+      // An unverified body is a single uncompared read: serve it for
+      // availability, but never let a shared cache retain it.
+      'cache-control': verified
+        ? 'public, max-age=60, stale-while-revalidate=15'
+        : 'private, no-store',
       etag,
       'access-control-allow-origin': '*',
       'x-patina-trace-id': traceId,
@@ -112,7 +125,7 @@ async function legacyCatalog(
   dependencies: WorkerDependencies,
 ): Promise<Response> {
   try {
-    return publicCatalogResponse(
+    return catalogResponse(
       await dependencies.queryLegacy(env, ids, request.signal),
       traceId,
     );
@@ -167,31 +180,35 @@ async function handleCatalog(
       return privateJson({ error: 'catalog_unavailable' }, 503, traceId);
     }
     ctx.waitUntil(
-      dependencies
-        .queryHyperdrive(env, ids)
-        .then((shadow) => {
-          if (!catalogResultsMatch(legacy, shadow)) {
-            dependencies.log({
-              event: ALERT_EVENTS.catalogShadowMismatch,
-              severity: 'critical',
-              traceId,
-              routeClass: 'catalog.products',
-              legacyCount: legacy.length,
-              hyperdriveCount: shadow.length,
-              fallback: 'legacy',
-            });
-          }
-        })
-        .catch(() => {
-          logCatalogFailure(
-            dependencies,
-            ALERT_EVENTS.catalogHyperdriveFailure,
+      Promise.allSettled([
+        dependencies.queryFresh(env, ids),
+        dependencies.queryHyperdrive(env, ids),
+      ]).then(([freshResult, cachedResult]) => {
+        if (
+          freshResult.status === 'rejected' ||
+          cachedResult.status === 'rejected'
+        ) {
+          dependencies.log({
+            event: ALERT_EVENTS.catalogHyperdriveFailure,
+            severity: 'error',
             traceId,
-            'legacy',
-          );
-        }),
+            routeClass: 'catalog.products',
+            binding: failingBinding(
+              freshResult.status === 'rejected',
+              cachedResult.status === 'rejected',
+            ),
+            fallback: 'legacy',
+          });
+          return;
+        }
+        logComparison(dependencies, traceId, 'legacy_vs_fresh_vs_cached', {
+          legacy,
+          fresh: freshResult.value,
+          cached: cachedResult.value,
+        });
+      }),
     );
-    return publicCatalogResponse(legacy, traceId);
+    return catalogResponse(legacy, traceId);
   }
 
   const selected = isSelectedForRollout(
@@ -212,57 +229,112 @@ async function handleCatalog(
       legacyResult.status === 'fulfilled' ? 'legacy' : 'unavailable',
     );
     if (legacyResult.status === 'fulfilled') {
-      return publicCatalogResponse(legacyResult.value, traceId);
+      return catalogResponse(legacyResult.value, traceId);
     }
     return privateJson({ error: 'catalog_unavailable' }, 503, traceId);
   }
 
-  if (legacyResult.status === 'fulfilled') {
-    if (!catalogResultsMatch(legacyResult.value, hyperdriveResult.value)) {
-      dependencies.log({
-        event: ALERT_EVENTS.catalogShadowMismatch,
-        severity: 'critical',
-        traceId,
-        routeClass: 'catalog.products',
-        legacyCount: legacyResult.value.length,
-        hyperdriveCount: hyperdriveResult.value.length,
-        fallback: 'legacy',
-      });
-      return publicCatalogResponse(legacyResult.value, traceId);
-    }
-  } else {
-    logCatalogFailure(
-      dependencies,
-      ALERT_EVENTS.catalogLegacyFailure,
+  if (legacyResult.status === 'rejected') {
+    // The comparison that authorizes serving the public view never ran.
+    dependencies.log({
+      event: ALERT_EVENTS.catalogUnverified,
+      severity: 'critical',
       traceId,
-      'hyperdrive_public_view',
-    );
+      routeClass: 'catalog.products',
+      fallback: 'hyperdrive_public_view',
+    });
+    return catalogResponse(hyperdriveResult.value, traceId, false);
   }
-  return publicCatalogResponse(hyperdriveResult.value, traceId);
+
+  const matched = logComparison(dependencies, traceId, 'legacy_vs_cached', {
+    legacy: legacyResult.value,
+    cached: hyperdriveResult.value,
+  });
+  return catalogResponse(
+    matched ? hyperdriveResult.value : legacyResult.value,
+    traceId,
+  );
+}
+
+function failingBinding(
+  freshFailed: boolean,
+  cachedFailed: boolean,
+): 'DB_FRESH' | 'DB_PUBLIC_CACHE' | 'both' {
+  if (freshFailed && cachedFailed) return 'both';
+  return freshFailed ? 'DB_FRESH' : 'DB_PUBLIC_CACHE';
+}
+
+function logComparison(
+  dependencies: WorkerDependencies,
+  traceId: string,
+  comparison: 'legacy_vs_cached' | 'legacy_vs_fresh_vs_cached',
+  sides: {
+    legacy: CatalogProductSummary[];
+    fresh?: CatalogProductSummary[];
+    cached: CatalogProductSummary[];
+  },
+): boolean {
+  const compared = sides.fresh
+    ? [sides.legacy, sides.fresh, sides.cached]
+    : [sides.legacy, sides.cached];
+  const matched = compared.every((side) =>
+    catalogResultsMatch(sides.legacy, side),
+  );
+  dependencies.log({
+    event: matched
+      ? ALERT_EVENTS.catalogShadowMatch
+      : ALERT_EVENTS.catalogShadowMismatch,
+    severity: matched ? 'info' : 'critical',
+    traceId,
+    routeClass: 'catalog.products',
+    comparison,
+    legacyCount: sides.legacy.length,
+    ...(sides.fresh ? { freshCount: sides.fresh.length } : {}),
+    hyperdriveCount: sides.cached.length,
+    legacyDigest: catalogResultsDigest(sides.legacy),
+    ...(sides.fresh ? { freshDigest: catalogResultsDigest(sides.fresh) } : {}),
+    hyperdriveDigest: catalogResultsDigest(sides.cached),
+    ...(matched
+      ? {}
+      : {
+          mismatchedIdCount: catalogDisagreeingIdCount(compared),
+          fallback: 'legacy' as const,
+        }),
+  });
+  return matched;
+}
+
+type BindingCheck = 'ok' | 'unavailable' | 'not_applicable';
+
+async function checkBinding(
+  binding: Hyperdrive | undefined,
+  required: boolean,
+  dependencies: WorkerDependencies,
+): Promise<BindingCheck> {
+  // An unbound binding on rung one is the correct steady state, not a fault.
+  // A binding the config declares must answer, whatever the source is.
+  if (!binding && !required) return 'not_applicable';
+  return (await dependencies.probe(binding)) ? 'ok' : 'unavailable';
 }
 
 async function handleHealth(
   request: Request,
   env: EdgeApiEnv,
+  config: RuntimeConfig,
   traceId: string,
   dependencies: WorkerDependencies,
 ): Promise<Response> {
   if (!(await dependencies.authorizeHealth(request, env))) {
     return privateJson({ error: 'not_found' }, 404, traceId);
   }
+  const required = config.catalogSource !== 'legacy';
   const [fresh, publicCache] = await Promise.all([
-    dependencies.probe(env.DB_FRESH),
-    dependencies.probe(env.DB_PUBLIC_CACHE),
+    checkBinding(env.DB_FRESH, required, dependencies),
+    checkBinding(env.DB_PUBLIC_CACHE, required, dependencies),
   ]);
-  const healthy = fresh && publicCache;
+  const healthy = fresh !== 'unavailable' && publicCache !== 'unavailable';
   return privateJson(
-    {
-      status: healthy ? 'ok' : 'degraded',
-      checks: {
-        fresh: fresh ? 'ok' : 'unavailable',
-        publicCache: publicCache ? 'ok' : 'unavailable',
-      },
-    },
+    { status: healthy ? 'ok' : 'degraded', checks: { fresh, publicCache } },
     healthy ? 200 : 503,
     traceId,
   );
@@ -309,7 +381,7 @@ export function createWorker(
           );
         }
         if (request.method === 'GET' && url.pathname === '/_internal/health') {
-          return await handleHealth(request, env, traceId, dependencies);
+          return await handleHealth(request, env, config, traceId, dependencies);
         }
         if (isCompatibilityPath(url.pathname)) {
           return await proxySupabaseRequest(

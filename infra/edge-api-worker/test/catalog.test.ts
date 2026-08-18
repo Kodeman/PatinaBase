@@ -3,8 +3,11 @@ import {
   CatalogRequestError,
   CatalogSourceError,
   LEGACY_CATALOG_MAX_BYTES,
+  catalogDisagreeingIdCount,
+  catalogResultsDigest,
   normalizeCatalogRows,
   parseCatalogIds,
+  queryCatalogViaFresh,
   queryCatalogViaHyperdrive,
   queryCatalogViaLegacy,
 } from '../src/catalog';
@@ -76,6 +79,15 @@ describe('catalog request contract', () => {
         new URL(`https://api.example/v1/catalog/products?ids=${ids.join(',')}`),
       ),
     ).toThrow('1 to 50 unique UUIDs');
+  });
+
+  it('rejects more than 50 raw ids even when they all deduplicate to one', () => {
+    const ids = Array.from({ length: 51 }, () => A);
+    expect(() =>
+      parseCatalogIds(
+        new URL(`https://api.example/v1/catalog/products?ids=${ids.join(',')}`),
+      ),
+    ).toThrow(CatalogRequestError);
   });
 
   it('filters non-catalog and non-published legacy rows and sorts output', () => {
@@ -158,6 +170,69 @@ describe('catalog sources', () => {
     expect(result).toEqual([
       expect.objectContaining({ id: A, status: 'published' }),
     ]);
+  });
+
+  it('reads the fresh leg through DB_FRESH with the same approved statement', async () => {
+    const query = vi.fn(async (_text: string, _values?: unknown[]) => ({
+      rows: [row(A, { layer: undefined })],
+      command: '',
+      rowCount: 1,
+      oid: 0,
+      fields: [],
+    }));
+    const createClient = vi.fn(() => ({
+      connect: vi.fn(async () => undefined),
+      query,
+      end: vi.fn(async () => undefined),
+    })) as unknown as DatabaseClientFactory;
+    const result = await queryCatalogViaFresh(
+      {
+        DB_FRESH: {
+          connectionString: 'postgres://edge_catalog_login@fresh',
+        } as Hyperdrive,
+        DB_PUBLIC_CACHE: {
+          connectionString: 'postgres://edge_catalog_login@public-cache',
+        } as Hyperdrive,
+      } as EdgeApiEnv,
+      [A],
+      createClient,
+    );
+    expect(createClient).toHaveBeenCalledWith(
+      'postgres://edge_catalog_login@fresh',
+    );
+    expect(query.mock.calls[0][0]).toBe(CATALOG_SELECT_SQL);
+    expect(query.mock.calls[0][1]).toEqual([[A]]);
+    expect(result).toEqual([
+      expect.objectContaining({ id: A, status: 'published' }),
+    ]);
+  });
+
+  it('refuses either Hyperdrive read when its binding is absent', async () => {
+    await expect(
+      queryCatalogViaFresh({ DB_FRESH: undefined } as EdgeApiEnv, [A]),
+    ).rejects.toThrow(CatalogSourceError);
+    await expect(
+      queryCatalogViaHyperdrive({ DB_PUBLIC_CACHE: undefined } as EdgeApiEnv, [
+        A,
+      ]),
+    ).rejects.toThrow(CatalogSourceError);
+  });
+
+  it('digests differing result sets differently and counts disagreeing ids', () => {
+    const base = normalizeCatalogRows([row(A), row(B)], [A, B], true);
+    const stale = normalizeCatalogRows(
+      [row(A, { price_retail: 999 }), row(B)],
+      [A, B],
+      true,
+    );
+    const swapped = normalizeCatalogRows([row(B)], [A, B], true);
+    expect(catalogResultsDigest(base)).toMatch(/^[0-9a-f]{8}$/);
+    expect(catalogResultsDigest(base)).toBe(catalogResultsDigest(base));
+    expect(catalogResultsDigest(base)).not.toBe(catalogResultsDigest(stale));
+    expect(catalogResultsDigest(stale)).not.toBe(catalogResultsDigest(swapped));
+    expect(catalogDisagreeingIdCount([base, stale])).toBe(1);
+    expect(catalogDisagreeingIdCount([base, swapped])).toBe(1);
+    expect(catalogDisagreeingIdCount([base, stale, swapped])).toBe(1);
   });
 
   it('matches the inherited edge_catalog_reader login contract without role changes', () => {

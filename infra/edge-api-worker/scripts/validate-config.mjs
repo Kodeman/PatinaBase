@@ -79,6 +79,7 @@ function validateScope(label, scope) {
       errors.push(`${label}: invalid ${name}`);
     }
   }
+  let provisionedBindings = new Set();
   if (!Array.isArray(scope.hyperdrive)) {
     errors.push(`${label}: hyperdrive must be an explicit array`);
   } else if (scope.hyperdrive.length !== 0) {
@@ -90,7 +91,19 @@ function validateScope(label, scope) {
       scope.hyperdrive.some((entry) => typeof entry?.id !== 'string' || entry.id.length === 0)
     ) {
       errors.push(`${label}: provisioned Hyperdrive entries must be exactly DB_FRESH and DB_PUBLIC_CACHE`);
+    } else {
+      provisionedBindings = bindings;
     }
+  }
+  // A promoted rung with no provisioned bindings deploys clean and silently
+  // serves 100% legacy, which is indistinguishable from a successful cutover.
+  if (
+    (source === 'shadow' || source === 'hyperdrive') &&
+    (!provisionedBindings.has('DB_FRESH') || !provisionedBindings.has('DB_PUBLIC_CACHE'))
+  ) {
+    errors.push(
+      `${label}: CATALOG_SOURCE=${source} requires provisioned DB_FRESH and DB_PUBLIC_CACHE Hyperdrive bindings`,
+    );
   }
 }
 
