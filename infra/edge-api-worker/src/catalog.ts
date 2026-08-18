@@ -161,7 +161,10 @@ export async function queryCatalogViaFresh(
   ids: string[],
   createClient?: DatabaseClientFactory,
 ): Promise<CatalogProductSummary[]> {
-  return queryCatalogViaBinding(env.DB_FRESH, ids, createClient);
+  // The shadow comparison's fresh leg reads the uncached catalog reader
+  // (DB_CATALOG_FRESH), not DB_FRESH: DB_FRESH is the authenticated RLS login
+  // and is revoked SELECT on public.edge_catalog_products (migration 00481).
+  return queryCatalogViaBinding(env.DB_CATALOG_FRESH, ids, createClient);
 }
 
 export async function queryCatalogViaLegacy(

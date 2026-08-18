@@ -1,7 +1,12 @@
 export type CatalogSource = 'legacy' | 'shadow' | 'hyperdrive';
 
 export interface EdgeApiEnv extends CloudflareBindings {
+  // DB_FRESH is the authenticated RLS login (SET ROLE authenticated) for the
+  // /v1/_authcheck probe and future authenticated routes. DB_CATALOG_FRESH is
+  // the uncached catalog reader the shadow comparison's fresh leg reads. They
+  // are two distinct Hyperdrive configs so neither role is overloaded.
   DB_FRESH?: Hyperdrive;
+  DB_CATALOG_FRESH?: Hyperdrive;
   DB_PUBLIC_CACHE?: Hyperdrive;
   SUPABASE_ANON_KEY?: string;
   ACCESS_TEAM_DOMAIN?: string;
@@ -73,9 +78,23 @@ export function validateRuntimeConfig(env: EdgeApiEnv): RuntimeConfig {
   ) {
     throw new ConfigurationError();
   }
-  // A promoted rung that boots without its Hyperdrive bindings serves 100%
+  // A promoted rung that boots without the bindings its path uses serves 100%
   // legacy while reporting success; refuse it so a failed cutover is visible.
-  if (source !== 'legacy' && (!env.DB_FRESH || !env.DB_PUBLIC_CACHE)) {
+  // Each source is validated for exactly the bindings it reads:
+  //  - shadow compares the fresh leg (DB_CATALOG_FRESH, the uncached catalog
+  //    reader) against the cached view (DB_PUBLIC_CACHE), so it needs both.
+  //  - hyperdrive serves the cached view (DB_PUBLIC_CACHE); the fresh leg is
+  //    not read at rung three.
+  //  - any promoted rung also opens DB_FRESH for the authenticated RLS path
+  //    (/v1/_authcheck runs SET ROLE authenticated on it), so DB_FRESH must be
+  //    bound off the legacy rung.
+  if (source === 'shadow' && (!env.DB_CATALOG_FRESH || !env.DB_PUBLIC_CACHE)) {
+    throw new ConfigurationError();
+  }
+  if (source === 'hyperdrive' && !env.DB_PUBLIC_CACHE) {
+    throw new ConfigurationError();
+  }
+  if (source !== 'legacy' && !env.DB_FRESH) {
     throw new ConfigurationError();
   }
 

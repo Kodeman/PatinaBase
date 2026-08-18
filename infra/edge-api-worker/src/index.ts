@@ -9,8 +9,8 @@ import {
   queryCatalogViaHyperdrive,
   queryCatalogViaLegacy,
 } from './catalog';
-import { isHealthAuthorized } from './auth';
-import { probeBinding } from './database';
+import { isHealthAuthorized, withVerifiedSupabaseTransaction } from './auth';
+import { probeBinding, type DatabaseClient } from './database';
 import { UpstreamAbortError, UpstreamTimeoutError } from './deadline';
 import {
   ConfigurationError,
@@ -46,6 +46,11 @@ export interface WorkerDependencies {
   ): Promise<CatalogProductSummary[]>;
   probe(binding: Hyperdrive | undefined): Promise<boolean>;
   authorizeHealth(request: Request, env: EdgeApiEnv): Promise<boolean>;
+  verifyAuthenticated<T>(
+    request: Request,
+    env: EdgeApiEnv,
+    work: (client: DatabaseClient) => Promise<T>,
+  ): Promise<T>;
   randomUUID(): string;
   cohortKey(request: Request): string;
   log(event: AlertLogEvent): void;
@@ -58,6 +63,8 @@ const defaultDependencies: WorkerDependencies = {
   queryLegacy: queryCatalogViaLegacy,
   probe: probeBinding,
   authorizeHealth: isHealthAuthorized,
+  verifyAuthenticated: (request, env, work) =>
+    withVerifiedSupabaseTransaction(request, env, work),
   randomUUID: () => crypto.randomUUID(),
   cohortKey: trustedRolloutKey,
   log: structuredLog,
@@ -304,6 +311,31 @@ function logComparison(
   return matched;
 }
 
+async function handleAuthCheck(
+  request: Request,
+  env: EdgeApiEnv,
+  traceId: string,
+  dependencies: WorkerDependencies,
+): Promise<Response> {
+  try {
+    await dependencies.verifyAuthenticated(request, env, async (client) => {
+      // Data-free: this exercises the verified-JWT -> SET ROLE authenticated ->
+      // set_config('request.jwt.claims', ...) chain without reading any
+      // application table. The row is discarded and never returned.
+      await client.query(
+        "SELECT current_user, current_setting('request.jwt.claims', true)",
+      );
+    });
+  } catch {
+    // Every failure mode — missing/invalid/expired/wrong-issuer/wrong-audience/
+    // wrong-role token, or an unavailable RLS login — collapses to the worker's
+    // non-enumerating not_found. Never a 500, and never any detail about which
+    // check failed or the claims/user behind a valid token.
+    return privateJson({ error: 'not_found' }, 404, traceId);
+  }
+  return privateJson({ ok: true }, 200, traceId);
+}
+
 type BindingCheck = 'ok' | 'unavailable' | 'not_applicable';
 
 async function checkBinding(
@@ -379,6 +411,9 @@ export function createWorker(
             traceId,
             dependencies,
           );
+        }
+        if (request.method === 'GET' && url.pathname === '/v1/_authcheck') {
+          return await handleAuthCheck(request, env, traceId, dependencies);
         }
         if (request.method === 'GET' && url.pathname === '/_internal/health') {
           return await handleHealth(request, env, config, traceId, dependencies);

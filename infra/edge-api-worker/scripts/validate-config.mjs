@@ -15,6 +15,11 @@ const requiredVars = [
   'WEBSOCKET_HANDSHAKE_TIMEOUT_MS',
 ];
 const requiredSecrets = ['SUPABASE_ANON_KEY'];
+const KNOWN_HYPERDRIVE_BINDINGS = new Set([
+  'DB_FRESH',
+  'DB_CATALOG_FRESH',
+  'DB_PUBLIC_CACHE',
+]);
 
 export function validateScope(label, scope, errors) {
   // Production must NOT expose a second, unauthenticated *.workers.dev origin:
@@ -83,26 +88,46 @@ export function validateScope(label, scope, errors) {
   if (!Array.isArray(scope.hyperdrive)) {
     errors.push(`${label}: hyperdrive must be an explicit array`);
   } else if (scope.hyperdrive.length !== 0) {
-    const bindings = new Set(scope.hyperdrive.map((entry) => entry?.binding));
-    if (
-      scope.hyperdrive.length !== 2 ||
-      !bindings.has('DB_FRESH') ||
-      !bindings.has('DB_PUBLIC_CACHE') ||
-      scope.hyperdrive.some((entry) => typeof entry?.id !== 'string' || entry.id.length === 0)
-    ) {
-      errors.push(`${label}: provisioned Hyperdrive entries must be exactly DB_FRESH and DB_PUBLIC_CACHE`);
+    const names = scope.hyperdrive.map((entry) => entry?.binding);
+    const bindings = new Set(names);
+    const unknown = names.filter((name) => !KNOWN_HYPERDRIVE_BINDINGS.has(name));
+    const malformedId = scope.hyperdrive.some(
+      (entry) => typeof entry?.id !== 'string' || entry.id.length === 0,
+    );
+    if (unknown.length > 0 || malformedId || names.length !== bindings.size) {
+      errors.push(
+        `${label}: provisioned Hyperdrive entries must be a subset of ${[...KNOWN_HYPERDRIVE_BINDINGS].join(', ')} with unique, non-empty ids`,
+      );
     } else {
       provisionedBindings = bindings;
     }
   }
   // A promoted rung with no provisioned bindings deploys clean and silently
   // serves 100% legacy, which is indistinguishable from a successful cutover.
+  // Require exactly the bindings each source's path reads, mirroring
+  // validateRuntimeConfig in src/env.ts:
+  //  - shadow compares DB_CATALOG_FRESH (fresh leg) with DB_PUBLIC_CACHE.
+  //  - hyperdrive serves DB_PUBLIC_CACHE.
+  //  - any promoted rung opens DB_FRESH for the authenticated /v1/_authcheck path.
   if (
-    (source === 'shadow' || source === 'hyperdrive') &&
-    (!provisionedBindings.has('DB_FRESH') || !provisionedBindings.has('DB_PUBLIC_CACHE'))
+    source === 'shadow' &&
+    (!provisionedBindings.has('DB_CATALOG_FRESH') || !provisionedBindings.has('DB_PUBLIC_CACHE'))
   ) {
     errors.push(
-      `${label}: CATALOG_SOURCE=${source} requires provisioned DB_FRESH and DB_PUBLIC_CACHE Hyperdrive bindings`,
+      `${label}: CATALOG_SOURCE=shadow requires provisioned DB_CATALOG_FRESH and DB_PUBLIC_CACHE Hyperdrive bindings`,
+    );
+  }
+  if (source === 'hyperdrive' && !provisionedBindings.has('DB_PUBLIC_CACHE')) {
+    errors.push(
+      `${label}: CATALOG_SOURCE=hyperdrive requires a provisioned DB_PUBLIC_CACHE Hyperdrive binding`,
+    );
+  }
+  if (
+    (source === 'shadow' || source === 'hyperdrive') &&
+    !provisionedBindings.has('DB_FRESH')
+  ) {
+    errors.push(
+      `${label}: CATALOG_SOURCE=${source} requires a provisioned DB_FRESH Hyperdrive binding for the authenticated path`,
     );
   }
 }

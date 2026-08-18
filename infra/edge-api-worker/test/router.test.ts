@@ -1,10 +1,16 @@
 import type { CatalogProductSummary } from '@patina/types';
+import { generateKeyPair, SignJWT } from 'jose';
 import { createWorker, type WorkerDependencies } from '../src';
+import { withVerifiedSupabaseTransaction } from '../src/auth';
 import {
   queryCatalogViaHyperdrive,
   queryCatalogViaLegacy,
 } from '../src/catalog';
-import { probeBinding } from '../src/database';
+import {
+  probeBinding,
+  type DatabaseClient,
+  type DatabaseClientFactory,
+} from '../src/database';
 import type { EdgeApiEnv } from '../src/env';
 import { ALERT_EVENTS, rolloutBucket, structuredLog } from '../src/security';
 
@@ -25,7 +31,10 @@ const product: CatalogProductSummary = {
 
 function env(overrides: Partial<EdgeApiEnv> = {}): EdgeApiEnv {
   return {
-    DB_FRESH: { connectionString: 'postgres://fresh' } as Hyperdrive,
+    DB_FRESH: { connectionString: 'postgres://rls-login' } as Hyperdrive,
+    DB_CATALOG_FRESH: {
+      connectionString: 'postgres://catalog-fresh',
+    } as Hyperdrive,
     DB_PUBLIC_CACHE: {
       connectionString: 'postgres://public-cache',
     } as Hyperdrive,
@@ -68,6 +77,9 @@ function dependencies(
     queryLegacy: vi.fn(async () => [product]),
     probe: vi.fn(async () => true),
     authorizeHealth: vi.fn(async () => true),
+    verifyAuthenticated: vi.fn(async () => {
+      throw new Error('unauthorized');
+    }),
     randomUUID: () => 'trace-0000000000000000000000001',
     cohortKey: () => 'trusted-cohort',
     log: vi.fn(),
@@ -366,6 +378,11 @@ describe('promotion ladder binding gate', () => {
     {
       CATALOG_SOURCE: 'shadow',
       CATALOG_HYPERDRIVE_PERCENT: '0',
+      DB_CATALOG_FRESH: undefined,
+    },
+    {
+      CATALOG_SOURCE: 'shadow',
+      CATALOG_HYPERDRIVE_PERCENT: '0',
       DB_PUBLIC_CACHE: undefined,
     },
     {
@@ -414,10 +431,27 @@ describe('promotion ladder binding gate', () => {
     const deps = dependencies();
     const { response } = await request(
       createWorker(deps),
-      env({ DB_FRESH: undefined, DB_PUBLIC_CACHE: undefined }),
+      env({ DB_FRESH: undefined, DB_CATALOG_FRESH: undefined, DB_PUBLIC_CACHE: undefined }),
     );
     expect(response.status).toBe(200);
     expect(deps.queryLegacy).toHaveBeenCalledTimes(1);
+  });
+
+  it('serves rung three without DB_CATALOG_FRESH — the fresh leg is unused there', async () => {
+    const deps = dependencies();
+    const { response } = await request(
+      createWorker(deps),
+      env({
+        CATALOG_SOURCE: 'hyperdrive',
+        CATALOG_HYPERDRIVE_PERCENT: '100',
+        DB_CATALOG_FRESH: undefined,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(deps.queryHyperdrive).toHaveBeenCalledTimes(1);
+    expect(deps.log).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: ALERT_EVENTS.configurationInvalid }),
+    );
   });
 });
 
@@ -693,5 +727,153 @@ describe('health, proxy deadline, and default response policy', () => {
     );
     expect(response.status).toBe(404);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+});
+
+interface RecordedClient extends DatabaseClient {
+  commands: Array<{ text: string; values?: unknown[] }>;
+  ended: boolean;
+}
+
+function recordingFactory(clients: RecordedClient[]): DatabaseClientFactory {
+  return () => {
+    const client: RecordedClient = {
+      commands: [],
+      ended: false,
+      async connect() {},
+      async query(text, values) {
+        this.commands.push({ text, values });
+        return { rows: [], command: '', rowCount: 0, oid: 0, fields: [] };
+      },
+      async end() {
+        this.ended = true;
+      },
+    };
+    clients.push(client);
+    return client;
+  };
+}
+
+const AUTH_ISSUER = 'https://project.supabase.co/auth/v1';
+const AUTH_AUDIENCE = 'authenticated';
+
+async function authToken(
+  privateKey: CryptoKey,
+  overrides: {
+    issuer?: string;
+    audience?: string;
+    expiration?: number;
+    role?: string;
+  } = {},
+) {
+  const now = Math.floor(Date.now() / 1000);
+  return new SignJWT({ role: overrides.role ?? 'authenticated' })
+    .setProtectedHeader({ alg: 'RS256' })
+    .setSubject('00000000-0000-4000-8000-000000000009')
+    .setIssuer(overrides.issuer ?? AUTH_ISSUER)
+    .setAudience(overrides.audience ?? AUTH_AUDIENCE)
+    .setIssuedAt(now)
+    .setExpirationTime(overrides.expiration ?? now + 60)
+    .sign(privateKey);
+}
+
+function authRequest(
+  worker: ReturnType<typeof createWorker>,
+  requestEnv: EdgeApiEnv,
+  headers?: HeadersInit,
+) {
+  return request(
+    worker,
+    requestEnv,
+    'https://api.patina.cloud/v1/_authcheck',
+    headers,
+  );
+}
+
+describe('authenticated probe route', () => {
+  it('runs the verified JWT through SET ROLE authenticated + set_config and returns only {ok:true}', async () => {
+    const { privateKey, publicKey } = await generateKeyPair('RS256');
+    const clients: RecordedClient[] = [];
+    const createClient = recordingFactory(clients);
+    const deps = dependencies({
+      verifyAuthenticated: (req, requestEnv, work) =>
+        withVerifiedSupabaseTransaction(req, requestEnv, work, {
+          key: publicKey,
+          createClient,
+        }),
+    });
+    const { response } = await authRequest(createWorker(deps), env(), {
+      authorization: `Bearer ${await authToken(privateKey)}`,
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+
+    expect(clients).toHaveLength(1);
+    const commands = clients[0].commands.map((command) => command.text);
+    expect(commands[0]).toBe('BEGIN');
+    expect(commands[1]).toBe('SET LOCAL ROLE authenticated');
+    expect(commands[2]).toBe(
+      "SELECT set_config('request.jwt.claims', $1, true)",
+    );
+    // The probe's own data-free statement — no application table is read.
+    expect(commands).toContain(
+      "SELECT current_user, current_setting('request.jwt.claims', true)",
+    );
+    expect(commands.at(-1)).toBe('COMMIT');
+    expect(clients[0].ended).toBe(true);
+
+    // The set_config value carries the verified claims; they are never returned
+    // to the client (the body is exactly {ok:true}).
+    expect(
+      JSON.parse(String(clients[0].commands[2].values?.[0])),
+    ).toMatchObject({ sub: '00000000-0000-4000-8000-000000000009' });
+  });
+
+  it.each([
+    ['no bearer token', undefined],
+    ['a wrong-issuer token', { issuer: 'https://evil.example/auth/v1' }],
+    ['a wrong-audience token', { audience: 'anon' }],
+    ['an expired token', { expiration: Math.floor(Date.now() / 1000) - 120 }],
+    ['a non-authenticated role', { role: 'anon' }],
+  ])('fails closed with a non-enumerating 404 for %s', async (_label, overrides) => {
+    const { privateKey, publicKey } = await generateKeyPair('RS256');
+    const clients: RecordedClient[] = [];
+    const createClient = recordingFactory(clients);
+    const deps = dependencies({
+      verifyAuthenticated: (req, requestEnv, work) =>
+        withVerifiedSupabaseTransaction(req, requestEnv, work, {
+          key: publicKey,
+          createClient,
+        }),
+    });
+    const headers = overrides
+      ? { authorization: `Bearer ${await authToken(privateKey, overrides)}` }
+      : undefined;
+    const { response } = await authRequest(createWorker(deps), env(), headers);
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'not_found' });
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    // A rejected verification never opens a database connection.
+    expect(clients).toHaveLength(0);
+  });
+
+  it('fails closed with 404, never 500, when the RLS login is unbound', async () => {
+    const { privateKey, publicKey } = await generateKeyPair('RS256');
+    const deps = dependencies({
+      verifyAuthenticated: (req, requestEnv, work) =>
+        withVerifiedSupabaseTransaction(req, requestEnv, work, {
+          key: publicKey,
+        }),
+    });
+    const { response } = await authRequest(
+      createWorker(deps),
+      env({ DB_FRESH: undefined }),
+      { authorization: `Bearer ${await authToken(privateKey)}` },
+    );
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'not_found' });
   });
 });
