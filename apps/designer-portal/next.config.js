@@ -47,9 +47,19 @@ const nextConfig = {
       // Allow connections based on environment
       // Development: localhost, local network IPs, and approved patina.cloud preview domains
       // Production: patina.cloud API gateway and WebSocket connections
+      //
+      // `data:` is for the SPLAT projection. @sparkjsdev/spark inlines its Rust
+      // splat-decode WASM as a `data:application/wasm;base64,…` URI rather than
+      // shipping a .wasm file — which sounds like it needs no CSP allowance and
+      // does: wasm-bindgen's init `fetch()`es that URI, and a fetch of a data:
+      // URL is still governed by connect-src. Without this the whole Spark module
+      // fails at `SplatMesh.staticInitialize()` with a bare "Failed to fetch" and
+      // the stage hangs on its loading line. The grant is narrow — a data: URL
+      // carries bytes the document already holds, so it is not an exfiltration
+      // path and reaches no network origin.
       isDevelopment
-        ? "connect-src 'self' http://localhost:* ws://localhost:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : '')
-        : "connect-src 'self' https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : ''),
+        ? "connect-src 'self' data: http://localhost:* ws://localhost:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : '')
+        : "connect-src 'self' data: https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : ''),
       "media-src 'self' blob:",
       // The MESH projection's GLTFLoader spins up DRACO/KTX2 transcoder workers
       // from blob: URLs (see public/three/). Without this they fall back to

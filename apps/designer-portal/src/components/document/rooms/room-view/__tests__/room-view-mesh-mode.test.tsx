@@ -44,6 +44,15 @@ jest.mock('@patina/supabase', () => ({
   useScanRefineArtifacts: () => ({ data: undefined }),
   useRoomScan: (...args: unknown[]) => mockUseRoomScan(...args),
   useSignedScanModelUrl: (...args: unknown[]) => mockUseSignedScanModelUrl(...args),
+  // The SPLAT projection's seam (W2). Held at "no artifact" throughout, so the
+  // MESH assertions below see the mode row this suite was written against.
+  useSplatUrl: () => ({
+    hasArtifact: false,
+    artifact: null,
+    url: null,
+    unavailable: 'no-artifact',
+    isLoading: false,
+  }),
 }));
 
 beforeEach(() => {
