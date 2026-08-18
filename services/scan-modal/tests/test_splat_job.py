@@ -22,6 +22,10 @@ from scan_modal.jobs import splat_job
 
 from test_verify_job import LEASE, LeaseRejectingDb, RecordingDb  # noqa: F401
 
+#: The genuine `_run`, captured at import — before any fixture replaces the
+#: module global with a fake. The subprocess-bound tests below need the real one.
+REAL_RUN = splat_job._run
+
 MANIFEST_URL = "https://example/sign/room-scans/manifests/u/r/photos_metadata.ndjson?token=t"
 PHOTO_URLS = [
     "https://example/sign/room-scans/photos/u/r/hero.heic?token=t",
@@ -270,6 +274,101 @@ def test_the_export_reads_the_pinned_config(world):
     assert export[export.index("--load-config") + 1].endswith("/config.yml")
 
 
+# ── the room_scan_images pose-carrier fallback ──────────────────────────────
+
+
+def photo_record(name: str, **overrides):
+    base = {
+        "fileName": name,
+        "width": 1440,
+        "height": 1920,
+        "cameraTransform": [
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 1.5,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0,
+        ],
+        "cameraIntrinsics": {"fx": 1500.0, "fy": 1500.0, "cx": 960.0, "cy": 720.0,
+                             "width": 1920, "height": 1440},
+    }
+    base.update(overrides)
+    return base
+
+
+ROWS_INPUTS = {
+    "photosSource": "rows",
+    "photoRecords": [photo_record("hero.heic"), photo_record("auto_001.50.heic")],
+    "photoUrls": list(PHOTO_URLS),
+    "capturedRoomJsonUrl": CAPTURED_URL,
+}
+
+
+def test_the_rows_carrier_trains_without_a_sidecar(world, tmp_path):
+    """The sidecar is stripped as device-local for most real scans, so this is
+    the path that decides whether splat runs at all for them."""
+    db = RecordingDb()
+    result = splat_job.run_splat(payload(inputs=dict(ROWS_INPUTS)), db=db)
+
+    assert MANIFEST_URL not in world.fetched, "the rows path must not fetch a sidecar"
+    assert world.frames == ["hero.jpg", "auto_001.50.jpg"]
+    assert result["provenance"]["photosSource"] == "rows"
+    assert result["artifacts"] == {"splat": {"object_id": "object-1", "version": 4}}
+    assert db.failed == []
+
+    document = json.loads(
+        splat_job.workspace_paths("scan-1", 4, tmp_path / "cache")["transforms"].read_text()
+    )
+    assert [f["file_path"] for f in document["frames"]] == [
+        "images/hero.jpg", "images/auto_001.50.jpg",
+    ]
+
+
+def test_the_manifest_carrier_is_recorded_as_such(world):
+    db = RecordingDb()
+    result = splat_job.run_splat(payload(), db=db)
+    assert result["provenance"]["photosSource"] == "manifest"
+
+
+def test_photos_source_reaches_the_completion_event(world):
+    db = RecordingDb()
+    splat_job.run_splat(payload(inputs=dict(ROWS_INPUTS)), db=db)
+    # A splat trained off rows and one trained off the sidecar are otherwise
+    # indistinguishable after the fact.
+    assert db.completed[0][1]["provenance"]["photosSource"] == "rows"
+
+
+def test_the_manifest_wins_when_both_carriers_arrive(world):
+    """Defence in depth: the dispatcher sends exactly one, but if both showed up
+    the uploaded sidecar is the authoritative record of the walk."""
+    db = RecordingDb()
+    both = dict(ROWS_INPUTS)
+    both["photosManifestUrl"] = MANIFEST_URL
+    result = splat_job.run_splat(payload(inputs=both), db=db)
+    assert MANIFEST_URL in world.fetched
+    assert result["provenance"]["photosSource"] == "manifest"
+
+
+def test_neither_carrier_fails_the_task(world):
+    db = RecordingDb()
+    with pytest.raises(splat_job.InputError) as excinfo:
+        splat_job.run_splat(payload(inputs={
+            "photoUrls": list(PHOTO_URLS),
+            "capturedRoomJsonUrl": CAPTURED_URL,
+        }), db=db)
+    assert "photoRecords" in str(excinfo.value)
+    assert db.failed and db.completed == []
+
+
+def test_a_malformed_photo_record_fails_the_task_rather_than_training_on_it(world):
+    db = RecordingDb()
+    bad = dict(ROWS_INPUTS)
+    bad["photoRecords"] = [photo_record("hero.heic", cameraTransform=[1.0, 2.0])]
+    with pytest.raises(Exception):
+        splat_job.run_splat(payload(inputs=bad), db=db)
+    assert db.completed == []
+    assert db.failed
+
+
 # ── preemption / resume ─────────────────────────────────────────────────────
 
 
@@ -422,6 +521,84 @@ def test_a_download_failure_redacts_the_signed_url(world, monkeypatch):
     assert "SUPERSECRET" not in persisted
     assert "https://" not in persisted
     assert "403" in persisted
+
+
+# ── the REAL subprocess bound ───────────────────────────────────────────────
+#
+# `_run` is the one seam these tests must NOT fake, because the bug it carried
+# was in the seam itself: an earlier version drained stdout with
+# `for line in proc.stdout:` on the calling thread and only then called
+# `proc.wait(timeout=...)`. The loop ends when the pipe closes at process exit,
+# so `wait` always saw a dead process and the timeout was dead code. A wedged
+# `ns-train` would have held an L4 with no bound of its own until Modal's
+# function timeout — an hour of GPU for a job that stopped progressing in the
+# first minute. Only a real, genuinely long-running child proves the fix.
+
+
+def test_a_hung_subprocess_is_killed_at_its_deadline_and_raises():
+    import subprocess
+    import sys
+    import time
+
+    started = time.monotonic()
+    with pytest.raises(TimeoutError) as excinfo:
+        splat_job._run([sys.executable, "-c", "import time; time.sleep(60)"], timeout=1.5)
+    elapsed = time.monotonic() - started
+
+    # It returned at the deadline, not at the child's own 60 s.
+    assert elapsed < 20.0, f"_run did not bound the child (took {elapsed:.1f}s)"
+    assert "budget" in str(excinfo.value)
+    # The message names the binary and the budget, never the full argv — the
+    # text is persisted to agent_tasks.last_error.
+    assert "time.sleep" not in str(excinfo.value)
+    # And nothing is left running: a survivor would keep the GPU busy.
+    assert subprocess.run(
+        [sys.executable, "-c", "pass"], capture_output=True
+    ).returncode == 0
+
+
+def test_a_normal_subprocess_still_streams_its_output_and_returns_its_code(capfd):
+    import sys
+
+    code = splat_job._run(
+        [sys.executable, "-c", "print('hello from ns-train'); raise SystemExit(0)"],
+        timeout=30.0,
+    )
+    assert code == 0
+    assert "hello from ns-train" in capfd.readouterr().out
+
+
+def test_a_failing_subprocess_returns_its_non_zero_code(capfd):
+    import sys
+
+    assert splat_job._run([sys.executable, "-c", "raise SystemExit(3)"], timeout=30.0) == 3
+
+
+def test_a_hung_training_run_fails_the_task_with_a_clean_error(world, monkeypatch):
+    """The timeout, seen from the job: a killed child is an ordinary failure —
+    the task is failed and released, not left claimed. `ns-train` runs for real
+    here (as a sleeping child); everything else stays faked."""
+    import sys
+
+    faked_run = splat_job._run  # the `world` fixture's fake, already installed
+
+    def run_or_hang(argv, timeout):
+        if argv[0] == "ns-train":
+            # REAL_RUN, not splat_job._run — the fixture has already replaced
+            # that name, so reading it here would just call the fake again.
+            return REAL_RUN([sys.executable, "-c", "import time; time.sleep(60)"], timeout=1.0)
+        return faked_run(argv, timeout)
+
+    monkeypatch.setattr(splat_job, "_run", run_or_hang)
+
+    db = RecordingDb()
+    with pytest.raises(TimeoutError):
+        splat_job.run_splat(payload(), db=db)
+
+    assert db.completed == []
+    assert db.room_files == []
+    assert "TimeoutError" in db.failed[0][1]
+    assert db.events[-1] == ("splat", "failed", "failed")
 
 
 # ── the golden lease / version cases ────────────────────────────────────────

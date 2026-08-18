@@ -21,6 +21,13 @@ WHAT MAKES THIS STAGE DIFFERENT FROM verify
    The dispatcher caps the URL list (see contract.json), and a positional match
    would silently pair frame 40's pixels with frame 0's pose the moment one
    photo was missing from `room_scan_images`.
+4. Poses arrive by one of TWO carriers. `inputs.photosManifestUrl` is the
+   uploaded `photos/photos_metadata.ndjson` sidecar; `inputs.photoRecords` is
+   the dispatcher's inline fallback, read from `room_scan_images`' own
+   `camera_transform`/`camera_intrinsics` columns for the many scans whose
+   sidecar was never uploaded. Same geometry, same conventions — see
+   `core.transforms.parse_photo_rows`. Which one fired is recorded on the
+   artifact as `photosSource`.
 """
 
 from __future__ import annotations
@@ -30,9 +37,15 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
+from .. import SPLAT_CACHE_MOUNT
 from ..core import spz as _spz
 from ..core.captured_room import parse_captured_room_meters
-from ..core.transforms import build_transforms, frame_file_name, parse_photos_manifest
+from ..core.transforms import (
+    build_transforms,
+    frame_file_name,
+    parse_photo_rows,
+    parse_photos_manifest,
+)
 from ..io import r2 as _r2
 from ..io.db import LeaseRejected, ScanWorkerDb, StaleVersion
 from . import _common
@@ -45,8 +58,10 @@ ARTIFACT_KIND = "splat"
 ACCESS_CLASS = "authenticated_project"
 SPZ_MIME = "application/octet-stream"
 
-#: Where a preemptible run keeps its state. Mounted from a `modal.Volume`.
-CACHE_ROOT = Path("/splat-cache")
+#: Where a preemptible run keeps its state. This is the mount point `app.py`
+#: attaches the `modal.Volume` at — shared from the package root so the mount
+#: and the workspace cannot drift apart and orphan every checkpoint.
+CACHE_ROOT = Path(SPLAT_CACHE_MOUNT)
 #: nerfstudio derives its output path from experiment name + method + timestamp.
 #: Pinning the timestamp is what makes the checkpoint directory PREDICTABLE
 #: across restarts — with the default (`{now}`), a resumed run writes to a new
@@ -177,30 +192,77 @@ def _run(argv: Sequence[str], timeout: float) -> int:
     Streamed rather than captured: a 25-minute training run that only printed
     on exit would look hung for 25 minutes, and a preemption would lose the log
     entirely. Nothing here echoes a URL — argv is workspace paths only.
+
+    The DRAIN RUNS ON A THREAD, and that is the whole point of the shape. An
+    earlier version read `for line in proc.stdout:` on this thread and then
+    called `proc.wait(timeout=...)`: the loop only ends when the pipe closes at
+    process exit, so `wait` was always called on an already-dead process and the
+    timeout was dead code. A wedged `ns-train` would have held an L4 open with
+    no bound of its own until Modal's function timeout — an hour of GPU for a
+    job that stopped making progress in the first minute.
+
+    Now the timeout is real: the reader thread is a daemon, `wait` does the
+    bounding, and expiry kills the process and raises.
     """
     import subprocess
+    import threading
 
-    with subprocess.Popen(
+    proc = subprocess.Popen(
         list(argv), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
-    ) as proc:
+    )
+
+    def drain() -> None:
         assert proc.stdout is not None
         for line in proc.stdout:
             print(line.rstrip())
-        return proc.wait(timeout=timeout)
+
+    reader = threading.Thread(target=drain, daemon=True)
+    reader.start()
+    try:
+        code = proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        # `from None`: TimeoutExpired stringifies the whole argv, and this text
+        # is persisted to agent_tasks.last_error.
+        raise TimeoutError(
+            f"{argv[0]} exceeded its {timeout:.0f}s budget and was killed"
+        ) from None
+    finally:
+        # Bounded: the drain is a daemon, so a reader wedged on a pipe a killed
+        # child left open must never hold the job.
+        reader.join(timeout=5.0)
+        if proc.stdout is not None:
+            proc.stdout.close()
+    return code
 
 
-def _prepare_workspace(paths: dict[str, Path], manifest_url: str, photo_urls: Sequence[str]) -> dict[str, Any]:
+def _prepare_workspace(
+    paths: dict[str, Path],
+    manifest_url: str | None,
+    photo_records: Any,
+    photo_urls: Sequence[str],
+) -> dict[str, Any]:
     """Download + transcode the frames and write `transforms.json`.
 
     Skipped wholesale when a previous (preempted) attempt already wrote the
     workspace — that is the cheap half of the resumable pattern, and it is safe
     because the workspace is job-keyed on the room-file version.
+
+    Poses come from the uploaded sidecar when there is one and from the
+    dispatcher's inlined `photoRecords` when there is not; see
+    `core.transforms.parse_photo_rows` for why both exist and why they are the
+    same geometry.
     """
     if paths["transforms"].is_file():
         document = _json.loads(paths["transforms"].read_text())
         return {"frames": len(document.get("frames", [])), "reused": True, "missing": 0}
 
-    poses = parse_photos_manifest(_fetch(manifest_url).decode("utf-8"))
+    poses = (
+        parse_photos_manifest(_fetch(manifest_url).decode("utf-8"))
+        if manifest_url
+        else parse_photo_rows(photo_records)
+    )
     by_name = index_photo_urls(photo_urls)
     paths["images"].mkdir(parents=True, exist_ok=True)
 
@@ -260,15 +322,24 @@ def run_splat(
                         "started", 0, {**detail, "taskId": task_id})
 
         manifest_url = inputs.get("photosManifestUrl")
+        photo_records = inputs.get("photoRecords")
         photo_urls = inputs.get("photoUrls") or []
         captured_url = inputs.get("capturedRoomJsonUrl")
-        if not manifest_url or not captured_url or not photo_urls:
+        # The sidecar is often absent (ingest strips it as device-local), so
+        # EITHER pose carrier is acceptable — but not neither.
+        if not manifest_url and not photo_records:
             raise InputError(
-                "inputs.photosManifestUrl, inputs.photoUrls and "
-                "inputs.capturedRoomJsonUrl are required"
+                "inputs.photosManifestUrl or inputs.photoRecords is required"
+            )
+        if not captured_url or not photo_urls:
+            raise InputError(
+                "inputs.photoUrls and inputs.capturedRoomJsonUrl are required"
             )
         if not scan_id:
             raise InputError("scanId is required")
+        # Derived from which carrier actually arrived, not from the dispatcher's
+        # own label — this is the job saying what it did.
+        photos_source = "manifest" if manifest_url else "rows"
 
         # Parsed for its own sake: an unreadable parametric room means the
         # capture is broken, and finding that out now costs a download rather
@@ -277,7 +348,7 @@ def run_splat(
 
         paths = workspace_paths(scan_id, room_file_version)
         paths["base"].mkdir(parents=True, exist_ok=True)
-        prep = _prepare_workspace(paths, manifest_url, photo_urls)
+        prep = _prepare_workspace(paths, manifest_url, photo_records, photo_urls)
 
         resume = paths["checkpoints"].is_dir() and any(paths["checkpoints"].iterdir())
         config = inputs.get("config") or {}
@@ -302,6 +373,10 @@ def run_splat(
             "method": METHOD,
             "frames": prep["frames"],
             "photosMissing": prep["missing"],
+            # Which pose carrier fired. Worth persisting: a splat trained off
+            # room_scan_images rows and one trained off the uploaded sidecar are
+            # not distinguishable after the fact from anything else on the row.
+            "photosSource": photos_source,
             "maxIterations": max_iterations,
             "resumed": resume,
             "walls": len(parametric.walls),

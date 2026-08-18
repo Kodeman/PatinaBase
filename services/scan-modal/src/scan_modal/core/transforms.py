@@ -90,6 +90,7 @@ __all__ = [
     "ARKIT_TO_NERFSTUDIO",
     "RIGHT_ROTATION_CAMERA",
     "parse_photos_manifest",
+    "parse_photo_rows",
     "frame_file_name",
     "nerfstudio_pose",
     "build_transforms",
@@ -217,6 +218,49 @@ def parse_photos_manifest(text: str) -> list[PhotoPose]:
             p.relative_path,
         ),
     )
+
+
+def parse_photo_rows(records: Any) -> list[PhotoPose]:
+    """Parse the dispatcher's `inputs.photoRecords` fallback into ordered poses.
+
+    THE SAME GEOMETRY, A DIFFERENT CARRIER. `photos/photos_metadata.ndjson` is
+    the sidecar, and it is not always uploaded — the ingest stage strips
+    `photosManifest` as device-local (capture-bundle-spec B-19), so
+    `room_scans.photos_manifest_url` is null for a large share of real scans and
+    `splat` would simply never run for them.
+
+    But the poses are not lost with it: `room_scan_images` carries
+    `camera_transform` (the same ROW-major flat 16) and `camera_intrinsics` (the
+    same `{fx, fy, cx, cy, width, height}` in the same native sensor frame) per
+    row, written by the same capture path. So when the sidecar is missing the
+    dispatcher reads the rows and inlines them in the payload, and this function
+    turns them into exactly the `PhotoPose` list `parse_photos_manifest`
+    produces. Every convention in the module docstring — including the
+    portrait-rotation detection — applies identically, because it is the same
+    data through a different pipe.
+
+    ORDER IS THE DISPATCHER'S. Rows carry no `orderIndex` or `timestampSeconds`
+    of their own, so the SQL ordering (`display_order, captured_at, id`) is
+    authoritative and is re-imposed here as the position in the list, rather
+    than falling through to the manifest sort's path-alphabetical tie-break.
+    """
+    if not isinstance(records, (list, tuple)):
+        raise ManifestError("photoRecords must be a list")
+    poses: list[PhotoPose] = []
+    for index, record in enumerate(records):
+        if not isinstance(record, dict):
+            raise ManifestError(f"photoRecords[{index}] is not an object")
+        entry = dict(record)
+        # `fileName` is the row's own object basename; the rest of this module
+        # keys on `relativePath`, and only its final segment is ever read.
+        if entry.get("relativePath") is None:
+            entry["relativePath"] = entry.get("fileName")
+        entry["orderIndex"] = index
+        entry["timestampSeconds"] = None
+        poses.append(_photo_pose(entry))
+    if not poses:
+        raise ManifestError("photoRecords is empty")
+    return poses
 
 
 # ── frame naming ────────────────────────────────────────────────────────────

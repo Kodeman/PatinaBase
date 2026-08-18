@@ -132,6 +132,94 @@ def test_a_non_json_line_names_its_line_number():
     assert "line 2" in str(excinfo.value)
 
 
+# ── the room_scan_images fallback carrier ───────────────────────────────────
+
+
+def record(name: str, **overrides) -> dict:
+    """One `inputs.photoRecords` entry, as the dispatcher inlines it from a
+    `room_scan_images` row."""
+    base = {
+        "fileName": name,
+        "width": 1440,
+        "height": 1920,
+        "cameraTransform": list(IDENTITY_16),
+        "cameraIntrinsics": {
+            "fx": 1500.0, "fy": 1500.0, "cx": 960.0, "cy": 720.0,
+            "width": 1920, "height": 1440,
+        },
+    }
+    base.update(overrides)
+    return base
+
+
+def test_photo_rows_parse_into_the_same_poses_as_a_manifest():
+    """The claim the fallback rests on: room_scan_images' columns carry the same
+    shapes the sidecar does, so one reader serves both."""
+    from scan_modal.core.transforms import parse_photo_rows
+
+    rows = parse_photo_rows([record("hero.heic"), record("auto_001.50.heic")])
+    manifest = parse_photos_manifest("\n".join([
+        json.dumps(entry(relativePath="photos/hero.heic", orderIndex=0,
+                         width=1440, height=1920)),
+        json.dumps(entry(relativePath="photos/auto_001.50.heic", orderIndex=1,
+                         width=1440, height=1920)),
+    ]))
+
+    assert [nerfstudio_pose(p) for p in rows] == [nerfstudio_pose(p) for p in manifest]
+    assert [frame_file_name(p.relative_path) for p in rows] == [
+        "hero.jpg", "auto_001.50.jpg",
+    ]
+
+
+def test_photo_rows_keep_the_dispatchers_order_not_an_alphabetical_one():
+    """Rows carry no orderIndex/timestamp of their own, so the SQL ordering the
+    dispatcher applied is authoritative — an alphabetical re-sort here would
+    silently re-order the frames relative to the photo URLs."""
+    from scan_modal.core.transforms import parse_photo_rows
+
+    poses = parse_photo_rows([record("zebra.heic"), record("apple.heic")])
+    assert [p.relative_path for p in poses] == ["zebra.heic", "apple.heic"]
+    assert [p.order_index for p in poses] == [0, 1]
+
+
+def test_photo_rows_apply_the_portrait_rotation_identically():
+    """The rotation heuristic is a property of the DATA, not of the carrier."""
+    from scan_modal.core.transforms import parse_photo_rows
+
+    pose_ = parse_photo_rows([record("hero.heic")])[0]
+    assert pose_.needs_right_rotation
+    matrix, intrinsics = nerfstudio_pose(pose_)
+    assert intrinsics == {"fl_x": 1500.0, "fl_y": 1500.0, "cx": 720.0, "cy": 960.0}
+    assert matrix == [
+        [0.0, -1.0, 0.0, 0.0],
+        [0.0, 0.0, -1.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+
+
+@pytest.mark.parametrize("missing", ["fileName", "width", "height", "cameraTransform",
+                                     "cameraIntrinsics"])
+def test_a_photo_row_missing_a_required_field_is_a_manifest_error(missing):
+    from scan_modal.core.transforms import parse_photo_rows
+
+    bad = record("hero.heic")
+    bad.pop(missing)
+    with pytest.raises(ManifestError):
+        parse_photo_rows([bad])
+
+
+def test_photo_rows_reject_a_non_list_and_an_empty_list():
+    from scan_modal.core.transforms import parse_photo_rows
+
+    with pytest.raises(ManifestError):
+        parse_photo_rows([])
+    with pytest.raises(ManifestError):
+        parse_photo_rows({"fileName": "hero.heic"})
+    with pytest.raises(ManifestError):
+        parse_photo_rows(["not an object"])
+
+
 # ── frame naming (the HEIC transcode) ───────────────────────────────────────
 
 
