@@ -135,9 +135,37 @@ ALTER TABLE svc_orders.orders
   ADD COLUMN IF NOT EXISTS organization_id UUID
     REFERENCES public.organizations(id) ON DELETE SET NULL;
 
-CREATE INDEX IF NOT EXISTS idx_orders_organization_created
-  ON svc_orders.orders (organization_id, created_at DESC)
-  WHERE organization_id IS NOT NULL;
+-- svc_orders is Prisma-owned and its physical column casing differs by
+-- environment: Strata was `prisma db push`ed before the schema carried @map,
+-- so the creation timestamp is "createdAt" there, while the 00052 replay that
+-- shapes local/CI stacks spells it created_at. Resolve it from the catalog
+-- rather than hard-coding either spelling.
+DO $orders_organization_index$
+DECLARE
+  v_created_column TEXT;
+BEGIN
+  SELECT attribute.attname INTO v_created_column
+  FROM pg_attribute AS attribute
+  WHERE attribute.attrelid = 'svc_orders.orders'::regclass
+    AND attribute.attnum > 0
+    AND NOT attribute.attisdropped
+    AND attribute.attname IN ('createdAt', 'created_at')
+  ORDER BY (attribute.attname = 'createdAt') DESC
+  LIMIT 1;
+
+  IF v_created_column IS NULL THEN
+    RAISE EXCEPTION
+      '00482 could not resolve a creation-timestamp column on svc_orders.orders';
+  END IF;
+
+  EXECUTE format(
+    'CREATE INDEX IF NOT EXISTS idx_orders_organization_created
+       ON svc_orders.orders (organization_id, %I DESC)
+       WHERE organization_id IS NOT NULL',
+    v_created_column
+  );
+END
+$orders_organization_index$;
 
 COMMENT ON COLUMN svc_orders.orders.organization_id IS
   'Authoritative organization scope for retained-service authorization. NULL means no organization access; never infer this value from order JSON.';
@@ -172,6 +200,18 @@ CREATE TABLE IF NOT EXISTS svc_orders.stripe_webhook_receipts (
 CREATE INDEX IF NOT EXISTS idx_stripe_webhook_receipts_status_started
   ON svc_orders.stripe_webhook_receipts (status, processing_started_at);
 
+-- Strata's svc_orders schema was provisioned by Prisma, not by the 00052
+-- replay, so the shared touch function that migration defines is absent there.
+-- Re-declare it with 00052's body: identical where it already exists, present
+-- where it never was.
+CREATE OR REPLACE FUNCTION svc_orders.set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 DROP TRIGGER IF EXISTS set_stripe_webhook_receipts_updated_at
   ON svc_orders.stripe_webhook_receipts;
 CREATE TRIGGER set_stripe_webhook_receipts_updated_at
@@ -202,34 +242,99 @@ COMMENT ON COLUMN svc_projects.projects.public_project_id IS
 -- Project documents need a canonical Media relationship that can be checked
 -- for the current client, designer, team, and organization. Uploader identity
 -- and JSON metadata cannot represent shared project authority.
-ALTER TYPE svc_media.asset_kind
-  ADD VALUE IF NOT EXISTS 'DOCUMENT';
-
-ALTER TABLE svc_media.media_assets
-  ADD COLUMN IF NOT EXISTS project_id UUID
-    REFERENCES public.projects(id) ON DELETE CASCADE;
-
-DO $$
+-- svc_media diverges further than svc_orders. Strata's copy predates the @@map
+-- annotations in services/media/prisma/schema.prisma, so it carries Prisma's
+-- default identifiers ("MediaAsset", "AssetKind", "productId", "createdAt"),
+-- while the 00052-54 replay that shapes local/CI stacks uses the mapped
+-- snake_case spellings. Every reference below is resolved from the catalog so
+-- the same contract lands on either physical shape.
+DO $media_project_scope$
+DECLARE
+  v_assets    REGCLASS;
+  v_kind_type REGTYPE;
+  v_product   TEXT;
+  v_created   TEXT;
 BEGIN
+  v_assets := COALESCE(
+    to_regclass('svc_media."MediaAsset"'),
+    to_regclass('svc_media.media_assets')
+  );
+  IF v_assets IS NULL THEN
+    RAISE EXCEPTION '00482 could not locate the svc_media asset table';
+  END IF;
+
+  SELECT attribute.atttypid::regtype INTO v_kind_type
+  FROM pg_attribute AS attribute
+  WHERE attribute.attrelid = v_assets
+    AND attribute.attname = 'kind'
+    AND attribute.attnum > 0
+    AND NOT attribute.attisdropped;
+
+  IF v_kind_type IS NULL THEN
+    RAISE EXCEPTION '00482 could not resolve the asset-kind enum on %', v_assets;
+  END IF;
+
+  SELECT attribute.attname INTO v_product
+  FROM pg_attribute AS attribute
+  WHERE attribute.attrelid = v_assets
+    AND attribute.attnum > 0
+    AND NOT attribute.attisdropped
+    AND attribute.attname IN ('productId', 'product_id')
+  ORDER BY (attribute.attname = 'productId') DESC
+  LIMIT 1;
+
+  SELECT attribute.attname INTO v_created
+  FROM pg_attribute AS attribute
+  WHERE attribute.attrelid = v_assets
+    AND attribute.attnum > 0
+    AND NOT attribute.attisdropped
+    AND attribute.attname IN ('createdAt', 'created_at')
+  ORDER BY (attribute.attname = 'createdAt') DESC
+  LIMIT 1;
+
+  IF v_product IS NULL OR v_created IS NULL THEN
+    RAISE EXCEPTION
+      '00482 could not resolve the product/creation columns on %', v_assets;
+  END IF;
+
+  -- Safe inside this transaction: the label is added but never used here.
+  EXECUTE format(
+    'ALTER TYPE %s ADD VALUE IF NOT EXISTS %L', v_kind_type::text, 'DOCUMENT'
+  );
+
+  EXECUTE format(
+    'ALTER TABLE %s ADD COLUMN IF NOT EXISTS project_id UUID
+       REFERENCES public.projects(id) ON DELETE CASCADE',
+    v_assets::text
+  );
+
   IF NOT EXISTS (
     SELECT 1
     FROM pg_constraint
-    WHERE conrelid = 'svc_media.media_assets'::regclass
+    WHERE conrelid = v_assets
       AND conname = 'media_assets_single_owner'
   ) THEN
-    ALTER TABLE svc_media.media_assets
-      ADD CONSTRAINT media_assets_single_owner
-      CHECK (project_id IS NULL OR product_id IS NULL);
+    EXECUTE format(
+      'ALTER TABLE %s ADD CONSTRAINT media_assets_single_owner
+         CHECK (project_id IS NULL OR %I IS NULL)',
+      v_assets::text, v_product
+    );
   END IF;
+
+  EXECUTE format(
+    'CREATE INDEX IF NOT EXISTS idx_media_assets_project_created
+       ON %s (project_id, %I DESC)
+       WHERE project_id IS NOT NULL',
+    v_assets::text, v_created
+  );
+
+  EXECUTE format(
+    'COMMENT ON COLUMN %s.project_id IS %L',
+    v_assets::text,
+    'Authoritative public.projects scope for project documents. Never infer project access from asset metadata or caller input.'
+  );
 END
-$$;
-
-CREATE INDEX IF NOT EXISTS idx_media_assets_project_created
-  ON svc_media.media_assets (project_id, created_at DESC)
-  WHERE project_id IS NOT NULL;
-
-COMMENT ON COLUMN svc_media.media_assets.project_id IS
-  'Authoritative public.projects scope for project documents. Never infer project access from asset metadata or caller input.';
+$media_project_scope$;
 
 -- No GRANT is added here. Existing Container login privileges cover their
 -- service schemas; widening PUBLIC, anon, or authenticated is out of scope and
