@@ -82,6 +82,43 @@
 --   schema `public`. Accepted as a benign block on that characterization, not
 --   as a risk judgement on 151 individual objects.
 --
+--   EVENT 3 — 2026-08-18. CONSIDERED, AND DELIBERATELY EMPTY.
+--   The reachability correction surfaced 11 residuals the old rule had hidden.
+--   None of them became a registry row, and the reasoning is recorded here so
+--   nobody rediscovers them and signs them off casually:
+--
+--     • extensions.pg_stat_statements, .._info — NOT registered because they
+--       are FIXED, not accepted. On staging and production `postgres` owns them
+--       and the PUBLIC SELECT grant reads `=r/postgres`, so migration
+--       00486_public_acl_residual_closure.sql revokes it. Fix beats accept
+--       wherever ownership allows it, and a registry row would have recorded
+--       permanent acceptance of something now closed.
+--       On the local Supabase CLI image the same two relations are
+--       supabase_admin-owned (`=r/supabase_admin`) and the revoke is a silent
+--       no-op, so they remain a live local finding. 00486 says so out loud
+--       rather than reporting closure it did not achieve.
+--
+--     • 4 storage prefix routines, 3 storage cleanup triggers, 2 graphql schema
+--       version routines — all SECURITY DEFINER, all PUBLIC-executable, all
+--       reachable by `anon`, and all owned by supabase_admin /
+--       supabase_storage_admin, so `postgres` cannot revoke them (verified:
+--       "WARNING: no privileges could be revoked"). They are NOT registered
+--       because they DO NOT EXIST on the target. Measured read-only against
+--       staging vuesoyhfrjabfxbrzekd on 2026-08-18: staging's `storage` schema
+--       has no prefix feature and zero SECURITY DEFINER routines, and its
+--       `graphql` schema has exactly one routine, `graphql.graphql`, which is
+--       SECURITY INVOKER. They exist only on the newer platform image the local
+--       CLI ships.
+--       Registering an object that is absent from the target is noise, and
+--       worse, it pre-approves the object for the day it arrives. When the
+--       platform upgrade reaches staging these must force a FRESH ruling, not
+--       inherit this file's signature.
+--
+--   The consequence is deliberate and is not a defect: the conformance gate is
+--   GREEN on staging and RED on the local CLI image. See the runbook's Blocker 1
+--   section. A local rehearsal that is red on nine objects the target does not
+--   have is telling the truth about the local image.
+--
 -- The practical consequence: a change that would move a row out of event 2's
 -- characterization — an extension shipping a SECURITY DEFINER routine, or
 -- `anon` losing USAGE on `public` so these stop being reachable at all —
