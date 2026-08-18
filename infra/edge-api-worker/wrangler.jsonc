@@ -97,8 +97,8 @@
         "SUPABASE_JWT_ISSUER": "https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1",
         "SUPABASE_JWT_AUDIENCE": "authenticated",
         "SUPABASE_JWKS_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1/.well-known/jwks.json",
-        "CATALOG_SOURCE": "shadow",
-        "CATALOG_HYPERDRIVE_PERCENT": "0",
+        "CATALOG_SOURCE": "hyperdrive",
+        "CATALOG_HYPERDRIVE_PERCENT": "100",
         "LEGACY_FETCH_TIMEOUT_MS": "3000",
         // review finding W-1 — a 10s proxy abort in front of stripe-webhook (sync DB writes + email sends) risks silent event loss inside Stripe's ~30s window.
         "COMPATIBILITY_FETCH_TIMEOUT_MS": "30000",
@@ -109,9 +109,13 @@
       // DB_FRESH=strata-prod-fresh (edge_rls_login, caching disabled),
       // DB_CATALOG_FRESH=strata-prod-catalog-fresh (edge_catalog_login, caching
       // disabled — the shadow fresh leg), DB_PUBLIC_CACHE=strata-prod-public-cache
-      // (edge_catalog_login, max_age 60 / swr 15). CATALOG_SOURCE stays legacy:
-      // promote it in a later, deliberate edit — a promoted source missing the
-      // bindings it reads fails config:check and boots 503.
+      // (edge_catalog_login, max_age 60 / swr 15). Resting at rung 3
+      // (hyperdrive/100) — a promoted source missing the bindings it reads
+      // fails config:check and boots 503. hyperdrive still reads legacy on
+      // every request and compares it against DB_PUBLIC_CACHE, so the rung-3
+      // canary keeps full comparison coverage; DB_CATALOG_FRESH stays bound
+      // but unread (shadow-only leg). Rollback = CATALOG_SOURCE "legacy" +
+      // CATALOG_HYPERDRIVE_PERCENT "0", config:check, deploy (~5s, drilled).
       "hyperdrive": [
         { "binding": "DB_FRESH", "id": "f19990d0765043ff842bd95e52875edd" },
         { "binding": "DB_CATALOG_FRESH", "id": "3832e8f8857549c1bfb76a8f2f42f2ec" },
