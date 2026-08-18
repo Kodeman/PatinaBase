@@ -73,6 +73,14 @@ describe('ScanViewerSheet', () => {
     expect(screen.getByText('Opening the scan…')).toBeInTheDocument();
   });
 
+  it('says the scan could not be opened when the query errors', () => {
+    mockUseRoomScan.mockReturnValue({ data: undefined, isError: true });
+    render(<ScanViewerSheet scanId="scan-4" onClose={jest.fn()} />);
+
+    expect(screen.getByText('That scan could not be opened.')).toBeInTheDocument();
+    expect(screen.queryByText('Opening the scan…')).not.toBeInTheDocument();
+  });
+
   it('closes from the still’s own header', () => {
     const onClose = jest.fn();
     mockUseRoomScan.mockReturnValue({

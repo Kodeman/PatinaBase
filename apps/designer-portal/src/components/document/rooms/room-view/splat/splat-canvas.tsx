@@ -112,7 +112,7 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
       if (cancelled || rafId) return;
       rafId = requestAnimationFrame(() => {
         rafId = 0;
-        void frame();
+        runFrame();
       });
     };
 
@@ -134,6 +134,22 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
           invalidate();
         }
       }
+    };
+
+    /**
+     * The only place a frame is started, and the only place its promise is handled.
+     * A rejected sort is not exceptional — unmounting mid-sort disposes the parts
+     * `spark.update()` is still holding, and the library rejects when it resumes on
+     * freed state. After teardown that is expected and must stay silent (a bare
+     * `void frame()` would surface it as an unhandledrejection, and a setState here
+     * would be on an unmounted component); before teardown it is a real failure and
+     * belongs in the same quiet state a failed load lands in.
+     */
+    const runFrame = () => {
+      frame().catch(() => {
+        if (cancelled) return;
+        setStatus('error');
+      });
     };
 
     let spark: SparkRenderer | null = null;
@@ -172,7 +188,15 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
           camera.lookAt(t.x, t.y, t.z);
           // The async half: Spark sorts the gaussians back-to-front for THIS camera
           // before the draw. Skipping the await would draw last frame's order.
-          await spark!.update({ scene, camera });
+          try {
+            await spark!.update({ scene, camera });
+          } catch (err) {
+            // Teardown during the sort freed the buffers this call resumes on, so
+            // the library throwing here is the expected shape of unmounting
+            // mid-frame, not a fault. Anything else is real and propagates.
+            if (cancelled) return;
+            throw err;
+          }
           if (cancelled) return;
           gl.render(scene, camera);
         };
@@ -193,7 +217,7 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
         observer.observe(wrap);
 
         resize();
-        void frame();
+        runFrame();
         setStatus('ready');
       })
       .catch(() => {

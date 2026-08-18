@@ -39,7 +39,27 @@ class MockSparkRenderer extends ActualTHREE.Object3D {
   sourceRenderer: unknown;
   onDirty?: () => void;
   dispose = jest.fn();
-  update = jest.fn().mockResolvedValue(undefined);
+  /**
+   * The sort. Resolves immediately by default; `holdSort()` makes the next call
+   * hang so a test can unmount mid-sort and then settle it either way — the same
+   * deferred shape `MockSplatMesh.initialized` uses, and the only way to reach the
+   * "teardown landed inside the await" path that a real user hits by clicking away
+   * from Splat while a frame is in flight.
+   */
+  update = jest.fn(() => {
+    if (!this.held) return Promise.resolve();
+    this.held = false;
+    return new Promise<void>((resolve, reject) => {
+      this.settleSort = resolve;
+      this.failSort = reject;
+    });
+  });
+  private held = false;
+  settleSort: (() => void) | null = null;
+  failSort: ((e: Error) => void) | null = null;
+  holdSort() {
+    this.held = true;
+  }
   constructor(options: { renderer: unknown; onDirty?: () => void }) {
     super();
     this.sourceRenderer = options.renderer;
@@ -289,6 +309,58 @@ describe('SplatCanvas — failure states', () => {
     ).toBeInTheDocument();
     expect(meshInstances[0].dispose).toHaveBeenCalled();
     expect(sparkInstances[0].dispose).toHaveBeenCalled();
+  });
+
+  it('is silent when teardown lands INSIDE the sort — no unhandled rejection', async () => {
+    // The real gesture: click away from Splat (or navigate) while a frame is in
+    // flight. Teardown disposes the buffers `spark.update()` resumes on, so the
+    // library rejects — after unmount, which must not reach the window as an
+    // unhandledrejection and must not set state on a dead component.
+    const rejections: unknown[] = [];
+    const onUnhandled = (e: PromiseRejectionEvent) => {
+      e.preventDefault();
+      rejections.push(e.reason);
+    };
+    window.addEventListener('unhandledrejection', onUnhandled);
+
+    try {
+      const { unmount } = render(<SplatCanvas splatUrl={URL_A} />);
+      sparkInstances[0].holdSort();
+      meshInstances[0].land();
+      await settle();
+      await nextFrame(); // starts a frame that now hangs inside spark.update()
+
+      expect(sparkInstances[0].settleSort).toBeInstanceOf(Function);
+      unmount();
+
+      // Teardown has run; now let the held sort fail the way a disposed one does.
+      sparkInstances[0].failSort?.(new Error('sort resumed on freed buffers'));
+      await settle();
+      await settle();
+
+      expect(rejections).toEqual([]);
+      // And nothing was drawn onto the disposed context.
+      expect(rendererInstances[0].render).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('unhandledrejection', onUnhandled);
+    }
+  });
+
+  it('routes a sort that fails while still mounted to the quiet error state', async () => {
+    render(<SplatCanvas splatUrl={URL_A} />);
+    sparkInstances[0].holdSort();
+    meshInstances[0].land();
+    await settle();
+    await nextFrame();
+
+    sparkInstances[0].failSort?.(new Error('sort failed'));
+    await settle();
+
+    expect(
+      await screen.findByText(
+        'The walkthrough couldn\u2019t be loaded \u2014 Mesh and Plan carry the room.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('says so plainly when the device has no WebGL at all', () => {
