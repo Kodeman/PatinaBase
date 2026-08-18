@@ -4837,9 +4837,14 @@ END
 $first_project_handoffs$;
 
 RESET ROLE;
+-- Suspending studio 1's last active owner is a fixture manipulation that trips
+-- last_owner_protected (a real org-integrity guard); suspend with triggers off
+-- to stage the owner-gone state the subsequent handoff probes exercise.
+SET LOCAL session_replication_role = replica;
 UPDATE public.organization_members
 SET status = 'suspended'
 WHERE id = 'd4851100-0000-4000-8000-000000000001';
+SET LOCAL session_replication_role = origin;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
@@ -4884,6 +4889,19 @@ BEGIN
       AND project.designer_id =
             'd4850000-0000-4000-8000-000000000005'
   ), 'subsequent handoff failed with the historical author suspended';
+END
+$subsequent_project_handoffs$;
+
+RESET ROLE;
+
+-- The proposal's authorship/provenance is a durable-state invariant; proposals
+-- RLS hides proposal 030 from the new lead (002), so verify it as postgres.
+DO $subsequent_handoff_provenance$
+DECLARE
+  activation_project_id uuid := (
+    SELECT project_id FROM _00487_activation_fixture
+  );
+BEGIN
   ASSERT (
     SELECT proposal.designer_id =
              'd4850000-0000-4000-8000-000000000001'
@@ -4892,9 +4910,7 @@ BEGIN
     WHERE proposal.id = 'd4853000-0000-4000-8000-000000000030'
   ), 'project handoff rewrote canonical proposal authorship/provenance';
 END
-$subsequent_project_handoffs$;
-
-RESET ROLE;
+$subsequent_handoff_provenance$;
 
 UPDATE public.project_team_members
 SET removed_at = now()
@@ -5142,6 +5158,22 @@ BEGIN
             'd4851000-0000-4000-8000-000000000001'
   ), 'post-handoff addendum/paper invoices did not use the current lead';
 
+  -- Proposal-authorship invariant verified as postgres after RESET ROLE below;
+  -- proposals RLS hides these 001-authored proposals from the current lead.
+
+  ASSERT current_setting('request.jwt.claims', true) = claims_before
+     AND current_setting('app.commercial_signature_capability', true) =
+           capability_before,
+    'post-handoff addendum/paper billing leaked claims or capability state';
+END
+$post_handoff_addendum_and_paper_billing$;
+
+RESET ROLE;
+
+-- Proposal authorship/provenance is a durable-state invariant; proposals RLS
+-- hides these 001-authored proposals from the current lead, so verify as postgres.
+DO $post_handoff_authorship_provenance$
+BEGIN
   ASSERT 3 = (
     SELECT count(*)
     FROM public.proposals AS proposal
@@ -5156,15 +5188,8 @@ BEGIN
             'd4850000-0000-4000-8000-000000000001'
       AND proposal.project_id IS NULL
   ), 'post-handoff addendum/paper billing rewrote proposal authorship';
-
-  ASSERT current_setting('request.jwt.claims', true) = claims_before
-     AND current_setting('app.commercial_signature_capability', true) =
-           capability_before,
-    'post-handoff addendum/paper billing leaked claims or capability state';
 END
-$post_handoff_addendum_and_paper_billing$;
-
-RESET ROLE;
+$post_handoff_authorship_provenance$;
 
 -- A zero-deposit authorization still crosses the full project/studio/lead
 -- boundary before it may mutate signature or execution state.
@@ -5198,6 +5223,37 @@ BEGIN
     );
   END;
 
+  -- No-residue state invariants verified as postgres after RESET ROLE below;
+  -- the role-removed lead cannot see these proposals under proposals RLS.
+
+  BEGIN
+    PERFORM public.execute_trade_scope_on_paper(
+      executed_trade_proposal, 'SD Client', current_date, NULL
+    );
+    RAISE EXCEPTION 'role-removed lead retried paper trade execution'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN insufficient_privilege THEN
+    ASSERT SQLERRM = format(
+      'trade scope %s not found or access denied', executed_trade_proposal
+    );
+  END;
+END
+$zero_deposit_live_authority_denial$;
+RESET ROLE;
+
+-- Verify the denials left no legal/billing residue as postgres; the role-removed
+-- lead (005) cannot see these proposals under proposals RLS.
+DO $zero_deposit_live_authority_denial_state$
+DECLARE
+  zero_proposal uuid := (
+    SELECT proposal_id FROM _00487_commercial_fixture
+    WHERE label = 'furnishings_zero'
+  );
+  executed_trade_proposal uuid := (
+    SELECT proposal_id FROM _00487_commercial_fixture
+    WHERE label = 'trade_paper'
+  );
+BEGIN
   ASSERT (
     SELECT proposal.commercial_state = 'sent'
        AND document.executed_at IS NULL
@@ -5211,18 +5267,6 @@ BEGIN
       ON document.proposal_id = proposal.id
     WHERE proposal.id = zero_proposal
   ), 'zero-deposit authority denial left legal or billing residue';
-
-  BEGIN
-    PERFORM public.execute_trade_scope_on_paper(
-      executed_trade_proposal, 'SD Client', current_date, NULL
-    );
-    RAISE EXCEPTION 'role-removed lead retried paper trade execution'
-      USING ERRCODE = 'P4850';
-  EXCEPTION WHEN insufficient_privilege THEN
-    ASSERT SQLERRM = format(
-      'trade scope %s not found or access denied', executed_trade_proposal
-    );
-  END;
 
   ASSERT (
     SELECT proposal.commercial_state = 'executed'
@@ -5240,8 +5284,7 @@ BEGIN
     WHERE proposal.id = executed_trade_proposal
   ), 'trade live-authority denial changed executed legal or billing state';
 END
-$zero_deposit_live_authority_denial$;
-RESET ROLE;
+$zero_deposit_live_authority_denial_state$;
 
 INSERT INTO public.user_roles (id, user_id, role_id, granted_by)
 VALUES (
@@ -5251,9 +5294,14 @@ VALUES (
   'd4850000-0000-4000-8000-000000000001'
 );
 
+-- Mirror of the earlier owner suspension: reactivating studio 1's owner trips
+-- guard_org_membership_changes (owner_promotion_requires_owner); restore the
+-- fixture state with triggers off.
+SET LOCAL session_replication_role = replica;
 UPDATE public.organization_members
 SET status = 'active'
 WHERE id = 'd4851100-0000-4000-8000-000000000001';
+SET LOCAL session_replication_role = origin;
 
 DO $canonical_project_binding_after_execution$
 BEGIN
@@ -5438,9 +5486,13 @@ SELECT public.reassign_project_lead(
 );
 RESET ROLE;
 
+-- Fixture owner-suspension (last active owner) trips last_owner_protected;
+-- stage it with triggers off.
+SET LOCAL session_replication_role = replica;
 UPDATE public.organization_members
 SET status = 'suspended'
 WHERE id = 'd4851100-0000-4000-8000-000000000001';
+SET LOCAL session_replication_role = origin;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
@@ -5492,9 +5544,12 @@ $trade_draw_comember_success$;
 
 RESET ROLE;
 
+-- Fixture owner-reactivation trips owner_promotion_requires_owner; triggers off.
+SET LOCAL session_replication_role = replica;
 UPDATE public.organization_members
 SET status = 'active'
 WHERE id = 'd4851100-0000-4000-8000-000000000001';
+SET LOCAL session_replication_role = origin;
 
 DO $trade_draw_success_state$
 BEGIN
