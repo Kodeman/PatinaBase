@@ -40,9 +40,13 @@ modal = ["modal>=1.0"]
 #                       it reads a COLMAP-free `transforms.json`, which is
 #                       exactly what core/transforms.py writes, and exports via
 #                       `ns-export gaussian-splat`.
-#   gsplat 1.5.3      — latest on PyPI (2025-07-04); splatfacto's rasterizer.
-#                       Pinned rather than floated: it compiles CUDA kernels, so
-#                       a float here is a rebuild-and-pray on every deploy.
+#   gsplat 1.4.0      — splatfacto's rasterizer, pinned to what nerfstudio
+#                       1.1.5 itself requires (`gsplat==1.4.0` in its own
+#                       metadata; PyPI's newest 1.5.3 is a pip
+#                       ResolutionImpossible conflict against it — hit on a
+#                       live build 2026-08-18). Pinned rather than floated: it
+#                       compiles CUDA kernels, so a float here is a
+#                       rebuild-and-pray on every deploy.
 #   torch 2.5.1 / torchvision 0.20.1 from the cu124 index — matches the CUDA
 #                       12.4 base. nerfstudio does not pin torch itself, so
 #                       leaving it unpinned resolves a CPU-only wheel about as

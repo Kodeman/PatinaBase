@@ -216,7 +216,11 @@ if modal is not None:
             extra_index_url="https://download.pytorch.org/whl/cu124",
         )
         .pip_install(
-            "gsplat==1.5.3",
+            # nerfstudio 1.1.5 pins gsplat==1.4.0 exactly (pip's resolver
+            # refuses 1.5.3 as a ResolutionImpossible conflict — verified
+            # 2026-08-18 against a live build). Follow nerfstudio's pin
+            # rather than PyPI's newest gsplat.
+            "gsplat==1.4.0",
             "nerfstudio==1.1.5",
             # HEIC decode for the captured photos (PosedPhotoService writes
             # image/heic); PIL cannot read them without this opener.
