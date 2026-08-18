@@ -65,6 +65,15 @@ export function compatibilityUpstreamHeaders(request: Request): Headers {
     headers.append(name, value);
   });
 
+  // All client-supplied forwarding headers were stripped above (anti-spoof).
+  // Re-derive X-Forwarded-For solely from cf-connecting-ip, which Cloudflare
+  // sets and a client cannot forge, so GoTrue sees the real per-caller IP for
+  // rate-limiting and audit. Absent it (non-CF path), forward nothing.
+  const cfConnectingIp = request.headers.get('cf-connecting-ip');
+  if (cfConnectingIp) {
+    headers.set('x-forwarded-for', cfConnectingIp);
+  }
+
   if (isWebSocketUpgrade(request)) {
     headers.set('connection', 'Upgrade');
     headers.set('upgrade', 'websocket');

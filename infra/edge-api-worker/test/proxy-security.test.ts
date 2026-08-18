@@ -114,7 +114,6 @@ describe('Supabase compatibility proxy', () => {
       'keep-alive',
       'proxy-authorization',
       'forwarded',
-      'x-forwarded-for',
       'cf-access-client-id',
       'cf-access-client-secret',
       'cf-access-jwt-assertion',
@@ -123,6 +122,51 @@ describe('Supabase compatibility proxy', () => {
       'x-patina-trace-id',
       'x-patina-edge-proxy',
     ]) {
+      expect(forwarded?.headers.has(name), name).toBe(false);
+    }
+    // The client-supplied x-forwarded-for (10.0.0.1) is dropped; the upstream
+    // value is the Cloudflare-verified cf-connecting-ip (10.0.0.2) instead.
+    expect(forwarded?.headers.get('x-forwarded-for')).toBe('10.0.0.2');
+  });
+
+  it('forwards cf-connecting-ip as X-Forwarded-For and never a client-supplied forwarding header', async () => {
+    let forwarded: Request | undefined;
+    const request = new Request('https://api.patina.cloud/rest/v1/products', {
+      headers: {
+        'cf-connecting-ip': '203.0.113.7',
+        'x-forwarded-for': '10.0.0.1, 192.168.0.1',
+        'true-client-ip': '198.51.100.9',
+        'x-real-ip': '198.51.100.9',
+        forwarded: 'for=192.168.0.1',
+      },
+    });
+    await proxySupabaseRequest(request, env, config, 'server-trace', async (input, init) => {
+      forwarded = new Request(input, init);
+      return new Response('ok');
+    });
+
+    // Verified client IP is the only forwarding signal that reaches upstream.
+    expect(forwarded?.headers.get('x-forwarded-for')).toBe('203.0.113.7');
+    for (const name of ['true-client-ip', 'x-real-ip', 'forwarded', 'cf-connecting-ip']) {
+      expect(forwarded?.headers.has(name), name).toBe(false);
+    }
+  });
+
+  it('adds no forwarding header when cf-connecting-ip is absent (non-CF path)', async () => {
+    let forwarded: Request | undefined;
+    const request = new Request('https://api.patina.cloud/rest/v1/products', {
+      headers: {
+        'x-forwarded-for': '10.0.0.1',
+        'true-client-ip': '198.51.100.9',
+        forwarded: 'for=private',
+      },
+    });
+    await proxySupabaseRequest(request, env, config, 'server-trace', async (input, init) => {
+      forwarded = new Request(input, init);
+      return new Response('ok');
+    });
+
+    for (const name of ['x-forwarded-for', 'true-client-ip', 'forwarded', 'x-real-ip']) {
       expect(forwarded?.headers.has(name), name).toBe(false);
     }
   });
