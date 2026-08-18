@@ -9,18 +9,34 @@
  * Plan, Orbit, Mesh, and Splat read as four faces of one instrument (D1 — a Strata
  * rule apart, not tabs), and it owns the projection's quiet states.
  *
- * ⚠ THE CANVAS IS NOT HERE YET, AND THE ABSENCE IS DELIBERATE. Every MIT
- * three.js-native Gaussian-splat renderer requires a three.js newer than the one
- * this portal runs; the evaluation, the evidence, and what unblocks it are in
- * `README.md` beside this file. Until then the stage tells the truth rather than
- * mounting a canvas that would throw on its first frame. When the renderer lands,
- * `splat-canvas.tsx` arrives as a sibling behind
- * `dynamic(() => import('./splat-canvas'), { ssr:false })` — the ModelStage shape —
- * and the only edit here is swapping the `renderer-pending` branch for it. The
- * states around it, and the whole data seam behind them, are already right.
+ * The WebGL surface arrives through `dynamic(() => import('./splat-canvas'),
+ * { ssr:false })`, so `@sparkjsdev/spark` — and the Rust splat-decode WASM it
+ * inlines — land in a chunk that loads on the first Splat mount and never on a
+ * Plan-, Orbit-, or Mesh-only visit. A design-system `ErrorBoundary` wraps it: if
+ * Spark can't start, Mesh and Plan still carry the room. This module itself stays
+ * free of three and of Spark; `__tests__/splat-chunk-boundary.test.ts` holds that.
+ *
+ * The quiet states live here rather than in the canvas because each is known
+ * before any WebGL exists: the Room File row is in flight, the splat is registered
+ * but its read path is not live yet, or the scan has no walkthrough at all. The
+ * load-error state proper — a splat file that 404s or won't decode — is the
+ * canvas's, and reads in the same voice.
  */
 
+import dynamic from 'next/dynamic';
+import { ErrorBoundary } from '@patina/design-system';
 import type { SplatUnavailableReason } from '@patina/supabase';
+
+const SplatCanvas = dynamic(() => import('./splat-canvas'), {
+  ssr: false,
+  loading: () => <StageMessage mono>Bringing the walkthrough up…</StageMessage>,
+});
+
+const SPLAT_FALLBACK = (
+  <StageMessage>
+    Splat couldn’t start on this device — Mesh and Plan carry the room.
+  </StageMessage>
+);
 
 export interface SplatStageProps {
   /** A fetchable splat URL, or null while none resolves. */
@@ -47,13 +63,12 @@ function StageBody({ url, unavailable, isLoading }: SplatStageProps) {
   if (isLoading) return <StageMessage mono>Fetching the walkthrough…</StageMessage>;
 
   // A URL resolved — a dev `?splatUrl=` override today, a capability URL once the
-  // W2 read path lands. Either way there is no renderer to hand it to yet, and
-  // saying so is the honest state; see this module's README.
+  // W2 read path lands. Either way it is the canvas's from here.
   if (url) {
     return (
-      <StageMessage>
-        The walkthrough viewer isn’t in this build yet — Mesh and Plan carry the room.
-      </StageMessage>
+      <ErrorBoundary fallback={SPLAT_FALLBACK}>
+        <SplatCanvas splatUrl={url} />
+      </ErrorBoundary>
     );
   }
 

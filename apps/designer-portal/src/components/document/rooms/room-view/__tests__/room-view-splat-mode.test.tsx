@@ -23,10 +23,17 @@ import { prototypeRoom } from '@/lib/room-view/__fixtures__/room-fixture';
 const mockUseRoomFiles = jest.fn(() => ({ data: [] as unknown[] }));
 const mockUseSplatUrl = jest.fn();
 
+// One stand-in for BOTH dynamic canvases (Mesh's and Splat's) — they are told
+// apart by the prop each is handed, which is also what proves the right URL
+// reached the right one.
 jest.mock('next/dynamic', () => ({
   __esModule: true,
-  default: () => function MockModelCanvas() {
-    return <div data-testid="model-canvas" />;
+  default: () => function MockCanvas(props: { modelUrl?: string; splatUrl?: string }) {
+    return props.splatUrl !== undefined ? (
+      <div data-testid="splat-canvas" data-splat-url={props.splatUrl} />
+    ) : (
+      <div data-testid="model-canvas" />
+    );
   },
 }));
 
@@ -61,6 +68,15 @@ const PENDING = {
   artifact: { object_id: 'obj-1', version: 1 },
   url: null,
   unavailable: 'read-path-pending' as const,
+  isLoading: false,
+};
+
+/** …and for one that resolves — a dev `?splatUrl=` override, or the read path. */
+const RESOLVED = {
+  hasArtifact: true,
+  artifact: { object_id: 'obj-1', version: 1 },
+  url: '/fixtures/splat/room-fixture.ply',
+  unavailable: null,
   isLoading: false,
 };
 
@@ -177,5 +193,37 @@ describe('RoomView — the SPLAT stage', () => {
         'This room’s walkthrough is captured — the viewer is waiting on its read path.',
       ),
     ).toBeInTheDocument();
+    expect(screen.queryByTestId('splat-canvas')).not.toBeInTheDocument();
+  });
+
+  it('mounts the canvas with the resolved URL once one arrives', async () => {
+    // The end-to-end shape of the dev walk: `?splatUrl=` reaches `useSplatUrl`,
+    // `useSplatUrl` hands the stage a URL, the stage hands it the canvas.
+    mockUseRoomFiles.mockReturnValue({ data: [{ id: 'rf-1', status: 'generated' }] });
+    mockUseSplatUrl.mockReturnValue(RESOLVED);
+    const user = userEvent.setup();
+
+    renderRoomView();
+    await user.click(screen.getByRole('button', { name: 'Splat' }));
+
+    expect(screen.getByTestId('splat-canvas')).toHaveAttribute(
+      'data-splat-url',
+      '/fixtures/splat/room-fixture.ply',
+    );
+    expect(screen.getByText('Splat · the room as photographed')).toBeInTheDocument();
+  });
+
+  it('keeps the splat stage mounted-but-hidden after switching away', async () => {
+    // Switching back to Plan must not tear the canvas down and re-download the
+    // splat; `room-view.tsx` hides it instead (the `splatMounted` latch).
+    mockUseRoomFiles.mockReturnValue({ data: [{ id: 'rf-1', status: 'generated' }] });
+    mockUseSplatUrl.mockReturnValue(RESOLVED);
+    const user = userEvent.setup();
+
+    renderRoomView();
+    await user.click(screen.getByRole('button', { name: 'Splat' }));
+    await user.click(screen.getByRole('button', { name: 'Plan' }));
+
+    expect(screen.getByTestId('splat-canvas')).toBeInTheDocument();
   });
 });

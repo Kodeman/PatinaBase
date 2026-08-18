@@ -6,9 +6,10 @@ Plan is the measured drawing. Orbit is the synthetic diagram. Mesh is the scan's
 geometry. **Splat is the room as photographed** — a Gaussian-splat radiance field
 trained from the walk's posed keyframes, seen and never measured against.
 
-What is in this directory today: the data seam, the mode gate, and the stage with its
-quiet states. What is not: the WebGL canvas. This document records why, with the
-evidence, so the next person does not re-run the evaluation.
+What is in this directory: the data seam, the mode gate, the stage with its quiet
+states, and — as of the W2 splat-unblock lane — the WebGL canvas itself, on
+`@sparkjsdev/spark`. This document keeps the renderer evaluation that led here, so the
+next person does not re-run it, and then records what was actually built.
 
 ---
 
@@ -17,7 +18,7 @@ evidence, so the next person does not re-run the evaluation.
 Two MIT candidates were named in the brief; a third came up during the evaluation.
 All three were checked against the real published packages, not their marketing.
 
-### (a) Spark — `@sparkjsdev/spark` · **the right renderer, blocked**
+### (a) Spark — `@sparkjsdev/spark` · **the right renderer — adopted, pinned at 2.1.0**
 
 Architecturally it is the fit, and nothing found here changes that. Spark renders
 splats as ordinary three.js scene objects: `new SparkRenderer({ renderer })` is an
@@ -41,7 +42,7 @@ Verified against the registry and the published `dist/spark.module.js` (2.1.0):
 | Render loop | Splat sorting is async. The quick-start uses `setAnimationLoop`, but on-demand works: `await spark.update({ scene, camera })` before each `renderer.render(...)`. That is one `await` inside our existing `invalidate()` coalescer. |
 | Packaging | ESM + CJS, ships its own `.d.ts`, no `window`/`document` at module scope |
 
-**The blocker, and it is hard:**
+**The blocker, and it was hard — now cleared:**
 
 ```
 @sparkjsdev/spark@2.1.0   peerDependencies: { "three": ">=0.180.0" }
@@ -86,71 +87,92 @@ well-known MIT three.js-native splat renderer. It does not rescue us:
 - Wants a Web Worker and (for its fast path) `SharedArrayBuffer`, which needs COOP/COEP
   response headers the portal does not send.
 
-**Conclusion: the entire MIT Gaussian-splat ecosystem post-dates three 0.159.** There
-is no renderer choice that unblocks this; the three.js version is the blocker.
+**Conclusion at the time: the entire MIT Gaussian-splat ecosystem post-dates three
+0.159.** No renderer choice unblocked this; the three.js version was the blocker.
 
 ---
 
-## What unblocks the canvas
+## How it was unblocked
 
-`apps/designer-portal` must move to **three ≥ 0.180** (`three` + `@types/three`).
-That is one line each, and the room-view code itself is ready for it — Orbit and Mesh
-use only bedrock APIs (`BoxGeometry`, `LineSegments`, `PerspectiveCamera`,
-`WebGLRenderer`, `GLTFLoader`/`DRACOLoader`/`KTX2Loader`), nothing removed between
-0.159 and 0.180, and `WebGLRenderer._useLegacyLights` is already `false` in 0.159 so
-the Mesh light rig does not change value.
+Exactly the sequence the evaluation named, in one lane:
 
-**But the bump does not land alone, which is why this lane did not take it.** It was
-attempted and reverted. `pnpm --filter @patina/designer-portal type-check` fails with
-12 errors, all in the legacy react-three-fiber viewer at
-`src/components/rooms/viewer/` (`ElevationCamera.tsx`, `FloorPlanCamera.tsx`,
-`WalkthroughControls.tsx`, `RoomModel.tsx`) — `@react-three/fiber@8` and
-`@react-three/drei@9` resolve their own `@types/three`, and with two copies in the
-tree every `Vector3`/`Matrix4`/`OrthographicCamera` crossing the boundary is a
-different type. That stack is the one PROPOSAL §4 says to **"remove or guard"**; it is
-still live-referenced (`components/document/overlays/scan-viewer-sheet.tsx` lazily
-imports `RoomScanViewer`), so retiring it is a product decision belonging to that
-item, not a side effect of adding a projection.
+1. **The legacy react-three-fiber viewer was retired**, not guarded. `src/components/
+   rooms/viewer/` (the whole `RoomScanViewer` stack), the orphaned `room-scan-detail.tsx`,
+   and the `react-three-fiber.d.ts` JSX shim are gone; `@react-three/fiber` and
+   `@react-three/drei` leave designer-portal's manifest. That stack ran on fiber@8,
+   which reads a React internal removed in React 19 — under React 19 it could only
+   throw on mount and fall through `scan-viewer-sheet.tsx`'s ErrorBoundary to the
+   still, so the sheet now renders that still directly and nothing is lost. It was
+   also the sole source of the 12 type errors the bump used to produce: `@react-three/*`
+   resolve their own `@types/three`, and with two copies in the tree every
+   `Vector3`/`Matrix4`/`OrthographicCamera` crossing the boundary was a different type.
+   (client-portal keeps r3f and its error boundary until its own port.)
+2. **three + @types/three → 0.180.0, exact pins.** Fallout in the surviving consumers
+   was nil, as predicted: `orbit/` and `model/` use only bedrock APIs, nothing removed
+   between 0.159 and 0.180, and `_useLegacyLights` was already `false` at 0.159 so the
+   Mesh light rig kept its values. `type-check` is clean with no source change.
+3. **`public/three/` re-vendored** per its own recipe. The three Draco files came
+   across byte-identical to the 0.159 ones; only the two basis transcoders moved.
+4. **`@sparkjsdev/spark` pinned at 2.1.0** and `splat-canvas.tsx` written.
 
-**Sequence: retire/guard the r3f viewer → bump three to ≥0.180 → re-vendor the
-Draco/Basis decoders per `public/three/README.md`'s own recipe → add
-`@sparkjsdev/spark` at an exact pin → write `splat-canvas.tsx`.**
-
-## What `splat-canvas.tsx` will be
+## What `splat-canvas.tsx` is
 
 A near-copy of `model/model-canvas.tsx` — the same StrictMode-safe imperative shape,
 reached only through `dynamic(() => import('./splat-canvas'), { ssr:false })` from
-`splat-stage.tsx` so Spark lands in a chunk that loads on the first Splat mount and
-never on a Plan-only visit. Four differences, all known now:
+`splat-stage.tsx`, so Spark lands in a chunk that loads on the first Splat mount and
+never on a Plan-, Orbit-, or Mesh-only visit. `__tests__/splat-chunk-boundary.test.ts`
+holds that line as a source contract, the way `model/` holds its own.
+
+Four differences from Mesh, all as the evaluation predicted:
 
 1. **No lights.** A splat carries its own radiance; `model-scene.ts`'s hemisphere +
-   key rig would be meaningless here. The scene is the `SparkRenderer`, the
-   `SplatMesh`, and the cream background, nothing else.
+   key rig would only wash it. The scene is the `SparkRenderer`, the `SplatMesh`, and
+   the cream background, nothing else — asserted in `splat-scene.test.ts`.
 2. **A `SparkRenderer` in the scene**, constructed from our own `WebGLRenderer` and
-   added before the `SplatMesh`.
-3. **An `await` inside `invalidate()`** — `await spark.update({ scene, camera })`
-   before `gl.render(...)`, because sorting is async. The rAF coalescer stays; only
-   the frame body becomes a promise.
-4. **Library-owned disposal.** Teardown calls `splatMesh.dispose()` and
-   `spark.dispose()` in place of `model-scene.ts`'s geometry/material/texture walk —
-   a splat holds packed GPU buffers, not three resources. The `cancelled` late-arrival
-   guard from `model-canvas.tsx` carries over unchanged and must dispose the same way.
+   added before the `SplatMesh`. Its `onDirty` callback is wired straight into
+   `invalidate()`: that is how an on-demand loop learns an async sort or LOD update
+   finished and the frame on screen is now stale. Spark's quick-start uses
+   `setAnimationLoop` and never needs this; we do.
+3. **An `await` inside the frame** — `await spark.update({ scene, camera })` before
+   `gl.render(...)`, because sorting is async. The rAF coalescer is unchanged; what is
+   added around it is a serializer (`rendering`/`pending`, so two `update()` calls
+   cannot interleave) and a `cancelled` re-check after the await, because teardown can
+   land mid-frame and `gl.render` on a disposed context is a hard error.
+4. **Library-owned disposal.** `disposeSplatParts` calls `splatMesh.dispose()` then
+   `spark.dispose()` in place of `model-scene.ts`'s geometry/material/texture walk — a
+   splat holds packed GPU buffers, not three resources, so that walk would free
+   nothing. Each call is isolated so a throw out of one cannot strand the other
+   (upstream [#237] reports disposal not always dropping memory). The `cancelled`
+   late-arrival guard from `model-canvas.tsx` carries over and disposes the same way.
+
+One more, small: the `WebGLRenderer` is built with `antialias: false`, per Spark's own
+guidance — MSAA does nothing for gaussians (the primitives are already soft) and costs
+real frame time. Mesh keeps antialiasing because its hard edges need it.
 
 Camera framing reuses `orbit/controls.ts`'s `frameRoom` exactly as `model-scene.ts`'s
 `frameModel` does — the radius band is a pure ratio of the plan diagonal, so a
 metre-scaled splat frames like a metre-scaled GLB with one piece of control math.
+`frameSplat` takes a `THREE.Box3` rather than an `Object3D` because a `SplatMesh` holds
+no three geometry for `Box3.setFromObject` to measure; the bounds come from the library
+(`SplatMesh.getBoundingBox()`).
 
-## Driving it before then
+**Nothing was vendored into `public/three/` for Spark, and nothing needs to be.** Its
+Rust splat-decode WASM ships inlined as a `data:application/wasm;base64,…` URI inside
+the JS, so there is no second request and no CSP allowance to make — strictly better
+than Draco/Basis on that axis.
+
+## Driving it
 
 `/fixtures/splat/room-fixture.ply` is a committed, deterministic 360-gaussian fixture
-(see its README). With the canvas in place:
+(see its README):
 
 ```
 http://localhost:3000/room/<scanId>?splatUrl=/fixtures/splat/room-fixture.ply
 ```
 
-Today that override reaches the stage and the stage says the viewer is not in this
-build — which is true, and is the whole design of the states in `splat-stage.tsx`.
+The override reaches `useSplatUrl` via `dev-splat-url.ts`, which hands the stage a URL,
+which mounts the canvas. `NODE_ENV` is inlined at build time, so the guard folds to a
+constant `null` in production and the parameter is inert there.
 
 ## The data seam
 

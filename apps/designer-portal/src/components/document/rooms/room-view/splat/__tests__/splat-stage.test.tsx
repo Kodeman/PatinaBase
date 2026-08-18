@@ -1,19 +1,32 @@
 /**
- * SplatStage — the projection's quiet states (Rendered Room v2, W2).
+ * SplatStage — state transitions + the canvas seam (Rendered Room v2, W2).
  *
- * Every state this stage can be in is reachable today, because none of them needs a
- * WebGL context: the canvas is not in this build (see `splat/README.md`). What is
- * asserted is that the stage says the RIGHT true thing for each answer `useSplatUrl`
- * can give it, and that the stagecap chrome — the thing that makes Splat read as a
- * face of the same instrument as Plan/Orbit/Mesh — is present in all of them.
+ * `next/dynamic` and the design-system `ErrorBoundary` are mocked exactly as
+ * `model/__tests__/model-stage.test.tsx` mocks them, which keeps the real
+ * `splat-canvas` chunk (three + `@sparkjsdev/spark`, neither of which can start
+ * without a WebGL context) out of the Jest module graph. What is asserted is the
+ * stage's own contract: that it says the RIGHT true thing for each answer
+ * `useSplatUrl` can give it, that the canvas is mounted with the URL exactly when
+ * there is one, and that the stagecap chrome — the thing that makes Splat read as a
+ * face of the same instrument as Plan/Orbit/Mesh — is present in every state.
  */
 
 import { render, screen } from '@testing-library/react';
 import { SplatStage } from '../splat-stage';
 
+jest.mock('next/dynamic', () => {
+  const MockSplatCanvas = ({ splatUrl }: { splatUrl: string }) => (
+    <div data-testid="splat-canvas" data-splat-url={splatUrl} />
+  );
+  return { __esModule: true, default: () => MockSplatCanvas };
+});
+
+jest.mock('@patina/design-system', () => ({
+  ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 const CAPTURED = 'This room’s walkthrough is captured — the viewer is waiting on its read path.';
 const NONE = 'This scan has no walkthrough yet — Mesh and Plan carry the room.';
-const NO_VIEWER = 'The walkthrough viewer isn’t in this build yet — Mesh and Plan carry the room.';
 
 describe('SplatStage', () => {
   it('holds a mono line while the Room File row is in flight', () => {
@@ -39,17 +52,29 @@ describe('SplatStage', () => {
     expect(screen.getByText(NONE)).toBeInTheDocument();
   });
 
-  it('admits there is no viewer when a URL does resolve', () => {
-    // A dev `?splatUrl=` override today, a capability URL later. Until
-    // `splat-canvas.tsx` exists the stage must not pretend to render it.
+  it('mounts the canvas with the URL when one resolves', () => {
+    // A dev `?splatUrl=` override today, a capability URL later. Either way the
+    // stage hands it straight to the dynamic chunk and stops talking.
     render(<SplatStage url="/fixtures/splat/room-fixture.ply" unavailable={null} />);
-    expect(screen.getByText(NO_VIEWER)).toBeInTheDocument();
+    expect(screen.getByTestId('splat-canvas')).toHaveAttribute(
+      'data-splat-url',
+      '/fixtures/splat/room-fixture.ply',
+    );
+    expect(screen.queryByText(NONE)).not.toBeInTheDocument();
   });
 
-  it('prefers the loading line over every settled state', () => {
+  it('never mounts the canvas without a URL, whatever the reason', () => {
+    const { rerender } = render(<SplatStage url={null} unavailable="read-path-pending" />);
+    expect(screen.queryByTestId('splat-canvas')).not.toBeInTheDocument();
+
+    rerender(<SplatStage url={null} unavailable="no-artifact" />);
+    expect(screen.queryByTestId('splat-canvas')).not.toBeInTheDocument();
+  });
+
+  it('prefers the loading line over every settled state, canvas included', () => {
     render(<SplatStage url="/fixtures/splat/room-fixture.ply" unavailable={null} isLoading />);
     expect(screen.getByText('Fetching the walkthrough…')).toBeInTheDocument();
-    expect(screen.queryByText(NO_VIEWER)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('splat-canvas')).not.toBeInTheDocument();
   });
 
   it('keeps the stagecap chrome in every state', () => {
