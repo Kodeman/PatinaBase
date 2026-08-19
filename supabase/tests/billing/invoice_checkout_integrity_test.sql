@@ -54,8 +54,16 @@ VALUES
    'b9700000-0000-4000-8000-000000000003',
    'b9710000-0000-4000-8000-000000000002', 'member', 'active', now());
 
+-- 00511 requires the project lead to hold a designer-domain role, and names
+-- the studio explicitly: this designer belongs to two studios, so canonical
+-- discovery finds two candidates and (by design) derives nothing.
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'b9700000-0000-4000-8000-000000000001', role.id,
+       'b9700000-0000-4000-8000-000000000001'
+FROM public.roles AS role WHERE role.name = 'studio_owner';
+
 INSERT INTO public.projects (
-  id, name, designer_id, client_id, created_by, status
+  id, name, designer_id, client_id, created_by, status, studio_id
 )
 VALUES (
   'b9730000-0000-4000-8000-000000000001',
@@ -63,7 +71,8 @@ VALUES (
   'b9700000-0000-4000-8000-000000000001',
   'b9700000-0000-4000-8000-000000000004',
   'b9700000-0000-4000-8000-000000000001',
-  'active'
+  'active',
+  'b9710000-0000-4000-8000-000000000001'
 );
 
 INSERT INTO public.project_payment_milestones (

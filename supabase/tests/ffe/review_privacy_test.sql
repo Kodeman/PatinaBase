@@ -11,8 +11,19 @@ INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at
 INSERT INTO public.profiles(id,email,full_name) VALUES
 ('f6000000-0000-4000-8000-000000000001','review-owner@test.invalid','Review Owner'),
 ('f6000000-0000-4000-8000-000000000002','review-client@test.invalid','Review Client') ON CONFLICT(id) DO NOTHING;
-INSERT INTO public.projects(id,name,designer_id,client_id,created_by) VALUES
-('f6100000-0000-4000-8000-000000000001','Review Project','f6000000-0000-4000-8000-000000000001','f6000000-0000-4000-8000-000000000002','f6000000-0000-4000-8000-000000000001');
+-- 00511 makes the design studio the canonical authority for every project:
+-- a studio-less project is no longer a reachable state (prod holds none), and
+-- the designer must be an active non-guest member of an active design_studio
+-- and hold a designer-domain role. Give the fixture that shape.
+INSERT INTO public.organizations(id,name,slug,type,status) VALUES
+('f6400000-0000-4000-8000-000000000001','Review Studio','review-studio','design_studio','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+('f6000000-0000-4000-8000-000000000001','f6400000-0000-4000-8000-000000000001','owner','active');
+INSERT INTO public.user_roles(user_id,role_id,granted_by)
+SELECT 'f6000000-0000-4000-8000-000000000001',role.id,'f6000000-0000-4000-8000-000000000001'
+FROM public.roles AS role WHERE role.name='studio_owner';
+INSERT INTO public.projects(id,name,designer_id,client_id,created_by,studio_id) VALUES
+('f6100000-0000-4000-8000-000000000001','Review Project','f6000000-0000-4000-8000-000000000001','f6000000-0000-4000-8000-000000000002','f6000000-0000-4000-8000-000000000001','f6400000-0000-4000-8000-000000000001');
 INSERT INTO public.vendors(id,name) VALUES('f6200000-0000-4000-8000-000000000001','Private Trade Vendor');
 INSERT INTO public.products(id,name,price_retail,price_trade,images,vendor_id,captured_by,captured_at,layer,status) VALUES
 ('f6300000-0000-4000-8000-000000000001','Review Sofa',500000,300000,ARRAY['https://example.invalid/sofa.jpg'],'f6200000-0000-4000-8000-000000000001','f6000000-0000-4000-8000-000000000001',now(),'catalog','published');

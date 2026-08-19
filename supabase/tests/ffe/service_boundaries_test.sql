@@ -19,8 +19,19 @@ INSERT INTO public.profiles(id,email,full_name) VALUES
 ('f7000000-0000-4000-8000-000000000002','boundary-client@test.invalid','Boundary Client'),
 ('f7000000-0000-4000-8000-000000000003','boundary-other@test.invalid','Boundary Other')
 ON CONFLICT(id) DO NOTHING;
-INSERT INTO public.projects(id,name,designer_id,client_id,created_by) VALUES
-('f7100000-0000-4000-8000-000000000001','Boundary Project','f7000000-0000-4000-8000-000000000001','f7000000-0000-4000-8000-000000000002','f7000000-0000-4000-8000-000000000001');
+-- 00511 makes the design studio the canonical authority for every project:
+-- a studio-less project is no longer a reachable state (prod holds none), and
+-- the designer must be an active non-guest member of an active design_studio
+-- and hold a designer-domain role. Give the fixture that shape.
+INSERT INTO public.organizations(id,name,slug,type,status) VALUES
+('f7400000-0000-4000-8000-000000000001','Boundary Studio','boundary-studio','design_studio','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+('f7000000-0000-4000-8000-000000000001','f7400000-0000-4000-8000-000000000001','owner','active');
+INSERT INTO public.user_roles(user_id,role_id,granted_by)
+SELECT 'f7000000-0000-4000-8000-000000000001',role.id,'f7000000-0000-4000-8000-000000000001'
+FROM public.roles AS role WHERE role.name='studio_owner';
+INSERT INTO public.projects(id,name,designer_id,client_id,created_by,studio_id) VALUES
+('f7100000-0000-4000-8000-000000000001','Boundary Project','f7000000-0000-4000-8000-000000000001','f7000000-0000-4000-8000-000000000002','f7000000-0000-4000-8000-000000000001','f7400000-0000-4000-8000-000000000001');
 INSERT INTO public.vendors(id,name) VALUES('f7200000-0000-4000-8000-000000000001','Boundary Vendor');
 INSERT INTO public.products(id,name,price_retail,price_trade,images,vendor_id,captured_by,captured_at,layer,status) VALUES
 ('f7300000-0000-4000-8000-000000000001','Boundary Chair',140000,90000,ARRAY['https://example.invalid/boundary.jpg'],'f7200000-0000-4000-8000-000000000001','f7000000-0000-4000-8000-000000000001',now(),'catalog','published');

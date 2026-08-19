@@ -65,6 +65,29 @@ VALUES
   ('f9020000-0000-4000-8000-000000000010', 'f9000000-0000-4000-8000-000000000001', 'f9010000-0000-4000-8000-000000000004', 'owner', 'active', now()),
   ('f9020000-0000-4000-8000-000000000011', 'f9000000-0000-4000-8000-000000000007', 'f9010000-0000-4000-8000-000000000004', 'member', 'active', now());
 
+-- 00511 requires every project lead to hold a designer-domain role; this
+-- fixture predates that invariant. Grant it to the studio members it creates.
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT DISTINCT membership.user_id, role.id, membership.user_id
+FROM public.organization_members AS membership
+JOIN public.organizations AS studio
+  ON studio.id = membership.organization_id
+ AND studio.type = 'design_studio'
+JOIN public.profiles AS member_profile
+  ON member_profile.id = membership.user_id
+ AND member_profile.is_designer
+CROSS JOIN public.roles AS role
+WHERE membership.organization_id IN (
+    'f9010000-0000-4000-8000-000000000001',
+    'f9010000-0000-4000-8000-000000000002',
+    'f9010000-0000-4000-8000-000000000003',
+    'f9010000-0000-4000-8000-000000000004'
+  )
+  AND membership.status = 'active'
+  -- This fixture models designer identity explicitly on the profile, and its
+  -- denial probes turn on it: the non-designer member must stay ineligible.
+  AND role.name = 'studio_owner';
+
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, client_email, status, source
 ) VALUES (
