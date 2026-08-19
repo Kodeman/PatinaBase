@@ -8,6 +8,22 @@ PR-style commits, same as any other doc; there is no separate approval path.
 
 Checked 2026-08-18/19, read-only, against Strata prod (`bkvcixdmuyejfzcijpdg`).
 
+## Consumed numbers (NOT available to draw from)
+
+`00489`–`00493` are **consumed on `main`** — all five have landed as files and none may
+be reissued to another program:
+
+| Number | File                                            | Landed state                      |
+| ------ | ----------------------------------------------- | --------------------------------- |
+| 00489  | `00489_media_registry_kernel.sql`               | on `main`; applied to **staging** |
+| 00490  | `00490_scan_worker_roles.sql`                   | on `main`; applied to **staging** |
+| 00491  | `00491_dispatch_scan_modal_cron.sql`            | on `main`; applied to **staging** |
+| 00492  | `00492_room_file_version_monotonicity.sql`      | on `main`; applied to **staging** |
+| 00493  | `00493_svc_shape_resolving_function_bodies.sql` | on `main`; applied to **prod**    |
+
+`00510` is **in flight** as the post-00483 grant-repair hotfix (branch
+`fix/post-00483-grant-gaps`) — treat it as taken, not free.
+
 ## Current state
 
 - **Current `main` head file** (highest-numbered file under `supabase/migrations/` on
@@ -33,7 +49,7 @@ Prod's applied migration list runs `... 00484, 00485, 00486, 00493` — 00487 th
   they are Rendered Room v2's W0/W1 foundations. Per memory and the file's own header
   comment, this program has proven these on **staging** (`vuesoyhfrjabfxbrzekd`) but has
   not yet pushed them to **prod**; `00493` was applied to prod directly (a targeted
-  svc_* function-body fix, independent of 00489–492) ahead of that push.
+  svc\_\* function-body fix, independent of 00489–492) ahead of that push.
 - Net effect: prod's real applied floor for "everything before Phase 2 starts" is
   **00486**, not 00493. Phase 2 migrations must not assume 00487–00492 are live on
   prod when they land — check `list_migrations` again immediately before every push,
@@ -47,17 +63,20 @@ The `00489` file header already documents its own renumbering exposure:
 > At merge/integration this file may need renumbering per patina-db-migrations step 8
 > if 00481–00488 land first.
 
-That note is now stale in one respect (00481–00486 **are** present on `main` as of this
-census — they merged), but its core warning stands: 00489–00492 may still need
-renumbering at whichever program's integration lands second.
+That note is now stale in two respects: 00481–00486 **are** present on `main` as of this
+census (they merged), and the renumbering exposure it warns about has since been closed —
+the Rendered Room v2 lane has confirmed 00489–00492 keep their numbers (see "Resolved"
+below). What still stands is the applied-state warning: these four are on `main` but not
+yet on prod.
 
 ## Reservations
 
-| Band | Program |
-| --- | --- |
-| 00494–00497 | Phase 2 (Cloudflare/media backfill program — this workstream and its siblings) |
-| 00498–00502 | Rendered Room v2 (scan pipeline) — **note:** this lane already has files at 00489–00492 authored under a different numbering rationale (see gap note above). Rendered Room v2 must explicitly confirm whether 00498–00502 is additive to 00489–00492 or a renumbering target for them before using this band, so the two don't end up double-booked. |
-| 00503–00509 | Phase 3 |
+| Band        | Program                                                                                                                                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 00494–00497 | Phase 2 (Cloudflare/media backfill program — this workstream and its siblings)                                                                                                                         |
+| 00498–00502 | Rendered Room v2 (scan pipeline) — **confirmed by that lane** as this program's _future_ draws, purely additive to its already-consumed 00489–00492. Those four are **not** renumbered into this band. |
+| 00503–00509 | Phase 3                                                                                                                                                                                                |
+| 00510       | Grant-repair hotfix (`fix/post-00483-grant-gaps`) — in flight                                                                                                                                          |
 
 No file in `supabase/migrations/` on `main`, and no commit in `git log --all`, currently
 occupies any number in 00494–00509 — the three bands are collision-free as reserved.
@@ -80,18 +99,17 @@ occupies any number in 00494–00509 — the three bands are collision-free as r
    change is proposed as an edit to this file, not decided unilaterally in a migration's
    header comment.
 5. **Edits land via normal commits.** No separate sign-off process — conventional
-   commit, PR/branch like any other doc change, but land the edit *before or with* the
+   commit, PR/branch like any other doc change, but land the edit _before or with_ the
    migration that depends on the new reservation, not after.
 
-### Outstanding item for Rendered Room v2
+### Resolved: Rendered Room v2's banding
 
-Per the rule above, the Rendered Room v2 lane owning 00498–00502 should explicitly
-confirm in this file (via a follow-up edit) whether:
+The question this census left open — whether 00489–00492 stay put or get renumbered into
+the 00498–00502 band — has been **answered by the Rendered Room v2 lane**: 00489–00492
+stay exactly as numbered, and 00498–00502 is purely for W2-onward work (splat/render
+export, additional crons). The two are additive, not alternatives.
 
-- 00489–00492 stay as-is and 00498–00502 is purely for W2-onward work (splat/render
-  export, additional crons), or
-- 00489–00492 get renumbered into/after the 00498–00502 band at prod-push time to keep
-  the applied-on-prod sequence contiguous with Phase 2's 00494–00497.
-
-This census did not decide that question — it is Rendered Room v2's call, flagged here
-so it isn't missed at integration time.
+Consequence for other programs: the applied-on-prod sequence will **not** be contiguous
+(00489–00492 land on prod only when that lane pushes them), so keep following discipline
+rule 2 — re-check `list_migrations` immediately before every land rather than inferring a
+floor from the file numbering.
