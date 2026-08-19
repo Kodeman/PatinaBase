@@ -123,20 +123,33 @@ const BLOCKED_HEADERS = new Set([
   "x-user-id",
 ]);
 
-function getSupabaseProjectRef(): string | null {
-  const explicit = process.env.SUPABASE_PROJECT_REF?.trim();
-  if (explicit) return explicit;
-
-  const configuredUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
-  if (!configuredUrl) return null;
-  try {
-    const hostname = new URL(configuredUrl).hostname;
-    const projectRef = hostname.match(/^([a-z0-9-]+)\.supabase\.co$/i)?.[1];
-    return projectRef ?? null;
-  } catch {
-    return null;
-  }
+/**
+ * Pinned auth cookie name (Workstream D-B1.1, docs/engineering/repoint-b0-audit.md §5).
+ *
+ * This used to be reconstructed as `sb-<project-ref>-auth-token`, where the
+ * ref came from `SUPABASE_PROJECT_REF` or — when that was unset (the case in
+ * every prod `wrangler.jsonc` today) — parsed out of the host of
+ * `NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_URL`. `SUPABASE_PROJECT_REF` is not
+ * consumed anywhere else in this codebase, so that reconstruction existed
+ * purely to name this cookie. If the URL is ever repointed (e.g. to
+ * api.patina.cloud) while the underlying Supabase project stays the same,
+ * the reconstructed name would silently change and this proxy would stop
+ * finding the auth cookie on every forwarded request — the same hazard
+ * pinned in `packages/supabase/src/client.ts` and
+ * `apps/extension/src/lib/supabase.ts`.
+ *
+ * Same env var (`NEXT_PUBLIC_SUPABASE_STORAGE_KEY`) and literal fallback as
+ * those two sites, kept as a local literal here instead of an import from
+ * `@patina/supabase` — this package has no existing dependency on it, and
+ * pulling in `@supabase/ssr`/`@supabase/supabase-js` for one string constant
+ * would be an unwanted dependency edge for a package whose job is header/
+ * cookie forwarding, not creating Supabase clients.
+ */
+function getSupabaseAuthCookieName(): string {
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY?.trim() ||
+    "sb-bkvcixdmuyejfzcijpdg-auth-token"
+  );
 }
 
 /**
@@ -152,11 +165,8 @@ async function extractAuthToken(request: Request): Promise<string | null> {
     : null;
   if (bearerMatch) return bearerMatch[1];
 
-  const projectRef = getSupabaseProjectRef();
-  if (!projectRef) return null;
-
   const cookieStore = await cookies();
-  const expectedName = `sb-${projectRef}-auth-token`;
+  const expectedName = getSupabaseAuthCookieName();
   const cookieParts = new Map<number | "base", string>();
   for (const cookie of cookieStore.getAll()) {
     const match = new RegExp(
