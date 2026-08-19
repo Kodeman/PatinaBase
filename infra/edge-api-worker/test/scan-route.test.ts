@@ -80,6 +80,7 @@ function dependencies(
       throw new Error('unauthorized');
     }),
     resolveScanArtifacts: vi.fn(async () => []),
+    authorizeUpload: vi.fn(async () => {}),
     createUploadIntent: vi.fn(async () => {
       throw new Error('media uploads are off in this fixture');
     }),

@@ -167,6 +167,26 @@ export function parseMediaUploadPath(
   return { kind: 'confirm', uploadId };
 }
 
+/**
+ * Verify the caller and nothing else. The intent route calls this BEFORE it
+ * reads the request body: `createUploadIntent` verifies too, but by the time it
+ * runs the body has already been read and parsed, so an anonymous caller could
+ * spend the Worker's JSON parse on a megabyte of garbage and only then be told
+ * 401. The 401 is a statement about the caller, and nothing about the body
+ * should precede it.
+ */
+export async function assertUploadCaller(
+  request: Request,
+  env: EdgeApiEnv,
+  key?: Parameters<typeof verifySupabaseRequest>[2],
+): Promise<void> {
+  try {
+    await verifySupabaseRequest(request, env, key);
+  } catch {
+    throw new UploadUnauthorizedError();
+  }
+}
+
 export interface UploadIntentInput {
   scanId: string;
   artifactKind: UploadArtifactKind;
@@ -415,7 +435,13 @@ export function signUploadPut(
 export interface ObservedObject {
   sizeBytes: number;
   etag: string | null;
-  /** Hex sha256, when R2 returned one. Null means the PUT-time condition is the only assurance. */
+  /**
+   * Hex sha256, as R2 reported it. Null is an ANOMALY, not a fallback: the
+   * 2026-08-19 probe (OPERATIONS.md "What the R2 probe established") showed a
+   * checksum-mode HEAD returns the digest for anything written through the
+   * presigned PUT, so a null here means these bytes did not arrive that way.
+   * `assertObservedMatchesDeclared` refuses it.
+   */
   sha256: string | null;
 }
 
@@ -527,6 +553,20 @@ export async function resolveUploadForConfirm(
       );
       const row = result.rows[0];
       if (!row) throw new UploadNotFoundError();
+      // PIN THE BUCKET. `media_objects` also holds the pipeline's ARTIFACT rows,
+      // and a caller who can see the scan can legitimately see those too — so
+      // "visible to this caller" is not enough to make a row confirmable. Left
+      // unpinned, an artifacts row's id passed here would have the confirm HEAD
+      // a pipeline output with the WRITE credential and stamp its observed
+      // checksum onto that row. This route only ever confirms objects the
+      // upload interface minted, and those are always in the originals bucket.
+      // Answered as the same 404 an invisible row gets — the route has no
+      // opinion to leak about objects that are not its own. 00499's
+      // `confirm_media_upload` refuses it a second time, for a caller that
+      // never came through here.
+      if (row.bucket !== env.SCAN_R2_ORIGINALS_BUCKET) {
+        throw new UploadNotFoundError();
+      }
       const provenance =
         row.provenance && typeof row.provenance === 'object'
           ? (row.provenance as Record<string, unknown>)
@@ -566,7 +606,16 @@ export function assertObservedMatchesDeclared(
   if (observed.sizeBytes !== pending.declaredSize) {
     throw new UploadMismatchError('size');
   }
-  if (observed.sha256 !== null && observed.sha256 !== pending.declaredSha256) {
+  // FAIL CLOSED on a missing checksum. 00498 treated it as "R2 was quiet, fall
+  // back to trusting the signed PUT condition" — a hedge written before anyone
+  // had measured whether that condition was enforced. It has now been measured
+  // (OPERATIONS.md "What the R2 probe established"): R2 both ENFORCES the
+  // signed `x-amz-checksum-sha256` (wrong bytes → 400 BadDigest, nothing
+  // stored) and REPORTS the digest on a checksum-mode HEAD. So an object that
+  // came through the presigned PUT always has one, and an object without one
+  // did not come through it — which is precisely the case that must not be
+  // waved through as "verified by the condition".
+  if (observed.sha256 === null || observed.sha256 !== pending.declaredSha256) {
     throw new UploadMismatchError('checksum');
   }
 }

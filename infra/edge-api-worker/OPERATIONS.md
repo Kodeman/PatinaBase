@@ -214,9 +214,41 @@ Every response is `private, no-store`.
 
 **`requiredHeaders` are conditions, not suggestions.** `content-length` and
 `x-amz-checksum-sha256` are signed into the URL, so a PUT that omits or alters
-either fails at R2 as `SignatureDoesNotMatch`. That is what makes
-`declaredSha256` a promise: R2 verifies the body against the signed digest and
-refuses a mismatch before storing anything.
+either fails at R2 as `SignatureDoesNotMatch`.
+
+### What the R2 probe established
+
+That the headers are *signed* was always demonstrable from `src/r2.ts`. Whether
+R2 actually **verifies the body against the signed digest** was not — 00498
+asserted it in prose and simultaneously hedged against it in code, recording a
+weaker `sha256_verified_by = 'put_condition'` for the case where a HEAD came
+back with no checksum. Measured 2026-08-19 against
+`patina-staging-media-originals-us`, run from Modal on the `scan-r2` credential,
+reproducing `src/r2.ts`'s canonical request exactly (same signed-header set,
+same sorted query, `UNSIGNED-PAYLOAD`, `region=auto`):
+
+| Probe | Observed |
+| --- | --- |
+| Correct bytes + correct signed `x-amz-checksum-sha256` | `200`; object created; response echoes `x-amz-checksum-sha256` |
+| **Wrong bytes**, same signed checksum, identical `content-length` | **`400 BadDigest`** — *"The SHA-256 checksum you specified did not match what we received"*, quoting both digests. A follow-up HEAD returns **`404`**: the object was never created |
+| `HEAD` with `x-amz-checksum-mode: ENABLED` | `200` carrying `x-amz-checksum-sha256` |
+| Sending a checksum header value other than the signed one | `403 SignatureDoesNotMatch` |
+
+All four results reproduce identically for `x-amz-checksum-crc64nvme`, R2's
+documented full-object algorithm — so either would have served; SHA-256 is kept
+because it is the digest iOS already computes and the registry already stores.
+
+Two consequences, both landed in **00499**:
+
+- The condition is real, so `declaredSha256` is a **promise**, not a label: R2
+  refuses a body that does not hash to it before storing anything.
+- R2 **reports** the digest on HEAD, so an object that arrived through the
+  presigned PUT always has one. A confirm carrying no observed checksum is
+  therefore evidence the bytes did **not** arrive that way — the one case that
+  must not be waved through. Both the Worker
+  (`assertObservedMatchesDeclared`) and the RPC (`confirm_media_upload`) now
+  **fail closed** on it, and `put_condition` is retired: the only value
+  `sha256_verified_by` can record is `r2_head`.
 
 **The key carries no authorization.**
 `scan_originals/{scanId}/{artifactKind}/{filename}` is registry-keyed. The legacy
@@ -277,6 +309,39 @@ npm run config:check
 npm run config:check:provisioned -- staging
 npx wrangler deploy --env staging
 ```
+
+**Before the first BROWSER upload — not before the first iOS one — set the
+originals bucket's CORS policy.** The presigned PUT is issued by this Worker but
+performed by the client straight against
+`<account>.r2.cloudflarestorage.com`, which is a different origin from any
+portal. A browser therefore preflights it, and R2 answers that preflight from
+the BUCKET's CORS configuration — nothing the Worker sends can substitute, and
+the Worker's own `access-control-allow-*` headers on `/v1/media/uploads` cover
+only the intent call, not the PUT that follows it. Without the bucket policy the
+upload fails as an opaque "Failed to fetch" with no request in the R2 logs,
+which is the same shape the read path already hit once on staging.
+
+It is deliberately **not** set now: no browser client issues these uploads yet,
+and a CORS policy is a standing grant of cross-origin write access to whatever
+origins it names. iOS and the pipeline are unaffected either way — `URLSession`
+and server-side clients do not preflight.
+
+When a browser client does arrive, allow exactly the portal origins that need
+it, the methods and headers the PUT actually uses, and expose `etag` so the
+client can read it back:
+
+```sh
+npx wrangler r2 bucket cors set patina-staging-media-originals-us \
+  --allowed-origins https://app.patina.cloud \
+  --allowed-methods PUT \
+  --allowed-headers content-type,content-length,x-amz-checksum-sha256 \
+  --expose-headers etag \
+  --max-age 3600
+```
+
+`--allowed-origins '*'` is the wrong answer here even though the URL is already
+a capability: the capability is time-boxed and single-object, but a wildcard
+turns every origin the user's browser visits into a potential relay for one.
 
 `config:check:provisioned` requires the write pair **only** where that scope's
 `MEDIA_UPLOADS` is `on`. Rollback is the same flip back to `"off"` plus a deploy

@@ -24,6 +24,7 @@ import {
 import type { EdgeApiEnv } from '../src/env';
 import {
   assertObservedMatchesDeclared,
+  assertUploadCaller,
   confirmUpload,
   createUploadIntent,
   hexToBase64,
@@ -105,6 +106,9 @@ function dependencies(
       throw new Error('unauthorized');
     }),
     resolveScanArtifacts: vi.fn(async () => []),
+    // Overridden with the REAL verifier by `liveWorker` below; the bare default
+    // is a no-op so the tests that never reach the routes are unaffected.
+    authorizeUpload: vi.fn(async () => {}),
     createUploadIntent: vi.fn(async () => ({
       uploadId: UPLOAD_ID,
       bucket: ORIGINALS_BUCKET,
@@ -258,6 +262,8 @@ async function liveWorker(rows: Parameters<typeof scriptedFactory>[1]) {
   const recorded: Recorded[] = [];
   const createClient = scriptedFactory(recorded, rows);
   const deps = dependencies({
+    authorizeUpload: (req, requestEnv) =>
+      assertUploadCaller(req, requestEnv, publicKey),
     createUploadIntent: (req, requestEnv, input) =>
       createUploadIntent(req, requestEnv, input, {
         key: publicKey,
@@ -814,29 +820,30 @@ describe('confirm mismatch', () => {
     });
   });
 
-  it('accepts a match when R2 returns no checksum — the PUT condition is the assurance', async () => {
+  // 00498 accepted this case and recorded `sha256_verified_by='put_condition'`,
+  // on the theory that the signed PUT condition was a weaker but real
+  // assurance. The 2026-08-19 R2 probe (OPERATIONS.md "What the R2 probe
+  // established") measured both halves of that theory and inverted the
+  // conclusion: the condition IS enforced, AND R2 reports the digest on a
+  // checksum-mode HEAD. So this case cannot arise for bytes that came through
+  // the presigned PUT — it can only arise for bytes that did not — and it is
+  // now refused rather than blessed.
+  it('409s when R2 returns no checksum — those bytes did not come through the signed PUT', async () => {
     const fetcher = vi.fn(async () => headResponse({ checksum: null }));
-    const live = await liveWorker({
-      mediaObject: [pendingRow],
-      confirmed: {
-        object_id: UPLOAD_ID,
-        lifecycle_state: 'stored',
-        sha256: DECLARED_SHA,
-        etag: '"deadbeef"',
-        size_bytes: DECLARED_SIZE,
-        changed: true,
-      },
-    });
+    const live = await liveWorker({ mediaObject: [pendingRow] });
     const worker = createWorker({ ...live.deps, fetcher });
     const result = await post(worker, env(), CONFIRM_PATH, {}, live.bearer);
-    expect(result.status).toBe(200);
+    expect(result.status).toBe(409);
+    expect(await result.json()).toEqual({
+      error: 'upload_mismatch',
+      reason: 'checksum',
+    });
 
+    // And the write path was never reached, so the row stays pending.
     const rpc = live.recorded
       .flatMap((record) => record.commands)
       .find((command) => command.text.includes('confirm_media_upload'));
-    // A null observed checksum reaches the RPC as null, so the registry records
-    // `put_condition` rather than claiming R2 verified it.
-    expect(rpc?.values?.[1]).toBeNull();
+    expect(rpc).toBeUndefined();
   });
 
   it('is idempotent on a second confirm of the same bytes', async () => {
@@ -875,6 +882,163 @@ describe('confirm mismatch', () => {
         sha256: DECLARED_SHA,
       }),
     ).toThrow(UploadMismatchError);
+  });
+
+  // The 2026-08-19 R2 probe (OPERATIONS.md) showed a checksum-mode HEAD returns
+  // the digest for anything written through the presigned PUT, so a null one is
+  // evidence the bytes did not come through it — never a reason to fall back to
+  // trusting the PUT condition, which is what 00498 did.
+  it('FAILS CLOSED when R2 reports no checksum at all', () => {
+    const pending: PendingUpload = {
+      bucket: ORIGINALS_BUCKET,
+      objectKey: OBJECT_KEY,
+      lifecycleState: 'pending',
+      declaredSha256: DECLARED_SHA,
+      declaredSize: DECLARED_SIZE,
+    };
+    expect(() =>
+      assertObservedMatchesDeclared(pending, {
+        sizeBytes: DECLARED_SIZE,
+        etag: '"' + 'a'.repeat(32) + '"',
+        sha256: null,
+      }),
+    ).toThrow(UploadMismatchError);
+  });
+});
+
+// ── Findings 2, 10 and 12 — the W3-A review's flag-on blockers ───────────────
+
+describe('the intent leg refuses to re-sign an object that already landed', () => {
+  it('answers with the row and NO putUrl once the upload is stored', async () => {
+    const live = await liveWorker({ roomScan: [{ id: SCAN_ID }] });
+    const worker = createWorker({
+      ...live.deps,
+      // 00498 returns the existing row for an exact restatement after a
+      // successful confirm; the route must not turn that into a fresh PUT.
+      createUploadIntent: async () => ({
+        uploadId: UPLOAD_ID,
+        bucket: ORIGINALS_BUCKET,
+        objectKey: OBJECT_KEY,
+        lifecycleState: 'stored',
+        version: 1,
+        created: false,
+      }),
+    });
+    const response = await post(
+      worker,
+      env(),
+      '/v1/media/uploads',
+      validBody(),
+      live.bearer,
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toEqual({ uploadId: UPLOAD_ID, lifecycle: 'stored' });
+    expect(body.putUrl).toBeUndefined();
+    expect(body.requiredHeaders).toBeUndefined();
+  });
+
+  it('still signs while the object is pending', async () => {
+    const live = await liveWorker({
+      roomScan: [{ id: SCAN_ID }],
+      intent: INTENT_ROW,
+    });
+    const response = await post(
+      live.worker,
+      env(),
+      '/v1/media/uploads',
+      validBody(),
+      live.bearer,
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(typeof body.putUrl).toBe('string');
+  });
+});
+
+describe('the intent leg verifies the caller before it reads the body', () => {
+  // `post` builds its own Request; these two need to hand one in (a body that
+  // is not JSON, and a Request whose .json() is spied on), so they call through
+  // the same shape directly.
+  const send = (
+    worker: ReturnType<typeof createWorker>,
+    requestEnv: EdgeApiEnv,
+    request: Request,
+  ) =>
+    worker.fetch!(
+      request as Request<unknown, IncomingRequestCfProperties>,
+      requestEnv,
+      {
+        waitUntil() {},
+        passThroughOnException() {},
+        props: {},
+      } as unknown as ExecutionContext,
+    );
+
+  it('401s without parsing JSON at all', async () => {
+    const live = await liveWorker({ roomScan: [{ id: SCAN_ID }] });
+    const request = new Request('https://api.patina.cloud/v1/media/uploads', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      // Not JSON. A route that parsed first would answer 400 about the body;
+      // the 401 is about the caller and must come first.
+      body: '{ this is not json',
+    });
+    const response = await send(live.worker, env(), request);
+    expect(response.status).toBe(401);
+    expect((await response.json()) as Record<string, unknown>).toMatchObject({
+      error: 'unauthorized',
+    });
+  });
+
+  it('leaves a malformed body unread when the token is missing', async () => {
+    const live = await liveWorker({ roomScan: [{ id: SCAN_ID }] });
+    const spy = vi.fn(async () => ({}) as unknown);
+    const request = new Request('https://api.patina.cloud/v1/media/uploads', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(validBody()),
+    });
+    Object.defineProperty(request, 'json', { value: spy });
+    const response = await send(live.worker, env(), request);
+    expect(response.status).toBe(401);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('the confirm leg is pinned to the originals bucket', () => {
+  const CONFIRM_PATH = `/v1/media/uploads/${UPLOAD_ID}/confirm`;
+
+  it('404s a registry row the caller CAN see that names another bucket', async () => {
+    // The finding-12 shape: media_objects also holds the pipeline's artifact
+    // rows, and a caller who can see the scan can see those too. Confirming one
+    // would HEAD a pipeline output with the WRITE credential.
+    const live = await liveWorker({
+      mediaObject: [
+        {
+          id: UPLOAD_ID,
+          bucket: 'patina-staging-media-artifacts-us',
+          object_key: 'scans/rls-test/1/mesh.glb',
+          lifecycle_state: 'pending',
+          scan_id: SCAN_ID,
+          provenance: {
+            declared_sha256: DECLARED_SHA,
+            declared_size: DECLARED_SIZE,
+          },
+        },
+      ],
+    });
+    const fetcher = vi.fn(async () => new Response(null, { status: 200 }));
+    const worker = createWorker({ ...live.deps, fetcher });
+    const response = await post(
+      worker,
+      env(),
+      CONFIRM_PATH,
+      {},
+      live.bearer,
+    );
+    expect(response.status).toBe(404);
+    // And nothing was HEADed — the refusal happens before R2 is touched.
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });
 

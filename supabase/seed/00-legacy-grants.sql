@@ -11294,6 +11294,12 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00499_upload_interface_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_originals_bucket(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00510_post_00483_grant_and_scope_repairs.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.engage_trade_scope(uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
