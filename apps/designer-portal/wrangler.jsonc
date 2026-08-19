@@ -64,7 +64,11 @@
         "ORDERS_SERVICE_URL": "https://patina-orders-worker-staging.kody-be3.workers.dev",
         "MEDIA_SERVICE_URL": "https://patina-media-svc-worker-staging.kody-be3.workers.dev",
         "PROJECTS_SERVICE_URL": "https://patina-projects-worker-staging.kody-be3.workers.dev",
-        "NEXT_PUBLIC_EDGE_API_URL": "https://patina-edge-api-staging.kody-be3.workers.dev"
+        "NEXT_PUBLIC_EDGE_API_URL": "https://patina-edge-api-staging.kody-be3.workers.dev",
+        // PostHog is disabled in staging (empty key, above) — the flag would
+        // otherwise resolve fail-closed and hide Room View/Room File entirely.
+        // Same override mechanism playwright.config.ts uses for CI.
+        "NEXT_PUBLIC_FLAG_OVERRIDES": "room-file:true"
       },
       "services": [
         { "binding": "SVC_PROJECTS", "service": "patina-projects-worker-staging" },
