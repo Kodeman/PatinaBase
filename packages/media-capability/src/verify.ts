@@ -1,12 +1,12 @@
-import { fromBase64Url } from './base64url';
-import { importPublicKey } from './keys';
-import type { MediaCapabilityClaims, VerifyCapabilityResult } from './types';
+import { fromBase64Url } from "./base64url";
+import { importPublicKey } from "./keys";
+import type { MediaCapabilityClaims, VerifyCapabilityResult } from "./types";
 
 function getSubtle(): SubtleCrypto {
   const c = (globalThis as { crypto?: Crypto }).crypto;
   if (!c || !c.subtle) {
     throw new Error(
-      '@patina/media-capability: globalThis.crypto.subtle is unavailable in this runtime'
+      "@patina/media-capability: globalThis.crypto.subtle is unavailable in this runtime",
     );
   }
   return c.subtle;
@@ -22,15 +22,15 @@ function getSubtle(): SubtleCrypto {
  */
 export async function verifyCapability(
   publicKeyPem: string,
-  token: string
+  token: string,
 ): Promise<VerifyCapabilityResult> {
-  if (typeof token !== 'string' || token.length === 0) {
-    return { ok: false, reason: 'malformed_token' };
+  if (typeof token !== "string" || token.length === 0) {
+    return { ok: false, reason: "malformed_token" };
   }
 
-  const parts = token.split('.');
+  const parts = token.split(".");
   if (parts.length !== 3) {
-    return { ok: false, reason: 'malformed_token' };
+    return { ok: false, reason: "malformed_token" };
   }
   const [headerB64, payloadB64, sigB64] = parts;
 
@@ -40,21 +40,23 @@ export async function verifyCapability(
   try {
     header = JSON.parse(decoder.decode(fromBase64Url(headerB64)));
   } catch {
-    return { ok: false, reason: 'malformed_header' };
+    return { ok: false, reason: "malformed_header" };
   }
   if (
-    typeof header !== 'object' ||
+    typeof header !== "object" ||
     header === null ||
-    (header as Record<string, unknown>).alg !== 'EdDSA'
+    (header as Record<string, unknown>).alg !== "EdDSA"
   ) {
-    return { ok: false, reason: 'unsupported_alg' };
+    return { ok: false, reason: "unsupported_alg" };
   }
 
   let claims: MediaCapabilityClaims;
   try {
-    claims = JSON.parse(decoder.decode(fromBase64Url(payloadB64))) as MediaCapabilityClaims;
+    claims = JSON.parse(
+      decoder.decode(fromBase64Url(payloadB64)),
+    ) as MediaCapabilityClaims;
   } catch {
-    return { ok: false, reason: 'malformed_payload' };
+    return { ok: false, reason: "malformed_payload" };
   }
 
   let signature: Uint8Array;
@@ -63,17 +65,17 @@ export async function verifyCapability(
     signature = fromBase64Url(sigB64);
     publicKey = await importPublicKey(publicKeyPem);
   } catch {
-    return { ok: false, reason: 'invalid_public_key' };
+    return { ok: false, reason: "invalid_public_key" };
   }
 
   const signingInput = `${headerB64}.${payloadB64}`;
   let valid: boolean;
   try {
     valid = await getSubtle().verify(
-      { name: 'Ed25519' },
+      { name: "Ed25519" },
       publicKey,
       signature as BufferSource,
-      new TextEncoder().encode(signingInput) as BufferSource
+      new TextEncoder().encode(signingInput) as BufferSource,
     );
   } catch {
     // A malformed signature (wrong length, etc.) can throw rather than
@@ -81,11 +83,14 @@ export async function verifyCapability(
     valid = false;
   }
   if (!valid) {
-    return { ok: false, reason: 'invalid_signature' };
+    return { ok: false, reason: "invalid_signature" };
   }
 
-  if (typeof claims.exp !== 'number' || Math.floor(Date.now() / 1000) >= claims.exp) {
-    return { ok: false, reason: 'expired' };
+  if (
+    typeof claims.exp !== "number" ||
+    Math.floor(Date.now() / 1000) >= claims.exp
+  ) {
+    return { ok: false, reason: "expired" };
   }
 
   return { ok: true, claims };

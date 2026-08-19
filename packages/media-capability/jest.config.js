@@ -9,28 +9,24 @@
 
 /** @type {import('jest').Config} */
 module.exports = {
-  displayName: '@patina/media-capability',
-  rootDir: '.',
-  testEnvironment: 'node',
+  displayName: "@patina/media-capability",
+  rootDir: ".",
+  testEnvironment: "node",
 
-  testMatch: [
-    '<rootDir>/src/**/*.spec.ts',
-    '<rootDir>/src/**/*.test.ts',
-  ],
+  testMatch: ["<rootDir>/src/**/*.spec.ts", "<rootDir>/src/**/*.test.ts"],
 
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/*.d.ts',
-    '!src/index.ts',
-  ],
+  collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts", "!src/index.ts"],
 
   transform: {
-    '^.+\\.ts$': ['ts-jest', {
-      tsconfig: {
-        esModuleInterop: true,
-        allowJs: true,
+    "^.+\\.ts$": [
+      "ts-jest",
+      {
+        tsconfig: {
+          esModuleInterop: true,
+          allowJs: true,
+        },
       },
-    }],
+    ],
   },
 
   testTimeout: 10000,

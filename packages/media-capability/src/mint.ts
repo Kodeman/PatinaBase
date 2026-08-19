@@ -1,15 +1,23 @@
-import { toBase64Url } from './base64url';
-import { importPrivateKey } from './keys';
-import type { MediaCapabilityClaims } from './types';
+import { toBase64Url } from "./base64url";
+import { importPrivateKey } from "./keys";
+import type { MediaCapabilityClaims } from "./types";
 
-const HEADER = { alg: 'EdDSA', typ: 'MCAP' } as const;
-const REQUIRED_FIELDS = ['objectId', 'version', 'bucket', 'key', 'presetAllowList', 'exp', 'aud'] as const;
+const HEADER = { alg: "EdDSA", typ: "MCAP" } as const;
+const REQUIRED_FIELDS = [
+  "objectId",
+  "version",
+  "bucket",
+  "key",
+  "presetAllowList",
+  "exp",
+  "aud",
+] as const;
 
 function getSubtle(): SubtleCrypto {
   const c = (globalThis as { crypto?: Crypto }).crypto;
   if (!c || !c.subtle) {
     throw new Error(
-      '@patina/media-capability: globalThis.crypto.subtle is unavailable in this runtime'
+      "@patina/media-capability: globalThis.crypto.subtle is unavailable in this runtime",
     );
   }
   return c.subtle;
@@ -22,10 +30,10 @@ function getSubtle(): SubtleCrypto {
  */
 export async function mintCapability(
   privateKeyPem: string,
-  claims: MediaCapabilityClaims
+  claims: MediaCapabilityClaims,
 ): Promise<string> {
-  if (!claims || typeof claims !== 'object') {
-    throw new Error('mintCapability: claims is required');
+  if (!claims || typeof claims !== "object") {
+    throw new Error("mintCapability: claims is required");
   }
   for (const field of REQUIRED_FIELDS) {
     if (claims[field] === undefined || claims[field] === null) {
@@ -45,9 +53,9 @@ export async function mintCapability(
 
   const privateKey = await importPrivateKey(privateKeyPem);
   const signature = await getSubtle().sign(
-    { name: 'Ed25519' },
+    { name: "Ed25519" },
     privateKey,
-    encoder.encode(signingInput)
+    encoder.encode(signingInput),
   );
   const sigB64 = toBase64Url(new Uint8Array(signature));
 
