@@ -105,10 +105,8 @@ Production deployment remains a separate, explicitly authorized operation.
 
 ## Migration ledger discipline (2026-08-19)
 
-> ⚠ **PENDING KODY'S CONFIRMATION.** This section **supersedes the earlier
-> scoped-MCP ruling** that allowed `apply_migration` against staging. Until
-> Kody confirms, treat the rule below as in force and the older ruling as
-> withdrawn.
+> ⚠ **CONFIRMED BY KODY 2026-08-19.** This section **supersedes the earlier
+> scoped-MCP ruling** that allowed `apply_migration` against staging.
 
 ### The rule
 
