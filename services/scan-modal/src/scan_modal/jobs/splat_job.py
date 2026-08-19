@@ -459,24 +459,43 @@ def ensure_seed_points(paths: dict[str, Path], captured_room_json: Any) -> dict[
     that already cost the most. Doing it here means both a fresh workspace and a
     resumed one end up with the same two files.
 
-    Never fatal. A room whose parametric geometry is unreadable yields no
-    points, and the run proceeds unseeded — which is what every run did before
-    this and is strictly better than failing a trainable scan.
+    Never fatal, and that is enforced rather than asserted: everything here is
+    inside a `try`. A room whose parametric geometry is unreadable, an
+    unwritable workspace, or a `transforms.json` this cannot patch all leave the
+    run unseeded — which is what every run did before this, and is strictly
+    better than failing a scan whose photos are perfectly trainable.
     """
-    spec = build_scene_spec(captured_room_json)
-    ply, count = build_seed_ply(spec)
-    if count == 0:
-        return {"seedPoints": 0, "seedReused": False}
+    try:
+        spec = build_scene_spec(captured_room_json)
+        ply, count = build_seed_ply(spec)
+        document = _json.loads(paths["transforms"].read_text())
+        if not isinstance(document, dict):
+            raise InputError("transforms.json is not an object")
 
-    reused = paths["seed_ply"].is_file()
-    if not reused:
+        if count == 0:
+            # Clear a key an earlier attempt may have written. A named seed file
+            # and a reported count of zero must not disagree — and nerfstudio
+            # logs nothing when a named PLY yields no points.
+            if document.pop("ply_file_path", None) is not None:
+                paths["transforms"].write_text(_json.dumps(document, sort_keys=True))
+            return {"seedPoints": 0, "seedReused": False}
+
+        # Written EVERY time, not only when absent. The bytes are deterministic
+        # and 1.5 MB, and `write_bytes` is not atomic: a truncated file left by
+        # a preempted attempt would otherwise be reused and named in
+        # transforms.json, open3d would read zero points, and the run would
+        # train from random init — silently, with a positive seed count on the
+        # ledger. That is precisely the failure this function exists to remove.
+        reused = paths["seed_ply"].is_file()
         paths["seed_ply"].write_bytes(ply)
 
-    document = _json.loads(paths["transforms"].read_text())
-    if document.get("ply_file_path") != SEED_PLY_NAME:
-        document["ply_file_path"] = SEED_PLY_NAME
-        paths["transforms"].write_text(_json.dumps(document, sort_keys=True))
-    return {"seedPoints": count, "seedReused": reused}
+        if document.get("ply_file_path") != SEED_PLY_NAME:
+            document["ply_file_path"] = SEED_PLY_NAME
+            paths["transforms"].write_text(_json.dumps(document, sort_keys=True))
+        return {"seedPoints": count, "seedReused": reused}
+    except Exception as exc:  # noqa: BLE001 - see docstring
+        _common.log_skip(STAGE, "seed_points_failed", error=type(exc).__name__)
+        return {"seedPoints": 0, "seedReused": False}
 
 
 # ── the job ─────────────────────────────────────────────────────────────────

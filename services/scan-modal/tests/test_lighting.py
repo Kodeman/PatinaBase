@@ -8,12 +8,18 @@ at 220 W per square metre, burnt the top-down plate to white (W2-EVIDENCE §10).
 
 from __future__ import annotations
 
+import json
+import math
+from pathlib import Path
+
 import pytest
 
 from scan_modal.core.blender_ops import (
     CEILING_DROP_M,
     INTERIOR_WATTS_PER_SQM,
     INTERIOR_WORLD_AMBIENT,
+    MIN_LIGHT_CLEARANCE_M,
+    MIN_LIGHT_SIZE_M,
     QUADRANT_LIGHT_FRACTION,
     TOP_DOWN_LIGHT_HEIGHT_M,
     TOP_DOWN_LIGHT_SPREAD,
@@ -22,6 +28,7 @@ from scan_modal.core.blender_ops import (
     plan_lighting,
 )
 from scan_modal.core.cameras import Bbox, plan_cameras
+from scan_modal.core.parametric_scene import build_scene_spec, room_frame
 
 # 4 m × 3 m × 2.5 m, floor at z = 0 — 12 m² of floor, wall tops at 2.5.
 ROOM = Bbox.from_points((-2.0, -1.5, 0.0), (2.0, 1.5, 2.5))
@@ -154,3 +161,102 @@ def test_power_scales_with_floor_area_so_a_big_room_is_not_underlit():
     small_total = sum(light.watts for light in plan_lighting(ROOM, CORNER).lights)
     big_total = sum(light.watts for light in plan_lighting(big, CORNER).lights)
     assert big_total == pytest.approx(small_total * 400.0 / 12.0)
+
+
+# ── the rig follows the cameras into the room ───────────────────────────────
+
+FIXTURE = Path(__file__).parent / "fixtures" / "captured_room_prod_copy.json"
+
+
+@pytest.fixture(scope="module")
+def prod_frame():
+    spec = build_scene_spec(json.loads(FIXTURE.read_text()))
+    return spec, room_frame(spec)
+
+
+def test_every_interior_lamp_of_the_REAL_room_hangs_INSIDE_its_walls(prod_frame):
+    """The defect this test exists for: the cameras were moved into the room's
+    own frame and the lighting was not. Planned off the world box, `ceiling_ne`
+    and `ceiling_sw` hung 0.8 m and 1.5 m the far side of a side wall — half the
+    rig's power emitted into the void, and every frame in a yawed room lit
+    differently from the same room square to the axes."""
+    spec, frame = prod_frame
+    cos_y, sin_y = math.cos(frame.yaw), math.sin(frame.yaw)
+    hu, hv = frame.half_xy
+
+    for light in plan_lighting(frame, CORNER).lights:
+        dx = light.location[0] - frame.center_xy[0]
+        dy = light.location[1] - frame.center_xy[1]
+        assert abs(dx * cos_y + dy * sin_y) < hu, light.name
+        assert abs(-dx * sin_y + dy * cos_y) < hv, light.name
+        assert spec.bbox.floor_z < light.location[2] < spec.bbox.max[2]
+
+
+def test_the_world_aligned_rig_is_what_hung_lamps_behind_a_wall(prod_frame):
+    """Stated as the failure, so the fix cannot quietly revert."""
+    spec, frame = prod_frame
+    cos_y, sin_y = math.cos(frame.yaw), math.sin(frame.yaw)
+    outside = 0
+    for light in plan_lighting(spec.bbox, CORNER).lights:
+        dx = light.location[0] - frame.center_xy[0]
+        dy = light.location[1] - frame.center_xy[1]
+        if abs(-dx * sin_y + dy * cos_y) > frame.half_xy[1]:
+            outside += 1
+    assert outside == 2
+
+
+def test_interior_power_is_scaled_by_the_ROOMs_area_not_its_bounding_box(prod_frame):
+    """7.774 × 3.636 = 28.27 m² of room inside a 71.94 m² box. Sized off the
+    box, this room would draw 2.5× the nominal wattage — so a room's exposure
+    would depend on how it happens to sit relative to the world axes."""
+    spec, frame = prod_frame
+    room_area = 4.0 * frame.half_xy[0] * frame.half_xy[1]
+    box_area = spec.bbox.size[0] * spec.bbox.size[1]
+    assert room_area == pytest.approx(28.27, abs=0.05)
+    assert box_area == pytest.approx(71.94, abs=0.05)
+
+    total = sum(light.watts for light in plan_lighting(frame, CORNER).lights)
+    assert total == pytest.approx(INTERIOR_WATTS_PER_SQM * room_area)
+    assert total < INTERIOR_WATTS_PER_SQM * box_area / 2.0
+
+
+def test_the_quadrant_lamps_are_yawed_to_the_room(prod_frame):
+    _, frame = prod_frame
+    for light in plan_lighting(frame, CORNER).lights:
+        assert light.rotation_z == pytest.approx(frame.yaw)
+    # ...and the plan key is not: it lights a world-aligned shot.
+    assert plan_lighting(frame, TOP_DOWN).lights[0].rotation_z == 0.0
+
+
+def test_the_plan_key_still_frames_and_lights_the_WORLD_box(prod_frame):
+    """The one shot that is genuinely world-aligned: an ortho camera looking
+    straight down has world X across its frame, and its key has to cover the
+    field that frame shows, not the rotated room inside it."""
+    spec, frame = prod_frame
+    key = plan_lighting(frame, TOP_DOWN).lights[0]
+    assert key.size_x == pytest.approx(spec.bbox.size[0] * TOP_DOWN_LIGHT_SPREAD)
+    assert key.size_y == pytest.approx(spec.bbox.size[1] * TOP_DOWN_LIGHT_SPREAD)
+    assert key.location[:2] == pytest.approx(spec.bbox.centroid[:2])
+
+
+def test_a_shallow_scene_does_not_hang_its_lamps_UNDER_the_floor():
+    """A capture with a floor element and no walls is not empty, so `renders`
+    accepts it — and its bbox is centimetres tall. Dropping 0.15 m below the top
+    would put the whole rig beneath the slab, which occludes it: 28 frames lit
+    by the world term alone, uploaded, registered and marked succeeded."""
+    shallow = Bbox.from_points((-3.0, -2.0, -0.05), (3.0, 2.0, 0.0))
+    for light in plan_lighting(shallow, CORNER).lights:
+        assert light.location[2] > shallow.max[2] - CEILING_DROP_M
+        assert light.location[2] > shallow.floor_z
+    assert plan_lighting(shallow, CORNER).lights[0].location[2] == pytest.approx(
+        shallow.floor_z + MIN_LIGHT_CLEARANCE_M
+    )
+
+
+def test_the_planned_emitter_size_is_the_size_blender_receives():
+    """The floor used to live at the bpy seam, below the planner, so every
+    assertion in this file was a claim about a number Blender never saw."""
+    tiny = Bbox.from_points((-0.3, -0.2, 0.0), (0.3, 0.2, 2.4))
+    for light in plan_lighting(tiny, CORNER).lights:
+        assert light.size_x == pytest.approx(MIN_LIGHT_SIZE_M)
+        assert light.size_y == pytest.approx(MIN_LIGHT_SIZE_M)

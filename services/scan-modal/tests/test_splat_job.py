@@ -870,3 +870,66 @@ def test_duplicate_delivery_is_refused_at_the_first_ledger_write(world, capsys):
     assert len(db.completed) == 1
     assert len(db.room_files) == 1
     assert db.failed == []
+
+
+# ── the seed write is never the thing that fails a trainable scan ───────────
+
+
+def test_a_truncated_seed_ply_from_a_preempted_attempt_is_REWRITTEN(world, tmp_path):
+    """`write_bytes` is not atomic. A reused-on-existence-alone file that is
+    zero-length or half-written is still named in transforms.json, open3d reads
+    zero points from it, and the run trains from random init — silently, with a
+    positive seed count on the ledger. That is the exact failure seeding exists
+    to remove, so the bytes are written every time."""
+    paths = splat_job.workspace_paths("scan-1", 4, tmp_path / "cache")
+    paths["base"].mkdir(parents=True, exist_ok=True)
+    paths["seed_ply"].write_bytes(b"ply\ntruncated")
+
+    splat_job.run_splat(payload(), db=RecordingDb())
+
+    written = paths["seed_ply"].read_bytes()
+    assert len(written) > 1000
+    assert written.startswith(b"ply\nformat binary_little_endian 1.0\n")
+
+
+def test_a_seed_write_that_cannot_happen_leaves_the_run_unseeded_not_failed(world, tmp_path):
+    """Never fatal is enforced, not asserted: a scan whose photos are perfectly
+    trainable must not be failed by the seeding step. Here the seed path is
+    occupied by a directory, so `write_bytes` raises — the workspace, the
+    training run and the artifact all have to survive it."""
+    paths = splat_job.workspace_paths("scan-1", 4, tmp_path / "cache")
+    paths["seed_ply"].mkdir(parents=True, exist_ok=True)
+
+    db = RecordingDb()
+    result = splat_job.run_splat(payload(), db=db)
+
+    assert db.completed, "the task still completed"
+    assert db.failed == []
+    assert result["provenance"]["seedPoints"] == 0
+    assert "ply_file_path" not in json.loads(paths["transforms"].read_text())
+
+
+def test_a_stale_ply_file_path_is_CLEARED_when_this_room_seeds_nothing(world, tmp_path, monkeypatch):
+    """A named seed file and a reported count of zero must not disagree —
+    nerfstudio logs nothing at all when a named PLY yields no points, so the
+    ledger would be the only witness and it would be wrong."""
+    paths = splat_job.workspace_paths("scan-1", 4, tmp_path / "cache")
+    paths["images"].mkdir(parents=True, exist_ok=True)
+    paths["transforms"].write_text(json.dumps(
+        {"camera_model": "PINHOLE", "frames": [], "ply_file_path": "sparse_pc.ply"}
+    ))
+
+    def fetch_empty_room(url, timeout=None):
+        if url == CAPTURED_URL:
+            return json.dumps({"walls": []}).encode()
+        if url == MANIFEST_URL:
+            return MANIFEST.encode()
+        return b"heic-bytes"
+
+    monkeypatch.setattr(splat_job, "_fetch", fetch_empty_room)
+    db = RecordingDb()
+    result = splat_job.run_splat(payload(), db=db)
+
+    assert db.completed
+    assert result["provenance"]["seedPoints"] == 0
+    assert "ply_file_path" not in json.loads(paths["transforms"].read_text())

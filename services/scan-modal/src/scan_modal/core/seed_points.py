@@ -207,18 +207,31 @@ def _faces(box: Box, room_centre: tuple[float, float, float]) -> list[_Face]:
     axes = ((cos_r, sin_r, 0.0), (-sin_r, cos_r, 0.0), (0.0, 0.0, 1.0))
     to_centre = tuple(room_centre[i] - box.center[i] for i in range(3))
 
+    thinnest = min(range(3), key=lambda i: box.size[i])
+
     out: list[_Face] = []
     for axis in range(3):
         u, v = (i for i in range(3) if i != axis)
         area = box.size[u] * box.size[v]
         if area < _MIN_FACE_AREA_SQM:
             continue
+        kept = []
         for sign in (1.0, -1.0):
             if shell:
                 normal = axes[axis]
                 to_plane = sum(sign * normal[i] * to_centre[i] for i in range(3))
                 if to_plane - box.size[axis] / 2.0 <= 0.0:
                     continue
+            kept.append(sign)
+        # A partition, an interior return, or any shell element the room's
+        # centre sits INSIDE fails the test on both signs — the centre is not
+        # outside either face's plane — and dropping both would leave a whole
+        # wall missing from the seed cloud. Such an element is seen from both
+        # sides, so it keeps both, but only on the pair of BROAD faces (the ones
+        # across its thinnest axis); its end caps and its top stay out.
+        if shell and not kept and axis == thinnest:
+            kept = [1.0, -1.0]
+        for sign in kept:
             out.append(_Face(box=box, axis=axis, sign=sign, area=area, weight=area * density))
     return out
 

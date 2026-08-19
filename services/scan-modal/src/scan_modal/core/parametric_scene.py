@@ -379,14 +379,21 @@ def room_frame(spec: SceneSpec, bbox: Bbox | None = None) -> RoomFrame:
 
     The orientation comes from the LONGEST WALL. A wall's `rotation_z` already
     is the direction its length runs, and the longest one is the least likely to
-    be a stub, a closet return, or a fragment of a bay. `max` keeps the first of
-    a tie, so a room of equal walls resolves in document order and the same
-    document always yields the same frame. Reduced modulo π because a wall and
-    the wall facing it report opposite directions of the same axis.
+    be a stub, a closet return, or a fragment of a bay. Reduced modulo π because
+    a wall and the wall facing it report opposite directions of the same axis.
+
+    The length is ROUNDED before it is compared. In a square room the four walls
+    differ only in the last bits of a float, so an exact `max` would pick its
+    winner on arithmetic noise — and which wall wins decides which axis is `u`,
+    which quadrant is `corner_ne`, and therefore which render key each of the
+    four corner frames lands on. Rounding to the millimetre and breaking ties on
+    document order makes two captures of the same room agree.
 
     The footprint is measured over the WALLS' plan corners, not every box: an
     object protruding past the shell should not move the room's own extents, and
-    the shell is what a camera has to stay inside of.
+    the shell is what a camera has to stay inside of. Those are the walls' OUTER
+    corners — bodies included — so an inset measured against `half_xy` is half a
+    wall thickness further from the visible surface than it reads.
 
     Falls back to the world-aligned reading — which is what this stage used to
     do everywhere — when there are no usable walls.
@@ -395,6 +402,6 @@ def room_frame(spec: SceneSpec, bbox: Bbox | None = None) -> RoomFrame:
     walls = [b for b in spec.boxes if b.kind == "wall"]
     if not walls:
         return RoomFrame.from_bbox(box)
-    longest = max(walls, key=lambda b: b.size[0])
+    longest = max(walls, key=lambda b: round(b.size[0], 3))
     footprint = [(x, y) for wall in walls for x, y, _ in _corners(wall)]
     return RoomFrame.oriented(box, longest.rotation_z % math.pi, footprint)

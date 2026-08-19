@@ -27,9 +27,19 @@ from scan_modal.core.seed_points import (
 from scan_modal.core.transforms import ARKIT_TO_NERFSTUDIO
 from scan_modal.io.ply import read_ply_vertices
 
+import json
+from pathlib import Path
+
 # The 4 m × 3 m × 2.5 m synthetic room: four 0.1 m walls and a synthesized floor
 # slab. Inner wall faces at |x| = 1.95 and |y| = 1.45; outer at 2.05 / 1.55.
 SPEC = build_scene_spec(captured_room_json())
+
+# The real reduced prod-copy capture — 4 walls at three heights, a floor whose
+# local +z is world up, 2 windows, a door, an opening and 7 objects, none of it
+# axis-aligned. What the golden digest below is taken over.
+PROD_SPEC = build_scene_spec(
+    json.loads((Path(__file__).parent / "fixtures" / "captured_room_prod_copy.json").read_text())
+)
 
 
 def with_object() -> object:
@@ -93,8 +103,23 @@ def test_the_same_room_samples_to_the_same_points_every_time():
 
 
 def test_the_same_room_encodes_to_the_same_BYTES_every_time():
-    """The stronger claim, and the one that matters: the artifact is stable."""
-    assert build_seed_ply(SPEC)[0] == build_seed_ply(SPEC)[0]
+    """Two calls in one process only prove the function is pure. The claim that
+    matters is stability across processes and releases, so it is pinned as a
+    GOLDEN DIGEST of the real capture's cloud — which fails if the Halton
+    indexing, the face selection, the density weights, the allocation, the
+    colours or the PLY layout move at all.
+
+    Regenerating this number is a decision, not a fix: the seed cloud is an
+    input to a 60-minute L4 run, and two rooms that produce different clouds
+    from the same document cannot be compared."""
+    import hashlib
+
+    ply, count = build_seed_ply(PROD_SPEC)
+    assert count == SEED_TARGET_POINTS
+    assert len(ply) == 1_500_222
+    assert hashlib.sha256(ply).hexdigest() == (
+        "7452680b3b6f068b78806c7d21b4165c30c3d8feeaec160af43bd1762d7dc433"
+    )
 
 
 def test_no_two_points_are_the_same_point():
@@ -273,3 +298,81 @@ def test_the_room_lands_at_the_room_s_own_metres():
     cloud = sample_scene_points(SPEC)
     span_x = cloud.xyz[:, 0].max() - cloud.xyz[:, 0].min()
     assert span_x == pytest.approx(4.1, abs=0.01)  # the floor slab's own span
+
+
+# ── the shell element the room's centre sits inside ─────────────────────────
+
+
+def partition_spec():
+    """A room with a partition running through its middle — the shape the
+    inward-facing rule cannot answer, because the room's centre is not outside
+    either of the partition's two broad faces."""
+    doc = captured_room_json()
+    doc["walls"].append({
+        "identifier": "partition",
+        "dimensions": [3.0, 2.5, 0.0],
+        "transform": [
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            -1.0, 0.0, 0.0, 0.0,
+            0.0, 1.25, 0.0, 1.0,
+        ],
+    })
+    return build_scene_spec(doc)
+
+
+def test_a_partition_through_the_room_keeps_BOTH_of_its_broad_faces():
+    """Dropping both would leave a whole wall missing from the seed cloud, with
+    no warning: the run trains, and the Gaussians in that plane start from
+    whatever the neighbouring surfaces happened to seed."""
+    spec = partition_spec()
+    partition = next(b for b in spec.boxes if b.name == "wall_04")
+    cloud = sample_scene_points(spec)
+
+    d = cloud.xyz - np.array(partition.center)
+    cos_r, sin_r = math.cos(partition.rotation_z), math.sin(partition.rotation_z)
+    local = np.stack([
+        cos_r * d[:, 0] + sin_r * d[:, 1],
+        -sin_r * d[:, 0] + cos_r * d[:, 1],
+        d[:, 2],
+    ], axis=1)
+    half = np.array(partition.size) / 2.0
+    on_box = np.all(np.abs(local) <= half + 1e-9, axis=1)
+    faces = {
+        (axis, sign)
+        for axis in range(3)
+        for sign in (1, -1)
+        if np.any(on_box & (np.abs(local[:, axis] - sign * half[axis]) <= 1e-9))
+    }
+    thin = int(np.argmin(partition.size))
+    # Both broad faces — the whole point; before the fallback this wall
+    # contributed ZERO points and vanished from the seed cloud entirely.
+    assert (thin, 1) in faces
+    assert (thin, -1) in faces
+    # ...and neither end cap. (The partition's underside coincides with the
+    # floor slab's top, so face (2, −1) shows up here from the FLOOR's points,
+    # which is why this asserts the length axis rather than an exact set.)
+    length = int(np.argmax(partition.size))
+    assert (length, 1) not in faces and (length, -1) not in faces
+
+
+def test_a_partition_contributes_a_share_of_the_cloud_proportional_to_its_area():
+    """The failure it replaces was silent: a wall simply absent, with the run
+    training happily and the Gaussians in that plane starting from whatever the
+    neighbouring surfaces happened to seed."""
+    spec = partition_spec()
+    partition = next(b for b in spec.boxes if b.name == "wall_04")
+    cloud = sample_scene_points(spec)
+
+    d = cloud.xyz - np.array(partition.center)
+    cos_r, sin_r = math.cos(partition.rotation_z), math.sin(partition.rotation_z)
+    local_y = -sin_r * d[:, 0] + cos_r * d[:, 1]
+    half = np.array(partition.size) / 2.0
+    thin = int(np.argmin(partition.size))
+    on_broad = (
+        np.all(np.abs(np.stack([
+            cos_r * d[:, 0] + sin_r * d[:, 1], local_y, d[:, 2]
+        ], axis=1)) <= half + 1e-9, axis=1)
+        & (np.abs(np.abs(local_y) - half[thin]) <= 1e-9)
+    )
+    assert int(on_broad.sum()) > 5_000

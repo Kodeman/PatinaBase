@@ -58,8 +58,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from .cameras import Bbox, CameraShot, RENDER_HEIGHT, RENDER_WIDTH
+from .cameras import Bbox, CameraShot, RENDER_HEIGHT, RENDER_WIDTH, RoomFrame
 from .parametric_scene import SceneSpec
+
+#: Degenerate-axis floor, matching `core/cameras`: a flat model must not ask for
+#: a zero-watt light over a zero-area room.
+_MIN_HALF_EXTENT_M = 0.25
 
 __all__ = [
     "BlenderScene",
@@ -75,21 +79,34 @@ __all__ = [
 CYCLES_SAMPLES = 96
 
 # ── the interior rig ────────────────────────────────────────────────────────
-#: Total emitted power of the four ceiling lights, per square metre of floor.
-#: Blender normalises a lamp's watts so that irradiance at distance d is about
-#: P/(4πd²), which is why this number is two orders below the old key's 220: the
-#: old key was hung outside a shell that blocked most of it, and the frames that
-#: were not in its shadow (the top-down plate) came back white. These lights are
-#: inside, unobstructed, and about 3 m off the floor.
+#: Total emitted power of the four ceiling lights, per square metre of THE
+#: ROOM's floor — the area inside its own walls, not the area of its
+#: world-aligned bounding box. On the real staging capture those differ by 2.5×
+#: (28.3 m² of room inside a 71.9 m² box), so a rig sized off the box makes a
+#: room's exposure depend on how it happens to sit relative to the world axes.
 #:
-#: MEASURED against the real staging capture, not derived. 8.0 rendered a
-#: legible but hot room — floor and cabinet fronts both sat near white with
-#: little tone between them. 5.0 is the value that separates them.
+#: Blender's own lamp normalisation is not the point-light `P/(4πd²)`: an area
+#: light's `energy` is total power spread over the emitter, so irradiance
+#: depends on the rectangle's size as well as its distance. That is why
+#: `QUADRANT_LIGHT_FRACTION` cannot be changed without re-measuring this.
+#:
+#: MEASURED against the real staging capture, not derived.
 INTERIOR_WATTS_PER_SQM = 5.0
 #: How far below the wall tops the ceiling lights hang. Enough to keep them from
 #: coplanar-shadowing against the wall caps, small enough to still read as a
 #: ceiling fixture.
 CEILING_DROP_M = 0.15
+#: ...but never below this above the model's floor. A capture with a floor
+#: element and no walls is not empty, so `renders` accepts it, and its bbox can
+#: be centimetres tall — which would put the whole rig UNDER the slab, where the
+#: slab occludes it. Every interior frame would then render on the world term
+#: alone and still upload, register and complete the task.
+MIN_LIGHT_CLEARANCE_M = 0.15
+#: Emitter floor. A rectangle smaller than this is a point light in practice and
+#: gives hard, noisy shadows. Applied HERE rather than at the bpy seam so the
+#: plan is what Blender actually receives — a clamp downstream of the planner
+#: makes every assertion about a `LightSpec` a claim about the wrong number.
+MIN_LIGHT_SIZE_M = 0.5
 #: Each quadrant light is a rectangle this fraction of its quadrant's footprint.
 #: Under 1.0 so the four sources stay distinguishable and the room keeps some
 #: falloff across it instead of flattening into one uniform ceiling emitter.
@@ -133,13 +150,16 @@ OBJECT_BEVEL_M = 0.02
 @dataclass(frozen=True)
 class LightSpec:
     """One rectangular area light, facing straight down. `watts` is Blender's
-    own lamp Power; `size_x`/`size_y` are the rectangle's metres."""
+    own lamp Power; `size_x`/`size_y` are the rectangle's metres, measured along
+    its own axes; `rotation_z` yaws it about world +Z, which leaves it facing
+    down and lines an oblong emitter up with an oblong room."""
 
     name: str
     location: tuple[float, float, float]
     size_x: float
     size_y: float
     watts: float
+    rotation_z: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -154,27 +174,60 @@ def _floor_area(bbox: Bbox) -> tuple[float, float, float]:
     """(sx, sy, area) with each horizontal extent floored, so a degenerate model
     cannot ask for a zero-watt light or a zero-sized emitter."""
     sx, sy, _ = bbox.size
-    sx, sy = max(sx, 0.5), max(sy, 0.5)
+    sx, sy = max(sx, 2.0 * _MIN_HALF_EXTENT_M), max(sy, 2.0 * _MIN_HALF_EXTENT_M)
     return sx, sy, sx * sy
 
 
-def plan_lighting(bbox: Bbox, shot: CameraShot) -> LightingPlan:
-    """The rig for one shot. Pure: bbox and shot in, light specs out.
+def _light(
+    name: str,
+    location: tuple[float, float, float],
+    size_x: float,
+    size_y: float,
+    watts: float,
+    rotation_z: float = 0.0,
+) -> LightSpec:
+    """A `LightSpec` with the emitter floor already applied, so the plan is what
+    Blender receives and an assertion about a spec is an assertion about a lamp."""
+    return LightSpec(
+        name=name,
+        location=location,
+        size_x=max(size_x, MIN_LIGHT_SIZE_M),
+        size_y=max(size_y, MIN_LIGHT_SIZE_M),
+        watts=watts,
+        rotation_z=rotation_z,
+    )
+
+
+def plan_lighting(frame: RoomFrame | Bbox, shot: CameraShot) -> LightingPlan:
+    """The rig for one shot. Pure: the room frame and the shot in, specs out.
 
     The plan is per SHOT rather than per scene because the top-down plate and
     the interior frames want opposite things — see the module docstring. It is
     keyed on `shot.kind`, not on the shot's name: "orthographic" IS the plan
     view in this stage, and keying on the name would silently mis-light any
     future ortho shot.
+
+    Which frame each rig uses is the same split `core/cameras` makes, for the
+    same reason. The plan plate is a WORLD-aligned shot — an orthographic
+    camera looking straight down has world X across its frame — so its key is
+    sized and placed off the world box, which is also what keeps the emitter's
+    edges out of a frame that shows the whole box. Everything else happens
+    INSIDE the room, so it is planned in the room's own frame: on the staging
+    capture the world box is 2.5× the room's area and its quadrant centres sit
+    up to 1.5 m the far side of a wall, which would emit half the rig's power
+    into the void and make a room's exposure depend on its yaw.
     """
-    sx, sy, area = _floor_area(bbox)
-    cx, cy, _ = bbox.centroid
+    if isinstance(frame, Bbox):
+        frame = RoomFrame.from_bbox(frame)
+    bbox = frame.bbox
     top = bbox.max[2]
 
     if shot.kind == "orthographic":
+        sx, sy, area = _floor_area(bbox)
+        cx, cy, _ = bbox.centroid
         return LightingPlan(
             lights=(
-                LightSpec(
+                _light(
                     name="plan_key",
                     location=(cx, cy, top + TOP_DOWN_LIGHT_HEIGHT_M),
                     size_x=sx * TOP_DOWN_LIGHT_SPREAD,
@@ -185,10 +238,13 @@ def plan_lighting(bbox: Bbox, shot: CameraShot) -> LightingPlan:
             world_ambient=TOP_DOWN_WORLD_AMBIENT,
         )
 
-    z = top - CEILING_DROP_M
+    hu = max(frame.half_xy[0], _MIN_HALF_EXTENT_M)
+    hv = max(frame.half_xy[1], _MIN_HALF_EXTENT_M)
+    area = 4.0 * hu * hv
+    z = max(top - CEILING_DROP_M, bbox.floor_z + MIN_LIGHT_CLEARANCE_M)
     quadrant_watts = INTERIOR_WATTS_PER_SQM * area / 4.0
-    size_x = sx / 2.0 * QUADRANT_LIGHT_FRACTION
-    size_y = sy / 2.0 * QUADRANT_LIGHT_FRACTION
+    size_u = hu * QUADRANT_LIGHT_FRACTION
+    size_v = hv * QUADRANT_LIGHT_FRACTION
     # Fixed order — a lighting plan is as much an artifact input as the camera
     # plan is, and two runs must build the same lamps in the same order.
     quadrants = (
@@ -199,14 +255,15 @@ def plan_lighting(bbox: Bbox, shot: CameraShot) -> LightingPlan:
     )
     return LightingPlan(
         lights=tuple(
-            LightSpec(
+            _light(
                 name=name,
-                location=(cx + sign_x * sx / 4.0, cy + sign_y * sy / 4.0, z),
-                size_x=size_x,
-                size_y=size_y,
+                location=frame.point(sign_u * hu / 2.0, sign_v * hv / 2.0, z),
+                size_x=size_u,
+                size_y=size_v,
                 watts=quadrant_watts,
+                rotation_z=frame.yaw,
             )
-            for name, sign_x, sign_y in quadrants
+            for name, sign_u, sign_v in quadrants
         ),
         world_ambient=INTERIOR_WORLD_AMBIENT,
     )
@@ -221,7 +278,7 @@ class BlenderScene(Protocol):
 
     def merge_glb(self, path: Path) -> Bbox | None: ...
 
-    def setup(self, bbox: Bbox) -> None: ...
+    def setup(self, frame: RoomFrame) -> None: ...
 
     def render(self, shot: CameraShot, output_path: Path) -> Path: ...
 
@@ -234,7 +291,7 @@ class BpyScene:
         self.samples = samples
         #: Held from `setup` so `render` can plan the frame's lighting. The
         #: rig is per shot, and the shot is not known until `render`.
-        self._bbox: Bbox | None = None
+        self._frame: RoomFrame | None = None
 
     # ── scene ────────────────────────────────────────────────────────────────
 
@@ -286,10 +343,10 @@ class BpyScene:
         imported = [o for o in bpy.context.scene.objects if o not in before]
         return self._bbox_of(imported)
 
-    def setup(self, bbox: Bbox) -> None:
+    def setup(self, frame: RoomFrame) -> None:
         import bpy
 
-        self._bbox = bbox
+        self._frame = frame if isinstance(frame, RoomFrame) else RoomFrame.from_bbox(frame)
         scene = bpy.context.scene
         scene.render.engine = "CYCLES"
         scene.cycles.samples = self.samples
@@ -317,12 +374,12 @@ class BpyScene:
         # rig differs between the plan plate and the interior shots. Building
         # four lamps costs microseconds against a Cycles frame, and rebuilding
         # is what guarantees no frame inherits the previous one's exposure.
-        if self._bbox is None:
+        if self._frame is None:
             # Refused rather than defaulted. Rendering without a rig produces a
             # black frame that still uploads, registers and completes the task —
             # a failure indistinguishable from a very dark room.
-            raise RuntimeError("render() called before setup(); no bbox to light from")
-        plan = plan_lighting(self._bbox, shot)
+            raise RuntimeError("render() called before setup(); no room to light")
+        plan = plan_lighting(self._frame, shot)
         ambient = plan.world_ambient
         if bpy.context.scene.world is not None:
             bpy.context.scene.world.color = (ambient, ambient, ambient)
@@ -350,7 +407,12 @@ class BpyScene:
 
         bpy.data.objects.remove(camera, do_unlink=True)
         for light in lights:
+            # The DATABLOCK too, not just the object. Left behind, 29 frames of
+            # `bpy.data.lights.new("ceiling_ne")` return ceiling_ne.001, .002 …
+            # and the lamp Blender holds stops being the one the plan names.
+            data = light.data
             bpy.data.objects.remove(light, do_unlink=True)
+            bpy.data.lights.remove(data)
         return output_path
 
     # ── helpers ──────────────────────────────────────────────────────────────
@@ -392,14 +454,17 @@ class BpyScene:
         data = bpy.data.lights.new(spec.name, type="AREA")
         # RECTANGLE, not the default square: a room is rarely square, and a
         # square emitter over an oblong room pools light down its short axis.
+        # `shape` first — `size_y` is only honoured for RECTANGLE/ELLIPSE.
         data.shape = "RECTANGLE"
-        data.size = max(spec.size_x, 0.5)
-        data.size_y = max(spec.size_y, 0.5)
+        data.size = spec.size_x
+        data.size_y = spec.size_y
         data.energy = spec.watts
         obj = bpy.data.objects.new(spec.name, data)
         obj.location = spec.location
-        # A Blender area light emits along its local -Z, and a new object's
-        # rotation is identity, so this faces straight down as built.
+        # A Blender area light emits along its local -Z, and a yaw about world
+        # +Z leaves that pointing straight down — so this lines an oblong
+        # emitter up with an oblong room without tilting it.
+        obj.rotation_euler = (0.0, 0.0, spec.rotation_z)
         #
         # Invisible to camera rays. The interior cameras carry a 24 mm lens
         # whose vertical field reaches metres above the light plane at the far
