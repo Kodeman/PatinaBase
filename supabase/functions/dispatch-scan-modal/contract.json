@@ -12,6 +12,9 @@
     "`inputs` differs, and each stage's inputs are CLOSED — a splat body carries",
     "no meshUrl, a renders body carries no photoUrls. Both sides assert the key",
     "SET, not just its presence, so an extra field is a failure too.",
+    "W2 note 2: `renders` builds its scene from capturedRoomJsonUrl and MERGES",
+    "glbUrl on top, so captured_room is required and the GLB is optional — the",
+    "renders_no_glb variant is the shape a scan with no model_url_gltf gets.",
     "`variants` holds shapes that are not a stage of their own. splat_rows is",
     "the pose-carrier fallback: the ingest stage strips `photosManifest` as",
     "device-local, so photos_manifest_url is null for a large share of scans and",
@@ -65,11 +68,24 @@
       "taskType": "scan_pipeline.renders",
       "traceId": "44444444-4444-4444-8444-444444444446",
       "inputs": {
+        "capturedRoomJsonUrl": "https://example.invalid/storage/v1/object/sign/room-scans/captured_room/u/r/captured_room.json?token=placeholder",
         "glbUrl": "https://example.invalid/storage/v1/object/sign/room-scans/usdz/u/r/room.glb?token=placeholder"
       }
     }
   },
   "variants": {
+    "renders_no_glb": {
+      "taskId": "11111111-1111-4111-8111-111111111115",
+      "leaseToken": "dispatch-scan-modal:99999999-9999-4999-8999-999999999999",
+      "scanId": "22222222-2222-4222-8222-222222222222",
+      "roomFileId": "33333333-3333-4333-8333-333333333333",
+      "roomFileVersion": 4,
+      "taskType": "scan_pipeline.renders",
+      "traceId": "44444444-4444-4444-8444-444444444448",
+      "inputs": {
+        "capturedRoomJsonUrl": "https://example.invalid/storage/v1/object/sign/room-scans/captured_room/u/r/captured_room.json?token=placeholder"
+      }
+    },
     "splat_rows": {
       "taskId": "11111111-1111-4111-8111-111111111114",
       "leaseToken": "dispatch-scan-modal:99999999-9999-4999-8999-999999999999",

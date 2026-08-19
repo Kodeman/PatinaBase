@@ -37,11 +37,13 @@ import {
   buildLogLine,
   buildModalDispatchBody,
   capPhotoKeys,
+  claimGroups,
   DISPATCH_TASK_TYPES,
   decideDispatchFailure,
   extractTaskInputIds,
   isPoseBearing,
   isSpawnSuccess,
+  isSupersededVersion,
   KEY_PREFIX_REJECTED,
   keyMatchesScanOwner,
   newLeaseOwner,
@@ -50,6 +52,8 @@ import {
   shouldSkipForNoWork,
   SIGNED_URL_TTL_S,
   stageForTaskType,
+  SUPERSEDED_ARTIFACTS,
+  SUPERSEDED_REASON,
   validateEnv,
   type ClaimedTaskRow,
   type DispatchInputs,
@@ -258,20 +262,21 @@ async function resolveDispatchInputs(
   if (!roomFileRow) throw new Error("room_files row not found for scan/version");
   const roomFileId = roomFileRow.id;
 
+  const capturedRoomKey = ownedKey(scanRow.captured_room_json_url, scanRow);
+  if (!capturedRoomKey) throw new Error("missing captured_room input key");
+
   if (stage === "renders") {
     // Bare-key tolerant via objectKeyFromRoomScansUrl: model_url_gltf is
     // stamped by convert-room-scan-glb and carries the I104 public-url shape on
-    // older rows.
+    // older rows. An ABSENT one is no longer fatal — the parametric room is the
+    // subject now and the GLB is an overlay.
     const glbKey = ownedKey(scanRow.model_url_gltf, scanRow);
-    if (!glbKey) throw new Error("missing model_url_gltf input key");
-    return {
-      roomFileId,
-      inputs: { kind: "renders", glbUrl: await signOne(admin, glbKey, "glb") },
-    };
+    const [capturedRoomJsonUrl, glbUrl] = await Promise.all([
+      signOne(admin, capturedRoomKey, "captured_room"),
+      glbKey ? signOne(admin, glbKey, "glb") : Promise.resolve(undefined),
+    ]);
+    return { roomFileId, inputs: { kind: "renders", capturedRoomJsonUrl, glbUrl } };
   }
-
-  const capturedRoomKey = ownedKey(scanRow.captured_room_json_url, scanRow);
-  if (!capturedRoomKey) throw new Error("missing captured_room input key");
 
   if (stage === "splat") {
     // A null/unusable photos_manifest_url is the COMMON case, not a fault: the
@@ -363,12 +368,32 @@ async function failDispatch(
   return { dispatchAttempts, fatal };
 }
 
+/** The scan's newest room_file version, or null if the answer is unavailable.
+ *
+ *  A failed lookup returns null rather than throwing, and `isSupersededVersion`
+ *  treats null as "not superseded" — an unreadable table must never park a task
+ *  permanently. The cost of that choice is one wasted dispatch on the rare tick
+ *  where the read fails; the cost of the other choice is a live task killed by
+ *  a transient error. */
+async function maxRoomFileVersion(admin: Supa, scanId: string): Promise<number | null> {
+  const { data, error } = await admin
+    .from("room_files")
+    .select("version")
+    .eq("scan_id", scanId)
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  const version = (data as { version?: unknown }).version;
+  return typeof version === "number" && Number.isFinite(version) ? version : null;
+}
+
 async function dispatchOne(
   admin: Supa,
   env: { MODAL_SPAWN_URL: string; MODAL_BEARER_TOKEN: string },
   task: ClaimedTaskRow,
   leaseOwner: string,
-): Promise<"spawned" | "failed" | "deferred"> {
+): Promise<"spawned" | "failed" | "deferred" | "superseded"> {
   const idCheck = extractTaskInputIds(task);
   if (!idCheck.ok) {
     log("task_input_invalid", { task_id: task.id, reason: idCheck.reason });
@@ -376,6 +401,34 @@ async function dispatchOne(
     return "failed";
   }
   const { scanId, roomFileVersion } = idCheck.ids;
+
+  // BEFORE input resolution and before the spawn: a task for a superseded room
+  // file cannot complete — 00492 refuses its writes with P0404 and the job
+  // exits clean — so dispatching it just re-runs the same dead end every five
+  // minutes, on a GPU for `splat`. Complete it as done/superseded instead.
+  const maxVersion = await maxRoomFileVersion(admin, scanId);
+  if (isSupersededVersion(roomFileVersion, maxVersion)) {
+    const { error } = await admin.rpc("complete_agent_task", {
+      p_id: task.id,
+      p_outcome: "done",
+      p_artifacts: SUPERSEDED_ARTIFACTS,
+      p_error: SUPERSEDED_REASON,
+      p_fatal: false,
+      p_actor: leaseOwner,
+    });
+    if (error) {
+      // The lease will expire and a later tick will reach the same conclusion.
+      log("run_error", { error_kind: "complete_agent_task_failed" });
+    }
+    log("dispatch_superseded", {
+      task_id: task.id,
+      scan_id: scanId,
+      task_type: task.task_type,
+      room_file_version: roomFileVersion,
+      max_version: maxVersion,
+    });
+    return "superseded";
+  }
 
   const stage = stageForTaskType(task.task_type);
   if (stage === null) {
@@ -588,23 +641,33 @@ Deno.serve(async (req: Request) => {
   let spawned = 0;
   let failed = 0;
   let deferred = 0;
+  let superseded = 0;
   let errorText: string | null = null;
 
   try {
-    const { data: claimedRows, error: claimErr } = await admin.rpc("claim_agent_tasks", {
-      p_task_types: DISPATCH_TASK_TYPES,
-      p_batch: BATCH_LIMIT,
-      p_worker: leaseOwner,
-      p_visibility_timeout: "30 minutes", // covers splat's 10-25min Modal run; 00378 reclaims a dead spawn past this
-    });
-    if (claimErr) throw new Error(`claim_agent_tasks: ${claimErr.message}`);
-    claimed = (claimedRows ?? []) as ClaimedTaskRow[];
+    // One claim call per LEASE LENGTH. `claim_agent_tasks` takes a single
+    // `p_visibility_timeout` for the whole call, and splat needs 90 minutes
+    // where verify and renders need 30 — so the batch is claimed in groups and
+    // BATCH_LIMIT is spent across them, never per group.
+    for (const group of claimGroups()) {
+      const remaining = BATCH_LIMIT - claimed.length;
+      if (remaining <= 0) break;
+      const { data: claimedRows, error: claimErr } = await admin.rpc("claim_agent_tasks", {
+        p_task_types: group.taskTypes,
+        p_batch: remaining,
+        p_worker: leaseOwner,
+        p_visibility_timeout: group.visibilityTimeout,
+      });
+      if (claimErr) throw new Error(`claim_agent_tasks: ${claimErr.message}`);
+      claimed = claimed.concat((claimedRows ?? []) as ClaimedTaskRow[]);
+    }
     log("claimed", { count: claimed.length });
 
     for (const task of claimed) {
       const outcome = await dispatchOne(admin, env, task, leaseOwner);
       if (outcome === "spawned") spawned++;
       else if (outcome === "deferred") deferred++;
+      else if (outcome === "superseded") superseded++;
       else failed++;
     }
   } catch (err) {
@@ -618,14 +681,14 @@ Deno.serve(async (req: Request) => {
       .update({
         status: errorText ? "failed" : "succeeded",
         finished_at: new Date().toISOString(),
-        detail: { claimed: claimed.length, spawned, failed, deferred },
+        detail: { claimed: claimed.length, spawned, failed, deferred, superseded },
         error: errorText,
       })
       .eq("id", runId);
   }
 
   return json(
-    { claimed: claimed.length, spawned, failed, deferred, error: errorText },
+    { claimed: claimed.length, spawned, failed, deferred, superseded, error: errorText },
     errorText ? 500 : 200,
   );
 });

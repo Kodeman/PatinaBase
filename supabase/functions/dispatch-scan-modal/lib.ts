@@ -41,6 +41,82 @@ export function stageForTaskType(taskType: string): DispatchStage | null {
 }
 
 export const BATCH_LIMIT = 3;
+
+// ─── Per-task-type visibility timeout ───────────────────────────────────────
+//
+// One 30-minute lease for all three stages was wrong for exactly one of them.
+// W2 measured `splat` at ~55 minutes for its 30,000-iteration budget on the
+// real fixture, so a run that trained and exported CORRECTLY would find its
+// lease expired and have every ledger write refused with P0403 — it would burn
+// a full L4 pass and then discard the result as `lease_rejected`
+// (W2-EVIDENCE.md §4 C). The lease is the sharpest of the stage's three time
+// budgets because it is the only one that silently throws away completed work.
+//
+// 90 minutes is the Modal function's own 7200 s ceiling with room to spare on
+// neither side being the binding constraint: long enough that a full training
+// run plus its export/compress tail cannot outlive it, short enough that a
+// genuinely dead splat spawn is reclaimed within the hour and a half rather
+// than never. verify and renders are CPU-minutes and single-digit minutes
+// respectively and keep the original 30.
+export const SPLAT_VISIBILITY_TIMEOUT = "90 minutes";
+export const DEFAULT_VISIBILITY_TIMEOUT = "30 minutes";
+
+export function visibilityTimeoutForTaskType(taskType: string): string {
+  return stageForTaskType(taskType) === "splat"
+    ? SPLAT_VISIBILITY_TIMEOUT
+    : DEFAULT_VISIBILITY_TIMEOUT;
+}
+
+export interface ClaimGroup {
+  taskTypes: DispatchTaskType[];
+  visibilityTimeout: string;
+}
+
+/** The claim is split by lease length, not by stage, because `claim_agent_tasks`
+ *  takes ONE `p_visibility_timeout` for the whole call. Splat-first is
+ *  deliberate: it is the expensive stage and the one whose lease was wrong, so
+ *  it should not be starved of the batch budget by a queue full of renders. */
+export function claimGroups(): ClaimGroup[] {
+  return [
+    { taskTypes: ["scan_pipeline.splat"], visibilityTimeout: SPLAT_VISIBILITY_TIMEOUT },
+    {
+      taskTypes: ["scan_pipeline.verify", "scan_pipeline.renders"],
+      visibilityTimeout: DEFAULT_VISIBILITY_TIMEOUT,
+    },
+  ];
+}
+
+// ─── Superseded-version guard ───────────────────────────────────────────────
+//
+// A task dispatched for room_file v1 of a scan now at v3 can never complete:
+// 00492 refuses its ledger writes with P0404 (StaleVersion), the job exits
+// clean without completing, and the next cron sweep claims and spawns it again
+// — forever. W1's verify task `abad722d` reached attempts 7 against
+// max_attempts 5 this way (W2-EVIDENCE.md open item 9). On a CPU stage that is
+// free; on `splat` it allocates an L4 every five minutes indefinitely.
+//
+// So the check moves BEFORE the spawn: a task whose version is no longer the
+// max for its scan is completed as superseded, without input resolution,
+// without a presigned URL, and without a GPU.
+
+/** Fixed literal — merged into `agent_tasks.artifacts` by complete_agent_task's
+ *  `artifacts || p_artifacts`. No scan id, no version, no key: the row already
+ *  carries all three in `payload`, and this is a reason, not a record. */
+export const SUPERSEDED_ARTIFACTS = { dispatch_outcome: "superseded" } as const;
+export const SUPERSEDED_REASON =
+  "room_file_version superseded by a newer version for this scan";
+
+/** True when a strictly newer room_file version exists for the scan. A null or
+ *  non-finite max (no rows, or an unreadable answer) is NOT superseded — the
+ *  guard must never park a task on a failed lookup, which is a transient fault
+ *  and belongs to the ordinary retry path. */
+export function isSupersededVersion(
+  dispatchVersion: number,
+  maxVersion: number | null | undefined,
+): boolean {
+  if (typeof maxVersion !== "number" || !Number.isFinite(maxVersion)) return false;
+  return maxVersion > dispatchVersion;
+}
 // Must outlast the whole Modal stage, not just the download: the presigned URL
 // is fetched inside the job, and splat's run is 10–25 minutes. 600s expired
 // mid-run.
@@ -282,9 +358,17 @@ export function isPoseBearing(
   );
 }
 
+/** `renders` builds its scene from the PARAMETRIC room and merges the GLB on
+ *  top, so `capturedRoomJsonUrl` is the required input and `glbUrl` is the
+ *  optional one — the reverse of W2's shape. The GLB for a real RoomPlan
+ *  capture is floor-only (the USDZ→GLB converter walks `UsdGeom.Mesh` and
+ *  RoomPlan writes `UsdGeom.Cube`), so a stage that rendered only the GLB
+ *  rendered a bare slab. A scan whose `model_url_gltf` was never stamped now
+ *  renders anyway rather than failing input resolution. */
 export interface RendersInputs {
   kind: "renders";
-  glbUrl: string;
+  capturedRoomJsonUrl: string;
+  glbUrl?: string;
 }
 
 export type DispatchInputs = VerifyInputs | SplatInputs | RendersInputs;
@@ -355,7 +439,10 @@ export function buildModalDispatchBody(p: DispatchParams): Record<string, unknow
       break;
     }
     case "renders":
-      inputs = { glbUrl: p.inputs.glbUrl };
+      inputs = { capturedRoomJsonUrl: p.inputs.capturedRoomJsonUrl };
+      // Absent, not null: the Modal side reads `glbUrl` for truthiness, and an
+      // explicit null on the wire reads as "there is one" to a shape check.
+      if (p.inputs.glbUrl) inputs.glbUrl = p.inputs.glbUrl;
       break;
   }
   return {
@@ -421,6 +508,9 @@ const ALLOWED_LOG_FIELDS: Record<string, readonly string[]> = {
   // visibility timeout recovers it. Not a failure, so it has its own event.
   dispatch_deferred: ["task_id", "scan_id", "task_type", "error_kind"],
   dispatch_failed: ["task_id", "scan_id", "task_type", "http_status", "error_kind", "fatal", "dispatch_attempts"],
+  // A task completed WITHOUT a spawn because its room file has been superseded.
+  // The two versions are integers off the task's own payload, never a key.
+  dispatch_superseded: ["task_id", "scan_id", "task_type", "room_file_version", "max_version"],
   // PostgREST's error `code` only — never `message`/`details`, which can echo
   // row content back into the log.
   job_run_insert_failed: ["error_code"],

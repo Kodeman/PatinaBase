@@ -13,11 +13,14 @@ import {
   buildLogLine,
   buildModalDispatchBody,
   capPhotoKeys,
+  claimGroups,
   decideDispatchFailure,
+  DEFAULT_VISIBILITY_TIMEOUT,
   DISPATCH_TASK_TYPES,
   extractTaskInputIds,
   isPoseBearing,
   isSpawnSuccess,
+  isSupersededVersion,
   KEY_PREFIX_REJECTED,
   keyMatchesScanOwner,
   MAX_DISPATCH_ATTEMPTS,
@@ -27,8 +30,11 @@ import {
   readDispatchAttempts,
   shouldSkipForNoWork,
   SIGNED_URL_TTL_S,
+  SPLAT_VISIBILITY_TIMEOUT,
   stageForTaskType,
+  SUPERSEDED_ARTIFACTS,
   validateEnv,
+  visibilityTimeoutForTaskType,
   WORKER_ID_PREFIX,
   type ClaimedTaskRow,
   type DispatchInputs,
@@ -481,7 +487,12 @@ Deno.test("contract.json: each stage's inputs are closed — no cross-stage keys
       "photosManifestUrl", "photosSource",
     ],
   );
-  assertEquals(Object.keys(stages.renders.inputs as ContractBody).sort(), ["glbUrl"]);
+  // `renders` builds from the parametric room and merges the GLB on top, so
+  // captured_room is required here and glbUrl is the optional overlay.
+  assertEquals(
+    Object.keys(stages.renders.inputs as ContractBody).sort(),
+    ["capturedRoomJsonUrl", "glbUrl"],
+  );
 });
 
 // ─── the splat pose-carrier fallback ───────────────────────────────────────
@@ -668,8 +679,114 @@ Deno.test("buildModalDispatchBody: a splat body carries no verify/renders keys",
   assertEquals((inputs as { kind?: unknown }).kind, undefined);
 });
 
-Deno.test("buildModalDispatchBody: a renders body carries only glbUrl", async () => {
+Deno.test("buildModalDispatchBody: a renders body carries the room, then the GLB", async () => {
   const stages = await readContract();
   const built = buildModalDispatchBody(paramsFor("renders", stages.renders));
-  assertEquals(Object.keys(built.inputs as Record<string, unknown>), ["glbUrl"]);
+  assertEquals(
+    Object.keys(built.inputs as Record<string, unknown>),
+    ["capturedRoomJsonUrl", "glbUrl"],
+  );
+});
+
+Deno.test("buildModalDispatchBody: a renders body OMITS an absent glbUrl", () => {
+  // Absent, not null. The Modal side reads `glbUrl` for truthiness, and the
+  // contract asserts key SETS — an explicit null would both fail the shape
+  // check and read as "there is a GLB" to anything less careful.
+  const built = buildModalDispatchBody({
+    taskId: "task-1",
+    leaseToken: "dispatch-scan-modal:lease-1",
+    scanId: "scan-1",
+    roomFileId: "rf-1",
+    roomFileVersion: 3,
+    taskType: "scan_pipeline.renders",
+    traceId: "trace-1",
+    inputs: {
+      kind: "renders",
+      capturedRoomJsonUrl: "https://signed.example/captured_room.json?sig=1",
+    },
+  });
+  assertEquals(built.inputs, {
+    capturedRoomJsonUrl: "https://signed.example/captured_room.json?sig=1",
+  });
+});
+
+// ─── per-task-type visibility timeout ──────────────────────────────────────
+
+Deno.test("visibilityTimeoutForTaskType: splat gets 90 minutes, the others 30", () => {
+  assertEquals(visibilityTimeoutForTaskType("scan_pipeline.splat"), SPLAT_VISIBILITY_TIMEOUT);
+  assertEquals(visibilityTimeoutForTaskType("scan_pipeline.verify"), DEFAULT_VISIBILITY_TIMEOUT);
+  assertEquals(visibilityTimeoutForTaskType("scan_pipeline.renders"), DEFAULT_VISIBILITY_TIMEOUT);
+});
+
+Deno.test("visibilityTimeoutForTaskType: the bare stage name resolves too", () => {
+  assertEquals(visibilityTimeoutForTaskType("splat"), SPLAT_VISIBILITY_TIMEOUT);
+});
+
+Deno.test("visibilityTimeoutForTaskType: an unknown type gets the SHORT lease", () => {
+  // Fail short, not long: an unrecognised type holding a 90-minute lease would
+  // block its own retry for an hour and a half on a guess.
+  assertEquals(visibilityTimeoutForTaskType("scan_pipeline.solve"), DEFAULT_VISIBILITY_TIMEOUT);
+});
+
+Deno.test("claimGroups: splat is claimed first, and alone", () => {
+  const groups = claimGroups();
+  assertEquals(groups.length, 2);
+  assertEquals(groups[0].taskTypes, ["scan_pipeline.splat"]);
+  assertEquals(groups[0].visibilityTimeout, SPLAT_VISIBILITY_TIMEOUT);
+});
+
+Deno.test("claimGroups: every dispatchable task type is claimed by exactly one group", () => {
+  const seen = claimGroups().flatMap((g) => g.taskTypes);
+  assertEquals([...seen].sort(), [...DISPATCH_TASK_TYPES].sort());
+  assertEquals(new Set(seen).size, seen.length, "no task type may be claimed twice");
+});
+
+Deno.test("claimGroups: each group's lease matches what its types resolve to", () => {
+  for (const group of claimGroups()) {
+    for (const taskType of group.taskTypes) {
+      assertEquals(visibilityTimeoutForTaskType(taskType), group.visibilityTimeout);
+    }
+  }
+});
+
+// ─── superseded-version guard ──────────────────────────────────────────────
+
+Deno.test("isSupersededVersion: a strictly newer version supersedes", () => {
+  assert(isSupersededVersion(1, 3));
+  assert(isSupersededVersion(2, 3));
+});
+
+Deno.test("isSupersededVersion: the newest version is not superseded by itself", () => {
+  assertFalse(isSupersededVersion(3, 3));
+});
+
+Deno.test("isSupersededVersion: a version ahead of the max is not superseded", () => {
+  // Shouldn't happen, but treating it as superseded would park a live task.
+  assertFalse(isSupersededVersion(4, 3));
+});
+
+Deno.test("isSupersededVersion: an unavailable max never supersedes", () => {
+  // A failed room_files lookup must fall through to the ordinary dispatch path
+  // and its ordinary retry — never park a task permanently on a transient read.
+  assertFalse(isSupersededVersion(1, null));
+  assertFalse(isSupersededVersion(1, undefined));
+  assertFalse(isSupersededVersion(1, NaN));
+});
+
+Deno.test("SUPERSEDED_ARTIFACTS: carries a reason and no identifiers", () => {
+  assertEquals(SUPERSEDED_ARTIFACTS, { dispatch_outcome: "superseded" });
+});
+
+Deno.test("buildLogLine: dispatch_superseded logs both versions and no key", () => {
+  const line = JSON.parse(buildLogLine("dispatch-scan-modal", "dispatch_superseded", {
+    task_id: "t-1",
+    scan_id: "s-1",
+    task_type: "scan_pipeline.splat",
+    room_file_version: 1,
+    max_version: 3,
+    object_key: "captured_room/u/r/captured_room.json",
+  }));
+  assertEquals(line.room_file_version, 1);
+  assertEquals(line.max_version, 3);
+  assertEquals(line.object_key, undefined);
 });
