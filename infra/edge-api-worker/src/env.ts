@@ -1,5 +1,6 @@
 export type CatalogSource = 'legacy' | 'shadow' | 'hyperdrive';
 export type ScanRoutesMode = 'off' | 'on';
+export type MediaUploadsMode = 'off' | 'on';
 
 export interface EdgeApiEnv extends CloudflareBindings {
   // DB_FRESH is the authenticated RLS login (SET ROLE authenticated) for the
@@ -18,6 +19,14 @@ export interface EdgeApiEnv extends CloudflareBindings {
   // never committed vars — and only required when SCAN_ROUTES is "on".
   SCAN_R2_ACCESS_KEY_ID?: string;
   SCAN_R2_SECRET_ACCESS_KEY?: string;
+  // A SEPARATE, WRITE-CAPABLE credential pair for the upload interface, scoped
+  // to the originals bucket alone. Least privilege in both directions: the read
+  // pair above cannot write anything, and this pair cannot reach the artifacts
+  // bucket the pipeline writes. One compromised credential is therefore never
+  // the whole media surface. Wrangler secrets; required only when
+  // MEDIA_UPLOADS is "on".
+  SCAN_R2_WRITE_ACCESS_KEY_ID?: string;
+  SCAN_R2_WRITE_SECRET_ACCESS_KEY?: string;
 }
 
 export interface RuntimeConfig {
@@ -27,6 +36,7 @@ export interface RuntimeConfig {
   compatibilityFetchTimeoutMs: number;
   websocketHandshakeTimeoutMs: number;
   scanRoutes: ScanRoutesMode;
+  mediaUploads: MediaUploadsMode;
 }
 
 export class ConfigurationError extends Error {
@@ -153,8 +163,28 @@ export function validateRuntimeConfig(env: EdgeApiEnv): RuntimeConfig {
     if (!env.DB_FRESH) throw new ConfigurationError();
   }
 
+  // The upload interface, declared and validated exactly like the read path
+  // above, and for a sharper version of the same reason: this flag turns on a
+  // route that MINTS WRITE CAPABILITIES against a private bucket. "on" with a
+  // missing credential, a missing bucket, or a missing RLS binding must be a
+  // loud 503, never a route that half-works. The two flags are independent —
+  // an environment may serve reads without accepting uploads — but "on" here
+  // requires its own complete set.
+  const mediaUploads = env.MEDIA_UPLOADS;
+  if (mediaUploads !== 'off' && mediaUploads !== 'on') {
+    throw new ConfigurationError();
+  }
+  if (mediaUploads === 'on') {
+    requiredHttpsOrigin(env.SCAN_R2_ENDPOINT);
+    requiredString(env.SCAN_R2_ORIGINALS_BUCKET);
+    requiredString(env.SCAN_R2_WRITE_ACCESS_KEY_ID);
+    requiredString(env.SCAN_R2_WRITE_SECRET_ACCESS_KEY);
+    if (!env.DB_FRESH) throw new ConfigurationError();
+  }
+
   return {
     scanRoutes,
+    mediaUploads,
     catalogSource: source,
     catalogHyperdrivePercent: percentage,
     legacyFetchTimeoutMs: integerInRange(

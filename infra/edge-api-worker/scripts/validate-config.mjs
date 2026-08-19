@@ -16,13 +16,22 @@ const requiredVars = [
   'SCAN_ROUTES',
   'SCAN_R2_ENDPOINT',
   'SCAN_R2_BUCKET',
+  'MEDIA_UPLOADS',
+  'SCAN_R2_ORIGINALS_BUCKET',
 ];
 // Every name here must be a Wrangler secret and must never appear in `vars`.
 // The scan credentials are additionally CONDITIONAL for the --provisioned
 // inventory: they are only required where SCAN_ROUTES is "on", so an
-// environment resting at "off" stays provisionable without them.
+// environment resting at "off" stays provisionable without them. The WRITE pair
+// is conditional on MEDIA_UPLOADS the same way, and is a SEPARATE credential on
+// purpose — read-only against the artifacts bucket, write-only against the
+// originals bucket, so neither one is the whole media surface.
 const requiredSecrets = ['SUPABASE_ANON_KEY'];
 const scanSecrets = ['SCAN_R2_ACCESS_KEY_ID', 'SCAN_R2_SECRET_ACCESS_KEY'];
+const uploadSecrets = [
+  'SCAN_R2_WRITE_ACCESS_KEY_ID',
+  'SCAN_R2_WRITE_SECRET_ACCESS_KEY',
+];
 const KNOWN_HYPERDRIVE_BINDINGS = new Set([
   'DB_FRESH',
   'DB_CATALOG_FRESH',
@@ -50,7 +59,7 @@ export function validateScope(label, scope, errors) {
       errors.push(`${label}: missing ${name}`);
     }
   }
-  for (const name of [...requiredSecrets, ...scanSecrets]) {
+  for (const name of [...requiredSecrets, ...scanSecrets, ...uploadSecrets]) {
     if (Object.hasOwn(scope.vars ?? {}, name)) {
       errors.push(`${label}: ${name} must be a Wrangler secret, not a committed variable`);
     }
@@ -114,6 +123,32 @@ export function validateScope(label, scope, errors) {
   } catch {
     errors.push(`${label}: SCAN_R2_ENDPOINT must be an https origin with no path`);
   }
+  // The upload interface, mirroring validateRuntimeConfig in src/env.ts. The
+  // originals bucket is named separately from the artifacts bucket and must
+  // never be the same string: one credential pair writes here and the other
+  // reads there, and collapsing the two names would quietly collapse that
+  // separation too.
+  const mediaUploads = scope.vars?.MEDIA_UPLOADS;
+  if (mediaUploads !== 'off' && mediaUploads !== 'on') {
+    errors.push(`${label}: MEDIA_UPLOADS must be "off" or "on"`);
+  }
+  if (
+    typeof scope.vars?.SCAN_R2_ORIGINALS_BUCKET === 'string' &&
+    scope.vars.SCAN_R2_ORIGINALS_BUCKET === scope.vars?.SCAN_R2_BUCKET
+  ) {
+    errors.push(
+      `${label}: SCAN_R2_ORIGINALS_BUCKET must differ from SCAN_R2_BUCKET (originals and artifacts are separate durability contracts)`,
+    );
+  }
+  // Production stays off for the whole of this plan (DELIVERY-PLAN W3 "Does
+  // not": no route deploys to production). Asserted here rather than left to
+  // review, because the failure mode is a write capability against a prod
+  // bucket appearing in a routine redeploy.
+  if (label === 'env.production' && mediaUploads !== 'off') {
+    errors.push(
+      `${label}: MEDIA_UPLOADS must be "off" in production — the upload interface ships to staging only`,
+    );
+  }
 
   let provisionedBindings = new Set();
   if (!Array.isArray(scope.hyperdrive)) {
@@ -170,6 +205,14 @@ export function validateScope(label, scope, errors) {
       `${label}: SCAN_ROUTES=on requires a provisioned DB_FRESH Hyperdrive binding`,
     );
   }
+  // Same argument as SCAN_ROUTES, one degree sharper: without DB_FRESH the
+  // upload routes could only 404, and the caller's-own-RLS visibility read that
+  // authorizes every intent would never run.
+  if (mediaUploads === 'on' && !provisionedBindings.has('DB_FRESH')) {
+    errors.push(
+      `${label}: MEDIA_UPLOADS=on requires a provisioned DB_FRESH Hyperdrive binding`,
+    );
+  }
 }
 
 function main() {
@@ -212,6 +255,7 @@ function main() {
           const expected = [
             ...requiredSecrets,
             ...(scope?.vars?.SCAN_ROUTES === 'on' ? scanSecrets : []),
+            ...(scope?.vars?.MEDIA_UPLOADS === 'on' ? uploadSecrets : []),
           ];
           for (const name of expected) {
             if (!names.has(name)) errors.push(`env.${environment}: missing Wrangler secret ${name}`);

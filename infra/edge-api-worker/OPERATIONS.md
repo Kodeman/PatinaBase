@@ -197,18 +197,107 @@ npx wrangler deploy --env staging
 without them. Rollback is the same flip back to `"off"` plus a deploy — a config
 change, not a code change.
 
+## Media upload interface (`/v1/media/uploads`)
+
+The Phase-2 upload interface, piloted for scan **originals** (DELIVERY-PLAN W3).
+Two POST routes:
+
+- `POST /v1/media/uploads` — body `{scanId, artifactKind, filename,
+  declaredSha256, declaredSize, declaredMime}`. Answers `201` for a new intent
+  and `200` for a repeated one, with `{uploadId, putUrl, expiresAt,
+  requiredHeaders}`. `putUrl` is a 1800-second SigV4 query-signed R2 **PUT**.
+- `POST /v1/media/uploads/:uploadId/confirm` — HEADs the object with the same
+  credentials, compares observed size/checksum against what the intent declared,
+  and answers `{uploadId, lifecycle, sha256, etag, sizeBytes}`.
+
+Every response is `private, no-store`.
+
+**`requiredHeaders` are conditions, not suggestions.** `content-length` and
+`x-amz-checksum-sha256` are signed into the URL, so a PUT that omits or alters
+either fails at R2 as `SignatureDoesNotMatch`. That is what makes
+`declaredSha256` a promise: R2 verifies the body against the signed digest and
+refuses a mismatch before storing anything.
+
+**The key carries no authorization.**
+`scan_originals/{scanId}/{artifactKind}/{filename}` is registry-keyed. The legacy
+Supabase Storage layout (`{userId}/{roomId}/…`) made the path the authorization;
+DELIVERY-PLAN W3 forbids carrying that into R2. `artifactKind` is the closed set
+of schema-v3 bundle kinds (`keys.py`'s `KIND_TO_URL_COLUMN` + `KIND_TO_FOLDER`).
+
+**Authorization is the caller's own RLS, twice.** The route verifies the JWT,
+then reads `room_scans` under `SET LOCAL ROLE authenticated` on `DB_FRESH` — the
+real policies decide — before calling 00498's SECURITY DEFINER RPC, which binds
+the caller again through `caller_can_access_room_scan`. That mirror exists only
+because a definer body cannot re-run the caller's RLS; it is gated by an
+equivalence assertion in
+`supabase/tests/scan_pipeline/scan_roles_conformance_test.sql`, not trusted.
+
+Missing or invalid JWT is **401**. A malformed body is **400**. An unknown scan,
+an invisible scan, an unknown upload id, and an upload belonging to someone else
+are one identical **404**. A confirm whose observed bytes disagree with the
+declared ones is **409 `upload_mismatch`** with a `reason` (`size`, `checksum`,
+`missing`, `state`, `registry`) and the registry row **stays `pending`**, so the
+client can re-PUT without re-issuing an intent.
+
+### `MEDIA_UPLOADS` and the two pending WRITE secrets
+
+`MEDIA_UPLOADS` is `off` in every committed environment. `off` leaves both paths
+unrouted, so they 404 like any unknown path. Production is additionally asserted
+`off` by `validate-config` — the upload interface ships to staging only, and the
+failure mode being guarded against is a write capability against a production
+bucket arriving in a routine redeploy.
+
+`on` additionally requires, or the worker boots 503 with
+`edge_api_configuration_invalid`:
+
+| Piece | Where | State |
+| --- | --- | --- |
+| `SCAN_R2_ENDPOINT` | `wrangler.jsonc` var | committed (shared with the read path) |
+| `SCAN_R2_ORIGINALS_BUCKET` | `wrangler.jsonc` var | committed (`patina-staging-media-originals-us` on staging) |
+| `DB_FRESH` | Hyperdrive binding | provisioned on staging and production |
+| `SCAN_R2_WRITE_ACCESS_KEY_ID` | Wrangler secret | **PENDING — does not exist** |
+| `SCAN_R2_WRITE_SECRET_ACCESS_KEY` | Wrangler secret | **PENDING — does not exist** |
+
+The write pair is a **separate** R2 API token from the read pair, and that
+separation is the point: the read token is Object Read only, scoped to
+`patina-staging-media-artifacts-us`; the write token is Object Read & Write,
+scoped to `patina-staging-media-originals-us` and nothing else. Neither
+credential is the whole media surface. Minting the token is a Cloudflare
+dashboard action this repo's tooling cannot perform — create
+`patina-staging-media-writer` with Object Read & Write on the originals bucket
+only.
+
+Turning the upload interface on, once that token exists:
+
+```sh
+npx wrangler secret put SCAN_R2_WRITE_ACCESS_KEY_ID --env staging
+npx wrangler secret put SCAN_R2_WRITE_SECRET_ACCESS_KEY --env staging
+# then flip env.staging vars.MEDIA_UPLOADS to "on" in wrangler.jsonc
+npm run config:check
+npm run config:check:provisioned -- staging
+npx wrangler deploy --env staging
+```
+
+`config:check:provisioned` requires the write pair **only** where that scope's
+`MEDIA_UPLOADS` is `on`. Rollback is the same flip back to `"off"` plus a deploy
+— a config change, not a code change.
+
 ## Cloudflare log alert contract
 
 Alert filters match the exact `event` and `severity` fields below. Log payloads
 contain only the documented allowlisted operational fields: `event`, `severity`,
 `traceId`, `routeClass`, `fallback`, `comparison`, `binding`, `legacyCount`,
 `freshCount`, `hyperdriveCount`, `mismatchedIdCount`, `legacyDigest`,
-`freshDigest`, `hyperdriveDigest`, `status`, and `artifactKind`. Digests are
+`freshDigest`, `hyperdriveDigest`, `status`, `artifactKind`, `uploadStage`, and
+`mismatchReason`. Digests are
 8-hex FNV-1a hashes of the normalized result set — they discriminate differing
 content without logging catalog data. `artifactKind` is a closed vocabulary
 (`splat`, `glb`, `renders`); the scan route's Room File id, bucket, object key,
 and minted capability URL are all deliberately absent, so `traceId` is the only
-handle on an individual scan request.
+handle on an individual scan request. `uploadStage` (`intent`, `confirm`) and
+`mismatchReason` (`size`, `checksum`, `missing`, `state`, `registry`) are closed
+vocabularies on the same terms: the scan id, upload id, object key, declared
+checksum, and the presigned URL never appear.
 
 | Event filter | Severity | Meaning |
 | --- | --- | --- |
@@ -221,6 +310,7 @@ handle on an individual scan request.
 | `edge_api_configuration_invalid` | `critical` | Runtime variables encode an invalid catalog state or incomplete configuration. |
 | `edge_api_request_failure` | `error` | An otherwise unclassified request failure reached the router boundary. |
 | `edge_api_scan_artifact_failure` | `error` | The scan read path could not answer: the RLS read failed, or presigning did. Never emitted for an unauthorized caller or an artifact that simply is not there — both of those are ordinary 401/404s and are not logged. `artifactKind` names the kind asked for. |
+| `edge_api_media_upload_failure` | `warning` (409) / `error` (503) | The upload interface refused or could not answer. At `warning` it is a real mismatch between what R2 holds and what the intent declared — `uploadStage` says which leg, `mismatchReason` says which comparison, and the registry row is still `pending`. At `error` it is a presign, credential, or registry fault. Never emitted for an unauthorized caller, a malformed body, or an invisible scan — those are ordinary 401/400/404s and are not logged. |
 | `edge_api_proxy_origin_rejected` | `error` | The proxy refused to forward a request whose resolved upstream escaped the pinned origin or the compatibility path set. Expected count is zero — any occurrence is a probe or a bug. Action: investigate the `traceId`; no notification wiring change. |
 
 Cloudflare email notification provisioning remains an operator action. The Worker

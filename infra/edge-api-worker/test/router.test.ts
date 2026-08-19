@@ -52,6 +52,8 @@ function env(overrides: Partial<EdgeApiEnv> = {}): EdgeApiEnv {
     SCAN_ROUTES: 'off',
     SCAN_R2_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
     SCAN_R2_BUCKET: 'patina-staging-media-artifacts-us',
+    MEDIA_UPLOADS: 'off',
+    SCAN_R2_ORIGINALS_BUCKET: 'patina-staging-media-originals-us',
     ...overrides,
   };
 }
@@ -84,6 +86,15 @@ function dependencies(
       throw new Error('unauthorized');
     }),
     resolveScanArtifacts: vi.fn(async () => []),
+    createUploadIntent: vi.fn(async () => {
+      throw new Error('media uploads are off in this fixture');
+    }),
+    resolveUploadForConfirm: vi.fn(async () => {
+      throw new Error('media uploads are off in this fixture');
+    }),
+    confirmUpload: vi.fn(async () => {
+      throw new Error('media uploads are off in this fixture');
+    }),
     randomUUID: () => 'trace-0000000000000000000000001',
     cohortKey: () => 'trusted-cohort',
     now: () => new Date('2026-08-18T12:00:00.000Z'),

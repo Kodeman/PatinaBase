@@ -9,6 +9,7 @@ export const ALERT_EVENTS = {
   requestFailure: 'edge_api_request_failure',
   proxyOriginRejected: 'edge_api_proxy_origin_rejected',
   scanArtifactFailure: 'edge_api_scan_artifact_failure',
+  mediaUploadFailure: 'edge_api_media_upload_failure',
 } as const;
 
 export type AlertEventName = (typeof ALERT_EVENTS)[keyof typeof ALERT_EVENTS];
@@ -18,6 +19,7 @@ export type RouteClass =
   | 'internal.health'
   | 'auth.check'
   | 'scan.artifact'
+  | 'media.upload'
   | 'compat.auth'
   | 'compat.realtime'
   | 'compat.rest'
@@ -57,6 +59,16 @@ export interface AlertLogEvent {
    * is the only handle an operator gets on an individual request.
    */
   artifactKind?: string;
+  /**
+   * Which leg of the upload interface failed — `intent` or `confirm` — and, for
+   * a mismatch, WHICH comparison disagreed (`uploadStage`/`mismatchReason`).
+   * Both are closed vocabularies. The scan id, the upload id, the object key,
+   * the declared checksum, and the presigned URL are all deliberately absent:
+   * the `traceId` stays the only handle on an individual request, exactly as on
+   * the read path.
+   */
+  uploadStage?: 'intent' | 'confirm';
+  mismatchReason?: 'size' | 'checksum' | 'missing' | 'state' | 'registry';
 }
 
 const OPTIONAL_LOG_FIELDS = [
@@ -72,6 +84,8 @@ const OPTIONAL_LOG_FIELDS = [
   'hyperdriveDigest',
   'status',
   'artifactKind',
+  'uploadStage',
+  'mismatchReason',
 ] as const satisfies readonly (keyof AlertLogEvent)[];
 
 export function structuredLog(input: AlertLogEvent): void {
@@ -98,6 +112,7 @@ export function routeClassFor(pathname: string): RouteClass {
   if (pathname === '/v1/catalog/products') return 'catalog.products';
   if (pathname === '/v1/_authcheck') return 'auth.check';
   if (pathname.startsWith('/v1/scan/')) return 'scan.artifact';
+  if (pathname.startsWith('/v1/media/uploads')) return 'media.upload';
   if (pathname === '/_internal/health') return 'internal.health';
   if (pathname === '/auth/v1' || pathname.startsWith('/auth/v1/')) {
     return 'compat.auth';

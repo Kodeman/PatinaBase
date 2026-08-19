@@ -71,15 +71,33 @@ yet on prod.
 
 ## Reservations
 
-| Band        | Program                                                                                                                                                                                                |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 00494–00497 | Phase 2 (Cloudflare/media backfill program — this workstream and its siblings)                                                                                                                         |
-| 00498–00502 | Rendered Room v2 (scan pipeline) — **confirmed by that lane** as this program's _future_ draws, purely additive to its already-consumed 00489–00492. Those four are **not** renumbered into this band. |
-| 00503–00509 | Phase 3                                                                                                                                                                                                |
-| 00510       | Grant-repair hotfix (`fix/post-00483-grant-gaps`) — in flight                                                                                                                                          |
+| Band        | Program                                                                                                                                                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 00494–00497 | Phase 2 (Cloudflare/media backfill program — this workstream and its siblings)                                                                                                                                                             |
+| 00498–00502 | Rendered Room v2 (scan pipeline) — **confirmed by that lane** as this program's _future_ draws, purely additive to its already-consumed 00489–00492. Those four are **not** renumbered into this band. **00498 is now DRAWN** — see below. |
+| 00503–00509 | Phase 3                                                                                                                                                                                                                                    |
+| 00510       | Grant-repair hotfix (`fix/post-00483-grant-gaps`) — in flight                                                                                                                                                                              |
 
-No file in `supabase/migrations/` on `main`, and no commit in `git log --all`, currently
-occupies any number in 00494–00509 — the three bands are collision-free as reserved.
+### Drawn from 00498–00502
+
+| Number | File                                                  | Landed state                                                       |
+| ------ | ----------------------------------------------------- | ------------------------------------------------------------------ |
+| 00498  | `00498_media_upload_intent_and_scan_version_lock.sql` | branch `w3a/media-upload-intent`; applied to **staging**, NOT prod |
+
+00498 carries W3-A: `create_media_upload_intent` / `confirm_media_upload` (the
+Phase-2 upload interface's registry side), the `caller_can_access_room_scan`
+visibility mirror they bind through, and the per-scan `pg_advisory_xact_lock` on
+BOTH the `room_files` insert path (a BEFORE INSERT trigger) and
+`scan_worker_update_room_file` — closing the insert-side residual 00492
+documented and deferred to W3. It replaces `scan_worker_update_room_file`, so the
+lineage for that function is now **00490 → 00492 → 00498**; a later program
+redefining it must graft onto 00498's body, not 00492's.
+
+00499–00502 remain free for this lane.
+
+Apart from 00498, no file in `supabase/migrations/` on `main`, and no commit in
+`git log --all`, currently occupies any number in 00494–00509 — the three bands
+are collision-free as reserved.
 
 ## Discipline rules
 

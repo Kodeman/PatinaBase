@@ -9,6 +9,7 @@ const config: RuntimeConfig = {
   compatibilityFetchTimeoutMs: 100,
   websocketHandshakeTimeoutMs: 100,
   scanRoutes: 'off',
+  mediaUploads: 'off',
 };
 
 describe('workerd runtime contracts', () => {

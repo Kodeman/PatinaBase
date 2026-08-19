@@ -22,6 +22,8 @@ function env(overrides: Partial<EdgeApiEnv> = {}): EdgeApiEnv {
     SCAN_ROUTES: 'off',
     SCAN_R2_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
     SCAN_R2_BUCKET: 'patina-staging-media-artifacts-us',
+    MEDIA_UPLOADS: 'off',
+    SCAN_R2_ORIGINALS_BUCKET: 'patina-staging-media-originals-us',
     ...overrides,
   } as EdgeApiEnv;
 }

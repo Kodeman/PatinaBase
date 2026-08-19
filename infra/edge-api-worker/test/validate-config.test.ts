@@ -229,6 +229,15 @@ function scanErrors(label: string, scope: unknown): string[] {
   return errors.filter((error) => error.includes('SCAN_'));
 }
 
+/** The upload interface's errors do not all carry a `SCAN_` prefix. */
+function uploadErrors(label: string, scope: unknown): string[] {
+  const errors: string[] = [];
+  validateScope(label, scope, errors);
+  return errors.filter(
+    (error) => error.includes('MEDIA_UPLOADS') || error.includes('SCAN_R2_ORIGINALS'),
+  );
+}
+
 function withVars(
   scope: { vars: Record<string, string> },
   vars: Record<string, unknown>,
@@ -308,8 +317,92 @@ describe('validate-config scan read path', () => {
     ).toEqual([]);
   });
 
+  it('pins the ruled MEDIA_UPLOADS posture per scope', () => {
+    // The upload interface ships to STAGING only, and staging itself rests at
+    // "off" until the write credential exists — flipping it on is a deliberate
+    // act, not a state a checkout arrives in.
+    expect(config.vars.MEDIA_UPLOADS).toBe('off');
+    expect(config.env.local.vars.MEDIA_UPLOADS).toBe('off');
+    expect(config.env.staging.vars.MEDIA_UPLOADS).toBe('off');
+    expect(config.env.production.vars.MEDIA_UPLOADS).toBe('off');
+  });
+
+  it('rejects any MEDIA_UPLOADS value that is not off or on', () => {
+    for (const value of ['true', 'ON', '1', '', undefined]) {
+      expect(
+        uploadErrors(
+          'env.staging',
+          withVars(config.env.staging, { MEDIA_UPLOADS: value }),
+        ),
+      ).toContainEqual(expect.stringContaining('MEDIA_UPLOADS must be'));
+    }
+  });
+
+  it('refuses MEDIA_UPLOADS=on in production, whatever else is set', () => {
+    expect(
+      uploadErrors(
+        'env.production',
+        withVars(config.env.production, { MEDIA_UPLOADS: 'on' }),
+      ),
+    ).toContainEqual(
+      expect.stringContaining('MEDIA_UPLOADS must be "off" in production'),
+    );
+  });
+
+  it('refuses MEDIA_UPLOADS=on without a provisioned DB_FRESH binding', () => {
+    const errors = uploadErrors('env.staging', {
+      ...withVars(config.env.staging, { MEDIA_UPLOADS: 'on' }),
+      hyperdrive: [],
+    });
+    expect(errors).toContainEqual(
+      expect.stringContaining('MEDIA_UPLOADS=on requires a provisioned DB_FRESH'),
+    );
+  });
+
+  it('accepts MEDIA_UPLOADS=on when DB_FRESH is provisioned', () => {
+    expect(
+      uploadErrors(
+        'env.staging',
+        withVars(config.env.staging, { MEDIA_UPLOADS: 'on' }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('refuses collapsing the originals bucket into the artifacts bucket', () => {
+    // Two buckets, two credentials, two durability contracts. One name for
+    // both would silently give the write credential the artifacts bucket.
+    expect(
+      scanErrors(
+        'env.staging',
+        withVars(config.env.staging, {
+          SCAN_R2_ORIGINALS_BUCKET: config.env.staging.vars.SCAN_R2_BUCKET,
+        }),
+      ),
+    ).toContainEqual(
+      expect.stringContaining('SCAN_R2_ORIGINALS_BUCKET must differ'),
+    );
+  });
+
+  it('requires every scope to name an originals bucket', () => {
+    for (const [label, scope] of [
+      ['default', config],
+      ['env.local', config.env.local],
+      ['env.staging', config.env.staging],
+      ['env.production', config.env.production],
+    ] as const) {
+      expect(
+        scanErrors(label, withVars(scope, { SCAN_R2_ORIGINALS_BUCKET: '' })),
+      ).toContainEqual(expect.stringContaining('missing SCAN_R2_ORIGINALS_BUCKET'));
+    }
+  });
+
   it('refuses the R2 credentials as committed variables', () => {
-    for (const name of ['SCAN_R2_ACCESS_KEY_ID', 'SCAN_R2_SECRET_ACCESS_KEY']) {
+    for (const name of [
+      'SCAN_R2_ACCESS_KEY_ID',
+      'SCAN_R2_SECRET_ACCESS_KEY',
+      'SCAN_R2_WRITE_ACCESS_KEY_ID',
+      'SCAN_R2_WRITE_SECRET_ACCESS_KEY',
+    ]) {
       const errors: string[] = [];
       validateScope(
         'env.staging',
