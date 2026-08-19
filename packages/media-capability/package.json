@@ -1,0 +1,23 @@
+{
+  "name": "@patina/media-capability",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hand-rolled Ed25519 capability tokens for Phase 2 media access. WebCrypto only, zero runtime dependencies — works in Cloudflare Workers, Node 20+, and Deno.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit",
+    "test": "jest"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.19.19",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.4",
+    "typescript": "^5.3.3"
+  }
+}
