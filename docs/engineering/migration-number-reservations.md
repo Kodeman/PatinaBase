@@ -71,19 +71,19 @@ yet on prod.
 
 ## Reservations
 
-| Band        | Program                                                                                                                                                                                                                                    |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 00494–00497 | Phase 2 (Cloudflare/media backfill program — this workstream and its siblings). **00494/00495 now DRAWN** — see below. 00496/00497 remain free for this lane.                                                                            |
-| 00498–00502 | Rendered Room v2 (scan pipeline) — **confirmed by that lane** as this program's _future_ draws, purely additive to its already-consumed 00489–00492. Those four are **not** renumbered into this band. **00498 is now DRAWN** — see below. |
-| 00503–00509 | Phase 3                                                                                                                                                                                                                                    |
+| Band        | Program                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 00494–00497 | Phase 2 (Cloudflare/media backfill program — this workstream and its siblings). **00494/00495 now DRAWN** — see below. 00496/00497 remain free for this lane.                                                                                                                                                                                                                                                                                                                                                         |
+| 00498–00502 | Rendered Room v2 (scan pipeline) — **confirmed by that lane** as this program's _future_ draws, purely additive to its already-consumed 00489–00492. Those four are **not** renumbered into this band. **00498 is now DRAWN** — see below.                                                                                                                                                                                                                                                                            |
+| 00503–00509 | Phase 3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 00510       | **TAKEN** — `00510_post_00483_grant_and_scope_repairs.sql` (branch `fix/post-00483-grant-gaps`, 2026-08-18). Post-00483 hotfix: project-documents storage policy caller-binding, `assignment_scope` derivation in `engage_trade_scope` / `apply_scope_change`, anon write-grant narrowing on four public tables. Numbered ABOVE the three bands above deliberately so it shifts none of them; the 00494–00509 gap is intentional and stays reserved. **Applied to prod 2026-08-19** (surgical single-migration push). |
 
 ### Drawn from 00494–00497
 
-| Number | File                                | Landed state                                              |
-| ------ | ----------------------------------- | ----------------------------------------------------------- |
-| 00494  | `00494_media_registry.sql`          | branch `feat/phase2-media-registry`; NOT applied to staging or prod |
-| 00495  | `00495_media_upload_intents.sql`    | branch `feat/phase2-media-registry`; NOT applied to staging or prod |
+| Number | File                             | Landed state                                                        |
+| ------ | -------------------------------- | ------------------------------------------------------------------- |
+| 00494  | `00494_media_registry.sql`       | branch `feat/phase2-media-registry`; NOT applied to staging or prod |
+| 00495  | `00495_media_upload_intents.sql` | branch `feat/phase2-media-registry`; NOT applied to staging or prod |
 
 00494 is B-W2: `public.media_registry`, a general-purpose Phase 2 media
 registry, deliberately separate from `public.media_objects` (00489, Rendered
@@ -100,9 +100,9 @@ unrelated (different table, different registry).
 
 ### Drawn from 00498–00502
 
-| Number | File                                                  | Landed state                                                       |
-| ------ | ----------------------------------------------------- | ------------------------------------------------------------------ |
-| 00498  | `00498_media_upload_intent_and_scan_version_lock.sql` | branch `w3a/media-upload-intent`; applied to **staging**, NOT prod |
+| Number | File                                                  | Landed state                                                         |
+| ------ | ----------------------------------------------------- | -------------------------------------------------------------------- |
+| 00498  | `00498_media_upload_intent_and_scan_version_lock.sql` | branch `w3a/media-upload-intent`; applied to **staging**, NOT prod   |
 | 00499  | `00499_upload_interface_hardening.sql`                | branch `w3a/upload-intent-hardening`; NOT applied to staging or prod |
 
 00498 carries W3-A: `create_media_upload_intent` / `confirm_media_upload` (the
