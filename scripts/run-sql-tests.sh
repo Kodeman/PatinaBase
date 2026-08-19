@@ -98,7 +98,11 @@ trap 'rm -rf "${LOG_DIR}"' EXIT
 # Parse KNOWN_FAILURES.md into a normalized "path<TAB>reason" file.
 # Recognized line format (one entry per file):
 #   - `relative/path/to/file.sql` — reason text
-# The dash before the reason may be an em dash (—) or a plain hyphen (-).
+# The dash before the reason may be an em dash (—) or a plain hyphen (-). A
+# reason is required (non-empty after trimming) — the header promises one,
+# so a line with nothing after the dash is NOT treated as allowlisted.
+# Fenced code blocks (``` ... ```) are skipped entirely, so the format
+# example the header shows inside its own fence is never read as an entry.
 # Lines that don't match are ignored (headings, prose, blank lines).
 # bash 3.2 has no associative arrays, so membership/reason lookup is done by
 # grepping this normalized file instead of an in-memory map.
@@ -107,10 +111,20 @@ KNOWN_NORMALIZED="${LOG_DIR}/known_failures.normalized"
 : > "${KNOWN_NORMALIZED}"
 
 if [[ -f "${KNOWN_FAILURES_FILE}" ]]; then
+  in_fence=0
   while IFS= read -r line; do
+    if [[ "${line}" =~ ^\`\`\` ]]; then
+      in_fence=$((1 - in_fence))
+      continue
+    fi
+    [[ ${in_fence} -eq 1 ]] && continue
     if [[ "${line}" =~ ^-\ \`([^\`]+)\`[[:space:]]*[—-][[:space:]]*(.*)$ ]]; then
       rel_path="${BASH_REMATCH[1]}"
       reason="${BASH_REMATCH[2]}"
+      # trim trailing/leading whitespace before requiring non-empty
+      reason="${reason#"${reason%%[![:space:]]*}"}"
+      reason="${reason%"${reason##*[![:space:]]}"}"
+      [[ -z "${reason}" ]] && continue
       printf '%s\t%s\n' "${rel_path}" "${reason}" >> "${KNOWN_NORMALIZED}"
     fi
   done < "${KNOWN_FAILURES_FILE}"

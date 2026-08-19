@@ -1735,7 +1735,15 @@ $$;
 -- prod boundary, not a bug to grant around.
 RESET ROLE;
 CREATE TEMP TABLE draft_share_token (token text NOT NULL) ON COMMIT DROP;
+-- Both GRANTs must run as postgres, the temp table's owner: authenticated
+-- has no GRANT OPTION on it, so issuing GRANT SELECT ... TO service_role
+-- after the SET LOCAL ROLE authenticated below would silently no-op
+-- ("WARNING: no privileges were granted") and leave service_role unable to
+-- read the row it needs further down.
+GRANT INSERT ON draft_share_token TO authenticated;
+GRANT SELECT ON draft_share_token TO service_role;
 SELECT pg_temp.assume_copy_actor('e8000000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
 INSERT INTO draft_share_token
 SELECT token
 FROM public.create_document_share(
@@ -1744,7 +1752,6 @@ FROM public.create_document_share(
   '{"itemDetails":true}'::jsonb,
   now() + interval '1 day'
 );
-GRANT SELECT ON draft_share_token TO service_role;
 
 DO $$
 DECLARE
