@@ -60,6 +60,8 @@ function env(overrides: Partial<EdgeApiEnv> = {}): EdgeApiEnv {
     SCAN_R2_BUCKET: 'patina-staging-media-artifacts-us',
     SCAN_R2_ACCESS_KEY_ID: 'AKIAEXAMPLEKEYID',
     SCAN_R2_SECRET_ACCESS_KEY: SECRET_KEY,
+    MEDIA_UPLOADS: 'off',
+    SCAN_R2_ORIGINALS_BUCKET: 'patina-staging-media-originals-us',
     ...overrides,
   };
 }
@@ -78,6 +80,15 @@ function dependencies(
       throw new Error('unauthorized');
     }),
     resolveScanArtifacts: vi.fn(async () => []),
+    createUploadIntent: vi.fn(async () => {
+      throw new Error('media uploads are off in this fixture');
+    }),
+    resolveUploadForConfirm: vi.fn(async () => {
+      throw new Error('media uploads are off in this fixture');
+    }),
+    confirmUpload: vi.fn(async () => {
+      throw new Error('media uploads are off in this fixture');
+    }),
     randomUUID: () => 'trace-0000000000000000000000001',
     cohortKey: () => 'trusted-cohort',
     now: () => new Date('2026-08-18T12:34:56.789Z'),

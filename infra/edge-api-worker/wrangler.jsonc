@@ -29,6 +29,14 @@
     "SCAN_ROUTES": "off",
     "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
     "SCAN_R2_BUCKET": "patina-staging-media-artifacts-us",
+    // The Phase-2 upload interface (Rendered Room v2 W3-A). "off" leaves
+    // /v1/media/uploads and its confirm leg unrouted; "on" additionally
+    // requires SCAN_R2_WRITE_ACCESS_KEY_ID and SCAN_R2_WRITE_SECRET_ACCESS_KEY
+    // as Wrangler secrets — a SEPARATE, write-capable credential scoped to the
+    // originals bucket alone — and validateRuntimeConfig boots the worker 503
+    // without them.
+    "MEDIA_UPLOADS": "off",
+    "SCAN_R2_ORIGINALS_BUCKET": "patina-staging-media-originals-us",
   },
   // Provisioning inserts real Hyperdrive IDs here. Three bindings exist:
   // DB_FRESH (authenticated RLS login, edge_rls_login), DB_CATALOG_FRESH
@@ -57,6 +65,8 @@
         "SCAN_ROUTES": "off",
         "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
         "SCAN_R2_BUCKET": "patina-staging-media-artifacts-us",
+        "MEDIA_UPLOADS": "off",
+        "SCAN_R2_ORIGINALS_BUCKET": "patina-staging-media-originals-us",
       },
       // Add the real binding IDs here (DB_FRESH, DB_CATALOG_FRESH,
       // DB_PUBLIC_CACHE). Each local binding also gets
@@ -85,6 +95,14 @@
         "SCAN_ROUTES": "on",
         "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
         "SCAN_R2_BUCKET": "patina-staging-media-artifacts-us",
+        // The upload interface. SCAN_R2_WRITE_ACCESS_KEY_ID and
+        // SCAN_R2_WRITE_SECRET_ACCESS_KEY are staging secrets (OPERATIONS.md
+        // "Media upload interface") — Object Read & Write, scoped to
+        // patina-staging-media-originals-us ONLY (token
+        // patina-staging-media-writer). Flip to "on" only once both are set;
+        // config:check --provisioned staging is what proves it.
+        "MEDIA_UPLOADS": "off",
+        "SCAN_R2_ORIGINALS_BUCKET": "patina-staging-media-originals-us",
       },
       // Resting at rung 3 (hyperdrive/100). DB_FRESH and DB_PUBLIC_CACHE carry
       // real staging Hyperdrive IDs; both currently point at edge_catalog_login.
@@ -124,6 +142,12 @@
         "SCAN_ROUTES": "off",
         "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
         "SCAN_R2_BUCKET": "patina-media-artifacts-us",
+        // Production stays off for the whole of this plan — the upload
+        // interface ships to staging only (DELIVERY-PLAN W3 "Does not").
+        // validate-config asserts this literal, so a redeploy cannot carry a
+        // write capability against a production bucket in by accident.
+        "MEDIA_UPLOADS": "off",
+        "SCAN_R2_ORIGINALS_BUCKET": "patina-media-originals-us",
       },
       // Provisioned against Strata's direct endpoint
       // (db.bkvcixdmuyejfzcijpdg.supabase.co:5432, never the pooler).

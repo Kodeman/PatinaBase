@@ -1,15 +1,22 @@
 /**
- * SigV4 query-signed GET URLs against the R2 S3 endpoint — the "capability URL"
- * half of the scan read path (DELIVERY-PLAN R5).
+ * SigV4 query-signed URLs against the R2 S3 endpoint — the "capability URL"
+ * half of the scan read path (DELIVERY-PLAN R5) and the presigned PUT/HEAD of
+ * the Phase-2 upload interface (W3-A).
  *
  * Hand-rolled rather than `aws4fetch`: the worker vendors no S3 client, and the
  * one thing this file has to be is *auditable* — the canonical request is the
  * security-relevant artifact, so `canonicalRequestFor` is exported and asserted
  * directly instead of being buried inside a dependency.
  *
- * A presigned GET signs no payload (`UNSIGNED-PAYLOAD`) and exactly one header
- * (`host`). Everything else rides in the query string, which is why the URL is a
- * capability: it carries its own expiry and is verifiable by R2 alone.
+ * A presigned URL signs no payload (`UNSIGNED-PAYLOAD`). It signs `host`, plus
+ * whatever extra headers the caller pins. Everything else rides in the query
+ * string, which is why the URL is a capability: it carries its own expiry and
+ * is verifiable by R2 alone.
+ *
+ * A SIGNED HEADER IS A CONDITION. A header named in `X-Amz-SignedHeaders` must
+ * be sent, with exactly the signed value, or R2 rejects the request — which is
+ * how the upload interface pins `content-length` (the declared byte count) and
+ * `x-amz-checksum-sha256` (the declared digest) onto a URL a client holds.
  */
 
 const ALGORITHM = 'AWS4-HMAC-SHA256';
@@ -29,6 +36,8 @@ export class PresignError extends Error {
   }
 }
 
+export type PresignMethod = 'GET' | 'PUT' | 'HEAD';
+
 export interface PresignRequest {
   /** The account's R2 S3 endpoint, e.g. `https://<account>.r2.cloudflarestorage.com`. */
   endpoint: string;
@@ -39,6 +48,13 @@ export interface PresignRequest {
   expiresInSeconds: number;
   /** Injected so a signature is reproducible in a test and pinned in a probe. */
   now: Date;
+  /** Defaults to GET — the read path's shape, unchanged. */
+  method?: PresignMethod;
+  /**
+   * Headers to sign in addition to `host`, lower-cased by the signer. Each one
+   * becomes a CONDITION the holder of the URL must satisfy exactly.
+   */
+  signedHeaders?: Record<string, string>;
 }
 
 export interface PresignedUrl {
@@ -104,6 +120,8 @@ export interface CanonicalRequest {
   amzDate: string;
   host: string;
   canonicalUri: string;
+  /** `;`-joined, sorted, lower-cased — the value of `X-Amz-SignedHeaders`. */
+  signedHeaderNames: string;
 }
 
 /**
@@ -142,6 +160,24 @@ export function canonicalRequestFor(input: PresignRequest): CanonicalRequest {
   const credentialScope = `${dateStamp}/${REGION}/${SERVICE}/aws4_request`;
   const uri = canonicalUri(input.bucket, input.objectKey);
 
+  // `host` is always signed; extras are folded in, lower-cased, and sorted —
+  // SigV4 canonicalization is order-sensitive, and a header sorted wrong is an
+  // opaque SignatureDoesNotMatch rather than an error anyone can read.
+  const headers = new Map<string, string>([['host', endpoint.host]]);
+  for (const [name, value] of Object.entries(input.signedHeaders ?? {})) {
+    const canonicalName = name.trim().toLowerCase();
+    if (!canonicalName) throw new PresignError('signed header name is empty');
+    if (canonicalName === 'host') {
+      throw new PresignError('host is signed automatically');
+    }
+    headers.set(canonicalName, String(value).trim());
+  }
+  const sortedHeaderNames = [...headers.keys()].sort();
+  const signedHeaderNames = sortedHeaderNames.join(';');
+  const canonicalHeaders = sortedHeaderNames
+    .map((name) => `${name}:${headers.get(name)}\n`)
+    .join('');
+
   // Already in sorted order; kept explicit so a future addition has to be
   // inserted in the right place rather than silently breaking the signature.
   const canonicalQueryString = [
@@ -149,18 +185,18 @@ export function canonicalRequestFor(input: PresignRequest): CanonicalRequest {
     ['X-Amz-Credential', `${input.accessKeyId}/${credentialScope}`],
     ['X-Amz-Date', date],
     ['X-Amz-Expires', String(input.expiresInSeconds)],
-    ['X-Amz-SignedHeaders', 'host'],
+    ['X-Amz-SignedHeaders', signedHeaderNames],
   ]
     .map(([name, value]) => `${encodeRfc3986(name)}=${encodeRfc3986(value)}`)
     .join('&');
 
   return {
     canonicalRequest: [
-      'GET',
+      input.method ?? 'GET',
       uri,
       canonicalQueryString,
-      `host:${endpoint.host}\n`,
-      'host',
+      canonicalHeaders,
+      signedHeaderNames,
       UNSIGNED_PAYLOAD,
     ].join('\n'),
     credentialScope,
@@ -168,11 +204,12 @@ export function canonicalRequestFor(input: PresignRequest): CanonicalRequest {
     amzDate: date,
     host: endpoint.host,
     canonicalUri: uri,
+    signedHeaderNames,
   };
 }
 
-/** Mint a short-lived, query-signed GET capability for one R2 object. */
-export async function presignR2GetUrl(
+/** Mint a short-lived, query-signed capability for one R2 object. */
+export async function presignR2Url(
   input: PresignRequest,
 ): Promise<PresignedUrl> {
   const canonical = canonicalRequestFor(input);
@@ -203,4 +240,15 @@ export async function presignR2GetUrl(
       input.now.getTime() + input.expiresInSeconds * 1000,
     ).toISOString(),
   };
+}
+
+/**
+ * The read path's shape, unchanged: GET, `host` the only signed header. Kept as
+ * its own name so the scan route reads as what it is and cannot acquire a
+ * method or a condition by accident.
+ */
+export function presignR2GetUrl(
+  input: Omit<PresignRequest, 'method' | 'signedHeaders'>,
+): Promise<PresignedUrl> {
+  return presignR2Url(input);
 }

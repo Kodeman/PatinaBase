@@ -18,6 +18,26 @@ import {
   type EdgeApiEnv,
   type RuntimeConfig,
 } from './env';
+import {
+  assertObservedMatchesDeclared,
+  confirmUpload,
+  createUploadIntent,
+  headUploadedObject,
+  hexToBase64,
+  parseMediaUploadPath,
+  parseUploadIntentBody,
+  resolveUploadForConfirm,
+  signUploadPut,
+  UploadMismatchError,
+  UploadNotFoundError,
+  UploadRequestError,
+  UploadUnauthorizedError,
+  type ConfirmedUpload,
+  type ObservedObject,
+  type PendingUpload,
+  type UploadIntent,
+  type UploadIntentInput,
+} from './media-uploads';
 import { isCompatibilityPath, proxySupabaseRequest } from './proxy';
 import { presignR2GetUrl } from './r2';
 import {
@@ -65,6 +85,22 @@ export interface WorkerDependencies {
     env: EdgeApiEnv,
     target: ScanArtifactRequest,
   ): Promise<ScanArtifactObject[]>;
+  createUploadIntent(
+    request: Request,
+    env: EdgeApiEnv,
+    input: UploadIntentInput,
+  ): Promise<UploadIntent>;
+  resolveUploadForConfirm(
+    request: Request,
+    env: EdgeApiEnv,
+    uploadId: string,
+  ): Promise<PendingUpload>;
+  confirmUpload(
+    request: Request,
+    env: EdgeApiEnv,
+    uploadId: string,
+    observed: ObservedObject,
+  ): Promise<ConfirmedUpload>;
   randomUUID(): string;
   cohortKey(request: Request): string;
   now(): Date;
@@ -82,6 +118,12 @@ const defaultDependencies: WorkerDependencies = {
     withVerifiedSupabaseTransaction(request, env, work),
   resolveScanArtifacts: (request, env, target) =>
     resolveScanArtifacts(request, env, target),
+  createUploadIntent: (request, env, input) =>
+    createUploadIntent(request, env, input),
+  resolveUploadForConfirm: (request, env, uploadId) =>
+    resolveUploadForConfirm(request, env, uploadId),
+  confirmUpload: (request, env, uploadId, observed) =>
+    confirmUpload(request, env, uploadId, observed),
   randomUUID: () => crypto.randomUUID(),
   cohortKey: trustedRolloutKey,
   now: () => new Date(),
@@ -490,6 +532,179 @@ function scanArtifactBody(
   return { kind, url: only.url, expiresAt: only.expiresAt };
 }
 
+// ── The Phase-2 upload interface (W3-A) ──────────────────────────────────────
+// The route is called from iOS and (later) the portals with a bearer token from
+// a different origin, so it needs the same preflight answer the read path
+// needed — that omission was already found live on staging once, as an opaque
+// "Failed to fetch" before a single request reached the Worker.
+const MEDIA_UPLOAD_CORS_HEADERS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-headers': 'authorization, content-type',
+  'access-control-max-age': '600',
+};
+
+function withMediaUploadCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(MEDIA_UPLOAD_CORS_HEADERS)) {
+    headers.set(name, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function logUploadFailure(
+  dependencies: WorkerDependencies,
+  traceId: string,
+  stage: 'intent' | 'confirm',
+  status: number,
+  mismatchReason?: 'size' | 'checksum' | 'missing' | 'state' | 'registry',
+): void {
+  dependencies.log({
+    event: ALERT_EVENTS.mediaUploadFailure,
+    severity: status >= 500 ? 'error' : 'warning',
+    traceId,
+    routeClass: 'media.upload',
+    uploadStage: stage,
+    status,
+    ...(mismatchReason ? { mismatchReason } : {}),
+  });
+}
+
+/**
+ * The shared negative mapping for both legs. `UploadNotFoundError` covers "no
+ * such scan", "no such upload", and "not yours" alike — one 404, never a 403.
+ */
+function uploadErrorResponse(
+  error: unknown,
+  traceId: string,
+  stage: 'intent' | 'confirm',
+  dependencies: WorkerDependencies,
+): Response {
+  if (error instanceof UploadUnauthorizedError) {
+    return privateJson({ error: 'unauthorized' }, 401, traceId);
+  }
+  if (error instanceof UploadRequestError) {
+    return privateJson(
+      { error: 'invalid_request', message: error.message },
+      400,
+      traceId,
+    );
+  }
+  if (error instanceof UploadNotFoundError) {
+    return privateJson({ error: 'not_found' }, 404, traceId);
+  }
+  if (error instanceof UploadMismatchError) {
+    logUploadFailure(dependencies, traceId, stage, 409, error.reason);
+    return privateJson(
+      { error: 'upload_mismatch', reason: error.reason },
+      409,
+      traceId,
+    );
+  }
+  logUploadFailure(dependencies, traceId, stage, 503);
+  return privateJson({ error: 'media_upload_unavailable' }, 503, traceId);
+}
+
+async function handleUploadIntent(
+  request: Request,
+  env: EdgeApiEnv,
+  traceId: string,
+  dependencies: WorkerDependencies,
+): Promise<Response> {
+  let input: UploadIntentInput;
+  let intent: UploadIntent;
+  try {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      throw new UploadRequestError('body must be valid JSON');
+    }
+    input = parseUploadIntentBody(body);
+    intent = await dependencies.createUploadIntent(request, env, input);
+  } catch (error) {
+    return uploadErrorResponse(error, traceId, 'intent', dependencies);
+  }
+
+  let signed: { url: string; expiresAt: string };
+  try {
+    signed = await signUploadPut(env, intent, input, dependencies.now());
+  } catch {
+    // A presign failure is a configuration or credential fault, never a
+    // statement about this caller — and the error carries key material
+    // context, so nothing about it is logged beyond the event itself.
+    logUploadFailure(dependencies, traceId, 'intent', 503);
+    return privateJson({ error: 'media_upload_unavailable' }, 503, traceId);
+  }
+
+  return privateJson(
+    {
+      uploadId: intent.uploadId,
+      putUrl: signed.url,
+      expiresAt: signed.expiresAt,
+      // Both are CONDITIONS baked into the signature, so the client has to be
+      // told what to send — a PUT without them fails as SignatureDoesNotMatch,
+      // which says nothing useful on its own.
+      requiredHeaders: {
+        'content-length': String(input.declaredSize),
+        'x-amz-checksum-sha256': hexToBase64(input.declaredSha256),
+      },
+    },
+    intent.created ? 201 : 200,
+    traceId,
+  );
+}
+
+async function handleUploadConfirm(
+  request: Request,
+  env: EdgeApiEnv,
+  uploadId: string,
+  traceId: string,
+  dependencies: WorkerDependencies,
+): Promise<Response> {
+  try {
+    // Visibility first, under the caller's own RLS — nothing is signed or
+    // HEADed for an upload this caller cannot see.
+    const pending = await dependencies.resolveUploadForConfirm(
+      request,
+      env,
+      uploadId,
+    );
+    const observed = await headUploadedObject(
+      env,
+      pending,
+      dependencies.now(),
+      dependencies.fetcher,
+    );
+    // Compared here, before the write path is touched at all, so a mismatch
+    // names its own reason and leaves the row exactly as it was.
+    assertObservedMatchesDeclared(pending, observed);
+    const confirmed = await dependencies.confirmUpload(
+      request,
+      env,
+      uploadId,
+      observed,
+    );
+    return privateJson(
+      {
+        uploadId: confirmed.uploadId,
+        lifecycle: confirmed.lifecycleState,
+        sha256: confirmed.sha256,
+        etag: confirmed.etag,
+        sizeBytes: confirmed.sizeBytes,
+      },
+      200,
+      traceId,
+    );
+  } catch (error) {
+    return uploadErrorResponse(error, traceId, 'confirm', dependencies);
+  }
+}
+
 type BindingCheck = 'ok' | 'unavailable' | 'not_applicable';
 
 async function checkBinding(
@@ -602,6 +817,34 @@ export function createWorker(
             }
             return withScanArtifactCors(
               await handleScanArtifact(request, env, target, traceId, dependencies),
+            );
+          }
+        }
+        // MEDIA_UPLOADS=off leaves both upload paths unrouted, so they fall
+        // through to the same not_found any unknown path gets: an environment
+        // that does not accept uploads does not advertise that it might.
+        if (
+          config.mediaUploads === 'on' &&
+          (request.method === 'POST' || request.method === 'OPTIONS')
+        ) {
+          const route = parseMediaUploadPath(url.pathname);
+          if (route) {
+            if (request.method === 'OPTIONS') {
+              return new Response(null, {
+                status: 204,
+                headers: MEDIA_UPLOAD_CORS_HEADERS,
+              });
+            }
+            return withMediaUploadCors(
+              route.kind === 'intent'
+                ? await handleUploadIntent(request, env, traceId, dependencies)
+                : await handleUploadConfirm(
+                    request,
+                    env,
+                    route.uploadId,
+                    traceId,
+                    dependencies,
+                  ),
             );
           }
         }
