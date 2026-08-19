@@ -101,7 +101,7 @@
         // patina-staging-media-originals-us ONLY (token
         // patina-staging-media-writer). Flip to "on" only once both are set;
         // config:check --provisioned staging is what proves it.
-        "MEDIA_UPLOADS": "off",
+        "MEDIA_UPLOADS": "on",
         "SCAN_R2_ORIGINALS_BUCKET": "patina-staging-media-originals-us",
       },
       // Resting at rung 3 (hyperdrive/100). DB_FRESH and DB_PUBLIC_CACHE carry
