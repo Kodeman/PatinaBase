@@ -29,12 +29,18 @@ public struct MediaUploadIntentClient: Sendable {
     // MARK: - Artifact kinds
 
     /// The closed set the interface accepts — `UPLOAD_ARTIFACT_KINDS` in
-    /// `media-uploads.ts`, which is Patina Field's artifact vocabulary
-    /// (`keys.py`'s `KIND_TO_FOLDER` + `KIND_TO_URL_COLUMN`), NOT this app's
+    /// `media-uploads.ts`, which is primarily Patina Field's artifact
+    /// vocabulary (`keys.py`'s `KIND_TO_FOLDER` + `KIND_TO_URL_COLUMN`) plus
+    /// this app's own `bundleArchive` (00500) — NOT this app's
     /// `ScanManifest.ArtifactKind`. The two overlap but are not the same enum;
-    /// `ScanUploadShadowLeg.uploadKind(for:)` is the only place they are joined.
+    /// `ScanUploadShadowLeg.uploadKind(for:)` is the only place they are
+    /// joined. `bundleArchive` and `keyframesArchive` are named as two
+    /// distinct kinds here even though they share a folder in the legacy
+    /// Supabase Storage layout — the registry-keyed interface never conflates
+    /// them.
     public enum ArtifactKind: String, Sendable, CaseIterable {
         case anchors
+        case bundleArchive
         case bundleManifest
         case capturedRoomJson
         case coverageHeatmap

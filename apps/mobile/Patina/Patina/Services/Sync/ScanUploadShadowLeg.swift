@@ -98,12 +98,16 @@ public struct ScanUploadShadowLeg: Sendable {
     /// and of the registry row, so a wrong name files real bytes under a false
     /// fact.
     ///
-    /// `.bundleArchive` is the one deliberate omission. The only slot in the
-    /// interface's set carrying its column and folder (`scan_bundle_url` /
-    /// `bundle`, per `keys.py`) is `keyframesArchive`, whose name asserts
-    /// keyframe content — this app's `bundle.zip` is a whole-bundle backup, so
-    /// the two coincide in the legacy key layout and disagree about what the
-    /// bytes are. Left unmapped for the contract owner to rule on.
+    /// `.bundleArchive` maps to the interface's own `.bundleArchive` (00500).
+    /// Before 00500 the only slot in the interface's set carrying the legacy
+    /// column and folder this app's `bundle.zip` PUTs to (`scan_bundle_url` /
+    /// `bundle`, per `keys.py`) was `keyframesArchive`, whose name asserts
+    /// keyframe content — this app's `bundle.zip` is a whole-bundle backup, a
+    /// different artifact that happened to coincide with Field's in the
+    /// legacy key layout. The ruled fix names both kinds distinctly in the
+    /// registry-keyed interface (the artifact kind is a key segment, so the
+    /// legacy folder collision never reaches it), so this leg now maps its own
+    /// kind rather than skipping it.
     ///
     /// `.depthIndex`, `.photoThumbnails` and `.annotations` never reach an
     /// upload at all (`ArtifactUploader.routing(for:)` returns nil), so their
@@ -120,10 +124,10 @@ public struct ScanUploadShadowLeg: Sendable {
         case .photosManifest:   return .photosManifest
         case .coverageHeatmap:  return .coverageHeatmap
         case .bundleManifest:   return .bundleManifest
+        case .bundleArchive:    return .bundleArchive
         // `hero_frame_url` on both sides — the same slot under two names.
         case .heroThumbnail:    return .heroFrame
-        case .bundleArchive,
-             .depthIndex,
+        case .depthIndex,
              .photoThumbnails,
              .annotations:
             return nil

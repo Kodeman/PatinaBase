@@ -84,6 +84,7 @@ yet on prod.
 | ------ | ----------------------------------------------------- | ------------------------------------------------------------------ |
 | 00498  | `00498_media_upload_intent_and_scan_version_lock.sql` | branch `w3a/media-upload-intent`; applied to **staging**, NOT prod |
 | 00499  | `00499_upload_interface_hardening.sql`                | branch `w3a/upload-intent-hardening`; NOT applied to staging or prod |
+| 00500  | `00500_upload_kind_split.sql`                         | branch `feat/upload-kind-split`; NOT applied to staging or prod — **staging apply is ON HOLD**: a peer session is repairing staging's migration ledger, this migration awaits that repair's post-repair push path |
 
 00498 carries W3-A: `create_media_upload_intent` / `confirm_media_upload` (the
 Phase-2 upload interface's registry side), the `caller_can_access_room_scan`
@@ -107,11 +108,22 @@ and un-storing a `verified` or upload-interface row (P0415). It replaces
 **00498 → 00499** and **00489 → 00499** respectively; a later program redefining
 any of them must graft onto 00499's body.
 
-00500–00502 remain free for this lane.
+00500 splits the upload-intent interface's `bundleArchive` (the Patina client's
+whole-bundle zip) from Field's `keyframesArchive` (keyframes.tar) as two distinct
+entries in `create_media_upload_intent`'s `c_kinds` allowlist — both share the
+legacy Supabase Storage `bundle` folder / `scan_bundle_url` column, a collision
+that does not follow into the registry-keyed interface (the kind name is a key
+segment) and that dies at cutover. It replaces `create_media_upload_intent`
+again, so that function's lineage is now **00498 → 00499 → 00500**; a later
+program redefining it must graft onto 00500's body. Mirrored in
+`infra/edge-api-worker/src/media-uploads.ts` and the Patina client's
+`MediaUploadIntentClient`/`ScanUploadShadowLeg` in the same lane.
 
-Apart from 00498 and 00499, no file in `supabase/migrations/` on `main`, and no commit in
-`git log --all`, currently occupies any number in 00494–00509 — the three bands
-are collision-free as reserved.
+00501–00502 remain free for this lane.
+
+Apart from 00498, 00499, and 00500, no file in `supabase/migrations/` on `main`, and no
+commit in `git log --all`, currently occupies any number in 00494–00509 — the three
+bands are collision-free as reserved.
 
 ## Discipline rules
 

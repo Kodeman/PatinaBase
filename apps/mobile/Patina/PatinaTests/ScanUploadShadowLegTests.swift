@@ -152,6 +152,7 @@ struct ScanUploadShadowLegMappingTests {
         #expect(ScanUploadShadowLeg.uploadKind(for: .photosManifest) == .photosManifest)
         #expect(ScanUploadShadowLeg.uploadKind(for: .coverageHeatmap) == .coverageHeatmap)
         #expect(ScanUploadShadowLeg.uploadKind(for: .bundleManifest) == .bundleManifest)
+        #expect(ScanUploadShadowLeg.uploadKind(for: .bundleArchive) == .bundleArchive)
     }
 
     /// `hero_frame_url` on both sides — the same slot under two names.
@@ -160,11 +161,17 @@ struct ScanUploadShadowLegMappingTests {
         #expect(ScanUploadShadowLeg.uploadKind(for: .heroThumbnail) == .heroFrame)
     }
 
-    /// Deliberately unmapped: the interface has no `bundleArchive`, and the
-    /// only slot sharing its column/folder asserts different content.
+    /// 00500: bundleArchive (this app's whole-bundle zip) and keyframesArchive
+    /// (Field's keyframes.tar) share a column/folder in the legacy Supabase
+    /// Storage layout but must map to two DISTINCT interface kinds, never
+    /// collapsing one onto the other.
     @Test
-    func bundleArchiveIsUnmapped() {
-        #expect(ScanUploadShadowLeg.uploadKind(for: .bundleArchive) == nil)
+    func bundleArchiveAndKeyframesArchiveAreDistinctKinds() {
+        #expect(ScanUploadShadowLeg.uploadKind(for: .bundleArchive) == .bundleArchive)
+        #expect(
+            ScanUploadShadowLeg.uploadKind(for: .bundleArchive)
+                != MediaUploadIntentClient.ArtifactKind.keyframesArchive
+        )
     }
 
     /// Device-local kinds never reach an upload, so they never reach the leg.
@@ -379,15 +386,19 @@ extension StubbedEdgeUploadTests {
         let file = try fixture()
         UploadStubRegistry.shared.reset([])
 
-        let bundle = ScanManifest.Artifact(
-            kind: .bundleArchive,
-            relativePath: "bundle/bundle.zip",
+        // `.depthIndex` is device-local and never reaches an upload
+        // (`ArtifactUploader.routing(for:)` returns nil), so `uploadKind(for:)`
+        // has no interface kind for it — genuinely unmapped, unlike
+        // `.bundleArchive` (00500 gave it `.bundleArchive`).
+        let depthIndex = ScanManifest.Artifact(
+            kind: .depthIndex,
+            relativePath: "depth/depth_index.ndjson",
             sizeBytes: 11,
             sha256: nil,
-            mimeType: "application/zip"
+            mimeType: "application/octet-stream"
         )
         let outcome = await leg(session: shadowStubSession()).run(
-            artifact: bundle,
+            artifact: depthIndex,
             fileURL: file,
             scanId: UUID()
         )

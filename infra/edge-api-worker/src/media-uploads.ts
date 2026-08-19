@@ -67,13 +67,21 @@ export const CONFIRM_HEAD_TTL_SECONDS = 60;
  * The schema-v3 capture bundle's artifact kinds — the union of
  * `KIND_TO_URL_COLUMN` and `KIND_TO_FOLDER` in
  * `services/scan-pipeline/src/patina_scan_worker/keys.py`, which are pinned in
- * turn by the iOS `ScanUploadDescriptor` table and capture-bundle-spec B-18.
- * Duplicated here and in 00498 deliberately: the Worker rejects an unknown kind
- * before a database round trip, and the RPC rejects it again for a caller that
- * never went through the Worker.
+ * turn by the iOS `ScanUploadDescriptor` table and capture-bundle-spec B-18 —
+ * PLUS the Patina client app's own `bundleArchive` (00500). `bundleArchive`
+ * (a whole-bundle zip) and Field's `keyframesArchive` (keyframes.tar) share
+ * the legacy Supabase Storage `bundle` folder / `scan_bundle_url` column —
+ * a quirk of the legacy per-kind-folder layout that conflated two
+ * semantically distinct artifacts. That collision does not follow into this
+ * registry-keyed interface (`scan_originals/{scanId}/{artifactKind}/…` keys
+ * by kind name), so the two are named here as TWO DISTINCT kinds rather than
+ * one standing in for the other. Duplicated here and in 00500 deliberately:
+ * the Worker rejects an unknown kind before a database round trip, and the
+ * RPC rejects it again for a caller that never went through the Worker.
  */
 export const UPLOAD_ARTIFACT_KINDS = [
   'anchors',
+  'bundleArchive',
   'bundleManifest',
   'capturedRoomJson',
   'coverageHeatmap',
