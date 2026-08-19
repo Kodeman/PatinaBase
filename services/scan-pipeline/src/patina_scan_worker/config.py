@@ -45,6 +45,14 @@ TASK_TYPE_PREFIX = "scan_pipeline."
 # so an un-tuned/CPU worker never advertises a GPU task type.
 DEFAULT_STAGES = "ingest,solve,drawings"
 
+# W3-C: the pluggable storage transport (storage_backend.py). "supabase" is
+# the only value that ships today's behavior; "r2" opts a worker into the
+# boto3/R2 backend. `_VALID_STORAGE_SHADOW_TARGETS` is the dual-write cutover
+# rung (storage_shadow.py) — unset (None) is the only value that ships today's
+# behavior there too.
+_VALID_STORAGE_BACKENDS: frozenset[str] = frozenset({"supabase", "r2"})
+_VALID_STORAGE_SHADOW_TARGETS: frozenset[str] = frozenset({"r2"})
+
 _VISIBILITY_TIMEOUT_RE = re.compile(
     r"^(?P<amount>\d+(?:\.\d+)?)\s*"
     r"(?P<unit>seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h)$",
@@ -121,6 +129,50 @@ class Settings:
     http_timeout_s: float = 30.0
     log_level: str = "info"
 
+    # ── storage backend / cutover (W3-C, storage_backend.py) ────────────────
+    # "supabase" is a no-op default — SCAN_STORAGE_BACKEND unset changes
+    # nothing about the worker's runtime behavior. "r2" is not wired into
+    # worker.py's Context.storage yet (that stays StorageClient, pinned by
+    # refine_publisher's isinstance check); it exists for callers that build a
+    # backend directly via storage_backend.build_storage_backend, ahead of the
+    # originals-cutover wave doing that wiring for real.
+    storage_backend: str = "supabase"
+    # SCAN_STORAGE_SHADOW: None (default) disables dual-write; "r2" mirrors
+    # every upload through the primary backend to R2 (storage_shadow.py), best
+    # effort, never able to fail the primary write.
+    storage_shadow: str | None = None
+    # SCAN_STORAGE_SHADOW_LEDGER_PATH: unset falls back to
+    # {work_dir}/shadow-storage-ledger.jsonl — see
+    # effective_storage_shadow_ledger_path below.
+    storage_shadow_ledger_path: str | None = None
+    # SCAN_STORAGE_R2_*: required only when storage_backend == "r2" or
+    # storage_shadow == "r2" (enforced in settings_from_env). Empty strings are
+    # the "unset" sentinel so Settings stays a plain frozen dataclass.
+    r2_endpoint: str = ""
+    r2_bucket: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    # ── credential posture (W3-C investigation) ─────────────────────────────
+    # `service_role_key` remains the Supabase Storage credential for
+    # SupabaseStorageBackend. Storage authorizes via RLS on `storage.objects`,
+    # keyed off the CALLER's JWT claims and the object key's path segments
+    # (00077's {folder}/{userId}/{roomId}/… policy) — and this worker
+    # legitimately touches every scan's owner, not one fixed identity, so
+    # narrowing it needs either (a) a dedicated `scan_worker` auth identity
+    # plus RLS policies recognizing it across every owner's objects (new
+    # schema — out of this lane's rails; W3-A owns the one migration number
+    # this wave gets), or (b) Supabase's newer secret/publishable API keys,
+    # which are project-wide capabilities, not bucket- or path-scoped, so they
+    # narrow nothing here. Neither is clean today, so the default stays
+    # service-role, same as before this wave. SCAN_WORKER_STORAGE_TOKEN, if
+    # set, overrides `service_role_key` on SupabaseStorageBackend's bearer/
+    # apikey headers only (build_storage_backend, when it owns the session) —
+    # so a future narrower credential is a config change, not a code change.
+    # Retiring the service-role default is the R2-cutover wave's job
+    # (DELIVERY-PLAN W3), the same precedent as the `scan_worker` Postgres
+    # role in that document's R2.
+    storage_token: str | None = None
+
     # Derived: the fully-qualified task types this worker claims.
     task_types: tuple[str, ...] = field(default_factory=tuple)
 
@@ -133,6 +185,16 @@ class Settings:
     @property
     def visibility_timeout_seconds(self) -> float:
         return _parse_visibility_timeout(self.visibility_timeout)
+
+    @property
+    def effective_storage_shadow_ledger_path(self) -> str:
+        """``storage_shadow_ledger_path`` if set, else a default derived from
+        ``work_dir`` — computed rather than stored so a later
+        ``dataclasses.replace(settings, work_dir=...)`` keeps the two in
+        lockstep without also needing to replace the ledger path."""
+        if self.storage_shadow_ledger_path:
+            return self.storage_shadow_ledger_path
+        return os.path.join(self.work_dir, "shadow-storage-ledger.jsonl")
 
     def with_task_types(self) -> "Settings":
         tts = tuple(f"{TASK_TYPE_PREFIX}{s}" for s in self.stages)
@@ -212,6 +274,58 @@ def settings_from_env(env: dict[str, str] | None = None) -> Settings:
 
     visibility_timeout = (src.get("VISIBILITY_TIMEOUT") or "60 minutes").strip()
 
+    storage_backend = (src.get("SCAN_STORAGE_BACKEND") or "supabase").strip().lower()
+    if storage_backend not in _VALID_STORAGE_BACKENDS:
+        raise ConfigError(
+            f"SCAN_STORAGE_BACKEND must be one of {sorted(_VALID_STORAGE_BACKENDS)}, "
+            f"got {storage_backend!r}"
+        )
+
+    storage_shadow_raw = (src.get("SCAN_STORAGE_SHADOW") or "").strip().lower()
+    storage_shadow = storage_shadow_raw or None
+    if (
+        storage_shadow is not None
+        and storage_shadow not in _VALID_STORAGE_SHADOW_TARGETS
+    ):
+        raise ConfigError(
+            f"SCAN_STORAGE_SHADOW must be one of "
+            f"{sorted(_VALID_STORAGE_SHADOW_TARGETS)} or unset, got {storage_shadow_raw!r}"
+        )
+    if storage_shadow is not None and storage_shadow == storage_backend:
+        raise ConfigError(
+            f"SCAN_STORAGE_SHADOW ({storage_shadow!r}) must differ from "
+            f"SCAN_STORAGE_BACKEND ({storage_backend!r}) — shadowing a backend "
+            f"to itself is not a cutover rehearsal"
+        )
+
+    storage_shadow_ledger_path = (
+        src.get("SCAN_STORAGE_SHADOW_LEDGER_PATH") or ""
+    ).strip() or None
+
+    r2_endpoint = (src.get("SCAN_STORAGE_R2_ENDPOINT") or "").strip()
+    r2_bucket = (src.get("SCAN_STORAGE_R2_BUCKET") or "").strip()
+    r2_access_key_id = (src.get("SCAN_STORAGE_R2_ACCESS_KEY_ID") or "").strip()
+    r2_secret_access_key = (src.get("SCAN_STORAGE_R2_SECRET_ACCESS_KEY") or "").strip()
+
+    if storage_backend == "r2" or storage_shadow == "r2":
+        missing_r2 = [
+            name
+            for name, value in (
+                ("SCAN_STORAGE_R2_ENDPOINT", r2_endpoint),
+                ("SCAN_STORAGE_R2_BUCKET", r2_bucket),
+                ("SCAN_STORAGE_R2_ACCESS_KEY_ID", r2_access_key_id),
+                ("SCAN_STORAGE_R2_SECRET_ACCESS_KEY", r2_secret_access_key),
+            )
+            if not value
+        ]
+        if missing_r2:
+            raise ConfigError(
+                f"{', '.join(missing_r2)} required when SCAN_STORAGE_BACKEND=r2 "
+                f"or SCAN_STORAGE_SHADOW=r2"
+            )
+
+    storage_token = (src.get("SCAN_WORKER_STORAGE_TOKEN") or "").strip() or None
+
     s = Settings(
         worker_id=worker_id,
         supabase_url=supabase_url,
@@ -227,6 +341,14 @@ def settings_from_env(env: dict[str, str] | None = None) -> Settings:
         retention_hours=_int_src("RETENTION_HOURS", 48),
         http_timeout_s=_float_src("HTTP_TIMEOUT_S", 30.0),
         log_level=log_level,
+        storage_backend=storage_backend,
+        storage_shadow=storage_shadow,
+        storage_shadow_ledger_path=storage_shadow_ledger_path,
+        r2_endpoint=r2_endpoint,
+        r2_bucket=r2_bucket,
+        r2_access_key_id=r2_access_key_id,
+        r2_secret_access_key=r2_secret_access_key,
+        storage_token=storage_token,
     )
     if s.max_concurrent < 1:
         raise ConfigError(f"MAX_CONCURRENT must be >= 1, got {s.max_concurrent}")

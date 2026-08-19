@@ -4,6 +4,14 @@ Reads bundle artifacts (service-role key bypasses storage RLS on read); item 11
 adds drawing uploads under the ``room_file/{userId}/{scanId}/v{version}/…``
 prefix. ``room-scans`` is PRIVATE, so downloads go through the authenticated
 object endpoint with the service-role key.
+
+W3-C (storage_backend.py) wraps ``download``/``download_to``/``upload_bytes``/
+``exists`` behind a swappable ``StorageBackend`` so the R2 cutover doesn't need
+to touch this file: none of the four change here. The refine/immutable-publish
+machinery below (deadline-bounded async I/O, descriptor staging, duplicate-
+conflict resolution) stays on this class directly — it is refine-specific, and
+refine's inputs/outputs are read via presigned URLs today (W1's plan), so it is
+out of scope for the storage-interface work.
 """
 
 from __future__ import annotations
@@ -435,6 +443,73 @@ class StorageClient:
                 return written
         except httpx.HTTPError as exc:
             raise TransientError(f"storage GET {object_key}: {exc}") from exc
+
+    def download(self, object_key: str) -> bytes:
+        """Read one object fully into memory.
+
+        Same URL, status-code classification and exception taxonomy as
+        ``download_to`` (404 -> PermanentError MISSING_FILE; 5xx/network ->
+        TransientError); this is the non-streaming sibling for small artifacts
+        (manifests) where staging a file would be needless. Large artifacts
+        should keep using ``download_to``. No ``deadline`` parameter — refine's
+        deadline-bounded path uses ``download_to`` exclusively today.
+        """
+        url = f"/storage/v1/object/{self._bucket}/{object_key}"
+        try:
+            resp = self._s.get(url)
+        except httpx.HTTPError as exc:
+            raise TransientError(f"storage GET {object_key}: {exc}") from exc
+        if resp.status_code == 404:
+            raise PermanentError(
+                f"object not found: {object_key}", token="MISSING_FILE"
+            )
+        if resp.status_code >= 500:
+            raise TransientError(f"storage GET {object_key} -> {resp.status_code}")
+        if resp.status_code >= 400:
+            raise PermanentError(
+                f"storage GET {object_key} -> {resp.status_code}: "
+                f"{resp.text[:200]!r}",
+                token="MISSING_FILE",
+            )
+        return resp.content
+
+    def exists(self, object_key: str) -> bool:
+        """True iff ``object_key`` names an existing object.
+
+        A lightweight existence probe against the bucket's list endpoint (the
+        same one ``list_reachable`` already uses for its doctor check),
+        narrowed to one key by prefix + exact-name search, rather than
+        downloading the object to prove it is there.
+        """
+        if "/" in object_key:
+            prefix, name = object_key.rsplit("/", 1)
+        else:
+            prefix, name = "", object_key
+        try:
+            resp = self._s.post(
+                f"/storage/v1/object/list/{self._bucket}",
+                json={"prefix": prefix, "search": name, "limit": 100},
+            )
+        except httpx.HTTPError as exc:
+            raise TransientError(f"storage list {object_key}: {exc}") from exc
+        if resp.status_code >= 500:
+            raise TransientError(f"storage list {object_key} -> {resp.status_code}")
+        if resp.status_code >= 400:
+            raise PermanentError(
+                f"storage list {object_key} -> {resp.status_code}: "
+                f"{resp.text[:200]!r}",
+                token="MISSING_FILE",
+            )
+        try:
+            entries = resp.json()
+        except ValueError:
+            return False
+        if not isinstance(entries, list):
+            return False
+        return any(
+            isinstance(entry, dict) and entry.get("name") == name
+            for entry in entries
+        )
 
     def list_reachable(self) -> bool:
         """doctor probe: a list against the bucket succeeds (proves the service

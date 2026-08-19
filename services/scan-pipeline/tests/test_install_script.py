@@ -91,6 +91,8 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/stages/solve_math.py",
     "src/patina_scan_worker/stages/validator.py",
     "src/patina_scan_worker/storage.py",
+    "src/patina_scan_worker/storage_backend.py",
+    "src/patina_scan_worker/storage_shadow.py",
     "src/patina_scan_worker/telemetry.py",
     "src/patina_scan_worker/untar.py",
     "src/patina_scan_worker/worker.py",

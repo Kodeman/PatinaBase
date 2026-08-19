@@ -774,6 +774,14 @@ file access. Full schema: design §3.
 | `RETENTION_HOURS` | `48` | how long scratch lingers before the janitor prunes it |
 | `HTTP_TIMEOUT_S` | `30` | per-request timeout |
 | `LOG_LEVEL` | `info` | journald verbosity |
+| `SCAN_STORAGE_BACKEND` | `supabase` | `supabase` (Storage REST) or `r2` (boto3, `r2` extra required). Not wired into the worker's live stage I/O yet (W3-C) — a change here has no runtime effect until the originals-cutover wave points `Context.storage` at `storage_backend.build_storage_backend` |
+| `SCAN_STORAGE_SHADOW` | *(unset)* | `r2` mirrors every upload built via `build_storage_backend` to R2 alongside the primary, best-effort, recording `{key, sha256, matched}`; unset disables it. Must differ from `SCAN_STORAGE_BACKEND` |
+| `SCAN_STORAGE_SHADOW_LEDGER_PATH` | `{WORK_DIR}/shadow-storage-ledger.jsonl` | JSONL sink for shadow-write verdicts |
+| `SCAN_STORAGE_R2_ENDPOINT` | *(required if `SCAN_STORAGE_BACKEND=r2` or `SCAN_STORAGE_SHADOW=r2`)* | R2 S3-compatible endpoint URL |
+| `SCAN_STORAGE_R2_BUCKET` | *(required, same condition)* | R2 bucket name |
+| `SCAN_STORAGE_R2_ACCESS_KEY_ID` | *(required, same condition)* | R2 access key id |
+| `SCAN_STORAGE_R2_SECRET_ACCESS_KEY` | *(required, same condition)* | R2 secret access key |
+| `SCAN_WORKER_STORAGE_TOKEN` | *(unset — falls back to `SUPABASE_SERVICE_ROLE_KEY`)* | optional narrower Storage credential for the Supabase backend; see storage_backend.py / config.py for why nothing narrower is wired by default yet |
 
 `refine` never treats the configured visibility default as its command timeout.
 Each claimed task carries the immutable request-start monotonic lower bound for

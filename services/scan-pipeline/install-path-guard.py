@@ -106,6 +106,8 @@ SOURCE_PACKAGE_FILES = frozenset(
         f"{SOURCE_PACKAGE_ROOT}/stages/solve_math.py",
         f"{SOURCE_PACKAGE_ROOT}/stages/validator.py",
         f"{SOURCE_PACKAGE_ROOT}/storage.py",
+        f"{SOURCE_PACKAGE_ROOT}/storage_backend.py",
+        f"{SOURCE_PACKAGE_ROOT}/storage_shadow.py",
         f"{SOURCE_PACKAGE_ROOT}/telemetry.py",
         f"{SOURCE_PACKAGE_ROOT}/untar.py",
         f"{SOURCE_PACKAGE_ROOT}/worker.py",
@@ -159,6 +161,7 @@ WORKER_PROVIDES_EXTRA = (
     "fuse",
     "splat",
     "gpu",
+    "r2",
     "dev",
 )
 WORKER_REQUIRES_DIST = (
@@ -179,6 +182,7 @@ WORKER_REQUIRES_DIST = (
     'gsplat<2.0,>=1.0; extra == "splat"',
     'numpy>=1.26; extra == "splat"',
     'patina-scan-worker[fuse,refine,splat]; extra == "gpu"',
+    'boto3>=1.34; extra == "r2"',
     'pytest>=7.4; extra == "dev"',
     'build<2,>=1.2; extra == "dev"',
     'setuptools>=68; extra == "dev"',
