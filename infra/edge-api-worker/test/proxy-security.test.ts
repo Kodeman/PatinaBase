@@ -21,6 +21,7 @@ const config: RuntimeConfig = {
   legacyFetchTimeoutMs: 100,
   compatibilityFetchTimeoutMs: 100,
   websocketHandshakeTimeoutMs: 50,
+  scanRoutes: 'off',
 };
 
 describe('Supabase compatibility proxy', () => {

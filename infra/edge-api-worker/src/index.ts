@@ -19,6 +19,15 @@ import {
   type RuntimeConfig,
 } from './env';
 import { isCompatibilityPath, proxySupabaseRequest } from './proxy';
+import { presignR2GetUrl } from './r2';
+import {
+  parseScanArtifactPath,
+  resolveScanArtifacts,
+  ScanUnauthorizedError,
+  type ScanArtifactKind,
+  type ScanArtifactObject,
+  type ScanArtifactRequest,
+} from './scan';
 import {
   ALERT_EVENTS,
   createTraceId,
@@ -51,8 +60,14 @@ export interface WorkerDependencies {
     env: EdgeApiEnv,
     work: (client: DatabaseClient) => Promise<T>,
   ): Promise<T>;
+  resolveScanArtifacts(
+    request: Request,
+    env: EdgeApiEnv,
+    target: ScanArtifactRequest,
+  ): Promise<ScanArtifactObject[]>;
   randomUUID(): string;
   cohortKey(request: Request): string;
+  now(): Date;
   log(event: AlertLogEvent): void;
 }
 
@@ -65,8 +80,11 @@ const defaultDependencies: WorkerDependencies = {
   authorizeHealth: isHealthAuthorized,
   verifyAuthenticated: (request, env, work) =>
     withVerifiedSupabaseTransaction(request, env, work),
+  resolveScanArtifacts: (request, env, target) =>
+    resolveScanArtifacts(request, env, target),
   randomUUID: () => crypto.randomUUID(),
   cohortKey: trustedRolloutKey,
+  now: () => new Date(),
   log: structuredLog,
 };
 
@@ -338,6 +356,106 @@ async function handleAuthCheck(
   return privateJson({ ok: true }, 200, traceId);
 }
 
+/**
+ * How long a scan capability URL lives. Ten minutes: long enough for a splat of
+ * a few hundred megabytes to finish downloading over a poor connection, short
+ * enough that a URL copied out of a network tab is worthless by the time it is
+ * pasted anywhere. Fixed rather than configurable — a per-environment TTL is a
+ * knob whose only use is making the capability last longer.
+ */
+const SCAN_URL_TTL_SECONDS = 600;
+
+async function signScanArtifact(
+  env: EdgeApiEnv,
+  object: ScanArtifactObject,
+  now: Date,
+): Promise<{ url: string; expiresAt: string }> {
+  return presignR2GetUrl({
+    endpoint: env.SCAN_R2_ENDPOINT,
+    bucket: object.bucket,
+    objectKey: object.objectKey,
+    accessKeyId: env.SCAN_R2_ACCESS_KEY_ID as string,
+    secretAccessKey: env.SCAN_R2_SECRET_ACCESS_KEY as string,
+    expiresInSeconds: SCAN_URL_TTL_SECONDS,
+    now,
+  });
+}
+
+async function handleScanArtifact(
+  request: Request,
+  env: EdgeApiEnv,
+  target: ScanArtifactRequest,
+  traceId: string,
+  dependencies: WorkerDependencies,
+): Promise<Response> {
+  let objects: ScanArtifactObject[];
+  try {
+    objects = await dependencies.resolveScanArtifacts(request, env, target);
+  } catch (error) {
+    if (error instanceof ScanUnauthorizedError) {
+      // The one negative that is about the CALLER rather than about data. Every
+      // other outcome below is an identical 404 — never a 403, which would
+      // confirm the Room File exists.
+      return privateJson({ error: 'unauthorized' }, 401, traceId);
+    }
+    dependencies.log({
+      event: ALERT_EVENTS.scanArtifactFailure,
+      severity: 'error',
+      traceId,
+      routeClass: 'scan.artifact',
+      artifactKind: target.kind,
+      status: 503,
+    });
+    return privateJson({ error: 'scan_artifact_unavailable' }, 503, traceId);
+  }
+
+  if (objects.length === 0) {
+    return privateJson({ error: 'not_found' }, 404, traceId);
+  }
+
+  const now = dependencies.now();
+  let signed: Array<{ shot: string; url: string; expiresAt: string }>;
+  try {
+    signed = await Promise.all(
+      objects.map(async (object) => ({
+        shot: object.shot,
+        ...(await signScanArtifact(env, object, now)),
+      })),
+    );
+  } catch {
+    // A presign failure is a configuration or credential fault, never a
+    // statement about this caller — and the error carries key material context,
+    // so nothing about it is logged beyond the event itself.
+    dependencies.log({
+      event: ALERT_EVENTS.scanArtifactFailure,
+      severity: 'error',
+      traceId,
+      routeClass: 'scan.artifact',
+      artifactKind: target.kind,
+      status: 503,
+    });
+    return privateJson({ error: 'scan_artifact_unavailable' }, 503, traceId);
+  }
+
+  return privateJson(scanArtifactBody(target.kind, signed), 200, traceId);
+}
+
+function scanArtifactBody(
+  kind: ScanArtifactKind,
+  signed: Array<{ shot: string; url: string; expiresAt: string }>,
+): unknown {
+  if (kind === 'renders') {
+    return {
+      kind,
+      shots: Object.fromEntries(
+        signed.map(({ shot, url, expiresAt }) => [shot, { url, expiresAt }]),
+      ),
+    };
+  }
+  const [only] = signed;
+  return { kind, url: only.url, expiresAt: only.expiresAt };
+}
+
 type BindingCheck = 'ok' | 'unavailable' | 'not_applicable';
 
 async function checkBinding(
@@ -428,6 +546,21 @@ export function createWorker(
         }
         if (request.method === 'GET' && url.pathname === '/v1/_authcheck') {
           return await handleAuthCheck(request, env, traceId, dependencies);
+        }
+        // SCAN_ROUTES=off leaves the path unrouted entirely, so it falls through
+        // to the same not_found any unknown path gets: an environment that has
+        // not turned the read path on does not advertise that it exists.
+        if (config.scanRoutes === 'on' && request.method === 'GET') {
+          const target = parseScanArtifactPath(url.pathname);
+          if (target) {
+            return await handleScanArtifact(
+              request,
+              env,
+              target,
+              traceId,
+              dependencies,
+            );
+          }
         }
         if (request.method === 'GET' && url.pathname === '/_internal/health') {
           return await handleHealth(request, env, config, traceId, dependencies);
