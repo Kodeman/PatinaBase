@@ -79,10 +79,10 @@
         "LEGACY_FETCH_TIMEOUT_MS": "3000",
         "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
         "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
-        // Off until SCAN_R2_ACCESS_KEY_ID and SCAN_R2_SECRET_ACCESS_KEY exist as
-        // staging secrets (OPERATIONS.md "Scan read path"). Flipping this to
-        // "on" without them is refused at boot, not served empty.
-        "SCAN_ROUTES": "off",
+        // SCAN_R2_ACCESS_KEY_ID and SCAN_R2_SECRET_ACCESS_KEY are staging
+        // secrets (OPERATIONS.md "Scan read path") — read-only, scoped to
+        // patina-staging-media-artifacts-us only (token patina-staging-scan-reader).
+        "SCAN_ROUTES": "on",
         "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
         "SCAN_R2_BUCKET": "patina-staging-media-artifacts-us",
       },
