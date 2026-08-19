@@ -67,8 +67,10 @@
 -- the SQL shape's timestamptz columns pass through untouched.
 --
 -- No new public routine is introduced: the resolution is inlined so this migration
--- adds nothing to the 00483/00484 public ACL surface. CREATE OR REPLACE preserves
--- every existing grant on all three functions, and no signature changes.
+-- adds nothing to the 00483/00484 public ACL surface, and no signature changes.
+-- CREATE OR REPLACE preserves every existing grant, which is exactly the problem
+-- for the two outbox RPCs — see section 4, which narrows them to service_role
+-- before the repaired bodies can serve anon.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -99,6 +101,7 @@ DECLARE
   v_col_upload  text;
   v_col_perms   text;
   v_col_tags    text;
+  v_ambiguous   text;
   v_invalid     boolean;
 BEGIN
   IF jsonb_typeof(p_lines) IS DISTINCT FROM 'array' OR EXISTS (
@@ -116,30 +119,48 @@ BEGIN
 
   IF cardinality(COALESCE(p_photo_asset_ids, '{}')) > 0 THEN
     v_asset_rel := COALESCE(
-      to_regclass('svc_media.media_assets'),
-      to_regclass('svc_media."MediaAsset"')
+      to_regclass('svc_media."MediaAsset"'),
+      to_regclass('svc_media.media_assets')
     );
     IF v_asset_rel IS NULL THEN
       RAISE EXCEPTION 'receiving photos cannot be validated: the svc_media asset table is absent'
         USING ERRCODE = 'integrity_constraint_violation';
     END IF;
 
+    -- A key that two physical columns collapse onto (a half-finished @@map
+    -- rollout leaving scan_status beside "scanStatus") must abort rather than
+    -- silently bind whichever spelling sorts higher.
     SELECT
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'id'),
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'status'),
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'scanstatus'),
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'uploadedby'),
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'permissions'),
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'tags')
-    INTO v_col_id, v_col_status, v_col_scan, v_col_upload, v_col_perms, v_col_tags
+      max(col.ident) FILTER (WHERE col.key = 'id'),
+      max(col.ident) FILTER (WHERE col.key = 'status'),
+      max(col.ident) FILTER (WHERE col.key = 'scanstatus'),
+      max(col.ident) FILTER (WHERE col.key = 'uploadedby'),
+      max(col.ident) FILTER (WHERE col.key = 'permissions'),
+      max(col.ident) FILTER (WHERE col.key = 'tags'),
+      string_agg(DISTINCT col.key, ', ') FILTER (WHERE col.collisions > 1)
+    INTO v_col_id, v_col_status, v_col_scan, v_col_upload, v_col_perms,
+         v_col_tags, v_ambiguous
     FROM (
-      SELECT attribute.attname,
-             lower(replace(attribute.attname, '_', '')) AS key
+      SELECT lower(replace(attribute.attname, '_', '')) AS key,
+             quote_ident(attribute.attname) AS ident,
+             count(*) OVER (
+               PARTITION BY lower(replace(attribute.attname, '_', ''))
+             ) AS collisions
       FROM pg_attribute AS attribute
       WHERE attribute.attrelid = v_asset_rel
         AND attribute.attnum > 0
         AND NOT attribute.attisdropped
-    ) AS col;
+    ) AS col
+    WHERE col.key IN (
+      'id', 'status', 'scanstatus', 'uploadedby', 'permissions', 'tags'
+    );
+
+    IF v_ambiguous IS NOT NULL THEN
+      RAISE EXCEPTION
+        'receiving photos cannot be validated: % carries more than one column for: %',
+        v_asset_rel::text, v_ambiguous
+        USING ERRCODE = 'integrity_constraint_violation';
+    END IF;
 
     IF v_col_id IS NULL OR v_col_status IS NULL OR v_col_scan IS NULL
        OR v_col_upload IS NULL OR v_col_perms IS NULL OR v_col_tags IS NULL THEN
@@ -156,7 +177,7 @@ BEGIN
       ||    'WHERE asset.%s IS NULL '
       ||       'OR asset.%s::text <> ''READY'' '
       ||       'OR asset.%s::text <> ''CLEAN'' '
-      ||       'OR asset.%s IS DISTINCT FROM $2::text '
+      ||       'OR asset.%s::text IS DISTINCT FROM $2::text '
       ||       'OR asset.%s->>''projectId'' IS DISTINCT FROM $3::text '
       ||       'OR NOT (''receiving'' = ANY(COALESCE(asset.%s, ''{}''::text[])))'
       || ')',
@@ -220,33 +241,51 @@ DECLARE
   v_error     text;
   v_created   text;
   v_pubat     text;
+  v_ambiguous text;
   v_branches  text[] := '{}';
 BEGIN
   FOREACH v_source IN ARRAY ARRAY['media', 'orders'] LOOP
     v_rel := to_regclass(format('svc_%s.outbox_events', v_source));
-    CONTINUE WHEN v_rel IS NULL;
+    IF v_rel IS NULL THEN
+      RAISE WARNING 'outbox source % table missing', v_source;
+      CONTINUE;
+    END IF;
 
     SELECT
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'id'),
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'type'),
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'published'),
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'retrycount'),
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'lasterror'),
+      max(col.ident) FILTER (WHERE col.key = 'id'),
+      max(col.ident) FILTER (WHERE col.key = 'type'),
+      max(col.ident) FILTER (WHERE col.key = 'published'),
+      max(col.ident) FILTER (WHERE col.key = 'retrycount'),
+      max(col.ident) FILTER (WHERE col.key = 'lasterror'),
       max(col.utc_expr) FILTER (WHERE col.key = 'createdat'),
-      max(col.utc_expr) FILTER (WHERE col.key = 'publishedat')
-    INTO v_id, v_type, v_published, v_retry, v_error, v_created, v_pubat
+      max(col.utc_expr) FILTER (WHERE col.key = 'publishedat'),
+      string_agg(DISTINCT col.key, ', ') FILTER (WHERE col.collisions > 1)
+    INTO v_id, v_type, v_published, v_retry, v_error, v_created, v_pubat,
+         v_ambiguous
     FROM (
       SELECT lower(replace(attribute.attname, '_', '')) AS key,
-             attribute.attname,
+             quote_ident(attribute.attname) AS ident,
              CASE WHEN attribute.atttypid = 'timestamp'::regtype
                   THEN '(' || quote_ident(attribute.attname) || ' AT TIME ZONE ''UTC'')'
                   ELSE quote_ident(attribute.attname)
-             END AS utc_expr
+             END AS utc_expr,
+             count(*) OVER (
+               PARTITION BY lower(replace(attribute.attname, '_', ''))
+             ) AS collisions
       FROM pg_attribute AS attribute
       WHERE attribute.attrelid = v_rel
         AND attribute.attnum > 0
         AND NOT attribute.attisdropped
-    ) AS col;
+    ) AS col
+    WHERE col.key IN (
+      'id', 'type', 'published', 'retrycount', 'lasterror',
+      'createdat', 'publishedat'
+    );
+
+    IF v_ambiguous IS NOT NULL THEN
+      RAISE EXCEPTION '% carries more than one column for: %', v_rel::text, v_ambiguous
+        USING ERRCODE = 'ambiguous_column';
+    END IF;
 
     IF v_id IS NULL OR v_type IS NULL OR v_published IS NULL OR v_retry IS NULL
        OR v_error IS NULL OR v_created IS NULL OR v_pubat IS NULL THEN
@@ -294,28 +333,42 @@ DECLARE
   v_rel       regclass;
   v_published text;
   v_created   text;
+  v_ambiguous text;
   v_branches  text[] := '{}';
 BEGIN
   FOREACH v_source IN ARRAY ARRAY['media', 'orders'] LOOP
     v_rel := to_regclass(format('svc_%s.outbox_events', v_source));
-    CONTINUE WHEN v_rel IS NULL;
+    IF v_rel IS NULL THEN
+      RAISE WARNING 'outbox source % table missing', v_source;
+      CONTINUE;
+    END IF;
 
     SELECT
-      max(quote_ident(col.attname)) FILTER (WHERE col.key = 'published'),
-      max(col.utc_expr) FILTER (WHERE col.key = 'createdat')
-    INTO v_published, v_created
+      max(col.ident) FILTER (WHERE col.key = 'published'),
+      max(col.utc_expr) FILTER (WHERE col.key = 'createdat'),
+      string_agg(DISTINCT col.key, ', ') FILTER (WHERE col.collisions > 1)
+    INTO v_published, v_created, v_ambiguous
     FROM (
       SELECT lower(replace(attribute.attname, '_', '')) AS key,
-             attribute.attname,
+             quote_ident(attribute.attname) AS ident,
              CASE WHEN attribute.atttypid = 'timestamp'::regtype
                   THEN '(' || quote_ident(attribute.attname) || ' AT TIME ZONE ''UTC'')'
                   ELSE quote_ident(attribute.attname)
-             END AS utc_expr
+             END AS utc_expr,
+             count(*) OVER (
+               PARTITION BY lower(replace(attribute.attname, '_', ''))
+             ) AS collisions
       FROM pg_attribute AS attribute
       WHERE attribute.attrelid = v_rel
         AND attribute.attnum > 0
         AND NOT attribute.attisdropped
-    ) AS col;
+    ) AS col
+    WHERE col.key IN ('published', 'createdat');
+
+    IF v_ambiguous IS NOT NULL THEN
+      RAISE EXCEPTION '% carries more than one column for: %', v_rel::text, v_ambiguous
+        USING ERRCODE = 'ambiguous_column';
+    END IF;
 
     IF v_published IS NULL OR v_created IS NULL THEN
       RAISE EXCEPTION '% is missing a required outbox column', v_rel::text
@@ -341,6 +394,24 @@ END;
 $fn$;
 
 -- ───────────────────────────────────────────────────────────────────────────
+-- 4. Close the outbox RPCs to the API roles.
+--
+-- 00109 intended service_role only ("grant to authenticated for symmetry" had
+-- no caller then and has none now — the admin route goes through
+-- getAuthenticatedAdmin and calls with service_role). But this database's
+-- default privileges auto-granted EXECUTE to anon and authenticated at CREATE
+-- time, so both routines really carry {postgres,anon,authenticated,service_role}
+-- — the same trap 00485 documented. Until now anon's grant was inert because
+-- the body threw 42703 for everyone. Repairing the body would turn that dead
+-- grant into unauthenticated reads of unfiltered cross-service outbox state,
+-- raw last_error text included, over /rest/v1/rpc/. Revoke before that lands.
+-- ───────────────────────────────────────────────────────────────────────────
+REVOKE EXECUTE ON FUNCTION
+  public.get_outbox_events(integer, boolean),
+  public.get_outbox_counts()
+FROM PUBLIC, anon, authenticated;
+
+-- ───────────────────────────────────────────────────────────────────────────
 -- Post-conditions, proven against this database's actual shapes rather than
 -- against the migration text. Both outbox RPCs are read-only, so they are
 -- exercised for real here; the receipt-batch wrapper needs FF&E fixtures to
@@ -351,20 +422,42 @@ DECLARE
   v_rel      regclass;
   v_resolved integer;
   v_rows     integer;
+  v_spelling text;
+  v_role     text;
+  v_fn       text;
 BEGIN
   PERFORM * FROM public.get_outbox_counts();
   PERFORM * FROM public.get_outbox_events(1, false);
 
+  FOREACH v_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    FOREACH v_fn IN ARRAY ARRAY[
+      'public.get_outbox_events(integer,boolean)',
+      'public.get_outbox_counts()'
+    ] LOOP
+      IF has_function_privilege(v_role, v_fn, 'EXECUTE') THEN
+        RAISE EXCEPTION '00493 left % with EXECUTE on %', v_role, v_fn;
+      END IF;
+    END LOOP;
+  END LOOP;
+
+  IF NOT has_function_privilege(
+       'service_role', 'public.get_outbox_events(integer,boolean)', 'EXECUTE')
+     OR NOT has_function_privilege(
+       'service_role', 'public.get_outbox_counts()', 'EXECUTE') THEN
+    RAISE EXCEPTION '00493 revoked service_role off the outbox RPCs; the admin route needs it';
+  END IF;
+
   v_rel := COALESCE(
-    to_regclass('svc_media.media_assets'),
-    to_regclass('svc_media."MediaAsset"')
+    to_regclass('svc_media."MediaAsset"'),
+    to_regclass('svc_media.media_assets')
   );
   IF v_rel IS NULL THEN
     RAISE EXCEPTION '00493 found no svc_media asset table under either shape';
   END IF;
 
-  SELECT count(DISTINCT lower(replace(attribute.attname, '_', '')))
-  INTO v_resolved
+  SELECT count(DISTINCT lower(replace(attribute.attname, '_', ''))),
+         string_agg(attribute.attname, ', ' ORDER BY attribute.attname)
+  INTO v_resolved, v_spelling
   FROM pg_attribute AS attribute
   WHERE attribute.attrelid = v_rel
     AND attribute.attnum > 0
@@ -378,6 +471,22 @@ BEGIN
       '00493 resolved only %/6 receiving-photo predicate columns on %',
       v_resolved, v_rel::text;
   END IF;
+
+  RAISE NOTICE '00493 receiving-photo asset table: % [%]', v_rel::text, v_spelling;
+
+  FOREACH v_role IN ARRAY ARRAY['media', 'orders'] LOOP
+    SELECT string_agg(attribute.attname, ', ' ORDER BY attribute.attname)
+    INTO v_spelling
+    FROM pg_attribute AS attribute
+    WHERE attribute.attrelid = to_regclass(format('svc_%s.outbox_events', v_role))
+      AND attribute.attnum > 0
+      AND NOT attribute.attisdropped
+      AND lower(replace(attribute.attname, '_', '')) IN (
+        'id', 'type', 'published', 'retrycount', 'lasterror',
+        'createdat', 'publishedat'
+      );
+    RAISE NOTICE '00493 svc_%.outbox_events: [%]', v_role, COALESCE(v_spelling, 'ABSENT');
+  END LOOP;
 
   SELECT count(*) INTO v_rows
   FROM pg_proc AS p
