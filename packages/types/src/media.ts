@@ -111,3 +111,18 @@ export type SortOrder = 'asc' | 'desc'
 
 // MediaAsset is an alias for MediaLibraryAsset for backwards compatibility with design-system
 export type MediaAsset = MediaLibraryAsset
+
+// Rendered Room v2 / CAD pipeline R2 bucket names — single source of truth so
+// no worker or script hand-rolls a bucket-name string. Staging buckets were
+// created directly (B-W1); prod buckets are NOT created — that's a separate,
+// explicitly Kody-authorized GO after staging is proven end to end.
+export const MEDIA_R2_BUCKETS = {
+  staging: {
+    originals: 'patina-staging-media-originals-us',
+    artifacts: 'patina-staging-media-artifacts-us',
+  },
+  production: {
+    originals: 'patina-media-originals-us',
+    artifacts: 'patina-media-artifacts-us',
+  },
+} as const
