@@ -1,22 +1,20 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@supabase/ssr';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createBrowserClient } from "../client";
 import type {
   AutomatedSequence,
   SequenceEnrollment,
   SequenceTriggerConfig,
   SequenceStep,
   SequenceStatus,
-} from '@patina/shared/types';
+} from "@patina/shared/types";
 
-const getSupabase = () =>
-  createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+const getSupabase = () => createBrowserClient();
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const supabase = getSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session?.access_token) return {};
   return { Authorization: `Bearer ${session.access_token}` };
 }
@@ -26,11 +24,11 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
  */
 export function useAutomations() {
   return useQuery<AutomatedSequence[]>({
-    queryKey: ['automations'],
+    queryKey: ["automations"],
     queryFn: async () => {
       const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/comms/automations', { headers });
-      if (!res.ok) throw new Error('Failed to fetch automations');
+      const res = await fetch("/api/admin/comms/automations", { headers });
+      if (!res.ok) throw new Error("Failed to fetch automations");
       return res.json();
     },
   });
@@ -41,12 +39,14 @@ export function useAutomations() {
  */
 export function useAutomation(id: string | null) {
   return useQuery<AutomatedSequence>({
-    queryKey: ['automation', id],
+    queryKey: ["automation", id],
     queryFn: async () => {
-      if (!id) throw new Error('No automation ID');
+      if (!id) throw new Error("No automation ID");
       const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/comms/automations/${id}`, { headers });
-      if (!res.ok) throw new Error('Failed to fetch automation');
+      const res = await fetch(`/api/admin/comms/automations/${id}`, {
+        headers,
+      });
+      if (!res.ok) throw new Error("Failed to fetch automation");
       return res.json();
     },
     enabled: !!id,
@@ -67,19 +67,19 @@ export function useCreateAutomation() {
       steps_json?: SequenceStep[];
     }) => {
       const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/comms/automations', {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
+      const res = await fetch("/api/admin/comms/automations", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to create automation');
+        throw new Error(err.error || "Failed to create automation");
       }
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automations'] });
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
     },
   });
 }
@@ -104,19 +104,19 @@ export function useUpdateAutomation() {
     }) => {
       const headers = await getAuthHeaders();
       const res = await fetch(`/api/admin/comms/automations/${id}`, {
-        method: 'PATCH',
-        headers: { ...headers, 'Content-Type': 'application/json' },
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to update automation');
+        throw new Error(err.error || "Failed to update automation");
       }
       return res.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['automations'] });
-      queryClient.invalidateQueries({ queryKey: ['automation', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automation", variables.id] });
     },
   });
 }
@@ -131,16 +131,16 @@ export function useDeleteAutomation() {
     mutationFn: async (id: string) => {
       const headers = await getAuthHeaders();
       const res = await fetch(`/api/admin/comms/automations/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
         headers,
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to delete automation');
+        throw new Error(err.error || "Failed to delete automation");
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automations'] });
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
     },
   });
 }
@@ -155,19 +155,19 @@ export function useActivateAutomation() {
     mutationFn: async (id: string) => {
       const headers = await getAuthHeaders();
       const res = await fetch(`/api/admin/comms/automations/${id}`, {
-        method: 'PATCH',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'active' }),
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "active" }),
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to activate automation');
+        throw new Error(err.error || "Failed to activate automation");
       }
       return res.json();
     },
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ['automations'] });
-      queryClient.invalidateQueries({ queryKey: ['automation', id] });
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automation", id] });
     },
   });
 }
@@ -182,19 +182,19 @@ export function usePauseAutomation() {
     mutationFn: async (id: string) => {
       const headers = await getAuthHeaders();
       const res = await fetch(`/api/admin/comms/automations/${id}`, {
-        method: 'PATCH',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'paused' }),
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "paused" }),
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to pause automation');
+        throw new Error(err.error || "Failed to pause automation");
       }
       return res.json();
     },
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ['automations'] });
-      queryClient.invalidateQueries({ queryKey: ['automation', id] });
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
+      queryClient.invalidateQueries({ queryKey: ["automation", id] });
     },
   });
 }
@@ -204,12 +204,14 @@ export function usePauseAutomation() {
  */
 export function useSequenceEnrollments(sequenceId: string | null) {
   return useQuery<SequenceEnrollment[]>({
-    queryKey: ['sequence-enrollments', sequenceId],
+    queryKey: ["sequence-enrollments", sequenceId],
     queryFn: async () => {
-      if (!sequenceId) throw new Error('No sequence ID');
+      if (!sequenceId) throw new Error("No sequence ID");
       const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/comms/automations/${sequenceId}`, { headers });
-      if (!res.ok) throw new Error('Failed to fetch automation');
+      const res = await fetch(`/api/admin/comms/automations/${sequenceId}`, {
+        headers,
+      });
+      if (!res.ok) throw new Error("Failed to fetch automation");
       const data = await res.json();
       return data.enrollments || [];
     },
@@ -230,7 +232,7 @@ export interface AutomationEnrollment {
   email: string | null;
   display_name: string | null;
   current_step: number;
-  status: 'active' | 'completed' | 'unsubscribed';
+  status: "active" | "completed" | "unsubscribed";
   next_step_at: string | null;
   enrolled_at: string;
   completed_at: string | null;
@@ -250,22 +252,27 @@ export interface AutomationEnrollmentsPage {
  */
 export function useAutomationEnrollments(
   sequenceId: string | null,
-  params?: { limit?: number; offset?: number }
+  params?: { limit?: number; offset?: number },
 ) {
   return useQuery<AutomationEnrollmentsPage>({
-    queryKey: ['automation-enrollments', sequenceId, params?.limit, params?.offset],
+    queryKey: [
+      "automation-enrollments",
+      sequenceId,
+      params?.limit,
+      params?.offset,
+    ],
     queryFn: async () => {
-      if (!sequenceId) throw new Error('No sequence ID');
+      if (!sequenceId) throw new Error("No sequence ID");
       const headers = await getAuthHeaders();
       const qs = new URLSearchParams();
-      if (params?.limit) qs.set('limit', String(params.limit));
-      if (params?.offset) qs.set('offset', String(params.offset));
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.offset) qs.set("offset", String(params.offset));
       const query = qs.toString();
       const res = await fetch(
-        `/api/admin/comms/automations/${sequenceId}/enrollments${query ? `?${query}` : ''}`,
-        { headers }
+        `/api/admin/comms/automations/${sequenceId}/enrollments${query ? `?${query}` : ""}`,
+        { headers },
       );
-      if (!res.ok) throw new Error('Failed to fetch enrollments');
+      if (!res.ok) throw new Error("Failed to fetch enrollments");
       return res.json();
     },
     enabled: !!sequenceId,
@@ -283,22 +290,31 @@ export function useEnrollInAutomation(sequenceId: string) {
   return useMutation({
     mutationFn: async (input: { email?: string; user_id?: string }) => {
       const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/comms/automations/${sequenceId}/enrollments`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      });
+      const res = await fetch(
+        `/api/admin/comms/automations/${sequenceId}/enrollments`,
+        {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        },
+      );
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Failed to enroll' }));
-        throw new Error(err.error || 'Failed to enroll');
+        const err = await res
+          .json()
+          .catch(() => ({ error: "Failed to enroll" }));
+        throw new Error(err.error || "Failed to enroll");
       }
       return res.json() as Promise<AutomationEnrollment>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automation-enrollments', sequenceId] });
-      queryClient.invalidateQueries({ queryKey: ['sequence-enrollments', sequenceId] });
-      queryClient.invalidateQueries({ queryKey: ['automation', sequenceId] });
-      queryClient.invalidateQueries({ queryKey: ['automations'] });
+      queryClient.invalidateQueries({
+        queryKey: ["automation-enrollments", sequenceId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["sequence-enrollments", sequenceId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["automation", sequenceId] });
+      queryClient.invalidateQueries({ queryKey: ["automations"] });
     },
   });
 }
@@ -312,21 +328,30 @@ export function useUnenrollFromAutomation(sequenceId: string) {
   return useMutation({
     mutationFn: async (enrollmentId: string) => {
       const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/comms/automations/${sequenceId}/enrollments`, {
-        method: 'DELETE',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enrollment_id: enrollmentId }),
-      });
+      const res = await fetch(
+        `/api/admin/comms/automations/${sequenceId}/enrollments`,
+        {
+          method: "DELETE",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ enrollment_id: enrollmentId }),
+        },
+      );
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Failed to unenroll' }));
-        throw new Error(err.error || 'Failed to unenroll');
+        const err = await res
+          .json()
+          .catch(() => ({ error: "Failed to unenroll" }));
+        throw new Error(err.error || "Failed to unenroll");
       }
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automation-enrollments', sequenceId] });
-      queryClient.invalidateQueries({ queryKey: ['sequence-enrollments', sequenceId] });
-      queryClient.invalidateQueries({ queryKey: ['automation', sequenceId] });
+      queryClient.invalidateQueries({
+        queryKey: ["automation-enrollments", sequenceId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["sequence-enrollments", sequenceId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["automation", sequenceId] });
     },
   });
 }

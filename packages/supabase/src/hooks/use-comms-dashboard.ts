@@ -1,15 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
-import { createBrowserClient } from '@supabase/ssr';
+import { useQuery } from "@tanstack/react-query";
+import { createBrowserClient } from "../client";
 
-const getSupabase = () =>
-  createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+const getSupabase = () => createBrowserClient();
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const supabase = getSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session?.access_token) return {};
   return { Authorization: `Bearer ${session.access_token}` };
 }
@@ -20,7 +18,7 @@ export interface CommsDashboardStats {
   totalSent: number;
   openRate: number;
   clickRate: number;
-  deliveryHealth: 'healthy' | 'warning' | 'critical';
+  deliveryHealth: "healthy" | "warning" | "critical";
   bounceRate: number;
 }
 
@@ -54,13 +52,15 @@ export interface CommsDashboardData {
 
 // ─── Hooks ───────────────────────────────────────────────────────────────
 
-export function useCommsDashboard(period: string = '7d') {
+export function useCommsDashboard(period: string = "7d") {
   return useQuery<CommsDashboardData>({
-    queryKey: ['comms-dashboard', period],
+    queryKey: ["comms-dashboard", period],
     queryFn: async () => {
       const headers = await getAuthHeaders();
-      const res = await fetch(`/api/admin/comms/dashboard?period=${period}`, { headers });
-      if (!res.ok) throw new Error('Failed to fetch dashboard data');
+      const res = await fetch(`/api/admin/comms/dashboard?period=${period}`, {
+        headers,
+      });
+      if (!res.ok) throw new Error("Failed to fetch dashboard data");
       return res.json();
     },
     staleTime: 60_000, // 1 minute
@@ -70,11 +70,13 @@ export function useCommsDashboard(period: string = '7d') {
 
 export function useRecentActivity() {
   return useQuery<RecentActivity[]>({
-    queryKey: ['comms-recent-activity'],
+    queryKey: ["comms-recent-activity"],
     queryFn: async () => {
       const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/comms/dashboard?period=24h', { headers });
-      if (!res.ok) throw new Error('Failed to fetch activity');
+      const res = await fetch("/api/admin/comms/dashboard?period=24h", {
+        headers,
+      });
+      if (!res.ok) throw new Error("Failed to fetch activity");
       const data = await res.json();
       return data.recentActivity;
     },
@@ -84,11 +86,13 @@ export function useRecentActivity() {
 
 export function useUpcomingSends() {
   return useQuery<ScheduledSend[]>({
-    queryKey: ['comms-upcoming-sends'],
+    queryKey: ["comms-upcoming-sends"],
     queryFn: async () => {
       const headers = await getAuthHeaders();
-      const res = await fetch('/api/admin/comms/dashboard?period=7d', { headers });
-      if (!res.ok) throw new Error('Failed to fetch scheduled sends');
+      const res = await fetch("/api/admin/comms/dashboard?period=7d", {
+        headers,
+      });
+      if (!res.ok) throw new Error("Failed to fetch scheduled sends");
       const data = await res.json();
       return data.scheduledSends;
     },

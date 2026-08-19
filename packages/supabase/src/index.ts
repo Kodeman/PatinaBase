@@ -4,16 +4,17 @@ export {
   createServerClient,
   createMiddlewareClient,
   createAdminClient,
-} from './client';
-export type { Database, Json } from './database.types';
-export * from './hooks';
+  SUPABASE_AUTH_STORAGE_KEY,
+} from "./client";
+export type { Database, Json } from "./database.types";
+export * from "./hooks";
 export {
   isOAuthProviderEnabled,
   getOAuthProviderLabel,
   parseOAuthProviders,
   ENABLED_OAUTH_PROVIDERS,
   type OAuthProvider,
-} from './lib/oauth-providers';
+} from "./lib/oauth-providers";
 export {
   AuthFlowError,
   normalizeAuthError,
@@ -31,24 +32,24 @@ export {
   type AuthFailure,
   type AuthFailureKind,
   type FinalizeAuthCallbackOptions,
-} from './auth';
-export { getCookieDomain } from './lib/cookie-domain';
+} from "./auth";
+export { getCookieDomain } from "./lib/cookie-domain";
 export {
   normalizeBoardMediaValue,
   signBoardMediaReference,
   signBoardMediaValue,
   type BoardStorageSigningClient,
-} from './lib/board-storage';
+} from "./lib/board-storage";
 export {
   normalizeProposalBoardReference,
   proposalBoardUrlToPath,
   PROPOSAL_BOARD_BUCKET,
-} from './lib/storage-url';
+} from "./lib/storage-url";
 export {
   invalidateProposalClientQueries,
   proposalClientQueryKeys,
   PROPOSAL_CLIENT_MUTATION_KEY,
-} from './lib/proposal-client-query-invalidation';
+} from "./lib/proposal-client-query-invalidation";
 export {
   assessProposalPaymentSchedule,
   canonicalizeProposalPaymentSchedule,
@@ -61,12 +62,12 @@ export {
   type ProposalPaymentScheduleIssueCode,
   type ProposalSendSnapshot,
   type ProposalSendSnapshotRpcRow,
-} from './lib/proposal-payment-schedule';
+} from "./lib/proposal-payment-schedule";
 export {
   resolveVendor,
   type ResolveVendorInput,
   type ResolvedVendor,
-} from './lib/vendors';
+} from "./lib/vendors";
 export {
   edgeApiBaseUrl,
   fetchScanArtifact,
@@ -80,7 +81,7 @@ export {
   type CaptureProductInput,
   type CaptureProductResult,
   type CaptureProductDestination,
-} from './mutations/capture-product';
+} from "./mutations/capture-product";
 export {
   promoteToStudio,
   demoteToPersonal,
@@ -91,13 +92,13 @@ export {
   type PromoteBatchToStudioInput,
   type PromoteBatchItem,
   type PaymentPattern,
-} from './mutations/promotion';
+} from "./mutations/promotion";
 export {
   nominateVendor,
   type NominateVendorInput,
   type NominateVendorResult,
   type NominationStatus,
-} from './mutations/nomination';
+} from "./mutations/nomination";
 
 // Server-side auth utilities are available via '@patina/supabase/server'
 // Do NOT re-export here — server.ts uses next/headers which breaks client components
