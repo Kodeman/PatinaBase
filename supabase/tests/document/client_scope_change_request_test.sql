@@ -242,6 +242,8 @@ BEGIN
   );
 END;
 $$;
+-- 00483 strips PUBLIC EXECUTE from routines created after it, pg_temp included,
+-- and every call below runs under SET LOCAL ROLE authenticated.
 GRANT EXECUTE ON FUNCTION pg_temp.assume_scope_actor(uuid) TO PUBLIC;
 
 SET LOCAL ROLE authenticated;

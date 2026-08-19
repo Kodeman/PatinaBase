@@ -209,6 +209,9 @@ BEGIN
   -- Two ordinary furnishings lines. Section 10 releases and purchase-orders one
   -- of them, so the trade block can be shown to be a TRADE rule and not a new
   -- blanket refusal on the whole table.
+  -- assignment_scope is explicit: 00438 replaced 00434's auto-deriving
+  -- guard_project_ffe_selection_integrity() with one that requires it, so a
+  -- room-scoped fixture row that leaves the 'unassigned' default is rejected.
   INSERT INTO public.project_ffe_items (project_id,
     project_room_id,
     assignment_scope,
@@ -1057,6 +1060,15 @@ BEGIN
   ASSERT (SELECT sum(line_total_cents) FROM public.project_ffe_items
           WHERE trade_scope_document_id = v_doc) = 900000,
     'the presence lines must sum to the client price, never a multiple of it';
+
+  -- 00510: both sections here name a room, so both presence lines must be
+  -- filed 'room'. Before 00510 engage_trade_scope omitted assignment_scope
+  -- entirely and this whole block was unreachable — the RPC raised
+  -- 'non-room assignment cannot carry a room' on the first section.
+  ASSERT (SELECT count(*) FROM public.project_ffe_items
+          WHERE trade_scope_document_id = v_doc
+            AND assignment_scope = 'room') = 2,
+    'a presence line minted for a room-scoped section must be filed assignment_scope=room';
 
   -- Idempotent.
   v_again := public.engage_trade_scope(v_scope);

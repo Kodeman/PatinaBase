@@ -14,8 +14,10 @@ read it:
 
 Everything below was diagnosed during the A1 SQL-test-suite repair
 (2026-08-18/19). None of these are the `pg_temp` permission-denied family —
-that family (55 files, ~84 files touch `pg_temp` at all) is fixed. These 23
-residuals split into three groups with very different confidence:
+that family (55 files, ~84 files touch `pg_temp` at all) is fixed. The 23
+residuals split into three groups with very different confidence. One of the 23
+(`document/client_scope_change_request_test.sql`) was subsequently closed by
+`00510_post_00483_grant_and_scope_repairs.sql`, leaving **22**:
 
 - **Group 1 — benign, verified.** A local-Supabase-CLI-image divergence from
   staging/prod, characterized down to the exact catalog rows. Safe to treat as
@@ -54,21 +56,23 @@ listed here.
 
 ## Group 2 — real grant/authority gaps (migration-side, not fixed)
 
-Each of these traces to a specific role lacking a privilege that its own
-call site (test fixture *or*, in two cases, production RPC code) assumes it
-has. All are plausibly prod-relevant; none are touched here.
+Each of these traces to a specific role lacking a privilege that its own test
+fixture assumes it has. All are plausibly prod-relevant; none are touched here.
+
+Three entries that stood in this group — `mood_boards/share_security_test.sql`,
+`commercial/trade_scope_test.sql` and
+`document/client_scope_change_request_test.sql` — were the migration-side cases,
+and `00510_post_00483_grant_and_scope_repairs.sql` closed all three root causes.
+See "Closed by 00510" below.
 
 - `supabase/tests/agent_os/roles_test.sql` — `permission denied for table agent_tasks`. `agent_writer`'s direct INSERT into `agent_tasks` (the test's own documented case 1) is denied at the table-grant layer before RLS is even evaluated. Needs a grant audit for `agent_writer` against current `agent_tasks` privileges.
 - `supabase/tests/commercial/trade_rfq_test.sql` — `mint role refusal: 'permission denied for function mint_trade_rfq_token'`. The test expects `authenticated` to reach `public.mint_trade_rfq_token`'s own internal check and get its custom message (`'minting a trade RFQ link requires service_role'`); instead Postgres's ACL layer denies it first because `authenticated` has no EXECUTE on the function at all. If real app code calls this as `authenticated`, it is broken in the same way today.
-- `supabase/tests/mood_boards/share_security_test.sql` — `permission denied for function is_project_team_member`. A `storage.objects` RLS policy on the `proposal-mood-boards` bucket references `public.is_project_team_member(...)`; `anon` has no EXECUTE on it, so an anonymous SELECT against that bucket raises a raw Postgres permission error instead of evaluating the policy to false/no-rows. Same class of gap as the two above.
 - `supabase/tests/document/close_project_readiness_test.sql` — `permission denied for table project_ffe_items`. Confirmed via `information_schema.role_table_grants`: `authenticated` holds only SELECT on `public.project_ffe_items` (INSERT/UPDATE/DELETE were REVOKEd from `authenticated` by the migration history itself — `00-legacy-grants.sql` replays it faithfully, so this matches prod). The test does a direct `UPDATE ... SET status = 'installed'` as `authenticated`; real app code must go through an RPC for this transition, and the fixture needs to be updated to do the same. Not attempted — the correct RPC/call shape for this specific transition wasn't identified.
 - `supabase/tests/document/journey_authority_integrity_test.sql` — same `project_ffe_items` grant boundary as above, different call site.
-- `supabase/tests/commercial/trade_scope_test.sql` — `non-room assignment cannot carry a room`, but **not** a test-fixture bug: traced into `public.engage_trade_scope` (defined in `00475_schedule_ceremony_anchors.sql`) itself, whose own `INSERT INTO project_ffe_items` doesn't set `assignment_scope`. This is the identical bug fixed in 4 sibling test files' *fixtures* (see 00434→00438 note below), but here it lives in shipped RPC code, which is migration-side and out of scope for this workstream.
-- `supabase/tests/document/client_scope_change_request_test.sql` — same root cause as above, inside `public.apply_scope_change`.
 
 ## Group 3 — business-logic / fixture drift (root cause not chased to completion)
 
-The first four share a fixture bug that **was** fixed here (`INSERT INTO
+The first five share a fixture bug that **was** fixed here (`INSERT INTO
 project_ffe_items` without `assignment_scope`, needed since
 `00438_ffe_release_security_hardening.sql` replaced the auto-deriving
 version of `guard_project_ffe_selection_integrity()` from
@@ -80,11 +84,13 @@ deeper* assertion, unrelated to the fixture bug:
 - `supabase/tests/commercial/design_services_authority_test.sql` — same `designDisposition` readiness-gate failure, same function.
 - `supabase/tests/commercial/executed_on_paper_test.sql` — same `designDisposition` readiness-gate failure, same function.
 - `supabase/tests/commercial/design_services_gap_hardening_test.sql` — `legacy release blocked by the wrong guard: 'schedule line ... is not ready for authorization: ["designDisposition"]'` — same family; the test's own message implies it already suspects a guard-ordering regression.
+- `supabase/tests/commercial/trade_scope_test.sql` — MOVED here from Group 2 by `00510`. Its Group 2 cause (`non-room assignment cannot carry a room`, raised inside `public.engage_trade_scope` itself, which inserted `project_ffe_items` without `assignment_scope`) is fixed: 00510 set `assignment_scope` explicitly in the RPC body, and the file now runs through the whole engagement ceremony — including a new assertion that both room-scoped presence lines are filed `assignment_scope = 'room'`. It now fails ~320 lines later at `schedule line ... is not ready for authorization: ["designDisposition"]`, the same readiness-gate family as the four above.
 
 Un-related residuals, each a genuine assertion failure whose root cause
 (a later migration changing a guard, a policy count, or an ordering) was
 identified only down to the failing message, not chased further:
 
+- `supabase/tests/mood_boards/share_security_test.sql` — MOVED here from Group 2 by `00510`, and its old Group 2 diagnosis was MIS-ATTRIBUTED. The `permission denied for function is_project_team_member` error did not come from a `proposal-mood-boards` policy at all: the culprit was `"Project members can read documents"` on the **project-documents** bucket, which applied `TO PUBLIC` while calling the helper. Policy EXECUTE checks resolve at executor-init for every policy applying to the caller's role, so that one policy broke `anon` SELECT on `storage.objects` for **every** bucket. Verified by flipping the policy back to `TO PUBLIC` locally: the file fails at line 262 with exactly that message, and stops doing so under 00510. It now reaches line 467 and fails on an unrelated business assertion, `board not found or not accessible`, from `public.create_board_share` — root cause not chased.
 - `supabase/tests/library/product_configuration_test.sql` — `issued cabinetry must lock the exact approved snapshot on the FF&E spec`.
 - `supabase/tests/notifications/unconfirmed_analytics_test.sql` — `active service role must not read user-owned campaign analytics`.
 - `supabase/tests/procurement/state_chain_test.sql` — `authentication required to link a configured line to a purchase order`. Runs as the unrestricted session owner (no actor assumed) at that point; a trigger apparently now requires `auth.uid()` to be set where it previously didn't.
@@ -94,6 +100,24 @@ identified only down to the failing message, not chased further:
 - `supabase/tests/rls/design_requests_test.sql` — `FAIL 3b: expected no_scans, got <none>` (a case that should raise a specific error no longer does).
 - `supabase/tests/rls/studio_titles_test.sql` — `FAIL f: demoting the sole active owner should raise last_owner_protected` (same shape — an expected guard no longer fires). Cross-ref project memory: studio co-member RLS has a documented SECURITY DEFINER requirement that may be implicated.
 - `supabase/tests/spec_books/security_and_lifecycle_test.sql` — `only service_role may finalize rendered issues` (the test's own custom ASSERT message; the finalize-lifecycle guard it exercises no longer behaves as written).
+
+## Closed by 00510 (removed from the lists above)
+
+**NOTE for editors:** nothing in this section may use the
+`- \`path\` — reason` bullet shape; the runner's parser would read it back as a
+live allowlist entry and re-suppress a file that is now green.
+
+The file `document/client_scope_change_request_test.sql` was a Group 2 entry
+(`non-room assignment cannot carry a room`, raised inside
+`public.apply_scope_change`). `00510_post_00483_grant_and_scope_repairs.sql` §S3
+set `assignment_scope` explicitly in the RPC body. That file
+is now **green** end to end and carries no entry.
+
+Two other Group 2 entries had their stated root cause closed by 00510 but are
+still red on a later, unrelated assertion, so they moved to Group 3 rather than
+away: `commercial/trade_scope_test.sql` (§S2) and
+`mood_boards/share_security_test.sql` (§S1 — see the corrected attribution in
+that entry).
 
 ## Fixed during this pass (for context, not failures)
 

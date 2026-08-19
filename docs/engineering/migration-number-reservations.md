@@ -76,7 +76,7 @@ yet on prod.
 | 00494–00497 | Phase 2 (Cloudflare/media backfill program — this workstream and its siblings)                                                                                                                                                             |
 | 00498–00502 | Rendered Room v2 (scan pipeline) — **confirmed by that lane** as this program's _future_ draws, purely additive to its already-consumed 00489–00492. Those four are **not** renumbered into this band. **00498 is now DRAWN** — see below. |
 | 00503–00509 | Phase 3                                                                                                                                                                                                                                    |
-| 00510       | Grant-repair hotfix (`fix/post-00483-grant-gaps`) — in flight                                                                                                                                                                              |
+| 00510       | **TAKEN** — `00510_post_00483_grant_and_scope_repairs.sql` (branch `fix/post-00483-grant-gaps`, 2026-08-18). Post-00483 hotfix: project-documents storage policy caller-binding, `assignment_scope` derivation in `engage_trade_scope` / `apply_scope_change`, anon write-grant narrowing on four public tables. Numbered ABOVE the three bands above deliberately so it shifts none of them; the 00494–00509 gap is intentional and stays reserved. **Applied to prod 2026-08-19** (surgical single-migration push). |
 
 ### Drawn from 00498–00502
 
