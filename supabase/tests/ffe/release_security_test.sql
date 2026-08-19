@@ -5,6 +5,7 @@ CREATE OR REPLACE FUNCTION pg_temp.assume_release_actor(p_actor uuid) RETURNS vo
   PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',p_actor,'role','authenticated')::text,true);
   PERFORM set_config('request.jwt.claim.sub',p_actor::text,true);
 END; $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_release_actor(uuid) TO PUBLIC;
 
 INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,instance_id,aud,role) VALUES
 ('fa000000-0000-4000-8000-000000000001','release-owner@test.invalid','',now(),now(),now(),'00000000-0000-0000-0000-000000000000','authenticated','authenticated'),

@@ -98,6 +98,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_actor(uuid) TO PUBLIC;
 
 INSERT INTO auth.users (
   id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
@@ -325,6 +326,7 @@ BEGIN
   ) = 0, 'security-invoker Binder view bypassed base-table privacy';
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assert_binder_hidden(uuid) TO PUBLIC;
 
 SET LOCAL ROLE authenticated;
 DO $shared_organization_proof$

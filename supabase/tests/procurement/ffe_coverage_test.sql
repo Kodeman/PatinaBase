@@ -92,6 +92,7 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(UUID) TO PUBLIC;
 
 -- ─── case 1: kind CHECK admits 'ffe' / rejects 'ffe' without ffe_item_id ────
 

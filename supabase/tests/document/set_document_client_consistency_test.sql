@@ -164,9 +164,10 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_document_client_owner() TO PUBLIC;
 
-SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_document_client_owner();
+SET LOCAL ROLE authenticated;
 
 -- Project client identity has the same two-factor table boundary. An owner is
 -- still current_user=authenticated, so neither a direct write nor the exact

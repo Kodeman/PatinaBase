@@ -119,6 +119,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_project_actor(uuid) TO PUBLIC;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_project_actor('f9000000-0000-4000-8000-000000000001');

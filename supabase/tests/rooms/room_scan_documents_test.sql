@@ -61,6 +61,7 @@ BEGIN
   EXECUTE 'SET LOCAL ROLE authenticated';
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_service()
 RETURNS void AS $$
@@ -71,6 +72,7 @@ BEGIN
   EXECUTE 'SET LOCAL ROLE service_role';
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_service() TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.reset_role()
 RETURNS void AS $$
@@ -79,6 +81,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', '', true);
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
 -- Scan (a): will carry an open lead, then graduate to a relationship.
 INSERT INTO room_scans (id, user_id, name, status, room_type, floor_area)

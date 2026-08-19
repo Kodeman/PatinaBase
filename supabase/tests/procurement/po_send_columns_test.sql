@@ -95,6 +95,7 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(UUID) TO PUBLIC;
 
 -- ─── case 1: assign_po_number — first/second number + idempotent re-call ─────
 
