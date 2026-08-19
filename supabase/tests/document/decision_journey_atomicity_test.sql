@@ -211,9 +211,14 @@ BEGIN
     'authenticated',
     'public.create_client_decision(uuid,jsonb,jsonb,uuid[],uuid[])', 'EXECUTE'
   ), 'canonical create RPC must be callable';
-  ASSERT has_function_privilege(
+  -- 00511 makes notify_decision_required service-role only (its sole callers
+  -- are the decision-reminder edge functions), narrowing both the EXECUTE grant
+  -- and adding a body role-check. authenticated no longer holds EXECUTE, so the
+  -- foreign-caller rejection below now comes from the ACL layer rather than the
+  -- body guard — same insufficient_privilege outcome, one layer earlier.
+  ASSERT NOT has_function_privilege(
     'authenticated', 'public.notify_decision_required(uuid)', 'EXECUTE'
-  ), 'expand phase must retain the guarded legacy notification call';
+  ), 'notify_decision_required must be service-role only under 00511';
 
   PERFORM pg_temp.assume_atomic_actor(
     'fa000000-0000-4000-8000-000000000004'
@@ -226,7 +231,7 @@ BEGIN
     v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL,
-    'guarded legacy notice must reject a foreign authenticated caller';
+    'service-role-only notice must reject a foreign authenticated caller';
   PERFORM pg_temp.assume_atomic_actor(
     'fa000000-0000-4000-8000-000000000001'
   );

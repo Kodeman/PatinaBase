@@ -116,6 +116,21 @@ VALUES
     'Activated proposal identity', 100000, 'accepted'
   );
 
+-- 00511 makes the design studio the canonical authority for every project:
+-- a studio-less project is no longer reachable (prod holds none), and the lead
+-- must be an active non-guest member of an active design_studio holding a
+-- designer-domain role.
+INSERT INTO public.organizations (id, name, slug, type, status)
+VALUES ('c7400000-0000-4000-8000-000000000001',
+        'Consistency Studio', 'consistency-studio', 'design_studio', 'active');
+INSERT INTO public.organization_members (user_id, organization_id, role, status)
+VALUES ('c7000000-0000-4000-8000-000000000001',
+        'c7400000-0000-4000-8000-000000000001', 'owner', 'active');
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'c7000000-0000-4000-8000-000000000001', role.id,
+       'c7000000-0000-4000-8000-000000000001'
+FROM public.roles AS role WHERE role.name = 'studio_owner';
+
 INSERT INTO public.projects (
   id, name, designer_id, client_id, created_by, status
 )

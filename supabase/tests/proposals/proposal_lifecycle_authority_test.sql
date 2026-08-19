@@ -41,6 +41,25 @@ VALUES
    'e7000000-0000-4000-8000-000000000003',
    'e7100000-0000-4000-8000-000000000001', 'member', 'active', NOW());
 
+-- 00511 requires every project lead to hold a designer-domain role; this
+-- fixture predates that invariant. Grant it to the studio members it creates.
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT DISTINCT membership.user_id, role.id, membership.user_id
+FROM public.organization_members AS membership
+JOIN public.organizations AS studio
+  ON studio.id = membership.organization_id
+ AND studio.type = 'design_studio'
+CROSS JOIN public.roles AS role
+WHERE membership.organization_id IN (
+    'e7100000-0000-4000-8000-000000000001'
+  )
+  AND membership.status = 'active'
+  -- Only studio leads. Several of these fixtures deliberately model a plain
+  -- member who must NOT be an eligible lead, and handing that member a
+  -- designer role would silently defeat their own denial probes.
+  AND membership.role IN ('owner', 'admin')
+  AND role.name = 'studio_owner';
+
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, status, source
 )

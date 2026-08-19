@@ -132,6 +132,13 @@ INSERT INTO auth.users (
   ('1a000000-0000-4000-8000-000000000004', 'issue-emailless@test.invalid', '', now(), now(), now(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
+-- is_designer=true auto-provisions a personal studio (00295). 00511's
+-- countersign authority check requires the designer and countersigner to share
+-- EXACTLY ONE active design studio, so a designer who also owns the explicit
+-- Issue Studio would have two and fail. Suppress provisioning here so each
+-- designer holds only the explicit studio the fixture assigns (prod designers
+-- hold one). Triggers return to origin immediately after.
+SET LOCAL session_replication_role = replica;
 INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
 VALUES
   ('1a000000-0000-4000-8000-000000000001', 'issue-designer@test.invalid', 'Issue Designer', true, now(), now()),
@@ -141,6 +148,7 @@ VALUES
   -- person outright; the paper rail is the only rail that can serve them.
   ('1a000000-0000-4000-8000-000000000004', NULL, 'Emailless Client', false, now(), now())
 ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name;
+SET LOCAL session_replication_role = origin;
 
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES
@@ -153,6 +161,18 @@ VALUES
    '1a100000-0000-4000-8000-000000000001', 'owner', 'active', now()),
   ('1a110000-0000-4000-8000-000000000002', '1a000000-0000-4000-8000-000000000003',
    '1a100000-0000-4000-8000-000000000002', 'owner', 'active', now());
+
+-- 00511's countersign check also requires the agreement's designer to hold a
+-- designer-domain role. Grant it to both studio owners (is_designer is already
+-- true, so this does not re-trigger provisioning).
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT designer.id, role.id, designer.id
+FROM (VALUES
+  ('1a000000-0000-4000-8000-000000000001'::uuid),
+  ('1a000000-0000-4000-8000-000000000003'::uuid)
+) AS designer(id)
+CROSS JOIN public.roles AS role
+WHERE role.name = 'studio_owner';
 
 INSERT INTO public.designer_clients (id, designer_id, client_id, client_name, status, source)
 VALUES

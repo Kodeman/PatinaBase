@@ -38,11 +38,12 @@ be reissued to another program:
 Prod's applied migration list runs `... 00484, 00485, 00486, 00493` — 00487 through
 00492 are **not applied to prod**, even though 00493 is:
 
-- `00487`/`00488` are reserved by the `phase1-close/staging-ready` program
-  (PR #28, open, not yet merged to `main`/prod). They were authored, then
-  recovered/renumbered onto a different branch per git history
-  (`13a256f5 chore(db): recover + renumber deferred SD-hardening (00487/00488), regen legacy-grants`);
-  no file at those numbers exists on `main` today.
+- `00487`/`00488` were reserved by the `phase1-close/staging-ready` program
+  (PR #28) for the deferred SD-hardening tranche, per git history
+  (`13a256f5 chore(db): recover + renumber deferred SD-hardening (00487/00488), regen legacy-grants`).
+  **That reservation is released:** the tranche has since been renumbered to
+  **00511–00513** (see the reservations table). `00487`/`00488` are now permanently
+  skipped — never applied anywhere, and not to be reissued.
 - `00489`–`00492` **do exist as files on `main`**
   (`00489_media_registry_kernel.sql`, `00490_scan_worker_roles.sql`,
   `00491_dispatch_scan_modal_cron.sql`, `00492_room_file_version_monotonicity.sql`) —
@@ -77,6 +78,23 @@ yet on prod.
 | 00498–00502 | Rendered Room v2 (scan pipeline) — **confirmed by that lane** as this program's _future_ draws, purely additive to its already-consumed 00489–00492. Those four are **not** renumbered into this band. **00498–00501 are now DRAWN; 00502 is the band's last free number** — see below.                                                                                                                                                                                                                                |
 | 00503–00509 | Phase 3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 00510       | **TAKEN** — `00510_post_00483_grant_and_scope_repairs.sql` (branch `fix/post-00483-grant-gaps`, 2026-08-18). Post-00483 hotfix: project-documents storage policy caller-binding, `assignment_scope` derivation in `engage_trade_scope` / `apply_scope_change`, anon write-grant narrowing on four public tables. Numbered ABOVE the three bands above deliberately so it shifts none of them; the 00494–00509 gap is intentional and stays reserved. **Applied to prod 2026-08-19** (surgical single-migration push). |
+| 00511–00513 | **TAKEN** — the SD-hardening (canonical studio authority) tranche. Renumbered off its provisional 00487/00488/00489 after Phase 1 landed and 00489–00493/00498–00499/00510 were consumed. **SPLIT 2026-08-19 (Kody):** 00511+00513 land on `followon/sd-hardening-v3`; **00512 is parked** on `followon/sd-caller-hardening-00512` (reserved-parked, not landing). The 00512 gap in the applied sequence is intentional — **00513 is NOT renumbered down.** Scope register: `docs/follow-ups/sd-hardening-w7-followon.md`; parked charter: `docs/follow-ups/sd-caller-hardening-00512-followon.md`. NOT applied to staging or prod. |
+
+### Drawn from 00511–00513 (SD-hardening tranche)
+
+| Number | File                                              | Landed state                                            |
+| ------ | ------------------------------------------------- | ------------------------------------------------------- |
+| 00511  | `00511_public_sd_hardening.sql`                   | landing branch `followon/sd-hardening-v3`; local replay only |
+| 00512  | `00512_public_sd_caller_hardening.sql`            | **PARKED** on `followon/sd-caller-hardening-00512`; removed from the landing branch; reserved-parked (do not reissue) |
+| 00513  | `00513_invoice_numbering_studio_uniqueness.sql`   | landing branch `followon/sd-hardening-v3`; local replay only; **keeps its number** (00512 gap intentional) |
+
+These carry the provisional numbers 00487/00488/00489 in older documents and in the
+`13a256f5` / `01d411ea` / `0096eb8d` commit history. The tranche's own internal
+identifiers (`_00487_profile`, `pg_temp._00488_references_routine`, exception strings,
+contract-test helper names) were normalized to the new numbers in the same renumber, so
+`00487`/`00488` no longer appear anywhere in the tranche's files. Nothing else in the
+repo referenced them: the remaining `00489` hits belong to `00489_media_registry_kernel.sql`,
+which keeps its number.
 
 ### Drawn from 00494–00497
 

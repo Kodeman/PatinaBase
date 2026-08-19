@@ -11473,3 +11473,99 @@ DO $g$ BEGIN
   REVOKE INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE ON TABLE public.purchase_orders FROM anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.has_designer_domain_role(uuid) FROM PUBLIC, anon, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.has_designer_domain_role(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.create_draft_invoice( uuid, uuid, uuid, uuid, numeric, integer, text, text, jsonb ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_draft_invoice( uuid, uuid, uuid, uuid, numeric, integer, text, text, jsonb ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION app_private.issue_invoice_for_actor(uuid, date, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public._countersign_design_services_agreement_impl(uuid, text, jsonb) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public._execute_furnishings_authorization_on_paper_authorized( uuid, text, date, uuid, uuid, jsonb ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public._execute_trade_scope_on_paper_authorized( uuid, text, date, uuid, uuid ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public._execute_furnishings_authorization_authorized( uuid, text, uuid, text ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public._execute_trade_scope_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.accept_trade_scope_with_trusted_ip(uuid, text, uuid, text), public.begin_proposal_send_provider_attempt(uuid, uuid), public.complete_proposal_send_dispatch(uuid, uuid, text, text, text), public.consume_board_unfurl_quota(uuid), public.execute_furnishings_authorization_with_trusted_ip( uuid, text, uuid, text ), public.execute_trade_scope_with_trusted_ip(uuid, text, uuid, text), public.issue_trade_draw_invoice(uuid), public.notify_decision_overdue(uuid), public.notify_decision_required(uuid), public.notify_decision_resolved(uuid), public.prepare_spec_book_issue( uuid, text[], text, text, uuid, text, jsonb ), public.publish_project_review(jsonb), public.release_proposal_send_dispatch(uuid, uuid, text), public.set_invoice_studio_id(), public.set_project_studio_id(), public.sign_design_services_agreement_with_trusted_ip( uuid, text, uuid, text ), public.suppress_proposal_send_dispatch(uuid, uuid, text) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public._countersign_design_services_agreement_impl(uuid, text, jsonb), public._execute_furnishings_authorization_authorized( uuid, text, uuid, text ), public._execute_furnishings_authorization_on_paper_authorized( uuid, text, date, uuid, uuid, jsonb ), public._execute_trade_scope_authorized(uuid, text, uuid, text), public._execute_trade_scope_on_paper_authorized( uuid, text, date, uuid, uuid ), public._prepare_spec_book_issue_00403( uuid, text[], text, text, uuid, text, jsonb ), public._publish_project_review_00448_impl(jsonb), public.guard_commercial_signature_insert(), app_private.issue_invoice_for_actor(uuid, date, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON FUNCTION public.create_draft_invoice( uuid, uuid, uuid, uuid, numeric, integer, text, text, jsonb ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_draft_invoice( uuid, uuid, uuid, uuid, numeric, integer, text, text, jsonb ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.accept_trade_scope_with_trusted_ip(uuid, text, uuid, text), public.begin_proposal_send_provider_attempt(uuid, uuid), public.complete_proposal_send_dispatch(uuid, uuid, text, text, text), public.consume_board_unfurl_quota(uuid), public.execute_furnishings_authorization_with_trusted_ip( uuid, text, uuid, text ), public.execute_trade_scope_with_trusted_ip(uuid, text, uuid, text), public.notify_decision_overdue(uuid), public.notify_decision_required(uuid), public.notify_decision_resolved(uuid), public.release_proposal_send_dispatch(uuid, uuid, text), public.sign_design_services_agreement_with_trusted_ip( uuid, text, uuid, text ), public.suppress_proposal_send_dispatch(uuid, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.issue_trade_draw_invoice(uuid), public.prepare_spec_book_issue( uuid, text[], text, text, uuid, text, jsonb ), public.publish_project_review(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

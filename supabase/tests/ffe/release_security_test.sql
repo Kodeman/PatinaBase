@@ -13,8 +13,19 @@ INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at
 INSERT INTO public.profiles(id,email,full_name) VALUES
 ('fa000000-0000-4000-8000-000000000001','release-owner@test.invalid','Release Owner'),
 ('fa000000-0000-4000-8000-000000000002','release-client@test.invalid','Release Client') ON CONFLICT DO NOTHING;
-INSERT INTO public.projects(id,name,designer_id,client_id,created_by) VALUES
-('fa100000-0000-4000-8000-000000000001','Release Project','fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000002','fa000000-0000-4000-8000-000000000001');
+-- 00511 makes the design studio the canonical authority for every project:
+-- a studio-less project is no longer a reachable state (prod holds none), and
+-- the designer must be an active non-guest member of an active design_studio
+-- and hold a designer-domain role. Give the fixture that shape.
+INSERT INTO public.organizations(id,name,slug,type,status) VALUES
+('fa400000-0000-4000-8000-000000000001','Release Studio','release-studio','design_studio','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+('fa000000-0000-4000-8000-000000000001','fa400000-0000-4000-8000-000000000001','owner','active');
+INSERT INTO public.user_roles(user_id,role_id,granted_by)
+SELECT 'fa000000-0000-4000-8000-000000000001',role.id,'fa000000-0000-4000-8000-000000000001'
+FROM public.roles AS role WHERE role.name='studio_owner';
+INSERT INTO public.projects(id,name,designer_id,client_id,created_by,studio_id) VALUES
+('fa100000-0000-4000-8000-000000000001','Release Project','fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000002','fa000000-0000-4000-8000-000000000001','fa400000-0000-4000-8000-000000000001');
 INSERT INTO public.vendors(id,name) VALUES('fa200000-0000-4000-8000-000000000001','Release Vendor');
 INSERT INTO public.products(id,name,price_retail,price_trade,images,vendor_id,captured_by,captured_at,layer,status) VALUES
 ('fa300000-0000-4000-8000-000000000001','Release Chair',150000,90000,ARRAY['https://example.invalid/release.jpg'],'fa200000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000001',now(),'catalog','published');

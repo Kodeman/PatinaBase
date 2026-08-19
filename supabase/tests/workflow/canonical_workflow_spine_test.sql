@@ -344,8 +344,23 @@ INSERT INTO public.phase_templates (
 );
 RESET ROLE;
 
+-- 00511 makes the design studio the canonical authority for every project:
+-- a studio-less project is no longer reachable (prod holds none), and the lead
+-- must be an active non-guest member of an active design_studio holding a
+-- designer-domain role.
+INSERT INTO public.organizations (id, name, slug, type, status)
+VALUES ('ed350000-0000-4000-8000-000000000001',
+        'Workflow Studio', 'workflow-studio', 'design_studio', 'active');
+INSERT INTO public.organization_members (user_id, organization_id, role, status)
+VALUES ('ed000000-0000-4000-8000-000000000001',
+        'ed350000-0000-4000-8000-000000000001', 'owner', 'active');
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'ed000000-0000-4000-8000-000000000001', role.id,
+       'ed000000-0000-4000-8000-000000000001'
+FROM public.roles AS role WHERE role.name = 'studio_owner';
+
 INSERT INTO public.projects (
-  id, name, created_by, designer_id, client_id
+  id, name, created_by, designer_id, client_id, studio_id
 )
 VALUES
   (
@@ -353,14 +368,16 @@ VALUES
     'Direct template seed fixture',
     'ed000000-0000-4000-8000-000000000001',
     'ed000000-0000-4000-8000-000000000001',
-    'ed000000-0000-4000-8000-000000000002'
+    'ed000000-0000-4000-8000-000000000002',
+    'ed350000-0000-4000-8000-000000000001'
   ),
   (
     'ed340000-0000-4000-8000-000000000002',
     'Private template isolation fixture',
     'ed000000-0000-4000-8000-000000000001',
     'ed000000-0000-4000-8000-000000000001',
-    'ed000000-0000-4000-8000-000000000002'
+    'ed000000-0000-4000-8000-000000000002',
+    'ed350000-0000-4000-8000-000000000001'
   );
 
 SET LOCAL ROLE authenticated;

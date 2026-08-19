@@ -45,6 +45,16 @@ VALUES
   ('88888888-8888-4888-8888-888888888802', 'dual-pricing-client@test.invalid',   'Dual Pricing Client',   NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+-- 00511 makes the design studio the canonical project authority: an activating
+-- designer must hold a designer-domain role and belong to exactly one active
+-- design_studio (studio-less projects are unreachable; prod holds none).
+-- Granting the role provisions the designer's own studio (00295), mirroring a
+-- real designer's account, so activate_proposal_as_project derives it.
+INSERT INTO user_roles (user_id, role_id, granted_by)
+SELECT '88888888-8888-4888-8888-888888888801', role.id,
+       '88888888-8888-4888-8888-888888888801'
+FROM public.roles AS role WHERE role.name = 'studio_owner';
+
 INSERT INTO designer_clients (id, designer_id, client_id, status)
 VALUES ('dddd0000-0000-4000-8000-000000000001', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'proposal');
 
@@ -80,8 +90,11 @@ VALUES
 
 -- ─── case 1: activation maps dual pricing correctly ──────────────────────────
 
-INSERT INTO proposals (id, designer_id, client_id, title, status, total_amount)
-VALUES ('dddd0000-0000-4000-8000-000000000021', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'Dual Pricing Proposal', 'draft', 310000);
+-- designer_client_id links the proposal to its designer_clients relationship.
+-- 00511 validates that link when activation creates the project (a real
+-- proposal always carries it); the test previously left it NULL.
+INSERT INTO proposals (id, designer_id, client_id, designer_client_id, title, status, total_amount)
+VALUES ('dddd0000-0000-4000-8000-000000000021', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'dddd0000-0000-4000-8000-000000000001', 'Dual Pricing Proposal', 'draft', 310000);
 
 -- Item A: 30% markup — trade 100000, client 130000, qty 2, client total 260000.
 -- Item B: zero markup — trade = client = 50000, qty 1.
@@ -364,8 +377,8 @@ $$;
 -- trade_price_cents = 0 (GREATEST(negative,0)), while unit_price_cents carries
 -- the raw unit_sell_price unclamped (no CHECK on that pre-existing column).
 
-INSERT INTO proposals (id, designer_id, client_id, title, status, total_amount)
-VALUES ('dddd0000-0000-4000-8000-000000000091', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'Negative Markup Proposal', 'draft', 45000);
+INSERT INTO proposals (id, designer_id, client_id, designer_client_id, title, status, total_amount)
+VALUES ('dddd0000-0000-4000-8000-000000000091', '88888888-8888-4888-8888-888888888801', '88888888-8888-4888-8888-888888888802', 'dddd0000-0000-4000-8000-000000000001', 'Negative Markup Proposal', 'draft', 45000);
 
 -- Item with negative markup: trade 50000, markup -10.00, client 45000.
 INSERT INTO proposal_items (id, proposal_id, name, quantity, unit_price, markup_percent, unit_sell_price, line_total_cents, item_type, position)

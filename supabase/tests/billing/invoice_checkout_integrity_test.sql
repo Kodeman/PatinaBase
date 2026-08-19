@@ -54,8 +54,16 @@ VALUES
    'b9700000-0000-4000-8000-000000000003',
    'b9710000-0000-4000-8000-000000000002', 'member', 'active', now());
 
+-- 00511 requires the project lead to hold a designer-domain role, and names
+-- the studio explicitly: this designer belongs to two studios, so canonical
+-- discovery finds two candidates and (by design) derives nothing.
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT 'b9700000-0000-4000-8000-000000000001', role.id,
+       'b9700000-0000-4000-8000-000000000001'
+FROM public.roles AS role WHERE role.name = 'studio_owner';
+
 INSERT INTO public.projects (
-  id, name, designer_id, client_id, created_by, status
+  id, name, designer_id, client_id, created_by, status, studio_id
 )
 VALUES (
   'b9730000-0000-4000-8000-000000000001',
@@ -63,7 +71,8 @@ VALUES (
   'b9700000-0000-4000-8000-000000000001',
   'b9700000-0000-4000-8000-000000000004',
   'b9700000-0000-4000-8000-000000000001',
-  'active'
+  'active',
+  'b9710000-0000-4000-8000-000000000001'
 );
 
 INSERT INTO public.project_payment_milestones (
@@ -312,40 +321,37 @@ $$;
 RESET ROLE;
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_billing_actor('b9700000-0000-4000-8000-000000000003');
-INSERT INTO public.invoices (
-  id, project_id, designer_id, client_id, status,
-  subtotal_cents, total_cents, memo
-)
-VALUES (
-  'b9750000-0000-4000-8000-000000000072',
-  'b9730000-0000-4000-8000-000000000001',
-  'b9700000-0000-4000-8000-000000000003',
-  'b9700000-0000-4000-8000-000000000004',
-  'draft', 6000, 6000, 'contractor-only authority probe'
-);
-
+-- Contractor-only authority probe. …003 belongs to a contractor org that shares
+-- the studio, not to the design_studio itself. 00511's set_invoice_studio_id
+-- rejects a contractor at invoice CREATION (studio_id_not_designer_studio,
+-- P0001) — earlier than the pre-00511 shape, which admitted the draft header
+-- and only refused the milestone line (42501). The contractor is still denied
+-- exact design-studio authority; the gate simply moved one step earlier.
 DO $$
 DECLARE v_state text;
 BEGIN
   BEGIN
-    INSERT INTO public.invoice_line_items (
-      invoice_id, kind, milestone_id, description, quantity,
-      unit_amount_cents, amount_cents, sort_order
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, status,
+      subtotal_cents, total_cents, memo
     ) VALUES (
-      'b9750000-0000-4000-8000-000000000072', 'milestone',
-      'b9740000-0000-4000-8000-000000000009', 'Contractor authority rejection',
-      1, 6000, 6000, 0
+      'b9750000-0000-4000-8000-000000000072',
+      'b9730000-0000-4000-8000-000000000001',
+      'b9700000-0000-4000-8000-000000000003',
+      'b9700000-0000-4000-8000-000000000004',
+      'draft', 6000, 6000, 'contractor-only authority probe'
     );
+    RAISE EXCEPTION 'contractor unexpectedly created a studio invoice';
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
   END;
 
-  ASSERT v_state = '42501',
+  ASSERT v_state = 'P0001',
     'contractor-only shared organization must fail exact design-studio authority';
   ASSERT NOT EXISTS (
-    SELECT 1 FROM public.invoice_line_items
-    WHERE milestone_id = 'b9740000-0000-4000-8000-000000000009'
-  ), 'rejected contractor line must roll back';
+    SELECT 1 FROM public.invoices
+    WHERE id = 'b9750000-0000-4000-8000-000000000072'
+  ), 'rejected contractor invoice must roll back';
 END;
 $$;
 
@@ -355,7 +361,7 @@ BEGIN
   ASSERT (SELECT invoice_id IS NULL
           FROM public.project_payment_milestones
           WHERE id = 'b9740000-0000-4000-8000-000000000009'),
-    'rejected contractor line must not mutate the milestone latch';
+    'rejected contractor invoice must not mutate the milestone latch';
 END;
 $$;
 
@@ -490,12 +496,19 @@ SET search_path = public, pg_temp
 AS $$
   SELECT public.draft_invoice_from_milestone(p_milestone_id);
 $$;
-GRANT EXECUTE ON FUNCTION pg_temp.trusted_milestone_draft(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.trusted_milestone_draft(uuid)
+  TO authenticated, service_role;
 CREATE TEMP TABLE trusted_milestone_draft_result (invoice_id uuid) ON COMMIT DROP;
-GRANT INSERT ON TABLE pg_temp.trusted_milestone_draft_result TO authenticated;
+GRANT INSERT ON TABLE pg_temp.trusted_milestone_draft_result
+  TO authenticated, service_role;
 
-SET LOCAL ROLE authenticated;
-SELECT pg_temp.assume_billing_actor('b9700000-0000-4000-8000-000000000004');
+-- The "trusted outer workflow" is a server-side operation — in prod the deposit
+-- autodraft runs during proposal activation, service-side. 00511's
+-- set_invoice_studio_id requires an authenticated CLIENT to present a
+-- transaction-bound capability (proposal_activation_id / commercial_document_id)
+-- to draft an invoice; a raw trusted draft has none, so it runs as service_role,
+-- which is what the real autodraft path uses.
+SET LOCAL ROLE service_role;
 INSERT INTO pg_temp.trusted_milestone_draft_result (invoice_id)
 SELECT pg_temp.trusted_milestone_draft(
   'b9740000-0000-4000-8000-000000000008'
