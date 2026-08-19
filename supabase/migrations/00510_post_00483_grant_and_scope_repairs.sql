@@ -62,10 +62,18 @@
 --        AND ((assignment_scope = 'room') = (project_room_id IS NOT NULL))).
 --
 -- 00434 also shipped an auto-derivation inside
--- guard_project_ffe_selection_integrity() — 00434:472, verbatim:
+-- guard_project_ffe_selection_integrity() — 00434:465-472, verbatim and
+-- INCLUDING ITS GUARD CONDITION, which matters:
 --
---   NEW.assignment_scope := CASE WHEN NEW.project_room_id IS NULL
---                                THEN 'throughout' ELSE 'room' END;
+--   IF TG_OP = 'INSERT'
+--      AND NEW.assignment_scope = 'unassigned'
+--      AND (NEW.source_proposal_item_id IS NOT NULL
+--           OR NEW.source_authorization_item_id IS NOT NULL
+--           OR NEW.source_decision_id IS NOT NULL)
+--   THEN
+--     NEW.assignment_scope := CASE WHEN NEW.project_room_id IS NULL
+--                                  THEN 'throughout' ELSE 'room' END;
+--   END IF;
 --
 -- 00438 re-created that guard WITHOUT the derivation block (its body now goes
 -- straight from thread resolution to `IF NEW.assignment_scope = 'room' THEN`),
@@ -81,12 +89,73 @@
 -- failure (see the test-suite delta note in the report).
 --
 -- DERIVATION CHOICE — 'throughout', not 'unassigned', for the NULL-room case.
--- That is the value 00434's own auto-derivation chose (line 472 above): the
--- CHECK permits either, but 'unassigned' is the column DEFAULT reserved for a
--- row nobody has scoped yet, while a trade-scope presence line minted by an
--- executed, deposit-paid engagement HAS been scoped — to the project as a
--- whole. Restoring 00434's mapping keeps rows minted before 00438 and rows
--- minted after it indistinguishable, which is what the FF&E readers assume.
+-- THIS IS A NEW PRODUCT DECISION, NOT A RESTORATION. Say so plainly, because
+-- an earlier draft of this header claimed otherwise and the claim was false:
+--
+--   00434's derivation never applied to these rows. It fired only when
+--   assignment_scope was still 'unassigned' AND at least one of
+--   source_proposal_item_id / source_authorization_item_id / source_decision_id
+--   was set. Neither engage_trade_scope nor apply_scope_change sets any of the
+--   three. So even before 00438 removed the block, a room-scoped section still
+--   failed (the derivation was skipped, and the CHECK rejected the row) and a
+--   room-less one was still filed 'unassigned'. There is no earlier behavior
+--   for 'throughout' to restore, and no pre/post-00438 equivalence to preserve.
+--
+-- 00434:472 is therefore cited below as PRECEDENT for the mapping, not as
+-- authority for it: it is the value Patina's own schema author picked for a
+-- room-less FF&E row the last time anyone made this choice explicitly.
+--
+-- The choice on the merits: the CHECK permits 'throughout' or 'unassigned' for
+-- a room-less row. 'unassigned' is the column DEFAULT, and every consumer reads
+-- it as "nobody has routed this yet" — an inbox state. A presence line minted
+-- by an executed, deposit-paid trade-scope engagement, or a line minted by an
+-- approved scope-change amendment, HAS been routed: the studio wrote a section
+-- or an amendment with no room because the work is project-wide. Filing that as
+-- 'unassigned' would be recording a decision as an omission.
+--
+-- OBSERVABLE CONSEQUENCE OF THE NULL-ROOM BRANCH. Unlike the room branch (which
+-- only converts a hard failure into a success), the room-less branch changes a
+-- value on a path that WORKS today: 'unassigned' → 'throughout'. Verified
+-- consumers of that difference:
+--
+--   • public.get_project_ffe_readiness (head 00445:35) tests
+--     `(v_rule = 'room' AND v_item.assignment_scope = 'unassigned')` and appends
+--     'room' to the missing list. 'throughout' satisfies the rule; 'unassigned'
+--     blocks it. What that gates is FURNISHINGS RELEASE / AUTHORIZATION —
+--     _create_furnishings_authorization_from_schedule_impl raises
+--     'schedule line % is not ready for authorization: %' (00445:116-121), and
+--     the portal disables "Release for authorization"
+--     (authorization-derivation.ts:313). It does NOT gate Spec Book Issue:
+--     prepare_spec_book_issue / finalize_spec_book_issue never call readiness
+--     and 00380 contains no reference to assignment_scope. (An earlier draft of
+--     this note said Spec Book Issue; that was wrong.) The rule also only
+--     applies when the project has a spec book whose template lists 'room' in
+--     required_field_rules->'fixed' (00445:24-30); the seeded residential v1
+--     template does (00380:781).
+--
+--   • The Desk nudge "Route the oldest Unsorted selection"
+--     (project-mood-boards.tsx:161-171) filters
+--     `row.assignment_scope === 'unassigned'`. These lines stop raising it.
+--
+--   • The FF&E schedule renders the row under "Throughout" instead of
+--     "Unsorted" (ffe-section.tsx:1263,1282; line-unfold.tsx:490-491), and the
+--     group-count string shifts (ffe-section.tsx:965-968).
+--
+--   • public.place_product_in_project_v2's reuse key (00439:302) matches on
+--     `item.assignment_scope = COALESCE(NULLIF(p_request->>'assignmentScope',''),
+--     'unassigned')`. A 'throughout' line no longer matches a later placement
+--     of the same product that sends no explicit scope, so that placement mints
+--     a NEW line instead of reusing this one. This is the one consequence that
+--     is not purely presentational, and it is the intended reading: a
+--     project-wide trade-scope presence line is not the row a subsequent
+--     product placement should silently fold itself into.
+--
+-- MEASURED PROD EXPOSURE: ZERO. Read-only against Strata 2026-08-19 —
+-- 0 engaged trade scopes (trade_scope_terms.progress_state <> 'none'),
+-- 0 applied scope changes (scope_change_requests.applied_at IS NOT NULL),
+-- 0 FF&E items carrying a trade_scope_document_id, 25 project_ffe_items total.
+-- No existing row changes value; this decides the value of rows minted from
+-- here on. The value is kept deliberately, not by default.
 --
 -- ── S3 · public.apply_scope_change(uuid) ────────────────────────────────────
 -- HIGH, reachable. Lineage: 00084 → 00253 → 00395 → 00510.
@@ -333,7 +402,9 @@ BEGIN
     -- 00510: assignment_scope is explicit. 00438 dropped 00434's auto-derivation
     -- from guard_project_ffe_selection_integrity(), so the 'unassigned' column
     -- default paired with a non-NULL project_room_id is now a hard rejection.
-    -- The mapping restores 00434:472 exactly.
+    -- Mapping per the header's DERIVATION CHOICE note: 'room' when the
+    -- section names one, else 'throughout'. 00434:472 is precedent for the
+    -- pairing, not authority — its derivation never reached these rows.
     INSERT INTO public.project_ffe_items (
       project_id, project_room_id, name, ffe_category, item_type, status,
       quantity, unit_price_cents, line_total_cents,
@@ -418,7 +489,7 @@ BEGIN
   IF position(
        'CASE WHEN v_section.project_room_id IS NOT NULL THEN ''room'' ELSE ''throughout'' END'
        IN v_src) = 0 THEN
-    RAISE EXCEPTION '00510 S2: engage_trade_scope is missing the 00434:472 derivation';
+    RAISE EXCEPTION '00510 S2: engage_trade_scope is missing the room/throughout derivation';
   END IF;
   IF NOT has_function_privilege('authenticated', 'public.engage_trade_scope(uuid,jsonb)', 'EXECUTE') THEN
     RAISE EXCEPTION '00510 S2: authenticated lost EXECUTE on engage_trade_scope';
@@ -605,7 +676,7 @@ BEGIN
       v_unit_price_cents * v_quantity
     );
 
-    -- 00510: assignment_scope is explicit, same reason and same 00434:472
+    -- 00510: assignment_scope is explicit, same reason and same room/throughout
     -- mapping as engage_trade_scope above.
     INSERT INTO public.project_ffe_items (
       project_id,
@@ -693,7 +764,7 @@ BEGIN
   IF position(
        'CASE WHEN v_project_room_id IS NOT NULL THEN ''room'' ELSE ''throughout'' END'
        IN v_src) = 0 THEN
-    RAISE EXCEPTION '00510 S3: apply_scope_change is missing the 00434:472 derivation';
+    RAISE EXCEPTION '00510 S3: apply_scope_change is missing the room/throughout derivation';
   END IF;
   IF NOT has_function_privilege('authenticated', 'public.apply_scope_change(uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION '00510 S3: authenticated lost EXECUTE on apply_scope_change';

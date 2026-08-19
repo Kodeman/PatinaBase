@@ -4,9 +4,15 @@
 -- 00434 added project_ffe_items.assignment_scope (DEFAULT 'unassigned') with
 --   CHECK (assignment_scope IN ('room','throughout','unassigned')
 --          AND ((assignment_scope = 'room') = (project_room_id IS NOT NULL)))
--- and, in guard_project_ffe_selection_integrity(), an auto-derivation:
---   NEW.assignment_scope := CASE WHEN NEW.project_room_id IS NULL
---                                THEN 'throughout' ELSE 'room' END;   (00434:472)
+-- and, in guard_project_ffe_selection_integrity(), a NARROWLY GATED
+-- auto-derivation (00434:465-472) — the gate is the part that matters:
+--   IF TG_OP = 'INSERT' AND NEW.assignment_scope = 'unassigned'
+--      AND (NEW.source_proposal_item_id IS NOT NULL
+--           OR NEW.source_authorization_item_id IS NOT NULL
+--           OR NEW.source_decision_id IS NOT NULL) THEN
+--     NEW.assignment_scope := CASE WHEN NEW.project_room_id IS NULL
+--                                  THEN 'throughout' ELSE 'room' END;
+--   END IF;
 --
 -- 00438 re-created that guard WITHOUT the derivation. Every writer now has to
 -- set the column, and two shipped RPCs did not:
@@ -14,13 +20,28 @@
 --   public.apply_scope_change(uuid)          00084 → 00253 → 00395
 -- Both insert project_ffe_items with a non-NULL project_room_id and no
 -- assignment_scope, so a room-scoped section/amendment hard-failed with
--- 'non-room assignment cannot carry a room'. 00510 restores 00434's mapping
--- inside both bodies.
+-- 'non-room assignment cannot carry a room'. 00510 sets the column explicitly
+-- inside both bodies: 'room' when a room is named, else 'throughout'.
+--
+-- NOTE ON 00434:472. It is cited here as PRECEDENT for the room/throughout
+-- pairing, not as behavior being restored. 00434's derivation was gated on
+-- assignment_scope='unassigned' AND a source_* column being set (00434:465-471);
+-- neither RPC sets a source_* column, so these rows were never auto-derived.
+-- The 'throughout' choice is a product decision — see 00510's header.
 --
 -- Sections (3) and (5) are the discriminators: each reconstructs the pre-00510
--- body from the live definition by removing exactly the two 00510 lines, and
--- proves the failure comes back. A suite that only ran the happy path would be
--- green against a body that set assignment_scope to any constant.
+-- body from the live definition by removing exactly the two 00510 lines,
+-- INSTALLS it, calls the real RPC, and proves the failure comes back. A suite
+-- that only ran the happy path would be green against a body that set
+-- assignment_scope to any constant.
+--
+-- Both RPCs are covered end to end here, executing: apply_scope_change in (2)/
+-- (3)/(4) and engage_trade_scope in (5)/(6). engage_trade_scope's fuller
+-- ceremony (create → execute → deposit → engage through the real RPC chain)
+-- lives in supabase/tests/commercial/trade_scope_test.sql, but that file is
+-- allowlisted in KNOWN_FAILURES.md for an unrelated readiness-gate residual and
+-- therefore does not gate CI — which is why the coverage is duplicated here in
+-- a file that does.
 --
 -- Run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
@@ -103,6 +124,56 @@ INSERT INTO public.scope_change_requests (
    'approved', now(), now(), 0, 0, 0,
    '[]'::jsonb,
    '[{"project_room_id":"52200000-0000-4000-8000-000000000001","name":"Reverted probe","ffeCategory":"Seating","itemType":"allowance","quantity":1,"unitPriceCents":1000}]'::jsonb);
+
+-- ── Trade-scope engagement fixture ────────────────────────────────────────
+-- Enough state for engage_trade_scope to run for real. `status` stays 'draft'
+-- so guard_commercial_authored_child / guard_trade_scope_terms allow the child
+-- rows to be seeded; `commercial_state` is 'executed', which is the column the
+-- RPC actually reads. The RPC never inspects proposals.status.
+--
+-- Two sections on purpose — one naming a room, one not — so a single engage
+-- call exercises BOTH branches of the 00510 derivation.
+INSERT INTO public.proposals (
+  id, designer_id, client_id, title, document_kind, commercial_state, status, project_id
+) VALUES (
+  '52400000-0000-4000-8000-000000000001',
+  '52000000-0000-4000-8000-000000000001',
+  '52000000-0000-4000-8000-000000000002',
+  'Study millwork', 'trade_scope', 'executed', 'draft',
+  '52100000-0000-4000-8000-000000000001'
+);
+
+INSERT INTO public.trade_scope_terms (proposal_id, client_price_cents, progress_state)
+VALUES ('52400000-0000-4000-8000-000000000001', 900000, 'none');
+
+INSERT INTO public.trade_scope_sections (
+  proposal_id, project_room_id, prose, allocation_cents, sort_order
+) VALUES
+  ('52400000-0000-4000-8000-000000000001',
+   '52200000-0000-4000-8000-000000000001', 'Study millwork prose', 600000, 0),
+  ('52400000-0000-4000-8000-000000000001',
+   NULL, 'Whole-house punch list', 300000, 1);
+
+INSERT INTO public.invoices (
+  id, project_id, designer_id, status, invoice_number, paid_at,
+  total_cents, amount_paid_cents
+) VALUES (
+  '52500000-0000-4000-8000-000000000001',
+  '52100000-0000-4000-8000-000000000001',
+  '52000000-0000-4000-8000-000000000001',
+  'paid', 'TS-DEP-0001', now(), 360000, 360000
+);
+
+INSERT INTO public.project_commercial_documents (
+  id, project_id, proposal_id, document_kind, executed_at, deposit_invoice_id, created_by
+) VALUES (
+  '52600000-0000-4000-8000-000000000001',
+  '52100000-0000-4000-8000-000000000001',
+  '52400000-0000-4000-8000-000000000001',
+  'trade_scope', now(),
+  '52500000-0000-4000-8000-000000000001',
+  '52000000-0000-4000-8000-000000000001'
+);
 
 CREATE OR REPLACE FUNCTION pg_temp.assume(p_actor uuid)
 RETURNS void
@@ -242,29 +313,21 @@ BEGIN
   ASSERT FOUND, 'the room-less amendment must have minted its line';
   ASSERT v_item.project_room_id IS NULL, 'the room-less line must carry no room';
   ASSERT v_item.assignment_scope = 'throughout',
-    format('a room-less amendment line must be filed throughout (00434:472), got %L',
+    format('a room-less amendment line must be filed throughout, got %L',
            v_item.assignment_scope);
 END $$;
 
--- ── (5) ANTI-VACUITY for engage_trade_scope ───────────────────────────────
--- The full engagement ceremony (executed scope + paid deposit) is exercised by
--- supabase/tests/commercial/trade_scope_test.sql section (6); here we only pin
--- that the 00510 delta is present verbatim and load-bearing — the reverted
--- body's INSERT is the shape section (1) just proved the guard rejects.
+-- ── (5) ANTI-VACUITY for engage_trade_scope — the old body, EXECUTED ──────
+-- Installs the pre-00510 body and calls the real RPC. This must run before
+-- section (6): engagement is idempotent, so a scope already engaged would make
+-- the reverted body mint nothing and the failure would not reproduce.
+SAVEPOINT pre_00510_engage;
+
 DO $$
 DECLARE
-  v_def      text := pg_get_functiondef('public.engage_trade_scope(uuid,jsonb)'::regprocedure);
   v_reverted text;
+  v_err      text;
 BEGIN
-  ASSERT position(
-    E'      trade_scope_document_id,\n      assignment_scope\n    ) VALUES (' IN v_def) <> 0,
-    'engage_trade_scope must name assignment_scope in its project_ffe_items column list';
-  ASSERT position(
-    E'      CASE WHEN v_section.project_room_id IS NOT NULL THEN ''room'' ELSE ''throughout'' END' IN v_def) <> 0,
-    'engage_trade_scope must carry the 00434:472 derivation verbatim';
-
-  -- Proves both anchors bite and that removing them leaves a body with no
-  -- mention of the column at all.
   v_reverted := pg_temp.revert_00510(
     'public.engage_trade_scope(uuid,jsonb)',
     E'      trade_scope_document_id,\n      assignment_scope\n    ) VALUES (',
@@ -272,10 +335,62 @@ BEGIN
     E'      v_document.id,\n      CASE WHEN v_section.project_room_id IS NOT NULL THEN ''room'' ELSE ''throughout'' END\n    );',
     E'      v_document.id\n    );'
   );
-  ASSERT v_reverted <> v_def, 'the revert must have changed the body';
+  EXECUTE v_reverted;
+
+  PERFORM pg_temp.assume('52000000-0000-4000-8000-000000000001');
+  BEGIN
+    PERFORM public.engage_trade_scope('52400000-0000-4000-8000-000000000001');
+    ASSERT false,
+      'the pre-00510 engage_trade_scope body must fail on a room-scoped section';
+  EXCEPTION WHEN check_violation THEN
+    v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'non-room assignment cannot carry a room',
+    format('pre-00510 engage_trade_scope failure message: %L', v_err);
 END $$;
 
--- ── (6) Both RPCs keep their authorization posture ────────────────────────
+ROLLBACK TO SAVEPOINT pre_00510_engage;
+
+-- ── (6) engage_trade_scope mints both scopes correctly ────────────────────
+-- One call, both branches: the room-scoped section lands 'room' with its room,
+-- the room-less section lands 'throughout' with no room. Before 00510 this RPC
+-- could not complete at all when any section named a room.
+DO $$
+DECLARE
+  v_engaged jsonb;
+  v_room    public.project_ffe_items%ROWTYPE;
+  v_whole   public.project_ffe_items%ROWTYPE;
+BEGIN
+  PERFORM pg_temp.assume('52000000-0000-4000-8000-000000000001');
+  v_engaged := public.engage_trade_scope('52400000-0000-4000-8000-000000000001');
+
+  ASSERT (v_engaged->>'newlyEngaged')::boolean, 'first engagement must be new';
+  ASSERT (v_engaged->>'presenceLineCount')::integer = 2,
+    format('one presence line per section, got %s', v_engaged->>'presenceLineCount');
+
+  SELECT * INTO v_room FROM public.project_ffe_items
+  WHERE trade_scope_document_id = '52600000-0000-4000-8000-000000000001'
+    AND project_room_id = '52200000-0000-4000-8000-000000000001';
+  ASSERT FOUND, 'the room-scoped section must have minted a presence line';
+  ASSERT v_room.assignment_scope = 'room',
+    format('a room-scoped section must be filed room, got %L', v_room.assignment_scope);
+
+  SELECT * INTO v_whole FROM public.project_ffe_items
+  WHERE trade_scope_document_id = '52600000-0000-4000-8000-000000000001'
+    AND project_room_id IS NULL;
+  ASSERT FOUND, 'the room-less section must have minted a presence line';
+  ASSERT v_whole.assignment_scope = 'throughout',
+    format('a room-less section must be filed throughout, not the unassigned default, got %L',
+           v_whole.assignment_scope);
+
+  -- The allocations still ride the sections, so the fix did not disturb the
+  -- one-price invariant the trade-scope rail depends on.
+  ASSERT (SELECT sum(line_total_cents) FROM public.project_ffe_items
+          WHERE trade_scope_document_id = '52600000-0000-4000-8000-000000000001') = 900000,
+    'presence lines must still sum to the client price';
+END $$;
+
+-- ── (7) Both RPCs keep their authorization posture ────────────────────────
 DO $$
 BEGIN
   ASSERT has_function_privilege('authenticated', 'public.engage_trade_scope(uuid,jsonb)', 'EXECUTE'),

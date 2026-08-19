@@ -84,7 +84,7 @@ deeper* assertion, unrelated to the fixture bug:
 - `supabase/tests/commercial/design_services_authority_test.sql` — same `designDisposition` readiness-gate failure, same function.
 - `supabase/tests/commercial/executed_on_paper_test.sql` — same `designDisposition` readiness-gate failure, same function.
 - `supabase/tests/commercial/design_services_gap_hardening_test.sql` — `legacy release blocked by the wrong guard: 'schedule line ... is not ready for authorization: ["designDisposition"]'` — same family; the test's own message implies it already suspects a guard-ordering regression.
-- `supabase/tests/commercial/trade_scope_test.sql` — MOVED here from Group 2 by `00510`. Its Group 2 cause (`non-room assignment cannot carry a room`, raised inside `public.engage_trade_scope` itself, which inserted `project_ffe_items` without `assignment_scope`) is fixed: 00510 restored 00434:472's derivation into the RPC body, and the file now runs through the whole engagement ceremony — including a new assertion that both room-scoped presence lines are filed `assignment_scope = 'room'`. It now fails ~320 lines later at `schedule line ... is not ready for authorization: ["designDisposition"]`, the same readiness-gate family as the four above.
+- `supabase/tests/commercial/trade_scope_test.sql` — MOVED here from Group 2 by `00510`. Its Group 2 cause (`non-room assignment cannot carry a room`, raised inside `public.engage_trade_scope` itself, which inserted `project_ffe_items` without `assignment_scope`) is fixed: 00510 set `assignment_scope` explicitly in the RPC body, and the file now runs through the whole engagement ceremony — including a new assertion that both room-scoped presence lines are filed `assignment_scope = 'room'`. It now fails ~320 lines later at `schedule line ... is not ready for authorization: ["designDisposition"]`, the same readiness-gate family as the four above.
 
 Un-related residuals, each a genuine assertion failure whose root cause
 (a later migration changing a guard, a policy count, or an ordering) was
@@ -110,7 +110,7 @@ live allowlist entry and re-suppress a file that is now green.
 The file `document/client_scope_change_request_test.sql` was a Group 2 entry
 (`non-room assignment cannot carry a room`, raised inside
 `public.apply_scope_change`). `00510_post_00483_grant_and_scope_repairs.sql` §S3
-grafted 00434:472's `assignment_scope` derivation into the RPC body. That file
+set `assignment_scope` explicitly in the RPC body. That file
 is now **green** end to end and carries no entry.
 
 Two other Group 2 entries had their stated root cause closed by 00510 but are

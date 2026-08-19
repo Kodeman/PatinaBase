@@ -142,6 +142,74 @@
 --   NOT re-measured against prod as part of this ruling and stay unregistered
 --   pending that check.
 --
+--   EVENT 5 — 2026-08-19. ONE EVENT 2 ROW RETIRED: ITS BASIS WAS WRONG.
+--   `storage.objects."Project members can read documents"` was signed in EVENT 2
+--   with the same boilerplate as its 14 siblings: "Already narrow: the predicate
+--   binds the caller identity, so the {public} role list is cosmetic." For this
+--   one policy that sentence was FALSE, and the registry row is deleted rather
+--   than re-worded.
+--
+--   The predicate does bind the caller — every leg needs auth.uid(). What the
+--   EVENT 2 characterization missed is that binding the caller in the PREDICATE
+--   does not make the ROLE LIST cosmetic when the predicate calls a routine the
+--   role cannot execute. This policy calls
+--   `public.is_project_team_member(uuid,uuid)`, on which `anon` holds no
+--   EXECUTE. Postgres resolves a policy's function EXECUTE permissions at
+--   executor-init, for the whole set of policies applying to the caller's role,
+--   BEFORE any predicate — including the `bucket_id` conjunct — is evaluated.
+--   So the {public} role list was not cosmetic: it dragged this policy into
+--   every `anon` query against storage.objects and made all of them raise
+--   `permission denied for function is_project_team_member` (42501), for EVERY
+--   bucket, not just project-documents. Measured on prod and on a clean local
+--   replay; reproduced by flipping the policy back to TO PUBLIC, which returns
+--   `supabase/tests/mood_boards/share_security_test.sql` to that exact error.
+--
+--   `00510_post_00483_grant_and_scope_repairs.sql` §S1 FIXED it — the policy is
+--   now `TO authenticated` with its predicate byte-identical (deparse md5
+--   e10021cd4fcbc1c9fdbcf143797340e6 asserted equal across the drop/recreate).
+--   Per EVENT 3's rule for pg_stat_statements ("NOT registered because they are
+--   FIXED, not accepted ... a registry row would have recorded permanent
+--   acceptance of something now closed"), the row is retired, not amended. Its
+--   `body_hash` pin is retired with it.
+--
+--   Two things this should change about how the remaining rows are read:
+--
+--     • A `body_hash` pin could never have caught this. body_hash covers
+--       `cmd || qual || with_check`; the role list is not in it. Content pinning
+--       protects against a predicate being widened, not against a role list
+--       being wrong in the first place.
+--
+--     • The other 14 EVENT 2 storage rows carry the identical "role list is
+--       cosmetic" sentence and were signed by the same reasoning that failed
+--       here, so the whole class was re-measured read-only against prod
+--       (bkvcixdmuyejfzcijpdg) on 2026-08-19: every {public} policy on
+--       storage.objects, joined against the `public` routines its predicate
+--       names, filtered to those `anon` cannot execute. Exactly FOUR policies
+--       have the defect shape, and three of them survive this event:
+--
+--         Project members can read documents        SELECT  is_project_team_member  ← fixed by 00510
+--         Org admins manage studio logos (insert)   INSERT  is_org_admin_or_owner
+--         Org admins manage studio logos (update)   UPDATE  is_org_admin_or_owner
+--         Org admins manage studio logos (delete)   DELETE  is_org_admin_or_owner
+--
+--       The studio-logo trio is the SAME defect but a much smaller one, and it
+--       is deliberately NOT fixed here. They are write policies: an `anon`
+--       INSERT/UPDATE/DELETE against storage.objects hits the same
+--       executor-init EXECUTE check and raises 42501 naming an internal routine
+--       instead of being refused cleanly by RLS. The request is denied either
+--       way, so this is an error-shape and information-disclosure wart, not a
+--       functional break — unlike the SELECT case above, which broke every
+--       `anon` read of every bucket. Narrowing them TO authenticated is the
+--       same one-line change and wants its own migration and its own ruling;
+--       00510 stayed scoped to the reachable read defect. The remaining 11
+--       EVENT 2 storage rows name no `public` routine `anon` cannot execute,
+--       so for them the EVENT 2 sentence holds.
+--
+--       00510 §S1 asserts only the narrower postcondition it owns: that no
+--       PUBLIC policy on storage.objects still calls `is_project_team_member`.
+--       It deliberately does not assert the general property, because the
+--       studio-logo trio would fail it.
+--
 -- The practical consequence: a change that would move a row out of event 2's
 -- characterization — an extension shipping a SECURITY DEFINER routine, or
 -- `anon` losing USAGE on `public` so these stop being reachable at all —
@@ -603,8 +671,12 @@ VALUES
    'Census section E — UPDATE policy with role list {public} on a public bucket. Already narrow: the predicate binds the caller identity, so the {public} role list is cosmetic.', 'kody', DATE '2026-08-17'),
   ('storage', 'storage.objects."Product images are publicly accessible"', 'supabase_storage_admin', 'storage_policy',
    'Census section E — SELECT policy with role list {public} on a public bucket. Unconditional read on a bucket already served unauthenticated over the CDN, so the policy adds no exposure beyond the bucket flag.', 'kody', DATE '2026-08-17'),
-  ('storage', 'storage.objects."Project members can read documents"', 'supabase_storage_admin', 'storage_policy',
-   'Census section E — SELECT policy with role list {public} on a private bucket. Already narrow: the predicate binds the caller identity, so the {public} role list is cosmetic.', 'kody', DATE '2026-08-17'),
+  -- RETIRED 2026-08-19 (EVENT 5) — storage.objects."Project members can read
+  -- documents" stood here signed as cosmetic. It was not. See EVENT 5 above:
+  -- 00510 narrowed it TO authenticated, so the policy no longer carries
+  -- `public` in its role list and invariant C never reaches it. The row is
+  -- deleted rather than re-worded, per EVENT 3's rule that a FIXED finding must
+  -- not keep a registry row recording permanent acceptance of something closed.
   ('storage', 'storage.objects."Proposal assets are publicly readable"', 'supabase_storage_admin', 'storage_policy',
    'Census section E — SELECT policy with role list {public} on a public bucket. Unconditional read on a bucket already served unauthenticated over the CDN, so the policy adds no exposure beyond the bucket flag.', 'kody', DATE '2026-08-17'),
   ('storage', 'storage.objects."Public read access for hero frames"', 'supabase_storage_admin', 'storage_policy',
@@ -702,7 +774,10 @@ UPDATE public_acl_exception_registry AS r
       ('storage.objects."Org admins manage studio logos (insert)"', '82ed32d7323f477e5ae7dcb04543bd8c92aab6f561ff6cfc0cda81f298fee24e'),
       ('storage.objects."Org admins manage studio logos (update)"', 'ba10f6e806faf4f70b8ed9ad385d3e419d9c4a12b379d60bf73fe271efa8a9df'),
       ('storage.objects."Product images are publicly accessible"', '374dbe9ac0e555e8d4a8667f99cd5df03c70d717cc9dd21848d4dd2c7dbbe246'),
-      ('storage.objects."Project members can read documents"', '06aa6543aa5a892022ba2c6c1da917eb1c63d01199c539817f25a9d0bc846cb0'),
+      -- RETIRED 2026-08-19 (EVENT 5) alongside its registry row above; this pin
+      -- had no row left to update. The hash itself never went stale — body_hash
+      -- covers cmd || qual || with_check and 00510 changed only the role list —
+      -- which is precisely why a content pin could not have caught this.
       ('storage.objects."Proposal assets are publicly readable"', '5ccf3710ec7d8a716cbb513d660d38636330fa7819b5280edc087d59bcaec300'),
       ('storage.objects."Public read access for hero frames"', '1dc34f457a4d028a43d28a4d9c59180a6847e20787f475c7f5a1c9c4d5604bb3'),
       ('storage.objects."Studio logos are publicly readable"', '56d276ca1255f6126bd5a8bbb6478a39e622489cf052b552236185839a3f5f07'),
