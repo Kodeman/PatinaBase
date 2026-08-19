@@ -201,6 +201,55 @@ no repair entry.
 ```
 
 `00487`, `00488`, `00494`–`00497`, and `00500`–`00509` have no files on `main`
-and are correctly absent. **This push was NOT executed** — the agreed scope
-authorized 00493 + 00510 only, and 00485's appearance is a scope change awaiting
-Kody's ruling.
+and are correctly absent.
+
+### Catch-up applied (2026-08-19)
+
+All three files were already live on **prod**, so the push brought staging to
+prod's existing posture rather than shipping anything new. Applied with
+`supabase db push --include-all` from the staging-linked worktree:
+
+```
+Applying migration 00485_moodboard_storage_caller_binding.sql...
+Applying migration 00493_svc_shape_resolving_function_bodies.sql...
+Applying migration 00510_post_00483_grant_and_scope_repairs.sql...
+```
+
+A plain `supabase db push --dry-run` afterwards reports
+`{"upToDate":true,"migrations":[]}` — once nothing sorts below the remote head,
+the `--include-all` requirement disappears. **Staging's ledger now matches the
+repository exactly.**
+
+Post-apply probes:
+
+| Probe                                                                                | Result                                                                                                 |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| 00485 `can_client_read_issued_board_media`                                           | present                                                                                                |
+| 00485 mood-board policy                                                              | `roles={authenticated}`, calls the helper                                                              |
+| 00493 `record_project_ffe_receipt_batch` / `get_outbox_events` / `get_outbox_counts` | all present, all `to_regclass`-resolving                                                               |
+| 00510 S1 `Project members can read documents`                                        | `roles={authenticated}`                                                                                |
+| 00510 S4 anon ACLs                                                                   | `anon=rm` on organizations, project_ffe_items, project_phases, purchase_orders — **identical to prod** |
+| 00510 S2/S3 `engage_trade_scope` / `apply_scope_change`                              | bodies updated                                                                                         |
+
+00510's own embedded verify blocks (which `RAISE EXCEPTION` on a wrong policy
+predicate, wrong roles, or a surviving PUBLIC policy) all passed as a condition
+of the migration applying.
+
+### ⚠ Known residual: `anon` EXECUTE on 00485's helper
+
+Staging grants `anon` EXECUTE on
+`public.can_client_read_issued_board_media(text)`; **prod does not**.
+
+Cause: `pg_default_acl` for functions owned by `postgres` auto-grants
+`anon=X`. 00485's file says only `REVOKE ALL … FROM PUBLIC`, which does **not**
+remove an explicit per-role `anon` grant. Prod escaped this because its 00485
+went in as a standalone hotfix paired with an explicit anon-execute revoke.
+**Any environment that applies 00485 from the file alone inherits the anon
+grant** — this is a latent defect in the file, not staging-specific drift.
+
+Not exploitable: the helper opens with `auth.uid() IS NOT NULL`, so it returns
+`false` for anon (verified by direct call), and the mood-board policy is
+`TO authenticated`, so anon never reaches it. Left **unfixed on purpose** — an
+ad-hoc `execute_sql` revoke would recreate exactly the out-of-band-DDL problem
+this section exists to prevent. Closing it properly means adding an explicit
+`REVOKE … FROM anon` to a numbered migration.
