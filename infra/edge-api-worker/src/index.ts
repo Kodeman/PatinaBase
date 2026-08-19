@@ -31,6 +31,7 @@ import {
   signUploadPut,
   UploadMismatchError,
   UploadNotFoundError,
+  UploadQuotaExceededError,
   UploadRequestError,
   UploadUnauthorizedError,
   type ConfirmedUpload,
@@ -607,6 +608,13 @@ function uploadErrorResponse(
       409,
       traceId,
     );
+  }
+  if (error instanceof UploadQuotaExceededError) {
+    // Operationally worth seeing: a caller tripping this repeatedly is either
+    // a buggy client retrying past a permanent rejection or an attempted
+    // abuse of the interface — either way it is not a 5xx and not silent.
+    logUploadFailure(dependencies, traceId, stage, 429);
+    return privateJson({ error: 'upload_quota_exceeded' }, 429, traceId);
   }
   logUploadFailure(dependencies, traceId, stage, 503);
   return privateJson({ error: 'media_upload_unavailable' }, 503, traceId);

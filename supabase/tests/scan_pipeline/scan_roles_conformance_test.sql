@@ -1038,6 +1038,276 @@ BEGIN
   RAISE NOTICE 'PASS 15d: a confirmed upload row is protected by provenance, not only by its key';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 00501 — upload-intent quota + stale-intent reaper (security-review finding
+--         11: no quota, no per-scan slot cap, no reclamation of orphaned
+--         upload intents)
+--
+--   16. create_media_upload_intent — the 24-pending-per-scan cap.
+--   17. expire_stale_upload_intents — the reaper: stale pending upload-
+--       interface rows only; pipeline rows and fresh rows untouched;
+--       expired_upload_originals surfaces exactly the expired rows.
+--   18. lifecycle_state 'expired' — terminal, resurrection refused via
+--       mark_media_object_state; confirm_media_upload's EXISTING
+--       state-mismatch path (P0413) already covers a confirm attempt,
+--       proven rather than merely asserted; the CHECK constraint itself.
+--   19. Grant surface of expire_stale_upload_intents and
+--       expired_upload_originals, and the pg_cron registration.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ─── 16: create_media_upload_intent — the 24-pending-per-scan cap ──────────
+
+DO $$
+DECLARE
+  cap_scan_id  uuid := 'c1010101-0101-4101-8101-101010101010';
+  intent       jsonb;
+  i            int;
+  freed_id     uuid;
+BEGIN
+  INSERT INTO room_scans (id, user_id, name, status)
+  VALUES (cap_scan_id, 'a1111111-1111-4111-8111-111111111111', 'Cap test scan', 'ready');
+
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', 'a1111111-1111-4111-8111-111111111111', 'role', 'authenticated')::text,
+    true
+  );
+
+  -- Fill the cap exactly: 24 distinct pending intents, same kind, distinct
+  -- filenames — the cap counts PENDING ROWS, not distinct kinds.
+  FOR i IN 1..24 LOOP
+    intent := public.create_media_upload_intent(
+      cap_scan_id, 'mesh', 'mesh-' || i || '.ply',
+      'patina-staging-media-originals-us', repeat('a', 64), 2048,
+      'application/octet-stream'
+    );
+    IF i = 1 THEN
+      freed_id := (intent ->> 'object_id')::uuid;
+    END IF;
+  END LOOP;
+  RAISE NOTICE 'PASS 16a: 24 concurrently-pending intents mint cleanly';
+
+  -- The 25th distinct slot trips the cap, with the dedicated errcode the
+  -- Worker maps to 429.
+  BEGIN
+    PERFORM public.create_media_upload_intent(
+      cap_scan_id, 'mesh', 'mesh-25.ply',
+      'patina-staging-media-originals-us', repeat('a', 64), 2048,
+      'application/octet-stream'
+    );
+    RAISE EXCEPTION 'FAIL 16b: a 25th pending intent was minted past the cap';
+  EXCEPTION
+    WHEN SQLSTATE 'P0416' THEN
+      RAISE NOTICE 'PASS 16b: the 25th pending intent trips the cap (P0416)';
+  END;
+
+  -- A restate of an EXISTING pending slot is NOT gated by the cap — it does
+  -- not consume a new one, and refusing it would break a client correctly
+  -- retrying at the ceiling.
+  intent := public.create_media_upload_intent(
+    cap_scan_id, 'mesh', 'mesh-1.ply',
+    'patina-staging-media-originals-us', repeat('a', 64), 2048,
+    'application/octet-stream'
+  );
+  ASSERT (intent ->> 'object_id')::uuid = freed_id,
+    'FAIL 16c: restating an existing pending slot at the cap must still return that slot''s id';
+  ASSERT NOT (intent ->> 'created')::boolean,
+    'FAIL 16c: restating an existing pending slot at the cap must not report created';
+  RAISE NOTICE 'PASS 16c: a restate of an existing slot is not gated by the cap';
+
+  -- Confirming one existing intent frees a slot — the cap re-reads the LIVE
+  -- pending count on every call, not a monotonic counter.
+  PERFORM public.confirm_media_upload(
+    freed_id, repeat('a', 64), '"' || repeat('9', 32) || '"', 2048
+  );
+  intent := public.create_media_upload_intent(
+    cap_scan_id, 'mesh', 'mesh-25.ply',
+    'patina-staging-media-originals-us', repeat('a', 64), 2048,
+    'application/octet-stream'
+  );
+  ASSERT (intent ->> 'created')::boolean,
+    'FAIL 16d: freeing a pending slot by confirming it must let a new intent mint';
+  RAISE NOTICE 'PASS 16d: the cap tracks the LIVE pending count, not a running total';
+
+  PERFORM set_config('request.jwt.claims', NULL, true);
+END $$;
+
+-- ─── 17: expire_stale_upload_intents — the stale-intent reaper ─────────────
+
+DO $$
+DECLARE
+  reaper_scan_id uuid := 'c2020202-0202-4202-8202-202020202020';
+  stale_upload   uuid;
+  fresh_upload   jsonb;
+  fresh_id       uuid;
+  pipeline_id    uuid;
+  expired_count  int;
+  state          text;
+BEGIN
+  INSERT INTO room_scans (id, user_id, name, status)
+  VALUES (reaper_scan_id, 'a1111111-1111-4111-8111-111111111111', 'Reaper test scan', 'ready');
+
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', 'a1111111-1111-4111-8111-111111111111', 'role', 'authenticated')::text,
+    true
+  );
+
+  -- A stale upload-interface intent: created long ago, still pending.
+  stale_upload := (public.create_media_upload_intent(
+    reaper_scan_id, 'mesh', 'stale.ply',
+    'patina-staging-media-originals-us', repeat('a', 64), 2048, 'application/octet-stream'
+  ) ->> 'object_id')::uuid;
+  UPDATE public.media_objects SET created_at = now() - interval '3 days' WHERE id = stale_upload;
+
+  -- A FRESH upload-interface intent, well inside the TTL: must survive.
+  fresh_upload := public.create_media_upload_intent(
+    reaper_scan_id, 'usdz', 'fresh.usdz',
+    'patina-staging-media-originals-us', repeat('b', 64), 2048, 'model/vnd.usdz+zip'
+  );
+  fresh_id := (fresh_upload ->> 'object_id')::uuid;
+
+  PERFORM set_config('request.jwt.claims', NULL, true);
+
+  -- A PIPELINE row (register_media_object), also stale and pending — must
+  -- never be touched, no matter how old: it carries no
+  -- 'source':'media_upload_intent' provenance, the SAME discriminator
+  -- register_media_object's own P0415 guard (00499) uses.
+  pipeline_id := public.register_media_object(
+    'patina-staging-media-artifacts-us', 'scans/reaper-probe/1/splat.spz',
+    'authenticated_project', p_scan_id => reaper_scan_id
+  );
+  UPDATE public.media_objects SET created_at = now() - interval '3 days' WHERE id = pipeline_id;
+
+  expired_count := public.expire_stale_upload_intents('48 hours'::interval);
+  ASSERT expired_count >= 1,
+    'FAIL 17a: expire_stale_upload_intents must report at least the one stale upload-interface row it expired, got ' || expired_count;
+
+  SELECT lifecycle_state INTO state FROM public.media_objects WHERE id = stale_upload;
+  ASSERT state = 'expired', 'FAIL 17a: the stale upload-interface row must be expired, got ' || state;
+
+  SELECT lifecycle_state INTO state FROM public.media_objects WHERE id = fresh_id;
+  ASSERT state = 'pending', 'FAIL 17b: a fresh (within-TTL) upload-interface row must stay pending, got ' || state;
+
+  SELECT lifecycle_state INTO state FROM public.media_objects WHERE id = pipeline_id;
+  ASSERT state = 'pending', 'FAIL 17c: a pipeline-registered row must never be expired regardless of age, got ' || state;
+  RAISE NOTICE 'PASS 17a/17b/17c: the reaper expires only stale PENDING upload-interface rows, never pipeline rows or fresh ones';
+
+  -- Idempotent: a second sweep with nothing newly stale reports 0.
+  ASSERT public.expire_stale_upload_intents('48 hours'::interval) = 0,
+    'FAIL 17d: a second sweep with nothing newly stale must report 0';
+  RAISE NOTICE 'PASS 17d: a sweep with nothing to expire reports 0';
+
+  -- The seam view surfaces exactly the expired row, and only it — this is
+  -- what a future R2 cleanup job would read; deletion itself is out of scope.
+  ASSERT EXISTS (SELECT 1 FROM public.expired_upload_originals WHERE id = stale_upload),
+    'FAIL 17e: expired_upload_originals must list the expired row';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.expired_upload_originals WHERE id = fresh_id),
+    'FAIL 17e: expired_upload_originals must not list a still-pending row';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.expired_upload_originals WHERE id = pipeline_id),
+    'FAIL 17e: expired_upload_originals must not list an untouched pipeline row';
+  RAISE NOTICE 'PASS 17e: expired_upload_originals surfaces exactly the expired rows';
+END $$;
+
+-- ─── 18: lifecycle_state 'expired' — terminal, resurrection refused ────────
+
+DO $$
+DECLARE
+  target uuid;
+  moved  boolean;
+BEGIN
+  SELECT id INTO target FROM public.media_objects WHERE lifecycle_state = 'expired' LIMIT 1;
+  ASSERT target IS NOT NULL, 'FAIL 18: expected an expired fixture row from section 17';
+
+  -- 18a: mark_media_object_state refuses to move an expired row anywhere,
+  -- including back to pending (resurrection) and forward to deleted. Tracked
+  -- via a boolean rather than a bare EXCEPTION-block catch, so a silent
+  -- (non-raising) success cannot be mistaken for a refusal.
+  moved := true;
+  BEGIN
+    PERFORM public.mark_media_object_state(target, 'pending');
+  EXCEPTION WHEN OTHERS THEN
+    moved := false;
+  END;
+  ASSERT NOT moved, 'FAIL 18a: an expired row was resurrected to pending with no exception raised';
+  ASSERT (SELECT lifecycle_state FROM public.media_objects WHERE id = target) = 'expired',
+    'FAIL 18a: the row must remain expired after the refused resurrection';
+
+  moved := true;
+  BEGIN
+    PERFORM public.mark_media_object_state(target, 'deleted');
+  EXCEPTION WHEN OTHERS THEN
+    moved := false;
+  END;
+  ASSERT NOT moved, 'FAIL 18a: an expired row was moved to deleted with no exception raised';
+  ASSERT (SELECT lifecycle_state FROM public.media_objects WHERE id = target) = 'expired',
+    'FAIL 18a: the row must remain expired — deleted must not reach it either';
+  RAISE NOTICE 'PASS 18a: expired is terminal — mark_media_object_state refuses every move off it';
+
+  -- 18b: confirm_media_upload refuses an expired row through the SAME
+  -- state-mismatch path (P0413) a stored/verified row already gets. This is
+  -- 00498/00499's EXISTING "lifecycle_state <> 'pending'" branch — 00501
+  -- changes nothing about confirm_media_upload, and this proves that claim
+  -- rather than merely asserting it in the migration header.
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', 'a1111111-1111-4111-8111-111111111111', 'role', 'authenticated')::text,
+    true
+  );
+  BEGIN
+    PERFORM public.confirm_media_upload(target, repeat('a', 64), '"' || repeat('1', 32) || '"', 2048);
+    RAISE EXCEPTION 'FAIL 18b: confirm_media_upload confirmed an expired row';
+  EXCEPTION
+    WHEN SQLSTATE 'P0413' THEN NULL;
+  END;
+  PERFORM set_config('request.jwt.claims', NULL, true);
+  RAISE NOTICE 'PASS 18b: confirm_media_upload refuses an expired row via the existing state-mismatch path (P0413)';
+
+  -- 18c: the CHECK constraint accepts 'expired' (proven by every fixture row
+  -- above already sitting at that state) and still rejects garbage.
+  BEGIN
+    UPDATE public.media_objects SET lifecycle_state = 'not-a-real-state' WHERE id = target;
+    RAISE EXCEPTION 'FAIL 18c: the lifecycle_state CHECK accepted a garbage value';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  RAISE NOTICE 'PASS 18c: lifecycle_state CHECK still rejects anything outside the five known states';
+END $$;
+
+-- ─── 19: grant surface + pg_cron registration ───────────────────────────────
+
+DO $$
+DECLARE
+  priv text;
+BEGIN
+  -- expire_stale_upload_intents: nobody but the function owner (and pg_cron,
+  -- which runs as the scheduling role) needs it.
+  FOREACH priv IN ARRAY ARRAY['public', 'anon', 'authenticated', 'scan_worker', 'scan_reader'] LOOP
+    ASSERT NOT has_function_privilege(priv, 'public.expire_stale_upload_intents(interval)', 'EXECUTE'),
+      'FAIL 19a: ' || priv || ' must NOT hold EXECUTE on expire_stale_upload_intents';
+  END LOOP;
+  RAISE NOTICE 'PASS 19a: expire_stale_upload_intents grants EXECUTE to nobody but its owner';
+
+  -- expired_upload_originals: the documented seam, readable only by
+  -- service_role today (the future cleanup job's role, whatever it ends up
+  -- being, gets its own GRANT when that job exists).
+  FOREACH priv IN ARRAY ARRAY['anon', 'authenticated', 'scan_worker', 'scan_reader'] LOOP
+    ASSERT NOT has_table_privilege(priv, 'public.expired_upload_originals', 'SELECT'),
+      'FAIL 19b: ' || priv || ' must NOT hold SELECT on expired_upload_originals';
+  END LOOP;
+  ASSERT has_table_privilege('service_role', 'public.expired_upload_originals', 'SELECT'),
+    'FAIL 19b: service_role must hold SELECT on expired_upload_originals';
+  RAISE NOTICE 'PASS 19b: expired_upload_originals is readable only by service_role';
+
+  -- The daily sweep is registered.
+  ASSERT EXISTS (
+    SELECT 1 FROM cron.job
+     WHERE jobname = 'expire-stale-upload-intents-daily'
+       AND schedule = '15 7 * * *'
+       AND command LIKE '%public.expire_stale_upload_intents()%'
+  ), 'FAIL 19c: the expire-stale-upload-intents-daily cron job is not registered as expected';
+  RAISE NOTICE 'PASS 19c: expire-stale-upload-intents-daily is scheduled, calling the RPC directly';
+END $$;
+
 -- ─── done — rollback so this file is re-runnable ────────────────────────────
 DO $$ BEGIN RAISE NOTICE 'scan_roles_conformance_test.sql: ALL ASSERTIONS PASSED'; END $$;
 

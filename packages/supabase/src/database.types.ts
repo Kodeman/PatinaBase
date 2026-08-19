@@ -25739,6 +25739,62 @@ export type Database = {
         }
         Relationships: []
       }
+      expired_upload_originals: {
+        Row: {
+          bucket: string | null
+          expired_at: string | null
+          id: string | null
+          object_key: string | null
+          scan_id: string | null
+          size_bytes: number | null
+        }
+        Insert: {
+          bucket?: string | null
+          expired_at?: string | null
+          id?: string | null
+          object_key?: string | null
+          scan_id?: string | null
+          size_bytes?: number | null
+        }
+        Update: {
+          bucket?: string | null
+          expired_at?: string | null
+          id?: string | null
+          object_key?: string | null
+          scan_id?: string | null
+          size_bytes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_objects_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "media_objects_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_objects_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_objects_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
+        ]
+      }
       field_activity_summary: {
         Row: {
           awaiting_reply_count: number | null
@@ -30059,6 +30115,7 @@ export type Database = {
       }
       expire_proposals: { Args: never; Returns: number }
       expire_room_scan_associations: { Args: never; Returns: number }
+      expire_stale_upload_intents: { Args: { p_ttl?: string }; Returns: number }
       export_designer_taste: { Args: { p_designer_id: string }; Returns: Json }
       extend_and_reopen_client_decision: {
         Args: {
@@ -30825,6 +30882,7 @@ export type Database = {
         Args: { _organization_id: string; _user_id?: string }
         Returns: boolean
       }
+      is_originals_bucket: { Args: { p_bucket: string }; Returns: boolean }
       is_product_in_active_use: {
         Args: { p_product_id: string }
         Returns: boolean

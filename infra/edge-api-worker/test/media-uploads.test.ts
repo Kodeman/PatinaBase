@@ -642,6 +642,7 @@ describe('POST /v1/media/uploads', () => {
       ['P0411', 400],
       ['P0412', 409],
       ['P0413', 409],
+      ['P0416', 429],
     ] as const) {
       const { worker, bearer } = await liveWorker({
         roomScan: [{ id: SCAN_ID }],
@@ -659,6 +660,25 @@ describe('POST /v1/media/uploads', () => {
       );
       expect(response.status).toBe(status);
     }
+  });
+
+  it('429s the per-scan pending-intent cap (00501, P0416) with a typed body', async () => {
+    const { worker, bearer } = await liveWorker({
+      roomScan: [{ id: SCAN_ID }],
+      throwOn: {
+        match: 'create_media_upload_intent',
+        error: Object.assign(new Error('cap tripped'), { code: 'P0416' }),
+      },
+    });
+    const response = await post(
+      worker,
+      env(),
+      '/v1/media/uploads',
+      validBody(),
+      bearer,
+    );
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: 'upload_quota_exceeded' });
   });
 
   it('503s an unrecognised database failure rather than calling it a data answer', async () => {
