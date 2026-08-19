@@ -27,7 +27,24 @@ const nextConfig = {
       supabaseFrameOrigin = null;
       supabaseRealtimeOrigin = null;
     }
-    const supabaseConnectOrigins = [supabaseFrameOrigin, supabaseRealtimeOrigin].filter(Boolean).join(' ');
+
+    // The Rendered Room v2 scan read path (use-splat-url.ts / scan-artifact-url.ts)
+    // calls the edge API Worker directly from the browser via
+    // `NEXT_PUBLIC_EDGE_API_URL`. That origin is a `*.workers.dev` host — not
+    // covered by the `*.patina.cloud` allowance below — so without this the fetch
+    // is silently CSP-blocked in every browser regardless of the env var being
+    // wired. Unset (every environment until a scope opts in) degrades to nothing,
+    // same pattern as supabaseFrameOrigin.
+    let edgeApiOrigin = null;
+    try {
+      edgeApiOrigin = process.env.NEXT_PUBLIC_EDGE_API_URL
+        ? new URL(process.env.NEXT_PUBLIC_EDGE_API_URL).origin
+        : null;
+    } catch {
+      edgeApiOrigin = null;
+    }
+
+    const supabaseConnectOrigins = [supabaseFrameOrigin, supabaseRealtimeOrigin, edgeApiOrigin].filter(Boolean).join(' ');
 
     // CSP directives - adapted for development vs production
     const cspDirectives = [

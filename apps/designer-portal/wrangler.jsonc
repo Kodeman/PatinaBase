@@ -50,7 +50,8 @@
         "NEXT_PUBLIC_ENABLED_OAUTH_PROVIDERS": "",
         "ORDERS_SERVICE_URL": "https://patina-orders-worker-staging.kody-be3.workers.dev",
         "MEDIA_SERVICE_URL": "https://patina-media-svc-worker-staging.kody-be3.workers.dev",
-        "PROJECTS_SERVICE_URL": "https://patina-projects-worker-staging.kody-be3.workers.dev"
+        "PROJECTS_SERVICE_URL": "https://patina-projects-worker-staging.kody-be3.workers.dev",
+        "NEXT_PUBLIC_EDGE_API_URL": "https://patina-edge-api-staging.kody-be3.workers.dev"
       },
       "services": [
         { "binding": "SVC_PROJECTS", "service": "patina-projects-worker-staging" },
