@@ -3,6 +3,7 @@
 > **Status:** staging evidence · **Date:** 2026-08-19 · **Wave:** W2 (GPU lane)
 > **Companions:** `W1-EVIDENCE.md`, `DELIVERY-PLAN.md`, `ARCHITECTURE.md`, `PROPOSAL.md`
 > **Format:** follows `docs/engineering/patina-cloudflare-phase-1-staging-evidence.md`
+> **Consolidated forward:** W3/W4 evidence + prod-readiness — `W3-W4-EVIDENCE.md` (the prod-authorization input; open-items ledger and go/no-go read live there).
 
 Everything below ran against **staging only** — Supabase project
 `vuesoyhfrjabfxbrzekd` and Modal environment `patina-staging`. The production
