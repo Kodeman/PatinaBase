@@ -11,6 +11,25 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 /**
+ * Pinned auth storage key (Workstream D-B1, docs/engineering/repoint-b0-audit.md §5).
+ *
+ * Without an explicit `storageKey`, `@supabase/ssr` derives the auth cookie
+ * name from the Supabase project ref in `NEXT_PUBLIC_SUPABASE_URL`'s host
+ * (`sb-<host-first-label>-auth-token`). If that URL is ever repointed to a
+ * different host (e.g. `api.patina.cloud`) while the underlying Supabase
+ * project stays the same, the derived key would silently change — logging
+ * out every session cookie in the wild and breaking the extension's
+ * independent re-derivation in `apps/extension/src/lib/supabase.ts`.
+ *
+ * The literal below is the CURRENT derived value for prod
+ * (`bkvcixdmuyejfzcijpdg`), pinned so it stays constant across any future URL
+ * change. Override via env for environments on a different Supabase project
+ * (see each portal's `wrangler.jsonc` `staging` block).
+ */
+export const SUPABASE_AUTH_STORAGE_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY || 'sb-bkvcixdmuyejfzcijpdg-auth-token';
+
+/**
  * Build the auth-cookie options based on the resolved cookie domain. When a
  * domain is set we're on a `*.patina.cloud` host, so layer in `secure: true`
  * (cookie must be transmitted over HTTPS) and explicit `sameSite: 'lax'` /
@@ -59,6 +78,7 @@ export function createBrowserClient(): SupabaseClient<Database> {
     if (!globalThis.__supabaseBrowserClient) {
       globalThis.__supabaseBrowserClient = createSSRBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
         cookieOptions,
+        auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
       }) as unknown as SupabaseClient<Database>;
     }
     return globalThis.__supabaseBrowserClient;
@@ -66,6 +86,7 @@ export function createBrowserClient(): SupabaseClient<Database> {
   // SSR fallback - create new instance (will be replaced on client)
   return createSSRBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookieOptions,
+    auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
   }) as unknown as SupabaseClient<Database>;
 }
 
@@ -113,6 +134,7 @@ export function createMiddlewareClient(
 
   return createSSRServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookieOptions,
+    auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
     cookies: {
       getAll() {
         return request.cookies.getAll();

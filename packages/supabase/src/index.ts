@@ -4,6 +4,7 @@ export {
   createServerClient,
   createMiddlewareClient,
   createAdminClient,
+  SUPABASE_AUTH_STORAGE_KEY,
 } from './client';
 export type { Database, Json } from './database.types';
 export * from './hooks';

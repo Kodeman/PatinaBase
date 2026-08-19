@@ -8,11 +8,14 @@ import { readPortalSessionTokens, isSessionCookieName } from '../../lib/portal-c
  * `.1`, …. The global setup.ts attaches a `chrome` mock to globalThis but it
  * has no `cookies` namespace, so we install one per-test.
  *
- * setup.ts sets PLASMO_PUBLIC_SUPABASE_URL = http://localhost:54321, so the
- * derived cookie name is `sb-localhost-auth-token`.
+ * Workstream D-B1 (docs/engineering/repoint-b0-audit.md §5): the cookie name
+ * is now a pinned constant (`SUPABASE_AUTH_STORAGE_KEY` in `lib/supabase.ts`)
+ * rather than derived from `PLASMO_PUBLIC_SUPABASE_URL`, so it no longer
+ * varies with setup.ts's stubbed URL — see `lib/supabase.test.ts` for
+ * coverage of the pin itself.
  */
 
-const COOKIE_NAME = 'sb-localhost-auth-token';
+const COOKIE_NAME = 'sb-bkvcixdmuyejfzcijpdg-auth-token';
 const BASE64_PREFIX = 'base64-';
 
 // ── encoder: port of @supabase/ssr stringToBase64URL (UTF-8 -> base64url, no padding) ──
