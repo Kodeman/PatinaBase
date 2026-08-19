@@ -72,6 +72,23 @@ VALUES
    'c9500000-0000-4000-8000-000000000005',
    'Scope Replacement', 'active', 'direct');
 
+-- 00511 requires a project lead to hold a designer-domain role and belong to
+-- exactly one active design studio for the trigger to derive/keep its studio.
+-- Grant the studio's designer members their role with triggers suppressed: a
+-- role grant flips is_designer and auto-provisions a personal studio (00295),
+-- which would make the lead multi-studio and defeat single-studio derivation.
+-- The explicit Scope Integrity Studio stays their sole studio.
+SET LOCAL session_replication_role = replica;
+INSERT INTO public.user_roles (user_id, role_id, granted_by)
+SELECT member_id, role.id, member_id
+FROM (VALUES
+  ('c9500000-0000-4000-8000-000000000001'::uuid),
+  ('c9500000-0000-4000-8000-000000000004'::uuid)
+) AS designer(member_id)
+CROSS JOIN public.roles AS role
+WHERE role.name = 'studio_owner';
+SET LOCAL session_replication_role = origin;
+
 INSERT INTO public.projects (
   id, name, designer_id, client_id, created_by, status,
   budget_cents, design_fee_cents, target_end_date
