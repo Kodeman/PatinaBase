@@ -822,6 +822,18 @@ def execute_copy_prod(
                     "captured_at": src_row.get("captured_at"),
                     "device_orientation": src_row.get("device_orientation"),
                     "light_estimate": src_row.get("light_estimate"),
+                    # THE POSE COLUMNS. These are the entire reason a real scan
+                    # is copied at all: with no `photos_metadata.ndjson` sidecar
+                    # in the bundle, `dispatch-scan-modal` builds `photoRecords`
+                    # from these two columns, and a row carrying neither is
+                    # dropped by `isPoseBearing` before the cap. Copying 42
+                    # photos without them yields a fixture that fails dispatch
+                    # with "no photos manifest and no pose-bearing
+                    # room_scan_images rows" — which is exactly what the first
+                    # W2 splat run hit. They were already in the prod SELECT
+                    # list above; only this insert dict omitted them.
+                    "camera_transform": src_row.get("camera_transform"),
+                    "camera_intrinsics": src_row.get("camera_intrinsics"),
                 })
             if new_image_rows:
                 ins_resp = staging.post(
