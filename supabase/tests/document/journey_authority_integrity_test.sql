@@ -279,6 +279,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_journey_actor(uuid, text) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.option_matches_client_truth(
   p_option_id uuid,
@@ -299,6 +300,7 @@ AS $$
     WHERE option.id = p_option_id
   ), false);
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.option_matches_client_truth(uuid, text, integer) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.decision_truth(p_decision_id uuid)
 RETURNS jsonb
@@ -311,6 +313,7 @@ AS $$
   FROM public.client_decisions AS decision
   WHERE decision.id = p_decision_id
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.decision_truth(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.option_truth(p_option_id uuid)
 RETURNS jsonb
@@ -323,6 +326,7 @@ AS $$
   FROM public.client_decision_options AS option
   WHERE option.id = p_option_id
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.option_truth(uuid) TO PUBLIC;
 
 DO $$
 BEGIN

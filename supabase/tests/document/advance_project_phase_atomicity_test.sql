@@ -410,6 +410,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_phase_actor(uuid, text) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_phase_failure(
   p_project_id uuid,
@@ -441,6 +442,7 @@ BEGIN
     format('expected error %L, got %L', p_expected_message, v_message);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.expect_phase_failure(uuid, uuid, text, text, text) TO PUBLIC;
 
 -- Browser ACL: authenticated only. PUBLIC would make anon true, so the anon
 -- assertion also proves no inherited PUBLIC execute; service_role is explicit.
@@ -1095,6 +1097,7 @@ AS $$
   SET status = 'completed'
   WHERE id = 'aa000000-0000-4000-8000-0000000001a2'
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.owner_phase_lifecycle_bypass() TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_direct_phase_failure(
   p_case text,
@@ -1244,6 +1247,7 @@ BEGIN
            p_case, p_expected_message, v_message);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.expect_direct_phase_failure(text, text, text) TO PUBLIC;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_phase_actor('a9000000-0000-4000-8000-000000000001');
@@ -1508,6 +1512,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.reject_injected_successor() TO PUBLIC;
 CREATE TRIGGER reject_injected_successor_trg
   BEFORE UPDATE ON public.project_phases
   FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_injected_successor();
@@ -1544,6 +1549,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.reject_injected_project_pointer() TO PUBLIC;
 CREATE TRIGGER reject_injected_project_pointer_trg
   BEFORE UPDATE ON public.projects
   FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_injected_project_pointer();

@@ -16,10 +16,12 @@ const nextConfig = jest.requireActual('../../../next.config.js') as {
 describe('designer portal development CSP', () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const originalEdgeApiUrl = process.env.NEXT_PUBLIC_EDGE_API_URL;
 
   afterEach(() => {
     process.env.NODE_ENV = originalNodeEnv;
     process.env.NEXT_PUBLIC_SUPABASE_URL = originalSupabaseUrl;
+    process.env.NEXT_PUBLIC_EDGE_API_URL = originalEdgeApiUrl;
   });
 
   it('allows Auth and Realtime calls to the configured Supabase project', async () => {
@@ -63,4 +65,46 @@ describe('designer portal development CSP', () => {
       expect(connectSrc).toMatch(/(^|\s)data:(\s|$)/);
     },
   );
+
+  it.each(['development', 'production'])(
+    'allows the scan read path to reach the configured edge API origin in %s',
+    async (env) => {
+      // The Rendered Room v2 read path (use-splat-url.ts) fetches
+      // NEXT_PUBLIC_EDGE_API_URL directly from the browser — a *.workers.dev
+      // host, not covered by the patina.cloud allowance. Without this the
+      // fetch is silently CSP-blocked even though the env var is wired.
+      process.env.NODE_ENV = env;
+      process.env.NEXT_PUBLIC_EDGE_API_URL =
+        'https://patina-edge-api-staging.kody-be3.workers.dev';
+
+      const rules = await nextConfig.headers();
+      const csp = rules[0]?.headers.find(
+        (header) => header.key === 'Content-Security-Policy',
+      )?.value;
+
+      const connectSrc = csp
+        ?.split('; ')
+        .find((directive) => directive.startsWith('connect-src '));
+
+      expect(connectSrc).toContain(
+        'https://patina-edge-api-staging.kody-be3.workers.dev',
+      );
+    },
+  );
+
+  it('does not widen connect-src when NEXT_PUBLIC_EDGE_API_URL is unset', async () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.NEXT_PUBLIC_EDGE_API_URL;
+
+    const rules = await nextConfig.headers();
+    const csp = rules[0]?.headers.find(
+      (header) => header.key === 'Content-Security-Policy',
+    )?.value;
+
+    const connectSrc = csp
+      ?.split('; ')
+      .find((directive) => directive.startsWith('connect-src '));
+
+    expect(connectSrc).not.toContain('workers.dev');
+  });
 });

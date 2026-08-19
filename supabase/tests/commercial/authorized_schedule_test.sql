@@ -145,15 +145,32 @@ DECLARE
   v_err text;
 BEGIN
   PERFORM pg_temp.assume_user('d7000000-0000-4000-8000-000000000001');
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, product_id, name, ffe_category, item_type,
-    status, quantity, unit_price_cents, trade_price_cents, line_total_cents,
-    sort_order
-  ) VALUES (
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    product_id,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    line_total_cents,
+    sort_order) VALUES (
     'd7500000-0000-4000-8000-000000000001',
     'd7600000-0000-4000-8000-000000000001',
-    'd7750000-0000-4000-8000-000000000001', 'Cold sofa', 'Seating', 'fixed',
-    'specified', 1, 100000, 60000, 100000, 0
+    'room',
+    'd7750000-0000-4000-8000-000000000001',
+    'Cold sofa',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    100000,
+    60000,
+    100000,
+    0
   ) RETURNING id INTO v_line;
 
   PERFORM set_config('patina.configuration_spec_workflow', '00403', true);
@@ -302,55 +319,294 @@ BEGIN
   INSERT INTO sched_ids VALUES ('living', v_living), ('study', v_study);
 
   -- Living room
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, product_id, name, ffe_category, item_type,
-    status, quantity, unit_price_cents, trade_price_cents, markup_percent,
-    line_total_cents, budget_max_cents, vendor_id, vendor_name, doc_code,
-    sort_order, notes
-  ) VALUES
-    (v_project, v_living, 'd7750000-0000-4000-8000-000000000001', 'Lounge sofa',
-     'Seating', 'fixed', 'specified', 1, 400000, 240000, 66.67, 400000, NULL,
-     'd7710000-0000-4000-8000-000000000001', 'Schedule Test Vendor', 'LR-01', 0,
-     'Fabric TBC with client.'),
-    (v_project, v_living, NULL, 'Side table', 'Casegoods', 'fixed', 'specified',
-     2, 50000, 30000, 66.67, 100000, NULL,
-     'd7710000-0000-4000-8000-000000000001', 'Schedule Test Vendor', 'LR-02', 1, NULL),
-    (v_project, v_living, NULL, 'Room rug', 'Textiles', 'allowance', 'specified',
-     1, NULL, NULL, NULL, NULL, 200000, NULL, NULL, 'LR-03', 2, NULL),
-    (v_project, v_living, NULL, 'Wall art', 'Art', 'tbd', 'specified',
-     1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'LR-04', 3, NULL),
-    (v_project, v_living, NULL, 'Entry console', 'Casegoods', 'fixed', 'specified',
-     1, 150000, 90000, 66.67, 150000, NULL,
-     'd7710000-0000-4000-8000-000000000001', 'Schedule Test Vendor', 'LR-05', 4, NULL),
-    (v_project, v_living, NULL, 'Paired sconce', 'Lighting', 'fixed', 'specified',
-     1, 60000, 36000, 66.67, 60000, NULL, NULL, NULL, 'LR-06', 6, NULL),
-    (v_project, v_living, NULL, 'Paired sconce', 'Lighting', 'fixed', 'specified',
-     1, 60000, 36000, 66.67, 60000, NULL, NULL, NULL, 'LR-06', 6, NULL),
-    (v_project, v_living, 'd7750000-0000-4000-8000-000000000002', 'Window bench',
-     'Seating', 'fixed', 'specified', 1, 90000, 54000, 66.67, 90000, NULL,
-     NULL, NULL, 'LR-08', 7, NULL),
-    (v_project, v_living, NULL, 'Bar stool', 'Seating', 'fixed', 'specified',
-     1, 40000, 24000, 66.67, 40000, NULL, NULL, NULL, 'LR-09', 8, NULL);
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    product_id,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    markup_percent,
+    line_total_cents,
+    budget_max_cents,
+    vendor_id,
+    vendor_name,
+    doc_code,
+    sort_order,
+    notes) VALUES
+    (
+    v_project,
+    v_living,
+    'room',
+    'd7750000-0000-4000-8000-000000000001',
+    'Lounge sofa',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    400000,
+    240000,
+    66.67,
+    400000,
+    NULL,
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor',
+    'LR-01',
+    0,
+    'Fabric TBC with client.'
+  ),
+  (
+    v_project,
+    v_living,
+    'room',
+    NULL,
+    'Side table',
+    'Casegoods',
+    'fixed',
+    'specified',
+    2,
+    50000,
+    30000,
+    66.67,
+    100000,
+    NULL,
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor',
+    'LR-02',
+    1,
+    NULL
+  ),
+  (
+    v_project,
+    v_living,
+    'room',
+    NULL,
+    'Room rug',
+    'Textiles',
+    'allowance',
+    'specified',
+    1,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    200000,
+    NULL,
+    NULL,
+    'LR-03',
+    2,
+    NULL
+  ),
+  (
+    v_project,
+    v_living,
+    'room',
+    NULL,
+    'Wall art',
+    'Art',
+    'tbd',
+    'specified',
+    1,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    'LR-04',
+    3,
+    NULL
+  ),
+  (
+    v_project,
+    v_living,
+    'room',
+    NULL,
+    'Entry console',
+    'Casegoods',
+    'fixed',
+    'specified',
+    1,
+    150000,
+    90000,
+    66.67,
+    150000,
+    NULL,
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor',
+    'LR-05',
+    4,
+    NULL
+  ),
+  (
+    v_project,
+    v_living,
+    'room',
+    NULL,
+    'Paired sconce',
+    'Lighting',
+    'fixed',
+    'specified',
+    1,
+    60000,
+    36000,
+    66.67,
+    60000,
+    NULL,
+    NULL,
+    NULL,
+    'LR-06',
+    6,
+    NULL
+  ),
+  (
+    v_project,
+    v_living,
+    'room',
+    NULL,
+    'Paired sconce',
+    'Lighting',
+    'fixed',
+    'specified',
+    1,
+    60000,
+    36000,
+    66.67,
+    60000,
+    NULL,
+    NULL,
+    NULL,
+    'LR-06',
+    6,
+    NULL
+  ),
+  (
+    v_project,
+    v_living,
+    'room',
+    'd7750000-0000-4000-8000-000000000002',
+    'Window bench',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    90000,
+    54000,
+    66.67,
+    90000,
+    NULL,
+    NULL,
+    NULL,
+    'LR-08',
+    7,
+    NULL
+  ),
+  (
+    v_project,
+    v_living,
+    'room',
+    NULL,
+    'Bar stool',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    40000,
+    24000,
+    66.67,
+    40000,
+    NULL,
+    NULL,
+    NULL,
+    'LR-09',
+    8,
+    NULL
+  );
 
   -- Study
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, trade_price_cents, markup_percent,
-    line_total_cents, vendor_id, vendor_name, doc_code, sort_order
-  ) VALUES
-    (v_project, v_study, 'Writing desk', 'Casegoods', 'fixed', 'specified',
-     1, 300000, 180000, 66.67, 300000,
-     'd7710000-0000-4000-8000-000000000001', 'Schedule Test Vendor', 'ST-01', 0),
-    (v_project, v_study, 'Desk chair', 'Seating', 'fixed', 'specified',
-     1, 120000, 72000, 66.67, 120000, NULL, NULL, 'ST-02', 1);
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    markup_percent,
+    line_total_cents,
+    vendor_id,
+    vendor_name,
+    doc_code,
+    sort_order) VALUES
+    (
+    v_project,
+    v_study,
+    'room',
+    'Writing desk',
+    'Casegoods',
+    'fixed',
+    'specified',
+    1,
+    300000,
+    180000,
+    66.67,
+    300000,
+    'd7710000-0000-4000-8000-000000000001',
+    'Schedule Test Vendor',
+    'ST-01',
+    0
+  ),
+  (
+    v_project,
+    v_study,
+    'room',
+    'Desk chair',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    120000,
+    72000,
+    66.67,
+    120000,
+    NULL,
+    NULL,
+    'ST-02',
+    1
+  );
 
   -- A line nobody filed in a room. Section 2 proves it cannot be released.
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, trade_price_cents, line_total_cents, sort_order
-  ) VALUES (
-    v_project, NULL, 'Floating floor lamp', 'Lighting', 'fixed', 'specified',
-    1, 30000, 18000, 30000, 9
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    line_total_cents,
+    sort_order) VALUES (
+    v_project,
+    NULL,
+    'throughout',
+    'Floating floor lamp',
+    'Lighting',
+    'fixed',
+    'specified',
+    1,
+    30000,
+    18000,
+    30000,
+    9
   );
 END $$;
 
@@ -692,12 +948,30 @@ DECLARE
 BEGIN
   INSERT INTO public.project_rooms (project_id, name, sort_order)
   VALUES (v_project, 'Pantry', 2) RETURNING id INTO v_pantry;
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, trade_price_cents, line_total_cents, sort_order
-  ) VALUES (
-    v_project, v_pantry, 'Pantry cabinet', 'Casegoods', 'fixed', 'specified',
-    1, 80000, 48000, 80000, 10
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    line_total_cents,
+    sort_order) VALUES (
+    v_project,
+    v_pantry,
+    'room',
+    'Pantry cabinet',
+    'Casegoods',
+    'fixed',
+    'specified',
+    1,
+    80000,
+    48000,
+    80000,
+    10
   ) RETURNING id INTO v_cabinet;
   INSERT INTO sched_ids VALUES ('pantry', v_pantry), ('cabinet', v_cabinet);
 
@@ -1074,12 +1348,30 @@ BEGIN
   INSERT INTO sched_ids VALUES ('project_b', v_project);
   INSERT INTO public.project_rooms (project_id, name, sort_order)
   VALUES (v_project, 'Guest bedroom', 0) RETURNING id INTO v_room;
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, trade_price_cents, line_total_cents, sort_order
-  ) VALUES (
-    v_project, v_room, 'Guest bed', 'Beds', 'fixed', 'specified',
-    1, 200000, 120000, 200000, 0
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    line_total_cents,
+    sort_order) VALUES (
+    v_project,
+    v_room,
+    'room',
+    'Guest bed',
+    'Beds',
+    'fixed',
+    'specified',
+    1,
+    200000,
+    120000,
+    200000,
+    0
   ) RETURNING id INTO v_line;
 
   v_budget := public.derive_working_budget_draft(v_project);
@@ -1130,12 +1422,30 @@ BEGIN
     AND category = 'Seating';
   INSERT INTO public.project_rooms (project_id, name, sort_order)
   VALUES (v_project, 'Hall', 3) RETURNING id INTO v_hall;
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, trade_price_cents, line_total_cents, sort_order
-  ) VALUES (
-    v_project, v_hall, 'Hall runner', 'Textiles', 'fixed', 'specified',
-    1, 70000, 42000, 70000, 11
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    line_total_cents,
+    sort_order) VALUES (
+    v_project,
+    v_hall,
+    'room',
+    'Hall runner',
+    'Textiles',
+    'fixed',
+    'specified',
+    1,
+    70000,
+    42000,
+    70000,
+    11
   );
 
   PERFORM public.derive_working_budget_draft(v_project);
@@ -1934,12 +2244,30 @@ BEGIN
   WHERE project_id = v_project AND name = 'Guest bedroom';
   INSERT INTO public.project_rooms (project_id, name, sort_order)
   VALUES (v_project, 'Guest bedroom', 1) RETURNING id INTO v_room_b;
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, trade_price_cents, line_total_cents, sort_order
-  ) VALUES (
-    v_project, v_room_b, 'Guest bed two', 'Beds', 'fixed', 'specified',
-    1, 150000, 90000, 150000, 1
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    line_total_cents,
+    sort_order) VALUES (
+    v_project,
+    v_room_b,
+    'room',
+    'Guest bed two',
+    'Beds',
+    'fixed',
+    'specified',
+    1,
+    150000,
+    90000,
+    150000,
+    1
   ) RETURNING id INTO v_line_b;
 
   v_budget := public.derive_working_budget_draft(v_project);
@@ -2052,12 +2380,26 @@ DECLARE
 BEGIN
   -- (a) An allowance is snapshotted at ceiling ÷ quantity, and quantity has no
   -- CHECK on the table. Zero used to raise a bare 22012 out of the release.
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, budget_max_cents, sort_order
-  ) VALUES (
-    v_project, v_living, 'Zero-quantity throw', 'Textiles', 'allowance',
-    'specified', 0, 50000, 12
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    budget_max_cents,
+    sort_order) VALUES (
+    v_project,
+    v_living,
+    'room',
+    'Zero-quantity throw',
+    'Textiles',
+    'allowance',
+    'specified',
+    0,
+    50000,
+    12
   ) RETURNING id INTO v_zero;
   BEGIN
     PERFORM public.create_furnishings_authorization_from_schedule(
@@ -2071,14 +2413,46 @@ BEGIN
 
   -- (c) Two commissions past int4 between them. The refusal names itself
   -- instead of surfacing a bare numeric_value_out_of_range.
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, trade_price_cents, line_total_cents, sort_order
-  ) VALUES
-    (v_project, v_living, 'Grand commission A', 'Seating', 'fixed', 'specified',
-     1, 2000000000, 0, 2000000000, 13) ,
-    (v_project, v_living, 'Grand commission B', 'Seating', 'fixed', 'specified',
-     1, 2000000000, 0, 2000000000, 14);
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    line_total_cents,
+    sort_order) VALUES
+    (
+    v_project,
+    v_living,
+    'room',
+    'Grand commission A',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    2000000000,
+    0,
+    2000000000,
+    13
+  ),
+  (
+    v_project,
+    v_living,
+    'room',
+    'Grand commission B',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    2000000000,
+    0,
+    2000000000,
+    14
+  );
   SELECT id INTO v_big_a FROM public.project_ffe_items
   WHERE project_id = v_project AND name = 'Grand commission A';
   SELECT id INTO v_big_b FROM public.project_ffe_items

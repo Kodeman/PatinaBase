@@ -40,6 +40,7 @@ BEGIN
   )::text, true);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid, text) TO PUBLIC;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (1) FIXTURE — an executed design-services engagement, two rooms, two subs,

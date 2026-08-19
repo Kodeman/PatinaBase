@@ -212,17 +212,58 @@ BEGIN
   -- assignment_scope is explicit: 00438 replaced 00434's auto-deriving
   -- guard_project_ffe_selection_integrity() with one that requires it, so a
   -- room-scoped fixture row that leaves the 'unassigned' default is rejected.
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, assignment_scope, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, trade_price_cents, markup_percent,
-    line_total_cents, vendor_id, vendor_name, doc_code, sort_order
-  ) VALUES
-    (v_project, v_kitchen, 'room', 'Counter stool', 'Seating', 'fixed', 'specified',
-     2, 60000, 36000, 66.67, 120000,
-     'd8710000-0000-4000-8000-000000000001', 'Trade Test Vendor', 'KT-01', 0),
-    (v_project, v_kitchen, 'room', 'Pendant light', 'Lighting', 'fixed', 'specified',
-     1, 90000, 54000, 66.67, 90000,
-     'd8710000-0000-4000-8000-000000000001', 'Trade Test Vendor', 'KT-02', 1);
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    markup_percent,
+    line_total_cents,
+    vendor_id,
+    vendor_name,
+    doc_code,
+    sort_order) VALUES
+    (
+    v_project,
+    v_kitchen,
+    'room',
+    'Counter stool',
+    'Seating',
+    'fixed',
+    'specified',
+    2,
+    60000,
+    36000,
+    66.67,
+    120000,
+    'd8710000-0000-4000-8000-000000000001',
+    'Trade Test Vendor',
+    'KT-01',
+    0
+  ),
+  (
+    v_project,
+    v_kitchen,
+    'room',
+    'Pendant light',
+    'Lighting',
+    'fixed',
+    'specified',
+    1,
+    90000,
+    54000,
+    66.67,
+    90000,
+    'd8710000-0000-4000-8000-000000000001',
+    'Trade Test Vendor',
+    'KT-02',
+    1
+  );
 
   -- The two subs. project_parties is the studio's roster; the scope snapshots
   -- what it needs so the document survives a roster edit.
@@ -1401,12 +1442,30 @@ BEGIN
   -- dropping itself and authorizing the rest. The companion line is freshly
   -- minted and passes every other check, so the trade refusal is the only one
   -- the loop can raise, whichever order it walks the ids in.
-  INSERT INTO public.project_ffe_items (
-    id, project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, line_total_cents, sort_order
-  ) VALUES (
-    v_clean, v_project, (SELECT value FROM trade_ids WHERE key = 'kitchen'),
-    'Bar stool', 'Seating', 'fixed', 'specified', 1, 40000, 40000, 91
+  INSERT INTO public.project_ffe_items (id,
+    project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    line_total_cents,
+    sort_order) VALUES (
+    v_clean,
+    v_project,
+    (SELECT value FROM trade_ids WHERE key = 'kitchen'),
+    'room',
+    'Bar stool',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    40000,
+    40000,
+    91
   );
   BEGIN
     PERFORM public.create_furnishings_authorization_from_schedule(
@@ -1475,14 +1534,30 @@ BEGIN
 
   -- The lock is about the TRADE line, not the whole table: an ordinary schedule
   -- line carrying no instrument is still the studio's to reprice and to remove.
-  INSERT INTO public.project_ffe_items (
-    id, project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, line_total_cents, sort_order
-  ) VALUES (
+  INSERT INTO public.project_ffe_items (id,
+    project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    line_total_cents,
+    sort_order) VALUES (
     'd8600000-0000-4000-8000-000000000001',
     (SELECT value FROM trade_ids WHERE key = 'project'),
     (SELECT value FROM trade_ids WHERE key = 'kitchen'),
-    'Loose control line', 'Accessories', 'fixed', 'specified', 1, 5000, 5000, 90
+    'room',
+    'Loose control line',
+    'Accessories',
+    'fixed',
+    'specified',
+    1,
+    5000,
+    5000,
+    90
   );
   UPDATE public.project_ffe_items SET line_total_cents = 7000, unit_price_cents = 7000
   WHERE id = 'd8600000-0000-4000-8000-000000000001';

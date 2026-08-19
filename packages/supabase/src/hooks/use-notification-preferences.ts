@@ -1,14 +1,13 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@supabase/ssr';
-import type { NotificationPreferences } from '@patina/shared/types';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createBrowserClient } from "../client";
+import type { NotificationPreferences } from "@patina/shared/types";
 
-const getSupabase = () =>
-  createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+const getSupabase = () => createBrowserClient();
 
-const DEFAULT_PREFERENCES: Omit<NotificationPreferences, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
+const DEFAULT_PREFERENCES: Omit<
+  NotificationPreferences,
+  "id" | "user_id" | "created_at" | "updated_at"
+> = {
   channels_email: true,
   channels_push: true,
   channels_in_app: true,
@@ -32,11 +31,11 @@ const DEFAULT_PREFERENCES: Omit<NotificationPreferences, 'id' | 'user_id' | 'cre
   type_product_launch: true,
   type_seasonal_campaign: true,
   type_reengagement: true,
-  digest_frequency: 'weekly',
-  reminder_cadence: 'immediate',
+  digest_frequency: "weekly",
+  reminder_cadence: "immediate",
   quiet_hours_enabled: false,
-  quiet_hours_start: '22:00',
-  quiet_hours_end: '08:00',
+  quiet_hours_start: "22:00",
+  quiet_hours_end: "08:00",
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
 };
 
@@ -52,23 +51,25 @@ const DEFAULT_PREFERENCES: Omit<NotificationPreferences, 'id' | 'user_id' | 'cre
  */
 export function useNotificationPreferences(options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: ['notification-preferences'],
+    queryKey: ["notification-preferences"],
     enabled: options?.enabled ?? true,
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
 
       const { data, error } = await supabase
-        .from('notification_preferences')
-        .select('*')
-        .eq('user_id', user.id)
+        .from("notification_preferences")
+        .select("*")
+        .eq("user_id", user.id)
         .single();
 
       // No row yet — return defaults
-      if (error?.code === 'PGRST116') {
+      if (error?.code === "PGRST116") {
         return {
-          id: '',
+          id: "",
           user_id: user.id,
           ...DEFAULT_PREFERENCES,
           created_at: new Date().toISOString(),
@@ -92,28 +93,30 @@ export function useUpdateNotificationPreferences() {
   return useMutation({
     mutationFn: async (updates: Partial<NotificationPreferences>) => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
 
       // Check if row exists
       const { data: existing } = await supabase
-        .from('notification_preferences')
-        .select('id')
-        .eq('user_id', user.id)
+        .from("notification_preferences")
+        .select("id")
+        .eq("user_id", user.id)
         .single();
 
       if (existing) {
         const { data, error } = await supabase
-          .from('notification_preferences')
+          .from("notification_preferences")
           .update(updates)
-          .eq('user_id', user.id)
+          .eq("user_id", user.id)
           .select()
           .single();
         if (error) throw error;
         return data as NotificationPreferences;
       } else {
         const { data, error } = await supabase
-          .from('notification_preferences')
+          .from("notification_preferences")
           .insert({ user_id: user.id, ...DEFAULT_PREFERENCES, ...updates })
           .select()
           .single();
@@ -122,7 +125,7 @@ export function useUpdateNotificationPreferences() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notification-preferences'] });
+      queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
     },
   });
 }

@@ -82,6 +82,7 @@ CREATE OR REPLACE FUNCTION pg_temp.wid(p_name text)
 RETURNS uuid AS $$
   SELECT id FROM ids WHERE name = p_name;
 $$ LANGUAGE sql;
+GRANT EXECUTE ON FUNCTION pg_temp.wid(text) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id uuid)
 RETURNS VOID AS $$
@@ -93,6 +94,7 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_role(p_user_id uuid)
 RETURNS VOID AS $$
@@ -101,6 +103,7 @@ BEGIN
   EXECUTE 'SET LOCAL ROLE authenticated';
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_role(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.reset_role()
 RETURNS VOID AS $$
@@ -108,23 +111,27 @@ BEGIN
   EXECUTE 'RESET ROLE';
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.anchor_of(p_phase_id uuid)
 RETURNS date AS $$
   SELECT anchor_date FROM public.project_phases WHERE id = p_phase_id;
 $$ LANGUAGE sql;
+GRANT EXECUTE ON FUNCTION pg_temp.anchor_of(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.revision_count()
 RETURNS integer AS $$
   SELECT count(*)::integer FROM public.schedule_revisions
    WHERE project_id = 'b1a5e000-0000-4000-8000-0000000000a1';
 $$ LANGUAGE sql;
+GRANT EXECUTE ON FUNCTION pg_temp.revision_count() TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.proposal_count()
 RETURNS integer AS $$
   SELECT count(*)::integer FROM public.schedule_proposals
    WHERE project_id = 'b1a5e000-0000-4000-8000-0000000000a1';
 $$ LANGUAGE sql;
+GRANT EXECUTE ON FUNCTION pg_temp.proposal_count() TO PUBLIC;
 
 SELECT pg_temp.assume_user('b1a5e000-0000-4000-8000-000000000001');
 

@@ -122,6 +122,11 @@ resolve_next_public_var() {
 
 PREFLIGHT_URL="$(resolve_next_public_var NEXT_PUBLIC_SUPABASE_URL)"
 PREFLIGHT_ANON="$(resolve_next_public_var NEXT_PUBLIC_SUPABASE_ANON_KEY)"
+# D-B1 (docs/engineering/repoint-b0-audit.md §5): the pinned auth-cookie
+# storage key. Same var as the client.ts/extension pin — resolved here too
+# because NEXT_PUBLIC_* is build-time-inlined, so a wrangler.jsonc-only value
+# is invisible to `next build`; see the fail-closed check below.
+PREFLIGHT_STORAGE_KEY="$(resolve_next_public_var NEXT_PUBLIC_SUPABASE_STORAGE_KEY)"
 
 if [ -z "$PREFLIGHT_URL" ] || [ -z "$PREFLIGHT_ANON" ]; then
   echo "ERROR: refusing to build ${PORTAL} portal — NEXT_PUBLIC_SUPABASE_URL and/or" >&2
@@ -157,6 +162,43 @@ if [ "$TARGET_ENV" = "staging" ]; then
     echo "       invoking this script; do not rely on a production .env.local." >&2
     exit 1
   fi
+fi
+
+# D-B1 (docs/engineering/repoint-b0-audit.md §5): the auth-cookie storage key
+# must be pinned, not left to derive from NEXT_PUBLIC_SUPABASE_URL's host —
+# otherwise a URL repoint (or a bad wrangler.jsonc edit) silently renames the
+# cookie every client/worker expects and mass-logs-out every session. Refuse
+# to ship a build whose resolved storage key doesn't match EITHER what
+# @supabase/ssr would derive from the resolved URL today (the un-repointed
+# default) OR the canonical pinned literal (the value that must survive a
+# future repoint) — anything else is an unexplained divergence between what
+# this build's client bundle will use and what every other portal/the
+# extension expects.
+CANONICAL_STORAGE_KEY="sb-bkvcixdmuyejfzcijpdg-auth-token"
+url_host="${PREFLIGHT_URL#*://}"
+url_host="${url_host%%/*}"
+url_host="${url_host%%:*}"
+DERIVED_STORAGE_KEY="sb-${url_host%%.*}-auth-token"
+
+if [ -z "$PREFLIGHT_STORAGE_KEY" ]; then
+  echo "ERROR: refusing to build ${PORTAL} portal — NEXT_PUBLIC_SUPABASE_STORAGE_KEY" >&2
+  echo "       resolved EMPTY for ${APP_DIR}. next build would inline an empty" >&2
+  echo "       storage key and packages/supabase/src/client.ts's in-code fallback" >&2
+  echo "       (${CANONICAL_STORAGE_KEY}) would silently take over instead — set it" >&2
+  echo "       explicitly in wrangler.jsonc's vars (or apps/${PORTAL}-portal/.env.local" >&2
+  echo "       for a local build) so it stays visible and greppable." >&2
+  exit 1
+elif [ "$PREFLIGHT_STORAGE_KEY" != "$DERIVED_STORAGE_KEY" ] && [ "$PREFLIGHT_STORAGE_KEY" != "$CANONICAL_STORAGE_KEY" ]; then
+  echo "ERROR: refusing to build ${PORTAL} portal — resolved" >&2
+  echo "       NEXT_PUBLIC_SUPABASE_STORAGE_KEY=${PREFLIGHT_STORAGE_KEY}" >&2
+  echo "       matches neither the URL-derived default for the resolved URL" >&2
+  echo "       (${DERIVED_STORAGE_KEY}, from NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL})" >&2
+  echo "       nor the canonical pinned literal (${CANONICAL_STORAGE_KEY})." >&2
+  echo "       This looks like an unintentional client/worker divergence — the" >&2
+  echo "       cookie name this build's client bundle uses would not match what" >&2
+  echo "       every other portal and the extension expect. Fix" >&2
+  echo "       apps/${PORTAL}-portal/wrangler.jsonc's NEXT_PUBLIC_SUPABASE_STORAGE_KEY." >&2
+  exit 1
 fi
 
 echo "==> [0/3] Preflight OK: NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL}"

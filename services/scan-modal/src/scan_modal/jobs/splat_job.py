@@ -68,6 +68,9 @@ CACHE_ROOT = Path(SPLAT_CACHE_MOUNT)
 #: directory and the previous checkpoint is never found.
 RUN_TIMESTAMP = "patina"
 METHOD = "splatfacto"
+#: What `--experiment-name` is passed as. Its own level in nerfstudio's output
+#: tree, above the method — see `workspace_paths`.
+EXPERIMENT_NAME = METHOD
 DEFAULT_MAX_ITERATIONS = 30000
 #: Save often enough that a preemption costs minutes, not the whole run.
 STEPS_PER_SAVE = 2000
@@ -98,14 +101,28 @@ def workspace_paths(scan_id: str, room_file_version: Any, root: Path | None = No
     mount point stays overridable (tests point it at a tmp dir).
     """
     base = (root or CACHE_ROOT) / str(scan_id) / f"v{room_file_version}"
+    # nerfstudio's run directory is FOUR segments, not three:
+    #
+    #     <output-dir> / <experiment-name> / <method-name> / <timestamp>
+    #
+    # `--experiment-name` and the method are separate levels even when they hold
+    # the same word, and this stage passes `splatfacto` for both. Modelling it as
+    # three collapsed them into one and pointed `config`/`checkpoints` at a
+    # directory nerfstudio never writes — so `ns-export --load-config` would fail
+    # on a path that does not exist, and `resume` could never find a checkpoint,
+    # silently defeating the preemption Volume it is all built around.
+    #
+    # Verified against a live staging run (2026-08-18), which logged:
+    #     logging events to: <base>/output/splatfacto/splatfacto/patina
+    run = base / "output" / EXPERIMENT_NAME / METHOD / RUN_TIMESTAMP
     return {
         "base": base,
         "images": base / "images",
         "transforms": base / "transforms.json",
         "output": base / "output",
-        "run": base / "output" / METHOD / RUN_TIMESTAMP,
-        "checkpoints": base / "output" / METHOD / RUN_TIMESTAMP / "nerfstudio_models",
-        "config": base / "output" / METHOD / RUN_TIMESTAMP / "config.yml",
+        "run": run,
+        "checkpoints": run / "nerfstudio_models",
+        "config": run / "config.yml",
         "exports": base / "exports",
         "ply": base / "exports" / "splat.ply",
         "spz": base / "room.spz",
@@ -124,7 +141,7 @@ def train_argv(paths: dict[str, Path], max_iterations: int, resume: bool) -> lis
         "ns-train", METHOD,
         "--data", str(paths["base"]),
         "--output-dir", str(paths["base"] / "output"),
-        "--experiment-name", METHOD,
+        "--experiment-name", EXPERIMENT_NAME,
         "--timestamp", RUN_TIMESTAMP,
         "--max-num-iterations", str(int(max_iterations)),
         "--steps-per-save", str(STEPS_PER_SAVE),

@@ -1,12 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@supabase/ssr';
-import type { Campaign, CampaignAnalytics } from '@patina/shared/types';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createBrowserClient } from "../client";
+import type { Campaign, CampaignAnalytics } from "@patina/shared/types";
 
-const getSupabase = () =>
-  createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+const getSupabase = () => createBrowserClient();
 
 type CampaignWithAnalytics = Campaign & {
   campaign_analytics: CampaignAnalytics | null;
@@ -14,7 +10,9 @@ type CampaignWithAnalytics = Campaign & {
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const supabase = getSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session?.access_token) return {};
   return { Authorization: `Bearer ${session.access_token}` };
 }
@@ -24,14 +22,12 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
  */
 export function useCampaigns(status?: string) {
   return useQuery<CampaignWithAnalytics[]>({
-    queryKey: ['campaigns', status],
+    queryKey: ["campaigns", status],
     queryFn: async () => {
       const headers = await getAuthHeaders();
-      const url = status
-        ? `/api/campaigns?status=${status}`
-        : '/api/campaigns';
+      const url = status ? `/api/campaigns?status=${status}` : "/api/campaigns";
       const res = await fetch(url, { headers });
-      if (!res.ok) throw new Error('Failed to fetch campaigns');
+      if (!res.ok) throw new Error("Failed to fetch campaigns");
       return res.json();
     },
   });
@@ -42,11 +38,11 @@ export function useCampaigns(status?: string) {
  */
 export function useCampaign(id: string | null) {
   return useQuery<CampaignWithAnalytics>({
-    queryKey: ['campaigns', id],
+    queryKey: ["campaigns", id],
     queryFn: async () => {
       const headers = await getAuthHeaders();
       const res = await fetch(`/api/campaigns/${id}`, { headers });
-      if (!res.ok) throw new Error('Failed to fetch campaign');
+      if (!res.ok) throw new Error("Failed to fetch campaign");
       return res.json();
     },
     enabled: !!id,
@@ -72,19 +68,19 @@ export function useCreateCampaign() {
       scheduled_for?: string;
     }) => {
       const headers = await getAuthHeaders();
-      const res = await fetch('/api/campaigns', {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
+      const res = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to create campaign');
+        throw new Error(err.error || "Failed to create campaign");
       }
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
     },
   });
 }
@@ -96,22 +92,25 @@ export function useUpdateCampaign() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string } & Record<string, unknown>) => {
+    mutationFn: async ({
+      id,
+      ...data
+    }: { id: string } & Record<string, unknown>) => {
       const headers = await getAuthHeaders();
       const res = await fetch(`/api/campaigns/${id}`, {
-        method: 'PATCH',
-        headers: { ...headers, 'Content-Type': 'application/json' },
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to update campaign');
+        throw new Error(err.error || "Failed to update campaign");
       }
       return res.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
-      queryClient.invalidateQueries({ queryKey: ['campaigns', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns", variables.id] });
     },
   });
 }
@@ -126,17 +125,17 @@ export function useSendCampaign() {
     mutationFn: async (id: string) => {
       const headers = await getAuthHeaders();
       const res = await fetch(`/api/campaigns/${id}/send`, {
-        method: 'POST',
+        method: "POST",
         headers,
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to send campaign');
+        throw new Error(err.error || "Failed to send campaign");
       }
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
     },
   });
 }
@@ -151,18 +150,18 @@ export function useArchiveCampaign() {
     mutationFn: async (id: string) => {
       const headers = await getAuthHeaders();
       const res = await fetch(`/api/campaigns/${id}`, {
-        method: 'PATCH',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'archived' }),
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "archived" }),
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to archive campaign');
+        throw new Error(err.error || "Failed to archive campaign");
       }
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
     },
   });
 }
@@ -177,17 +176,17 @@ export function useDeleteCampaign() {
     mutationFn: async (id: string) => {
       const headers = await getAuthHeaders();
       const res = await fetch(`/api/campaigns/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
         headers,
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to delete campaign');
+        throw new Error(err.error || "Failed to delete campaign");
       }
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
     },
   });
 }
@@ -202,17 +201,17 @@ export function useCancelCampaign() {
     mutationFn: async (id: string) => {
       const headers = await getAuthHeaders();
       const res = await fetch(`/api/campaigns/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
         headers,
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Failed to cancel campaign');
+        throw new Error(err.error || "Failed to cancel campaign");
       }
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
     },
   });
 }
@@ -234,11 +233,11 @@ export interface AbVariantStats {
  */
 export function useAbVariantStats(campaignId: string | undefined) {
   return useQuery<AbVariantStats[]>({
-    queryKey: ['campaign-ab-stats', campaignId],
+    queryKey: ["campaign-ab-stats", campaignId],
     enabled: !!campaignId,
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data, error } = await supabase.rpc('get_ab_variant_stats', {
+      const { data, error } = await supabase.rpc("get_ab_variant_stats", {
         p_campaign_id: campaignId!,
       });
       if (error) throw error;

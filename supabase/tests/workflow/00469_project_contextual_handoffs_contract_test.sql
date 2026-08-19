@@ -62,6 +62,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_actor(uuid) TO PUBLIC;
 
 INSERT INTO auth.users (
   id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
@@ -180,6 +181,7 @@ BEGIN
   RETURN v_id;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.create_handoff_approval(text, integer, uuid) TO PUBLIC;
 
 SELECT pg_temp.assume_actor('a4410000-0000-4000-8000-000000000001');
 SET LOCAL ROLE authenticated;

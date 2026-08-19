@@ -252,17 +252,14 @@ describe('validate-config scan read path', () => {
     }
   });
 
-  it('keeps every environment resting at SCAN_ROUTES=off', () => {
-    // The plan ships the read path to STAGING only, and only once the R2
-    // credentials exist; production is off for the whole of it.
-    for (const scope of [
-      config,
-      config.env.local,
-      config.env.staging,
-      config.env.production,
-    ]) {
-      expect(scope.vars.SCAN_ROUTES).toBe('off');
-    }
+  it('pins the ruled SCAN_ROUTES posture per scope', () => {
+    // The plan ships the read path to STAGING only (459dad4b); default,
+    // local, and production stay off — production is off for the whole of
+    // it.
+    expect(config.vars.SCAN_ROUTES).toBe('off');
+    expect(config.env.local.vars.SCAN_ROUTES).toBe('off');
+    expect(config.env.staging.vars.SCAN_ROUTES).toBe('on');
+    expect(config.env.production.vars.SCAN_ROUTES).toBe('off');
   });
 
   it('rejects any SCAN_ROUTES value that is not off or on', () => {

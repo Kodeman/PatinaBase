@@ -140,6 +140,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_begin_actor(uuid) TO PUBLIC;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_begin_actor('d6000000-0000-4000-8000-000000000001');
@@ -172,6 +173,11 @@ BEGIN
 END;
 $$;
 
+-- Must run as the unrestricted session owner: SET LOCAL ROLE authenticated
+-- above means the current role no longer has CREATE on this session's own
+-- pg_temp_N schema, so defining another pg_temp object here without
+-- resetting first fails "permission denied for schema pg_temp_N".
+RESET ROLE;
 CREATE OR REPLACE FUNCTION pg_temp.reject_rollback_relationship()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -183,6 +189,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.reject_rollback_relationship() TO PUBLIC;
 
 CREATE TRIGGER test_reject_rollback_relationship
 BEFORE INSERT OR UPDATE ON public.designer_clients

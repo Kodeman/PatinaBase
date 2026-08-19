@@ -145,6 +145,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_atomic_actor(uuid, text) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.decision_notice_count(
   p_decision_id uuid,
@@ -160,6 +161,7 @@ AS $$
   WHERE decision_id = p_decision_id
     AND (p_kind IS NULL OR kind::text = p_kind)
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.decision_notice_count(uuid, text) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.reminder_log_count(p_decision_id uuid)
 RETURNS bigint
@@ -175,6 +177,7 @@ AS $$
     AND channel = 'in_app'
     AND status = 'delivered'
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.reminder_log_count(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.decision_viewed_at(p_decision_id uuid)
 RETURNS timestamptz
@@ -186,6 +189,7 @@ AS $$
   FROM public.client_decisions
   WHERE id = p_decision_id
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.decision_viewed_at(uuid) TO PUBLIC;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_atomic_actor('fa000000-0000-4000-8000-000000000001');

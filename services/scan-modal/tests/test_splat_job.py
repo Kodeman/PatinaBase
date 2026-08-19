@@ -425,6 +425,32 @@ def test_the_workspace_is_keyed_on_the_room_file_version():
     assert str(v4["base"]).endswith("scan-1/v4")
 
 
+def test_the_run_directory_matches_nerfstudios_own_four_level_layout():
+    """nerfstudio writes to `<output-dir>/<experiment>/<method>/<timestamp>`.
+
+    Asserted as LITERAL segments derived from the argv, not from
+    `workspace_paths` itself — a self-consistent expectation is what let the
+    collapsed three-level path ship: every other test builds its fixture
+    directories from the same helper it is checking, so both sides moved
+    together and `ns-export --load-config` pointed at a directory nerfstudio
+    never creates. A live staging run logged
+    `<base>/output/splatfacto/splatfacto/patina`.
+    """
+    paths = splat_job.workspace_paths("scan-1", 4)
+    argv = splat_job.train_argv(paths, 30000, resume=False)
+    output_dir = argv[argv.index("--output-dir") + 1]
+    experiment = argv[argv.index("--experiment-name") + 1]
+    timestamp = argv[argv.index("--timestamp") + 1]
+    method = argv[1]
+
+    expected = f"{output_dir}/{experiment}/{method}/{timestamp}"
+    assert str(paths["run"]) == expected
+    assert str(paths["config"]) == f"{expected}/config.yml"
+    assert str(paths["checkpoints"]) == f"{expected}/nerfstudio_models"
+    # Four levels below the output dir, not three.
+    assert paths["run"].relative_to(paths["output"]).parts == (experiment, method, timestamp)
+
+
 def test_the_object_key_carries_scan_and_room_file_version():
     assert splat_job.splat_object_key("s1", 7) == "scan_artifacts/s1/v7/room.spz"
 
