@@ -359,6 +359,7 @@ describe('intent body', () => {
   it('accepts every artifact kind the capture bundle actually carries', () => {
     for (const artifactKind of [
       'anchors',
+      'bundleArchive',
       'bundleManifest',
       'capturedRoomJson',
       'coverageHeatmap',
@@ -379,6 +380,23 @@ describe('intent body', () => {
         artifactKind,
       );
     }
+  });
+
+  // 00500: bundleArchive (the Patina client's whole-bundle zip) and
+  // keyframesArchive (Field's keyframes.tar) share the legacy Supabase
+  // Storage `bundle` folder / `scan_bundle_url` column, but the
+  // registry-keyed interface (`scan_originals/{scanId}/{artifactKind}/…`)
+  // must never conflate them — each kind name is its own key segment.
+  it('treats bundleArchive and keyframesArchive as distinct kinds', () => {
+    const bundleArchive = parseUploadIntentBody(
+      validBody({ artifactKind: 'bundleArchive', filename: 'bundle.zip' }),
+    );
+    const keyframesArchive = parseUploadIntentBody(
+      validBody({ artifactKind: 'keyframesArchive', filename: 'keyframes.tar' }),
+    );
+    expect(bundleArchive.artifactKind).toBe('bundleArchive');
+    expect(keyframesArchive.artifactKind).toBe('keyframesArchive');
+    expect(bundleArchive.artifactKind).not.toBe(keyframesArchive.artifactKind);
   });
 });
 

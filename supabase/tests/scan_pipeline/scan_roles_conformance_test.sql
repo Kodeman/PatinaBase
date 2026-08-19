@@ -606,6 +606,37 @@ BEGIN
   END;
   RAISE NOTICE 'PASS 10e: malformed kinds, nested filenames, and the artifacts bucket are all refused';
 
+  -- 10f: 00500 — bundleArchive (the Patina client's whole-bundle zip) and
+  -- keyframesArchive (Field's keyframes.tar) share the legacy Supabase
+  -- Storage `bundle` folder / `scan_bundle_url` column, but must be TWO
+  -- DISTINCT kinds here: each is a separate registry key
+  -- (`scan_originals/{scanId}/{artifactKind}/{filename}`), and neither
+  -- collides with or overwrites the other's slot.
+  DECLARE
+    bundle_intent    jsonb;
+    keyframes_intent jsonb;
+  BEGIN
+    bundle_intent := public.create_media_upload_intent(
+      'c3333333-3333-4333-8333-333333333333', 'bundleArchive', 'bundle.zip',
+      'patina-staging-media-originals-us', repeat('a', 64), 2048,
+      'application/octet-stream'
+    );
+    keyframes_intent := public.create_media_upload_intent(
+      'c3333333-3333-4333-8333-333333333333', 'keyframesArchive', 'keyframes.tar',
+      'patina-staging-media-originals-us', repeat('a', 64), 2048,
+      'application/octet-stream'
+    );
+    ASSERT bundle_intent ->> 'object_key'
+      = 'scan_originals/c3333333-3333-4333-8333-333333333333/bundleArchive/bundle.zip',
+      'FAIL 10f: unexpected bundleArchive object key ' || (bundle_intent ->> 'object_key');
+    ASSERT keyframes_intent ->> 'object_key'
+      = 'scan_originals/c3333333-3333-4333-8333-333333333333/keyframesArchive/keyframes.tar',
+      'FAIL 10f: unexpected keyframesArchive object key ' || (keyframes_intent ->> 'object_key');
+    ASSERT (bundle_intent ->> 'object_id') <> (keyframes_intent ->> 'object_id'),
+      'FAIL 10f: bundleArchive and keyframesArchive must not resolve to the same registry row';
+    RAISE NOTICE 'PASS 10f: bundleArchive and keyframesArchive are distinct kinds with distinct registry keys';
+  END;
+
   PERFORM set_config('request.jwt.claims', NULL, true);
 END $$;
 
