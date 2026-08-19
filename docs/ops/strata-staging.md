@@ -102,3 +102,105 @@ At minimum, verify:
    bottom/newest entry.
 
 Production deployment remains a separate, explicitly authorized operation.
+
+## Migration ledger discipline (2026-08-19)
+
+> ⚠ **PENDING KODY'S CONFIRMATION.** This section **supersedes the earlier
+> scoped-MCP ruling** that allowed `apply_migration` against staging. Until
+> Kody confirms, treat the rule below as in force and the older ruling as
+> withdrawn.
+
+### The rule
+
+Staging database changes are **file-based only**:
+
+```bash
+# from a staging-linked worktree (verify supabase/.temp/project-ref first)
+supabase db push --dry-run
+supabase db push
+```
+
+- **NEVER `mcp__*__apply_migration` against staging.** The MCP tool stamps a
+  **timestamp** version (`20260818072756`) instead of the repository's
+  hand-numbered `NNNNN`. The CLI then cannot match the row to its file, so the
+  file reads as unapplied forever and the two ledgers silently diverge.
+- **NEVER a bare `supabase db push` from a prod-linked checkout.** The
+  repository root checkout is linked to **prod** (`bkvcixdmuyejfzcijpdg`). Every
+  staging command carries an explicit target — a staging-linked worktree, or
+  `--project-ref vuesoyhfrjabfxbrzekd` / `--db-url`.
+- Out-of-order catch-up (a repaired gap below the remote head) needs
+  `supabase db push --include-all`; a plain push fails with
+  `LegacyDbPushMissingRemoteError`.
+
+### The incident
+
+Two programs applied migrations to staging over 2026-08-18/19 via MCP
+`apply_migration`. That wrote **12 timestamp-versioned rows** into
+`supabase_migrations.schema_migrations` above a `00480` floor, none of which the
+CLI could reconcile against a repository file. Reconciled 2026-08-19 by mapping
+each row to its `NNNNN`, content-verifying the objects on staging, then
+`supabase migration repair --status applied <NNNNN…>` +
+`--status reverted <timestamp…>`.
+
+### Reconciliation record (2026-08-19)
+
+| Timestamp on staging | Maps to                                           | Text vs repo file | Verdict                           |
+| -------------------- | ------------------------------------------------- | ----------------- | --------------------------------- |
+| `20260818072756`     | `00481_edge_catalog_roles`                        | exact             | applied                           |
+| `20260818072900`     | `00482_retained_service_authorization_contract`   | **variant**       | applied                           |
+| `20260818074342`     | `00483_public_acl_allowlist`                      | exact             | applied                           |
+| `20260818075013`     | `00484_public_rpc_authorization_contract`         | exact             | applied                           |
+| `20260818075051`     | `00485_moodboard_storage_caller_binding`          | **stale body**    | **NOT repaired — left unapplied** |
+| `20260818075143`     | `00486_public_acl_residual_closure`               | exact             | applied                           |
+| `20260818184355`     | `00489_media_registry_kernel`                     | exact             | applied                           |
+| `20260818184517`     | `00490_scan_worker_roles`                         | exact             | applied                           |
+| `20260818184547`     | `00491_dispatch_scan_modal_cron`                  | exact             | applied                           |
+| `20260818212329`     | `00492_room_file_version_monotonicity`            | exact             | applied                           |
+| `20260819095918`     | `00498_media_upload_intent_and_scan_version_lock` | comments only     | applied                           |
+| `20260819104323`     | `00499_upload_interface_hardening`                | comments only     | applied                           |
+
+Notes on the three non-exact rows:
+
+- **00482 — the snake-case variant.** Staging received the pre-`2d6e9063` body
+  that names `svc_media.media_assets` / `created_at` directly. `main`'s file is
+  the catalog-resolving rewrite that exists because **prod**'s `svc_*` schemas
+  are Prisma-shaped (`svc_media."MediaAsset"` / `"createdAt"`). Staging is
+  snake-shaped throughout, so the two are **equivalent in effect there**.
+  Verified by object, not by text: `svc_orders.orders.organization_id`,
+  `svc_orders.stripe_webhook_receipts`, `svc_projects.projects.public_project_id`,
+  `svc_media.media_assets.project_id`, `svc_media.asset_kind` value `DOCUMENT`,
+  and all 8 `public.permissions` rows.
+- **00498 / 00499 — abridged headers.** The applied text replaced the long file
+  headers with a pointer back to the file. Comment-stripped, whitespace-normalized
+  hashes of every function body (`scan_worker_update_room_file`,
+  `create_media_upload_intent`, `confirm_media_upload`, `register_media_object`)
+  **match the repository byte for byte**; `is_originals_bucket` matches
+  unmodified. Executable content is identical.
+- **00485 — a real content gap, deliberately left unapplied.** Staging holds the
+  body from before `6e9b109a` ("reference-scope 00485 client leg to the active
+  issued board"): the client leg is still whole-prefix and the helper
+  `public.can_client_read_issued_board_media` is **absent**. Prod **has** the
+  tightened version, so staging — not `main` — is the laggard. Marking 00485
+  applied would have stranded the tightening on staging permanently, so its
+  ledger row was reverted and no applied-mark written; `db push` therefore
+  carries it.
+
+**Non-ledger repair, content-verified:** `00373`'s `public.room_files.drawings`
+column was re-applied to staging via `execute_sql` without a ledger row. The
+column exists (`jsonb`); 00373 is inside the reconciled `00480` floor and needs
+no repair entry.
+
+### Post-repair state
+
+`supabase db push --dry-run --include-all` plans exactly:
+
+```
+ • 00485_moodboard_storage_caller_binding.sql
+ • 00493_svc_shape_resolving_function_bodies.sql
+ • 00510_post_00483_grant_and_scope_repairs.sql
+```
+
+`00487`, `00488`, `00494`–`00497`, and `00500`–`00509` have no files on `main`
+and are correctly absent. **This push was NOT executed** — the agreed scope
+authorized 00493 + 00510 only, and 00485's appearance is a scope change awaiting
+Kody's ruling.
