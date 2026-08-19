@@ -692,3 +692,66 @@ describe('SCAN_ROUTES', () => {
     expect(response.status).toBe(200);
   });
 });
+
+// ── CORS ─────────────────────────────────────────────────────────────────────
+// This route is called cross-origin, straight from portal browser JS, with an
+// `Authorization` header — which forces a CORS preflight `OPTIONS` before the
+// real `GET` ever leaves the browser. Confirmed missing live on staging: an
+// `OPTIONS` to this exact path 404'd with no `access-control-*` headers at
+// all, so `fetch()` failed with an opaque "Failed to fetch" and the read path
+// never even reached the Worker — SPLAT/renders stuck on
+// `unavailable: 'read-path-pending'` forever, indistinguishable from the route
+// being genuinely unwired.
+describe('CORS', () => {
+  async function optionsRequest(
+    worker: ReturnType<typeof createWorker>,
+    requestEnv: EdgeApiEnv,
+    path = `/v1/scan/room-files/${ROOM_FILE_ID}/artifacts/splat`,
+  ) {
+    return worker.fetch!(
+      new Request(`https://api.patina.cloud${path}`, {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'https://patina-designer-portal-staging.kody-be3.workers.dev',
+          'access-control-request-method': 'GET',
+          'access-control-request-headers': 'authorization',
+        },
+      }) as Request<unknown, IncomingRequestCfProperties>,
+      requestEnv,
+      { waitUntil() {}, passThroughOnException() {}, props: {} } as unknown as ExecutionContext,
+    );
+  }
+
+  it('answers the preflight with 204 and the CORS headers the browser checks', async () => {
+    const response = await optionsRequest(createWorker(dependencies()), env());
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect(response.headers.get('access-control-allow-methods')).toContain('GET');
+    expect(response.headers.get('access-control-allow-headers')).toContain('authorization');
+  });
+
+  it('never touches the database for a preflight', async () => {
+    const deps = dependencies();
+    await optionsRequest(createWorker(deps), env());
+    expect(deps.resolveScanArtifacts).not.toHaveBeenCalled();
+  });
+
+  it('leaves the preflight unrouted — same as any unmatched OPTIONS — when SCAN_ROUTES is off', async () => {
+    const response = await optionsRequest(createWorker(dependencies()), env({ SCAN_ROUTES: 'off' }));
+    expect(response.status).toBe(404);
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
+  it('carries the same CORS header on the real GET response, success or not', async () => {
+    // Default `resolveScanArtifacts` resolves to no objects -> 404, but the
+    // CORS header must survive every response shape this route can return,
+    // not just the happy path.
+    const deps = dependencies();
+    const response = await request(createWorker(deps), env(), undefined, {
+      authorization: 'Bearer irrelevant',
+    });
+    expect(response.status).toBe(404);
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+  });
+});

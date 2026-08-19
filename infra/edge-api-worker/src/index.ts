@@ -98,6 +98,40 @@ function privateJson(body: unknown, status: number, traceId: string): Response {
   });
 }
 
+/**
+ * The scan artifact route (`GET /v1/scan/room-files/:id/artifacts/:kind`) is
+ * called directly from portal browser JS with a bearer `Authorization` header
+ * (`packages/supabase/src/lib/scan-artifact-url.ts`) — a cross-origin request
+ * (the portal and this Worker are different origins), so the browser sends a
+ * CORS preflight `OPTIONS` before the real `GET`. Nothing on this route ever
+ * answered that preflight (no `access-control-*` headers, no `OPTIONS`
+ * handling), so every browser call failed with an opaque "Failed to fetch"
+ * before a single GET request reached the Worker — confirmed live on staging
+ * (`curl -X OPTIONS .../artifacts/renders` → 404, no CORS headers at all).
+ * The route carries no cookie/session state of its own (auth is the bearer
+ * token, verified server-side against Supabase JWKS), so a wildcard origin
+ * leaks nothing a same-origin request wouldn't already get — matching the
+ * catalog route's existing `access-control-allow-origin: '*'` precedent.
+ */
+const SCAN_ARTIFACT_CORS_HEADERS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, OPTIONS',
+  'access-control-allow-headers': 'authorization, content-type',
+  'access-control-max-age': '600',
+};
+
+function withScanArtifactCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(SCAN_ARTIFACT_CORS_HEADERS)) {
+    headers.set(name, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 async function catalogResponse(
   products: CatalogProductSummary[],
   traceId: string,
@@ -550,15 +584,24 @@ export function createWorker(
         // SCAN_ROUTES=off leaves the path unrouted entirely, so it falls through
         // to the same not_found any unknown path gets: an environment that has
         // not turned the read path on does not advertise that it exists.
-        if (config.scanRoutes === 'on' && request.method === 'GET') {
+        if (
+          config.scanRoutes === 'on' &&
+          (request.method === 'GET' || request.method === 'OPTIONS')
+        ) {
           const target = parseScanArtifactPath(url.pathname);
           if (target) {
-            return await handleScanArtifact(
-              request,
-              env,
-              target,
-              traceId,
-              dependencies,
+            // Browser JS calls this route cross-origin with an `Authorization`
+            // header, which triggers a CORS preflight — answer it here rather
+            // than falling through to the generic not_found every other
+            // unmatched OPTIONS request gets.
+            if (request.method === 'OPTIONS') {
+              return new Response(null, {
+                status: 204,
+                headers: SCAN_ARTIFACT_CORS_HEADERS,
+              });
+            }
+            return withScanArtifactCors(
+              await handleScanArtifact(request, env, target, traceId, dependencies),
             );
           }
         }
