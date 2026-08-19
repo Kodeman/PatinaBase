@@ -473,18 +473,39 @@ INSERT INTO public.projects (
 INSERT INTO public.project_rooms (id, project_id, name, sort_order)
 VALUES ('d5600000-0000-4000-8000-000000000002',
         'd5730000-0000-4000-8000-000000000001', 'Other living room', 0);
-INSERT INTO public.project_ffe_items (
-  id, project_id, project_room_id, name, ffe_category, item_type, status,
-  quantity, unit_price_cents, trade_price_cents, markup_percent,
-  line_total_cents, vendor_id, vendor_name, sort_order
-) VALUES (
-  'd5720000-0000-4000-8000-000000000002',
-  'd5730000-0000-4000-8000-000000000001',
-  'd5600000-0000-4000-8000-000000000002',
-  'Cross-project chair', 'Seating', 'fixed', 'specified', 1, 100000, 60000,
-  66.67, 100000, 'd5710000-0000-4000-8000-000000000001',
-  'Commercial Test Vendor', 0
-);
+INSERT INTO public.project_ffe_items (id,
+    project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    markup_percent,
+    line_total_cents,
+    vendor_id,
+    vendor_name,
+    sort_order) VALUES (
+    'd5720000-0000-4000-8000-000000000002',
+    'd5730000-0000-4000-8000-000000000001',
+    'd5600000-0000-4000-8000-000000000002',
+    'room',
+    'Cross-project chair',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    100000,
+    60000,
+    66.67,
+    100000,
+    'd5710000-0000-4000-8000-000000000001',
+    'Commercial Test Vendor',
+    0
+  );
 DO $$
 DECLARE v_project_id uuid; v_err text;
 BEGIN
@@ -504,12 +525,12 @@ END;
 $$;
 -- The line the whole wave walk below is drawn over.
 INSERT INTO public.project_ffe_items (
-  id, project_id, project_room_id, name, ffe_category, item_type, status,
+  id, project_id, project_room_id, assignment_scope, name, ffe_category, item_type, status,
   quantity, unit_price_cents, trade_price_cents, markup_percent,
   line_total_cents, vendor_id, vendor_name, sort_order
 ) SELECT
   'd5720000-0000-4000-8000-000000000001', p.id,
-  'd5600000-0000-4000-8000-000000000001',
+  'd5600000-0000-4000-8000-000000000001', 'room',
   'Test lounge chair', 'Seating', 'fixed', 'specified', 1, 100000, 60000,
   66.67, 100000, 'd5710000-0000-4000-8000-000000000001',
   'Commercial Test Vendor', 0
