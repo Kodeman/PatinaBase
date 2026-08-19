@@ -64,7 +64,12 @@ function mkRequest(
 
 beforeEach(() => {
   vi.clearAllMocks();
-  process.env.SUPABASE_PROJECT_REF = "api";
+  // D-B1.1: the expected cookie name is now pinned via
+  // NEXT_PUBLIC_SUPABASE_STORAGE_KEY (see getSupabaseAuthCookieName in
+  // proxy-to-backend.ts), not reconstructed from SUPABASE_PROJECT_REF. Set
+  // to "sb-api-auth-token" so the rest of this file's fixtures (which all
+  // use that cookie name) keep working unchanged.
+  process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY = "sb-api-auth-token";
   // Default: token verification passes
   verifyJwtToken.mockResolvedValue({ sub: "user-123" });
 });
@@ -393,10 +398,8 @@ describe("proxyToBackend — authentication", () => {
     expect(verifyJwtToken).not.toHaveBeenCalledWith("foreign-project-token");
   });
 
-  it("does not use an arbitrary Supabase cookie when the project ref is not configured", async () => {
-    delete process.env.SUPABASE_PROJECT_REF;
-    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-    delete process.env.SUPABASE_URL;
+  it("does not use an arbitrary Supabase cookie when NEXT_PUBLIC_SUPABASE_STORAGE_KEY is not configured", async () => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY;
     cookiesGetAll.mockReturnValue([
       {
         name: "sb-foreign-auth-token",
@@ -410,6 +413,80 @@ describe("proxyToBackend — authentication", () => {
 
     expect(response.status).toBe(401);
     expect(verifyJwtToken).not.toHaveBeenCalled();
+  });
+
+  describe("D-B1.1: pinned auth cookie name", () => {
+    it("falls back to the pinned literal cookie name when NEXT_PUBLIC_SUPABASE_STORAGE_KEY is unset", async () => {
+      delete process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY;
+      const payload = JSON.stringify({ access_token: "prod-pinned-token" });
+      cookiesGetAll.mockReturnValue([
+        { name: "sb-bkvcixdmuyejfzcijpdg-auth-token", value: payload },
+      ]);
+      mockFetch.mockResolvedValueOnce(
+        new Response("{}", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+      await proxyToBackend(mkRequest(), mkContext(), {
+        service: { name: "catalog", baseUrl: "http://x" },
+      });
+
+      expect(verifyJwtToken).toHaveBeenCalledWith("prod-pinned-token");
+    });
+
+    it("is independent of NEXT_PUBLIC_SUPABASE_URL / SUPABASE_URL — no longer derives the cookie name from them", async () => {
+      delete process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY;
+      // Point the URL at a completely different project ref. Pre-D-B1.1 this
+      // would have changed the expected cookie name to
+      // sb-totally-different-project-auth-token; it must not anymore.
+      process.env.NEXT_PUBLIC_SUPABASE_URL =
+        "https://totally-different-project.supabase.co";
+      const payload = JSON.stringify({ access_token: "prod-pinned-token" });
+      cookiesGetAll.mockReturnValue([
+        { name: "sb-bkvcixdmuyejfzcijpdg-auth-token", value: payload },
+      ]);
+      mockFetch.mockResolvedValueOnce(
+        new Response("{}", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+      await proxyToBackend(mkRequest(), mkContext(), {
+        service: { name: "catalog", baseUrl: "http://x" },
+      });
+
+      expect(verifyJwtToken).toHaveBeenCalledWith("prod-pinned-token");
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    });
+
+    it("NEXT_PUBLIC_SUPABASE_STORAGE_KEY overrides the literal fallback", async () => {
+      process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY = "sb-override-auth-token";
+      const payload = JSON.stringify({ access_token: "override-token" });
+      cookiesGetAll.mockReturnValue([
+        { name: "sb-override-auth-token", value: payload },
+        // The pinned literal must NOT match once an override is set.
+        {
+          name: "sb-bkvcixdmuyejfzcijpdg-auth-token",
+          value: JSON.stringify({ access_token: "should-not-be-used" }),
+        },
+      ]);
+      mockFetch.mockResolvedValueOnce(
+        new Response("{}", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+      await proxyToBackend(mkRequest(), mkContext(), {
+        service: { name: "catalog", baseUrl: "http://x" },
+      });
+
+      expect(verifyJwtToken).toHaveBeenCalledWith("override-token");
+      expect(verifyJwtToken).not.toHaveBeenCalledWith("should-not-be-used");
+    });
   });
 
   it("rebuilds forwarding headers from Cloudflare context and ignores caller spoofing", async () => {

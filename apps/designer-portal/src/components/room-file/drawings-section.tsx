@@ -6,12 +6,25 @@
  * (CAD import is day-one pilot workflow, R6). Every download signs a short-lived
  * URL at click time (room-scans is private) and streams the object to disk.
  * Typography-first, no shadows.
+ *
+ * The floor plan is also shown INLINE above the set (Rendered Room v2, P1 /
+ * PROPOSAL §4: "we already generate it — showing it is the cheapest single
+ * improvement"). It is the one sheet signed on MOUNT rather than at click time —
+ * an <img> needs a URL before anyone clicks — through the same
+ * `signRoomScansUrl` helper the downloads use, so there is one signing path, not
+ * two. Elevations stay download-only. Every failure here is silent: a signing
+ * error, a missing plan sheet, or an <img> that won't load all collapse back to
+ * exactly the previous downloads-only layout.
  */
 
-import { useState } from 'react';
-import type { RoomFileDrawings } from '@patina/supabase';
-import { downloadRoomFileArtifact } from '@/lib/room-file/room-file-download';
+import { useEffect, useState } from 'react';
+import type { RoomFileDrawings, RoomFileDrawingSheet } from '@patina/supabase';
+import { downloadRoomFileArtifact, signRoomScansUrl } from '@/lib/room-file/room-file-download';
 import { ROOM_FILE_COPY as C } from './room-file-copy';
+
+/** The plan sheet's stable id from the worker's manifest (drawing/model.py:
+ *  `Sheet(id="plan", …)`; elevations are `elev-north` … `elev-west`). */
+const PLAN_SHEET_ID = 'plan';
 
 function safeName(raw: string): string {
   return (raw || 'room').trim().replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'room';
@@ -45,6 +58,8 @@ export function DrawingsSection({ drawings, version, roomName }: DrawingsSection
   return (
     <section className="mt-10">
       <SectionHeading title={C.drawingsTitle} meta={C.drawingsSubtitle(sheets.length, drawings.generated_at ?? null)} />
+
+      <PlanPreview sheet={sheets.find((s) => s.id === PLAN_SHEET_ID) ?? null} roomName={roomName} />
 
       {/* DXF — the prominent CAD door. A single quiet-but-emphatic rule-bordered
           row above the sheet list. */}
@@ -99,6 +114,57 @@ export function DrawingsSection({ drawings, version, roomName }: DrawingsSection
         <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)]">{error}</p>
       )}
     </section>
+  );
+}
+
+/**
+ * The floor plan, drawn on the page. Signs the plan sheet's SVG once on mount
+ * (short-lived URL, same helper as the downloads) and renders it in the section's
+ * own rule-bordered chrome. Three states, one of them invisible: a skeleton while
+ * signing, the drawing when it lands, and NOTHING at all if anything goes wrong —
+ * no error line, no empty box; the page falls back to the sheet list it always had.
+ */
+function PlanPreview({ sheet, roomName }: { sheet: RoomFileDrawingSheet | null; roomName: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const svgUrl = sheet?.svg_url ?? null;
+
+  useEffect(() => {
+    if (!svgUrl) return;
+    let cancelled = false;
+    setUrl(null);
+    setFailed(false);
+    signRoomScansUrl(svgUrl)
+      .then((signed) => {
+        if (!cancelled) setUrl(signed);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [svgUrl]);
+
+  if (!svgUrl || failed) return null;
+
+  return (
+    <div className="mt-5 overflow-hidden rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-front)]">
+      {url ? (
+        <img
+          src={url}
+          alt={C.planPreviewAlt(roomName)}
+          className="block h-auto w-full"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div
+          data-testid="plan-preview-skeleton"
+          aria-hidden="true"
+          className="aspect-[4/3] w-full animate-pulse bg-[var(--bg-muted)] motion-reduce:animate-none"
+        />
+      )}
+    </div>
   );
 }
 

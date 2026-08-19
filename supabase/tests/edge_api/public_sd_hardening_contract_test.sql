@@ -1,4 +1,4 @@
--- Real-Postgres contract tests for migration 00487.
+-- Real-Postgres contract tests for migration 00511.
 -- Run after a clean reset and the privileged local platform runner:
 --   ./scripts/run-public-acl-psql.sh local \
 --     supabase/tests/edge_api/public_sd_hardening_contract_test.sql
@@ -1395,7 +1395,7 @@ BEGIN
   END IF;
 
   -- A fresh composer holds the project before its child latch. The final
-  -- 00488 close path must wait at that same root, then fail on the committed
+  -- 00512 close path must wait at that same root, then fail on the committed
   -- positive milestone rather than deadlocking invoice/child-first.
   PERFORM extensions.dblink_exec(
     'd485_atomic_first',
@@ -1589,12 +1589,12 @@ SET LOCAL statement_timeout = '60s';
 DO $assertion_preflight$
 BEGIN
   IF current_setting('plpgsql.check_asserts') <> 'on' THEN
-    RAISE EXCEPTION '00487 test requires plpgsql.check_asserts=on';
+    RAISE EXCEPTION '00511 test requires plpgsql.check_asserts=on';
   END IF;
 END
 $assertion_preflight$;
 
-CREATE TEMP TABLE _00487_expected_public (
+CREATE TEMP TABLE _00511_expected_public (
   signature text PRIMARY KEY,
   arguments text NOT NULL,
   result_type text NOT NULL,
@@ -1604,7 +1604,7 @@ CREATE TEMP TABLE _00487_expected_public (
   security_definer boolean NOT NULL DEFAULT true
 ) ON COMMIT DROP;
 
-INSERT INTO _00487_expected_public (
+INSERT INTO _00511_expected_public (
   signature, arguments, result_type, final_config, body_sha256, direct_roles
 )
 VALUES
@@ -1721,7 +1721,7 @@ VALUES
     ARRAY['service_role']::text[]
   );
 
-UPDATE _00487_expected_public
+UPDATE _00511_expected_public
 SET security_definer = false
 WHERE signature IN (
   'public.set_invoice_studio_id()',
@@ -1730,12 +1730,12 @@ WHERE signature IN (
 
 DO $public_catalog_contract$
 BEGIN
-  ASSERT (SELECT count(*) FROM _00487_expected_public) = 17,
+  ASSERT (SELECT count(*) FROM _00511_expected_public) = 17,
     'the public hardening manifest must contain exactly 17 rows';
 
   ASSERT NOT EXISTS (
     SELECT 1
-    FROM _00487_expected_public AS expected
+    FROM _00511_expected_public AS expected
     LEFT JOIN pg_proc AS routine
       ON routine.oid = to_regprocedure(expected.signature)
     LEFT JOIN pg_roles AS owner ON owner.oid = routine.proowner
@@ -1758,7 +1758,7 @@ BEGIN
            extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
            'hex'
          ) IS DISTINCT FROM expected.body_sha256
-  ), 'a public 00487 identity, semantic profile, or body hash drifted';
+  ), 'a public 00511 identity, semantic profile, or body hash drifted';
 
   ASSERT NOT EXISTS (
     WITH expected_acl AS (
@@ -1768,7 +1768,7 @@ BEGIN
         'postgres'::text AS grantor,
         'EXECUTE'::text AS privilege_type,
         false AS is_grantable
-      FROM _00487_expected_public AS expected
+      FROM _00511_expected_public AS expected
       CROSS JOIN LATERAL unnest(expected.direct_roles) AS role_name
     ),
     actual_acl AS (
@@ -1781,7 +1781,7 @@ BEGIN
         grantor.rolname::text AS grantor,
         acl.privilege_type,
         acl.is_grantable
-      FROM _00487_expected_public AS expected
+      FROM _00511_expected_public AS expected
       JOIN pg_proc AS routine
         ON routine.oid = to_regprocedure(expected.signature)
       CROSS JOIN LATERAL aclexplode(
@@ -1797,11 +1797,11 @@ BEGIN
       UNION ALL
       (SELECT * FROM actual_acl EXCEPT ALL SELECT * FROM expected_acl)
     ) AS drift
-  ), 'a public 00487 direct ACL tuple drifted';
+  ), 'a public 00511 direct ACL tuple drifted';
 
   ASSERT NOT EXISTS (
     SELECT 1
-    FROM _00487_expected_public AS expected
+    FROM _00511_expected_public AS expected
     JOIN pg_proc AS routine
       ON routine.oid = to_regprocedure(expected.signature)
     CROSS JOIN LATERAL aclexplode(
@@ -1819,11 +1819,11 @@ BEGIN
         OR grantor.rolname IS DISTINCT FROM 'postgres'
         OR acl.is_grantable
       )
-  ), 'an unreviewed public 00487 direct EXECUTE tuple exists';
+  ), 'an unreviewed public 00511 direct EXECUTE tuple exists';
 END
 $public_catalog_contract$;
 
-CREATE TEMP TABLE _00487_expected_dependency (
+CREATE TEMP TABLE _00511_expected_dependency (
   signature text PRIMARY KEY,
   arguments text NOT NULL,
   result_type text NOT NULL,
@@ -1832,7 +1832,7 @@ CREATE TEMP TABLE _00487_expected_dependency (
   security_definer boolean NOT NULL DEFAULT true
 ) ON COMMIT DROP;
 
-INSERT INTO _00487_expected_dependency (
+INSERT INTO _00511_expected_dependency (
   signature, arguments, result_type, final_config, body_sha256
 )
 VALUES
@@ -1891,11 +1891,11 @@ VALUES
     'cebd8924bd0de977fc47b137c77df7945906eb4955acf70fdb41f386eb04f255'
   );
 
-UPDATE _00487_expected_dependency
+UPDATE _00511_expected_dependency
 SET security_definer = false
 WHERE signature = 'public.guard_commercial_signature_insert()';
 
-CREATE OR REPLACE FUNCTION pg_temp._00487_references_routine(
+CREATE OR REPLACE FUNCTION pg_temp._00511_references_routine(
   p_source text,
   p_schema text,
   p_name text
@@ -2019,39 +2019,39 @@ $caller_scan$;
 
 DO $invoice_caller_scan_contract$
 BEGIN
-  IF NOT pg_temp._00487_references_routine(
+  IF NOT pg_temp._00511_references_routine(
     $source$SELECT APP_PRIVATE.ISSUE_INVOICE_FOR_ACTOR($1)$source$,
     'app_private', 'issue_invoice_for_actor'
-  ) OR NOT pg_temp._00487_references_routine(
+  ) OR NOT pg_temp._00511_references_routine(
     $source$SELECT "app_private"."issue_invoice_for_actor"($1)$source$,
     'app_private', 'issue_invoice_for_actor'
-  ) OR NOT pg_temp._00487_references_routine(
+  ) OR NOT pg_temp._00511_references_routine(
     $source$BEGIN EXECUTE format('SELECT public.issue_invoice_for_actor(%L)', value); END$source$,
     'app_private', 'issue_invoice_for_actor'
-  ) OR NOT pg_temp._00487_references_routine(
+  ) OR NOT pg_temp._00511_references_routine(
     $source$BEGIN EXECUTE format('SELECT %I.%I($1)', 'app_private', 'issue_invoice_for_actor'); END$source$,
     'app_private', 'issue_invoice_for_actor'
-  ) OR NOT pg_temp._00487_references_routine(
+  ) OR NOT pg_temp._00511_references_routine(
     $source$BEGIN EXECUTE format('%s%s', 'issue_invoice_', 'for_actor'); END$source$,
     'app_private', 'issue_invoice_for_actor'
-  ) OR NOT pg_temp._00487_references_routine(
+  ) OR NOT pg_temp._00511_references_routine(
     $source$BEGIN EXECUTE 'SELECT app_private.issue_invoice_' || 'for_actor($1)'; END$source$,
     'app_private', 'issue_invoice_for_actor'
-  ) OR pg_temp._00487_references_routine(
+  ) OR pg_temp._00511_references_routine(
     $source$SELECT "app_private"."ISSUE_INVOICE_FOR_ACTOR"($1)$source$,
     'app_private', 'issue_invoice_for_actor'
-  ) OR pg_temp._00487_references_routine(
+  ) OR pg_temp._00511_references_routine(
     $source$SELECT public.issue_invoice_for_actor($1)$source$,
     'app_private', 'issue_invoice_for_actor'
-  ) OR pg_temp._00487_references_routine(
+  ) OR pg_temp._00511_references_routine(
     $source$PERFORM 'public.issue_invoice_for_actor(';$source$,
     'app_private', 'issue_invoice_for_actor'
-  ) OR pg_temp._00487_references_routine(
+  ) OR pg_temp._00511_references_routine(
     $source$-- public.issue_invoice_for_actor(
       PERFORM 1;$source$,
     'app_private', 'issue_invoice_for_actor'
   ) THEN
-    RAISE EXCEPTION '00487 routine-reference scanner contract failed';
+    RAISE EXCEPTION '00511 routine-reference scanner contract failed';
   END IF;
 END
 $invoice_caller_scan_contract$;
@@ -2132,7 +2132,7 @@ BEGIN
     JOIN pg_namespace AS namespace ON namespace.oid = caller.pronamespace
     WHERE namespace.nspname <> 'information_schema'
       AND namespace.nspname NOT LIKE 'pg_%'
-      AND pg_temp._00487_references_routine(
+      AND pg_temp._00511_references_routine(
         caller.prosrc, 'public', 'create_draft_invoice'
       )
   ), 'atomic draft database caller universe is not empty';
@@ -2141,8 +2141,8 @@ $atomic_draft_catalog_contract$;
 
 DO $private_dependency_contract$
 BEGIN
-  ASSERT (SELECT count(*) FROM _00487_expected_dependency) = 9,
-    'the 00487 dependency manifest must contain exactly nine rows';
+  ASSERT (SELECT count(*) FROM _00511_expected_dependency) = 9,
+    'the 00511 dependency manifest must contain exactly nine rows';
 
   ASSERT 1 = (
     SELECT count(*)
@@ -2154,7 +2154,7 @@ BEGIN
 
   ASSERT NOT EXISTS (
     SELECT 1
-    FROM _00487_expected_dependency AS expected
+    FROM _00511_expected_dependency AS expected
     LEFT JOIN pg_proc AS routine
       ON routine.oid = to_regprocedure(expected.signature)
     LEFT JOIN pg_roles AS owner ON owner.oid = routine.proowner
@@ -2177,18 +2177,18 @@ BEGIN
            extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
            'hex'
          ) IS DISTINCT FROM expected.body_sha256
-  ), 'an exact 00487 dependency profile drifted';
+  ), 'an exact 00511 dependency profile drifted';
 
   ASSERT NOT EXISTS (
     SELECT 1
-    FROM _00487_expected_dependency AS expected
+    FROM _00511_expected_dependency AS expected
     JOIN pg_proc AS routine
       ON routine.oid = to_regprocedure(expected.signature)
     CROSS JOIN LATERAL aclexplode(
       COALESCE(routine.proacl, acldefault('f', routine.proowner))
     ) AS acl
     WHERE acl.grantee <> routine.proowner
-  ), 'an exact 00487 dependency has a nonowner ACL row';
+  ), 'an exact 00511 dependency has a nonowner ACL row';
 
   ASSERT (
     SELECT NOT routine.prosecdef
@@ -2223,7 +2223,7 @@ BEGIN
       JOIN pg_namespace AS namespace ON namespace.oid = routine.pronamespace
       WHERE namespace.nspname <> 'information_schema'
         AND namespace.nspname NOT LIKE 'pg_%'
-        AND pg_temp._00487_references_routine(
+        AND pg_temp._00511_references_routine(
           routine.prosrc, 'app_private', 'issue_invoice_for_actor'
         )
     )
@@ -3152,7 +3152,7 @@ VALUES (
   'd4853310-0000-4000-8000-000000000001',
   'd4852000-0000-4000-8000-000000000007',
   'd4853300-0000-4000-8000-000000000001',
-  'sd-00487-checkpoint', 'acknowledged',
+  'sd-00511-checkpoint', 'acknowledged',
   public._budget_version_fingerprint(
     'd4853300-0000-4000-8000-000000000001'
   ),
@@ -3335,7 +3335,7 @@ VALUES
     'd4850000-0000-4000-8000-000000000001'
   );
 
-CREATE TEMP TABLE _00487_commercial_fixture (
+CREATE TEMP TABLE _00511_commercial_fixture (
   label text PRIMARY KEY,
   proposal_id uuid NOT NULL UNIQUE,
   document_id uuid NOT NULL UNIQUE,
@@ -3343,8 +3343,8 @@ CREATE TEMP TABLE _00487_commercial_fixture (
   review_fingerprint text
 ) ON COMMIT DROP;
 
-GRANT SELECT, INSERT ON _00487_commercial_fixture TO authenticated;
-GRANT SELECT ON _00487_commercial_fixture TO service_role;
+GRANT SELECT, INSERT ON _00511_commercial_fixture TO authenticated;
+GRANT SELECT ON _00511_commercial_fixture TO service_role;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
@@ -3360,7 +3360,7 @@ BEGIN
     'SD Trusted Furnishings',
     ARRAY['d4853270-0000-4000-8000-000000000001'::uuid], 25
   );
-  INSERT INTO _00487_commercial_fixture (
+  INSERT INTO _00511_commercial_fixture (
     label, proposal_id, document_id, project_id
   )
   VALUES (
@@ -3373,7 +3373,7 @@ BEGIN
     'SD Direct Furnishings',
     ARRAY['d4853270-0000-4000-8000-000000000002'::uuid], 25
   );
-  INSERT INTO _00487_commercial_fixture (
+  INSERT INTO _00511_commercial_fixture (
     label, proposal_id, document_id, project_id
   )
   VALUES (
@@ -3386,7 +3386,7 @@ BEGIN
     'SD Paper Furnishings',
     ARRAY['d4853270-0000-4000-8000-000000000003'::uuid], 25
   );
-  INSERT INTO _00487_commercial_fixture (
+  INSERT INTO _00511_commercial_fixture (
     label, proposal_id, document_id, project_id
   )
   VALUES (
@@ -3399,7 +3399,7 @@ BEGIN
     'SD Zero Deposit Furnishings',
     ARRAY['d4853270-0000-4000-8000-000000000004'::uuid], 0
   );
-  INSERT INTO _00487_commercial_fixture (
+  INSERT INTO _00511_commercial_fixture (
     label, proposal_id, document_id, project_id
   )
   VALUES (
@@ -3411,7 +3411,7 @@ BEGIN
     'd4852000-0000-4000-8000-000000000008',
     'SD Trusted Trade Scope'
   );
-  INSERT INTO _00487_commercial_fixture (
+  INSERT INTO _00511_commercial_fixture (
     label, proposal_id, document_id, project_id
   )
   VALUES (
@@ -3423,7 +3423,7 @@ BEGIN
     'd4852000-0000-4000-8000-000000000008',
     'SD Direct Trade Scope'
   );
-  INSERT INTO _00487_commercial_fixture (
+  INSERT INTO _00511_commercial_fixture (
     label, proposal_id, document_id, project_id
   )
   VALUES (
@@ -3435,7 +3435,7 @@ BEGIN
     'd4852000-0000-4000-8000-000000000008',
     'SD Paper Trade Scope'
   );
-  INSERT INTO _00487_commercial_fixture (
+  INSERT INTO _00511_commercial_fixture (
     label, proposal_id, document_id, project_id
   )
   VALUES (
@@ -3447,7 +3447,7 @@ BEGIN
     'd4852000-0000-4000-8000-000000000001',
     'SD Local Draw Scope'
   );
-  INSERT INTO _00487_commercial_fixture (
+  INSERT INTO _00511_commercial_fixture (
     label, proposal_id, document_id, project_id
   )
   VALUES (
@@ -3459,7 +3459,7 @@ BEGIN
     'd4852000-0000-4000-8000-000000000002',
     'SD Foreign Draw Scope'
   );
-  INSERT INTO _00487_commercial_fixture (
+  INSERT INTO _00511_commercial_fixture (
     label, proposal_id, document_id, project_id
   )
   VALUES (
@@ -3475,13 +3475,13 @@ DO $canonical_creator_shape$
 BEGIN
   ASSERT NOT EXISTS (
     SELECT 1
-    FROM _00487_commercial_fixture AS fixture
+    FROM _00511_commercial_fixture AS fixture
     JOIN public.proposals AS proposal ON proposal.id = fixture.proposal_id
     WHERE proposal.project_id IS NOT NULL
   ), 'canonical furnishings/trade creators populated proposals.project_id';
   ASSERT NOT EXISTS (
     SELECT 1
-    FROM _00487_commercial_fixture AS fixture
+    FROM _00511_commercial_fixture AS fixture
     JOIN public.project_commercial_documents AS document
       ON document.id = fixture.document_id
     WHERE document.project_id IS DISTINCT FROM fixture.project_id
@@ -3496,7 +3496,7 @@ SET party_id = fixture.party_id,
     party_company_name = fixture.party_company,
     party_trade = 'millwork',
     client_price_cents = fixture.price_cents,
-    terms = 'Canonical 00487 trade terms'
+    terms = 'Canonical 00511 trade terms'
 FROM (
   SELECT commercial.proposal_id, party.id AS party_id,
          party.display_name AS party_name,
@@ -3510,7 +3510,7 @@ FROM (
       ('trade_draw_local'::text, 10000),
       ('trade_draw_foreign'::text, 12000)
   ) AS requested(label, price_cents)
-  JOIN _00487_commercial_fixture AS commercial USING (label)
+  JOIN _00511_commercial_fixture AS commercial USING (label)
   JOIN public.project_parties AS party
     ON party.project_id = commercial.project_id
 ) AS fixture
@@ -3520,8 +3520,8 @@ INSERT INTO public.trade_scope_sections (
   proposal_id, room_name, prose, sort_order
 )
 SELECT fixture.proposal_id, 'Whole project',
-       'Canonical trade scope for the focused 00487 contract.', 0
-FROM _00487_commercial_fixture AS fixture
+       'Canonical trade scope for the focused 00511 contract.', 0
+FROM _00511_commercial_fixture AS fixture
 WHERE fixture.label IN ('trade_trusted', 'trade_direct', 'trade_paper');
 
 INSERT INTO public.trade_scope_draws (
@@ -3559,7 +3559,7 @@ FROM (VALUES
   label, id, draw_label, percentage, amount_cents,
   sort_order, gates_on_acceptance
 )
-JOIN _00487_commercial_fixture AS fixture USING (label);
+JOIN _00511_commercial_fixture AS fixture USING (label);
 
 -- Seed the two executed trade-draw proposals into their signed/executed state
 -- directly. guard_commercial_proposal_authority gates the status='accepted'
@@ -3571,18 +3571,18 @@ SET LOCAL session_replication_role = replica;
 UPDATE public.proposals AS proposal
 SET status = 'accepted', commercial_state = 'executed',
     signed_at = now(), signed_by_name = 'SD Client', accepted_at = now()
-FROM _00487_commercial_fixture AS fixture
+FROM _00511_commercial_fixture AS fixture
 WHERE proposal.id = fixture.proposal_id
   AND fixture.label IN ('trade_draw_local', 'trade_draw_foreign');
 
 UPDATE public.project_commercial_documents AS document
 SET executed_at = now()
-FROM _00487_commercial_fixture AS fixture
+FROM _00511_commercial_fixture AS fixture
 WHERE document.id = fixture.document_id
   AND fixture.label IN ('trade_draw_local', 'trade_draw_foreign');
 SET LOCAL session_replication_role = origin;
 
-UPDATE _00487_commercial_fixture AS fixture
+UPDATE _00511_commercial_fixture AS fixture
 SET review_fingerprint =
   public._commercial_document_fingerprint(fixture.proposal_id)
 WHERE fixture.label IN (
@@ -3601,7 +3601,7 @@ DECLARE
   fixture record;
 BEGIN
   FOR fixture IN
-    SELECT * FROM _00487_commercial_fixture
+    SELECT * FROM _00511_commercial_fixture
     WHERE label IN (
       'furnishings_trusted', 'furnishings_direct',
       'furnishings_paper', 'furnishings_zero',
@@ -3611,7 +3611,7 @@ BEGIN
   LOOP
     PERFORM public.send_commercial_document(
       fixture.proposal_id, fixture.review_fingerprint,
-      'Reviewed canonical 00487 fixture', NULL
+      'Reviewed canonical 00511 fixture', NULL
     );
   END LOOP;
 END
@@ -4044,11 +4044,11 @@ DECLARE
   sub_before text;
   role_before text;
   furnishings_proposal_id uuid := (
-    SELECT proposal_id FROM _00487_commercial_fixture
+    SELECT proposal_id FROM _00511_commercial_fixture
     WHERE label = 'furnishings_trusted'
   );
   trade_proposal_id uuid := (
-    SELECT proposal_id FROM _00487_commercial_fixture
+    SELECT proposal_id FROM _00511_commercial_fixture
     WHERE label = 'trade_trusted'
   );
   first_result jsonb;
@@ -4434,12 +4434,12 @@ BEGIN
 END
 $service_mutation_results$;
 
-CREATE TEMP TABLE _00487_addendum_fixture (
+CREATE TEMP TABLE _00511_addendum_fixture (
   project_id uuid PRIMARY KEY,
   proposal_id uuid NOT NULL UNIQUE,
   document_id uuid NOT NULL UNIQUE
 ) ON COMMIT DROP;
-GRANT SELECT, INSERT ON _00487_addendum_fixture TO authenticated;
+GRANT SELECT, INSERT ON _00511_addendum_fixture TO authenticated;
 
 -- The origin proposal predates studio snapshots. Make its historical author
 -- unambiguous for the one-time origin activation, then restore the second
@@ -4481,7 +4481,7 @@ BEGIN
     'Reviewed canonical post-handoff addendum', NULL
   );
 
-  INSERT INTO _00487_addendum_fixture(project_id, proposal_id, document_id)
+  INSERT INTO _00511_addendum_fixture(project_id, proposal_id, document_id)
   VALUES (
     (origin_result->>'projectId')::uuid,
     addendum_id,
@@ -4497,14 +4497,14 @@ SELECT pg_temp.assume_actor(
   'd4850000-0000-4000-8000-000000000004', 'authenticated'
 );
 SELECT public.sign_design_services_agreement(
-  (SELECT proposal_id FROM _00487_addendum_fixture), 'SD Client'
+  (SELECT proposal_id FROM _00511_addendum_fixture), 'SD Client'
 );
 RESET ROLE;
 
-CREATE TEMP TABLE _00487_activation_fixture (
+CREATE TEMP TABLE _00511_activation_fixture (
   project_id uuid PRIMARY KEY
 ) ON COMMIT DROP;
-GRANT SELECT, INSERT ON _00487_activation_fixture TO authenticated;
+GRANT SELECT, INSERT ON _00511_activation_fixture TO authenticated;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
@@ -4520,7 +4520,7 @@ BEGIN
   activation_result := public.sign_proposal(
     'd4853000-0000-4000-8000-000000000030', 'SD Client'
   );
-  INSERT INTO _00487_activation_fixture(project_id)
+  INSERT INTO _00511_activation_fixture(project_id)
   VALUES ((activation_result->>'project_id')::uuid);
   ASSERT (activation_result->>'project_id')::uuid IS NOT NULL
      AND EXISTS (
@@ -4575,7 +4575,7 @@ BEGIN
       ON line.invoice_id = invoice.id
      AND line.milestone_id = milestone.id
     WHERE milestone.project_id =
-            (SELECT project_id FROM _00487_activation_fixture)
+            (SELECT project_id FROM _00511_activation_fixture)
       AND milestone.trigger_kind = 'on_signing'
       AND invoice.status = 'draft'
       AND invoice.client_id = 'd4850000-0000-4000-8000-000000000004'
@@ -4798,7 +4798,7 @@ SELECT public.issue_invoice(
 DO $first_project_handoffs$
 DECLARE
   activation_project_id uuid := (
-    SELECT project_id FROM _00487_activation_fixture
+    SELECT project_id FROM _00511_activation_fixture
   );
 BEGIN
   PERFORM public.reassign_project_lead(
@@ -4817,7 +4817,7 @@ BEGIN
     'd4850000-0000-4000-8000-000000000002'
   );
   PERFORM public.reassign_project_lead(
-    (SELECT project_id FROM _00487_addendum_fixture),
+    (SELECT project_id FROM _00511_addendum_fixture),
     'd4850000-0000-4000-8000-000000000001',
     'd4850000-0000-4000-8000-000000000002'
   );
@@ -4828,7 +4828,7 @@ BEGIN
       activation_project_id,
       'd4852000-0000-4000-8000-000000000007',
       'd4852000-0000-4000-8000-000000000008',
-      (SELECT project_id FROM _00487_addendum_fixture)
+      (SELECT project_id FROM _00511_addendum_fixture)
     )
       AND project.designer_id =
             'd4850000-0000-4000-8000-000000000002'
@@ -4854,7 +4854,7 @@ SELECT pg_temp.assume_actor(
 DO $subsequent_project_handoffs$
 DECLARE
   activation_project_id uuid := (
-    SELECT project_id FROM _00487_activation_fixture
+    SELECT project_id FROM _00511_activation_fixture
   );
 BEGIN
   PERFORM public.reassign_project_lead(
@@ -4873,7 +4873,7 @@ BEGIN
     'd4850000-0000-4000-8000-000000000005'
   );
   PERFORM public.reassign_project_lead(
-    (SELECT project_id FROM _00487_addendum_fixture),
+    (SELECT project_id FROM _00511_addendum_fixture),
     'd4850000-0000-4000-8000-000000000002',
     'd4850000-0000-4000-8000-000000000005'
   );
@@ -4884,7 +4884,7 @@ BEGIN
       activation_project_id,
       'd4852000-0000-4000-8000-000000000007',
       'd4852000-0000-4000-8000-000000000008',
-      (SELECT project_id FROM _00487_addendum_fixture)
+      (SELECT project_id FROM _00511_addendum_fixture)
     )
       AND project.designer_id =
             'd4850000-0000-4000-8000-000000000005'
@@ -4899,7 +4899,7 @@ RESET ROLE;
 DO $subsequent_handoff_provenance$
 DECLARE
   activation_project_id uuid := (
-    SELECT project_id FROM _00487_activation_fixture
+    SELECT project_id FROM _00511_activation_fixture
   );
 BEGIN
   ASSERT (
@@ -4929,7 +4929,7 @@ BEGIN
     PERFORM public.record_invoice_payment(
       'd4857000-0000-4000-8000-000000000097',
       100, 'check', 'D485-CROSS-STUDIO', now(),
-      '00487 cross-studio historical payment denial'
+      '00511 cross-studio historical payment denial'
     );
     RAISE EXCEPTION 'cross-studio co-member paid a foreign-studio invoice'
       USING ERRCODE = 'P4850';
@@ -4991,7 +4991,7 @@ WHERE id = 'd4857000-0000-4000-8000-000000000098';
 UPDATE public.invoices
 SET status = 'void',
     voided_at = now(),
-    void_reason = '00487 historical service reconciliation'
+    void_reason = '00511 historical service reconciliation'
 WHERE id = 'd4857000-0000-4000-8000-000000000099';
 
 DO $historical_service_reconciliation_contract$
@@ -5034,7 +5034,7 @@ BEGIN
   ASSERT (
     SELECT invoice.status = 'void'
        AND invoice.voided_at IS NOT NULL
-       AND invoice.void_reason = '00487 historical service reconciliation'
+       AND invoice.void_reason = '00511 historical service reconciliation'
     FROM public.invoices AS invoice
     WHERE invoice.id = 'd4857000-0000-4000-8000-000000000099'
   ), 'service void did not update the pre-handoff invoice';
@@ -5070,12 +5070,12 @@ DECLARE
   trade_result jsonb;
 BEGIN
   furnishings_result := public.execute_furnishings_authorization(
-    (SELECT proposal_id FROM _00487_commercial_fixture
+    (SELECT proposal_id FROM _00511_commercial_fixture
      WHERE label = 'furnishings_direct'),
     'SD Client'
   );
   trade_result := public.execute_trade_scope(
-    (SELECT proposal_id FROM _00487_commercial_fixture
+    (SELECT proposal_id FROM _00511_commercial_fixture
      WHERE label = 'trade_direct'),
     'SD Client'
   );
@@ -5099,7 +5099,7 @@ BEGIN
   ), 'post-handoff commercial invoices did not bind the current project lead';
   ASSERT 2 = (
     SELECT count(*)
-    FROM _00487_commercial_fixture AS fixture
+    FROM _00511_commercial_fixture AS fixture
     JOIN public.proposals AS proposal ON proposal.id = fixture.proposal_id
     WHERE fixture.label IN ('furnishings_direct', 'trade_direct')
       AND proposal.designer_id =
@@ -5127,16 +5127,16 @@ DECLARE
   trade_result jsonb;
 BEGIN
   addendum_result := public.countersign_design_services_agreement(
-    (SELECT proposal_id FROM _00487_addendum_fixture),
+    (SELECT proposal_id FROM _00511_addendum_fixture),
     'SD Successor', NULL
   );
   furnishings_result := public.execute_furnishings_authorization_on_paper(
-    (SELECT proposal_id FROM _00487_commercial_fixture
+    (SELECT proposal_id FROM _00511_commercial_fixture
      WHERE label = 'furnishings_paper'),
     'SD Client', current_date, NULL, NULL
   );
   trade_result := public.execute_trade_scope_on_paper(
-    (SELECT proposal_id FROM _00487_commercial_fixture
+    (SELECT proposal_id FROM _00511_commercial_fixture
      WHERE label = 'trade_paper'),
     'SD Client', current_date, NULL
   );
@@ -5178,10 +5178,10 @@ BEGIN
     SELECT count(*)
     FROM public.proposals AS proposal
     WHERE proposal.id IN (
-      (SELECT proposal_id FROM _00487_addendum_fixture),
-      (SELECT proposal_id FROM _00487_commercial_fixture
+      (SELECT proposal_id FROM _00511_addendum_fixture),
+      (SELECT proposal_id FROM _00511_commercial_fixture
        WHERE label = 'furnishings_paper'),
-      (SELECT proposal_id FROM _00487_commercial_fixture
+      (SELECT proposal_id FROM _00511_commercial_fixture
        WHERE label = 'trade_paper')
     )
       AND proposal.designer_id =
@@ -5203,11 +5203,11 @@ SELECT pg_temp.assume_actor(
 DO $zero_deposit_live_authority_denial$
 DECLARE
   zero_proposal uuid := (
-    SELECT proposal_id FROM _00487_commercial_fixture
+    SELECT proposal_id FROM _00511_commercial_fixture
     WHERE label = 'furnishings_zero'
   );
   executed_trade_proposal uuid := (
-    SELECT proposal_id FROM _00487_commercial_fixture
+    SELECT proposal_id FROM _00511_commercial_fixture
     WHERE label = 'trade_paper'
   );
 BEGIN
@@ -5246,11 +5246,11 @@ RESET ROLE;
 DO $zero_deposit_live_authority_denial_state$
 DECLARE
   zero_proposal uuid := (
-    SELECT proposal_id FROM _00487_commercial_fixture
+    SELECT proposal_id FROM _00511_commercial_fixture
     WHERE label = 'furnishings_zero'
   );
   executed_trade_proposal uuid := (
-    SELECT proposal_id FROM _00487_commercial_fixture
+    SELECT proposal_id FROM _00511_commercial_fixture
     WHERE label = 'trade_paper'
   );
 BEGIN
@@ -5307,7 +5307,7 @@ DO $canonical_project_binding_after_execution$
 BEGIN
   ASSERT NOT EXISTS (
     SELECT 1
-    FROM _00487_commercial_fixture AS fixture
+    FROM _00511_commercial_fixture AS fixture
     JOIN public.proposals AS proposal ON proposal.id = fixture.proposal_id
     WHERE proposal.project_id IS NOT NULL
   ), 'furnishings/trade execution rewrote canonical NULL proposal.project_id';
@@ -5323,7 +5323,7 @@ DO $foreign_client_commercial_denials$
 BEGIN
   BEGIN
     PERFORM public.execute_furnishings_authorization(
-      (SELECT proposal_id FROM _00487_commercial_fixture
+      (SELECT proposal_id FROM _00511_commercial_fixture
        WHERE label = 'furnishings_direct'),
       'Foreign Client'
     );
@@ -5333,7 +5333,7 @@ BEGIN
 
   BEGIN
     PERFORM public.execute_trade_scope(
-      (SELECT proposal_id FROM _00487_commercial_fixture
+      (SELECT proposal_id FROM _00511_commercial_fixture
        WHERE label = 'trade_direct'),
       'Foreign Client'
     );
@@ -5434,11 +5434,11 @@ VALUES
     'Ambiguous commercial anchors', 1, 100, 100,
     jsonb_build_object(
       'commercialDocumentId', (
-        SELECT document_id::text FROM _00487_commercial_fixture
+        SELECT document_id::text FROM _00511_commercial_fixture
         WHERE label = 'furnishings_trusted'
       ),
       'tradeScopeDocumentId', (
-        SELECT document_id::text FROM _00487_commercial_fixture
+        SELECT document_id::text FROM _00511_commercial_fixture
         WHERE label = 'trade_trusted'
       )
     )
@@ -5570,7 +5570,7 @@ BEGIN
              'd4850000-0000-4000-8000-000000000001'
        AND project.designer_id =
              'd4850000-0000-4000-8000-000000000005'
-    FROM _00487_commercial_fixture AS fixture
+    FROM _00511_commercial_fixture AS fixture
     JOIN public.proposals AS proposal ON proposal.id = fixture.proposal_id
     JOIN public.projects AS project ON project.id = fixture.project_id
     WHERE fixture.label = 'trade_draw_local'
@@ -6384,11 +6384,11 @@ SELECT pg_temp.assume_actor(
 );
 SELECT public.record_invoice_payment(
   'd4857000-0000-4000-8000-000000000094',
-  100, 'check', 'D485-CHECK', now(), '00487 trigger transition probe'
+  100, 'check', 'D485-CHECK', now(), '00511 trigger transition probe'
 );
 SELECT public.void_invoice(
   'd4857000-0000-4000-8000-000000000096',
-  '00487 trigger transition probe'
+  '00511 trigger transition probe'
 );
 
 RESET ROLE;
@@ -6436,7 +6436,7 @@ BEGIN
   ASSERT (
     SELECT invoice.status = 'void'
        AND invoice.voided_at IS NOT NULL
-       AND invoice.void_reason = '00487 trigger transition probe'
+       AND invoice.void_reason = '00511 trigger transition probe'
     FROM public.invoices AS invoice
     WHERE invoice.id = 'd4857000-0000-4000-8000-000000000096'
   ), 'on-hold owner void failed after designer-role removal';
@@ -6644,7 +6644,7 @@ SELECT set_config(
 );
 SELECT set_config(
   'app.commercial_document_id',
-  (SELECT proposal_id::text FROM _00487_commercial_fixture
+  (SELECT proposal_id::text FROM _00511_commercial_fixture
    WHERE label = 'furnishings_direct'), true
 );
 

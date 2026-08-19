@@ -8,6 +8,8 @@ const config: RuntimeConfig = {
   legacyFetchTimeoutMs: 100,
   compatibilityFetchTimeoutMs: 100,
   websocketHandshakeTimeoutMs: 100,
+  scanRoutes: 'off',
+  mediaUploads: 'off',
 };
 
 describe('workerd runtime contracts', () => {

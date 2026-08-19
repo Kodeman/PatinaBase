@@ -22,12 +22,30 @@
     "LEGACY_FETCH_TIMEOUT_MS": "3000",
     "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
     "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+    // The scan read path (Rendered Room v2 W2). "off" leaves
+    // /v1/scan/room-files/:id/artifacts/:kind unrouted; "on" additionally
+    // requires SCAN_R2_ACCESS_KEY_ID and SCAN_R2_SECRET_ACCESS_KEY as Wrangler
+    // secrets, and validateRuntimeConfig boots the worker 503 without them.
+    "SCAN_ROUTES": "off",
+    "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
+    "SCAN_R2_BUCKET": "patina-staging-media-artifacts-us",
+    // The Phase-2 upload interface (Rendered Room v2 W3-A). "off" leaves
+    // /v1/media/uploads and its confirm leg unrouted; "on" additionally
+    // requires SCAN_R2_WRITE_ACCESS_KEY_ID and SCAN_R2_WRITE_SECRET_ACCESS_KEY
+    // as Wrangler secrets — a SEPARATE, write-capable credential scoped to the
+    // originals bucket alone — and validateRuntimeConfig boots the worker 503
+    // without them.
+    "MEDIA_UPLOADS": "off",
+    "SCAN_R2_ORIGINALS_BUCKET": "patina-staging-media-originals-us",
   },
-  // Phase 1 Wave 2 inserts DB_FRESH and DB_PUBLIC_CACHE after Wrangler returns
-  // the real Hyperdrive IDs. Empty bindings keep legacy compatibility mode
-  // deployable. CATALOG_SOURCE may only leave "legacy" once both bindings are
-  // listed here: config:check and validateRuntimeConfig both reject a promoted
-  // source with an unprovisioned binding.
+  // Provisioning inserts real Hyperdrive IDs here. Three bindings exist:
+  // DB_FRESH (authenticated RLS login, edge_rls_login), DB_CATALOG_FRESH
+  // (uncached catalog reader, edge_catalog_login — the shadow fresh leg), and
+  // DB_PUBLIC_CACHE (cached catalog reader). Empty bindings keep legacy
+  // compatibility mode deployable. config:check and validateRuntimeConfig
+  // reject a promoted source missing the bindings it reads: shadow needs
+  // DB_CATALOG_FRESH + DB_PUBLIC_CACHE, hyperdrive needs DB_PUBLIC_CACHE, and
+  // any promoted rung needs DB_FRESH for the /v1/_authcheck path.
   "hyperdrive": [],
   "env": {
     "local": {
@@ -44,11 +62,17 @@
         "LEGACY_FETCH_TIMEOUT_MS": "3000",
         "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
         "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+        "SCAN_ROUTES": "off",
+        "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
+        "SCAN_R2_BUCKET": "patina-staging-media-artifacts-us",
+        "MEDIA_UPLOADS": "off",
+        "SCAN_R2_ORIGINALS_BUCKET": "patina-staging-media-originals-us",
       },
-      // Add both real binding IDs here. Each local binding also gets
+      // Add the real binding IDs here (DB_FRESH, DB_CATALOG_FRESH,
+      // DB_PUBLIC_CACHE). Each local binding also gets
       // localConnectionString=postgresql://postgres:postgres@127.0.0.1:54322/postgres.
       // Promote CATALOG_SOURCE in the same edit that adds the IDs; a promoted
-      // source with hyperdrive: [] now fails config:check and boots 503.
+      // source missing the bindings it reads now fails config:check and boots 503.
       "hyperdrive": [],
     },
     "staging": {
@@ -65,13 +89,32 @@
         "LEGACY_FETCH_TIMEOUT_MS": "3000",
         "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
         "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+        // SCAN_R2_ACCESS_KEY_ID and SCAN_R2_SECRET_ACCESS_KEY are staging
+        // secrets (OPERATIONS.md "Scan read path") — read-only, scoped to
+        // patina-staging-media-artifacts-us only (token patina-staging-scan-reader).
+        "SCAN_ROUTES": "on",
+        "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
+        "SCAN_R2_BUCKET": "patina-staging-media-artifacts-us",
+        // The upload interface. SCAN_R2_WRITE_ACCESS_KEY_ID and
+        // SCAN_R2_WRITE_SECRET_ACCESS_KEY are staging secrets (OPERATIONS.md
+        // "Media upload interface") — Object Read & Write, scoped to
+        // patina-staging-media-originals-us ONLY (token
+        // patina-staging-media-writer). Flip to "on" only once both are set;
+        // config:check --provisioned staging is what proves it.
+        "MEDIA_UPLOADS": "off",
+        "SCAN_R2_ORIGINALS_BUCKET": "patina-staging-media-originals-us",
       },
-      // Replace the local-only URLs and add both real staging Hyperdrive IDs
-      // after the persistent branch is provisioned. No staging branch exists yet.
-      // Promote CATALOG_SOURCE in the same edit that adds the IDs; a promoted
-      // source with hyperdrive: [] now fails config:check and boots 503.
+      // Resting at rung 3 (hyperdrive/100). DB_FRESH and DB_PUBLIC_CACHE carry
+      // real staging Hyperdrive IDs; both currently point at edge_catalog_login.
+      // auth2 provisions DB_CATALOG_FRESH (a NEW Hyperdrive config on
+      // edge_catalog_login uncached) and adds it here, re-runs the shadow rung,
+      // then repoints DB_FRESH's config to edge_rls_login (id unchanged) for the
+      // authenticated /v1/_authcheck path — do NOT invent DB_CATALOG_FRESH's id
+      // here. hyperdrive source does not require DB_CATALOG_FRESH, so this rung
+      // stays config-valid until auth2 adds it.
       "hyperdrive": [
         { "binding": "DB_FRESH", "id": "5cda0d8adbd346febf2f8d528cfaea4e" },
+        { "binding": "DB_CATALOG_FRESH", "id": "d0e0e6d2c3de4d4aa13fdefdfa1232ab" },
         { "binding": "DB_PUBLIC_CACHE", "id": "114f7421d13e487eb023e144b90e58d5" },
       ],
     },
@@ -88,17 +131,41 @@
         "SUPABASE_JWT_ISSUER": "https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1",
         "SUPABASE_JWT_AUDIENCE": "authenticated",
         "SUPABASE_JWKS_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1/.well-known/jwks.json",
-        "CATALOG_SOURCE": "legacy",
-        "CATALOG_HYPERDRIVE_PERCENT": "0",
+        "CATALOG_SOURCE": "hyperdrive",
+        "CATALOG_HYPERDRIVE_PERCENT": "100",
         "LEGACY_FETCH_TIMEOUT_MS": "3000",
-        "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
+        // review finding W-1 — a 10s proxy abort in front of stripe-webhook (sync DB writes + email sends) risks silent event loss inside Stripe's ~30s window.
+        "COMPATIBILITY_FETCH_TIMEOUT_MS": "30000",
         "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+        // Production stays off for the whole of this plan — the scan read path
+        // ships to staging only (DELIVERY-PLAN W2 "Does not").
+        "SCAN_ROUTES": "off",
+        "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
+        "SCAN_R2_BUCKET": "patina-media-artifacts-us",
+        // Production stays off for the whole of this plan — the upload
+        // interface ships to staging only (DELIVERY-PLAN W3 "Does not").
+        // validate-config asserts this literal, so a redeploy cannot carry a
+        // write capability against a production bucket in by accident.
+        "MEDIA_UPLOADS": "off",
+        "SCAN_R2_ORIGINALS_BUCKET": "patina-media-originals-us",
       },
-      // Add DB_FRESH=strata-prod-fresh and DB_PUBLIC_CACHE=strata-prod-public-cache
-      // using the literal IDs returned by Cloudflare provisioning, then enable shadowing.
-      // Promote CATALOG_SOURCE in the same edit that adds the IDs; a promoted
-      // source with hyperdrive: [] now fails config:check and boots 503.
-      "hyperdrive": [],
+      // Provisioned against Strata's direct endpoint
+      // (db.bkvcixdmuyejfzcijpdg.supabase.co:5432, never the pooler).
+      // DB_FRESH=strata-prod-fresh (edge_rls_login, caching disabled),
+      // DB_CATALOG_FRESH=strata-prod-catalog-fresh (edge_catalog_login, caching
+      // disabled — the shadow fresh leg), DB_PUBLIC_CACHE=strata-prod-public-cache
+      // (edge_catalog_login, max_age 60 / swr 15). Resting at rung 3
+      // (hyperdrive/100) — a promoted source missing the bindings it reads
+      // fails config:check and boots 503. hyperdrive still reads legacy on
+      // every request and compares it against DB_PUBLIC_CACHE, so the rung-3
+      // canary keeps full comparison coverage; DB_CATALOG_FRESH stays bound
+      // but unread (shadow-only leg). Rollback = CATALOG_SOURCE "legacy" +
+      // CATALOG_HYPERDRIVE_PERCENT "0", config:check, deploy (~5s, drilled).
+      "hyperdrive": [
+        { "binding": "DB_FRESH", "id": "f19990d0765043ff842bd95e52875edd" },
+        { "binding": "DB_CATALOG_FRESH", "id": "3832e8f8857549c1bfb76a8f2f42f2ec" },
+        { "binding": "DB_PUBLIC_CACHE", "id": "b55e02bfab174b08ada96892acae2618" },
+      ],
     },
   },
 }

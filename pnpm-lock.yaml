@@ -8,6 +8,8 @@ overrides:
   '@react-email/render': 1.1.2
   next: ~16.2.6
 
+packageExtensionsChecksum: e446f8b492ad054ae003fd653f79e544
+
 importers:
 
   .:
@@ -626,12 +628,9 @@ importers:
       '@radix-ui/react-toggle-group':
         specifier: ^1.1.11
         version: 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@react-three/drei':
-        specifier: ^9.122.0
-        version: 9.122.0(@react-three/fiber@8.18.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(three@0.159.0))(@types/react@19.2.14)(@types/three@0.159.0)(immer@10.2.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(three@0.159.0)(use-sync-external-store@1.6.0(react@19.2.4))
-      '@react-three/fiber':
-        specifier: ^8.18.0
-        version: 8.18.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(three@0.159.0)
+      '@sparkjsdev/spark':
+        specifier: 2.1.0
+        version: 2.1.0(three@0.180.0)
       '@supabase/ssr':
         specifier: ^0.5.0
         version: 0.5.2(@supabase/supabase-js@2.98.0)
@@ -720,8 +719,8 @@ importers:
         specifier: ^2.2.1
         version: 2.6.1
       three:
-        specifier: ^0.159.0
-        version: 0.159.0
+        specifier: 0.180.0
+        version: 0.180.0
       uuid:
         specifier: ^10.0.0
         version: 10.0.0
@@ -769,8 +768,8 @@ importers:
         specifier: ^19.2.2
         version: 19.2.3(@types/react@19.2.14)
       '@types/three':
-        specifier: '0.159'
-        version: 0.159.0
+        specifier: 0.180.0
+        version: 0.180.0
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.0.0
         version: 8.63.0(@typescript-eslint/parser@8.63.0(eslint@9.39.3(jiti@1.21.7))(typescript@5.9.3))(eslint@9.39.3(jiti@1.21.7))(typescript@5.9.3)
@@ -9775,6 +9774,11 @@ packages:
 
   '@socket.io/component-emitter@3.1.2':
     resolution: {integrity: sha512-9BCxFwvbGg/RsZK9tjXd8s4UcwR0MWeFQ1XEKIQVVvAGJyINdrqKMcTRyLoK8Rse1GjzLV9cwjWV1olXRWEXVA==}
+
+  '@sparkjsdev/spark@2.1.0':
+    resolution: {integrity: sha512-BRw+MuMzx0B3K8fDLQygt2OHEhYUV+41RX7btq9pZ3rCVrq42o57jW34VAIvC7JO/84DJh/1AutACV9ym6BfVg==}
+    peerDependencies:
+      three: '>=0.180.0'
 
   '@speed-highlight/core@1.2.17':
     resolution: {integrity: sha512-Z92FwKpCtfaW1V0jTU/fh3QzYEZN8wDwrzRIBoADCJfn4mJCNcJN/XegifX7BDrQ8/h9Xh/JnbyMchL0FqXrkg==}
@@ -29013,6 +29017,12 @@ snapshots:
       text-hex: 1.0.0
 
   '@socket.io/component-emitter@3.1.2': {}
+
+  '@sparkjsdev/spark@2.1.0(three@0.180.0)':
+    dependencies:
+      '@types/three': 0.180.0
+      fflate: 0.8.2
+      three: 0.180.0
 
   '@speed-highlight/core@1.2.17': {}
 

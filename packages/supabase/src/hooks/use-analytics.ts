@@ -1,15 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
-import { createBrowserClient } from '@supabase/ssr';
+import { useQuery } from "@tanstack/react-query";
+import { createBrowserClient } from "../client";
 
-const getSupabase = () =>
-  createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+const getSupabase = () => createBrowserClient();
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const supabase = getSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session?.access_token) return {};
   return { Authorization: `Bearer ${session.access_token}` };
 }
@@ -93,16 +91,16 @@ export interface DeliveryHealthData {
 
 // ─── Hooks ───────────────────────────────────────────────────────────────
 
-export function useAnalyticsOverview(period: string = '7d') {
+export function useAnalyticsOverview(period: string = "7d") {
   return useQuery<AnalyticsOverviewData>({
-    queryKey: ['analytics', 'overview', period],
+    queryKey: ["analytics", "overview", period],
     queryFn: async () => {
       const headers = await getAuthHeaders();
       const res = await fetch(
         `/api/admin/comms/analytics?view=overview&period=${period}`,
-        { headers }
+        { headers },
       );
-      if (!res.ok) throw new Error('Failed to fetch analytics overview');
+      if (!res.ok) throw new Error("Failed to fetch analytics overview");
       return res.json();
     },
     staleTime: 60_000,
@@ -111,32 +109,32 @@ export function useAnalyticsOverview(period: string = '7d') {
 }
 
 export function useCampaignComparison(campaignIds: string[] = []) {
-  const idsParam = campaignIds.join(',');
+  const idsParam = campaignIds.join(",");
   return useQuery<CampaignComparisonData>({
-    queryKey: ['analytics', 'comparison', idsParam],
+    queryKey: ["analytics", "comparison", idsParam],
     queryFn: async () => {
       const headers = await getAuthHeaders();
       const url = idsParam
         ? `/api/admin/comms/analytics?view=comparison&campaign_ids=${idsParam}`
-        : '/api/admin/comms/analytics?view=comparison';
+        : "/api/admin/comms/analytics?view=comparison";
       const res = await fetch(url, { headers });
-      if (!res.ok) throw new Error('Failed to fetch campaign comparison');
+      if (!res.ok) throw new Error("Failed to fetch campaign comparison");
       return res.json();
     },
     staleTime: 60_000,
   });
 }
 
-export function useRevenueAttribution(period: string = '7d') {
+export function useRevenueAttribution(period: string = "7d") {
   return useQuery<RevenueAttributionData>({
-    queryKey: ['analytics', 'attribution', period],
+    queryKey: ["analytics", "attribution", period],
     queryFn: async () => {
       const headers = await getAuthHeaders();
       const res = await fetch(
         `/api/admin/comms/analytics?view=attribution&period=${period}`,
-        { headers }
+        { headers },
       );
-      if (!res.ok) throw new Error('Failed to fetch revenue attribution');
+      if (!res.ok) throw new Error("Failed to fetch revenue attribution");
       return res.json();
     },
     staleTime: 60_000,
@@ -145,30 +143,29 @@ export function useRevenueAttribution(period: string = '7d') {
 
 export function useEngagementCohorts() {
   return useQuery<EngagementCohortsData>({
-    queryKey: ['analytics', 'cohorts'],
+    queryKey: ["analytics", "cohorts"],
     queryFn: async () => {
       const headers = await getAuthHeaders();
-      const res = await fetch(
-        '/api/admin/comms/analytics?view=cohorts',
-        { headers }
-      );
-      if (!res.ok) throw new Error('Failed to fetch engagement cohorts');
+      const res = await fetch("/api/admin/comms/analytics?view=cohorts", {
+        headers,
+      });
+      if (!res.ok) throw new Error("Failed to fetch engagement cohorts");
       return res.json();
     },
     staleTime: 120_000,
   });
 }
 
-export function useDeliveryHealth(period: string = '7d') {
+export function useDeliveryHealth(period: string = "7d") {
   return useQuery<DeliveryHealthData>({
-    queryKey: ['analytics', 'delivery', period],
+    queryKey: ["analytics", "delivery", period],
     queryFn: async () => {
       const headers = await getAuthHeaders();
       const res = await fetch(
         `/api/admin/comms/analytics?view=delivery&period=${period}`,
-        { headers }
+        { headers },
       );
-      if (!res.ok) throw new Error('Failed to fetch delivery health');
+      if (!res.ok) throw new Error("Failed to fetch delivery health");
       return res.json();
     },
     staleTime: 60_000,

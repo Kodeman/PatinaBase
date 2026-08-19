@@ -27,14 +27,66 @@ const nextConfig = {
       supabaseFrameOrigin = null;
       supabaseRealtimeOrigin = null;
     }
-    const supabaseConnectOrigins = [supabaseFrameOrigin, supabaseRealtimeOrigin].filter(Boolean).join(' ');
+
+    // The Rendered Room v2 scan read path (use-splat-url.ts / scan-artifact-url.ts)
+    // calls the edge API Worker directly from the browser via
+    // `NEXT_PUBLIC_EDGE_API_URL`. That origin is a `*.workers.dev` host — not
+    // covered by the `*.patina.cloud` allowance below — so without this the fetch
+    // is silently CSP-blocked in every browser regardless of the env var being
+    // wired. Unset (every environment until a scope opts in) degrades to nothing,
+    // same pattern as supabaseFrameOrigin.
+    let edgeApiOrigin = null;
+    try {
+      edgeApiOrigin = process.env.NEXT_PUBLIC_EDGE_API_URL
+        ? new URL(process.env.NEXT_PUBLIC_EDGE_API_URL).origin
+        : null;
+    } catch {
+      edgeApiOrigin = null;
+    }
+
+    // The edge API only MINTS the capability URL; the bytes are fetched straight
+    // from R2's S3 endpoint by whoever holds it, so that origin needs its own
+    // connect-src grant. Missing it is what blocked SPLAT on staging after the
+    // worker-CORS, wasm-unsafe-eval, and R2-bucket-CORS fixes had all landed —
+    // and it was invisible for a reason worth writing down: @sparkjsdev/spark
+    // fetches the splat from inside a blob: Web Worker. A worker inherits the
+    // owning document's CSP but reports its violations in its OWN context, so
+    // DevTools showed no console error, no network row, and no CSP warning on
+    // the main thread. All the page saw was `TypeError: Failed to fetch` thrown
+    // out of Spark's `decodeBytesUrl`, which the canvas routed to its quiet
+    // error state. `?splatDebug=1` (splat/splat-debug.ts) is what surfaced it,
+    // and a `securitypolicyviolation` listener on the document is what named
+    // the directive: `connect-src blocked https://<account>.r2.cloudflarestorage.com/…`.
+    //
+    // The grant is one exact origin, not a wildcard: it is an S3 endpoint whose
+    // every object is already presign-gated, and widening it to `*.r2.cloudflarestorage.com`
+    // would name every Cloudflare account's R2 rather than ours. Unset degrades
+    // to nothing, same pattern as edgeApiOrigin.
+    let scanR2Origin = null;
+    try {
+      scanR2Origin = process.env.NEXT_PUBLIC_SCAN_R2_ENDPOINT
+        ? new URL(process.env.NEXT_PUBLIC_SCAN_R2_ENDPOINT).origin
+        : null;
+    } catch {
+      scanR2Origin = null;
+    }
+
+    const supabaseConnectOrigins = [supabaseFrameOrigin, supabaseRealtimeOrigin, edgeApiOrigin, scanR2Origin].filter(Boolean).join(' ');
 
     // CSP directives - adapted for development vs production
     const cspDirectives = [
       "default-src 'self'",
+      // `wasm-unsafe-eval` (prod leg) is the narrow CSP source for WebAssembly
+      // compilation specifically — NOT a general eval allowance. Without it,
+      // @sparkjsdev/spark's `WebAssembly.instantiateStreaming()` for the SPLAT
+      // projection's Rust splat-decode module throws a CompileError citing
+      // `'unsafe-eval'` and the stage hangs forever on its loading line
+      // ("Bringing the walkthrough up…") — confirmed live on staging. Dev's
+      // `'unsafe-eval'` already covers WASM instantiation too (which is why
+      // this never surfaced locally), so the dev leg is unchanged.
       isDevelopment
         ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-        : "script-src 'self' 'unsafe-inline' https://us-assets.i.posthog.com",
+        : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://us-assets.i.posthog.com",
       "style-src 'self' 'unsafe-inline'",
       // Images: prod screenshots/assets come from https://api.patina.cloud
       // (covered by https:). In dev, private-bucket signed URLs are served over
@@ -47,10 +99,26 @@ const nextConfig = {
       // Allow connections based on environment
       // Development: localhost, local network IPs, and approved patina.cloud preview domains
       // Production: patina.cloud API gateway and WebSocket connections
+      //
+      // `data:` is for the SPLAT projection. @sparkjsdev/spark inlines its Rust
+      // splat-decode WASM as a `data:application/wasm;base64,…` URI rather than
+      // shipping a .wasm file — which sounds like it needs no CSP allowance and
+      // does: wasm-bindgen's init `fetch()`es that URI, and a fetch of a data:
+      // URL is still governed by connect-src. Without this the whole Spark module
+      // fails at `SplatMesh.staticInitialize()` with a bare "Failed to fetch" and
+      // the stage hangs on its loading line. The grant is narrow — a data: URL
+      // carries bytes the document already holds, so it is not an exfiltration
+      // path and reaches no network origin.
       isDevelopment
-        ? "connect-src 'self' http://localhost:* ws://localhost:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : '')
-        : "connect-src 'self' https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : ''),
+        ? "connect-src 'self' data: http://localhost:* ws://localhost:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : '')
+        : "connect-src 'self' data: https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : ''),
       "media-src 'self' blob:",
+      // The MESH projection's GLTFLoader spins up DRACO/KTX2 transcoder workers
+      // from blob: URLs (see public/three/). Without this they fall back to
+      // script-src, which has no blob:, and every Draco-compressed scan fails
+      // to decode — as a worker construction error in the console, not as
+      // anything the page can show.
+      "worker-src 'self' blob:",
       ["frame-src 'self'", supabaseFrameOrigin].filter(Boolean).join(' '),
       "object-src 'none'",
       "base-uri 'self'",

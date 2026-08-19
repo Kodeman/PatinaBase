@@ -101,6 +101,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_billing_actor(uuid) TO PUBLIC;
 
 -- ── Milestone draft is header + exact line + latch, and retry is exact. ──
 SET LOCAL ROLE authenticated;
@@ -629,6 +630,7 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.reject_billing_line() TO PUBLIC;
 CREATE TRIGGER reject_billing_line
 BEFORE INSERT ON public.invoice_line_items
 FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_billing_line();

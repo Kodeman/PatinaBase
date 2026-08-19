@@ -4,8 +4,12 @@
  *   · the three MOVEMENT hues (Mocha/Clay/Dusty-Blue), line 3 softened
  *   · the --f fill as a left-clipped scaleX, four size variants, mono flag
  *   · the .sweeping loader's classes match the globals keyframes
- *   · the spine carries per-section fill; the scan overlay + canonical button
- *     render the sweep, not a CSS spinner.
+ *   · the spine carries per-section fill; the canonical button renders the
+ *     sweep, not a CSS spinner.
+ *
+ * The r3f viewer's `LoadingOverlay` used to be a third surface asserted here; it
+ * was deleted with the rest of that stack (Rendered Room v2, W2), and a contract
+ * over a file that no longer exists is not a contract.
  */
 
 import { readFileSync } from 'fs';
@@ -18,7 +22,6 @@ const mark = read('components/document/strata-mark.tsx');
 const sweep = read('components/ui/strata-sweep.tsx');
 const globals = read('app/globals.css');
 const spine = read('components/document/doc-spine.tsx');
-const overlay = read('components/rooms/viewer/LoadingOverlay.tsx');
 const button = read('components/ui/controls/button.tsx');
 
 describe('R35 — the three-hue progress mark', () => {
@@ -73,11 +76,6 @@ describe('R35 — surfaces carry the mark', () => {
   it('the spine renders per-section fill (the staircase), active breathing', () => {
     expect(spine).toMatch(/fillStateAtSection\(s\.key\)/);
     expect(spine).toMatch(/breathing=\{s\.state === 'active'\}/);
-  });
-
-  it('the live-scan overlay sweeps instead of spinning', () => {
-    expect(overlay).toMatch(/<StrataSweep/);
-    expect(overlay).not.toMatch(/animate-spin/);
   });
 
   it('the canonical button sweeps on load (no lucide spinner)', () => {

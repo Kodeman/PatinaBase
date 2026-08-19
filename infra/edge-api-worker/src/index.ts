@@ -9,8 +9,8 @@ import {
   queryCatalogViaHyperdrive,
   queryCatalogViaLegacy,
 } from './catalog';
-import { isHealthAuthorized } from './auth';
-import { probeBinding } from './database';
+import { isHealthAuthorized, withVerifiedSupabaseTransaction } from './auth';
+import { probeBinding, type DatabaseClient } from './database';
 import { UpstreamAbortError, UpstreamTimeoutError } from './deadline';
 import {
   ConfigurationError,
@@ -18,7 +18,37 @@ import {
   type EdgeApiEnv,
   type RuntimeConfig,
 } from './env';
+import {
+  assertObservedMatchesDeclared,
+  assertUploadCaller,
+  confirmUpload,
+  createUploadIntent,
+  headUploadedObject,
+  hexToBase64,
+  parseMediaUploadPath,
+  parseUploadIntentBody,
+  resolveUploadForConfirm,
+  signUploadPut,
+  UploadMismatchError,
+  UploadNotFoundError,
+  UploadRequestError,
+  UploadUnauthorizedError,
+  type ConfirmedUpload,
+  type ObservedObject,
+  type PendingUpload,
+  type UploadIntent,
+  type UploadIntentInput,
+} from './media-uploads';
 import { isCompatibilityPath, proxySupabaseRequest } from './proxy';
+import { presignR2GetUrl } from './r2';
+import {
+  parseScanArtifactPath,
+  resolveScanArtifacts,
+  ScanUnauthorizedError,
+  type ScanArtifactKind,
+  type ScanArtifactObject,
+  type ScanArtifactRequest,
+} from './scan';
 import {
   ALERT_EVENTS,
   createTraceId,
@@ -46,8 +76,36 @@ export interface WorkerDependencies {
   ): Promise<CatalogProductSummary[]>;
   probe(binding: Hyperdrive | undefined): Promise<boolean>;
   authorizeHealth(request: Request, env: EdgeApiEnv): Promise<boolean>;
+  verifyAuthenticated<T>(
+    request: Request,
+    env: EdgeApiEnv,
+    work: (client: DatabaseClient) => Promise<T>,
+  ): Promise<T>;
+  resolveScanArtifacts(
+    request: Request,
+    env: EdgeApiEnv,
+    target: ScanArtifactRequest,
+  ): Promise<ScanArtifactObject[]>;
+  authorizeUpload(request: Request, env: EdgeApiEnv): Promise<void>;
+  createUploadIntent(
+    request: Request,
+    env: EdgeApiEnv,
+    input: UploadIntentInput,
+  ): Promise<UploadIntent>;
+  resolveUploadForConfirm(
+    request: Request,
+    env: EdgeApiEnv,
+    uploadId: string,
+  ): Promise<PendingUpload>;
+  confirmUpload(
+    request: Request,
+    env: EdgeApiEnv,
+    uploadId: string,
+    observed: ObservedObject,
+  ): Promise<ConfirmedUpload>;
   randomUUID(): string;
   cohortKey(request: Request): string;
+  now(): Date;
   log(event: AlertLogEvent): void;
 }
 
@@ -58,8 +116,20 @@ const defaultDependencies: WorkerDependencies = {
   queryLegacy: queryCatalogViaLegacy,
   probe: probeBinding,
   authorizeHealth: isHealthAuthorized,
+  verifyAuthenticated: (request, env, work) =>
+    withVerifiedSupabaseTransaction(request, env, work),
+  resolveScanArtifacts: (request, env, target) =>
+    resolveScanArtifacts(request, env, target),
+  authorizeUpload: (request, env) => assertUploadCaller(request, env),
+  createUploadIntent: (request, env, input) =>
+    createUploadIntent(request, env, input),
+  resolveUploadForConfirm: (request, env, uploadId) =>
+    resolveUploadForConfirm(request, env, uploadId),
+  confirmUpload: (request, env, uploadId, observed) =>
+    confirmUpload(request, env, uploadId, observed),
   randomUUID: () => crypto.randomUUID(),
   cohortKey: trustedRolloutKey,
+  now: () => new Date(),
   log: structuredLog,
 };
 
@@ -70,6 +140,40 @@ function privateJson(body: unknown, status: number, traceId: string): Response {
       'cache-control': 'private, no-store',
       'x-patina-trace-id': traceId,
     },
+  });
+}
+
+/**
+ * The scan artifact route (`GET /v1/scan/room-files/:id/artifacts/:kind`) is
+ * called directly from portal browser JS with a bearer `Authorization` header
+ * (`packages/supabase/src/lib/scan-artifact-url.ts`) — a cross-origin request
+ * (the portal and this Worker are different origins), so the browser sends a
+ * CORS preflight `OPTIONS` before the real `GET`. Nothing on this route ever
+ * answered that preflight (no `access-control-*` headers, no `OPTIONS`
+ * handling), so every browser call failed with an opaque "Failed to fetch"
+ * before a single GET request reached the Worker — confirmed live on staging
+ * (`curl -X OPTIONS .../artifacts/renders` → 404, no CORS headers at all).
+ * The route carries no cookie/session state of its own (auth is the bearer
+ * token, verified server-side against Supabase JWKS), so a wildcard origin
+ * leaks nothing a same-origin request wouldn't already get — matching the
+ * catalog route's existing `access-control-allow-origin: '*'` precedent.
+ */
+const SCAN_ARTIFACT_CORS_HEADERS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, OPTIONS',
+  'access-control-allow-headers': 'authorization, content-type',
+  'access-control-max-age': '600',
+};
+
+function withScanArtifactCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(SCAN_ARTIFACT_CORS_HEADERS)) {
+    headers.set(name, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
   });
 }
 
@@ -259,9 +363,11 @@ async function handleCatalog(
 function failingBinding(
   freshFailed: boolean,
   cachedFailed: boolean,
-): 'DB_FRESH' | 'DB_PUBLIC_CACHE' | 'both' {
+): 'DB_CATALOG_FRESH' | 'DB_PUBLIC_CACHE' | 'both' {
   if (freshFailed && cachedFailed) return 'both';
-  return freshFailed ? 'DB_FRESH' : 'DB_PUBLIC_CACHE';
+  // The shadow fresh leg reads DB_CATALOG_FRESH (the catalog reader), not
+  // DB_FRESH (the RLS login) — point an operator at the binding that failed.
+  return freshFailed ? 'DB_CATALOG_FRESH' : 'DB_PUBLIC_CACHE';
 }
 
 function logComparison(
@@ -304,6 +410,325 @@ function logComparison(
   return matched;
 }
 
+async function handleAuthCheck(
+  request: Request,
+  env: EdgeApiEnv,
+  traceId: string,
+  dependencies: WorkerDependencies,
+): Promise<Response> {
+  try {
+    await dependencies.verifyAuthenticated(request, env, async (client) => {
+      // Data-free: this exercises the verified-JWT -> SET ROLE authenticated ->
+      // set_config('request.jwt.claims', ...) chain without reading any
+      // application table. The row is discarded and never returned.
+      await client.query(
+        "SELECT current_user, current_setting('request.jwt.claims', true)",
+      );
+    });
+  } catch {
+    // Every failure mode — missing/invalid/expired/wrong-issuer/wrong-audience/
+    // wrong-role token, or an unavailable RLS login — collapses to the worker's
+    // non-enumerating not_found. Never a 500, and never any detail about which
+    // check failed or the claims/user behind a valid token.
+    return privateJson({ error: 'not_found' }, 404, traceId);
+  }
+  return privateJson({ ok: true }, 200, traceId);
+}
+
+/**
+ * How long a scan capability URL lives. Ten minutes: long enough for a splat of
+ * a few hundred megabytes to finish downloading over a poor connection, short
+ * enough that a URL copied out of a network tab is worthless by the time it is
+ * pasted anywhere. Fixed rather than configurable — a per-environment TTL is a
+ * knob whose only use is making the capability last longer.
+ */
+const SCAN_URL_TTL_SECONDS = 600;
+
+async function signScanArtifact(
+  env: EdgeApiEnv,
+  object: ScanArtifactObject,
+  now: Date,
+): Promise<{ url: string; expiresAt: string }> {
+  return presignR2GetUrl({
+    endpoint: env.SCAN_R2_ENDPOINT,
+    bucket: object.bucket,
+    objectKey: object.objectKey,
+    accessKeyId: env.SCAN_R2_ACCESS_KEY_ID as string,
+    secretAccessKey: env.SCAN_R2_SECRET_ACCESS_KEY as string,
+    expiresInSeconds: SCAN_URL_TTL_SECONDS,
+    now,
+  });
+}
+
+async function handleScanArtifact(
+  request: Request,
+  env: EdgeApiEnv,
+  target: ScanArtifactRequest,
+  traceId: string,
+  dependencies: WorkerDependencies,
+): Promise<Response> {
+  let objects: ScanArtifactObject[];
+  try {
+    objects = await dependencies.resolveScanArtifacts(request, env, target);
+  } catch (error) {
+    if (error instanceof ScanUnauthorizedError) {
+      // The one negative that is about the CALLER rather than about data. Every
+      // other outcome below is an identical 404 — never a 403, which would
+      // confirm the Room File exists.
+      return privateJson({ error: 'unauthorized' }, 401, traceId);
+    }
+    dependencies.log({
+      event: ALERT_EVENTS.scanArtifactFailure,
+      severity: 'error',
+      traceId,
+      routeClass: 'scan.artifact',
+      artifactKind: target.kind,
+      status: 503,
+    });
+    return privateJson({ error: 'scan_artifact_unavailable' }, 503, traceId);
+  }
+
+  if (objects.length === 0) {
+    return privateJson({ error: 'not_found' }, 404, traceId);
+  }
+
+  const now = dependencies.now();
+  let signed: Array<{ shot: string; url: string; expiresAt: string }>;
+  try {
+    signed = await Promise.all(
+      objects.map(async (object) => ({
+        shot: object.shot,
+        ...(await signScanArtifact(env, object, now)),
+      })),
+    );
+  } catch {
+    // A presign failure is a configuration or credential fault, never a
+    // statement about this caller — and the error carries key material context,
+    // so nothing about it is logged beyond the event itself.
+    dependencies.log({
+      event: ALERT_EVENTS.scanArtifactFailure,
+      severity: 'error',
+      traceId,
+      routeClass: 'scan.artifact',
+      artifactKind: target.kind,
+      status: 503,
+    });
+    return privateJson({ error: 'scan_artifact_unavailable' }, 503, traceId);
+  }
+
+  return privateJson(scanArtifactBody(target.kind, signed), 200, traceId);
+}
+
+function scanArtifactBody(
+  kind: ScanArtifactKind,
+  signed: Array<{ shot: string; url: string; expiresAt: string }>,
+): unknown {
+  if (kind === 'renders') {
+    return {
+      kind,
+      shots: Object.fromEntries(
+        signed.map(({ shot, url, expiresAt }) => [shot, { url, expiresAt }]),
+      ),
+    };
+  }
+  const [only] = signed;
+  return { kind, url: only.url, expiresAt: only.expiresAt };
+}
+
+// ── The Phase-2 upload interface (W3-A) ──────────────────────────────────────
+// The route is called from iOS and (later) the portals with a bearer token from
+// a different origin, so it needs the same preflight answer the read path
+// needed — that omission was already found live on staging once, as an opaque
+// "Failed to fetch" before a single request reached the Worker.
+const MEDIA_UPLOAD_CORS_HEADERS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-headers': 'authorization, content-type',
+  'access-control-max-age': '600',
+};
+
+function withMediaUploadCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(MEDIA_UPLOAD_CORS_HEADERS)) {
+    headers.set(name, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function logUploadFailure(
+  dependencies: WorkerDependencies,
+  traceId: string,
+  stage: 'intent' | 'confirm',
+  status: number,
+  mismatchReason?: 'size' | 'checksum' | 'missing' | 'state' | 'registry',
+): void {
+  dependencies.log({
+    event: ALERT_EVENTS.mediaUploadFailure,
+    severity: status >= 500 ? 'error' : 'warning',
+    traceId,
+    routeClass: 'media.upload',
+    uploadStage: stage,
+    status,
+    ...(mismatchReason ? { mismatchReason } : {}),
+  });
+}
+
+/**
+ * The shared negative mapping for both legs. `UploadNotFoundError` covers "no
+ * such scan", "no such upload", and "not yours" alike — one 404, never a 403.
+ */
+function uploadErrorResponse(
+  error: unknown,
+  traceId: string,
+  stage: 'intent' | 'confirm',
+  dependencies: WorkerDependencies,
+): Response {
+  if (error instanceof UploadUnauthorizedError) {
+    return privateJson({ error: 'unauthorized' }, 401, traceId);
+  }
+  if (error instanceof UploadRequestError) {
+    return privateJson(
+      { error: 'invalid_request', message: error.message },
+      400,
+      traceId,
+    );
+  }
+  if (error instanceof UploadNotFoundError) {
+    return privateJson({ error: 'not_found' }, 404, traceId);
+  }
+  if (error instanceof UploadMismatchError) {
+    logUploadFailure(dependencies, traceId, stage, 409, error.reason);
+    return privateJson(
+      { error: 'upload_mismatch', reason: error.reason },
+      409,
+      traceId,
+    );
+  }
+  logUploadFailure(dependencies, traceId, stage, 503);
+  return privateJson({ error: 'media_upload_unavailable' }, 503, traceId);
+}
+
+async function handleUploadIntent(
+  request: Request,
+  env: EdgeApiEnv,
+  traceId: string,
+  dependencies: WorkerDependencies,
+): Promise<Response> {
+  let input: UploadIntentInput;
+  let intent: UploadIntent;
+  try {
+    // The caller, BEFORE the body. An unauthenticated request must not buy a
+    // JSON read and parse first — and a 401 that arrives after a 400 for a
+    // malformed body would also be telling an anonymous caller which of their
+    // two problems the Worker noticed.
+    await dependencies.authorizeUpload(request, env);
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      throw new UploadRequestError('body must be valid JSON');
+    }
+    input = parseUploadIntentBody(body);
+    intent = await dependencies.createUploadIntent(request, env, input);
+  } catch (error) {
+    return uploadErrorResponse(error, traceId, 'intent', dependencies);
+  }
+
+  // An intent for an object that has ALREADY LANDED is a restatement, not a
+  // request for a new capability. 00498 returns the existing row for an exact
+  // restatement so a client that lost the response to a successful confirm gets
+  // a stable answer — but signing a fresh PUT for it would hand that client a
+  // thirty-minute licence to overwrite confirmed bytes, under a checksum the
+  // registry already recorded and the scan read path already serves. There is
+  // nothing left to upload, so there is no URL to give: answer with the row.
+  if (intent.lifecycleState !== 'pending') {
+    return privateJson(
+      { uploadId: intent.uploadId, lifecycle: intent.lifecycleState },
+      200,
+      traceId,
+    );
+  }
+
+  let signed: { url: string; expiresAt: string };
+  try {
+    signed = await signUploadPut(env, intent, input, dependencies.now());
+  } catch {
+    // A presign failure is a configuration or credential fault, never a
+    // statement about this caller — and the error carries key material
+    // context, so nothing about it is logged beyond the event itself.
+    logUploadFailure(dependencies, traceId, 'intent', 503);
+    return privateJson({ error: 'media_upload_unavailable' }, 503, traceId);
+  }
+
+  return privateJson(
+    {
+      uploadId: intent.uploadId,
+      putUrl: signed.url,
+      expiresAt: signed.expiresAt,
+      // Both are CONDITIONS baked into the signature, so the client has to be
+      // told what to send — a PUT without them fails as SignatureDoesNotMatch,
+      // which says nothing useful on its own.
+      requiredHeaders: {
+        'content-length': String(input.declaredSize),
+        'x-amz-checksum-sha256': hexToBase64(input.declaredSha256),
+      },
+    },
+    intent.created ? 201 : 200,
+    traceId,
+  );
+}
+
+async function handleUploadConfirm(
+  request: Request,
+  env: EdgeApiEnv,
+  uploadId: string,
+  traceId: string,
+  dependencies: WorkerDependencies,
+): Promise<Response> {
+  try {
+    // Visibility first, under the caller's own RLS — nothing is signed or
+    // HEADed for an upload this caller cannot see.
+    const pending = await dependencies.resolveUploadForConfirm(
+      request,
+      env,
+      uploadId,
+    );
+    const observed = await headUploadedObject(
+      env,
+      pending,
+      dependencies.now(),
+      dependencies.fetcher,
+    );
+    // Compared here, before the write path is touched at all, so a mismatch
+    // names its own reason and leaves the row exactly as it was.
+    assertObservedMatchesDeclared(pending, observed);
+    const confirmed = await dependencies.confirmUpload(
+      request,
+      env,
+      uploadId,
+      observed,
+    );
+    return privateJson(
+      {
+        uploadId: confirmed.uploadId,
+        lifecycle: confirmed.lifecycleState,
+        sha256: confirmed.sha256,
+        etag: confirmed.etag,
+        sizeBytes: confirmed.sizeBytes,
+      },
+      200,
+      traceId,
+    );
+  } catch (error) {
+    return uploadErrorResponse(error, traceId, 'confirm', dependencies);
+  }
+}
+
 type BindingCheck = 'ok' | 'unavailable' | 'not_applicable';
 
 async function checkBinding(
@@ -328,13 +753,25 @@ async function handleHealth(
     return privateJson({ error: 'not_found' }, 404, traceId);
   }
   const required = config.catalogSource !== 'legacy';
-  const [fresh, publicCache] = await Promise.all([
+  // Only shadow reads the fresh leg (DB_CATALOG_FRESH); legacy and hyperdrive
+  // never do, so the reader is not_applicable there even if it is bound. In
+  // shadow it must answer, or every comparison silently runs one-legged.
+  const [fresh, publicCache, catalogFresh] = await Promise.all([
     checkBinding(env.DB_FRESH, required, dependencies),
     checkBinding(env.DB_PUBLIC_CACHE, required, dependencies),
+    config.catalogSource === 'shadow'
+      ? checkBinding(env.DB_CATALOG_FRESH, true, dependencies)
+      : Promise.resolve<BindingCheck>('not_applicable'),
   ]);
-  const healthy = fresh !== 'unavailable' && publicCache !== 'unavailable';
+  const healthy =
+    fresh !== 'unavailable' &&
+    publicCache !== 'unavailable' &&
+    catalogFresh !== 'unavailable';
   return privateJson(
-    { status: healthy ? 'ok' : 'degraded', checks: { fresh, publicCache } },
+    {
+      status: healthy ? 'ok' : 'degraded',
+      checks: { fresh, publicCache, catalogFresh },
+    },
     healthy ? 200 : 503,
     traceId,
   );
@@ -379,6 +816,61 @@ export function createWorker(
             traceId,
             dependencies,
           );
+        }
+        if (request.method === 'GET' && url.pathname === '/v1/_authcheck') {
+          return await handleAuthCheck(request, env, traceId, dependencies);
+        }
+        // SCAN_ROUTES=off leaves the path unrouted entirely, so it falls through
+        // to the same not_found any unknown path gets: an environment that has
+        // not turned the read path on does not advertise that it exists.
+        if (
+          config.scanRoutes === 'on' &&
+          (request.method === 'GET' || request.method === 'OPTIONS')
+        ) {
+          const target = parseScanArtifactPath(url.pathname);
+          if (target) {
+            // Browser JS calls this route cross-origin with an `Authorization`
+            // header, which triggers a CORS preflight — answer it here rather
+            // than falling through to the generic not_found every other
+            // unmatched OPTIONS request gets.
+            if (request.method === 'OPTIONS') {
+              return new Response(null, {
+                status: 204,
+                headers: SCAN_ARTIFACT_CORS_HEADERS,
+              });
+            }
+            return withScanArtifactCors(
+              await handleScanArtifact(request, env, target, traceId, dependencies),
+            );
+          }
+        }
+        // MEDIA_UPLOADS=off leaves both upload paths unrouted, so they fall
+        // through to the same not_found any unknown path gets: an environment
+        // that does not accept uploads does not advertise that it might.
+        if (
+          config.mediaUploads === 'on' &&
+          (request.method === 'POST' || request.method === 'OPTIONS')
+        ) {
+          const route = parseMediaUploadPath(url.pathname);
+          if (route) {
+            if (request.method === 'OPTIONS') {
+              return new Response(null, {
+                status: 204,
+                headers: MEDIA_UPLOAD_CORS_HEADERS,
+              });
+            }
+            return withMediaUploadCors(
+              route.kind === 'intent'
+                ? await handleUploadIntent(request, env, traceId, dependencies)
+                : await handleUploadConfirm(
+                    request,
+                    env,
+                    route.uploadId,
+                    traceId,
+                    dependencies,
+                  ),
+            );
+          }
         }
         if (request.method === 'GET' && url.pathname === '/_internal/health') {
           return await handleHealth(request, env, config, traceId, dependencies);

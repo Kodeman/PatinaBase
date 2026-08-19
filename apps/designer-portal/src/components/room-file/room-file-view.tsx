@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * RoomFileView — the Room File v0 surface (Field Capture P1, package item 12).
@@ -17,26 +17,36 @@
  * room-file-copy.ts).
  */
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { useRoomScan, useRoomFiles, useRoomFileMeasurements, useScanContextCaptures } from '@patina/supabase';
-import { useHydrated } from '@/hooks/use-hydrated';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { DrawingsSection } from './drawings-section';
-import { CertificateSection } from './certificate-section';
-import { MeasurementsTable } from './measurements-table';
-import { CaptureContextSection } from './capture-context-section';
-import { RoomFileVersionStrip } from './room-file-version-strip';
-import { RoomFilePresentLine } from './room-file-present-line';
-import { ROOM_FILE_COPY as C } from './room-file-copy';
+import { useState } from "react";
+import Link from "next/link";
+import {
+  useRoomScan,
+  useRoomFiles,
+  useRoomFileMeasurements,
+  useScanContextCaptures,
+} from "@patina/supabase";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { DrawingsSection } from "./drawings-section";
+import { RenderGallerySection } from "./render-gallery-section";
+import { CertificateSection } from "./certificate-section";
+import { MeasurementsTable } from "./measurements-table";
+import { CaptureContextSection } from "./capture-context-section";
+import { RoomFileVersionStrip } from "./room-file-version-strip";
+import { RoomFilePresentLine } from "./room-file-present-line";
+import { ROOM_FILE_COPY as C } from "./room-file-copy";
 
 function prettyRoomType(roomType: string): string {
-  return roomType.replace(/_/g, ' ').trim();
+  return roomType.replace(/_/g, " ").trim();
 }
 
 function fmtDay(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export interface RoomFileViewProps {
@@ -49,24 +59,31 @@ export interface RoomFileViewProps {
 
 export function RoomFileView({ scanId }: RoomFileViewProps) {
   const hydrated = useHydrated();
-  const { value: enabled, isLoading: flagLoading } = useFeatureFlag('room-file');
+  const { value: enabled, isLoading: flagLoading } =
+    useFeatureFlag("room-file");
 
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
+    null,
+  );
 
   // Gate every data fetch on the flag (mirrors room-view.tsx): a flag-off
   // direct hit — or the brief flag-loading window — fetches nothing. The
   // disabled scanId is '' / undefined per each hook's own `enabled` guard.
-  const { data: scan } = useRoomScan(enabled ? scanId : '');
-  const { data: roomFiles, isLoading: filesLoading } = useRoomFiles(enabled ? scanId : undefined);
-  const { data: captures } = useScanContextCaptures(enabled ? scanId : undefined);
+  const { data: scan } = useRoomScan(enabled ? scanId : "");
+  const { data: roomFiles, isLoading: filesLoading } = useRoomFiles(
+    enabled ? scanId : undefined,
+  );
+  const { data: captures } = useScanContextCaptures(
+    enabled ? scanId : undefined,
+  );
 
   const versions = roomFiles ?? [];
   // Current = the selected version, else the newest `generated` row, else the
   // newest row of any status (versions come back version-desc).
-  const generated = versions.filter((v) => v.status === 'generated');
+  const generated = versions.filter((v) => v.status === "generated");
   const defaultCurrent = generated[0] ?? versions[0] ?? null;
   const current = selectedVersionId
-    ? versions.find((v) => v.id === selectedVersionId) ?? defaultCurrent
+    ? (versions.find((v) => v.id === selectedVersionId) ?? defaultCurrent)
     : defaultCurrent;
 
   const { data: measurements } = useRoomFileMeasurements(current?.id ?? null);
@@ -85,7 +102,7 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
     );
   }
 
-  const roomLabel = scan?.name ?? 'Room';
+  const roomLabel = scan?.name ?? "Room";
   const roomType = scan?.room_type ? prettyRoomType(scan.room_type) : null;
   const capturedIso = scan?.scanned_at ?? scan?.created_at ?? null;
 
@@ -104,11 +121,18 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
 
       {/* Header */}
       <header className="mt-4">
-        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-clay)]">{C.eyebrow}</p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-clay)]">
+          {C.eyebrow}
+        </p>
         <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <h1 className="font-heading text-[30px] font-medium text-[var(--color-charcoal)] sm:text-[36px]">
             {roomLabel}
-            {roomType && <span className="italic text-[var(--color-mocha)]"> · {roomType}.</span>}
+            {roomType && (
+              <span className="italic text-[var(--color-mocha)]">
+                {" "}
+                · {roomType}.
+              </span>
+            )}
           </h1>
           {current?.unverified && (
             <span className="rounded-[2px] border border-[var(--color-clay)] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay)]">
@@ -128,7 +152,7 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
           <div className="mt-4">
             <RoomFileVersionStrip
               versions={versions}
-              currentId={current?.id ?? ''}
+              currentId={current?.id ?? ""}
               onSelect={setSelectedVersionId}
             />
           </div>
@@ -144,7 +168,7 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
       {/* Body */}
       {!current ? (
         <EmptyState />
-      ) : current.status !== 'generated' ? (
+      ) : current.status !== "generated" ? (
         <>
           <NotGeneratedState />
           <CertificateSection certificate={current.certificate} />
@@ -153,7 +177,12 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
         </>
       ) : (
         <>
-          <DrawingsSection drawings={current.drawings} version={current.version} roomName={roomLabel} />
+          <DrawingsSection
+            drawings={current.drawings}
+            version={current.version}
+            roomName={roomLabel}
+          />
+          <RenderGallerySection roomFileId={current.id} roomName={roomLabel} />
           <CertificateSection certificate={current.certificate} />
           <MeasurementsTable measurements={measurements ?? []} />
           <CaptureContextSection captures={captures ?? []} />
@@ -168,8 +197,12 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
 function EmptyState() {
   return (
     <div className="mt-16 text-center">
-      <p className="font-heading text-[1.2rem] italic text-[var(--color-charcoal)]">{C.notGeneratedYet}</p>
-      <p className="mt-2 font-heading text-[13px] italic text-[var(--color-mocha)]">{C.notGeneratedBody}</p>
+      <p className="font-heading text-[1.2rem] italic text-[var(--color-charcoal)]">
+        {C.notGeneratedYet}
+      </p>
+      <p className="mt-2 font-heading text-[13px] italic text-[var(--color-mocha)]">
+        {C.notGeneratedBody}
+      </p>
     </div>
   );
 }
@@ -177,7 +210,9 @@ function EmptyState() {
 function NotGeneratedState() {
   return (
     <div className="mt-8 rounded-[3px] border border-[var(--doc-ink-border)] px-5 py-4">
-      <p className="font-heading text-[13px] italic text-[var(--color-mocha)]">{C.notGeneratedBody}</p>
+      <p className="font-heading text-[13px] italic text-[var(--color-mocha)]">
+        {C.notGeneratedBody}
+      </p>
     </div>
   );
 }

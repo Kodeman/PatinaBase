@@ -13,8 +13,30 @@ const requiredVars = [
   'LEGACY_FETCH_TIMEOUT_MS',
   'COMPATIBILITY_FETCH_TIMEOUT_MS',
   'WEBSOCKET_HANDSHAKE_TIMEOUT_MS',
+  'SCAN_ROUTES',
+  'SCAN_R2_ENDPOINT',
+  'SCAN_R2_BUCKET',
+  'MEDIA_UPLOADS',
+  'SCAN_R2_ORIGINALS_BUCKET',
 ];
+// Every name here must be a Wrangler secret and must never appear in `vars`.
+// The scan credentials are additionally CONDITIONAL for the --provisioned
+// inventory: they are only required where SCAN_ROUTES is "on", so an
+// environment resting at "off" stays provisionable without them. The WRITE pair
+// is conditional on MEDIA_UPLOADS the same way, and is a SEPARATE credential on
+// purpose — read-only against the artifacts bucket, write-only against the
+// originals bucket, so neither one is the whole media surface.
 const requiredSecrets = ['SUPABASE_ANON_KEY'];
+const scanSecrets = ['SCAN_R2_ACCESS_KEY_ID', 'SCAN_R2_SECRET_ACCESS_KEY'];
+const uploadSecrets = [
+  'SCAN_R2_WRITE_ACCESS_KEY_ID',
+  'SCAN_R2_WRITE_SECRET_ACCESS_KEY',
+];
+const KNOWN_HYPERDRIVE_BINDINGS = new Set([
+  'DB_FRESH',
+  'DB_CATALOG_FRESH',
+  'DB_PUBLIC_CACHE',
+]);
 
 export function validateScope(label, scope, errors) {
   // Production must NOT expose a second, unauthenticated *.workers.dev origin:
@@ -37,7 +59,7 @@ export function validateScope(label, scope, errors) {
       errors.push(`${label}: missing ${name}`);
     }
   }
-  for (const name of requiredSecrets) {
+  for (const name of [...requiredSecrets, ...scanSecrets, ...uploadSecrets]) {
     if (Object.hasOwn(scope.vars ?? {}, name)) {
       errors.push(`${label}: ${name} must be a Wrangler secret, not a committed variable`);
     }
@@ -49,9 +71,17 @@ export function validateScope(label, scope, errors) {
   ]) {
     try {
       const url = new URL(scope.vars?.[name]);
-      if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error();
+      const isLoopbackHost = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+      // https is required everywhere except loopback (mirrors requiredHttpUrl
+      // in src/env.ts) so env.local keeps http://127.0.0.1:54321 while a
+      // committed http:// value for staging/production fails closed here.
+      if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopbackHost)) {
+        throw new Error();
+      }
     } catch {
-      errors.push(`${label}: ${name} must be an HTTP(S) URL`);
+      errors.push(
+        `${label}: ${name} must be an HTTPS URL (http allowed only for 127.0.0.1/localhost)`,
+      );
     }
   }
   const source = scope.vars?.CATALOG_SOURCE;
@@ -79,30 +109,108 @@ export function validateScope(label, scope, errors) {
       errors.push(`${label}: invalid ${name}`);
     }
   }
+  // The scan read path, mirroring validateRuntimeConfig in src/env.ts. The R2
+  // endpoint must be a bare https origin — a path component would change the
+  // object a signature covers — and there is no loopback exemption because R2
+  // has no local stand-in.
+  const scanRoutes = scope.vars?.SCAN_ROUTES;
+  if (scanRoutes !== 'off' && scanRoutes !== 'on') {
+    errors.push(`${label}: SCAN_ROUTES must be "off" or "on"`);
+  }
+  try {
+    const endpoint = new URL(scope.vars?.SCAN_R2_ENDPOINT);
+    if (endpoint.protocol !== 'https:' || endpoint.pathname !== '/') throw new Error();
+  } catch {
+    errors.push(`${label}: SCAN_R2_ENDPOINT must be an https origin with no path`);
+  }
+  // The upload interface, mirroring validateRuntimeConfig in src/env.ts. The
+  // originals bucket is named separately from the artifacts bucket and must
+  // never be the same string: one credential pair writes here and the other
+  // reads there, and collapsing the two names would quietly collapse that
+  // separation too.
+  const mediaUploads = scope.vars?.MEDIA_UPLOADS;
+  if (mediaUploads !== 'off' && mediaUploads !== 'on') {
+    errors.push(`${label}: MEDIA_UPLOADS must be "off" or "on"`);
+  }
+  if (
+    typeof scope.vars?.SCAN_R2_ORIGINALS_BUCKET === 'string' &&
+    scope.vars.SCAN_R2_ORIGINALS_BUCKET === scope.vars?.SCAN_R2_BUCKET
+  ) {
+    errors.push(
+      `${label}: SCAN_R2_ORIGINALS_BUCKET must differ from SCAN_R2_BUCKET (originals and artifacts are separate durability contracts)`,
+    );
+  }
+  // Production stays off for the whole of this plan (DELIVERY-PLAN W3 "Does
+  // not": no route deploys to production). Asserted here rather than left to
+  // review, because the failure mode is a write capability against a prod
+  // bucket appearing in a routine redeploy.
+  if (label === 'env.production' && mediaUploads !== 'off') {
+    errors.push(
+      `${label}: MEDIA_UPLOADS must be "off" in production — the upload interface ships to staging only`,
+    );
+  }
+
   let provisionedBindings = new Set();
   if (!Array.isArray(scope.hyperdrive)) {
     errors.push(`${label}: hyperdrive must be an explicit array`);
   } else if (scope.hyperdrive.length !== 0) {
-    const bindings = new Set(scope.hyperdrive.map((entry) => entry?.binding));
-    if (
-      scope.hyperdrive.length !== 2 ||
-      !bindings.has('DB_FRESH') ||
-      !bindings.has('DB_PUBLIC_CACHE') ||
-      scope.hyperdrive.some((entry) => typeof entry?.id !== 'string' || entry.id.length === 0)
-    ) {
-      errors.push(`${label}: provisioned Hyperdrive entries must be exactly DB_FRESH and DB_PUBLIC_CACHE`);
+    const names = scope.hyperdrive.map((entry) => entry?.binding);
+    const bindings = new Set(names);
+    const unknown = names.filter((name) => !KNOWN_HYPERDRIVE_BINDINGS.has(name));
+    const malformedId = scope.hyperdrive.some(
+      (entry) => typeof entry?.id !== 'string' || entry.id.length === 0,
+    );
+    if (unknown.length > 0 || malformedId || names.length !== bindings.size) {
+      errors.push(
+        `${label}: provisioned Hyperdrive entries must be a subset of ${[...KNOWN_HYPERDRIVE_BINDINGS].join(', ')} with unique, non-empty ids`,
+      );
     } else {
       provisionedBindings = bindings;
     }
   }
   // A promoted rung with no provisioned bindings deploys clean and silently
   // serves 100% legacy, which is indistinguishable from a successful cutover.
+  // Require exactly the bindings each source's path reads, mirroring
+  // validateRuntimeConfig in src/env.ts:
+  //  - shadow compares DB_CATALOG_FRESH (fresh leg) with DB_PUBLIC_CACHE.
+  //  - hyperdrive serves DB_PUBLIC_CACHE.
+  //  - any promoted rung opens DB_FRESH for the authenticated /v1/_authcheck path.
   if (
-    (source === 'shadow' || source === 'hyperdrive') &&
-    (!provisionedBindings.has('DB_FRESH') || !provisionedBindings.has('DB_PUBLIC_CACHE'))
+    source === 'shadow' &&
+    (!provisionedBindings.has('DB_CATALOG_FRESH') || !provisionedBindings.has('DB_PUBLIC_CACHE'))
   ) {
     errors.push(
-      `${label}: CATALOG_SOURCE=${source} requires provisioned DB_FRESH and DB_PUBLIC_CACHE Hyperdrive bindings`,
+      `${label}: CATALOG_SOURCE=shadow requires provisioned DB_CATALOG_FRESH and DB_PUBLIC_CACHE Hyperdrive bindings`,
+    );
+  }
+  if (source === 'hyperdrive' && !provisionedBindings.has('DB_PUBLIC_CACHE')) {
+    errors.push(
+      `${label}: CATALOG_SOURCE=hyperdrive requires a provisioned DB_PUBLIC_CACHE Hyperdrive binding`,
+    );
+  }
+  if (
+    (source === 'shadow' || source === 'hyperdrive') &&
+    !provisionedBindings.has('DB_FRESH')
+  ) {
+    errors.push(
+      `${label}: CATALOG_SOURCE=${source} requires a provisioned DB_FRESH Hyperdrive binding for the authenticated path`,
+    );
+  }
+  // SCAN_ROUTES=on reads user-scoped rows under the caller's RLS on the
+  // uncached login. Without DB_FRESH the route could only ever 404, which is
+  // indistinguishable from "this scan has no artifacts" — the same silent-
+  // failure shape the catalog rungs above are written to prevent.
+  if (scanRoutes === 'on' && !provisionedBindings.has('DB_FRESH')) {
+    errors.push(
+      `${label}: SCAN_ROUTES=on requires a provisioned DB_FRESH Hyperdrive binding`,
+    );
+  }
+  // Same argument as SCAN_ROUTES, one degree sharper: without DB_FRESH the
+  // upload routes could only 404, and the caller's-own-RLS visibility read that
+  // authorizes every intent would never run.
+  if (mediaUploads === 'on' && !provisionedBindings.has('DB_FRESH')) {
+    errors.push(
+      `${label}: MEDIA_UPLOADS=on requires a provisioned DB_FRESH Hyperdrive binding`,
     );
   }
 }
@@ -143,7 +251,13 @@ function main() {
           const parsed = JSON.parse(result.stdout);
           const secrets = Array.isArray(parsed) ? parsed : parsed.secrets;
           const names = new Set(secrets.map((secret) => secret.name));
-          for (const name of requiredSecrets) {
+          const scope = environment === 'default' ? config : config.env?.[environment];
+          const expected = [
+            ...requiredSecrets,
+            ...(scope?.vars?.SCAN_ROUTES === 'on' ? scanSecrets : []),
+            ...(scope?.vars?.MEDIA_UPLOADS === 'on' ? uploadSecrets : []),
+          ];
+          for (const name of expected) {
             if (!names.has(name)) errors.push(`env.${environment}: missing Wrangler secret ${name}`);
           }
         } catch {

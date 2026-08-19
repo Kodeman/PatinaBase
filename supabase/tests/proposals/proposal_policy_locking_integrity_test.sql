@@ -298,6 +298,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_policy_actor(uuid) TO PUBLIC;
 
 -- Deterministic two-session send-order races.  The send session holds the
 -- proposal parent first, as send_proposal does, while an authenticated phase
@@ -632,6 +633,7 @@ BEGIN
     format('%s should affect zero rows, affected %s', p_case, v_rows);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.expect_zero_rows(text, text) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_sqlstate(
   p_case text,
@@ -661,6 +663,7 @@ BEGIN
     );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.expect_sqlstate(text, text, text) TO PUBLIC;
 
 -- Exact owner compatibility: authored writes still work, totals follow item
 -- and phase truth in the same statement, stale legacy total PATCHes are

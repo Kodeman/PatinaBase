@@ -80,6 +80,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_workflow_actor(uuid) TO PUBLIC;
 
 CREATE TEMP TABLE workflow_test_result (
   project_id uuid,

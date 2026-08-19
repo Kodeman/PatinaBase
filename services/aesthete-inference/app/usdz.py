@@ -106,6 +106,20 @@ def _triangulate(counts: list[int], indices: list[int]) -> list[int]:
     return tris
 
 
+#: The 12 triangles of a unit cube, over the 8 corners enumerated as
+#: `4x + 2y + z` with each axis running (-half, +half) — the order the Cube
+#: branch below builds its points in. Wound counter-clockwise seen from
+#: outside, which is glTF's front face.
+_CUBE_FACES = [
+    0, 1, 3, 0, 3, 2,   # -x
+    4, 6, 7, 4, 7, 5,   # +x
+    0, 4, 5, 0, 5, 1,   # -y
+    2, 3, 7, 2, 7, 6,   # +y
+    0, 2, 6, 0, 6, 4,   # -z
+    1, 5, 7, 1, 7, 3,   # +z
+]
+
+
 def convert_usdz_to_glb(data: bytes) -> bytes:
     """Parse USDZ bytes → minimal binary-glTF bytes. CPU-bound; USD imported lazily.
 
@@ -152,12 +166,41 @@ def convert_usdz_to_glb(data: bytes) -> bytes:
         nodes: list[Node] = []
 
         for prim in stage.Traverse():
-            if not prim.IsA(UsdGeom.Mesh):
+            # RoomPlan writes exactly ONE UsdGeom.Mesh per capture — the floor,
+            # which it pre-triangulates from the room outline. Every wall, door,
+            # window, opening and object is a UsdGeom.Cube (`def Cube "Wall0"`,
+            # sized by xformOp:scale), and Cube is a sibling Gprim, not a Mesh
+            # subclass. So a Mesh-only traversal emitted a floor and nothing
+            # else: a real 4-wall, 20-object capture converted to a 1,196-byte
+            # GLB holding a single `Floor0` node, and every render made from it
+            # was a bare slab. Verified against the USDZ for prod scan
+            # 83f0d63d-cc35-4320-bf80-67d473af52f3.
+            is_mesh = prim.IsA(UsdGeom.Mesh)
+            is_cube = prim.IsA(UsdGeom.Cube)
+            if not (is_mesh or is_cube):
                 continue
-            mesh = UsdGeom.Mesh(prim)
-            pts = mesh.GetPointsAttr().Get()
-            counts = mesh.GetFaceVertexCountsAttr().Get()
-            idx = mesh.GetFaceVertexIndicesAttr().Get()
+            if is_mesh:
+                mesh = UsdGeom.Mesh(prim)
+                pts = mesh.GetPointsAttr().Get()
+                counts = mesh.GetFaceVertexCountsAttr().Get()
+                idx = mesh.GetFaceVertexIndicesAttr().Get()
+            else:
+                # A Cube's geometry is implicit: `size` is the edge length of a
+                # cube centred on its own origin, and the prim's transform (with
+                # RoomPlan's non-uniform xformOp:scale) turns it into the actual
+                # box. The corner order below is (x, y, z) each over (-h, +h),
+                # so corner index = 4x + 2y + z — which is what _CUBE_FACES is
+                # written against. The world transform is applied downstream,
+                # unchanged, exactly as it is for a Mesh.
+                half = (UsdGeom.Cube(prim).GetSizeAttr().Get() or 2.0) / 2.0
+                pts = [
+                    (x, y, z)
+                    for x in (-half, half)
+                    for y in (-half, half)
+                    for z in (-half, half)
+                ]
+                counts = [3] * (len(_CUBE_FACES) // 3)
+                idx = _CUBE_FACES
             if not pts or not counts or not idx:
                 continue
 

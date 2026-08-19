@@ -662,21 +662,31 @@ BEGIN
             )::oid
           )
       )
-      -- The same four policies 00484 exempts in its own preflight. 00484's
+      -- THREE of the four policies 00484 exempts in its own preflight. 00484's
       -- comment defers them to "the privileged 00483 platform-admin phase";
       -- that phase is retired as unrunnable on Supabase Cloud and its script
       -- contained no policy DDL in any case, so the deferral pointed at a step
-      -- that will never happen. All four are recorded instead as signed
+      -- that will never happen. The three are recorded instead as signed
       -- storage_policy rows in
-      -- supabase/tests/edge_api/public_acl_exception_registry.sql — each is
-      -- already narrow, because its predicate binds the caller identity.
+      -- supabase/tests/edge_api/public_acl_exception_registry.sql.
+      --
+      -- 'Project members can read documents' was the fourth and is NO LONGER
+      -- EXEMPT: 00510 §S1 narrowed it TO authenticated, so it carries no
+      -- `public` role and this invariant passes it on the merits. Its registry
+      -- row is retired (EVENT 5). Do not re-add it — the exemption existed
+      -- because the policy was broken, and an exemption that outlives its fix
+      -- is how the next one hides.
+      --
+      -- The remaining three are the same defect at lower severity (write
+      -- policies calling is_org_admin_or_owner, which anon cannot execute — an
+      -- anon write gets 42501 naming the routine instead of a clean RLS
+      -- refusal). They stay exempt pending their own migration; see EVENT 5.
       AND NOT (
         policy.polrelid = 'storage.objects'::regclass
         AND policy.polname IN (
           'Org admins manage studio logos (insert)',
           'Org admins manage studio logos (update)',
-          'Org admins manage studio logos (delete)',
-          'Project members can read documents'
+          'Org admins manage studio logos (delete)'
         )
       )
   ), 'a protected helper still has a PUBLIC policy dependency';
@@ -698,9 +708,23 @@ BEGIN
     LEFT JOIN pg_policy AS policy
       ON policy.polrelid = relation.oid
      AND policy.polname = expected.policy_name
-    -- Presence only. Narrowing these to authenticated requires a
-    -- supabase_storage_admin principal; no artifact in this repository
-    -- performs it, so asserting polroles here fails on every environment.
+    -- Presence only, and the reason is NOT the one this comment used to give.
+    -- It claimed "narrowing these to authenticated requires a
+    -- supabase_storage_admin principal; no artifact in this repository performs
+    -- it". Both halves were false. storage.objects is owned by
+    -- supabase_storage_admin, but CREATE POLICY on it is permitted to the
+    -- ordinary migration principal (only COMMENT ON POLICY needs ownership —
+    -- 00485 documents exactly that split), and two artifacts in this repository
+    -- have now performed the narrowing as postgres:
+    -- 00485_moodboard_storage_caller_binding.sql (proposal_mood_boards_proposal_read)
+    -- and 00510_post_00483_grant_and_scope_repairs.sql ("Project members can
+    -- read documents").
+    --
+    -- The honest reason to keep this presence-only is narrower: the three
+    -- studio-logo policies still listed above have not been narrowed yet, so
+    -- asserting polroles = {authenticated} for them would fail until their
+    -- migration lands. That is a statement about work not done, not about a
+    -- principal we lack.
     WHERE policy.oid IS NULL
   ), 'a privileged Storage policy is missing';
 

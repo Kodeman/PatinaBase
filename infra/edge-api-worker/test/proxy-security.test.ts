@@ -21,6 +21,8 @@ const config: RuntimeConfig = {
   legacyFetchTimeoutMs: 100,
   compatibilityFetchTimeoutMs: 100,
   websocketHandshakeTimeoutMs: 50,
+  scanRoutes: 'off',
+  mediaUploads: 'off',
 };
 
 describe('Supabase compatibility proxy', () => {
@@ -182,6 +184,75 @@ describe('Supabase compatibility proxy', () => {
     );
     expect(response.status).toBe(508);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('rejects a scheme-relative pathname that would resolve to a different origin', async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const response = await proxySupabaseRequest(
+      new Request('https://api.patina.cloud//evil.com/rest/v1/x'),
+      env,
+      config,
+      'trace-0000000005',
+      fetcher,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'invalid_upstream_path' });
+    expect(fetcher).not.toHaveBeenCalled();
+    for (const call of fetcher.mock.calls) {
+      const [input] = call;
+      const url = input instanceof Request ? input.url : String(input);
+      expect(url).not.toContain('evil.com');
+    }
+  });
+
+  it('still proxies a normal /rest/v1 path (control)', async () => {
+    let forwarded: Request | undefined;
+    const response = await proxySupabaseRequest(
+      new Request('https://api.patina.cloud/rest/v1/products'),
+      env,
+      config,
+      'trace-0000000006',
+      async (input, init) => {
+        forwarded = new Request(input, init);
+        return new Response('ok', { status: 200 });
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(forwarded?.url).toBe('https://project.supabase.co/rest/v1/products');
+  });
+
+  it('rejects a same-origin pathname that resolves outside the compatibility path set', async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const response = await proxySupabaseRequest(
+      new Request('https://api.patina.cloud/v1/not-a-compat-path'),
+      env,
+      config,
+      'trace-0000000007',
+      fetcher,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'invalid_upstream_path' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('still proxies a storage path with mid-path // in the object key, byte-identical (control)', async () => {
+    let forwarded: Request | undefined;
+    const response = await proxySupabaseRequest(
+      new Request(
+        'https://api.patina.cloud/storage/v1/object/public//weird//key',
+      ),
+      env,
+      config,
+      'trace-0000000008',
+      async (input, init) => {
+        forwarded = new Request(input, init);
+        return new Response('ok', { status: 200 });
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(forwarded?.url).toBe(
+      'https://project.supabase.co/storage/v1/object/public//weird//key',
+    );
   });
 
   it('times out a never-settling compatibility fetch independently', async () => {

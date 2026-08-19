@@ -22,6 +22,7 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_room_actor(uuid) TO PUBLIC;
 
 INSERT INTO auth.users (
   id, email, encrypted_password, email_confirmed_at, created_at, updated_at,

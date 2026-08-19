@@ -4,11 +4,21 @@
 properly-reviewed follow-on program. Phase 1 (PR #28) and the edge-API auth path (PR #29) land
 on their own; this SD work lands *after* Phase 1, as its own reviewed program.
 
-**Carrier branch:** `followon/sd-hardening-v2` (tip `03989a58`), stacked on the unmerged Phase 1
-stack (fork point `ccba9b88`). Nothing is on `main`. Nothing is applied to staging or prod.
+**Carrier branch:** `followon/sd-hardening-v3` (branched from `followon/sd-hardening-v2` tip
+`79a0d1b5`, with `origin/main` merged in). Nothing is on `main`. Nothing is applied to staging
+or prod.
 
 This register is the authoritative scope. It supersedes the plan's terse "W7 — 00488 canonical
 studio authority" line with what the 2026-08-18 adversarial review actually found.
+
+> **⚠ Renumbered 2026-08-19.** The tranche's provisional numbers were consumed on `main` while it
+> sat. `00487 → 00511`, `00488 → 00512`, `00489 → 00513`, including every internal identifier
+> (`_00487_profile`, `pg_temp._00488_references_routine`, exception strings, contract-test helper
+> names). **The narrative below still uses the old numbers where it recounts history** — read
+> `00487`/`00488`/`00489` as `00511`/`00512`/`00513` throughout, except where it refers to
+> `00489_media_registry_kernel.sql` on `main` (which keeps its number). Line numbers cited into
+> `00487` (e.g. `00487:2612`, `00487:2854-2872`) still point at the same lines of
+> `00511_public_sd_hardening.sql`. Ledger: `docs/engineering/migration-number-reservations.md`.
 
 ---
 
@@ -16,10 +26,10 @@ studio authority" line with what the 2026-08-18 adversarial review actually foun
 
 | Artifact | State | Notes |
 |---|---|---|
-| `supabase/migrations/00487_public_sd_hardening.sql` (7272 lines) | authored, **contract test NOT green** | recovered/renumbered from the old descoped 00488; the "lock narrowing" commit `01d411ea` *is* this whole file (the file did not exist at its parent) |
-| `supabase/migrations/00488_public_sd_caller_hardening.sql` | authored, **contract test GREEN end-to-end** (`public_sd_caller_hardening_contract_test.sql`, local exit 0) | |
-| `supabase/migrations/00489_invoice_numbering_studio_uniqueness.sql` (70 lines) | authored, **proven & load-bearing**, SAFE-to-land | independent of 00487; sits above it by number |
-| `supabase/tests/edge_api/public_sd_hardening_contract_test.sql` | **stops at line 6187** on finding #1 | passes cleanly through 6088 once 00489 is in place |
+| `supabase/migrations/00511_public_sd_hardening.sql` (7272 lines) | authored, **contract test NOT green** | was 00487; recovered/renumbered from the old descoped 00488; the "lock narrowing" commit `01d411ea` *is* this whole file (the file did not exist at its parent) |
+| `supabase/migrations/00512_public_sd_caller_hardening.sql` | authored, **contract test GREEN end-to-end** (`public_sd_caller_hardening_contract_test.sql`, local exit 0) | was 00488 |
+| `supabase/migrations/00513_invoice_numbering_studio_uniqueness.sql` (70 lines) | authored, **proven & load-bearing**, SAFE-to-land | was 00489; independent of 00511; sits above it by number |
+| `supabase/tests/edge_api/public_sd_hardening_contract_test.sql` | **stops at line 6187** on finding #1 | passes cleanly through 6088 once 00513 is in place |
 
 ## Why it folds together instead of landing 00489 now
 

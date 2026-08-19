@@ -26,7 +26,11 @@ dependencies = [
 # `solve` was declared for the least-squares fit; P1 solve is pure-Python so it
 # stays unused today (kept as shipped). `drawings` = the item-11 SVG/PDF/DXF path.
 solve = ["numpy>=1.26", "scipy>=1.11"]
-drawings = ["ezdxf>=1.1", "cairosvg>=2.7"]
+# ifcopenshell 0.8.5: current 0.8.x, real wheels for linux (manylinux_2_31
+# x86_64/aarch64) and macOS arm64, py311-py314 — no source build needed on any
+# box this worker targets. Pulls its own numpy; pinned explicitly too since
+# drawing/ifc.py imports numpy directly for placement matrices.
+drawings = ["ezdxf>=1.1", "cairosvg>=2.7", "ifcopenshell==0.8.5", "numpy>=1.26"]
 
 # ── P2 GPU stages (item 3) — each pulls ONLY what its stage imports ──────────
 # refine (§10.2 / I87): target COLMAP 4.0.2 known-pose triangulation + BA;
@@ -52,6 +56,13 @@ fuse = ["open3d>=0.18", "trimesh>=4.0", "numpy>=1.26"]
 splat = ["torch>=2.2,<2.5", "gsplat>=1.0,<2.0", "numpy>=1.26"]
 # gpu meta-extra — the box's one-line install of all three GPU stages.
 gpu = ["patina-scan-worker[refine,fuse,splat]"]
+
+# ── storage cutover (W3-C, storage_backend.py) ──────────────────────────────
+# R2StorageBackend needs boto3 only when SCAN_STORAGE_BACKEND=r2 or
+# SCAN_STORAGE_SHADOW=r2 (config.py); a Supabase-only worker never installs
+# it — imports stay lazy (inside functions) so this extra is opt-in, not a
+# hard dependency of storage_backend.py itself.
+r2 = ["boto3>=1.34"]
 
 dev = [
   "pytest>=7.4",

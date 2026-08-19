@@ -1000,17 +1000,58 @@ BEGIN
     INSERT INTO public.project_rooms (project_id, name, sort_order)
     VALUES (v_project, 'Living room', 0) RETURNING id INTO v_room;
     INSERT INTO paper_ids VALUES (v_key || '_room', v_room);
-    INSERT INTO public.project_ffe_items (
-      project_id, project_room_id, name, ffe_category, item_type, status,
-      quantity, unit_price_cents, trade_price_cents, markup_percent,
-      line_total_cents, vendor_id, vendor_name, doc_code, sort_order
-    ) VALUES
-      (v_project, v_room, 'Lounge sofa', 'Seating', 'fixed', 'specified',
-       1, 400000, 240000, 66.67, 400000,
-       'ea710000-0000-4000-8000-000000000001', 'Paper Test Vendor', 'LR-01', 0),
-      (v_project, v_room, 'Side table', 'Casegoods', 'fixed', 'specified',
-       2, 50000, 30000, 66.67, 100000,
-       'ea710000-0000-4000-8000-000000000001', 'Paper Test Vendor', 'LR-02', 1);
+    INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    markup_percent,
+    line_total_cents,
+    vendor_id,
+    vendor_name,
+    doc_code,
+    sort_order) VALUES
+      (
+    v_project,
+    v_room,
+    'room',
+    'Lounge sofa',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    400000,
+    240000,
+    66.67,
+    400000,
+    'ea710000-0000-4000-8000-000000000001',
+    'Paper Test Vendor',
+    'LR-01',
+    0
+  ),
+  (
+    v_project,
+    v_room,
+    'room',
+    'Side table',
+    'Casegoods',
+    'fixed',
+    'specified',
+    2,
+    50000,
+    30000,
+    66.67,
+    100000,
+    'ea710000-0000-4000-8000-000000000001',
+    'Paper Test Vendor',
+    'LR-02',
+    1
+  );
   END LOOP;
 END $$;
 
@@ -1751,17 +1792,58 @@ DECLARE
 BEGIN
   -- A second release on the control project, so the fixture is a real wave and
   -- not a proposal wearing a wave's name.
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, trade_price_cents, markup_percent,
-    line_total_cents, vendor_id, vendor_name, doc_code, sort_order
-  ) VALUES
-    (v_project, v_room, 'Late armchair', 'Seating', 'fixed', 'specified',
-     1, 300000, 180000, 66.67, 300000,
-     'ea710000-0000-4000-8000-000000000001', 'Paper Test Vendor', 'LR-03', 2),
-    (v_project, v_room, 'Late lamp', 'Lighting', 'fixed', 'specified',
-     1, 60000, 36000, 66.67, 60000,
-     'ea710000-0000-4000-8000-000000000001', 'Paper Test Vendor', 'LR-04', 3);
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    markup_percent,
+    line_total_cents,
+    vendor_id,
+    vendor_name,
+    doc_code,
+    sort_order) VALUES
+    (
+    v_project,
+    v_room,
+    'room',
+    'Late armchair',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    300000,
+    180000,
+    66.67,
+    300000,
+    'ea710000-0000-4000-8000-000000000001',
+    'Paper Test Vendor',
+    'LR-03',
+    2
+  ),
+  (
+    v_project,
+    v_room,
+    'room',
+    'Late lamp',
+    'Lighting',
+    'fixed',
+    'specified',
+    1,
+    60000,
+    36000,
+    66.67,
+    60000,
+    'ea710000-0000-4000-8000-000000000001',
+    'Paper Test Vendor',
+    'LR-04',
+    3
+  );
 
   SELECT array_agg(i.id ORDER BY i.sort_order) INTO v_ids
   FROM public.project_ffe_items i

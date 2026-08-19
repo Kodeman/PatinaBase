@@ -112,6 +112,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_actor(uuid) TO PUBLIC;
 
 INSERT INTO auth.users (
   id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
@@ -403,6 +404,7 @@ BEGIN
   ASSERT v_raised, 'non-design organization peer closed a request';
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assert_nonstudio_denied(uuid) TO PUBLIC;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assert_nonstudio_denied(

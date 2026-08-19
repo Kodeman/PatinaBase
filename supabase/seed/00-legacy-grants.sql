@@ -11132,493 +11132,709 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.media_objects TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.media_objects TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.media_objects FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.media_objects FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.register_media_object(text, text, text, text, text, text, bigint, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.register_media_object(text, text, text, text, text, text, bigint, uuid, uuid, jsonb) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_media_object_state(uuid, text, text, text, bigint) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00489_media_registry_kernel.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_media_object_state(uuid, text, text, text, bigint) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.scan_worker_complete_task(uuid, text, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.scan_worker_complete_task(uuid, text, jsonb) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.scan_worker_fail_task(uuid, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.scan_worker_fail_task(uuid, text, text) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.scan_worker_append_event(uuid, text, uuid, uuid, text, text, text, integer, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.scan_worker_append_event(uuid, text, uuid, uuid, text, text, text, integer, jsonb) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.scan_worker_update_room_file(uuid, text, uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.scan_worker_update_room_file(uuid, text, uuid, jsonb, jsonb) TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA public TO scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA public TO scan_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON TABLE public.scan_media_read FROM PUBLIC, anon, authenticated, service_role, scan_worker;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00490_scan_worker_roles.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.scan_media_read TO scan_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00493_svc_shape_resolving_function_bodies.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.get_outbox_events(integer, boolean), public.get_outbox_counts() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.caller_can_access_room_scan(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_media_upload_intent(uuid, text, text, text, text, bigint, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_media_upload_intent(uuid, text, text, text, text, bigint, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.confirm_media_upload(uuid, text, text, bigint) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.confirm_media_upload(uuid, text, text, bigint) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.room_files_scan_version_lock() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00499_upload_interface_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_originals_bucket(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.engage_trade_scope(uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.engage_trade_scope(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_scope_change(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_scope_change(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE ON TABLE public.project_ffe_items FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE ON TABLE public.organizations FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE ON TABLE public.project_phases FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE ON TABLE public.purchase_orders FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.create_draft_invoice( uuid, uuid, uuid, uuid, numeric, integer, text, text, jsonb ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.create_draft_invoice( uuid, uuid, uuid, uuid, numeric, integer, text, text, jsonb ) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION app_private.issue_invoice_for_actor(uuid, date, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public._countersign_design_services_agreement_impl(uuid, text, jsonb) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public._execute_furnishings_authorization_on_paper_authorized( uuid, text, date, uuid, uuid, jsonb ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public._execute_trade_scope_on_paper_authorized( uuid, text, date, uuid, uuid ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public._execute_furnishings_authorization_authorized( uuid, text, uuid, text ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public._execute_trade_scope_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.accept_trade_scope_with_trusted_ip(uuid, text, uuid, text), public.begin_proposal_send_provider_attempt(uuid, uuid), public.complete_proposal_send_dispatch(uuid, uuid, text, text, text), public.consume_board_unfurl_quota(uuid), public.execute_furnishings_authorization_with_trusted_ip( uuid, text, uuid, text ), public.execute_trade_scope_with_trusted_ip(uuid, text, uuid, text), public.issue_trade_draw_invoice(uuid), public.notify_decision_overdue(uuid), public.notify_decision_required(uuid), public.notify_decision_resolved(uuid), public.prepare_spec_book_issue( uuid, text[], text, text, uuid, text, jsonb ), public.publish_project_review(jsonb), public.release_proposal_send_dispatch(uuid, uuid, text), public.set_invoice_studio_id(), public.set_project_studio_id(), public.sign_design_services_agreement_with_trusted_ip( uuid, text, uuid, text ), public.suppress_proposal_send_dispatch(uuid, uuid, text) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public._countersign_design_services_agreement_impl(uuid, text, jsonb), public._execute_furnishings_authorization_authorized( uuid, text, uuid, text ), public._execute_furnishings_authorization_on_paper_authorized( uuid, text, date, uuid, uuid, jsonb ), public._execute_trade_scope_authorized(uuid, text, uuid, text), public._execute_trade_scope_on_paper_authorized( uuid, text, date, uuid, uuid ), public._prepare_spec_book_issue_00403( uuid, text[], text, text, uuid, text, jsonb ), public._publish_project_review_00448_impl(jsonb), public.guard_commercial_signature_insert(), app_private.issue_invoice_for_actor(uuid, date, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.create_draft_invoice( uuid, uuid, uuid, uuid, numeric, integer, text, text, jsonb ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.create_draft_invoice( uuid, uuid, uuid, uuid, numeric, integer, text, text, jsonb ) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.accept_trade_scope_with_trusted_ip(uuid, text, uuid, text), public.begin_proposal_send_provider_attempt(uuid, uuid), public.complete_proposal_send_dispatch(uuid, uuid, text, text, text), public.consume_board_unfurl_quota(uuid), public.execute_furnishings_authorization_with_trusted_ip( uuid, text, uuid, text ), public.execute_trade_scope_with_trusted_ip(uuid, text, uuid, text), public.notify_decision_overdue(uuid), public.notify_decision_required(uuid), public.notify_decision_resolved(uuid), public.release_proposal_send_dispatch(uuid, uuid, text), public.sign_design_services_agreement_with_trusted_ip( uuid, text, uuid, text ), public.suppress_proposal_send_dispatch(uuid, uuid, text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00487_public_sd_hardening.sql
+-- 00511_public_sd_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.issue_trade_draw_invoice(uuid), public.prepare_spec_book_issue( uuid, text[], text, text, uuid, text, jsonb ), public.publish_project_review(jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.apply_client_decision( uuid, uuid, text, text, text, integer ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.apply_client_decision( uuid, uuid, text, text, text, integer ) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.po_status_cascade_to_items() FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.guard_ffe_production_transition() FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.draft_milestones_on_production_start() FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public._finalize_spec_book_issue_00403(uuid) FROM PUBLIC CASCADE;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public._finalize_spec_book_issue_00403(uuid) FROM anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user CASCADE;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public._scope_change_requester_can_author(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public._scope_change_requester_can_author(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.guard_scope_change_request_integrity() FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.send_scope_change_request(uuid, uuid), public.approve_scope_change_request(uuid, uuid, text, text), public.accept_client_scope_change_request(uuid, uuid), public.decline_scope_change_request(uuid, uuid, text), public.cancel_scope_change_request(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.send_scope_change_request(uuid, uuid), public.approve_scope_change_request(uuid, uuid, text, text), public.accept_client_scope_change_request(uuid, uuid), public.decline_scope_change_request(uuid, uuid, text), public.cancel_scope_change_request(uuid, uuid) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public._draft_invoice_from_milestone_00486(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.draft_invoice_from_milestone(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.draft_invoice_from_milestone(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.sync_invoice_line_milestone_latch() FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.apply_field_effect(uuid, jsonb, text, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.apply_field_effect(uuid, jsonb, text, uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.activate_project_v2(jsonb) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.activate_project_v2(jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.apply_scope_change(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.apply_scope_change(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.claim_proposal_send_dispatch( uuid, uuid, timestamp with time zone, integer ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.claim_proposal_send_dispatch( uuid, uuid, timestamp with time zone, integer ) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.close_project(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.close_project(uuid, jsonb, jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.create_field_link(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.create_field_link(uuid) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.decline_proposal(uuid, text) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.decline_proposal(uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.escalate_item_feedback_to_decision(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.escalate_item_feedback_to_decision(uuid, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.expire_due_client_decisions(timestamp with time zone) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.expire_due_client_decisions(timestamp with time zone) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.finalize_spec_book_issue(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.finalize_spec_book_issue(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.generate_milestone_invoice(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.generate_milestone_invoice(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.get_ab_variant_stats(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_ab_variant_stats(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.get_client_project_review_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_client_project_review_bundle(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.mark_proposal_viewed(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.mark_proposal_viewed(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.mint_trade_rfq_token(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.mint_trade_rfq_token(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.persist_proposal_send_request( uuid, uuid, text, text, text[], text[], text, boolean ) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.persist_proposal_send_request( uuid, uuid, text, text, text[], text[], text, boolean ) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.read_proposal_send_dispatch(uuid, uuid, timestamp with time zone) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.read_proposal_send_dispatch(uuid, uuid, timestamp with time zone) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.reassign_project_lead(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.reassign_project_lead(uuid, uuid, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.record_offline_signature(uuid, text, boolean, date) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.record_offline_signature(uuid, text, boolean, date) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.reply_to_item_feedback(uuid, text) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.reply_to_item_feedback(uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.request_proposal_change(uuid, text) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.request_proposal_change(uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.review_sms_message(uuid, text, jsonb) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.review_sms_message(uuid, text, jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.stamp_project_approval_reminder_delivery(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.stamp_project_approval_reminder_delivery(uuid, uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.submit_coordination_revision(uuid, jsonb, text, text, uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.submit_coordination_revision(uuid, jsonb, text, text, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.sync_proposal_send_email_log(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.sync_proposal_send_email_log(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON FUNCTION public.sync_proposal_send_in_app_log(uuid) FROM PUBLIC, anon, authenticated, service_role, dashboard_user, agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00488_public_sd_caller_hardening.sql
+-- 00512_public_sd_caller_hardening.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.sync_proposal_send_in_app_log(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;

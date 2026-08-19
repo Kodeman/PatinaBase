@@ -69,6 +69,7 @@ BEGIN
   EXECUTE 'SET LOCAL ROLE authenticated';
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(UUID) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.reset_role()
 RETURNS VOID AS $$
@@ -77,6 +78,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', NULL, true);
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
 -- ─── (1) member CRUD on live cards ─────────────────────────────────────────
 DO $$

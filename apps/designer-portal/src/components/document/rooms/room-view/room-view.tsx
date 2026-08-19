@@ -30,7 +30,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { RoomGeometryDocument, RoomScanPhoto } from '@patina/supabase';
-import { useRoomFiles, useScanRefineArtifacts } from '@patina/supabase';
+import {
+  useRoomFiles,
+  useRoomScan,
+  useScanRefineArtifacts,
+  useSignedScanModelUrl,
+  useSplatUrl,
+} from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import type { PhotoProvenance } from '@/lib/room-view/photo-poses';
@@ -39,17 +45,23 @@ import { roomEvents } from '@/lib/analytics';
 import { FactsRail } from './facts-rail';
 import type { RefineReadoutProps } from './refine-readout';
 import { MeasureLayer } from './measure-layer';
+import { hasMeshModel, ModelStage } from './model/model-stage';
 import type { OrbitPhotoPose } from './orbit/photo-marker-objects';
 import { OrbitStage } from './orbit/orbit-stage';
 import { buildPhotoMarkers, planBounds, PhotoMarkers } from './photo-markers';
 import { PhotoStrip } from './photo-strip';
 import { PhotoViewer } from './photo-viewer';
 import { planViewBox, PlanStage } from './plan-stage';
+import { useDevSplatUrl } from './splat/dev-splat-url';
+import { SplatStage } from './splat/splat-stage';
 import { useMeasure } from './use-measure';
 import { usePhotoViewer } from './use-photo-viewer';
 
-/** The room's two live projections. Walk is ruled into the arc but built after Place. */
-type ViewMode = 'plan' | 'orbit';
+/** The room's live projections. Mesh appears only for a scan that carries a GLB
+ *  (`hasMeshModel`); Splat only for a scan whose current Room File registers a
+ *  `splat` artifact (`useSplatUrl`); Walk is ruled into the arc but built after
+ *  Place. */
+type ViewMode = 'plan' | 'orbit' | 'mesh' | 'splat';
 
 /** Mirrors folder-card.tsx's SECTION_LABEL (module-private there) — the
  *  Room View doc-link needs the same human phase label as the Desk folio. */
@@ -131,18 +143,29 @@ export function RoomView({
   // R21 dissolve: the old project-nested route also required the scan to be on
   // a project. `/room/[scanId]/file` is scan-keyed, so that requirement is
   // gone — an orphan scan with a finished drawing set now shows its door too.
+  // ⚠ The query is NO LONGER flag-gated. It was (`roomFileEnabled ? roomId :
+  // undefined`), so a flag-off visit cost zero database. The Splat projection's
+  // mode gate needs this scan's current Room File whether or not the door is
+  // shown, and one small ordered read per Room View is the honest price. The flag
+  // still gates the DOOR's render below — only the query's condition moved.
   const { value: roomFileEnabled } = useFeatureFlag('room-file');
-  const { data: roomFilesForDoor } = useRoomFiles(
-    roomFileEnabled ? roomId : undefined,
-  );
+  const { data: roomFiles } = useRoomFiles(roomId);
   const roomFileDoor = useMemo(() => {
     if (!roomFileEnabled) return undefined;
-    const hasGenerated = (roomFilesForDoor ?? []).some(
+    const hasGenerated = (roomFiles ?? []).some(
       (rf) => rf.status === 'generated',
     );
     if (!hasGenerated) return undefined;
     return { href: `/room/${roomId}/file` };
-  }, [roomFileEnabled, roomFilesForDoor, roomId]);
+  }, [roomFileEnabled, roomFiles, roomId]);
+
+  // The scan's CURRENT Room File — `useRoomFiles` orders version-desc and the
+  // chain is append-only, so the head row is the newest generation. Splat
+  // presence is read from that row and no other: an older version's artifacts
+  // describe an older solve. Deliberately not filtered on `status`, which tracks
+  // the drawings (True Layer) lifecycle and is independent of whether the Present
+  // Layer trained a splat (00376).
+  const currentRoomFileId = (roomFiles ?? [])[0]?.id ?? null;
 
   // ── Refine diagnostic readout (Field Capture P2, Layer 3, ruling R-G) ──
   // A facts-rail line + a <details> disclosure: drift figures and R123's
@@ -196,17 +219,48 @@ export function RoomView({
     );
   }, [geometry, photos, provenance]);
 
-  // Plan is the landing mode. Orbit stays UNMOUNTED (zero three.js cost) until the first
-  // Orbit switch — `orbitMounted` latches true then and never resets, so once its lazy
-  // chunk has loaded, Plan ↔ Orbit is a display toggle (both stay mounted → instant).
+  // Plan is the landing mode. Orbit and Mesh stay UNMOUNTED (zero three.js cost) until
+  // their first switch — each `*Mounted` latches true then and never resets, so once a
+  // lazy chunk has loaded, switching back is a display toggle (all stay mounted →
+  // instant).
   const [mode, setMode] = useState<ViewMode>('plan');
   const [orbitMounted, setOrbitMounted] = useState(false);
+  const [meshMounted, setMeshMounted] = useState(false);
+  const [splatMounted, setSplatMounted] = useState(false);
 
   const selectMode = (next: ViewMode) => {
     if (next === 'orbit') setOrbitMounted(true);
+    if (next === 'mesh') setMeshMounted(true);
+    if (next === 'splat') setSplatMounted(true);
     setMode(next);
     roomEvents.modeSwitched({ room_id: roomId, mode: next });
   };
+
+  // ── Mesh projection (Rendered Room v2, P1) ──
+  // `roomId` IS the scan id, so the scan row answers the only gating question:
+  // does this scan carry a GLB (`model_url_gltf`)? Without one the MESH control is
+  // never rendered — `model_url` alone is the iOS USDZ, which GLTFLoader can't read.
+  // Signing is deferred to the first MESH switch (`meshMounted`, latched in
+  // `selectMode` above): passing `null` leaves `useSignedScanModelUrl` disabled, so a
+  // Plan-only visit costs zero Storage calls, matching how Orbit's chunk stays unloaded.
+  const { data: scan } = useRoomScan(roomId);
+  const meshAvailable = hasMeshModel(scan);
+  const {
+    data: signedModelUrl,
+    isFetching: signingModel,
+  } = useSignedScanModelUrl(meshMounted && meshAvailable ? scan : null);
+
+  // ── Splat projection (Rendered Room v2, W2) ──
+  // Unlike Mesh, the gating question and the fetching question are the SAME query
+  // here — the artifact ref and its (future) resolved URL both come out of
+  // `useSplatUrl`, so it runs from first paint rather than on the first switch.
+  // It reads two columns of one row; a Plan-only visit costs that and nothing
+  // else, and there is no Storage call behind it at all until the W2 read path
+  // exists. `useDevSplatUrl` is the dev-only `?splatUrl=` seam, constant-folded to
+  // null in production (see splat/dev-splat-url.ts).
+  const devSplatUrl = useDevSplatUrl();
+  const splat = useSplatUrl(currentRoomFileId, { urlSource: devSplatUrl });
+  const splatAvailable = splat.hasArtifact;
 
   // measure_used — fires once per completed measurement (the SECOND point,
   // armed/point → complete in use-measure's reducer), not on every re-render
@@ -285,6 +339,31 @@ export function RoomView({
         >
           Orbit
         </button>
+        {/* Mesh — the scan's own geometry, not a reconstruction. Present only
+            for a scan that carries a GLB; a scan without one never sees the
+            control at all (Rendered Room v2 P1, PROPOSAL §4). */}
+        {meshAvailable && (
+          <button
+            type="button"
+            onClick={() => selectMode('mesh')}
+            className={modeClass(mode === 'mesh', 'px-5')}
+          >
+            Mesh
+          </button>
+        )}
+        {/* Splat — the room as photographed, not as reconstructed. Present only
+            when the scan's current Room File registers a `splat` artifact (or a
+            dev `?splatUrl=` override is in play); a scan without one never sees
+            the control (Rendered Room v2 W2, PROPOSAL §4). */}
+        {splatAvailable && (
+          <button
+            type="button"
+            onClick={() => selectMode('splat')}
+            className={modeClass(mode === 'splat', 'px-5')}
+          >
+            Splat
+          </button>
+        )}
         <span
           aria-disabled="true"
           className="-mb-px cursor-not-allowed border-b-2 border-transparent px-5 pb-3 pt-2.5 font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-mocha)] opacity-35"
@@ -362,6 +441,23 @@ export function RoomView({
                 geometry={geometry}
                 photoPoses={orbitPhotoPoses}
                 onPhotoClick={(index) => viewer.openAtIndex(index, 'orbit')}
+              />
+            </div>
+          )}
+          {meshMounted && (
+            <div className={mode === 'mesh' ? undefined : 'hidden'}>
+              <ModelStage
+                modelUrl={signedModelUrl ?? null}
+                isSigning={signingModel}
+              />
+            </div>
+          )}
+          {splatMounted && (
+            <div className={mode === 'splat' ? undefined : 'hidden'}>
+              <SplatStage
+                url={splat.url}
+                unavailable={splat.unavailable}
+                isLoading={splat.isLoading}
               />
             </div>
           )}

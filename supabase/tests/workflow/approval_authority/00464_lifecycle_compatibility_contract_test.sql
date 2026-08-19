@@ -274,6 +274,7 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', p_role, true);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_approval_actor(uuid, text) TO PUBLIC;
 
 -- 00467 removes raw Stage-2 parent reads from clients. Keep this compatibility
 -- assertion server-side so a rejected installed response can still prove that
@@ -306,6 +307,7 @@ AS $$
         AND receipt.action_kind = 'responded'
     );
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.stage2_response_evidence_is_absent(uuid) TO PUBLIC;
 
 
 CREATE TEMP TABLE approval_lifecycle_results (
@@ -439,6 +441,12 @@ SELECT 'authority-a1', public.set_project_decision_authority(
   'a4360000-0000-4000-8000-000000000002', NULL, 0
 );
 
+-- Must define as the unrestricted session owner: SET LOCAL ROLE authenticated
+-- above is still in effect, and 00483 revokes CREATE on this session's own
+-- pg_temp_N schema from authenticated (asserted database-TEMPORARY boundary),
+-- so defining another pg_temp object here without resetting first fails
+-- "permission denied for schema pg_temp_N".
+RESET ROLE;
 CREATE OR REPLACE FUNCTION pg_temp.create_lifecycle_approval(
   p_label text,
   p_issue_no integer,
@@ -473,6 +481,8 @@ BEGIN
   RETURN (v_result->>'decisionId')::uuid;
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.create_lifecycle_approval(text, integer, uuid) TO PUBLIC;
+SET LOCAL ROLE authenticated;
 
 SELECT pg_temp.create_lifecycle_approval(
   'advance-approved', 1, 'a4363100-0000-4000-8000-000000000001'
@@ -576,16 +586,18 @@ FROM approval_lifecycle_results AS create_row
 WHERE create_row.label LIKE '%-create'
 ORDER BY create_row.label;
 
+-- CREATE TEMP TABLE must run before SET LOCAL ROLE: 00483 revokes database
+-- TEMPORARY from authenticated by design, so creating it after the role
+-- switch fails "permission denied for schema pg_temp_N".
 RESET ROLE;
-SELECT pg_temp.assume_approval_actor('a4360000-0000-4000-8000-000000000001');
-SET LOCAL ROLE authenticated;
-
 CREATE TEMP TABLE approval_pending_tokens (
   label text PRIMARY KEY,
   decision_id uuid NOT NULL,
   updated_at timestamptz NOT NULL
 ) ON COMMIT DROP;
 GRANT SELECT, INSERT ON approval_pending_tokens TO authenticated, service_role;
+SELECT pg_temp.assume_approval_actor('a4360000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
 
 INSERT INTO approval_pending_tokens(label, decision_id, updated_at)
 SELECT replace(create_row.label, '-create', ''), decision.id, published.updated_at

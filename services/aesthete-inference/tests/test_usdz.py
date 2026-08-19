@@ -148,3 +148,53 @@ def test_healthz_reports_usd_available_true_when_installed():
     # so the cached probe must report available here.
     with convert_client(fixture_bytes()) as c:
         assert c.get("/healthz").json()["usd_available"] is True
+
+
+# ── RoomPlan's actual encoding: Cube prims, not Meshes ──────────────────────
+
+ROOMPLAN_FIXTURE = FIXTURES / "roomplan-room.usdz"
+
+
+def test_cube_prims_convert_and_are_not_silently_dropped():
+    """The defect this fixture exists for.
+
+    RoomPlan writes exactly ONE UsdGeom.Mesh per capture — the floor — and
+    encodes every wall, opening and object as a UsdGeom.Cube. Cube is a sibling
+    Gprim, not a Mesh subclass, so a `prim.IsA(UsdGeom.Mesh)` traversal emitted
+    the floor and nothing else: prod scan 83f0d63d converted to a 1,196-byte
+    GLB holding a single `Floor0` node, and every render made from it was a
+    bare slab on grey.
+    """
+    doc = gltf_json(convert_usdz_to_glb(ROOMPLAN_FIXTURE.read_bytes()))
+    names = {n.get("name") for n in doc["nodes"]}
+
+    assert "Floor0" in names, "the one real Mesh still converts"
+    assert {"Wall0", "Wall1", "Wall2", "Wall3"} <= names
+    assert "Window0" in names
+    assert "Storage0" in names
+    assert len(doc["nodes"]) == 7
+
+
+def test_a_cubes_non_uniform_scale_reaches_the_geometry():
+    """RoomPlan carries the real dimensions in `xformOp:scale`, not in `size`
+    (which is always 1). A converter that read the size attribute but ignored
+    the transform would emit 1 m cubes in a pile at the origin."""
+    doc = gltf_json(convert_usdz_to_glb(ROOMPLAN_FIXTURE.read_bytes()))
+    by_name = {n["name"]: n for n in doc["nodes"]}
+    wall0 = doc["meshes"][by_name["Wall0"]["mesh"]]["primitives"][0]
+    accessor = doc["accessors"][wall0["attributes"]["POSITION"]]
+
+    lo, hi = accessor["min"], accessor["max"]
+    size = [round(h - l, 4) for l, h in zip(lo, hi)]
+    # Wall0 is translate (2, 1.25, 0), scale (4, 2.5, 0.1) about a unit cube.
+    assert size == pytest.approx([4.0, 2.5, 0.1], abs=1e-3)
+    assert lo == pytest.approx([0.0, 0.0, -0.05], abs=1e-3)
+
+
+def test_every_cube_face_is_a_triangle_with_indices():
+    doc = gltf_json(convert_usdz_to_glb(ROOMPLAN_FIXTURE.read_bytes()))
+    for mesh in doc["meshes"]:
+        prim = mesh["primitives"][0]
+        assert "POSITION" in prim["attributes"]
+        indices = doc["accessors"][prim["indices"]]
+        assert indices["count"] % 3 == 0

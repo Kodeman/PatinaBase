@@ -9,8 +9,18 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // NEXT_PUBLIC_SUPABASE_STORAGE_KEY (below): pinned auth-cookie storage key
+  // (Workstream D-B1). Without this pin, @supabase/ssr derives the cookie
+  // name from NEXT_PUBLIC_SUPABASE_URL's host (`sb-<host-first-label>-auth-token`).
+  // If that URL is ever repointed (e.g. to api.patina.cloud) while the
+  // underlying Supabase project stays the same, the derived name would
+  // silently change — logging out every session cookie in the wild and
+  // breaking the extension's independent re-derivation. Value here is the
+  // CURRENT derived value for this env's Supabase project.
   "vars": {
-    "NEXT_PUBLIC_SUPABASE_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co"
+    "NEXT_PUBLIC_SUPABASE_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJrdmNpeGRtdXllamZ6Y2lqcGRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNjg0MzIsImV4cCI6MjA4Mzg0NDQzMn0.SPl6jHaeTp9McfF-AmXJUDKTwRaXD7Qf0hlve72rVg0",
+    "NEXT_PUBLIC_SUPABASE_STORAGE_KEY": "sb-bkvcixdmuyejfzcijpdg-auth-token"
   },
   "env": {
     "staging": {
@@ -18,6 +28,10 @@
       "vars": {
         "NEXT_PUBLIC_SUPABASE_URL": "https://vuesoyhfrjabfxbrzekd.supabase.co",
         "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1ZXNveWhmcmphYmZ4YnJ6ZWtkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4NzYwNjYsImV4cCI6MjEwMjQ1MjA2Nn0.Fi64Lk7N6vo_t37NKo8ZGQtBko96BBPye-8zwbJWDh4",
+        // Staging is a SEPARATE Supabase project (vuesoyhfrjabfxbrzekd), not a
+        // repoint of prod — pin its own current derived value so staging auth
+        // behavior is unchanged by D-B1 (see the top-level vars comment).
+        "NEXT_PUBLIC_SUPABASE_STORAGE_KEY": "sb-vuesoyhfrjabfxbrzekd-auth-token",
         "NEXT_PUBLIC_ENV": "staging"
       }
     }

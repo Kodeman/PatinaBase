@@ -146,3 +146,101 @@ def test_visibility_timeout_has_one_source_of_truth_for_direct_settings():
 def test_url_trailing_slash_trimmed():
     s = settings_from_env({**BASE, "SUPABASE_URL": "https://x.supabase.co/"})
     assert s.supabase_url == "https://x.supabase.co"
+
+
+# ── W3-C: storage backend / shadow / R2 / credential-posture config ─────────
+
+R2_ENV = {
+    "SCAN_STORAGE_R2_ENDPOINT": "https://r2.example.com",
+    "SCAN_STORAGE_R2_BUCKET": "patina-staging-media-artifacts-us",
+    "SCAN_STORAGE_R2_ACCESS_KEY_ID": "key-id",
+    "SCAN_STORAGE_R2_SECRET_ACCESS_KEY": "secret",
+}
+
+
+def test_storage_backend_defaults_to_supabase_with_zero_new_state():
+    s = settings_from_env(dict(BASE))
+    assert s.storage_backend == "supabase"
+    assert s.storage_shadow is None
+    assert s.storage_token is None
+    assert (s.r2_endpoint, s.r2_bucket, s.r2_access_key_id, s.r2_secret_access_key) == (
+        "",
+        "",
+        "",
+        "",
+    )
+    assert s.effective_storage_shadow_ledger_path == (
+        s.work_dir + "/shadow-storage-ledger.jsonl"
+    )
+
+
+def test_storage_backend_rejects_unknown_value():
+    with pytest.raises(ConfigError, match="SCAN_STORAGE_BACKEND"):
+        settings_from_env({**BASE, "SCAN_STORAGE_BACKEND": "s3"})
+
+
+def test_storage_backend_r2_requires_full_r2_env():
+    for missing in R2_ENV:
+        env = {**BASE, "SCAN_STORAGE_BACKEND": "r2", **R2_ENV}
+        del env[missing]
+        with pytest.raises(ConfigError) as ei:
+            settings_from_env(env)
+        assert missing in str(ei.value)
+
+
+def test_storage_backend_r2_accepted_with_full_env():
+    s = settings_from_env({**BASE, "SCAN_STORAGE_BACKEND": "r2", **R2_ENV})
+    assert s.storage_backend == "r2"
+    assert s.r2_endpoint == "https://r2.example.com"
+    assert s.r2_bucket == "patina-staging-media-artifacts-us"
+
+
+def test_storage_shadow_rejects_unknown_value():
+    with pytest.raises(ConfigError, match="SCAN_STORAGE_SHADOW"):
+        settings_from_env({**BASE, "SCAN_STORAGE_SHADOW": "supabase"})
+
+
+def test_storage_shadow_r2_requires_full_r2_env():
+    with pytest.raises(ConfigError) as ei:
+        settings_from_env({**BASE, "SCAN_STORAGE_SHADOW": "r2"})
+    assert "SCAN_STORAGE_R2_ENDPOINT" in str(ei.value)
+
+
+def test_storage_shadow_r2_accepted_with_full_env_and_supabase_primary():
+    s = settings_from_env({**BASE, "SCAN_STORAGE_SHADOW": "r2", **R2_ENV})
+    assert s.storage_backend == "supabase"
+    assert s.storage_shadow == "r2"
+
+
+def test_storage_shadow_cannot_equal_the_primary_backend():
+    with pytest.raises(ConfigError, match="must differ"):
+        settings_from_env(
+            {
+                **BASE,
+                "SCAN_STORAGE_BACKEND": "r2",
+                "SCAN_STORAGE_SHADOW": "r2",
+                **R2_ENV,
+            }
+        )
+
+
+def test_storage_shadow_ledger_path_override():
+    s = settings_from_env(
+        {**BASE, "SCAN_STORAGE_SHADOW_LEDGER_PATH": "/var/lib/patina/shadow.jsonl"}
+    )
+    assert s.storage_shadow_ledger_path == "/var/lib/patina/shadow.jsonl"
+    assert s.effective_storage_shadow_ledger_path == "/var/lib/patina/shadow.jsonl"
+
+
+def test_effective_shadow_ledger_path_tracks_work_dir_via_dataclasses_replace():
+    s = settings_from_env(dict(BASE))
+    moved = replace(s, work_dir="/tmp/other-work")
+    assert moved.effective_storage_shadow_ledger_path == (
+        "/tmp/other-work/shadow-storage-ledger.jsonl"
+    )
+
+
+def test_storage_token_optional_override():
+    assert settings_from_env(dict(BASE)).storage_token is None
+    s = settings_from_env({**BASE, "SCAN_WORKER_STORAGE_TOKEN": "narrow-token"})
+    assert s.storage_token == "narrow-token"

@@ -1,13 +1,32 @@
 export type CatalogSource = 'legacy' | 'shadow' | 'hyperdrive';
+export type ScanRoutesMode = 'off' | 'on';
+export type MediaUploadsMode = 'off' | 'on';
 
 export interface EdgeApiEnv extends CloudflareBindings {
+  // DB_FRESH is the authenticated RLS login (SET ROLE authenticated) for the
+  // /v1/_authcheck probe and future authenticated routes. DB_CATALOG_FRESH is
+  // the uncached catalog reader the shadow comparison's fresh leg reads. They
+  // are two distinct Hyperdrive configs so neither role is overloaded.
   DB_FRESH?: Hyperdrive;
+  DB_CATALOG_FRESH?: Hyperdrive;
   DB_PUBLIC_CACHE?: Hyperdrive;
   SUPABASE_ANON_KEY?: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUDIENCE?: string;
   HEALTH_SERVICE_TOKEN_ID?: string;
   HEALTH_SERVICE_TOKEN_SECRET?: string;
+  // R2 credentials for the scan read path's capability URLs. Wrangler secrets,
+  // never committed vars — and only required when SCAN_ROUTES is "on".
+  SCAN_R2_ACCESS_KEY_ID?: string;
+  SCAN_R2_SECRET_ACCESS_KEY?: string;
+  // A SEPARATE, WRITE-CAPABLE credential pair for the upload interface, scoped
+  // to the originals bucket alone. Least privilege in both directions: the read
+  // pair above cannot write anything, and this pair cannot reach the artifacts
+  // bucket the pipeline writes. One compromised credential is therefore never
+  // the whole media surface. Wrangler secrets; required only when
+  // MEDIA_UPLOADS is "on".
+  SCAN_R2_WRITE_ACCESS_KEY_ID?: string;
+  SCAN_R2_WRITE_SECRET_ACCESS_KEY?: string;
 }
 
 export interface RuntimeConfig {
@@ -16,6 +35,8 @@ export interface RuntimeConfig {
   legacyFetchTimeoutMs: number;
   compatibilityFetchTimeoutMs: number;
   websocketHandshakeTimeoutMs: number;
+  scanRoutes: ScanRoutesMode;
+  mediaUploads: MediaUploadsMode;
 }
 
 export class ConfigurationError extends Error {
@@ -32,6 +53,15 @@ function requiredString(value: unknown): string {
   return value;
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === '127.0.0.1' || hostname === 'localhost';
+}
+
+// https is required everywhere except loopback so env.local (Supabase CLI on
+// http://127.0.0.1:54321) keeps working while a committed http:// value for
+// staging/production fails closed here. This also closes a side effect: the
+// proxy-loop guard in proxy.ts compares exact origin strings, so an
+// http://api.patina.cloud upstream would otherwise evade it.
 function requiredHttpUrl(value: unknown): string {
   const candidate = requiredString(value);
   let parsed: URL;
@@ -40,7 +70,28 @@ function requiredHttpUrl(value: unknown): string {
   } catch {
     throw new ConfigurationError();
   }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+  if (parsed.protocol === 'https:') {
+    return candidate;
+  }
+  if (parsed.protocol === 'http:' && isLoopbackHostname(parsed.hostname)) {
+    return candidate;
+  }
+  throw new ConfigurationError();
+}
+
+// The R2 S3 endpoint must be a bare https origin: a path component would move
+// the object a signature covers, and http would put a capability URL on the wire
+// in clear. Unlike the Supabase upstream there is no loopback exemption — R2 has
+// no local stand-in in this worker.
+function requiredHttpsOrigin(value: unknown): string {
+  const candidate = requiredString(value);
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new ConfigurationError();
+  }
+  if (parsed.protocol !== 'https:' || parsed.pathname !== '/') {
     throw new ConfigurationError();
   }
   return candidate;
@@ -73,13 +124,67 @@ export function validateRuntimeConfig(env: EdgeApiEnv): RuntimeConfig {
   ) {
     throw new ConfigurationError();
   }
-  // A promoted rung that boots without its Hyperdrive bindings serves 100%
+  // A promoted rung that boots without the bindings its path uses serves 100%
   // legacy while reporting success; refuse it so a failed cutover is visible.
-  if (source !== 'legacy' && (!env.DB_FRESH || !env.DB_PUBLIC_CACHE)) {
+  // Each source is validated for exactly the bindings it reads:
+  //  - shadow compares the fresh leg (DB_CATALOG_FRESH, the uncached catalog
+  //    reader) against the cached view (DB_PUBLIC_CACHE), so it needs both.
+  //  - hyperdrive serves the cached view (DB_PUBLIC_CACHE); the fresh leg is
+  //    not read at rung three.
+  //  - any promoted rung also opens DB_FRESH for the authenticated RLS path
+  //    (/v1/_authcheck runs SET ROLE authenticated on it), so DB_FRESH must be
+  //    bound off the legacy rung.
+  if (source === 'shadow' && (!env.DB_CATALOG_FRESH || !env.DB_PUBLIC_CACHE)) {
+    throw new ConfigurationError();
+  }
+  if (source === 'hyperdrive' && !env.DB_PUBLIC_CACHE) {
+    throw new ConfigurationError();
+  }
+  if (source !== 'legacy' && !env.DB_FRESH) {
     throw new ConfigurationError();
   }
 
+  // The scan read path is declared per-env exactly like the catalog source, and
+  // for the same reason: "on" with a missing piece must be LOUD. A scan route
+  // that boots without its RLS binding, its R2 endpoint, or its credentials
+  // would 404 every request — indistinguishable from "this scan has no splat".
+  // So the flag is validated against everything its path reads, and a gap fails
+  // the whole worker closed (503 + edge_api_configuration_invalid) rather than
+  // degrading into a silent, permanent absence.
+  const scanRoutes = env.SCAN_ROUTES;
+  if (scanRoutes !== 'off' && scanRoutes !== 'on') {
+    throw new ConfigurationError();
+  }
+  if (scanRoutes === 'on') {
+    requiredHttpsOrigin(env.SCAN_R2_ENDPOINT);
+    requiredString(env.SCAN_R2_BUCKET);
+    requiredString(env.SCAN_R2_ACCESS_KEY_ID);
+    requiredString(env.SCAN_R2_SECRET_ACCESS_KEY);
+    if (!env.DB_FRESH) throw new ConfigurationError();
+  }
+
+  // The upload interface, declared and validated exactly like the read path
+  // above, and for a sharper version of the same reason: this flag turns on a
+  // route that MINTS WRITE CAPABILITIES against a private bucket. "on" with a
+  // missing credential, a missing bucket, or a missing RLS binding must be a
+  // loud 503, never a route that half-works. The two flags are independent —
+  // an environment may serve reads without accepting uploads — but "on" here
+  // requires its own complete set.
+  const mediaUploads = env.MEDIA_UPLOADS;
+  if (mediaUploads !== 'off' && mediaUploads !== 'on') {
+    throw new ConfigurationError();
+  }
+  if (mediaUploads === 'on') {
+    requiredHttpsOrigin(env.SCAN_R2_ENDPOINT);
+    requiredString(env.SCAN_R2_ORIGINALS_BUCKET);
+    requiredString(env.SCAN_R2_WRITE_ACCESS_KEY_ID);
+    requiredString(env.SCAN_R2_WRITE_SECRET_ACCESS_KEY);
+    if (!env.DB_FRESH) throw new ConfigurationError();
+  }
+
   return {
+    scanRoutes,
+    mediaUploads,
     catalogSource: source,
     catalogHyperdrivePercent: percentage,
     legacyFetchTimeoutMs: integerInRange(

@@ -8551,6 +8551,89 @@ export type Database = {
         }
         Relationships: []
       }
+      media_objects: {
+        Row: {
+          access_class: string
+          bucket: string
+          created_at: string
+          etag: string | null
+          id: string
+          lifecycle_state: string
+          mime: string | null
+          object_key: string
+          owner_user_id: string | null
+          provenance: Json
+          scan_id: string | null
+          sha256: string | null
+          size_bytes: number | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          access_class: string
+          bucket: string
+          created_at?: string
+          etag?: string | null
+          id?: string
+          lifecycle_state?: string
+          mime?: string | null
+          object_key: string
+          owner_user_id?: string | null
+          provenance?: Json
+          scan_id?: string | null
+          sha256?: string | null
+          size_bytes?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          access_class?: string
+          bucket?: string
+          created_at?: string
+          etag?: string | null
+          id?: string
+          lifecycle_state?: string
+          mime?: string | null
+          object_key?: string
+          owner_user_id?: string | null
+          provenance?: Json
+          scan_id?: string | null
+          sha256?: string | null
+          size_bytes?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_objects_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "media_objects_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_objects_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_objects_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
+        ]
+      }
       metric_thresholds: {
         Row: {
           active: boolean
@@ -19036,6 +19119,7 @@ export type Database = {
       room_files: {
         Row: {
           anchor_count: number
+          artifacts: Json
           certificate: Json
           created_at: string
           dense_mesh_url: string | null
@@ -19056,10 +19140,12 @@ export type Database = {
           tolerance_class: string | null
           unverified: boolean
           updated_at: string
+          verify: Json | null
           version: number
         }
         Insert: {
           anchor_count?: number
+          artifacts?: Json
           certificate?: Json
           created_at?: string
           dense_mesh_url?: string | null
@@ -19080,10 +19166,12 @@ export type Database = {
           tolerance_class?: string | null
           unverified?: boolean
           updated_at?: string
+          verify?: Json | null
           version: number
         }
         Update: {
           anchor_count?: number
+          artifacts?: Json
           certificate?: Json
           created_at?: string
           dense_mesh_url?: string | null
@@ -19104,6 +19192,7 @@ export type Database = {
           tolerance_class?: string | null
           unverified?: boolean
           updated_at?: string
+          verify?: Json | null
           version?: number
         }
         Relationships: [
@@ -26136,6 +26225,17 @@ export type Database = {
           },
         ]
       }
+      scan_media_read: {
+        Row: {
+          access_class: string | null
+          bucket: string | null
+          id: string | null
+          kind: string | null
+          object_key: string | null
+          version: number | null
+        }
+        Relationships: []
+      }
       scan_pipeline_runs: {
         Row: {
           anchor_count: number | null
@@ -28875,12 +28975,20 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      caller_can_access_room_scan: {
+        Args: { p_scan_id: string }
+        Returns: boolean
+      }
       can_access_item_feedback_anchor: {
         Args: {
           p_board_item_id: string
           p_ffe_item_id: string
           p_proposal_item_id: string
         }
+        Returns: boolean
+      }
+      can_client_read_issued_board_media: {
+        Args: { p_object_name: string }
         Returns: boolean
       }
       can_dispatch_proposal_send: {
@@ -29160,6 +29268,15 @@ export type Database = {
         Args: { p_disclosed_impact?: Json; p_window_id: string }
         Returns: string
       }
+      confirm_media_upload: {
+        Args: {
+          p_etag: string
+          p_object_id: string
+          p_sha256: string
+          p_size: number
+        }
+        Returns: Json
+      }
       confirm_project_decision_review: {
         Args: {
           p_decision_id: string
@@ -29338,6 +29455,18 @@ export type Database = {
           p_ffe_item_ids: string[]
           p_name: string
           p_project_id: string
+        }
+        Returns: Json
+      }
+      create_media_upload_intent: {
+        Args: {
+          p_artifact_kind: string
+          p_bucket: string
+          p_declared_mime: string
+          p_declared_sha256: string
+          p_declared_size: number
+          p_filename: string
+          p_scan_id: string
         }
         Returns: Json
       }
@@ -30972,6 +31101,16 @@ export type Database = {
         }
       }
       mark_feedback_seen: { Args: { p_id: string }; Returns: undefined }
+      mark_media_object_state: {
+        Args: {
+          p_etag?: string
+          p_id: string
+          p_sha256?: string
+          p_size?: number
+          p_state: string
+        }
+        Returns: undefined
+      }
       mark_project_review_delivery_sent:
         | {
             Args: {
@@ -31485,6 +31624,21 @@ export type Database = {
       }
       refresh_product_behavior_stats: { Args: never; Returns: undefined }
       refresh_style_centroids: { Args: never; Returns: number }
+      register_media_object: {
+        Args: {
+          p_access_class: string
+          p_bucket: string
+          p_etag?: string
+          p_mime?: string
+          p_object_key: string
+          p_owner_user_id?: string
+          p_provenance?: Json
+          p_scan_id?: string
+          p_sha256?: string
+          p_size_bytes?: number
+        }
+        Returns: string
+      }
       register_project_ffe_working_media_source: {
         Args: {
           p_actor_id: string
@@ -32003,6 +32157,38 @@ export type Database = {
         }
       }
       save_product_configuration: { Args: { p_input: Json }; Returns: Json }
+      scan_worker_append_event: {
+        Args: {
+          p_detail?: Json
+          p_duration_ms?: number
+          p_event: string
+          p_lease_owner: string
+          p_room_file_id: string
+          p_scan_id: string
+          p_stage: string
+          p_status?: string
+          p_task_id: string
+        }
+        Returns: string
+      }
+      scan_worker_complete_task: {
+        Args: { p_lease_owner: string; p_result?: Json; p_task_id: string }
+        Returns: undefined
+      }
+      scan_worker_fail_task: {
+        Args: { p_error: string; p_lease_owner: string; p_task_id: string }
+        Returns: undefined
+      }
+      scan_worker_update_room_file: {
+        Args: {
+          p_artifacts?: Json
+          p_lease_owner: string
+          p_room_file_id: string
+          p_task_id: string
+          p_verify?: Json
+        }
+        Returns: undefined
+      }
       search_products: {
         Args: {
           category_filter?: string

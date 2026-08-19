@@ -19,7 +19,7 @@ import { formatDate, formatFileSize } from '../../utils/format';
 import { Button } from '../Button';
 import { Dialog, DialogContent } from '../Dialog';
 import { Card } from '../Card';
-import { MediaAsset } from '@patina/types/media';
+import { MediaAsset, MediaUsage } from '@patina/types/media';
 import { ModelViewer3D } from './model-viewer-3d';
 
 export interface MediaPreviewModalProps {
@@ -301,7 +301,7 @@ export function MediaPreviewModal({
                 <div>
                   <label className="text-sm font-medium text-gray-500">Tags</label>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {asset.tags.map((tag) => (
+                    {asset.tags.map((tag: string) => (
                       <span
                         key={tag}
                         className="text-xs px-2 py-1 bg-gray-100 rounded"
@@ -318,7 +318,7 @@ export function MediaPreviewModal({
                     Used In
                   </label>
                   <div className="space-y-2 mt-2">
-                    {asset.usage.map((usage) => (
+                    {asset.usage.map((usage: MediaUsage) => (
                       <Card key={usage.id} className="p-2">
                         <p className="text-sm font-medium">{usage.itemName}</p>
                         <p className="text-xs text-gray-500 capitalize">

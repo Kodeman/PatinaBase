@@ -1,11 +1,18 @@
 """scan_pipeline.drawings — dimensioned floor plan + four elevations → SVG
-(native), PDF (cairosvg), layered DXF (ezdxf) per R108.6. Terminal stage: no
-successor (portal delivery is item 12). Design §2.1/§2.3.
+(native), PDF (cairosvg), layered DXF (ezdxf), IFC4 (ifcopenshell) per R108.6 +
+the W2 IFC lane (`docs/architecture/CAD Generation Pipeline/DELIVERY-PLAN.md`
+§3). Terminal stage: no successor (portal delivery is item 12). Design §2.1/§2.3.
 
 Pulls the solved room_file's measurements + certificate + captured_room geometry,
 renders the sheet set to WORK_DIR, uploads under room_file/{uid}/{scanId}/v{n}/…,
 records the artifact URLs + sha256 on room_files, flips status → 'generated'
 (forward-only).
+
+IFC is the ONE optional artifact in an otherwise all-or-nothing stage: it is
+new and additive (drawings shipped svg/pdf/dxf long before IFC existed), so a
+generation failure there must not take down the core sheet set — the stage
+degrades by recording drawings.artifacts[] with kind 'ifc' and status
+'skipped' (plus a logged warning + telemetry event) rather than raising.
 """
 
 from __future__ import annotations
@@ -13,12 +20,14 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import logging
 import os
 import shutil
 import time
 from typing import Any
 
 from ..drawing import dxf as dxf_mod
+from ..drawing import ifc as ifc_mod
 from ..drawing import model as drawing_model
 from ..drawing import pdf as pdf_mod
 from ..drawing import svg as svg_mod
@@ -32,7 +41,10 @@ from ..keys import (
 from .base import BaseStage, Context, StageOutcome
 from .captured_room import parse_captured_room_meters
 
-# room-scans bucket MIME allowlist excludes svg/pdf/dxf → transport as octet-stream.
+log = logging.getLogger("patina_scan_worker.stages.drawings")
+
+# room-scans bucket MIME allowlist excludes svg/pdf/dxf/ifc → transport as
+# octet-stream.
 _OCTET = "application/octet-stream"
 
 
@@ -89,6 +101,7 @@ class DrawingsStage(BaseStage):
                 "svg_url": summary["delivery"]["svg_url"],
                 "pdf_url": summary["delivery"]["pdf_url"],
                 "dxf_url": summary["delivery"]["dxf_url"],
+                "ifc_url": summary["delivery"].get("ifc_url"),
                 "sheets": summary["render"]["sheet_count"],
             })
         finally:
@@ -173,6 +186,38 @@ class DrawingsStage(BaseStage):
         ctx.storage.upload_bytes(dxf_key, dxf_bytes, _OCTET)
         total_bytes += len(dxf_bytes)
 
+        # ── IFC4 (W2 IFC lane) — the one optional artifact; see module docstring.
+        ifc_manifest_entry: dict[str, Any] = {"kind": "ifc", "status": "skipped"}
+        ifc_url: str | None = None
+        try:
+            ifc_bytes = ifc_mod.build_ifc(room, {
+                "scan_id": scan_id,
+                "project": "Patina Field Capture",
+                "room": str(scan_row.get("name") or scan_id[:8]),
+                "generated_at": date_str,
+                "scale": float(certificate.get("scale", 1.0)),
+            })
+            ifc_key = f"{prefix}/room.ifc"
+            ctx.storage.upload_bytes(ifc_key, ifc_bytes, _OCTET)
+            total_bytes += len(ifc_bytes)
+            ifc_url = f"{base}/{ifc_key}"
+            ifc_manifest_entry = {
+                "kind": "ifc", "status": "generated",
+                "url": ifc_url, "sha256": _sha256(ifc_bytes),
+            }
+        except Exception as exc:  # noqa: BLE001 — degrade, don't fail the stage.
+            reason = str(exc)[:500]
+            ifc_manifest_entry = {"kind": "ifc", "status": "skipped", "error": reason}
+            log.warning("drawings: IFC export skipped for room_file %s: %s", room_file_id, reason)
+            # scan_pipeline_events.status is CHECK-bounded to
+            # ('started','succeeded','failed','info') — 'info' here, never
+            # 'failed': the stage itself did not fail. The degrade signal is
+            # the detail flag, not the status column.
+            ctx.telemetry.emit(
+                scan_id, "drawing", "drawings.ifc_skipped", "info",
+                room_file_id=room_file_id, detail={"ifc_skipped": True, "error": reason},
+            )
+
         # canonical pointers = plan sheet + the dxf
         plan = next((s for s in sheets_manifest if s["id"] == "plan"), sheets_manifest[0])
         svg_url, pdf_url = plan["svg_url"], plan["pdf_url"]
@@ -183,6 +228,7 @@ class DrawingsStage(BaseStage):
             "dxf_sha256": _sha256(dxf_bytes),
             "generated_at": date_str,
             "sheet_count": len(sheets_manifest),
+            "artifacts": [ifc_manifest_entry],
         }
 
         wrote = ctx.db.finalize_room_file_generated(
@@ -193,15 +239,20 @@ class DrawingsStage(BaseStage):
                 f"room_file {room_file_id} not in solved/generated at finalize — retry"
             )
 
+        formats = ["svg", "pdf", "dxf"]
+        if ifc_manifest_entry["status"] == "generated":
+            formats.append("ifc")
         return {
             "render": {
                 "sheet_count": len(sheets_manifest),
-                "formats": ["svg", "pdf", "dxf"],
+                "formats": formats,
                 "total_bytes": total_bytes,
                 "unverified": bool(certificate.get("unverified")),
+                "ifc_skipped": ifc_manifest_entry["status"] != "generated",
             },
             "delivery": {
                 "room_file_id": room_file_id, "version": version,
                 "svg_url": svg_url, "pdf_url": pdf_url, "dxf_url": dxf_url,
+                "ifc_url": ifc_url,
             },
         }

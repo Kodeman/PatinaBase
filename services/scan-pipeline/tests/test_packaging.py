@@ -28,7 +28,22 @@ def _extras() -> dict[str, list[str]]:
 
 def test_all_stage_extras_declared():
     extras, _ = _extras()
-    assert set(extras) == {"solve", "drawings", "refine", "fuse", "splat", "gpu", "dev"}
+    assert set(extras) == {
+        "solve", "drawings", "refine", "fuse", "splat", "gpu", "dev",
+        # W3-C: R2StorageBackend's boto3 dependency, opt-in like every other
+        # stage extra — a Supabase-only worker never installs it.
+        "r2",
+    }
+
+
+def test_r2_extra_pulls_only_boto3():
+    # R2StorageBackend has no other dependency; keep this extra minimal so it
+    # stays a cheap opt-in rather than growing into a second GPU-sized extra.
+    extras, _ = _extras()
+    r2 = " ".join(extras["r2"]).lower()
+    assert "boto3" in r2
+    cuda_markers = ("torch", "gsplat", "pycolmap", "open3d", "cuda", "nvidia")
+    assert not any(m in r2 for m in cuda_markers)
 
 
 def test_cpu_install_never_pulls_cuda():

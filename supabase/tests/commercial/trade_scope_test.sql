@@ -209,17 +209,61 @@ BEGIN
   -- Two ordinary furnishings lines. Section 10 releases and purchase-orders one
   -- of them, so the trade block can be shown to be a TRADE rule and not a new
   -- blanket refusal on the whole table.
-  INSERT INTO public.project_ffe_items (
-    project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, trade_price_cents, markup_percent,
-    line_total_cents, vendor_id, vendor_name, doc_code, sort_order
-  ) VALUES
-    (v_project, v_kitchen, 'Counter stool', 'Seating', 'fixed', 'specified',
-     2, 60000, 36000, 66.67, 120000,
-     'd8710000-0000-4000-8000-000000000001', 'Trade Test Vendor', 'KT-01', 0),
-    (v_project, v_kitchen, 'Pendant light', 'Lighting', 'fixed', 'specified',
-     1, 90000, 54000, 66.67, 90000,
-     'd8710000-0000-4000-8000-000000000001', 'Trade Test Vendor', 'KT-02', 1);
+  -- assignment_scope is explicit: 00438 replaced 00434's auto-deriving
+  -- guard_project_ffe_selection_integrity() with one that requires it, so a
+  -- room-scoped fixture row that leaves the 'unassigned' default is rejected.
+  INSERT INTO public.project_ffe_items (project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    trade_price_cents,
+    markup_percent,
+    line_total_cents,
+    vendor_id,
+    vendor_name,
+    doc_code,
+    sort_order) VALUES
+    (
+    v_project,
+    v_kitchen,
+    'room',
+    'Counter stool',
+    'Seating',
+    'fixed',
+    'specified',
+    2,
+    60000,
+    36000,
+    66.67,
+    120000,
+    'd8710000-0000-4000-8000-000000000001',
+    'Trade Test Vendor',
+    'KT-01',
+    0
+  ),
+  (
+    v_project,
+    v_kitchen,
+    'room',
+    'Pendant light',
+    'Lighting',
+    'fixed',
+    'specified',
+    1,
+    90000,
+    54000,
+    66.67,
+    90000,
+    'd8710000-0000-4000-8000-000000000001',
+    'Trade Test Vendor',
+    'KT-02',
+    1
+  );
 
   -- The two subs. project_parties is the studio's roster; the scope snapshots
   -- what it needs so the document survives a roster edit.
@@ -1017,6 +1061,15 @@ BEGIN
           WHERE trade_scope_document_id = v_doc) = 900000,
     'the presence lines must sum to the client price, never a multiple of it';
 
+  -- 00510: both sections here name a room, so both presence lines must be
+  -- filed 'room'. Before 00510 engage_trade_scope omitted assignment_scope
+  -- entirely and this whole block was unreachable — the RPC raised
+  -- 'non-room assignment cannot carry a room' on the first section.
+  ASSERT (SELECT count(*) FROM public.project_ffe_items
+          WHERE trade_scope_document_id = v_doc
+            AND assignment_scope = 'room') = 2,
+    'a presence line minted for a room-scoped section must be filed assignment_scope=room';
+
   -- Idempotent.
   v_again := public.engage_trade_scope(v_scope);
   ASSERT NOT (v_again->>'newlyEngaged')::boolean, 're-engaging is not a new engagement';
@@ -1389,12 +1442,30 @@ BEGIN
   -- dropping itself and authorizing the rest. The companion line is freshly
   -- minted and passes every other check, so the trade refusal is the only one
   -- the loop can raise, whichever order it walks the ids in.
-  INSERT INTO public.project_ffe_items (
-    id, project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, line_total_cents, sort_order
-  ) VALUES (
-    v_clean, v_project, (SELECT value FROM trade_ids WHERE key = 'kitchen'),
-    'Bar stool', 'Seating', 'fixed', 'specified', 1, 40000, 40000, 91
+  INSERT INTO public.project_ffe_items (id,
+    project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    line_total_cents,
+    sort_order) VALUES (
+    v_clean,
+    v_project,
+    (SELECT value FROM trade_ids WHERE key = 'kitchen'),
+    'room',
+    'Bar stool',
+    'Seating',
+    'fixed',
+    'specified',
+    1,
+    40000,
+    40000,
+    91
   );
   BEGIN
     PERFORM public.create_furnishings_authorization_from_schedule(
@@ -1463,14 +1534,30 @@ BEGIN
 
   -- The lock is about the TRADE line, not the whole table: an ordinary schedule
   -- line carrying no instrument is still the studio's to reprice and to remove.
-  INSERT INTO public.project_ffe_items (
-    id, project_id, project_room_id, name, ffe_category, item_type, status,
-    quantity, unit_price_cents, line_total_cents, sort_order
-  ) VALUES (
+  INSERT INTO public.project_ffe_items (id,
+    project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    ffe_category,
+    item_type,
+    status,
+    quantity,
+    unit_price_cents,
+    line_total_cents,
+    sort_order) VALUES (
     'd8600000-0000-4000-8000-000000000001',
     (SELECT value FROM trade_ids WHERE key = 'project'),
     (SELECT value FROM trade_ids WHERE key = 'kitchen'),
-    'Loose control line', 'Accessories', 'fixed', 'specified', 1, 5000, 5000, 90
+    'room',
+    'Loose control line',
+    'Accessories',
+    'fixed',
+    'specified',
+    1,
+    5000,
+    5000,
+    90
   );
   UPDATE public.project_ffe_items SET line_total_cents = 7000, unit_price_cents = 7000
   WHERE id = 'd8600000-0000-4000-8000-000000000001';

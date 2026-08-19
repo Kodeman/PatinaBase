@@ -13,7 +13,7 @@ pnpm supabase:start
 pnpm --filter @patina/designer-portal dev
 ```
 
-Before starting, confirm `NEXT_PUBLIC_SUPABASE_URL` in `.env.local` points to the intended local environment. The required auth settings are `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`; server proxy deployments also configure `SUPABASE_JWT_ISSUER` and `SUPABASE_PROJECT_REF` so JWT and cookie validation remain scoped to Strata. Never expose `SUPABASE_SERVICE_ROLE_KEY` to browser code.
+Before starting, confirm `NEXT_PUBLIC_SUPABASE_URL` in `.env.local` points to the intended local environment. The required auth settings are `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`; server proxy deployments also configure `SUPABASE_JWT_ISSUER` so JWT validation remains scoped to Strata. The auth cookie name is pinned via `NEXT_PUBLIC_SUPABASE_STORAGE_KEY` (Workstream D-B1) rather than derived from the Supabase project ref — `SUPABASE_PROJECT_REF` is not consumed by this portal's own code. Never expose `SUPABASE_SERVICE_ROLE_KEY` to browser code.
 
 The portal listens on `http://localhost:3000`. Retained local services use their standard ports: orders `3015`, media `3014`, and projects `3016`.
 

@@ -68,6 +68,7 @@ BEGIN
   EXECUTE 'SET LOCAL ROLE authenticated';
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.reset_user()
 RETURNS void LANGUAGE plpgsql AS $$
@@ -76,6 +77,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', NULL, true);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_user() TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.configuration_snapshot_hash(p_snapshot jsonb)
 RETURNS text
@@ -89,6 +91,7 @@ AS $$
     'sha256'
   ), 'hex');
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.configuration_snapshot_hash(jsonb) TO PUBLIC;
 
 DO $$
 DECLARE

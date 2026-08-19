@@ -128,6 +128,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_proposal_lifecycle_actor(uuid, text) TO PUBLIC;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_proposal_lifecycle_actor(

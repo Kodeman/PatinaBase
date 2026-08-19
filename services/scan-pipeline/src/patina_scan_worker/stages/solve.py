@@ -7,17 +7,26 @@ equivalent to the redundant anchors.json artifact; the manifest is authoritative
 and always present, blessed call). Fits a scalar scale, snaps anchored spans to
 their typed values, classes every dimension, writes room_file_measurements + the
 certificate, flips room_files → 'solved', and enqueues drawings.
+
+Rendered Room v2 W1 (docs/architecture/CAD Generation Pipeline/DELIVERY-PLAN.md):
+solve ALSO enqueues `scan_pipeline.verify` as a second, non-gating successor —
+the CPU-only Modal accuracy lane. verify never gates drawings in either
+direction: drawings enqueues unconditionally exactly as before, and a failed or
+absent verify enqueue has zero effect on solve's own success.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import time
 from typing import Any
 
 from ..errors import PermanentError, TransientError
+
+log = logging.getLogger("patina_scan_worker.stages.solve")
 from ..keys import (
     OwnershipError,
     artifact_object_key,
@@ -78,6 +87,9 @@ class SolveStage(BaseStage):
                 raise
 
             # enqueue drawings BEFORE completing (crash-safe, idempotent) — §2.3
+            # Drawings is the gating successor: its enqueue is unguarded, exactly
+            # as it was before verify existed, so nothing about the verify
+            # enqueue below may change its behavior.
             ctx.queue.enqueue_successor(
                 task_type="scan_pipeline.drawings",
                 payload={
@@ -92,6 +104,48 @@ class SolveStage(BaseStage):
                 lease_owner=task["_lease_owner"],
             )
 
+            # enqueue verify (Rendered Room v2 W1) as a SECOND, NON-GATING
+            # successor. verify never gates drawings in either direction: its
+            # payload carries both the worker's own snake_case convention
+            # (scan_id/room_file_version — what dispatch-scan-modal's
+            # extractTaskInputIds reads off the task row) and the camelCase
+            # roomFileId/scanId/roomFileVersion keys the 00490
+            # scan_worker_update_room_file task-binding check reads off the
+            # SAME payload column. A failure here (RPC error, lost race
+            # surfaced as something other than the handled no-op, etc.) is
+            # caught, logged, and swallowed — it must never fail solve or
+            # affect the drawings enqueue above, which has already happened.
+            verify_enqueued = False
+            try:
+                ctx.queue.enqueue_successor(
+                    task_type="scan_pipeline.verify",
+                    payload={
+                        "scan_id": scan_id,
+                        "room_file_id": room_file_id,
+                        "room_file_version": version,
+                        "scanId": scan_id,
+                        "roomFileId": room_file_id,
+                        "roomFileVersion": version,
+                    },
+                    entity_id=scan_id,
+                    idempotency_key=f"{scan_id}:verify:{version}",
+                    owner_task_id=task["id"],
+                    parent_task_id=task["id"],
+                    lease_owner=task["_lease_owner"],
+                )
+                verify_enqueued = True
+            except Exception as exc:  # noqa: BLE001 — never let verify gate solve
+                log.warning(
+                    "solve: verify successor enqueue failed for scan %s room_file "
+                    "%s v%s — solve still succeeds, drawings is unaffected: %s",
+                    scan_id, room_file_id, version, exc,
+                )
+                ctx.telemetry.emit(
+                    scan_id, "solve", "solve.verify_enqueue_failed", "info",
+                    room_file_id=room_file_id,
+                    detail={"error": str(exc)},
+                )
+
             ctx.telemetry.emit(
                 scan_id, "solve", "solve.succeeded", "succeeded",
                 room_file_id=room_file_id,
@@ -105,6 +159,7 @@ class SolveStage(BaseStage):
                 "tolerance_counts": summary["dimension_counts"],
                 "unverified": summary["unverified"],
                 "successor_enqueued": "scan_pipeline.drawings",
+                "verify_enqueued": verify_enqueued,
             })
         finally:
             shutil.rmtree(work, ignore_errors=True)

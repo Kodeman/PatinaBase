@@ -8,6 +8,7 @@ import { ClientViewerCanvas, type ClientViewerMode } from './ClientViewerCanvas'
 import { ClientViewerLoadingOverlay } from './ClientViewerLoadingOverlay';
 import { ClientViewerToolbar } from './ClientViewerToolbar';
 import { ShareScanDialog } from './ShareScanDialog';
+import { ScanStillFallback, ViewerErrorBoundary } from './ViewerErrorBoundary';
 
 interface ClientRoomScanViewerProps {
   scanId: string;
@@ -93,10 +94,19 @@ export function ClientRoomScanViewer({ scanId }: ClientRoomScanViewerProps) {
             fullQualityAvailable={!isMobile && hasModel}
             fullQualityDisabledReason={fullQualityDisabledReason}
           />
+          {/* The r3f@8 canvas throws during render under React 19. The boundary keeps
+              that inside the viewer frame — the page around it survives — and shows the
+              scan's still instead. Stop-gap, not the fix: see ViewerErrorBoundary.tsx. */}
           <div className="relative aspect-video w-full" data-testid="client-viewer-canvas">
-            <Suspense fallback={<ClientViewerLoadingOverlay />}>
-              <ClientViewerCanvas modelUrl={modelUrl} mode={mode} />
-            </Suspense>
+            <ViewerErrorBoundary
+              fallback={
+                <ScanStillFallback thumbnailUrl={scan.thumbnail_url} roomName={scan.name} />
+              }
+            >
+              <Suspense fallback={<ClientViewerLoadingOverlay />}>
+                <ClientViewerCanvas modelUrl={modelUrl} mode={mode} />
+              </Suspense>
+            </ViewerErrorBoundary>
           </div>
         </>
       ) : (
