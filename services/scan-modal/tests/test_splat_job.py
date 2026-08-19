@@ -196,6 +196,82 @@ def test_the_workspace_is_written_from_the_manifest_and_the_photos(world, tmp_pa
     assert world.frames == ["hero.jpg", "auto_001.50.jpg"]
 
 
+# ── the seed point cloud ────────────────────────────────────────────────────
+
+
+def test_the_workspace_carries_a_seed_cloud_that_transforms_json_names(world, tmp_path):
+    """W2's real run trained from random init because `transforms.json` carried
+    no `ply_file_path` — the only key nerfstudio's Nerfstudio dataparser reads
+    for a seed cloud, resolved relative to the dataset directory."""
+    splat_job.run_splat(payload(), db=RecordingDb())
+
+    paths = splat_job.workspace_paths("scan-1", 4, tmp_path / "cache")
+    assert paths["seed_ply"].name == "sparse_pc.ply"
+    assert paths["seed_ply"].parent == paths["transforms"].parent
+    assert paths["seed_ply"].is_file()
+
+    document = json.loads(paths["transforms"].read_text())
+    assert document["ply_file_path"] == "sparse_pc.ply"
+    header = paths["seed_ply"].read_bytes().split(b"end_header")[0]
+    assert b"property float x" in header and b"property uchar red" in header
+
+
+def test_the_training_run_asks_for_the_seed_cloud_explicitly(world):
+    """splatfacto's own config already defaults this True, so the flag is an
+    assertion — the value that decides whether the seed is read should be ours
+    and visible, not a default in someone else's config that could move."""
+    splat_job.run_splat(payload(), db=RecordingDb())
+    train = world.runs[0]
+    assert train[train.index("--load-3D-points") + 1] == "True"
+    # After the dataparser subcommand, or tyro binds it to the trainer.
+    assert train.index("--load-3D-points") > train.index("nerfstudio-data")
+
+
+def test_how_the_optimiser_started_reaches_the_ledger(world):
+    """A splat seeded off the parametric room and one that began from noise are
+    the same artifact kind and are otherwise indistinguishable afterwards."""
+    db = RecordingDb()
+    result = splat_job.run_splat(payload(), db=db)
+    assert result["provenance"]["seedPoints"] > 0
+    assert db.registered[0]["provenance"]["seedPoints"] == result["provenance"]["seedPoints"]
+
+
+def test_a_workspace_written_BEFORE_seeding_is_repaired_on_resume(world, tmp_path):
+    """The resume path short-circuits the whole workspace build, so a seeding
+    step folded into it would never run for exactly the runs that already cost
+    the most — a preempted 60-minute L4 would resume unseeded forever."""
+    paths = splat_job.workspace_paths("scan-1", 4, tmp_path / "cache")
+    paths["images"].mkdir(parents=True, exist_ok=True)
+    paths["transforms"].write_text(json.dumps({"camera_model": "PINHOLE", "frames": []}))
+    assert not paths["seed_ply"].exists()
+
+    splat_job.run_splat(payload(), db=RecordingDb())
+
+    assert paths["seed_ply"].is_file()
+    assert json.loads(paths["transforms"].read_text())["ply_file_path"] == "sparse_pc.ply"
+
+
+def test_a_room_with_no_parametric_geometry_still_trains_unseeded(world, monkeypatch):
+    """Unseeded is what every run did before this, and is strictly better than
+    failing a scan whose photos are perfectly trainable."""
+    def fetch_empty_room(url, timeout=None):
+        if url == CAPTURED_URL:
+            return json.dumps({"walls": []}).encode()
+        if url == MANIFEST_URL:
+            return MANIFEST.encode()
+        return b"heic-bytes"
+
+    monkeypatch.setattr(splat_job, "_fetch", fetch_empty_room)
+    db = RecordingDb()
+    result = splat_job.run_splat(payload(), db=db)
+
+    assert db.completed
+    assert result["provenance"]["seedPoints"] == 0
+    paths = splat_job.workspace_paths("scan-1", 4)
+    assert not paths["seed_ply"].exists()
+    assert "ply_file_path" not in json.loads(paths["transforms"].read_text())
+
+
 def test_photos_are_matched_to_poses_by_NAME_not_by_position(world):
     """A positional match would pair the wrong pixels with the wrong pose the
     moment one photo was missing from room_scan_images."""

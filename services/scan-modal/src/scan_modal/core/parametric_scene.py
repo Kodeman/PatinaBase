@@ -53,12 +53,13 @@ import math
 from dataclasses import dataclass, field, replace
 from typing import Any, Iterable, Iterator
 
-from .cameras import Bbox
+from .cameras import Bbox, RoomFrame
 
 __all__ = [
     "Box",
     "SceneSpec",
     "build_scene_spec",
+    "room_frame",
     "MATERIALS",
     "WALL_THICKNESS_M",
     "FLOOR_THICKNESS_M",
@@ -366,3 +367,34 @@ def build_scene_spec(captured_room_json: Any) -> SceneSpec:
     if extent is not None:
         spec.bbox = Bbox.from_points(*extent)
     return spec
+
+
+def room_frame(spec: SceneSpec, bbox: Bbox | None = None) -> RoomFrame:
+    """The room's own horizontal frame, for the interior cameras.
+
+    A room is rarely square to the world axes — the real staging capture is a
+    9.5 × 4.5 m galley yawed about 30°, whose axis-aligned box is 8.2 × 7.5 m, a
+    shape it does not have. Cameras placed by insetting from that box stand
+    against a wall or outside one (W2-EVIDENCE.md §13).
+
+    The orientation comes from the LONGEST WALL. A wall's `rotation_z` already
+    is the direction its length runs, and the longest one is the least likely to
+    be a stub, a closet return, or a fragment of a bay. `max` keeps the first of
+    a tie, so a room of equal walls resolves in document order and the same
+    document always yields the same frame. Reduced modulo π because a wall and
+    the wall facing it report opposite directions of the same axis.
+
+    The footprint is measured over the WALLS' plan corners, not every box: an
+    object protruding past the shell should not move the room's own extents, and
+    the shell is what a camera has to stay inside of.
+
+    Falls back to the world-aligned reading — which is what this stage used to
+    do everywhere — when there are no usable walls.
+    """
+    box = bbox if bbox is not None else spec.bbox
+    walls = [b for b in spec.boxes if b.kind == "wall"]
+    if not walls:
+        return RoomFrame.from_bbox(box)
+    longest = max(walls, key=lambda b: b.size[0])
+    footprint = [(x, y) for wall in walls for x, y, _ in _corners(wall)]
+    return RoomFrame.oriented(box, longest.rotation_z % math.pi, footprint)

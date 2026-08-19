@@ -18,29 +18,100 @@ Materials are a small fixed palette keyed by the spec's material NAMES. Neutral
 and fully matte on purpose — a schematic room reads as massing, and a specular
 highlight on a box is a lie about a surface nobody measured.
 
-Lighting is deterministic by construction: a fixed key/fill area pair sized off
-the bounding box, plus a flat world colour. No HDRI, no IBL file, no sun angle
-derived from a timestamp — two runs of the same GLB must render the same pixels,
-and an environment texture is one more thing that could differ between image
-builds.
+Lighting is deterministic by construction and is PLANNED before it is applied:
+`plan_lighting` is pure arithmetic over the bounding box and the shot, and
+`BpyScene.render` is the only thing that turns a `LightSpec` into a lamp. No
+HDRI, no IBL file, no sun angle derived from a timestamp — two runs of the same
+room must render the same pixels, and an environment texture is one more thing
+that could differ between image builds.
+
+WHY THE RIG WAS REPLACED
+────────────────────────
+The old rig was one key light at `bbox top + 1.0 m` and a fill at mid-height,
+sized at 220 W per square metre of floor. That was written when the model was a
+flat slab. Against a real room with 3.3 m walls the key sits about a metre off
+the wall tops, and the top-down plate — which looks straight at those wall tops
+from directly above — came back burnt to white (W2-EVIDENCE.md §10, open item
+2). The same rig lights an interior badly for the mirror-image reason: it is a
+single source outside the shell, so once the cameras moved inside
+(`core/cameras`) the room is lit from one direction and largely by spill.
+
+What replaces it is two rigs, chosen by shot:
+
+  interior  four area lights, one per ceiling quadrant, hung just under the
+            wall tops and facing down — room lighting, near enough — plus a
+            weak world term so the void above the (ceiling-less) walls reads as
+            a neutral background rather than black.
+  top-down  one high, broad key far enough above that its falloff across the
+            plan is flat, at a fraction of the interior power, carried by a
+            much brighter world dome. A plan plate wants even illumination and
+            soft contact shading, not a hero key.
+
+Lights are excluded from camera rays. The interior cameras look out across the
+room with a 24 mm lens, whose vertical field reaches well above the light plane,
+so a visible lamp would render as a white rectangle floating under the ceiling.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 from .cameras import Bbox, CameraShot, RENDER_HEIGHT, RENDER_WIDTH
 from .parametric_scene import SceneSpec
 
-__all__ = ["BlenderScene", "BpyScene", "CYCLES_SAMPLES", "PALETTE"]
+__all__ = [
+    "BlenderScene",
+    "BpyScene",
+    "CYCLES_SAMPLES",
+    "PALETTE",
+    "LightSpec",
+    "LightingPlan",
+    "plan_lighting",
+]
 
 #: Enough for a clean interior at 1280×960 without paying for a hero frame.
 CYCLES_SAMPLES = 96
-#: Key light power scales with room area so a big room is not underlit.
-KEY_WATTS_PER_SQM = 220.0
-FILL_FRACTION = 0.35
-WORLD_AMBIENT = 0.05
+
+# ── the interior rig ────────────────────────────────────────────────────────
+#: Total emitted power of the four ceiling lights, per square metre of floor.
+#: Blender normalises a lamp's watts so that irradiance at distance d is about
+#: P/(4πd²), which is why this number is two orders below the old key's 220: the
+#: old key was hung outside a shell that blocked most of it, and the frames that
+#: were not in its shadow (the top-down plate) came back white. These lights are
+#: inside, unobstructed, and about 3 m off the floor.
+#:
+#: MEASURED against the real staging capture, not derived. 8.0 rendered a
+#: legible but hot room — floor and cabinet fronts both sat near white with
+#: little tone between them. 5.0 is the value that separates them.
+INTERIOR_WATTS_PER_SQM = 5.0
+#: How far below the wall tops the ceiling lights hang. Enough to keep them from
+#: coplanar-shadowing against the wall caps, small enough to still read as a
+#: ceiling fixture.
+CEILING_DROP_M = 0.15
+#: Each quadrant light is a rectangle this fraction of its quadrant's footprint.
+#: Under 1.0 so the four sources stay distinguishable and the room keeps some
+#: falloff across it instead of flattening into one uniform ceiling emitter.
+QUADRANT_LIGHT_FRACTION = 0.8
+#: The void above the (ceiling-less) walls. Weak: it is a background, and it
+#: also fills the upper walls, which the downward ceiling lights barely reach.
+INTERIOR_WORLD_AMBIENT = 0.08
+
+# ── the top-down rig ────────────────────────────────────────────────────────
+#: The plan key's power, per square metre of floor.
+TOP_DOWN_WATTS_PER_SQM = 8.0
+#: How far above the wall tops the plan key hangs. High enough that its inverse
+#: square falloff is nearly flat across the whole plan — a light just over the
+#: wall tops is what burnt them out.
+TOP_DOWN_LIGHT_HEIGHT_M = 6.0
+#: Plan key size, as a multiple of the room's larger horizontal extent. Broader
+#: than the room so its edges do not fall inside the frame.
+TOP_DOWN_LIGHT_SPREAD = 1.5
+#: A bright dome does most of the work on the plan plate: it reaches into the
+#: room evenly, and the soft occlusion it leaves at wall bases and under objects
+#: is the shading that makes a plan readable.
+TOP_DOWN_WORLD_AMBIENT = 0.35
 
 #: Base colour per `parametric_scene` material name. Openings sit a few steps off
 #: the wall so a window reads as an aperture and not as more wall.
@@ -57,6 +128,88 @@ MATTE_ROUGHNESS = 0.92
 #: Objects get a small bevel so their silhouettes catch the key light instead of
 #: reading as a pile of hard cubes.
 OBJECT_BEVEL_M = 0.02
+
+
+@dataclass(frozen=True)
+class LightSpec:
+    """One rectangular area light, facing straight down. `watts` is Blender's
+    own lamp Power; `size_x`/`size_y` are the rectangle's metres."""
+
+    name: str
+    location: tuple[float, float, float]
+    size_x: float
+    size_y: float
+    watts: float
+
+
+@dataclass(frozen=True)
+class LightingPlan:
+    """Everything a frame's exposure depends on, as data."""
+
+    lights: tuple[LightSpec, ...]
+    world_ambient: float
+
+
+def _floor_area(bbox: Bbox) -> tuple[float, float, float]:
+    """(sx, sy, area) with each horizontal extent floored, so a degenerate model
+    cannot ask for a zero-watt light or a zero-sized emitter."""
+    sx, sy, _ = bbox.size
+    sx, sy = max(sx, 0.5), max(sy, 0.5)
+    return sx, sy, sx * sy
+
+
+def plan_lighting(bbox: Bbox, shot: CameraShot) -> LightingPlan:
+    """The rig for one shot. Pure: bbox and shot in, light specs out.
+
+    The plan is per SHOT rather than per scene because the top-down plate and
+    the interior frames want opposite things — see the module docstring. It is
+    keyed on `shot.kind`, not on the shot's name: "orthographic" IS the plan
+    view in this stage, and keying on the name would silently mis-light any
+    future ortho shot.
+    """
+    sx, sy, area = _floor_area(bbox)
+    cx, cy, _ = bbox.centroid
+    top = bbox.max[2]
+
+    if shot.kind == "orthographic":
+        return LightingPlan(
+            lights=(
+                LightSpec(
+                    name="plan_key",
+                    location=(cx, cy, top + TOP_DOWN_LIGHT_HEIGHT_M),
+                    size_x=sx * TOP_DOWN_LIGHT_SPREAD,
+                    size_y=sy * TOP_DOWN_LIGHT_SPREAD,
+                    watts=TOP_DOWN_WATTS_PER_SQM * area,
+                ),
+            ),
+            world_ambient=TOP_DOWN_WORLD_AMBIENT,
+        )
+
+    z = top - CEILING_DROP_M
+    quadrant_watts = INTERIOR_WATTS_PER_SQM * area / 4.0
+    size_x = sx / 2.0 * QUADRANT_LIGHT_FRACTION
+    size_y = sy / 2.0 * QUADRANT_LIGHT_FRACTION
+    # Fixed order — a lighting plan is as much an artifact input as the camera
+    # plan is, and two runs must build the same lamps in the same order.
+    quadrants = (
+        ("ceiling_ne", 1.0, 1.0),
+        ("ceiling_nw", -1.0, 1.0),
+        ("ceiling_sw", -1.0, -1.0),
+        ("ceiling_se", 1.0, -1.0),
+    )
+    return LightingPlan(
+        lights=tuple(
+            LightSpec(
+                name=name,
+                location=(cx + sign_x * sx / 4.0, cy + sign_y * sy / 4.0, z),
+                size_x=size_x,
+                size_y=size_y,
+                watts=quadrant_watts,
+            )
+            for name, sign_x, sign_y in quadrants
+        ),
+        world_ambient=INTERIOR_WORLD_AMBIENT,
+    )
 
 
 class BlenderScene(Protocol):
@@ -79,6 +232,9 @@ class BpyScene:
     def __init__(self, use_gpu: bool = True, samples: int = CYCLES_SAMPLES):
         self.use_gpu = use_gpu
         self.samples = samples
+        #: Held from `setup` so `render` can plan the frame's lighting. The
+        #: rig is per shot, and the shot is not known until `render`.
+        self._bbox: Bbox | None = None
 
     # ── scene ────────────────────────────────────────────────────────────────
 
@@ -133,6 +289,7 @@ class BpyScene:
     def setup(self, bbox: Bbox) -> None:
         import bpy
 
+        self._bbox = bbox
         scene = bpy.context.scene
         scene.render.engine = "CYCLES"
         scene.cycles.samples = self.samples
@@ -145,29 +302,31 @@ class BpyScene:
         if self.use_gpu:
             self._enable_gpu(scene)
 
-        # Flat, weak ambient — no HDRI, so nothing outside the image can change
-        # the result between builds.
+        # Flat ambient — no HDRI, so nothing outside the image can change the
+        # result between builds. The VALUE is per shot and is set in `render`;
+        # the world datablock is made once so every frame writes to the same one.
         world = bpy.data.worlds.new("patina_world")
         world.use_nodes = False
-        world.color = (WORLD_AMBIENT, WORLD_AMBIENT, WORLD_AMBIENT)
         scene.world = world
-
-        sx, sy, sz = bbox.size
-        cx, cy, _ = bbox.centroid
-        area = max(sx, 0.5) * max(sy, 0.5)
-        top = bbox.max[2]
-        key_watts = KEY_WATTS_PER_SQM * area
-        self._add_area_light("key", (cx, cy, top + 1.0), max(sx, sy), key_watts)
-        self._add_area_light(
-            "fill",
-            (cx, cy, bbox.floor_z + max(sz, 1.0) * 0.5),
-            max(sx, sy) * 0.75,
-            key_watts * FILL_FRACTION,
-        )
 
     def render(self, shot: CameraShot, output_path: Path) -> Path:
         import bpy
         import mathutils
+
+        # Lights are built PER FRAME and torn down with the camera, because the
+        # rig differs between the plan plate and the interior shots. Building
+        # four lamps costs microseconds against a Cycles frame, and rebuilding
+        # is what guarantees no frame inherits the previous one's exposure.
+        if self._bbox is None:
+            # Refused rather than defaulted. Rendering without a rig produces a
+            # black frame that still uploads, registers and completes the task —
+            # a failure indistinguishable from a very dark room.
+            raise RuntimeError("render() called before setup(); no bbox to light from")
+        plan = plan_lighting(self._bbox, shot)
+        ambient = plan.world_ambient
+        if bpy.context.scene.world is not None:
+            bpy.context.scene.world.color = (ambient, ambient, ambient)
+        lights = [self._add_area_light(spec) for spec in plan.lights]
 
         camera_data = bpy.data.cameras.new(shot.name)
         if shot.kind == "orthographic":
@@ -190,6 +349,8 @@ class BpyScene:
         bpy.ops.render.render(write_still=True)
 
         bpy.data.objects.remove(camera, do_unlink=True)
+        for light in lights:
+            bpy.data.objects.remove(light, do_unlink=True)
         return output_path
 
     # ── helpers ──────────────────────────────────────────────────────────────
@@ -225,15 +386,28 @@ class BpyScene:
         bsdf.inputs["Specular IOR Level"].default_value = 0.0
         return material
 
-    def _add_area_light(self, name: str, location: tuple[float, float, float], size: float, watts: float) -> None:
+    def _add_area_light(self, spec: LightSpec):
         import bpy
 
-        data = bpy.data.lights.new(name, type="AREA")
-        data.size = max(size, 0.5)
-        data.energy = watts
-        obj = bpy.data.objects.new(name, data)
-        obj.location = location
+        data = bpy.data.lights.new(spec.name, type="AREA")
+        # RECTANGLE, not the default square: a room is rarely square, and a
+        # square emitter over an oblong room pools light down its short axis.
+        data.shape = "RECTANGLE"
+        data.size = max(spec.size_x, 0.5)
+        data.size_y = max(spec.size_y, 0.5)
+        data.energy = spec.watts
+        obj = bpy.data.objects.new(spec.name, data)
+        obj.location = spec.location
+        # A Blender area light emits along its local -Z, and a new object's
+        # rotation is identity, so this faces straight down as built.
+        #
+        # Invisible to camera rays. The interior cameras carry a 24 mm lens
+        # whose vertical field reaches metres above the light plane at the far
+        # wall, so a lamp left camera-visible renders as a white rectangle
+        # hanging in the room. It still lights, shadows and bounces.
+        obj.visible_camera = False
         bpy.context.scene.collection.objects.link(obj)
+        return obj
 
     @staticmethod
     def _enable_gpu(scene) -> None:

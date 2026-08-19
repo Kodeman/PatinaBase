@@ -21,7 +21,14 @@ WHAT MAKES THIS STAGE DIFFERENT FROM verify
    The dispatcher caps the URL list (see contract.json), and a positional match
    would silently pair frame 40's pixels with frame 0's pose the moment one
    photo was missing from `room_scan_images`.
-4. Poses arrive by one of TWO carriers. `inputs.photosManifestUrl` is the
+4. It SEEDS its own initialisation. splatfacto asks its dataparser for an
+   initial point cloud (`load_3D_points=True` in nerfstudio's own splatfacto
+   config) and, finding none, starts from a cube of random points — which is
+   what W2's real run did. This stage already downloads `captured_room.json`,
+   so `core/seed_points` surface-samples the parametric room into a PLY beside
+   `transforms.json` and names it there as `ply_file_path`, the key nerfstudio's
+   Nerfstudio dataparser reads. See `_ensure_seed_points`.
+5. Poses arrive by one of TWO carriers. `inputs.photosManifestUrl` is the
    uploaded `photos/photos_metadata.ndjson` sidecar; `inputs.photoRecords` is
    the dispatcher's inline fallback, read from `room_scan_images`' own
    `camera_transform`/`camera_intrinsics` columns for the many scans whose
@@ -41,6 +48,8 @@ from typing import Any, Callable, Sequence
 from .. import SPLAT_CACHE_MOUNT
 from ..core import spz as _spz
 from ..core.captured_room import parse_captured_room_meters
+from ..core.parametric_scene import build_scene_spec
+from ..core.seed_points import SEED_PLY_NAME, build_seed_ply
 from ..core.transforms import (
     build_transforms,
     frame_file_name,
@@ -53,7 +62,7 @@ from . import _common
 
 __all__ = ["STAGE", "ARTIFACT_KIND", "InputError", "run_splat", "splat_object_key",
            "train_argv", "export_argv", "workspace_paths", "checkpoint_marker",
-           "CheckpointCommitter"]
+           "CheckpointCommitter", "ensure_seed_points"]
 
 STAGE = "splat"
 ARTIFACT_KIND = "splat"
@@ -140,6 +149,9 @@ def workspace_paths(scan_id: str, room_file_version: Any, root: Path | None = No
         "exports": base / "exports",
         "ply": base / "exports" / "splat.ply",
         "spz": base / "room.spz",
+        # Beside transforms.json, because nerfstudio resolves `ply_file_path`
+        # relative to the dataset directory — which is `--data`, i.e. `base`.
+        "seed_ply": base / SEED_PLY_NAME,
     }
 
 
@@ -169,6 +181,14 @@ def train_argv(paths: dict[str, Path], max_iterations: int, resume: bool) -> lis
         "--orientation-method", "none",
         "--center-method", "none",
         "--auto-scale-poses", "False",
+        # splatfacto's own method config already sets this True, so it is an
+        # assertion rather than a change: the seed cloud is now the point, and
+        # the value that decides whether it is read must be ours and visible in
+        # the argv, not a default in someone else's config that could move.
+        # The spelling is nerfstudio's, capital `3D` and an explicit `True` —
+        # its CLI is built with tyro's `FlagConversionOff`, so booleans take a
+        # value and there is no `--no-` form.
+        "--load-3D-points", "True",
     ]
     return argv
 
@@ -429,6 +449,36 @@ def _prepare_workspace(
     return {"frames": len(kept), "reused": False, "missing": missing}
 
 
+def ensure_seed_points(paths: dict[str, Path], captured_room_json: Any) -> dict[str, Any]:
+    """Write the seed point cloud and name it in `transforms.json`.
+
+    SEPARATE from `_prepare_workspace`, and run after it, for the resume path.
+    A workspace written by an earlier attempt — including one written before
+    this stage seeded at all — short-circuits `_prepare_workspace` wholesale, so
+    a seeding step folded into it would silently never run for exactly the runs
+    that already cost the most. Doing it here means both a fresh workspace and a
+    resumed one end up with the same two files.
+
+    Never fatal. A room whose parametric geometry is unreadable yields no
+    points, and the run proceeds unseeded — which is what every run did before
+    this and is strictly better than failing a trainable scan.
+    """
+    spec = build_scene_spec(captured_room_json)
+    ply, count = build_seed_ply(spec)
+    if count == 0:
+        return {"seedPoints": 0, "seedReused": False}
+
+    reused = paths["seed_ply"].is_file()
+    if not reused:
+        paths["seed_ply"].write_bytes(ply)
+
+    document = _json.loads(paths["transforms"].read_text())
+    if document.get("ply_file_path") != SEED_PLY_NAME:
+        document["ply_file_path"] = SEED_PLY_NAME
+        paths["transforms"].write_text(_json.dumps(document, sort_keys=True))
+    return {"seedPoints": count, "seedReused": reused}
+
+
 # ── the job ─────────────────────────────────────────────────────────────────
 
 
@@ -488,12 +538,15 @@ def run_splat(
 
         # Parsed for its own sake: an unreadable parametric room means the
         # capture is broken, and finding that out now costs a download rather
-        # than 25 minutes of L4.
-        parametric = parse_captured_room_meters(_json.loads(_fetch(captured_url)))
+        # than 25 minutes of L4. The DOCUMENT is kept, not just the parse: it is
+        # also what the seed point cloud is sampled from.
+        captured_doc = _json.loads(_fetch(captured_url))
+        parametric = parse_captured_room_meters(captured_doc)
 
         paths = workspace_paths(scan_id, room_file_version)
         paths["base"].mkdir(parents=True, exist_ok=True)
         prep = _prepare_workspace(paths, manifest_url, photo_records, photo_urls)
+        seed = ensure_seed_points(paths, captured_doc)
 
         resume = paths["checkpoints"].is_dir() and any(paths["checkpoints"].iterdir())
         config = inputs.get("config") or {}
@@ -529,6 +582,10 @@ def run_splat(
             "maxIterations": max_iterations,
             "resumed": resume,
             "walls": len(parametric.walls),
+            # How the optimiser started. A splat seeded off the parametric room
+            # and one that began from random noise are the same artifact kind
+            # and are not otherwise distinguishable after the fact.
+            "seedPoints": seed["seedPoints"],
             # Which compressor produced these bytes, and what it started from.
             # `spz` and `gzip-ply` are different containers behind the same
             # artifact kind, and the ratio is the whole reason the stage
