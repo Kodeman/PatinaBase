@@ -16,7 +16,7 @@ import json
 
 import pytest
 
-from scan_modal.core.cameras import Bbox, TURNTABLE_FRAMES
+from scan_modal.core.cameras import Bbox, RoomFrame, TURNTABLE_FRAMES, plan_cameras
 from scan_modal.io.db import LeaseRejected, StaleVersion
 from scan_modal.jobs import renders_job
 
@@ -143,7 +143,7 @@ def test_success_renders_the_whole_plan_and_merges_one_manifest(world):
     assert scene.imported == ["room.glb"]
     # The cameras frame the PARAMETRIC room. `merged` is None here — the fake
     # GLB carried no geometry — and that is no longer a failure.
-    assert scene.setup_with == [PARAMETRIC]
+    assert [f.bbox for f in scene.setup_with] == [PARAMETRIC]
     assert [b.kind for b in scene.built[0].boxes] == ["wall"] * 4 + ["floor"]
     assert len(scene.rendered) == 4 + 1 + TURNTABLE_FRAMES == 29
     assert len(world.uploads) == 29
@@ -421,9 +421,30 @@ def test_the_glbs_extent_widens_the_frame_but_never_narrows_it(world):
     scene = FakeScene(merged=overhang)
     run(world, db, scene)
 
-    framed = scene.setup_with[0]
+    framed = scene.setup_with[0].bbox
     assert framed.min == (-3.0, -1.55, -0.05)
     assert framed.max == (2.05, 1.55, 4.0)
+
+
+def test_the_scene_is_set_up_and_shot_in_the_ROOMs_frame_not_the_worlds(world):
+    """`renders_job` could regress to handing the bare bbox to `plan_cameras`
+    and `setup`, and every camera and lighting test would stay green — they
+    build their own frames. This is the one place the wiring is asserted.
+
+    CAPTURED_ROOM is axis-aligned, so the frame's yaw is 0 and only its EXTENTS
+    distinguish it: the room measures 4.1 × 3.1 over the wall bodies, while its
+    bbox is that plus nothing — equal here — so the test pins the type and the
+    measured half-extents rather than a rotation."""
+    db = RecordingDb()
+    scene = FakeScene()
+    run(world, db, scene)
+
+    frame = scene.setup_with[0]
+    assert isinstance(frame, RoomFrame)
+    assert frame.half_xy == pytest.approx((2.05, 1.55))
+    assert frame.center_xy == pytest.approx((0.0, 0.0))
+    # And the shots really came off that frame, not off the box.
+    assert scene.rendered == [s.name for s in plan_cameras(frame)]
 
 
 def test_the_completion_event_records_what_the_picture_is_of(world):

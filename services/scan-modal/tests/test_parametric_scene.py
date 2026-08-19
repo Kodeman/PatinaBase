@@ -17,13 +17,14 @@ from pathlib import Path
 
 import pytest
 
-from scan_modal.core.cameras import Bbox, plan_cameras
+from scan_modal.core.cameras import Bbox, RoomFrame, plan_cameras
 from scan_modal.core.parametric_scene import (
     FLOOR_THICKNESS_M,
     OPENING_DEPTH_M,
     OPENING_INSET_M,
     WALL_THICKNESS_M,
     build_scene_spec,
+    room_frame,
 )
 
 from _synthetic import DEPTH_M, HEIGHT_M, WIDTH_M, captured_room_json
@@ -321,3 +322,94 @@ def test_junk_elements_do_not_stop_the_good_ones(prod_room):
     assert spec.count("object") == 7
     assert any("wall 4" in w for w in spec.warnings)
     assert any("object 0" in w for w in spec.warnings)
+
+
+# ── the room's own frame ────────────────────────────────────────────────────
+
+
+def test_the_room_frame_is_the_ROOM_not_its_axis_aligned_shadow(prod_room):
+    """The real capture is a 7.77 × 3.64 m galley yawed 142°, whose world box is
+    8.80 × 8.18 — nearly square, and a shape the room does not have. Cameras
+    inset from that box stood outside the end walls (W2-EVIDENCE.md §13)."""
+    spec = build_scene_spec(prod_room)
+    frame = room_frame(spec)
+
+    assert spec.bbox.size[0] == pytest.approx(8.795, abs=1e-3)
+    assert spec.bbox.size[1] == pytest.approx(8.177, abs=1e-3)
+    assert frame.half_xy == pytest.approx((3.887, 1.818), abs=1e-3)
+    assert math.degrees(frame.yaw) == pytest.approx(142.083, abs=1e-3)
+
+
+def test_the_frame_takes_its_yaw_from_the_LONGEST_wall(prod_room):
+    """A stub, a closet return or a fragment of a bay would give the room an
+    orientation it does not have. The two 7.673 m walls are the long ones."""
+    spec = build_scene_spec(prod_room)
+    walls = [b for b in spec.boxes if b.kind == "wall"]
+    longest = max(walls, key=lambda b: b.size[0])
+    assert longest.size[0] == pytest.approx(7.673, abs=1e-3)
+    assert room_frame(spec).yaw == pytest.approx(longest.rotation_z % math.pi)
+
+
+def test_facing_walls_report_opposite_directions_of_ONE_axis(prod_room):
+    """`wall_00` runs at −37.92° and `wall_03` at 142.08° — the same line. The
+    modulo is what stops the frame flipping on which of the two is longest."""
+    spec = build_scene_spec(prod_room)
+    yaws = sorted(round(b.rotation_z % math.pi, 6) for b in spec.boxes if b.kind == "wall")
+    assert len(set(yaws)) == 2, "a rectangular room has two wall axes, not four"
+    assert yaws[1] - yaws[0] < 1e-5 and yaws[3] - yaws[2] < 1e-5
+    assert yaws[2] - yaws[0] == pytest.approx(math.pi / 2, abs=1e-3)
+
+
+def test_every_interior_camera_of_the_REAL_room_stands_inside_its_walls(prod_room):
+    """The end-to-end claim, on the capture that broke it."""
+    spec = build_scene_spec(prod_room)
+    frame = room_frame(spec)
+    cos_y, sin_y = math.cos(frame.yaw), math.sin(frame.yaw)
+    hu, hv = frame.half_xy
+    inside = 0
+    for shot in plan_cameras(frame):
+        if shot.kind == "orthographic":
+            continue
+        dx = shot.location[0] - frame.center_xy[0]
+        dy = shot.location[1] - frame.center_xy[1]
+        assert abs(dx * cos_y + dy * sin_y) < hu, shot.name
+        assert abs(-dx * sin_y + dy * cos_y) < hv, shot.name
+        assert spec.bbox.floor_z < shot.location[2] < spec.bbox.max[2]
+        inside += 1
+    assert inside == 28
+
+
+def test_the_world_aligned_reading_is_what_put_a_camera_through_a_wall(prod_room):
+    """The regression this frame exists to prevent, stated as the failure it was.
+
+    Insetting from the 8.80 × 8.17 world box puts all FOUR corner stations
+    outside a 7.77 × 3.64 room — two past an end wall at u ≈ ±4.8, two clean
+    through a side wall at v ≈ ±4.4 to ±5.1, standing 2.6 m out in the void and
+    photographing a wall's OUTER face from close range. That is what the first
+    staging cycle rendered."""
+    spec = build_scene_spec(prod_room)
+    frame = room_frame(spec)
+    cos_y, sin_y = math.cos(frame.yaw), math.sin(frame.yaw)
+    hu, hv = frame.half_xy
+    outside = 0
+    for shot in plan_cameras(spec.bbox):
+        if not shot.name.startswith("corner_"):
+            continue
+        dx = shot.location[0] - frame.center_xy[0]
+        dy = shot.location[1] - frame.center_xy[1]
+        u, v = dx * cos_y + dy * sin_y, -dx * sin_y + dy * cos_y
+        if abs(u) > hu or abs(v) > hv:
+            outside += 1
+    assert outside == 4
+
+
+def test_a_room_with_no_usable_walls_falls_back_to_the_world_frame():
+    """Not a failure: a capture with objects but no shell still renders, from
+    the reading this stage used everywhere before it had an oriented one."""
+    spec = build_scene_spec({"walls": [], "objects": [
+        {"dimensions": [1.0, 1.0, 1.0],
+         "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0.5, 0, 1]},
+    ]})
+    frame = room_frame(spec)
+    assert frame.yaw == 0.0
+    assert frame == RoomFrame.from_bbox(spec.bbox)

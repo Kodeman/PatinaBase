@@ -37,7 +37,7 @@ from typing import Any
 
 from ..core.blender_ops import BlenderScene, BpyScene
 from ..core.cameras import Bbox, CameraShot, plan_cameras
-from ..core.parametric_scene import build_scene_spec
+from ..core.parametric_scene import build_scene_spec, room_frame
 from ..io import r2 as _r2
 from ..io.db import LeaseRejected, ScanWorkerDb, StaleVersion
 from . import _common
@@ -163,9 +163,13 @@ def run_renders(
             glb_path.write_bytes(_fetch(glb_url))
             merged = scene.merge_glb(glb_path)
 
-        bbox = _union_bbox(spec.bbox, merged)
-        scene.setup(bbox)
-        shots = plan_cameras(bbox)
+        # The world box frames and lights the plan plate; the room's own frame
+        # places and lights everything that stands inside it. The oriented
+        # extents come from the parametric WALLS only — a merged GLB has no
+        # boxes to measure and is an overlay on the shell, not the shell.
+        frame = room_frame(spec, _union_bbox(spec.bbox, merged))
+        scene.setup(frame)
+        shots = plan_cameras(frame)
 
         bucket = _r2.artifacts_bucket()
         # Per-object provenance stays lean — this is copied onto all 29 rows.

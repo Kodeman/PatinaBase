@@ -53,12 +53,13 @@ import math
 from dataclasses import dataclass, field, replace
 from typing import Any, Iterable, Iterator
 
-from .cameras import Bbox
+from .cameras import Bbox, RoomFrame
 
 __all__ = [
     "Box",
     "SceneSpec",
     "build_scene_spec",
+    "room_frame",
     "MATERIALS",
     "WALL_THICKNESS_M",
     "FLOOR_THICKNESS_M",
@@ -366,3 +367,41 @@ def build_scene_spec(captured_room_json: Any) -> SceneSpec:
     if extent is not None:
         spec.bbox = Bbox.from_points(*extent)
     return spec
+
+
+def room_frame(spec: SceneSpec, bbox: Bbox | None = None) -> RoomFrame:
+    """The room's own horizontal frame, for the interior cameras.
+
+    A room is rarely square to the world axes — the real staging capture is a
+    9.5 × 4.5 m galley yawed about 30°, whose axis-aligned box is 8.2 × 7.5 m, a
+    shape it does not have. Cameras placed by insetting from that box stand
+    against a wall or outside one (W2-EVIDENCE.md §13).
+
+    The orientation comes from the LONGEST WALL. A wall's `rotation_z` already
+    is the direction its length runs, and the longest one is the least likely to
+    be a stub, a closet return, or a fragment of a bay. Reduced modulo π because
+    a wall and the wall facing it report opposite directions of the same axis.
+
+    The length is ROUNDED before it is compared. In a square room the four walls
+    differ only in the last bits of a float, so an exact `max` would pick its
+    winner on arithmetic noise — and which wall wins decides which axis is `u`,
+    which quadrant is `corner_ne`, and therefore which render key each of the
+    four corner frames lands on. Rounding to the millimetre and breaking ties on
+    document order makes two captures of the same room agree.
+
+    The footprint is measured over the WALLS' plan corners, not every box: an
+    object protruding past the shell should not move the room's own extents, and
+    the shell is what a camera has to stay inside of. Those are the walls' OUTER
+    corners — bodies included — so an inset measured against `half_xy` is half a
+    wall thickness further from the visible surface than it reads.
+
+    Falls back to the world-aligned reading — which is what this stage used to
+    do everywhere — when there are no usable walls.
+    """
+    box = bbox if bbox is not None else spec.bbox
+    walls = [b for b in spec.boxes if b.kind == "wall"]
+    if not walls:
+        return RoomFrame.from_bbox(box)
+    longest = max(walls, key=lambda b: round(b.size[0], 3))
+    footprint = [(x, y) for wall in walls for x, y, _ in _corners(wall)]
+    return RoomFrame.oriented(box, longest.rotation_z % math.pi, footprint)

@@ -871,3 +871,481 @@ patina-staging` is empty; nothing is left running.
 11. **Production remains read-only and read-twice.** Two reads, both sanctioned:
     the posed-photo bundle (§2) and one source USDZ (§8). No production Modal
     environment, no production role, no production secret, no production write.
+
+---
+
+## 13. The interior turn — cameras, lighting, and a seeded splat
+
+§12's open items 1, 2 and 8 were the three things standing between "the pipeline
+works" and "the pictures are of anything". This section is those three closed,
+plus one defect the first staging cycle found that no unit test could have.
+
+Everything below ran against **staging only** — Modal environment
+`patina-staging`, Supabase `vuesoyhfrjabfxbrzekd`, R2 bucket
+`patina-staging-media-artifacts-us`. Three code-only redeploys of `patina-scan`
+(2.8 s, 1.8 s, 4.4 s — every image layer cached), three `renders` runs and one
+`splat` run, all on the same fixture. Production was not touched, read or
+written.
+
+### 13.1 The camera plan stands inside the room now
+
+`CORNER_STANDOFF = 1.35` and `TURNTABLE_STANDOFF = 1.6` are gone.
+
+| Shot | Was | Is |
+|---|---|---|
+| `corner_*` ×4 | 1.35× the bbox corner offset, **outside** the shell, aimed at the centroid | **inside**, inset 0.5 m from each wall at 1.5 m eye height, aimed diagonally at the opposite corner's mid-height |
+| `top_down` | ortho, world-aligned, `max(sx, sy·4/3)·1.1` | **unchanged** — a plan view is the one shot that wants to be outside |
+| `turntable_*` ×24 | a ring at 1.6× the half-diagonal, **outside**, all 24 aimed at the centroid | an interior **pan**: a small orbit near the room's centre at 1.5 m, each frame looking outward at the wall in its own heading |
+
+Three numbers carry the interior placement, and each exists for a case a real
+room produces:
+
+- `CORNER_INSET_M = 0.5` — where a person stops before a wall, and far enough
+  that the two walls behind the lens are not half the frame.
+- `CORNER_MAX_REACH = 0.8` / `CORNER_MIN_REACH = 0.25` — the reach is clamped to
+  that band of the half-extent. The ceiling is for a room whose bounding box is
+  bigger than it is (§13.2); the floor is because 0.5 m of inset exceeds the
+  half-extent of anything under a metre across, and an unclamped inset would
+  send the camera through the centre and out the far side.
+- `PAN_ORBIT_FRACTION = 0.25`, capped at `PAN_ORBIT_MAX_M = 1.0` — the pan is
+  nominally "stand in the middle and turn", and a *small* orbit is what stops
+  that being 24 renders of one point. It also covers the narrow-room case
+  without a branch: in a corridor the ellipse automatically lies along the long
+  axis, so the strip walks down the corridor instead of spending half its frames
+  on a wall an arm's length away.
+
+The pan's aim point is the ray/rectangle intersection with the room's own walls
+(`wall_distance`), not a fixed radius — see cycle 3 in §13.5 for why.
+
+### 13.2 A room has its own axes, and its bounding box is not them
+
+**This is the defect the first staging cycle found, and nothing but a render
+could have found it.** The plan above was correct and unit-tested against
+axis-aligned fixtures. On the real capture, two of the four corner frames came
+back as a flat wall filling the frame.
+
+The staging room is a **7.77 × 3.64 m galley yawed 142°**. Its axis-aligned
+bounding box is **8.80 × 8.17 m** — nearly square, and a shape the room does not
+have. "Inset 0.5 m from the corner of the box" is only "stand near the corner of
+the room" when the two agree. Measured, in the room's own frame (half-extents
+3.887 × 1.818):
+
+| world-aligned station | u | v | where it actually stood |
+|---|---|---|---|
+| `corner_ne` | −0.742 | **−4.415** | 2.6 m outside a side wall |
+| `corner_nw` | **+4.809** | −0.091 | 0.9 m past an end wall |
+| `corner_sw` | +0.789 | **+5.069** | 3.3 m outside a side wall |
+| `corner_se` | **−4.762** | +0.746 | 0.9 m past an end wall |
+
+All four were outside the shell, photographing a wall's outer face from close
+range. That is exactly what the frames showed.
+
+The fix is `RoomFrame` — the room's own horizontal orientation plus the extents
+measured along it. `parametric_scene.room_frame` derives it from the **longest
+wall**: a wall's `rotation_z` already is the direction its length runs, and the
+longest wall is the least likely to be a stub, a closet return or a fragment of
+a bay. It is reduced modulo π because a wall and the wall facing it report
+opposite directions of the same axis, and the footprint is measured over the
+walls' plan corners only — an object overhanging the shell must not move the
+room's extents.
+
+The plan plate keeps the world box on purpose: an orthographic camera looking
+straight down **is** world-aligned, its frame edges run along world X and Y, and
+framing it on a rotated extent would crop the room. Both readings now live in
+one object, and neither can be used for the other's job by accident.
+
+With the frame, all 28 interior stations land inside the walls — corners at
+u = ±3.109 (0.78 m off the end walls) and v = ±1.318 (0.50 m off the sides).
+
+### 13.3 Lighting: two rigs, chosen by the shot
+
+The old rig was one key at `bbox top + 1.0 m` at 220 W per square metre of
+floor, sized when the model was a flat slab. Against 3.3 m walls it sat a metre
+off the wall caps and burnt the plan plate white (§10). What replaces it is a
+pure planner, `blender_ops.plan_lighting(bbox, shot)`, applied per frame by
+`BpyScene.render`:
+
+| | interior frames | `top_down` |
+|---|---|---|
+| frame | the **room's** | the **world box's** |
+| lights | 4 area lights, one per ceiling quadrant | 1 broad key |
+| height | wall top **− 0.15 m**, facing down | wall top **+ 6.0 m** |
+| power | **5.0 W/m²** of floor, split four ways | **8.0 W/m²** of floor |
+| size | 0.8 × its quadrant, rectangular, yawed to the room | 1.5 × the box, rectangular |
+| world | 0.08 | **0.35** — a bright dome does most of the work |
+
+**Which frame each rig uses is the same split §13.2 makes, for the same
+reason** — and getting that wrong was the second thing adversarial review found.
+The first version of this rig planned both rigs off the world box. On the
+staging capture that hung `ceiling_ne` and `ceiling_sw` 0.8 m and 1.5 m the far
+side of a side wall, emitting half the rig's power into the void, and scaled the
+wattage by 71.9 m² of bounding box instead of 28.3 m² of room — 2.5× nominal. A
+room's exposure would have depended on how it happened to sit relative to the
+world axes. The plan key stays on the world box on purpose: an orthographic
+camera looking straight down genuinely is world-aligned, and its emitter has to
+cover the field that frame shows.
+
+Four more things are not arbitrary:
+
+- **The lights are below the wall tops, not above them.** That single inversion
+  is the §10 defect, and there is a test that asserts nothing else.
+- **The plan key clears the caps by six metres**, so its inverse-square falloff
+  across the plan is nearly flat. A light just over the wall tops is what blew
+  them out.
+- **Rectangular, not square.** A square emitter over an oblong room pools its
+  light down the short axis.
+- **Lamps are invisible to camera rays** (`visible_camera = False`). The
+  interior cameras carry a 24 mm lens whose vertical field reaches metres above
+  the light plane at the far wall; a camera-visible lamp renders as a white
+  rectangle hanging in the room.
+
+`INTERIOR_WATTS_PER_SQM` is measured, not derived: 8.0 rendered a legible but
+hot room — floor and cabinet fronts both near white, with little tone between
+them — and 5.0 is the value that separates them.
+
+The rig is keyed on `shot.kind`, not `shot.name`: "orthographic" *is* the plan
+view in this stage, and keying on the name would silently mis-light any future
+ortho shot. `render()` now **refuses** to run before `setup()` rather than
+defaulting to no rig — an unlit frame still uploads, registers and completes the
+task, which is a failure indistinguishable from a very dark room.
+
+### 13.4 The splat starts from the room, not from noise
+
+§12 item 8 recorded that the real run trained from random initialisation and
+that its own log said so. The mechanism was **researched against nerfstudio
+1.1.5's source before anything was wired**, because "splatfacto accepts a seed
+cloud" and "splatfacto accepts *this* seed cloud" are different claims.
+
+- `nerfstudio/data/dataparsers/nerfstudio_dataparser.py`, in
+  `Nerfstudio._generate_dataparser_outputs`:
+  `if self.config.load_3D_points: if "ply_file_path" in meta: ply_file_path = data_dir / meta["ply_file_path"]`.
+  The key is **top-level in `transforms.json`** and is resolved **relative to
+  the dataset directory** — which is `--data`, i.e. the workspace base. So the
+  PLY is written beside `transforms.json` and named there.
+- `load_3D_points` defaults to `False` on `NerfstudioDataParserConfig`, but
+  `method_configs.py` builds splatfacto with
+  `NerfstudioDataParserConfig(load_3D_points=True)`. `train_argv` passes
+  `--load-3D-points True` explicitly anyway: the value that decides whether the
+  seed is read should be ours and visible in the argv, not a default in someone
+  else's config that could move. The spelling is nerfstudio's — capital `3D`,
+  an explicit `True`, no `--no-` form, because its CLI is built with tyro's
+  `FlagConversionOff`.
+- `_load_3D_points` reads the file with **`open3d.io.read_point_cloud`**, which
+  finds coordinates by `x`/`y`/`z` and colours by `red`/`green`/`blue`. Any
+  other spelling loads as a cloud with no colours, silently. `open3d>=0.16.0` is
+  a hard dependency of nerfstudio 1.1.5, so it is already in `_SPLAT_IMAGE` —
+  checked, because a missing import there would surface forty seconds into a
+  sixty-minute L4 run.
+- The dataparser applies the **same `transform_matrix` and `scale_factor` to the
+  points as to the cameras**, so the two stay together whatever it does. Under
+  `--orientation-method none --center-method none --auto-scale-poses False` both
+  are the identity, but the seeding does not depend on that.
+- The exact string §12 quoted —
+  `Warning: load_3D_points set to true but no point cloud found. splatfacto will use random point cloud initialization.`
+  — fires **only** when the key is absent from `transforms.json`. A present but
+  unreadable PLY is a silent `return None`. So the log named our defect
+  precisely: the key was never written.
+- Downstream, `VanillaPipeline.__init__` lifts `points3D_xyz`/`points3D_rgb` out
+  of the dataparser metadata into `seed_points=(xyz, rgb)`, and
+  `SplatfactoModel.populate_modules` uses them unless `random_init` (default
+  `False`). `num_random` (50 000) and `random_scale` are then never consulted —
+  which is what makes the initial Gaussian count a *measurement* of whether the
+  seed was read.
+
+**The frame is the part that had to be right, and it is derived rather than
+asserted.** `core/transforms.py` puts camera poses into nerfstudio world by
+left-multiplying each ARKit camera-to-world by `ARKIT_TO_NERFSTUDIO`, which
+sends `(x, y, z) → (x, −z, y)`. `core/parametric_scene._to_blender` sends
+`(x, y, z) → (x, −z, y)`. They are the same map — Blender's glTF convention and
+nerfstudio's world convention are both ARKit Y-up rotated to Z-up the same way —
+so a `SceneSpec` is **already** in the frame the `transform_matrix` entries live
+in, and the seed cloud is written with no further change of basis. A test fails
+if those two maps ever diverge, because a seed cloud in the wrong frame does not
+error: it trains, slowly, to a worse result, and looks exactly like the random
+init it replaced.
+
+`core/seed_points.py` is the sampler — pure, deterministic, no IO:
+
+- **No RNG.** The two face coordinates come from a **Halton sequence** in bases
+  2 and 3 indexed by a running global counter: reproducible on any interpreter
+  without depending on a generator's internal state, better spread than uniform
+  noise, and the same room always yields the same bytes.
+- **Per-kind densities**, because area alone would spend nearly everything on
+  the floor: objects 2.0, openings 1.4, walls and floors 1.0. Small detail is
+  what 42 sparse views most need help with.
+- **Shell elements are sampled on the inside only.** A wall's outward half is
+  behind the shell, where no camera stands and no photo constrains it; Gaussians
+  seeded there are unsupervised and can only become floaters outside the room.
+  The test is whether the room's centre lies on the outward side of the face's
+  **plane** — a signed distance, not the sign of a dot product, because a wall's
+  end cap has a normal perpendicular to the direction of the centre and the dot
+  product there is zero plus floating-point noise. (A first cut used the dot
+  product, kept end caps at random, and kept every wall's bottom cap —
+  duplicating the floor slab it stands on.) Objects keep all six faces: they are
+  photographed from every side.
+
+Measured on the real capture's `captured_room.json`:
+
+```
+points 100,000        ply bytes 1,500,222        sha256 7452680b3b6f068b…
+wall 39,557   object 31,207   floor 19,281   opening 7,330   door 1,331   window 1,294
+```
+
+The write is a **separate step run after** the workspace build, deliberately: a
+workspace left by an earlier attempt short-circuits `_prepare_workspace`
+wholesale, so a seeding step folded into it would never run for exactly the runs
+that already cost the most — a preempted sixty-minute L4 would resume unseeded
+for ever. `ensure_seed_points` writes the PLY if absent and names it in
+`transforms.json` if the key is not already there, so a fresh workspace and a
+resumed one end up identical. A room whose parametric geometry is unreadable
+yields no points and trains unseeded, which is what every run did before this
+and is strictly better than failing a trainable scan.
+
+### 13.5 The `renders` re-run — four cycles
+
+Same fixture throughout: scan `cd72ad9b-…`, `room_files` `5bc4cef2-…` v1,
+dual-key payload, `renders` only. Each was enqueued through `enqueue_agent_task`
+and dispatched by invoking `dispatch-scan-modal` with the staging service-role
+bearer; every dispatch returned
+`{"claimed":1,"spawned":1,"failed":0,"deferred":0,"superseded":0}` HTTP 200, and
+every run was one attempt, 29 frames, `sceneWarnings: []`.
+
+| Cycle | Task | Duration | What changed | Verdict |
+|---|---|---|---|---|
+| 1 | `84b9d4c3-…` | 128 979 ms | interior cameras, two-rig lighting, 8 W/m² | top-down **PASS**, pan **PASS**, corners **FAIL** |
+| 2 | `c9838454-…` | 118 286 ms | `RoomFrame`, 5 W/m² | corners **PASS**, pan target too high |
+| 3 | `2f0573a7-…` | 132 995 ms | pan aims at the wall in its heading | **all PASS** |
+| 4 | `b6d877f0-…` | 123 610 ms | lighting follows the cameras into the room frame | **all PASS**, no visual change |
+
+**Cycle 1.** The top-down plate stopped being blown out on the first attempt:
+the room's full footprint in mid-grey, wall tops white but holding detail, the
+island and the run of base cabinets legible at thumbnail size. `turntable_000`
+was unmistakably the inside of a kitchen — wall cabinets, a countertop, a window
+panel, floor. And `corner_ne` and `corner_sw` were each a single flat wall
+filling the frame, which is what sent §13.2 looking at the room's orientation.
+
+**Cycle 2.** All four corners became real interior views. `corner_ne` reads as
+standing in the corner of a kitchen/dining space looking down its length: a
+window panel on the near wall, a tall cabinet, wall units and base cabinets on
+the far wall, an island in the foreground, floor running away, and the void
+above the (ceiling-less) walls reading as a dark ceiling. Tone separated
+properly at 5 W/m² — floor lighter than cabinet fronts, walls lighter again,
+nothing clipped.
+
+What cycle 2 exposed was the pan. Aiming every heading at a fixed half-diagonal
+radius puts the target *past* the near wall when the pan looks across a galley:
+`turntable_006` centred about 1.25 m up a wall 1.8 m away, and the floor fell
+off the bottom edge. `wall_distance` fixes it by landing the target on whichever
+wall the heading actually points at, so the same 0.6 m drop is taken over the
+real distance and the tilt steepens as the wall comes closer.
+
+**Cycle 3 — the set as it stands.** The cover (`top_down`) is the room's plan:
+a long yawed rectangle on grey, thin white wall lines, an L-shaped island near
+one end, a run of counters and cabinets down one side, the door and window
+reveals visible as breaks in the wall line, and hard contact shadows in the
+tight gaps behind the counters. It reads as a room at thumbnail size, which is
+what a cover has to do. `corner_ne` and `corner_sw` are interior views from
+opposite ends. `turntable_000` is now the dining end — a table with four chairs
+centred in frame, a door panel on the right wall, floor filling the lower third.
+`turntable_006`, the frame that was a wall, now shows the wall/floor junction
+with a cabinet at the edge.
+
+**Cycle 4** was not a visual iteration: it is the fix from §13.3 — the lighting
+moving into the room frame — verified against the shot set it could have
+regressed. It did not. Composition is identical to cycle 3, the tonal separation
+holds, and the plan plate is unchanged, which is what it should be: its rig
+never moved.
+
+Against the brief's question — do the corners show a room interior, with walls,
+openings and objects, from inside — the answer is yes for all four, and the
+top-down is evenly exposed.
+
+**The registry replaced in place, four times.**
+
+```sql
+select count(*) rows, count(*) filter (where lifecycle_state='stored') stored,
+       count(distinct sha256) distinct_sha, count(distinct id) ids, sum(size_bytes) total
+from public.media_objects
+where object_key like 'scan_artifacts/cd72ad9b-…/v1/renders/%';
+-- rows 29 | stored 29 | distinct_sha 29 | ids 29 | total 1647926
+```
+
+29 rows and 29 object ids after five render sets, not 145. Total bytes rose
+1 048 981 → 1 587 001 → 1 642 622 → 1 647 926, which is what photographing an
+interior instead of a blank exterior costs.
+
+**A verification trap worth writing down.** `wrangler r2 object get --remote`
+served **stale bytes** for these keys: after cycle 2 replaced all 29 objects, it
+kept returning cycle 1's, byte-identical, for at least several minutes, through
+both `--file` and `--pipe` and after deleting the local copies. It was caught
+because the downloaded sha256 did not match `media_objects.sha256`. Reading the
+same keys through a one-off Modal function using the `scan-r2` credential — the
+one that wrote them — returned bytes whose sha256 matched the registry exactly,
+every time. **Any visual verdict in this lane must be taken on bytes fetched
+through the writing credential, and checked against the registry's digest.** A
+render verdict taken on a stale download is a verdict about the previous deploy.
+
+### 13.6 The `splat` re-run, seeded
+
+Task `be911028-878b-42e3-bc90-233067cf2bec`, one attempt, dispatched the same
+way. The `output/` directory was removed from the `patina-scan-splat-cache`
+Volume first, so `resume` was false and the comparison is a fresh 30 000-step
+run against a fresh 30 000-step run; the transcoded frames and `transforms.json`
+were left in place, which is also what exercised `ensure_seed_points`' repair
+path on real data — the workspace predates seeding, so the PLY was written and
+the key added to an existing `transforms.json`.
+
+It was spawned from the deploy that carried the seeding and before the
+robustness fixes in §13.3's commit. That does not weaken the comparison: those
+fixes change when the PLY is rewritten and what happens when it cannot be, not
+what it contains, and the seed cloud's sha256 is identical across both — the
+partition fallback does not fire on a room whose four walls each keep exactly
+one face.
+
+**The seed was read, and there are three independent witnesses.** The
+random-init run's log carries
+`Warning: load_3D_points set to true but no point cloud found…`; this run's does
+not. Its printed config carries `load_3D_points=True`. And the decisive one:
+
+> **`Train Metrics Dict/gaussian_count` at step 0 is 100 000** — the seed
+> cloud's own point count. The random-init run's is **50 000**, which is
+> `SplatfactoModelConfig.num_random`'s default. That number is only consulted
+> when `seed_points` is absent, so it is a direct measurement of which branch
+> `populate_modules` took.
+
+`provenance.seedPoints: 100000` is on the completion event and on the
+`media_objects` row, so the artifact says how it was initialised.
+
+#### What seeding actually did — and the finding that matters more
+
+Both runs: 42 frames, 30 000 iterations, one attempt, no resume, 15 checkpoint
+commits, the same photos and the same poses. Read off the two tensorboard event
+files.
+
+| | random init | seeded |
+|---|---|---|
+| Gaussians at step 0 | 50 000 | **100 000** |
+| Wall clock | 3 846 244 ms (64.1 min) | 3 863 864 ms (**64.4 min**) |
+| Training only | 3 690 s | 3 716 s |
+| Gaussians exported | 1 153 080 | **1 176 100** |
+| `.ply` | 285 513 578 B | **291 140 698 B** |
+| `.spz` | 25 798 805 B | **27 032 708 B** (+4.8%) |
+| Train loss, best | 0.006162 @ 27 210 | **0.006027** @ 27 210 |
+| Train loss, final | 0.022567 | 0.024492 |
+| Train PSNR, best | 45.449 @ 27 210 | **45.549** @ 27 210 |
+| **Held-out PSNR, best** | 15.132 @ 9 000 | **16.360 @ 4 000** |
+| **Held-out PSNR, final (29 000)** | **14.673** | 13.542 |
+| Held-out LPIPS, best | 0.679 @ 28 000 | **0.610 @ 15 000** |
+| Held-out SSIM, final | 0.578 | **0.604** |
+
+**Seeding raises the ceiling and reaches it in less than half the steps.** The
+best held-out PSNR the room ever achieves goes from 15.13 to **16.36 — +1.23
+dB** — and the seeded run gets there by step 4 000, where the random run is
+still at 15.03 and never does better than 15.13 at any point in 30 000
+iterations. LPIPS, the perceptual metric, improves from 0.679 to 0.610. On the
+training views the two runs are indistinguishable (best loss 0.00603 vs 0.00616,
+best PSNR 45.5 vs 45.4, both at step 27 210), so the whole difference is in
+generalisation, which is exactly what an initialisation on the real surfaces
+should buy.
+
+**And the artifact that was actually stored is past its best.** The seeded run's
+held-out PSNR holds a plateau near 16.3 from step 4 000 to about 18 000, then
+falls away to 13.54 by 29 000 — *below* where the random run ends. The random
+run's curve is flat because it never fits well enough to overfit.
+
+So the honest headline is not "seeding improved the splat". It is:
+
+> **The initialisation is no longer the binding constraint — the iteration
+> budget is.** 30 000 iterations is roughly twice too many for 42 views of an
+> 8.8 × 8.2 m room. The best artifact this fixture can produce sits somewhere
+> between step 4 000 and step 15 000, and this run drove past it for 45 minutes
+> of L4 to arrive somewhere worse.
+
+That promotes §12's open item 4 from a cost knob to a quality control:
+`inputs.config.maxIterations` is still unreachable from the queue, and it is now
+the single highest-value thing left in this stage. Cutting to ~15 000 would
+improve the artifact *and* halve the L4 bill. Nothing here should be read as a
+reason to keep 30 000.
+
+**Not measured.** Nobody has looked at either splat. §12 item 8's "a visual pass
+on the splat" is still owed — these are held-out reconstruction metrics on
+withheld capture frames, which is a stronger claim than the pipeline had before
+and a weaker one than "it looks right".
+
+### 13.7 Cost
+
+| Item | Measure |
+|---|---|
+| `renders` × 4 (129 + 118 + 133 + 124 s on L40S) | ≈ **$0.26** |
+| `splat`, seeded, 64.4 min on L4 | ≈ **$0.86** |
+| Redeploys (4 × code-only, every image layer cached) | ≈ **$0.00** |
+| CPU probes (R2 reads through Modal, two Volume pulls) | ≈ **$0.01** |
+| **This section, total** | ≈ **$1.13** |
+
+Against a $5 ceiling for this lane, and against §11's $0.94 for the close.
+`modal container list --env patina-staging` is empty; nothing is left running.
+
+### 13.8 What this closes, and what it does not
+
+**Closed.** §12 items **1** (the camera plan photographed the room from outside)
+and **2** (the top-down plate was blown out), both proven on the fixture that
+exposed them. §12 item **8**'s second half — "a decision about seeding" — is
+made and implemented; its first half is addressed in §13.6.
+
+**Promoted.** §12 item **4** (`inputs.config` is unreachable from the queue) is
+no longer a cost knob. §13.6 measures the iteration budget overshooting the
+best artifact by a factor of two, so `maxIterations` is now a quality control
+and the highest-value thing left in this stage.
+
+**Not closed, and unchanged.** §12 items 3 (the fixed USDZ→GLB converter is
+committed but not deployed), 5 (`media_objects.owner_user_id` is NULL), 6
+(Cycles output is not byte-reproducible — re-confirmed four more times here; the
+*plan* is deterministic and unit-tested, the pixels are not), 7 (`splat` has no
+determinism claim), 9, 10 and 11. Item **8**'s visual pass on the splat is still
+owed (§13.6).
+
+**New.**
+
+1. **No camera station is checked for occupancy.** Corner stations and the pan
+   orbit are placed from the room's extents; nothing tests whether the point
+   falls inside an object or an opening panel. Measured across all 28 interior
+   stations and all 15 non-floor boxes of this capture, the worst clearance is
+   **0.380 m** (`corner_ne` to `opening_00`) and the nearest wall is 0.400 m —
+   so nothing is inside anything here. But a tall wardrobe in a smaller room
+   would put a lens inside a matte box, and Cycles renders that as a flat colour
+   fill with no error anywhere. The fix is a design decision (nudge along the
+   diagonal? drop the shot? shrink the reach?) and wants a ruling, not a patch.
+
+2. **The plan plate wastes frame on a yawed room.** Framing the world box means
+   a room turned 30° off the axes sits inside a much larger grey field. Fixing
+   it means rotating the ortho camera to the room's yaw, which is a real change
+   to what "top-down" means and wants a ruling, not a patch.
+
+3. **Contact shadows in tight gaps go to black** on the plan plate — a counter
+   0.3 m off a wall occludes both the key and most of the dome. It reads as
+   depth rather than as an error, and lifting it would flatten the plate, so it
+   is recorded rather than changed.
+
+4. **Per-frame lamp rebuild costs a scene re-sync.** Building and tearing down
+   four lights per frame makes Blender re-sync geometry each time. Total run
+   time stayed in one band across all four cycles (118–133 s for 29 frames), so
+   it has not been optimised; if the shot count grows, caching the applied plan
+   between frames with the same rig is the obvious first move.
+
+5. **`room_frame` assumes a convex rectangular plan.** `half_xy` is the bounding
+   rectangle of the walls' corners in the yawed frame, so an L-shaped room or
+   one with a partition can still place a corner station in the notch. Every
+   fixture in the suite is rectangular; a real L-shaped capture is the missing
+   test, and probably the next thing to break this.
+
+6. **The corner shots tilt 1.4° UP.** They aim at the room's mid-height from
+   1.5 m eye height, so in a ceiling-less model roughly the top third of each
+   corner frame is the world-colour void. It currently reads as a dark ceiling
+   and was judged good on cycle 4, but the pan was given an explicit target
+   height for exactly this reason and the corners were not.
+
+7. **`renders` still has no bpy-level test.** `BpyScene` is exercised only by a
+   real Modal run: the lamp construction, the camera-ray exclusion, the
+   rectangle shape and the teardown have no fake to check them against. A
+   minimal stub `bpy` module in `tests/` would close it, and would have caught
+   the emitter-size clamp that used to sit below the planner.
