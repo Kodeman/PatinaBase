@@ -144,20 +144,89 @@ That review is a gate before landing, independent of the test back-half.
 
 ## Landing checklist (when this program is picked up, after Phase 1 is on main)
 
-1. [ ] Fix finding #1 via option (a): a SECURITY DEFINER authority helper in
-       `set_project_studio_id` + `set_invoice_studio_id`. **Separate-context adversarial review of
-       this money-path change.**
-2. [ ] Fix the `03989a58` fixture (`studio_id = NULL` → real studio_id) and rework the 00487 test
-       back-half (6187+) to green **without** masking the positive-authority assertions.
-3. [ ] Full adversarial review of 00487-the-migration (never had one).
+1. [x] Fix finding #1 via option (a): a SECURITY DEFINER authority helper in
+       `set_project_studio_id` + `set_invoice_studio_id`. Landed as
+       `public.has_designer_domain_role(uuid)` inside 00511. **The separate-context adversarial
+       review of this money-path change is still owed** — it is part of item 3's dispatch.
+2. [x] Fix the `03989a58` fixture and rework the 00511 test back-half to green **without** masking
+       the positive-authority assertions. Both contract tests now exit 0.
+3. [ ] Full adversarial review of 00511-the-migration (never had one). **Now also has to rule on
+       the nine suite regressions in "Suite impact" below, including the likely second production
+       defect.**
 4. [ ] Correct the `01d411ea` commit narrative (finding 1.1); optionally symmetrize the lock fix
        (finding 1.2).
-5. [ ] Renumber/reconcile the tranche against main's head **after** Phase 1 lands (00487/00488/
-       00489 are provisional numbers).
-6. [ ] Prod dup-check (finding 2.1) before the 00489 index build.
-7. [ ] Verify: `supabase db reset` exits 0; both contract tests green under
-       `psql -X -v ON_ERROR_STOP=1`; 00489 discrimination holds (reverting it fails the trade-draw
-       suite at ~5735).
+5. [x] Renumber/reconcile the tranche against main's head. 00487/00488/00489 → **00511/00512/00513**;
+       ledger updated in `docs/engineering/migration-number-reservations.md`.
+6. [x] Prod dup-check (finding 2.1) — **CLEAR**, see below.
+7. [~] Verify: `supabase db reset` exits 0 ✔; both contract tests green under
+       `psql -X -v ON_ERROR_STOP=1` ✔; full `scripts/run-sql-tests.sh` **not** clean — 11
+       unexpected failures remain (see "Suite impact"). 00513 discrimination not re-checked.
+
+## Prod precondition for 00513 (finding 2.1) — CLEAR
+
+Read-only against Strata (`bkvcixdmuyejfzcijpdg`), 2026-08-19. The migration header's claim is
+exact:
+
+| Check | Result |
+|---|---|
+| duplicate `(studio_id, invoice_number)` where both non-null | **0** |
+| duplicate `(designer_id, invoice_number)` where `studio_id IS NULL` | **0** |
+| numbered invoices | 20 |
+| numbered invoices with no studio | 0 |
+| distinct studios holding numbers | 1 |
+| `uniq_invoices_designer_number` (to be dropped) | present |
+| `uniq_invoices_studio_number` / `..._studioless` | absent (not yet applied) |
+
+Both new partial unique indexes will build cleanly. Re-run immediately before any prod apply —
+the count can only grow.
+
+## Suite impact — the tranche regresses 11 SQL-suite files
+
+Measured 2026-08-19 on one box, same runner. Baseline on the merged main (`33d95754`): 89 green,
+22 expected-fail, **0 unexpected**. With the tranche: **23 unexpected**, reduced to **11** after
+repairing genuinely stale fixtures (102/113 effective-green).
+
+The 12 repaired files were stale, not broken: 00511 makes the design studio the canonical
+authority for every project, and prod already matches that invariant (23 projects / 27 invoices,
+**zero** studio-less among either, verified read-only 2026-08-19). Those fixtures predated it.
+Nothing was relaxed or re-seeded as postgres to get them green.
+
+The remaining 11 are behavior changes the tranche makes to code `main` already ships, and each
+needs a ruling rather than a test edit:
+
+- 🔴 **`billing/invoice_checkout_integrity` — likely a SECOND production defect.** 00512's
+  `sync_invoice_line_milestone_latch` refuses any *authenticated* detach of a milestone-latched
+  invoice line (`invoice milestone latch: direct detach is not allowed`, 42501) and no RPC
+  replaces it. `useDeleteLineItem` (`packages/supabase/src/hooks/use-invoices.ts`) removes lines
+  with a direct authenticated DELETE, so after this tranche a designer cannot delete a
+  milestone-backed line from a draft invoice. Same family as finding #1: a DEFINER-era assumption
+  applied to the one path the portal drives directly. Ad-hoc lines are unaffected
+  (`milestone_id IS NULL` → no detach).
+- ⚠ **`edge_api/public_rpc_authorization_contract`** — main's own 00484 contract test asserts
+  `the trusted project trigger lost its internal primary-studio lookup`, a property of
+  `set_project_studio_id` that 00511's rewrite removes. Two shipped contracts disagree; which one
+  yields is a reviewer's call.
+- `mood_boards/maintenance_quota` (`quota RPC caller grants are incorrect`) and
+  `workflow/approval_authority/00465` (`permission denied for function notify_decision_required`)
+  — 00512 narrows EXECUTE; the tests assert the pre-narrowing grant set.
+- `document/decision_journey_atomicity`, `document/client_scope_change_request`,
+  `commercial/design_services_paper_issue` — 00512 replaces bodies/authority these assert on.
+- `procurement/ffe_coverage`, `procurement/dual_pricing`,
+  `mood_boards/lineage_and_client_bundle`, `document/proposal_phase_authority_atomicity` — still
+  `studio_id_not_designer_studio`, but reached through RPCs rather than a direct fixture insert,
+  so each needs its own reading before being called stale.
+
+## Carried-in repairs the merge itself forced
+
+- **00512 was silently reverting 00510.** It replaces `apply_scope_change` from a body captured
+  before 00510 existed, dropping 00510 S3's explicit `project_ffe_items.assignment_scope`. Caught
+  by 00512's own source-hash preflight once it sequenced above 00510. Rebased, both pins moved,
+  and a postcondition now asserts the installed body still names `assignment_scope`.
+- **Five routines' source ACLs are unreachable on a fresh local replay.** They hold their
+  non-postgres EXECUTE grants only from creation-time `ALTER DEFAULT PRIVILEGES`; prod has them
+  (verified), a fresh `supabase db reset` does not, because `seed/00-legacy-grants.sql` runs after
+  the migration phase. Recorded as an explicit alternative source state (`original_roles_local`)
+  on 00512's three profile tables rather than by weakening the shared assertion.
 
 ## Related
 
