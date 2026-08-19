@@ -102,7 +102,7 @@ async function request(
       waitUntil() {},
       passThroughOnException() {},
       props: {},
-    } as ExecutionContext,
+    } as unknown as ExecutionContext,
   );
 }
 
@@ -137,7 +137,10 @@ function scriptedFactory(
     recorded.push(record);
     const client: DatabaseClient = {
       async connect() {},
-      async query(text: string, values?: unknown[]) {
+      async query<T extends Record<string, unknown> = Record<string, unknown>>(
+        text: string,
+        values?: unknown[],
+      ): Promise<QueryResult<T>> {
         record.commands.push({ text, values });
         const empty = {
           rows: [],
@@ -145,18 +148,18 @@ function scriptedFactory(
           rowCount: 0,
           oid: 0,
           fields: [],
-        } as unknown as QueryResult<Record<string, unknown>>;
+        } as unknown as QueryResult<T>;
         if (text.includes('FROM public.room_files')) {
           return {
             ...empty,
             rows: rows.roomFile === undefined ? [] : [{ artifacts: rows.roomFile }],
-          } as QueryResult<Record<string, unknown>>;
+          } as unknown as QueryResult<T>;
         }
         if (text.includes('FROM public.media_objects')) {
           return {
             ...empty,
             rows: (rows.mediaObjects ?? []) as Record<string, unknown>[],
-          } as QueryResult<Record<string, unknown>>;
+          } as unknown as QueryResult<T>;
         }
         return empty;
       },
