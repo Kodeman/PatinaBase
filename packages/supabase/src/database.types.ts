@@ -8634,6 +8634,167 @@ export type Database = {
           },
         ]
       }
+      media_registry: {
+        Row: {
+          access_class: string
+          bucket: string
+          bucket_class: string
+          created_at: string
+          created_by: string | null
+          declared_mime: string | null
+          declared_size_bytes: number | null
+          deleted_at: string | null
+          etag: string | null
+          gc_confirmed_at: string | null
+          gc_marked_at: string | null
+          height: number | null
+          id: string
+          legal_hold: boolean
+          legal_hold_reason: string | null
+          lifecycle_state: string
+          object_key: string
+          observed_mime: string | null
+          observed_size_bytes: number | null
+          provenance: Json
+          retention_until: string | null
+          sha256: string | null
+          subject_id: string | null
+          subject_type: string | null
+          updated_at: string
+          version: number
+          width: number | null
+        }
+        Insert: {
+          access_class: string
+          bucket: string
+          bucket_class: string
+          created_at?: string
+          created_by?: string | null
+          declared_mime?: string | null
+          declared_size_bytes?: number | null
+          deleted_at?: string | null
+          etag?: string | null
+          gc_confirmed_at?: string | null
+          gc_marked_at?: string | null
+          height?: number | null
+          id?: string
+          legal_hold?: boolean
+          legal_hold_reason?: string | null
+          lifecycle_state?: string
+          object_key: string
+          observed_mime?: string | null
+          observed_size_bytes?: number | null
+          provenance?: Json
+          retention_until?: string | null
+          sha256?: string | null
+          subject_id?: string | null
+          subject_type?: string | null
+          updated_at?: string
+          version?: number
+          width?: number | null
+        }
+        Update: {
+          access_class?: string
+          bucket?: string
+          bucket_class?: string
+          created_at?: string
+          created_by?: string | null
+          declared_mime?: string | null
+          declared_size_bytes?: number | null
+          deleted_at?: string | null
+          etag?: string | null
+          gc_confirmed_at?: string | null
+          gc_marked_at?: string | null
+          height?: number | null
+          id?: string
+          legal_hold?: boolean
+          legal_hold_reason?: string | null
+          lifecycle_state?: string
+          object_key?: string
+          observed_mime?: string | null
+          observed_size_bytes?: number | null
+          provenance?: Json
+          retention_until?: string | null
+          sha256?: string | null
+          subject_id?: string | null
+          subject_type?: string | null
+          updated_at?: string
+          version?: number
+          width?: number | null
+        }
+        Relationships: []
+      }
+      media_upload_intents: {
+        Row: {
+          access_class: string
+          actor: string
+          bucket: string
+          bucket_class: string
+          confirmed_at: string | null
+          created_at: string
+          declared_mime: string | null
+          declared_sha256: string
+          declared_size_bytes: number | null
+          expires_at: string | null
+          id: string
+          idempotency_key: string
+          object_key: string
+          registry_id: string | null
+          status: string
+          subject_id: string | null
+          subject_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_class: string
+          actor: string
+          bucket: string
+          bucket_class: string
+          confirmed_at?: string | null
+          created_at?: string
+          declared_mime?: string | null
+          declared_sha256: string
+          declared_size_bytes?: number | null
+          expires_at?: string | null
+          id?: string
+          idempotency_key: string
+          object_key: string
+          registry_id?: string | null
+          status?: string
+          subject_id?: string | null
+          subject_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_class?: string
+          actor?: string
+          bucket?: string
+          bucket_class?: string
+          confirmed_at?: string | null
+          created_at?: string
+          declared_mime?: string | null
+          declared_sha256?: string
+          declared_size_bytes?: number | null
+          expires_at?: string | null
+          id?: string
+          idempotency_key?: string
+          object_key?: string
+          registry_id?: string | null
+          status?: string
+          subject_id?: string | null
+          subject_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_upload_intents_registry_id_fkey"
+            columns: ["registry_id"]
+            isOneToOne: false
+            referencedRelation: "media_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       metric_thresholds: {
         Row: {
           active: boolean
@@ -29277,6 +29438,17 @@ export type Database = {
         }
         Returns: Json
       }
+      confirm_media_upload_intent_v2: {
+        Args: {
+          p_etag?: string
+          p_intent_id: string
+          p_observed_mime?: string
+          p_observed_size_bytes?: number
+          p_r2_verified?: boolean
+          p_sha256: string
+        }
+        Returns: string
+      }
       confirm_project_decision_review: {
         Args: {
           p_decision_id: string
@@ -29469,6 +29641,23 @@ export type Database = {
           p_scan_id: string
         }
         Returns: Json
+      }
+      create_media_upload_intent_v2: {
+        Args: {
+          p_access_class: string
+          p_actor: string
+          p_bucket: string
+          p_bucket_class: string
+          p_declared_mime?: string
+          p_declared_sha256: string
+          p_declared_size_bytes?: number
+          p_expires_at?: string
+          p_idempotency_key: string
+          p_object_key: string
+          p_subject_id?: string
+          p_subject_type?: string
+        }
+        Returns: string
       }
       create_named_project_need: { Args: { p_request: Json }; Returns: Json }
       create_plan_issue: {
@@ -30825,6 +31014,7 @@ export type Database = {
         Args: { _organization_id: string; _user_id?: string }
         Returns: boolean
       }
+      is_originals_bucket: { Args: { p_bucket: string }; Returns: boolean }
       is_product_in_active_use: {
         Args: { p_product_id: string }
         Returns: boolean
@@ -31101,6 +31291,20 @@ export type Database = {
         }
       }
       mark_feedback_seen: { Args: { p_id: string }; Returns: undefined }
+      mark_media_entry_legal_hold: {
+        Args: { p_hold: boolean; p_id: string; p_reason?: string }
+        Returns: undefined
+      }
+      mark_media_entry_state: {
+        Args: {
+          p_etag?: string
+          p_id: string
+          p_observed_mime?: string
+          p_observed_size_bytes?: number
+          p_state: string
+        }
+        Returns: undefined
+      }
       mark_media_object_state: {
         Args: {
           p_etag?: string
@@ -31624,6 +31828,26 @@ export type Database = {
       }
       refresh_product_behavior_stats: { Args: never; Returns: undefined }
       refresh_style_centroids: { Args: never; Returns: number }
+      register_media_entry: {
+        Args: {
+          p_access_class: string
+          p_bucket: string
+          p_bucket_class: string
+          p_created_by?: string
+          p_declared_mime?: string
+          p_declared_size_bytes?: number
+          p_etag?: string
+          p_height?: number
+          p_object_key: string
+          p_provenance?: Json
+          p_sha256?: string
+          p_subject_id?: string
+          p_subject_type?: string
+          p_version?: number
+          p_width?: number
+        }
+        Returns: string
+      }
       register_media_object: {
         Args: {
           p_access_class: string
