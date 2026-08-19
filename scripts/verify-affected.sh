@@ -63,19 +63,28 @@ if matches '^infra/edge-api-worker/'; then
 fi
 
 if matches '^packages/'; then
+  # Route through turbo, not raw `pnpm --filter`, for every task below: turbo.json's
+  # `type-check`/`build`/`test` tasks declare `"dependsOn": ["^build"]`, so `turbo run`
+  # builds a changed package's own workspace dependencies (and, for the three downstream
+  # checks, the changed package itself) before type-checking a consumer. A raw
+  # `pnpm --filter <pkg> <task>` call bypasses that graph entirely — the exact gap that let
+  # `@patina/patina-design-system`'s Media components (which import `@patina/types/media`,
+  # a `dist`-only subpath export) get type-checked via designer-portal/client-portal/
+  # admin-portal before `@patina/types` had ever been built. See
+  # docs/follow-ups/media-type-debt-2026-08.md.
   while IFS= read -r package_dir; do
     [[ -f "$package_dir/package.json" ]] || continue
     package_name="$(node -e 'const p=require(process.argv[1]); process.stdout.write(p.name || "")' "$package_dir/package.json")"
     [[ -n "$package_name" ]] || continue
     for task in build type-check test; do
       if node -e 'const p=require(process.argv[1]); process.exit(p.scripts && p.scripts[process.argv[2]] ? 0 : 1)' "$package_dir/package.json" "$task"; then
-        run pnpm --filter "$package_name" "$task"
+        run pnpm exec turbo run "$task" --filter="$package_name"
       fi
     done
   done < <(printf '%s\n' "$changed_files" | sed -n 's#^\(packages/[^/]*\)/.*#\1#p' | sort -u)
-  run pnpm --filter @patina/designer-portal type-check
-  run pnpm --filter @patina/client-portal type-check
-  run pnpm --filter @patina/admin-portal build
+  run pnpm exec turbo run type-check --filter=@patina/designer-portal
+  run pnpm exec turbo run type-check --filter=@patina/client-portal
+  run pnpm exec turbo run build --filter=@patina/admin-portal
 fi
 
 if matches '^supabase/functions/.*\.ts$'; then

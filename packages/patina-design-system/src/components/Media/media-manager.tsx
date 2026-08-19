@@ -30,6 +30,8 @@ import {
   MediaFolder,
   MediaType,
   MediaFilter,
+  MediaUsage,
+  MediaVersion,
   ViewMode,
 } from '@patina/types/media';
 
@@ -268,7 +270,7 @@ export function MediaManager({
 
     if (filter.tags && filter.tags.length > 0) {
       filtered = filtered.filter((a) =>
-        filter.tags?.some((tag) => a.tags?.includes(tag))
+        filter.tags?.some((tag: string) => a.tags?.includes(tag))
       );
     }
 
@@ -390,7 +392,7 @@ export function MediaManager({
                 setFilter({
                   ...filter,
                   type: filter.type?.includes('image')
-                    ? filter.type.filter((t) => t !== 'image')
+                    ? filter.type.filter((t: MediaType) => t !== 'image')
                     : [...(filter.type || []), 'image'],
                 })
               }
@@ -406,7 +408,7 @@ export function MediaManager({
                 setFilter({
                   ...filter,
                   type: filter.type?.includes('video')
-                    ? filter.type.filter((t) => t !== 'video')
+                    ? filter.type.filter((t: MediaType) => t !== 'video')
                     : [...(filter.type || []), 'video'],
                 })
               }
@@ -420,7 +422,7 @@ export function MediaManager({
                 setFilter({
                   ...filter,
                   type: filter.type?.includes('3d')
-                    ? filter.type.filter((t) => t !== '3d')
+                    ? filter.type.filter((t: MediaType) => t !== '3d')
                     : [...(filter.type || []), '3d'],
                 })
               }
@@ -570,7 +572,7 @@ export function MediaManager({
               <X className="h-4 w-4" />
             </Button>
           </div>
-          {selectedAsset.versions?.map((version) => (
+          {selectedAsset.versions?.map((version: MediaVersion) => (
             <Card key={version.id} className="p-3 mb-2">
               <p className="text-sm font-medium">Version {version.version}</p>
               <p className="text-xs text-gray-500">
@@ -601,7 +603,7 @@ export function MediaManager({
               <X className="h-4 w-4" />
             </Button>
           </div>
-          {selectedAsset.usage?.map((usage) => (
+          {selectedAsset.usage?.map((usage: MediaUsage) => (
             <Card key={usage.id} className="p-3 mb-2">
               <p className="text-sm font-medium">{usage.itemName}</p>
               <p className="text-xs text-gray-500 capitalize">{usage.type}</p>

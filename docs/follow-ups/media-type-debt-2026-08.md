@@ -1,8 +1,21 @@
 # Follow-up: pre-existing Media type debt (surfaced by the Phase 1 merge)
 
-**Status:** open, low priority. Pre-existing on `main`; **not** introduced by Cloudflare Phase 1.
-Logged 2026-08-18 when it turned PR #28's `quality` gate red (the merge proceeded past it since the
-debt is orthogonal to Phase 1 and GitHub allowed the merge — non-required check).
+**Status:** resolved on `fix/media-type-debt` (2026-08-18, A4). Pre-existing on `main`; **not**
+introduced by Cloudflare Phase 1. Logged 2026-08-18 when it turned PR #28's `quality` gate red (the
+merge proceeded past it since the debt is orthogonal to Phase 1 and GitHub allowed the merge —
+non-required check).
+
+Both defects below are fixed:
+1. The 7 implicit-`any` parameters in `media-manager.tsx`/`media-preview-modal.tsx` are annotated
+   from `@patina/types/media`'s exported types (`string`, `MediaType`, `MediaVersion`, `MediaUsage`).
+2. `scripts/verify-affected.sh`'s `packages/`-changed branch now routes every `build`/`type-check`/
+   `test` invocation through `pnpm exec turbo run <task> --filter=<pkg>` instead of raw
+   `pnpm --filter <pkg> <task>`. `turbo.json` already declared `"type-check": { "dependsOn": ["^build"] }`
+   (and the same for `build`/`test`) — the gap was that the CI script bypassed turbo's task graph
+   entirely, so that `dependsOn` never fired. Reproduced pre-fix (`tsc` errors: `Cannot find module
+   '@patina/types/media'` across 6 `Media/*` files, plus `@patina/api-routes` unbuilt) and confirmed
+   post-fix (`turbo run type-check --filter=@patina/designer-portal` builds `@patina/api-routes`,
+   `@patina/design-system`, `@patina/help-system`, `@patina/utils` first, then type-checks clean).
 
 ## What's red
 
