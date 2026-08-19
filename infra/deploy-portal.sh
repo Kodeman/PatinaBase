@@ -245,7 +245,12 @@ fi
 # ---------------------------------------------------------------------------
 echo
 echo "==> [3/3] Deploying the ${PORTAL} portal to Cloudflare Workers"
-CLOUDFLARE_ACCOUNT_ID=be3aaeed18a81b5d90ee2263b62219ea npx wrangler deploy "${WRANGLER_ENV_ARGS[@]}"
+# The `[@]+` guard is required, not cosmetic: macOS ships bash 3.2, where
+# expanding an EMPTY array as "${arr[@]}" under `set -u` aborts with
+# "unbound variable". WRANGLER_ENV_ARGS is empty for production, so the
+# unguarded form broke every production deploy while staging (non-empty)
+# kept working.
+CLOUDFLARE_ACCOUNT_ID=be3aaeed18a81b5d90ee2263b62219ea npx wrangler deploy ${WRANGLER_ENV_ARGS[@]+"${WRANGLER_ENV_ARGS[@]}"}
 
 echo
 echo "==> Done: ${PORTAL} portal deployed to ${TARGET_ENV}."
