@@ -48,6 +48,25 @@ Usage:
     STAGING_SEED_USER_ID=<staging profiles.id> \\
     STAGING_SEED_ROOM_ID=<staging rooms.id, owned by that user> \\
     python3 seed_scan.py
+
+── `copy-prod` subcommand (W2) ────────────────────────────────────────────────
+Copies ONE real scan bundle from Strata PROD (read-only: storage GETs + REST
+selects only, via `ReadOnlyClient`, which has no write method at all — see
+`validate_source_url`) to STAGING, so the splat/renders Modal stages have a
+genuine posed-photo scan to run against (W1's `seed_scan.py` lane above only
+ever wrote a synthetic rectangular room). Marker `COPY_SEED_MARKER`; the
+staging scan/room/room_file ids are derived (uuid5) from
+`(COPY_SEED_MARKER, staging_user_id)` — deterministic and idempotent, same
+shape as the `seed` lane above, but note this means every `copy-prod` run
+targets the SAME staging scan regardless of which prod scan_id was given (by
+design: ONE prod-copy fixture, replaced wholesale, never accumulating).
+
+    STAGING_SUPABASE_URL=https://vuesoyhfrjabfxbrzekd.supabase.co \\
+    STAGING_SUPABASE_SERVICE_ROLE_KEY=... \\
+    PROD_SUPABASE_SERVICE_ROLE_KEY=... \\
+    python3 seed_scan.py copy-prod \\
+      --scan-id <prod room_scans.id, owned by PROD_KODY_USER_ID> \\
+      --staging-user-id <staging profiles.id>
 """
 
 from __future__ import annotations
@@ -71,6 +90,17 @@ __all__ = [
     "build_plan",
     "execute_plan",
     "main",
+    # copy-prod (W2)
+    "COPY_SEED_MARKER",
+    "PROD_KODY_USER_ID",
+    "PHOTO_CAP",
+    "validate_source_url",
+    "ReadOnlyClient",
+    "derive_copy_ids",
+    "rewrite_key",
+    "CopyManifest",
+    "build_copy_manifest",
+    "execute_copy_prod",
 ]
 
 # ─── target refs (the hard guard) ───────────────────────────────────────────
@@ -119,6 +149,135 @@ def validate_target_url(url: str | None) -> None:
             f"({STAGING_REF!r}) — this script only ever runs against the "
             "staging Supabase project"
         )
+
+
+# ─── copy-prod (W2): read-only PROD source + the staging write target ──────
+
+# The only prod identity this lane is ever allowed to read from (task rail:
+# "The scan MUST belong to Kody's prod user ... No other user's scan is
+# eligible"). Baked in as a hard assertion in fetch_prod_scan, not just a
+# selection filter the caller is trusted to have applied upstream.
+PROD_KODY_USER_ID = "74056c2a-866d-42b0-9e2a-d473c2484316"
+
+# The existing seed:<slug> marker convention (see SEED_MARKER above). A
+# DIFFERENT marker from W1's, deliberately: this lane's ids are derived from
+# (marker, staging_user_id) only — see derive_copy_ids — so it never collides
+# with W1's synthetic verify fixture, which lives under its own room/marker.
+COPY_SEED_MARKER = "seed:rendered-room-v2-w2-prod-copy"
+
+# dispatch-scan-modal/lib.ts's PHOTO_URL_CAP — the dispatcher's exact cap on
+# how many photo keys it will ever sign+send to Modal for one splat task.
+# Copying anything past this cap would be dead weight staging will never use.
+PHOTO_CAP = 80
+
+
+def validate_source_url(url: str | None) -> None:
+    """HARD GUARD for copy-prod's READ-ONLY source. The mirror image of
+    validate_target_url: that function forbids the production ref on a WRITE
+    target; this one REQUIRES it on the read source (copy-prod's whole point
+    is reading real prod data). Called unconditionally before any prod call."""
+    if not url or not url.strip():
+        raise TargetGuardError(
+            "no source Supabase URL provided — set --prod-url or PROD_SUPABASE_URL"
+        )
+    if PROD_REF not in url:
+        raise TargetGuardError(
+            f"refusing to read from {url!r} as the copy-prod source — it does "
+            f"not name the production ref ({PROD_REF!r}); copy-prod only ever "
+            "reads from Strata prod, never anywhere else"
+        )
+
+
+class ReadOnlyClient:
+    """The prod-read-only guard, structural rather than merely conventional:
+    this object exposes ONLY `get_rest` / `get_storage_object` (both plain
+    HTTP GETs). There is no put/post/patch/delete method anywhere on this
+    class — a coding mistake that tries to write through it fails with an
+    AttributeError, not a silent prod write. `validate_source_url` runs in
+    the constructor, so an instance can never be pointed anywhere but prod."""
+
+    def __init__(self, base_url: str, service_role_key: str):
+        validate_source_url(base_url)
+        import httpx  # local import — mirrors execute_plan's lazy httpx dependency
+
+        self._client = httpx.Client(
+            base_url=base_url.rstrip("/"),
+            headers=_rest_headers(service_role_key),
+            timeout=60.0,
+        )
+
+    def get_rest(self, table: str, params: dict[str, str]) -> Any:
+        resp = self._client.get(f"/rest/v1/{table}", params=params)
+        if resp.status_code >= 400:
+            raise RuntimeError(f"GET {table} -> HTTP {resp.status_code}: {resp.text[:400]}")
+        return resp.json()
+
+    def get_storage_object(self, bucket: str, key: str) -> bytes:
+        resp = self._client.get(f"/storage/v1/object/{bucket}/{key}")
+        if resp.status_code >= 400:
+            raise RuntimeError(f"GET storage {bucket}/{key} -> HTTP {resp.status_code}: {resp.text[:200]}")
+        return resp.content
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> "ReadOnlyClient":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
+
+def _load_keys():
+    """Import services/scan-pipeline/.../keys.py by EXACT FILE PATH via
+    importlib — deliberately NOT sys.path insertion (unlike _load_synthetic()
+    below): that package directory also contains its own http.py, which would
+    shadow Python's stdlib `http` package for the rest of the process the
+    moment anything (including this script's own httpx dependency) imports
+    `http`/`http.client`. keys.py has no sibling-module imports of its own, so
+    loading it standalone by path is safe and sys.path stays untouched."""
+    import importlib.util
+
+    repo_root = Path(__file__).resolve().parents[2]
+    keys_path = repo_root / "services" / "scan-pipeline" / "src" / "patina_scan_worker" / "keys.py"
+    if not keys_path.exists():
+        raise RuntimeError(f"expected keys.py at {keys_path} — repo layout changed?")
+    spec = importlib.util.spec_from_file_location("patina_scan_worker_keys", keys_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not build an import spec for {keys_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def derive_copy_ids(staging_user_id: str) -> tuple[str, str, str]:
+    """Deterministic (room_id, scan_id, room_file_id) for the copy-prod
+    fixture, derived from (COPY_SEED_MARKER, staging_user_id) ONLY — not from
+    the source prod scan_id, so re-running copy-prod (even against a
+    different prod scan) always targets the SAME staging scan (idempotent
+    replace, never a duplicate — see module docstring)."""
+    room_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{COPY_SEED_MARKER}:{staging_user_id}:room"))
+    identity_seed = f"{COPY_SEED_MARKER}:{staging_user_id}:{room_id}"
+    scan_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{identity_seed}:scan"))
+    room_file_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{identity_seed}:room_file:1"))
+    return room_id, scan_id, room_file_id
+
+
+def rewrite_key(source_key: str, prod_user_id: str, prod_room_id: str, staging_user_id: str, staging_room_id: str) -> str:
+    """`{folder}/{prodUserId}/{prodRoomId}/{file}` -> `{folder}/{stagingUserId}/
+    {stagingRoomId}/{file}`. Asserts the source key's owner/room segments
+    match the expected prod identity FIRST (the C2/OWNERSHIP_VIOLATION check
+    keys.py's assert_owner_prefix does on the write side) — refuses to rewrite
+    a key that doesn't actually belong to the scan we think we're copying."""
+    parts = source_key.split("/")
+    if len(parts) < 3:
+        raise ValueError(f"key too short to rewrite (need {{folder}}/{{uid}}/{{room}}/...): {source_key!r}")
+    if parts[1] != prod_user_id or parts[2] != prod_room_id:
+        raise ValueError(
+            f"key owner/room segments {parts[1]!r}/{parts[2]!r} do not match the "
+            f"expected prod scan identity {prod_user_id!r}/{prod_room_id!r}: {source_key!r}"
+        )
+    return "/".join([parts[0], staging_user_id, staging_room_id, *parts[3:]])
 
 
 # ─── the synthetic-room generator (imported, not duplicated) ───────────────
@@ -330,10 +489,461 @@ def execute_plan(target_url: str, service_role_key: str, plan: SeedPlan, mesh_by
         _enqueue_verify(client, plan)
 
 
+# ─── copy-prod (W2): manifest building (pure) + execution (network) ────────
+
+
+@dataclasses.dataclass
+class CopyManifest:
+    """What copy-prod will copy vs skip, and why. Built PURELY from the
+    already-fetched prod room_scans row + room_scan_images rows — no network
+    of its own, so it's fully unit-testable (see test_seed_scan.py)."""
+
+    captured_room_src_key: str | None
+    mesh_src_key: str | None
+    photos_manifest_src_key: str | None
+    glb_src_key: str | None
+    photo_src_keys: list[str]  # capped, in display_order/captured_at/id order
+    photo_source_image_ids: list[str]  # same order/length as photo_src_keys
+    photo_total_available: int
+    photo_capped: bool
+    skipped: list[str]  # human-readable reasons, e.g. "mesh.ply: mesh_url is null on source"
+
+
+def _owned_key_or_none(url: str | None, prod_user_id: str, prod_room_id: str, keys_mod, label: str, skipped: list[str]) -> str | None:
+    key = keys_mod.object_key_from_url(url)
+    if not key:
+        skipped.append(f"{label}: source column is null")
+        return None
+    try:
+        keys_mod.assert_owner_prefix(key, prod_user_id, prod_room_id)
+    except keys_mod.OwnershipError as exc:
+        skipped.append(f"{label}: SKIPPED — {exc}")
+        return None
+    return key
+
+
+def build_copy_manifest(
+    scan_row: dict[str, Any],
+    image_rows: list[dict[str, Any]],
+    keys_mod,
+    photo_cap: int = PHOTO_CAP,
+) -> CopyManifest:
+    """Decide what to copy from one prod room_scans row + its room_scan_images,
+    per the task contract: captured_room.json, mesh.ply (if present),
+    photos manifest (if present), up to `photo_cap` full-res photos in
+    display_order/captured_at/id order (the rows arrive pre-ordered — this
+    function does not re-sort), a hero thumbnail (if present), and scan.glb
+    IFF model_url_gltf is set. Deliberately SKIPS depth archive, world map,
+    bundle/keyframes archive, and the USDZ — recorded in `skipped` with a
+    reason rather than silently dropped."""
+    prod_user_id = str(scan_row["user_id"])
+    prod_room_id = str(scan_row["room_id"])
+    skipped: list[str] = []
+
+    captured_room_key = _owned_key_or_none(
+        scan_row.get("captured_room_json_url"), prod_user_id, prod_room_id, keys_mod,
+        "captured_room.json", skipped,
+    )
+    mesh_key = _owned_key_or_none(
+        scan_row.get("mesh_url"), prod_user_id, prod_room_id, keys_mod, "mesh.ply", skipped,
+    )
+    manifest_key = _owned_key_or_none(
+        scan_row.get("photos_manifest_url"), prod_user_id, prod_room_id, keys_mod,
+        "photos_manifest.json", skipped,
+    )
+    glb_key = _owned_key_or_none(
+        scan_row.get("model_url_gltf"), prod_user_id, prod_room_id, keys_mod, "scan.glb", skipped,
+    )
+
+    # Explicitly-skipped artifact kinds — never attempted, always noted.
+    for label, col in (
+        ("usdz (scan.usdz)", "model_url"),
+        ("depth archive (depth.tar)", "depth_archive_url"),
+        ("world map", "world_map_url"),
+        ("bundle/keyframes archive", "scan_bundle_url"),
+        ("bundle manifest.json", "bundle_manifest_url"),
+        ("coverage heatmap", "coverage_heatmap_url"),
+    ):
+        if scan_row.get(col):
+            skipped.append(f"{label}: present on source but out of scope for copy-prod (not needed by splat/renders)")
+
+    hero_present = any(row.get("is_primary") or row.get("role") == "hero" for row in image_rows)
+    if not hero_present:
+        skipped.append("hero thumbnail: no is_primary/role='hero' row on source scan")
+
+    photo_keys: list[str] = []
+    photo_ids: list[str] = []
+    seen: set[str] = set()
+    for row in image_rows:
+        key = _owned_key_or_none(row.get("image_url"), prod_user_id, prod_room_id, keys_mod, f"photo {row.get('id')}", skipped)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        photo_keys.append(key)
+        photo_ids.append(str(row["id"]))
+
+    total_available = len(photo_keys)
+    capped = total_available > photo_cap
+    if capped:
+        skipped.append(f"{total_available - photo_cap} photo(s) beyond the {photo_cap}-photo dispatcher cap")
+
+    return CopyManifest(
+        captured_room_src_key=captured_room_key,
+        mesh_src_key=mesh_key,
+        photos_manifest_src_key=manifest_key,
+        glb_src_key=glb_key,
+        photo_src_keys=photo_keys[:photo_cap],
+        photo_source_image_ids=photo_ids[:photo_cap],
+        photo_total_available=total_available,
+        photo_capped=capped,
+        skipped=skipped,
+    )
+
+
+# room_scans metadata copied verbatim from the prod row (everything else on
+# the staging row is either a fresh identity column or a rewritten URL key).
+_COPY_METADATA_FIELDS = [
+    "dimensions", "floor_area", "room_type", "features", "furniture_detected",
+    "style_signals", "suggested_styles", "coverage_percentage",
+    "scan_schema_version", "device_model", "os_version", "has_lidar",
+    "capture_environment", "scanned_at", "quality_grade",
+]
+
+
+def _download_verify_upload(
+    source: ReadOnlyClient,
+    staging_client,
+    bucket: str,
+    src_key: str,
+    dst_key: str,
+    content_type: str,
+) -> dict[str, Any]:
+    """Download one object from prod (read-only), upload it to staging at the
+    rewritten key, then re-download the staging copy and compare size+sha256
+    against the source bytes — the verification the task asks for, not merely
+    trusting the PUT response."""
+    import hashlib
+
+    data = source.get_storage_object(bucket, src_key)
+    src_sha = hashlib.sha256(data).hexdigest()
+    _upload(staging_client, bucket, dst_key, data, content_type)
+
+    resp = staging_client.get(f"/storage/v1/object/{bucket}/{dst_key}")
+    if resp.status_code >= 400:
+        raise RuntimeError(f"post-upload verify GET {bucket}/{dst_key} -> HTTP {resp.status_code}")
+    dst_bytes = resp.content
+    dst_sha = hashlib.sha256(dst_bytes).hexdigest()
+    ok = len(dst_bytes) == len(data) and dst_sha == src_sha
+    return {
+        "src_key": src_key,
+        "dst_key": dst_key,
+        "bytes": len(data),
+        "sha256": src_sha,
+        "verified": ok,
+    }
+
+
+def execute_copy_prod(
+    prod_url: str,
+    prod_service_role_key: str,
+    staging_url: str,
+    staging_service_role_key: str,
+    scan_id: str,
+    staging_user_id: str,
+    photo_cap: int = PHOTO_CAP,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """The whole copy-prod lane. Guards run first and unconditionally
+    (including under dry_run): validate_source_url on `prod_url`,
+    validate_target_url on `staging_url` — a misconfigured environment can
+    never reach a network call against the wrong project in either
+    direction."""
+    validate_source_url(prod_url)
+    validate_target_url(staging_url)
+
+    import httpx  # local import — dry_run + guard tests need no network deps
+
+    keys_mod = _load_keys()
+    room_id, new_scan_id, room_file_id = derive_copy_ids(staging_user_id)
+
+    with ReadOnlyClient(prod_url, prod_service_role_key) as source:
+        scan_rows = source.get_rest("room_scans", {"id": f"eq.{scan_id}", "select": "*"})
+        if not scan_rows:
+            raise RuntimeError(f"prod room_scans id={scan_id} not found")
+        scan_row = scan_rows[0]
+
+        # The ownership rail, baked in — never trust the caller applied the
+        # "Kody's own data only" filter upstream.
+        if str(scan_row.get("user_id")) != PROD_KODY_USER_ID:
+            raise RuntimeError(
+                f"refusing to copy prod scan {scan_id}: user_id "
+                f"{scan_row.get('user_id')!r} != required {PROD_KODY_USER_ID!r}"
+            )
+
+        image_rows = source.get_rest(
+            "room_scan_images",
+            {
+                "scan_id": f"eq.{scan_id}",
+                "select": (
+                    "id,role,is_primary,display_order,feature_category,feature_confidence,"
+                    "image_url,quality_score,sharpness_score,brightness_score,composition_score,"
+                    "stability_score,width,height,file_size_bytes,mime_type,captured_at,"
+                    "device_orientation,light_estimate,camera_transform,camera_intrinsics"
+                ),
+                "order": "display_order.asc,captured_at.asc,id.asc",
+            },
+        )
+
+        manifest = build_copy_manifest(scan_row, image_rows, keys_mod, photo_cap=photo_cap)
+
+        report: dict[str, Any] = {
+            "prod_scan_id": scan_id,
+            "prod_scan_name": scan_row.get("name"),
+            "staging_scan_id": new_scan_id,
+            "staging_room_id": room_id,
+            "staging_room_file_id": room_file_id,
+            "photo_total_available": manifest.photo_total_available,
+            "photo_copied_count": len(manifest.photo_src_keys),
+            "photo_capped": manifest.photo_capped,
+            "skipped": manifest.skipped,
+            "dry_run": dry_run,
+            "uploads": [],
+            "ingest_enqueued": None,
+        }
+
+        if dry_run:
+            return report
+
+        prod_user_id = str(scan_row["user_id"])
+        prod_room_id = str(scan_row["room_id"])
+
+        with httpx.Client(
+            base_url=staging_url.rstrip("/"),
+            headers=_rest_headers(staging_service_role_key),
+            timeout=120.0,
+        ) as staging:
+            # 1. Ensure the staging room exists (GET-then-POST, mirrors _upsert_row).
+            room_row = {
+                "id": room_id,
+                "user_id": staging_user_id,
+                "name": f"{COPY_SEED_MARKER}",
+                "type": "other",
+            }
+            _upsert_row(staging, "rooms", room_row)
+
+            uploads: list[dict[str, Any]] = []
+            url_columns: dict[str, str | None] = {
+                "mesh_url": None,
+                "captured_room_json_url": None,
+                "photos_manifest_url": None,
+                "model_url_gltf": None,
+            }
+
+            if manifest.captured_room_src_key:
+                dst = rewrite_key(manifest.captured_room_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.captured_room_src_key, dst, "application/json"))
+                url_columns["captured_room_json_url"] = dst
+
+            if manifest.mesh_src_key:
+                dst = rewrite_key(manifest.mesh_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.mesh_src_key, dst, "application/octet-stream"))
+                url_columns["mesh_url"] = dst
+
+            if manifest.photos_manifest_src_key:
+                dst = rewrite_key(manifest.photos_manifest_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.photos_manifest_src_key, dst, "application/json"))
+                url_columns["photos_manifest_url"] = dst
+
+            if manifest.glb_src_key:
+                dst = rewrite_key(manifest.glb_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.glb_src_key, dst, "model/gltf-binary"))
+                url_columns["model_url_gltf"] = dst
+
+            photo_dst_keys: list[str] = []
+            for src_key in manifest.photo_src_keys:
+                dst = rewrite_key(src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
+                ct = "image/jpeg" if src_key.lower().endswith((".jpg", ".jpeg")) else "image/heic"
+                uploads.append(_download_verify_upload(source, staging, BUCKET, src_key, dst, ct))
+                photo_dst_keys.append(dst)
+
+            report["uploads"] = uploads
+            if not all(u["verified"] for u in uploads):
+                raise RuntimeError("one or more uploads failed sha256/size verification — aborting before any DB write")
+
+            # 2. Upsert the room_scans row.
+            room_scan_row: dict[str, Any] = {
+                "id": new_scan_id,
+                "user_id": staging_user_id,
+                "room_id": room_id,
+                "name": COPY_SEED_MARKER,
+                "status": "ready",
+                "image_count": len(manifest.photo_src_keys),
+                **{k: v for k, v in url_columns.items()},
+            }
+            for field in _COPY_METADATA_FIELDS:
+                if field in scan_row:
+                    room_scan_row[field] = scan_row[field]
+            _upsert_row(staging, "room_scans", room_scan_row)
+
+            # 3. Replace room_scan_images wholesale for this scan_id (delete-then-
+            # insert, not per-row upsert) so a re-run with fewer photos than a
+            # prior run never leaves orphaned rows behind.
+            del_resp = staging.delete(
+                "/rest/v1/room_scan_images",
+                params={"scan_id": f"eq.{new_scan_id}"},
+                headers={"Prefer": "return=minimal"},
+            )
+            if del_resp.status_code >= 400:
+                raise RuntimeError(f"delete room_scan_images -> HTTP {del_resp.status_code}: {del_resp.text[:400]}")
+
+            image_by_id = {str(r["id"]): r for r in image_rows}
+            new_image_rows = []
+            for src_id, dst_key in zip(manifest.photo_source_image_ids, photo_dst_keys):
+                src_row = image_by_id[src_id]
+                new_image_rows.append({
+                    "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{COPY_SEED_MARKER}:{new_scan_id}:image:{src_id}")),
+                    "scan_id": new_scan_id,
+                    "room_id": room_id,
+                    "role": src_row.get("role") or "auto",
+                    "is_primary": bool(src_row.get("is_primary")),
+                    "display_order": src_row.get("display_order") or 0,
+                    "feature_category": src_row.get("feature_category"),
+                    "feature_confidence": src_row.get("feature_confidence"),
+                    "image_url": dst_key,
+                    "quality_score": src_row.get("quality_score"),
+                    "sharpness_score": src_row.get("sharpness_score"),
+                    "brightness_score": src_row.get("brightness_score"),
+                    "composition_score": src_row.get("composition_score"),
+                    "stability_score": src_row.get("stability_score"),
+                    "width": src_row.get("width"),
+                    "height": src_row.get("height"),
+                    "file_size_bytes": src_row.get("file_size_bytes"),
+                    "mime_type": src_row.get("mime_type"),
+                    "captured_at": src_row.get("captured_at"),
+                    "device_orientation": src_row.get("device_orientation"),
+                    "light_estimate": src_row.get("light_estimate"),
+                })
+            if new_image_rows:
+                ins_resp = staging.post(
+                    "/rest/v1/room_scan_images",
+                    json=new_image_rows,
+                    headers={"Prefer": "return=minimal"},
+                )
+                if ins_resp.status_code >= 400:
+                    raise RuntimeError(f"insert room_scan_images -> HTTP {ins_resp.status_code}: {ins_resp.text[:400]}")
+
+            # 4. Ensure a room_files v1 row exists (mirrors seed_scan.py's shape).
+            room_file_row = {
+                "id": room_file_id,
+                "scan_id": new_scan_id,
+                "version": 1,
+                "status": "solved",
+            }
+            _upsert_row(staging, "room_files", room_file_row)
+
+            # 5. Report whether the 00370 ingest sweep picked this row up. The
+            # AFTER UPDATE trigger does NOT fire on our INSERT (it only fires
+            # on a status transition), but the 15-min catch-up sweep
+            # (sweep_scan_pipeline_ingest) will enqueue scan_pipeline.ingest for
+            # any ready/schema>=3 scan with no ingest task at all — invoke it
+            # directly (it's designed to be safely re-run) so this report is
+            # accurate now rather than "check back in 15 minutes".
+            sweep_resp = staging.post("/rest/v1/rpc/sweep_scan_pipeline_ingest", json={})
+            sweep_detail = sweep_resp.json() if sweep_resp.status_code < 400 else {"error": sweep_resp.text[:200]}
+            task_resp = staging.get(
+                "/rest/v1/agent_tasks",
+                params={
+                    "entity_id": f"eq.{new_scan_id}",
+                    "task_type": "eq.scan_pipeline.ingest",
+                    "select": "id,status,idempotency_key",
+                },
+            )
+            report["ingest_enqueued"] = {
+                "sweep_result": sweep_detail,
+                "ingest_tasks": task_resp.json() if task_resp.status_code < 400 else None,
+            }
+
+        return report
+
+
 # ─── CLI ────────────────────────────────────────────────────────────────────
 
 
+def main_copy_prod(argv: list[str]) -> int:
+    """`seed_scan.py copy-prod ...` — see the module docstring's "copy-prod
+    subcommand (W2)" section. A SEPARATE small parser (not argparse
+    subparsers) so the legacy `seed` flow's flags/tests above are completely
+    untouched by this addition."""
+    parser = argparse.ArgumentParser(
+        prog="seed_scan.py copy-prod",
+        description="Copy one real scan bundle from Strata PROD (read-only) to STAGING.",
+    )
+    parser.add_argument(
+        "--prod-url",
+        default=os.environ.get("PROD_SUPABASE_URL", f"https://{PROD_REF}.supabase.co"),
+        help="Prod Supabase URL — READ-ONLY source (default: env PROD_SUPABASE_URL, else the canonical prod URL)",
+    )
+    parser.add_argument(
+        "--staging-url",
+        default=os.environ.get("STAGING_SUPABASE_URL", f"https://{STAGING_REF}.supabase.co"),
+        help="Staging Supabase URL — the only write target (default: env STAGING_SUPABASE_URL, else canonical staging URL)",
+    )
+    parser.add_argument("--scan-id", required=True, help="prod room_scans.id to copy — MUST belong to PROD_KODY_USER_ID")
+    parser.add_argument("--staging-user-id", default=os.environ.get("STAGING_SEED_USER_ID"), required=False)
+    parser.add_argument("--photo-cap", type=int, default=PHOTO_CAP)
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="fetch+report the plan from prod (read-only) but make NO staging writes",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        validate_source_url(args.prod_url)
+        validate_target_url(args.staging_url)
+    except TargetGuardError as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return 2
+
+    if not args.staging_user_id:
+        print(
+            "FATAL: --staging-user-id (or STAGING_SEED_USER_ID) is required — "
+            "the staging profiles.id that will own the copied scan.",
+            file=sys.stderr,
+        )
+        return 2
+
+    prod_key = os.environ.get("PROD_SUPABASE_SERVICE_ROLE_KEY")
+    if not prod_key:
+        print("FATAL: PROD_SUPABASE_SERVICE_ROLE_KEY is not set (read-only use only)", file=sys.stderr)
+        return 2
+
+    staging_key = None
+    if not args.dry_run:
+        staging_key = os.environ.get("STAGING_SUPABASE_SERVICE_ROLE_KEY")
+        if not staging_key:
+            print("FATAL: STAGING_SUPABASE_SERVICE_ROLE_KEY is not set", file=sys.stderr)
+            return 2
+
+    report = execute_copy_prod(
+        prod_url=args.prod_url,
+        prod_service_role_key=prod_key,
+        staging_url=args.staging_url,
+        staging_service_role_key=staging_key or "",
+        scan_id=args.scan_id,
+        staging_user_id=args.staging_user_id,
+        photo_cap=args.photo_cap,
+        dry_run=args.dry_run,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True, default=str))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv and argv[0] == "copy-prod":
+        return main_copy_prod(argv[1:])
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--supabase-url",

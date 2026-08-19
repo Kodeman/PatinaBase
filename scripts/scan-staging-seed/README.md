@@ -104,3 +104,92 @@ naming both refs), rejects any non-staging URL, accepts the staging ref;
 ref before anything else runs; plan-building produces the canonical bare
 I104 keys, a verify payload satisfying both the dispatcher's and 00490's
 contracts, and is idempotent for a given `(user_id, room_id)`.
+
+## `copy-prod` subcommand (W2 — a genuine posed-photo scan)
+
+`seed_scan.py copy-prod` copies ONE real scan bundle from Strata **prod**
+(read-only) to **staging**, so the splat/renders Modal stages (dispatched by
+the same `dispatch-scan-modal`) have a genuine posed-photo scan to run
+against, instead of only the synthetic rectangular room the `seed` lane above
+produces. It reuses this module's constants, `TargetGuardError`, and the
+`_upload`/`_upsert_row` REST idioms rather than duplicating them.
+
+### The two guards
+
+- **`validate_target_url`** (existing, reused as-is): every STAGING write
+  path is refused unless the target names `vuesoyhfrjabfxbrzekd` — this is
+  the only thing that ever gets written to.
+- **`validate_source_url` + `ReadOnlyClient`** (new): the mirror image for
+  the PROD read source. `validate_source_url` refuses any URL that doesn't
+  name `bkvcixdmuyejfzcijpdg`. `ReadOnlyClient` is a *structural* guard, not
+  a conventional one — it exposes only `get_rest`/`get_storage_object`
+  (both GETs); there is no `put`/`post`/`patch`/`delete` method on the class
+  at all, so a coding mistake that tries to write through it fails with an
+  `AttributeError`, not a silent prod write.
+- The scan's `user_id` is asserted against `PROD_KODY_USER_ID` inside
+  `execute_copy_prod` itself — a hard rail, not merely a selection filter
+  the caller is trusted to have applied upstream.
+
+### What it copies (and what it skips)
+
+`captured_room.json`, `mesh.ply` (if the source scan has one — most don't;
+prod's real captures use USDZ→GLB, not a `.ply` mesh export), the photos
+manifest (if present), up to 80 full-resolution photos (`display_order,
+captured_at, id` order — dispatch-scan-modal's exact cap+ordering), a hero
+thumbnail (if `is_primary`/`role='hero'` is present), and `scan.glb` IFF
+`model_url_gltf` is set. Every skip is recorded with a reason in the
+report's `skipped` list — nothing is silently dropped. Deliberately out of
+scope (never attempted): the USDZ, depth archive, world map, bundle/
+keyframes archive, bundle manifest, coverage heatmap — none of these are
+inputs `dispatch-scan-modal` reads for `verify`/`splat`/`renders`.
+
+### Key rewriting + verification
+
+Every object key is rewritten from `{folder}/{prodUserId}/{prodRoomId}/
+{file}` to `{folder}/{stagingUserId}/{stagingRoomId}/{file}` (`rewrite_key`),
+after asserting the source key's owner/room segments actually match the
+scan we're copying (mirrors `keys.py`'s `assert_owner_prefix` C2 check).
+Every upload is verified by re-downloading the staging copy and comparing
+size + sha256 against the source bytes (`_download_verify_upload`) — the
+run aborts before any DB write if any upload fails verification.
+
+### Idempotency — and why it does NOT reuse the W1 room
+
+The staging `room_scans`/`rooms`/`room_files` ids are derived (uuid5) from
+`(COPY_SEED_MARKER, staging_user_id)` **only** — not from the source prod
+scan_id — so re-running `copy-prod` (even against a different prod scan)
+always targets the SAME staging scan (`seed:rendered-room-v2-w2-prod-copy`),
+replaced wholesale, never duplicated. `room_scan_images` rows are deleted
+and re-inserted wholesale on every run (not per-row upserted) so a re-run
+with fewer photos than a prior run never leaves orphaned rows.
+
+This lane **mints its own room** rather than reusing the W1 `seed` lane's
+room (`STAGING_SEED_ROOM_ID`), even though it uses the SAME staging seed
+user. Object keys are `{folder}/{userId}/{roomId}/{file}` — fixed per
+(user, room), not per scan — so if `copy-prod` wrote `captured_room.json`
+into the W1 room's prefix, it would permanently overwrite the W1 lane's
+synthetic `captured_room.json` fixture at that exact key (both scans would
+then point at the SAME storage object). Minting a second, deterministic
+room under the same seed user avoids that collision entirely while still
+keeping everything under one easily-findable seed account.
+
+### Usage
+
+```bash
+PROD_SUPABASE_SERVICE_ROLE_KEY=<prod service_role key — READ-ONLY use> \
+STAGING_SUPABASE_URL=https://vuesoyhfrjabfxbrzekd.supabase.co \
+STAGING_SUPABASE_SERVICE_ROLE_KEY=<staging service_role key> \
+.venv/bin/python seed_scan.py copy-prod \
+  --scan-id <prod room_scans.id, owned by PROD_KODY_USER_ID> \
+  --staging-user-id <staging profiles.id>
+
+# read-only preview — fetches from prod, makes NO staging writes:
+PROD_SUPABASE_SERVICE_ROLE_KEY=... \
+.venv/bin/python seed_scan.py copy-prod --scan-id <id> \
+  --staging-user-id <id> --dry-run
+```
+
+Both service-role keys are obtained via
+`supabase projects api-keys --project-ref <ref>` — never committed, never
+logged (the report never includes a key, only object keys/sha256/byte
+counts).
