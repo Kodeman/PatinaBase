@@ -101,7 +101,10 @@ def test_each_stages_inputs_are_closed_no_cross_stage_keys():
         "photosSource", "photosManifestUrl", "photoUrls", "capturedRoomJsonUrl",
         "photoUrlsCapped", "photoCount",
     }
-    assert set(stages["renders"]["inputs"]) == {"glbUrl"}
+    # `capturedRoomJsonUrl` is `renders`' required input and `glbUrl` its
+    # optional overlay — the parametric room is the subject, the GLB is merged
+    # on top. See jobs/renders_job.py's docstring.
+    assert set(stages["renders"]["inputs"]) == {"capturedRoomJsonUrl", "glbUrl"}
 
 
 # ─── the splat pose-carrier fallback ────────────────────────────────────────

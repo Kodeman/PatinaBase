@@ -57,11 +57,27 @@ DB_SECRET_NAME = "scan-worker-db"
 R2_SECRET_NAME = "scan-r2"
 
 VERIFY_TIMEOUT_SECONDS = 1800
-# splatfacto is 10–25 minutes on an L4 (plan §4); 3600 s leaves room for the
-# download/transcode head and the export/compress tail without letting a wedged
-# run bill for an hour more than that.
-SPLAT_TIMEOUT_SECONDS = 3600
+# MEASURED, not planned. The plan's "10–25 minutes on an L4" was written before
+# anything had run; W2 timed the real fixture (42 frames at 1440×1920) at 48.8
+# ms/iter at step 4,550 and 119.2 ms/iter at step 7,470 — iteration cost more
+# than doubles as densification proceeds, and 30,000 iterations extrapolates to
+# ~55 minutes. 3600 s left no headroom at all for the download/transcode head
+# and the export/compress tail, so a run that trained successfully would still
+# have been killed. 7200 s is ~55 min of training plus the tail plus slack, and
+# is still a hard ceiling on a wedged run. This number, `TRAIN_TIMEOUT_S` in
+# splat_job, and the dispatcher's per-type visibility timeout are ONE budget in
+# three places and move together — see W2-EVIDENCE.md §4 C.
+SPLAT_TIMEOUT_SECONDS = 7200
 RENDERS_TIMEOUT_SECONDS = 1800
+
+# The SPZ converter, built from source in `_SPLAT_IMAGE` (see the image recipe
+# below for why the crates.io/PyPI routes do not work). The commit is the
+# v3.0.0 tag of github.com/nianticlabs/spz, pinned as a SHA because a tag can
+# move and this is the provenance of a binary that touches every artifact.
+SPZ_SOURCE_REPO = "https://github.com/nianticlabs/spz.git"
+SPZ_SOURCE_TAG = "v3.0.0"
+SPZ_SOURCE_COMMIT = "5bf2945de1a003cee07133b1e495fe9c6ffdc7e7"
+SPZ_BINARY_PATH = "/usr/local/bin/ply_to_spz"
 
 SPLAT_GPU = "L4"
 RENDERS_GPU = "L40S"
@@ -267,25 +283,49 @@ if modal is not None:
             "httpx>=0.24,<1.0",
             "spz>=0.0.1",
         )
-        # The SPZ compressor CLI. The PyPI `spz` wheel (above) exposes
-        # load/build, not a PLY→SPZ entry point, so the CONVERTER is this
-        # separate Rust CLI. Ubuntu 22.04's packaged cargo is too old for a
-        # 2026 crate, hence rustup (now already installed, above).
+        # ── the SPZ compressor: Niantic's own C++, built from a pinned tag ────
         #
-        # The crate is `spz`, NOT `spz-cli` — `spz-cli` does not exist on
-        # crates.io (verified 2026-08 against the registry API; the earlier
-        # spelling here came from the GitHub README's `cargo install spz-cli`
-        # line and would have failed at image build).
+        # The crates.io route this layer used to take does not work and cannot
+        # be made to work. `cargo install spz --version 0.0.5` succeeds and puts
+        # a binary on PATH whose ENTIRE command surface is `spz info` — there is
+        # no `convert`, and 0.0.6 dropped the binary target altogether. The PyPI
+        # `spz` wheel installed in the pip layer above is not a fallback either:
+        # no cp311 wheel, and the maturin-built sdist does not import. So the
+        # image shipped with no PLY→SPZ path at all, and every splat run would
+        # have trained for tens of minutes and then failed at compression
+        # (W2-EVIDENCE.md §4 B). Both are left installed above rather than
+        # excised because removing them would invalidate the torch/nerfstudio
+        # layers and force a full multi-hour rebuild to delete something inert.
         #
-        # Pinned to 0.0.5, which is NOT the newest: 0.0.6 (2025-12-23) ships
-        # `bin_names: []` — it dropped the binary target and is library-only, so
-        # installing it would leave `spz` missing from PATH and every conversion
-        # would fail at runtime with a much less obvious error than a build
-        # failure. 0.0.5 (2025-12-22) is the newest version that still ships the
-        # `spz` binary. `--locked` so the crate's own Cargo.lock decides its
-        # transitive versions rather than whatever resolves on build day.
+        # github.com/nianticlabs/spz is the REFERENCE implementation — the one
+        # the format is defined by — and it ships three CLI tools behind
+        # `SPZ_BUILD_TOOLS` (default ON): ply_to_spz, spz_to_ply, spz_info.
+        # Only the first is installed here; the other two are dead weight in a
+        # write-only stage.
+        #
+        # Pinned to the v3.0.0 tag BY COMMIT, and the SHA is asserted after the
+        # checkout: a tag is a movable ref, and "we built the tag" is not the
+        # same claim as "we built these bytes". zlib/zstd come from apt so
+        # CMake's find_package succeeds — left to itself it FetchContents both
+        # from the network at build time, which is a second set of downloads
+        # that can fail on a day the image has to rebuild. The apt-get runs
+        # HERE, in this layer, rather than in the image's `apt_install` call for
+        # the same cache reason as above.
         .run_commands(
-            "cargo install spz --version 0.0.5 --locked --root /usr/local",
+            "apt-get update && apt-get install -y --no-install-recommends "
+            "zlib1g-dev libzstd-dev && rm -rf /var/lib/apt/lists/*",
+            "git clone https://github.com/nianticlabs/spz.git /opt/spz-src",
+            f"git -C /opt/spz-src checkout {SPZ_SOURCE_COMMIT}",
+            f'test "$(git -C /opt/spz-src rev-parse HEAD)" = "{SPZ_SOURCE_COMMIT}"',
+            "cmake -S /opt/spz-src -B /opt/spz-src/build -DCMAKE_BUILD_TYPE=Release "
+            "-DSPZ_BUILD_TOOLS=ON -DBUILD_TESTING=OFF",
+            "cmake --build /opt/spz-src/build --target ply_to_spz -j $(nproc)",
+            f"install -m 0755 /opt/spz-src/build/ply_to_spz {SPZ_BINARY_PATH}",
+            # Proves the binary runs in THIS image, at image-build time rather
+            # than after an L4 has been paid for. argc < 3 prints the usage line
+            # and exits 1, so a zero exit here would mean something unexpected.
+            f"{SPZ_BINARY_PATH} 2>&1 | grep -q 'Usage: ply_to_spz'",
+            "rm -rf /opt/spz-src/build",
         )
         # Final runtime PATH: cargo drops out again. Nothing at runtime needs
         # `rustc`/`cargo` themselves — only the `spz` BINARY they built,

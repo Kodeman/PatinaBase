@@ -1,9 +1,13 @@
 """`renders` job glue, with Blender behind a fake `BlenderScene`.
 
-`core/blender_ops.BlenderScene` is the entire Blender surface — four verbs — so
-these tests never import bpy and never allocate an L40S. What is under test is
-the ledger discipline, the per-frame register/PUT/mark order, and the artifact
-manifest shape.
+`core/blender_ops.BlenderScene` is the entire Blender surface, so these tests
+never import bpy and never allocate an L40S. What is under test is the ledger
+discipline, the per-frame register/PUT/mark order, and the artifact manifest
+shape.
+
+The subject is the PARAMETRIC room, not the GLB — see the job's own docstring.
+So `capturedRoomJsonUrl` is the required input here and the GLB is an optional
+overlay, and the fake scene answers `build_parametric` / `merge_glb`.
 """
 
 from __future__ import annotations
@@ -19,7 +23,26 @@ from scan_modal.jobs import renders_job
 from test_verify_job import LEASE, LeaseRejectingDb, RecordingDb  # noqa: F401
 
 GLB_URL = "https://example/sign/room-scans/usdz/u/r/room.glb?token=t"
+CAPTURED_URL = "https://example/sign/room-scans/captured_room/u/r/captured_room.json?token=t"
 ROOM = Bbox.from_points((-2.0, -1.5, 0.0), (2.0, 1.5, 2.5))
+#: What CAPTURED_ROOM below actually builds: ROOM grown by half a wall
+#: thickness on each horizontal side, and down by the synthesized floor slab.
+PARAMETRIC = Bbox.from_points((-2.05, -1.55, -0.05), (2.05, 1.55, 2.5))
+
+#: A four-wall room whose parametric extent is ROOM. Read by `build_scene_spec`
+#: for real — the scene spec is not faked, only Blender is.
+CAPTURED_ROOM = {
+    "walls": [
+        {"identifier": "n", "dimensions": [4.0, 2.5, 0.0],
+         "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.0, 1.25, -1.5, 1]},
+        {"identifier": "s", "dimensions": [4.0, 2.5, 0.0],
+         "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.0, 1.25, 1.5, 1]},
+        {"identifier": "e", "dimensions": [3.0, 2.5, 0.0],
+         "transform": [0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 2.0, 1.25, 0.0, 1]},
+        {"identifier": "w", "dimensions": [3.0, 2.5, 0.0],
+         "transform": [0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, -2.0, 1.25, 0.0, 1]},
+    ],
+}
 
 
 def payload(**overrides):
@@ -30,19 +53,21 @@ def payload(**overrides):
         "roomFileId": "rf-1",
         "roomFileVersion": 4,
         "traceId": "trace-1",
-        "inputs": {"glbUrl": GLB_URL},
+        "inputs": {"capturedRoomJsonUrl": CAPTURED_URL, "glbUrl": GLB_URL},
     }
     p.update(overrides)
     return p
 
 
 class FakeScene:
-    """Implements exactly `BlenderScene`'s three verbs and nothing else."""
+    """Implements exactly `BlenderScene`'s verbs and nothing else."""
 
-    def __init__(self, bbox=ROOM, fail_on=None):
+    def __init__(self, bbox=ROOM, fail_on=None, merged=None):
         self.bbox = bbox
         self.fail_on = fail_on
+        self.merged = merged
         self.imported: list[str] = []
+        self.built: list = []
         self.setup_with: list[Bbox] = []
         self.rendered: list[str] = []
 
@@ -51,6 +76,15 @@ class FakeScene:
         if self.fail_on == "import":
             raise RuntimeError("imported GLB contains no mesh geometry")
         return self.bbox
+
+    def build_parametric(self, spec):
+        self.built.append(spec)
+
+    def merge_glb(self, path):
+        self.imported.append(path.name)
+        if self.fail_on == "import":
+            raise RuntimeError("imported GLB contains no mesh geometry")
+        return self.merged
 
     def setup(self, bbox):
         self.setup_with.append(bbox)
@@ -76,9 +110,9 @@ def world(monkeypatch, tmp_path):
 
     def fake_fetch(url, timeout=None):
         w.fetched.append(url)
-        return b"glb-bytes"
+        return json.dumps(CAPTURED_ROOM).encode() if url == CAPTURED_URL else b"glb-bytes"
 
-    def fake_put_file(bucket, key, path, content_type, client=None):
+    def fake_put_file(bucket, key, path, content_type, client=None, content_encoding=None):
         if w.upload_error is not None:
             raise w.upload_error
         w.uploads.append((bucket, key, content_type))
@@ -107,7 +141,10 @@ def test_success_renders_the_whole_plan_and_merges_one_manifest(world):
     assert db.events[0] == ("renders", "started", "started")
     assert db.events[-1] == ("renders", "completed", "succeeded")
     assert scene.imported == ["room.glb"]
-    assert scene.setup_with == [ROOM]
+    # The cameras frame the PARAMETRIC room. `merged` is None here — the fake
+    # GLB carried no geometry — and that is no longer a failure.
+    assert scene.setup_with == [PARAMETRIC]
+    assert [b.kind for b in scene.built[0].boxes] == ["wall"] * 4 + ["floor"]
     assert len(scene.rendered) == 4 + 1 + TURNTABLE_FRAMES == 29
     assert len(world.uploads) == 29
     assert len(db.registered) == 29
@@ -333,3 +370,85 @@ def test_duplicate_delivery_is_refused_at_the_first_ledger_write(world, capsys):
     assert len(db.completed) == 1
     assert len(db.room_files) == 1
     assert db.failed == []
+
+
+# ── the parametric subject ──────────────────────────────────────────────────
+
+
+def test_a_scan_with_no_glb_still_renders_its_room(world):
+    """The GLB is an overlay now. A scan whose model_url_gltf was never stamped
+    used to fail input resolution at the dispatcher and render nothing."""
+    db = RecordingDb()
+    scene = FakeScene()
+    result = run(world, db, scene,
+                 inputs={"capturedRoomJsonUrl": CAPTURED_URL})
+
+    assert scene.imported == [], "no GLB was fetched or merged"
+    assert world.fetched == [CAPTURED_URL]
+    assert len(scene.rendered) == 29
+    assert result["artifacts"]["renders"]["count"] == 29
+
+
+def test_a_missing_captured_room_fails_the_task(world):
+    """Reversed from W2: the parametric room is the required input."""
+    db = RecordingDb()
+    with pytest.raises(renders_job.InputError):
+        run(world, db, FakeScene(), inputs={"glbUrl": GLB_URL})
+    assert db.completed == []
+    assert db.failed
+
+
+def test_a_captured_room_with_no_geometry_fails_before_a_single_frame(world, monkeypatch):
+    """29 pictures of an empty world is the exact failure this stage spent a
+    wave discovering. It must cost an InputError, not an L40S."""
+    db = RecordingDb()
+    scene = FakeScene()
+    empty = json.dumps({"walls": []}).encode()
+    monkeypatch.setattr(renders_job, "_fetch", lambda url, timeout=None: empty)
+
+    with pytest.raises(renders_job.InputError):
+        run(world, db, scene, inputs={"capturedRoomJsonUrl": CAPTURED_URL})
+
+    assert scene.rendered == []
+    assert db.completed == []
+
+
+def test_the_glbs_extent_widens_the_frame_but_never_narrows_it(world):
+    """A mesh that overhangs the parametric room must not be framed out of shot,
+    and a floor-only GLB must not shrink the frame back onto its own slab."""
+    db = RecordingDb()
+    overhang = Bbox.from_points((-3.0, -1.55, -0.05), (2.05, 1.55, 4.0))
+    scene = FakeScene(merged=overhang)
+    run(world, db, scene)
+
+    framed = scene.setup_with[0]
+    assert framed.min == (-3.0, -1.55, -0.05)
+    assert framed.max == (2.05, 1.55, 4.0)
+
+
+def test_the_completion_event_records_what_the_picture_is_of(world):
+    class DetailedDb(RecordingDb):
+        """RecordingDb keeps only (stage, event, status); this one keeps the
+        detail too, which is where "what was rendered" is written."""
+
+        def __init__(self):
+            super().__init__()
+            self.details: list[dict] = []
+
+        def append_event(self, *args, **kwargs):
+            self.details.append(args[8] if len(args) > 8 else kwargs.get("detail") or {})
+            return super().append_event(*args, **kwargs)
+
+    db = DetailedDb()
+    run(world, db, FakeScene())
+    detail = db.details[-1]
+    assert detail["source"] == "parametric"
+    assert detail["geometry"] == {"wall": 4, "floor": 1}
+    assert detail["glbMerged"] is False
+    assert detail["frames"] == 29
+
+
+def test_every_registered_object_names_the_parametric_source(world):
+    db = RecordingDb()
+    run(world, db, FakeScene())
+    assert {r["provenance"]["source"] for r in db.registered} == {"parametric"}

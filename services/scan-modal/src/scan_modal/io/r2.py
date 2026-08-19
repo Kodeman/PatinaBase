@@ -101,17 +101,25 @@ def put_file(
     path: Any,
     content_type: str,
     client: Any | None = None,
+    content_encoding: str | None = None,
 ) -> dict[str, Any]:
     """Streaming PUT from a file on disk. Returns `{"sha256", "size_bytes", "etag"}`.
 
     The checksum is computed here, on the bytes we are about to send, so the
     registry row records what was actually uploaded rather than what some
-    earlier step believed it had written.
+    earlier step believed it had written — which also means the recorded sha256
+    is of the bytes AT REST. When `content_encoding` is set the object is
+    inflated in transit, so a client that hashes what it received will not get
+    this digest. That is the correct trade: the registry describes the object,
+    not the delivery.
     """
     client = client or r2_client()
     sha256, size = sha256_file(path)
+    extra = {"ContentEncoding": content_encoding} if content_encoding else {}
     with open(path, "rb") as handle:
-        response = client.put_object(Bucket=bucket, Key=key, Body=handle, ContentType=content_type)
+        response = client.put_object(
+            Bucket=bucket, Key=key, Body=handle, ContentType=content_type, **extra
+        )
     etag = (response or {}).get("ETag")
     if isinstance(etag, str):
         etag = etag.strip('"')

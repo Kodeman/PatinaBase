@@ -14,9 +14,11 @@ retrain from zero.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
+from scan_modal.core.spz import CompressedSplat
 from scan_modal.io.db import LeaseRejected, StaleVersion
 from scan_modal.jobs import splat_job
 
@@ -124,20 +126,23 @@ def world(monkeypatch, tmp_path):
         paths["ply"].write_bytes(b"ply")
         return w.export_exit
 
-    def fake_compress(input_path, output_path, *a, **k):
-        output_path.write_bytes(b"spz")
-        return output_path
+    def fake_compress(input_path, work_dir, *a, **k):
+        target = Path(work_dir) / f"{k.get('stem', 'room')}.spz"
+        target.write_bytes(b"spz")
+        return CompressedSplat(path=target, mode="spz", file_name=target.name,
+                               content_type="application/octet-stream",
+                               mime="application/octet-stream", content_encoding=None)
 
-    def fake_put_file(bucket, key, path, content_type, client=None):
+    def fake_put_file(bucket, key, path, content_type, client=None, content_encoding=None):
         if w.upload_error is not None:
             raise w.upload_error
-        w.uploads.append((bucket, key, str(path), content_type))
+        w.uploads.append((bucket, key, str(path), content_type, content_encoding))
         return {"sha256": "abc123", "size_bytes": 3, "etag": "etag-1"}
 
     monkeypatch.setattr(splat_job, "_fetch", fake_fetch)
     monkeypatch.setattr(splat_job, "_write_frame", fake_write_frame)
     monkeypatch.setattr(splat_job, "_run", fake_run)
-    monkeypatch.setattr(splat_job._spz, "compress_ply_to_spz", fake_compress)
+    monkeypatch.setattr(splat_job._spz, "compress_splat", fake_compress)
     monkeypatch.setattr(splat_job._r2, "put_file", fake_put_file)
     monkeypatch.setattr(splat_job._r2, "artifacts_bucket", lambda: "patina-staging-media-artifacts-us")
     return w
@@ -393,9 +398,10 @@ def test_a_second_attempt_resumes_from_the_checkpoint_and_reuses_the_workspace(w
     assert second.completed
 
 
-def test_the_checkpoint_commit_runs_after_training_and_before_the_export(world, monkeypatch):
-    """An uncommitted Volume write is lost on preemption, so the commit has to
-    land before the export — the next thing that can be interrupted."""
+def test_the_checkpoint_is_committed_before_the_export(world, monkeypatch):
+    """An uncommitted Volume write is lost on preemption, so the last checkpoint
+    has to be committed before the export — the next thing that can be
+    interrupted."""
     order: list[str] = []
     faked_run = splat_job._run  # the fixture's fake, already installed
 
@@ -410,10 +416,100 @@ def test_the_checkpoint_commit_runs_after_training_and_before_the_export(world, 
     assert order == ["ns-train", "commit", "ns-export"]
 
 
+def test_a_training_failure_still_commits_the_checkpoint_it_reached(world):
+    """The case the Volume exists for. A run killed mid-training — preemption,
+    the training timeout, an operator stop — must leave its last checkpoint
+    durable, or `retries` retries from zero and the resume path is decoration.
+    """
+    commits: list[int] = []
+    world.train_exit = 1
+    db = RecordingDb()
+
+    with pytest.raises(RuntimeError):
+        splat_job.run_splat(payload(), db=db, checkpoint_commit=lambda: commits.append(1))
+
+    assert db.failed, "the failure is still reported"
+    assert commits, "the checkpoint written before the failure was committed"
+
+
 def test_the_job_runs_without_a_checkpoint_commit(world):
     """`checkpoint_commit` is the Modal Volume seam; a local/CLI run has none."""
     db = RecordingDb()
     assert splat_job.run_splat(payload(), db=db, checkpoint_commit=None)["stage"] == "splat"
+
+
+def test_the_completion_records_how_many_times_the_volume_was_committed(world):
+    db = RecordingDb()
+    splat_job.run_splat(payload(), db=db, checkpoint_commit=lambda: None)
+    assert db.registered[0]["provenance"]["checkpointCommits"] == 1
+
+
+# ── the checkpoint watcher itself ───────────────────────────────────────────
+
+
+def test_the_watcher_commits_once_per_new_checkpoint(tmp_path):
+    commits: list[int] = []
+    checkpoints = tmp_path / "nerfstudio_models"
+    checkpoints.mkdir()
+    committer = splat_job.CheckpointCommitter(checkpoints, lambda: commits.append(1))
+
+    assert committer.poll() is False, "no checkpoint yet"
+
+    (checkpoints / "step-000002000.ckpt").write_bytes(b"a")
+    assert committer.poll() is True
+    assert committer.poll() is False, "the same checkpoint must not commit twice"
+
+    (checkpoints / "step-000004000.ckpt").write_bytes(b"bb")
+    assert committer.poll() is True
+    assert len(commits) == 2
+    assert committer.commits == 2
+
+
+def test_the_watcher_sees_a_checkpoint_rewritten_in_place(tmp_path):
+    """nerfstudio rewrites the final checkpoint under the same name, and that is
+    the most valuable write of the run — a name-only marker would miss it."""
+    checkpoints = tmp_path / "nerfstudio_models"
+    checkpoints.mkdir()
+    ckpt = checkpoints / "step-000030000.ckpt"
+    ckpt.write_bytes(b"a")
+    commits: list[int] = []
+    committer = splat_job.CheckpointCommitter(checkpoints, lambda: commits.append(1))
+    assert committer.poll() is True
+
+    ckpt.write_bytes(b"much longer contents")
+    assert committer.poll() is True
+    assert len(commits) == 2
+
+
+def test_a_failing_commit_never_propagates_out_of_the_watcher(tmp_path):
+    """This runs alongside a training process minutes from a usable result. A
+    transient Volume error must not be what kills it — and the marker must NOT
+    advance, so the next poll retries."""
+    checkpoints = tmp_path / "nerfstudio_models"
+    checkpoints.mkdir()
+    (checkpoints / "step-000002000.ckpt").write_bytes(b"a")
+    attempts: list[int] = []
+
+    def flaky():
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("volume unavailable")
+
+    committer = splat_job.CheckpointCommitter(checkpoints, flaky)
+    assert committer.poll() is False
+    assert committer.poll() is True
+    assert committer.commits == 1
+
+
+def test_the_marker_is_none_when_the_directory_does_not_exist(tmp_path):
+    assert splat_job.checkpoint_marker(tmp_path / "missing") is None
+
+
+def test_the_marker_ignores_non_checkpoint_files(tmp_path):
+    checkpoints = tmp_path / "nerfstudio_models"
+    checkpoints.mkdir()
+    (checkpoints / "events.out.tfevents").write_bytes(b"x")
+    assert splat_job.checkpoint_marker(checkpoints) is None
 
 
 def test_the_workspace_is_keyed_on_the_room_file_version():

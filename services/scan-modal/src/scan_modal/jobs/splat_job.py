@@ -1,4 +1,4 @@
-"""`splat` job glue — ARKit posed photos → splatfacto → `.ply` → `.spz` → R2.
+"""`splat` job glue — ARKit posed photos → splatfacto → `.ply` → compressed → R2.
 
 Ledger discipline is `verify_job`'s, verbatim in shape: lease-gated `started`
 event first, `LeaseRejected`/`StaleVersion` exit clean and write nothing, and a
@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json as _json
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -51,12 +52,12 @@ from ..io.db import LeaseRejected, ScanWorkerDb, StaleVersion
 from . import _common
 
 __all__ = ["STAGE", "ARTIFACT_KIND", "InputError", "run_splat", "splat_object_key",
-           "train_argv", "export_argv", "workspace_paths"]
+           "train_argv", "export_argv", "workspace_paths", "checkpoint_marker",
+           "CheckpointCommitter"]
 
 STAGE = "splat"
 ARTIFACT_KIND = "splat"
 ACCESS_CLASS = "authenticated_project"
-SPZ_MIME = "application/octet-stream"
 
 #: Where a preemptible run keeps its state. This is the mount point `app.py`
 #: attaches the `modal.Volume` at — shared from the package root so the mount
@@ -74,9 +75,19 @@ EXPERIMENT_NAME = METHOD
 DEFAULT_MAX_ITERATIONS = 30000
 #: Save often enough that a preemption costs minutes, not the whole run.
 STEPS_PER_SAVE = 2000
-#: Wall-clock ceilings, well inside the function's own 3600 s timeout.
-TRAIN_TIMEOUT_S = 3000.0
+#: Wall-clock ceilings, well inside the function's own SPLAT_TIMEOUT_SECONDS.
+#:
+#: 3000 s (50 min) was under the measured cost of the iteration budget it is
+#: paired with: 30,000 iterations of splatfacto on 42 frames at 1440×1920 is
+#: ~55 minutes on an L4, because per-iteration cost more than doubles across
+#: densification (48.8 ms/iter at step 4,550; 119.2 ms/iter at step 7,470 —
+#: W2-EVIDENCE.md §4 C). A run that trained correctly would still have been
+#: killed at 50 minutes, every time. 4800 s is the measured ~55 min plus slack
+#: and remains a real bound on a wedged run.
+TRAIN_TIMEOUT_S = 4800.0
 EXPORT_TIMEOUT_S = 600.0
+#: How often the checkpoint watcher looks for a new checkpoint to commit.
+CHECKPOINT_POLL_S = 60.0
 
 # Module-level seam — tests monkeypatch this by name, and the job calls it
 # through the module global so the substitution takes.
@@ -90,8 +101,11 @@ class InputError(ValueError):
 # ── pure helpers ────────────────────────────────────────────────────────────
 
 
-def splat_object_key(scan_id: str, room_file_version: Any) -> str:
-    return f"scan_artifacts/{scan_id}/v{room_file_version}/room.spz"
+def splat_object_key(scan_id: str, room_file_version: Any, file_name: str = "room.spz") -> str:
+    """The artifact key. `file_name` carries the compression mode's own suffix —
+    `room.spz` normally, `room.ply.gz` under `SPZ_MODE=gzip-ply` — because a
+    `.spz` key holding gzipped PLY bytes would be a lie told to every reader."""
+    return f"scan_artifacts/{scan_id}/v{room_file_version}/{file_name}"
 
 
 def workspace_paths(scan_id: str, room_file_version: Any, root: Path | None = None) -> dict[str, Path]:
@@ -165,6 +179,90 @@ def export_argv(paths: dict[str, Path]) -> list[str]:
         "--load-config", str(paths["config"]),
         "--output-dir", str(paths["exports"]),
     ]
+
+
+def checkpoint_marker(checkpoint_dir: Path) -> tuple[str, int, int] | None:
+    """Identify the newest checkpoint on disk, or None if there is none yet.
+
+    Identity is (name, mtime_ns, size) rather than name alone: nerfstudio
+    rewrites `step-000030000.ckpt` in place on the final save, so a name-only
+    marker would miss the last write of the run — the one that matters most.
+    """
+    if not checkpoint_dir.is_dir():
+        return None
+    newest: tuple[str, int, int] | None = None
+    newest_mtime = -1
+    for path in checkpoint_dir.glob("*.ckpt"):
+        try:
+            stat = path.stat()
+        except OSError:  # a checkpoint being written and renamed under us
+            continue
+        if stat.st_mtime_ns > newest_mtime:
+            newest_mtime = stat.st_mtime_ns
+            newest = (path.name, stat.st_mtime_ns, stat.st_size)
+    return newest
+
+
+class CheckpointCommitter:
+    """Commits the Modal Volume each time a new checkpoint lands.
+
+    An uncommitted Volume write does not survive the container, so committing
+    only after `ns-train` returns 0 means a preempted, timed-out or operator-
+    stopped run loses everything — precisely the case the Volume exists for.
+    Observed in W2: run 2 found no workspace from run 1 and re-downloaded and
+    re-transcoded all 42 photos, and `modal.Retries` therefore retried from
+    zero rather than from a checkpoint (W2-EVIDENCE.md §4 D).
+
+    Polling for a new checkpoint file, rather than committing on a timer, is
+    what makes this crash-safe AND cheap: a commit of an unchanged Volume is
+    wasted IO, and a commit DURING a checkpoint write would persist a truncated
+    file. nerfstudio writes each checkpoint to its final name in one go and
+    only every `STEPS_PER_SAVE` steps, so a marker that has stopped changing
+    between two polls a minute apart is a checkpoint that has landed.
+
+    `poll()` is the whole decision and is synchronous, so the behaviour is
+    testable without a thread. `run_until(stop)` is the thin thread body.
+    """
+
+    def __init__(
+        self,
+        checkpoint_dir: Path,
+        commit: Callable[[], None],
+        poll_interval: float = CHECKPOINT_POLL_S,
+    ):
+        self._dir = checkpoint_dir
+        self._commit = commit
+        self._interval = poll_interval
+        self._seen: tuple[str, int, int] | None = None
+        self.commits = 0
+
+    def poll(self) -> bool:
+        """Commit iff a new checkpoint has appeared since the last commit.
+
+        A failing commit is logged and swallowed. This runs alongside a training
+        process that is minutes from a usable result; a transient Volume error
+        must never be the thing that kills it, and the next poll retries anyway.
+        """
+        marker = checkpoint_marker(self._dir)
+        if marker is None or marker == self._seen:
+            return False
+        try:
+            self._commit()
+        except Exception as exc:  # noqa: BLE001 - see docstring
+            _common.log_skip(STAGE, "checkpoint_commit_failed", error=type(exc).__name__)
+            return False
+        self._seen = marker
+        self.commits += 1
+        return True
+
+    def run_until(self, stop: Any) -> None:
+        """Poll until `stop` (a threading.Event) is set, then poll once more."""
+        while not stop.wait(self._interval):
+            self.poll()
+        # The last checkpoint can land in the final seconds of training, after
+        # the last interval poll and before the stop. Without this, the most
+        # valuable checkpoint of the run is the one that is never committed.
+        self.poll()
 
 
 def _url_basename(url: str) -> str:
@@ -254,6 +352,36 @@ def _run(argv: Sequence[str], timeout: float) -> int:
     return code
 
 
+@contextmanager
+def _checkpoint_watch(
+    checkpoint_dir: Path,
+    commit: Callable[[], None] | None,
+    poll_interval: float = CHECKPOINT_POLL_S,
+):
+    """Run a `CheckpointCommitter` on a daemon thread for the duration of a block.
+
+    Yields the committer either way — with no `commit` seam (tests, and any
+    non-Modal runtime) it simply never fires, so the caller has no branch.
+    """
+    committer = CheckpointCommitter(checkpoint_dir, commit or (lambda: None), poll_interval)
+    if commit is None:
+        yield committer
+        return
+
+    import threading
+
+    stop = threading.Event()
+    thread = threading.Thread(target=committer.run_until, args=(stop,), daemon=True)
+    thread.start()
+    try:
+        yield committer
+    finally:
+        stop.set()
+        # Bounded: the final poll is one Volume commit. A watcher that outlived
+        # its join is a daemon and cannot hold the container open.
+        thread.join(timeout=120.0)
+
+
 def _prepare_workspace(
     paths: dict[str, Path],
     manifest_url: str | None,
@@ -311,9 +439,9 @@ def run_splat(
 ) -> dict[str, Any]:
     """Run `splat` for one dispatched task and write its outcome to the ledger.
 
-    `checkpoint_commit` persists the Modal Volume (the real `volume.commit`, a
-    no-op in tests). Called after training so a preemption during EXPORT does
-    not throw away the trained checkpoint.
+    `checkpoint_commit` persists the Modal Volume (the real `volume.commit`;
+    `None` in tests and anywhere without one). It is called DURING training,
+    each time a new checkpoint lands — see `CheckpointCommitter`.
     """
     task_id = payload.get("taskId")
     if not task_id:
@@ -370,21 +498,25 @@ def run_splat(
         resume = paths["checkpoints"].is_dir() and any(paths["checkpoints"].iterdir())
         config = inputs.get("config") or {}
         max_iterations = int(config.get("maxIterations") or DEFAULT_MAX_ITERATIONS)
-        code = _run(train_argv(paths, max_iterations, resume), TRAIN_TIMEOUT_S)
+        # The watcher commits the Volume as each checkpoint lands, and its
+        # shutdown is in a `finally`, so a preemption, a training timeout or an
+        # operator stop all leave the last checkpoint durable — the resume path
+        # is only real if something committed before the container died.
+        with _checkpoint_watch(paths["checkpoints"], checkpoint_commit) as committer:
+            code = _run(train_argv(paths, max_iterations, resume), TRAIN_TIMEOUT_S)
         if code != 0:
             raise RuntimeError(f"ns-train {METHOD} exited {code}")
-        if checkpoint_commit is not None:
-            checkpoint_commit()
 
         paths["exports"].mkdir(parents=True, exist_ok=True)
         code = _run(export_argv(paths), EXPORT_TIMEOUT_S)
         if code != 0:
             raise RuntimeError(f"ns-export gaussian-splat exited {code}")
         ply = _resolve_ply(paths)
-        _spz.compress_ply_to_spz(ply, paths["spz"])
+        ply_bytes = ply.stat().st_size
+        compressed = _spz.compress_splat(ply, paths["base"])
 
         bucket = _r2.artifacts_bucket()
-        key = splat_object_key(scan_id, room_file_version)
+        key = splat_object_key(scan_id, room_file_version, compressed.file_name)
         provenance = {
             "stage": STAGE,
             "method": METHOD,
@@ -397,12 +529,20 @@ def run_splat(
             "maxIterations": max_iterations,
             "resumed": resume,
             "walls": len(parametric.walls),
+            # Which compressor produced these bytes, and what it started from.
+            # `spz` and `gzip-ply` are different containers behind the same
+            # artifact kind, and the ratio is the whole reason the stage
+            # compresses at all.
+            "compression": compressed.mode,
+            "plyBytes": ply_bytes,
+            "checkpointCommits": committer.commits,
         }
         object_id = db.register_media_object(
             bucket=bucket, object_key=key, access_class=ACCESS_CLASS,
-            mime=SPZ_MIME, scan_id=scan_id, provenance=provenance,
+            mime=compressed.mime, scan_id=scan_id, provenance=provenance,
         )
-        stored = _r2.put_file(bucket, key, paths["spz"], SPZ_MIME)
+        stored = _r2.put_file(bucket, key, compressed.path, compressed.content_type,
+                              content_encoding=compressed.content_encoding)
         db.mark_media_object_state(object_id, "stored", sha256=stored["sha256"],
                                    etag=stored["etag"], size_bytes=stored["size_bytes"])
 
