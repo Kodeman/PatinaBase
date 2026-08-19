@@ -254,6 +254,90 @@ describe('artifact map reading', () => {
     expect([...refs.keys()]).toEqual(['corner_ne', 'turntable']);
   });
 
+  // The real stored shape (`renders_job.py`'s `run_renders`, verbatim from
+  // staging room_files id 5bc4cef2-44fd-5d6f-b7fc-3dfe005e99ab, scan
+  // cd72ad9b-da14-5eee-a8c7-1f71ace9db12): the cover shot's ref is hoisted to
+  // `renders.object_id`/`.version` so 00490's `scan_media_read` can resolve a
+  // single-object ref, and `renders.shots` carries the full set the gallery
+  // shows together. This is what broke the flat-map assumption in production.
+  const HOISTED_COVER_RENDERS = {
+    renders: {
+      object_id: '7ca139c2-adb7-4177-b9f6-26331244b548',
+      version: 1,
+      cover: 'top_down',
+      count: 3,
+      shots: {
+        top_down: {
+          object_id: '7ca139c2-adb7-4177-b9f6-26331244b548',
+          object_key:
+            'scan_artifacts/cd72ad9b-da14-5eee-a8c7-1f71ace9db12/v1/renders/top_down.jpg',
+          sha256: '3c520ae6b88e7866b61f7a131fdde09244e3264f28e9e556b62b935857bb2b8',
+        },
+        corner_ne: {
+          object_id: '9ebc2bc4-f96b-4437-a3b5-d1cd48994ffb',
+          object_key:
+            'scan_artifacts/cd72ad9b-da14-5eee-a8c7-1f71ace9db12/v1/renders/corner_ne.jpg',
+          sha256: '620f6402256981dfc66b695a23fb482df46bf80934eea9919cb40c073381d7e',
+        },
+        corner_nw: {
+          object_id: '4e2db7a2-98b3-41a9-8545-e31a8a194366',
+          object_key:
+            'scan_artifacts/cd72ad9b-da14-5eee-a8c7-1f71ace9db12/v1/renders/corner_nw.jpg',
+          sha256: '11cb508e846fadf9ebf579b04a196a268fef0a32cfcacdf42f38286ca8de1ea',
+        },
+      },
+    },
+  };
+
+  it('reads the real hoisted-cover shape: the shots map, keyed by shot name', () => {
+    const refs = readArtifactRefs(HOISTED_COVER_RENDERS, 'renders');
+    expect([...refs.keys()]).toEqual(['corner_ne', 'corner_nw', 'top_down']);
+    expect(refs.get('top_down')).toEqual({
+      objectId: '7ca139c2-adb7-4177-b9f6-26331244b548',
+      version: null, // per-shot entries carry no `version` field of their own
+    });
+  });
+
+  it('does not duplicate the cover under a synthetic `cover` key when a shot already carries its object id', () => {
+    const refs = readArtifactRefs(HOISTED_COVER_RENDERS, 'renders');
+    // top_down IS the cover (object_id matches renders.object_id) — no
+    // separate 'cover' entry should appear.
+    expect(refs.has('cover')).toBe(false);
+    expect(refs.size).toBe(3);
+  });
+
+  it('folds the hoisted cover in under key "cover" when no shot in the set resolves to the same object', () => {
+    const refs = readArtifactRefs(
+      {
+        renders: {
+          object_id: RENDER_B, // not present in `shots` below
+          version: 1,
+          cover: 'missing_shot',
+          count: 1,
+          shots: {
+            corner_ne: { object_id: RENDER_A },
+          },
+        },
+      },
+      'renders',
+    );
+    expect([...refs.keys()]).toEqual(['corner_ne', 'cover']);
+    expect(refs.get('cover')).toEqual({ objectId: RENDER_B, version: 1 });
+  });
+
+  it('tolerates the legacy flat shape (no `shots` key) as a fallback', () => {
+    const refs = readArtifactRefs(
+      {
+        renders: {
+          turntable: { object_id: RENDER_B },
+          corner_ne: { object_id: RENDER_A },
+        },
+      },
+      'renders',
+    );
+    expect([...refs.keys()]).toEqual(['corner_ne', 'turntable']);
+  });
+
   it('is total against a jsonb column with no shape constraint', () => {
     // None of these may throw inside a request; all read as "no artifact".
     for (const value of [
@@ -440,6 +524,48 @@ describe('capability URLs', () => {
       '/patina-staging-media-artifacts-us/scans/abc/1/renders/corner_ne.jpg',
     );
     expect(body.shots.turntable.expiresAt).toBe('2026-08-18T12:44:56.789Z');
+  });
+
+  it('returns a shot map for the real hoisted-cover renders shape end to end', async () => {
+    // Same jsonb `room_files.artifacts.renders` a genuinely completed renders
+    // job writes (verbatim, minus the sha256/extra fields — see the fixture
+    // in the "artifact map reading" suite above for the full field set).
+    const live = await liveWorker({
+      roomFile: {
+        renders: {
+          object_id: RENDER_A, // cover ref, hoisted — equals shots.top_down below
+          version: 1,
+          cover: 'top_down',
+          count: 2,
+          shots: {
+            top_down: { object_id: RENDER_A },
+            corner_ne: { object_id: RENDER_B },
+          },
+        },
+      },
+      mediaObjects: [
+        object(RENDER_A, 'scans/abc/1/renders/top_down.jpg'),
+        object(RENDER_B, 'scans/abc/1/renders/corner_ne.jpg'),
+      ],
+    });
+    const response = await request(
+      live.worker,
+      env(),
+      `/v1/scan/room-files/${ROOM_FILE_ID}/artifacts/renders`,
+      live.bearer,
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      kind: string;
+      shots: Record<string, { url: string }>;
+    };
+    expect(body.kind).toBe('renders');
+    // The cover (top_down) is not duplicated under a synthetic 'cover' key.
+    expect(Object.keys(body.shots)).toEqual(['corner_ne', 'top_down']);
+    expect(new URL(body.shots.top_down.url).pathname).toBe(
+      '/patina-staging-media-artifacts-us/scans/abc/1/renders/top_down.jpg',
+    );
   });
 
   it('omits a shot whose object the caller cannot see rather than failing the set', async () => {

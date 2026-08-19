@@ -26,9 +26,15 @@
  * ── THE ARTIFACT MAP ────────────────────────────────────────────────────────
  * `room_files.artifacts` (00489) is `kind -> {object_id, version}` over
  * `public.media_objects`. `splat` and `glb` are single refs. `renders` is one
- * level deeper — `renders -> shot name -> {object_id, version}` — because the
- * stage emits a set (four corners, a top-down, a turntable strip) that the
- * gallery shows together, and one round trip should return the whole set.
+ * level deeper, and its actual on-disk shape (`renders_job.py`) is the
+ * HOISTED-COVER manifest: `{ object_id, version, cover, count, shots: {shot
+ * name -> {object_id, ...}} }`. `object_id`/`version` at the top are the cover
+ * shot's ref, duplicated up a level so 00490's `scan_media_read` — which
+ * resolves a ref by top-level `object_id` and has no notion of `shots` — has
+ * something to join against; `shots` is the full set (four corners, a
+ * top-down, a turntable strip) this route returns together in one round trip.
+ * A flat `{shot name -> {object_id, version}}` map (no `shots` key) is read as
+ * a legacy/tolerated fallback shape.
  */
 
 import { verifySupabaseRequest } from './auth';
@@ -136,10 +142,34 @@ export function readArtifactRefs(
   }
 
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return refs;
-  // Sorted so the shot map — and therefore the response body — is deterministic
-  // whatever order the renders stage wrote the keys in.
-  for (const shot of Object.keys(entry as Record<string, unknown>).sort()) {
-    const ref = readRef((entry as Record<string, unknown>)[shot]);
+  const entryObj = entry as Record<string, unknown>;
+  const shotsValue = entryObj.shots;
+
+  // The real, hoisted-cover shape: `shots` carries the actual set. Read it,
+  // then fold in the hoisted cover ref under key `cover` — but only if no shot
+  // in the set already resolves to the same object, so the cover's own shot
+  // (e.g. `top_down`) doesn't appear twice under two keys.
+  if (shotsValue && typeof shotsValue === 'object' && !Array.isArray(shotsValue)) {
+    // Sorted so the shot map — and therefore the response body — is
+    // deterministic whatever order the renders stage wrote the keys in.
+    for (const shot of Object.keys(shotsValue as Record<string, unknown>).sort()) {
+      const ref = readRef((shotsValue as Record<string, unknown>)[shot]);
+      if (ref) refs.set(shot, ref);
+    }
+    const coverRef = readRef(entryObj);
+    if (coverRef) {
+      const alreadyPresent = [...refs.values()].some(
+        (ref) => ref.objectId === coverRef.objectId,
+      );
+      if (!alreadyPresent) refs.set('cover', coverRef);
+    }
+    return refs;
+  }
+
+  // Legacy/tolerated fallback: a flat `{shot name -> ref}` map with no `shots`
+  // key of its own.
+  for (const shot of Object.keys(entryObj).sort()) {
+    const ref = readRef(entryObj[shot]);
     if (ref) refs.set(shot, ref);
   }
   return refs;
