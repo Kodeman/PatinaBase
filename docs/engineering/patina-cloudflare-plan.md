@@ -188,6 +188,8 @@ Only Cloudflare-hosted models are used. Retry only timeouts, capacity 429s, and 
 
 Workers AI does not write embeddings. Current Nomic text/vision vectors and the inference Container remain canonical; content revision/hash becomes part of the Nomic job key so enrichment changes cannot leave stale vectors.
 
+Phase 3 migration reservation: 00503–00509 (see docs/engineering/migration-number-reservations.md).
+
 ## Phase 4 target: finish the API strangler
 
 Direct `/rest/v1` and RPC consumers migrate to typed routes in this order:
