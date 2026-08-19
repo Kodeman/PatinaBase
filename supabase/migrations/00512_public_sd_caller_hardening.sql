@@ -41,6 +41,9 @@ CREATE TEMP TABLE _00512_routine_profile (
   original_body_sha256 text NOT NULL,
   final_body_sha256 text NOT NULL,
   original_roles text[] NOT NULL DEFAULT ARRAY[]::text[],
+  -- Alternative accepted source ACL for the local fresh-replay image; see the
+  -- preflight comment on the source-ACL comparison. NULL = no alternative.
+  original_roles_local text[],
   final_roles text[] NOT NULL
 ) ON COMMIT DROP;
 
@@ -61,8 +64,12 @@ VALUES
     'public.apply_scope_change(uuid)', 'p_request_id uuid', 'void', 'v',
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
-    '299b2eec88629f4abb9c8ef5c62b2549bf444ee2673f30ace8266e00958fb911',
-    '88cd8a50f7851f7a4857e7a0e79bafb741c20c0ddd87b6f49005aa2438c58e49', ARRAY['authenticated']
+    -- Rebased onto 00510 S3 (2026-08-19): 00510 landed on main while this
+    -- tranche waited and rewrote apply_scope_change to set assignment_scope
+    -- explicitly. Both pins moved — source is now 00510's body, and the final
+    -- body carries 00510's fix forward on top of this migration's hardening.
+    '1145e78069169a45ed235b79c12e58ece9dcec96951c3884b1334ce14e60d98e',
+    'f7760aaeb9245011d9f13afc02d399ea2d10e680ba5bce98859f5963ad138110', ARRAY['authenticated']
   ),
   (
     'public.claim_proposal_send_dispatch(uuid,uuid,timestamp with time zone,integer)',
@@ -262,6 +269,24 @@ WHERE signature IN (
   'public.review_sms_message(uuid,text,jsonb)'
 );
 
+-- Those same four hold service_role by creation-time ALTER DEFAULT PRIVILEGES
+-- and by nothing else — no migration ever GRANTs it explicitly (00271, 00397,
+-- 00267 and 00282 grant only `authenticated`). Strata prod and staging predate
+-- the 2026-05-30 platform-default flip and hold {authenticated, service_role}
+-- (verified read-only on prod 2026-08-19); a fresh local `supabase db reset`
+-- reaches this migration with {authenticated} only, because the replacement
+-- baseline in seed/00-legacy-grants.sql runs after the migration phase. Both
+-- are legitimate source states, so record the local one as an alternative
+-- rather than weakening the shared assertion.
+UPDATE _00512_routine_profile
+SET original_roles_local = ARRAY['authenticated']
+WHERE signature IN (
+  'public.escalate_item_feedback_to_decision(uuid,uuid)',
+  'public.generate_milestone_invoice(uuid)',
+  'public.reply_to_item_feedback(uuid,text)',
+  'public.review_sms_message(uuid,text,jsonb)'
+);
+
 CREATE TEMP TABLE _00512_dependency_profile (
   signature text PRIMARY KEY,
   arguments text NOT NULL,
@@ -275,7 +300,11 @@ CREATE TEMP TABLE _00512_dependency_profile (
   final_body_sha256 text NOT NULL,
   original_roles text[] NOT NULL,
   final_roles text[] NOT NULL,
-  source_required boolean NOT NULL DEFAULT true
+  source_required boolean NOT NULL DEFAULT true,
+  -- Appended last so the positional INSERT ... VALUES below keeps working. See
+  -- the note where it is populated: alternative accepted source ACL on the
+  -- local fresh-replay image. NULL = no alternative.
+  original_roles_local text[]
 ) ON COMMIT DROP;
 
 INSERT INTO _00512_dependency_profile VALUES
@@ -400,6 +429,17 @@ INSERT INTO _00512_dependency_profile VALUES
     ARRAY[]::text[], ARRAY[]::text[], true
   );
 
+-- Trigger relays whose entire EXECUTE ACL came from creation-time ALTER DEFAULT
+-- PRIVILEGES: no migration grants them anything explicitly. Prod holds the
+-- default-privilege grants (verified read-only on Strata 2026-08-19); a fresh
+-- local `supabase db reset` reaches this migration with `postgres` only,
+-- because seed/00-legacy-grants.sql restores the baseline after the migration
+-- phase. Record the local shape as an accepted alternative source state rather
+-- than dropping the prod assertion.
+UPDATE _00512_dependency_profile
+SET original_roles_local = ARRAY[]::text[]
+WHERE signature = 'public.guard_scope_change_request_integrity()';
+
 CREATE TEMP TABLE _00512_lock_order_profile (
   signature text PRIMARY KEY,
   arguments text NOT NULL,
@@ -413,7 +453,11 @@ CREATE TEMP TABLE _00512_lock_order_profile (
   final_body_sha256 text NOT NULL,
   original_roles text[] NOT NULL,
   final_roles text[] NOT NULL,
-  source_required boolean NOT NULL DEFAULT true
+  source_required boolean NOT NULL DEFAULT true,
+  -- Appended last so the positional INSERT ... VALUES below keeps working. See
+  -- the note where it is populated: alternative accepted source ACL on the
+  -- local fresh-replay image. NULL = no alternative.
+  original_roles_local text[]
 ) ON COMMIT DROP;
 
 INSERT INTO _00512_lock_order_profile VALUES
@@ -451,6 +495,20 @@ INSERT INTO _00512_lock_order_profile VALUES
     '6c2c1082d6fcd2a94654431a766c4a1f717e70de8f55426c7190c6b2e9becc31',
     ARRAY[]::text[], ARRAY[]::text[], false
   );
+
+-- Trigger relays whose entire EXECUTE ACL came from creation-time ALTER DEFAULT
+-- PRIVILEGES: no migration grants them anything explicitly. Prod holds the
+-- default-privilege grants (verified read-only on Strata 2026-08-19); a fresh
+-- local `supabase db reset` reaches this migration with `postgres` only,
+-- because seed/00-legacy-grants.sql restores the baseline after the migration
+-- phase. Record the local shape as an accepted alternative source state rather
+-- than dropping the prod assertion.
+UPDATE _00512_lock_order_profile
+SET original_roles_local = ARRAY[]::text[]
+WHERE signature IN (
+  'public.draft_milestones_on_production_start()',
+  'public.po_status_cascade_to_items()'
+);
 
 CREATE OR REPLACE FUNCTION pg_temp._00512_references_routine(
   p_source text,
@@ -640,7 +698,17 @@ BEGIN
                     extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
                     'hex'
                   ) IS NOT DISTINCT FROM expected.original_body_sha256
-              AND COALESCE((
+              -- Source ACL. `original_roles_local` is the same ACL minus the
+              -- creation-time ALTER DEFAULT PRIVILEGES grant to service_role,
+              -- which the 2026-05-30 Supabase platform-default flip no longer
+              -- issues. Prod and staging hold the grant (verified read-only on
+              -- Strata 2026-08-19); a fresh local `supabase db reset` does not,
+              -- because 00-legacy-grants.sql restores it in the seed phase that
+              -- runs AFTER migrations. Accepting both shapes here costs nothing:
+              -- this migration REVOKEs ALL and re-GRANTs unconditionally, so the
+              -- final-state assertions below are untouched by which one was seen.
+              AND (
+                COALESCE((
                     SELECT array_agg(
                       COALESCE(grantee.rolname, 'PUBLIC')::text
                       ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
@@ -656,6 +724,26 @@ BEGIN
                       array_append(expected.original_roles, 'postgres')
                     ) AS role_name
                   )
+                OR (
+                  expected.original_roles_local IS NOT NULL
+                  AND COALESCE((
+                    SELECT array_agg(
+                      COALESCE(grantee.rolname, 'PUBLIC')::text
+                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
+                    )
+                    FROM aclexplode(
+                      COALESCE(routine.proacl, acldefault('f', routine.proowner))
+                    ) AS acl
+                    LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+                    WHERE acl.privilege_type = 'EXECUTE'
+                    ), ARRAY[]::text[]) IS NOT DISTINCT FROM (
+                      SELECT array_agg(role_name ORDER BY role_name)
+                      FROM unnest(
+                        array_append(expected.original_roles_local, 'postgres')
+                      ) AS role_name
+                    )
+                )
+              )
             )
             OR (
               routine.proconfig IS NOT DISTINCT FROM expected.final_config
@@ -722,7 +810,10 @@ BEGIN
                     extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
                     'hex'
                   ) IS NOT DISTINCT FROM expected.original_body_sha256
-              AND COALESCE((
+              -- Source ACL, tolerating the local fresh-replay shape; see the
+              -- note on original_roles_local where it is populated.
+              AND (
+                COALESCE((
                     SELECT array_agg(
                       COALESCE(grantee.rolname, 'PUBLIC')::text
                       ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
@@ -738,6 +829,26 @@ BEGIN
                       array_append(expected.original_roles, 'postgres')
                     ) AS role_name
                   )
+                OR (
+                  expected.original_roles_local IS NOT NULL
+                  AND COALESCE((
+                    SELECT array_agg(
+                      COALESCE(grantee.rolname, 'PUBLIC')::text
+                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
+                    )
+                    FROM aclexplode(
+                      COALESCE(routine.proacl, acldefault('f', routine.proowner))
+                    ) AS acl
+                    LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+                    WHERE acl.privilege_type = 'EXECUTE'
+                    ), ARRAY[]::text[]) IS NOT DISTINCT FROM (
+                      SELECT array_agg(role_name ORDER BY role_name)
+                      FROM unnest(
+                        array_append(expected.original_roles_local, 'postgres')
+                      ) AS role_name
+                    )
+                )
+              )
             )
             OR (
               routine.proconfig IS NOT DISTINCT FROM expected.final_config
@@ -809,7 +920,10 @@ BEGIN
                     extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
                     'hex'
                   ) IS NOT DISTINCT FROM expected.original_body_sha256
-              AND COALESCE((
+              -- Source ACL, tolerating the local fresh-replay shape; see the
+              -- note on original_roles_local where it is populated.
+              AND (
+                COALESCE((
                     SELECT array_agg(
                       COALESCE(grantee.rolname, 'PUBLIC')::text
                       ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
@@ -825,6 +939,26 @@ BEGIN
                       array_append(expected.original_roles, 'postgres')
                     ) AS role_name
                   )
+                OR (
+                  expected.original_roles_local IS NOT NULL
+                  AND COALESCE((
+                    SELECT array_agg(
+                      COALESCE(grantee.rolname, 'PUBLIC')::text
+                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
+                    )
+                    FROM aclexplode(
+                      COALESCE(routine.proacl, acldefault('f', routine.proowner))
+                    ) AS acl
+                    LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+                    WHERE acl.privilege_type = 'EXECUTE'
+                    ), ARRAY[]::text[]) IS NOT DISTINCT FROM (
+                      SELECT array_agg(role_name ORDER BY role_name)
+                      FROM unnest(
+                        array_append(expected.original_roles_local, 'postgres')
+                      ) AS role_name
+                    )
+                )
+              )
             )
             OR (
               routine.proconfig IS NOT DISTINCT FROM expected.final_config
@@ -3481,6 +3615,8 @@ BEGIN
       v_unit_price_cents * v_quantity
     );
 
+    -- assignment_scope stays explicit (00510 S3): 00438 dropped 00434's
+    -- auto-derivation, so a room-scoped amendment cannot be applied without it.
     INSERT INTO public.project_ffe_items (
       project_id,
       project_room_id,
@@ -3491,7 +3627,8 @@ BEGIN
       unit_price_cents,
       line_total_cents,
       vendor_name,
-      notes
+      notes,
+      assignment_scope
     ) VALUES (
       v_request.project_id,
       v_project_room_id,
@@ -3511,7 +3648,8 @@ BEGIN
       v_unit_price_cents,
       v_line_total_cents,
       COALESCE(v_new_item->>'vendor_name', v_new_item->>'vendorName'),
-      v_new_item->>'notes'
+      v_new_item->>'notes',
+      CASE WHEN v_project_room_id IS NOT NULL THEN 'room' ELSE 'throughout' END
     );
   END LOOP;
 
@@ -6095,6 +6233,18 @@ BEGIN
     ]) AS expected(signature)
   ) THEN
     RAISE EXCEPTION '00512 production authority caller graph drifted';
+  END IF;
+
+  -- Carry-forward guard for 00510 S3. The body pins above already fix the exact
+  -- text, but they are regenerated whenever this body is rebased, and a rebase
+  -- onto a stale copy is precisely how 00510's fix was lost once already.
+  IF position(
+       'assignment_scope'
+       IN (SELECT prosrc FROM pg_proc
+           WHERE oid = to_regprocedure('public.apply_scope_change(uuid)'))
+     ) = 0 THEN
+    RAISE EXCEPTION
+      '00512 apply_scope_change body dropped 00510 S3 assignment_scope';
   END IF;
 END
 $lock_order_profile_postcondition$;
