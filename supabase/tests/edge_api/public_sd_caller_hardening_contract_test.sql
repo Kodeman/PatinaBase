@@ -155,7 +155,7 @@ INSERT INTO _00512_expected VALUES
   (
     'public.apply_scope_change(uuid)', 'p_request_id uuid', 'void', 'v',
     ARRAY['search_path=pg_catalog, public, pg_temp'],
-    '88cd8a50f7851f7a4857e7a0e79bafb741c20c0ddd87b6f49005aa2438c58e49',
+    'f7760aaeb9245011d9f13afc02d399ea2d10e680ba5bce98859f5963ad138110',
     ARRAY['authenticated'],
     $call$SELECT public.apply_scope_change('48600000-0000-4000-8000-00000000ff01')$call$
   ),

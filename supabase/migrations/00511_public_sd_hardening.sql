@@ -199,7 +199,7 @@ VALUES
     'trigger', 'v', ARRAY['search_path=public']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '53c95a7cbfb04102ddd662fc0d0d63fd33474c3e3e3c51e9c23ce6263bf3a474',
-    '67873d9018516818c182ee716cdc7e4b45ffe6b6c5d03bc9285b35e7a031c12f', ARRAY['authenticated', 'service_role']::text[],
+    '3ce8183f5490b21a6a087a6a21e8e36c2c1b4c51d1577da614799a473f99099b', ARRAY['authenticated', 'service_role']::text[],
     ARRAY[]::text[]
   ),
   (
@@ -208,7 +208,7 @@ VALUES
     'trigger', 'v', ARRAY['search_path=public']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '04b921692fd72c03a2137e413c76d997435bafb3c29d2506e8b3fa14d8f6ce20',
-    'fe66293d1fc39149dba2abc85d6ecd7b948f786e53f7e4e5746a65b69e82028d', ARRAY['authenticated', 'service_role']::text[],
+    '8113ca8a0b99edcce6220e97983ddf1f71576d099f5e3311044c571027929a02', ARRAY['authenticated', 'service_role']::text[],
     ARRAY[]::text[]
   ),
   (
@@ -2243,6 +2243,52 @@ BEGIN
 END;
 $$;
 
+-- Finding #1. set_project_studio_id and set_invoice_studio_id must stay
+-- SECURITY INVOKER (asserted below: the caller's own role is what they judge),
+-- yet both need one fact about a THIRD party — whether the project's lead
+-- designer holds a designer-domain role. public.user_roles RLS is
+-- USING (user_id = auth.uid()), so a co-member reads no row for the lead and
+-- the trigger refuses the write, even though RLS admits it and the trigger's
+-- own co-member branch means to allow it. That blocks the one legitimate
+-- direct authenticated path in the product: the draft-invoice header UPDATE in
+-- packages/supabase/src/hooks/use-invoices.ts. Every other invoice transition
+-- runs through a SECURITY DEFINER RPC, where the read is already unaffected.
+--
+-- Resolve only the boolean, behind a DEFINER boundary, mirroring
+-- is_design_studio_comember (00399). No row, role name or role_id is exposed.
+-- The triggers keep their own `PERFORM user_role.id ... FOR SHARE OF
+-- user_role` at the canonical lock position; this helper deliberately takes no
+-- lock, so it cannot be used to acquire one out of order (and the path it
+-- unblocks — a draft header edit — cannot reparent an invoice: studio_id,
+-- designer_id, project_id and client_id are all immutable on UPDATE two
+-- hundred lines below, so there is no authority state for a concurrent role
+-- revoke to invalidate).
+CREATE OR REPLACE FUNCTION public.has_designer_domain_role(p_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+  SELECT p_user_id IS NOT NULL
+    AND EXISTS (
+      SELECT 1
+      FROM public.user_roles AS user_role
+      JOIN public.roles AS role ON role.id = user_role.role_id
+      WHERE user_role.user_id = p_user_id
+        AND role.domain = 'designer'
+    );
+$$;
+
+COMMENT ON FUNCTION public.has_designer_domain_role(uuid) IS
+  'Does this user hold any designer-domain role? RLS-independent so the studio triggers can judge a lead designer they are not allowed to read (00511, finding #1). Boolean only.';
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.has_designer_domain_role(uuid)
+  FROM PUBLIC, anon, dashboard_user, agent_reader, agent_writer,
+       edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.has_designer_domain_role(uuid)
+  TO authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION public.set_project_studio_id()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -2388,13 +2434,7 @@ BEGIN
       AND membership.role <> 'guest'
       AND studio.type = 'design_studio'
       AND studio.status = 'active'
-      AND EXISTS (
-        SELECT 1
-        FROM public.user_roles AS user_role
-        JOIN public.roles AS role ON role.id = user_role.role_id
-        WHERE user_role.user_id = NEW.designer_id
-          AND role.domain = 'designer'
-      );
+      AND public.has_designer_domain_role(NEW.designer_id);
 
     IF v_candidate_studio_count = 1 THEN
       NEW.studio_id := v_candidate_studio_id;
@@ -2417,7 +2457,10 @@ BEGIN
     AND role.domain = 'designer'
   ORDER BY user_role.role_id, user_role.id
   FOR SHARE OF user_role;
-  v_lead_has_designer_role := FOUND;
+  -- FOUND here is the caller's RLS-filtered view; the authority answer is the
+  -- DEFINER helper's. The statement above stays for its lock and its place in
+  -- the canonical roles -> user_roles -> membership -> studio order.
+  v_lead_has_designer_role := public.has_designer_domain_role(NEW.designer_id);
 
   PERFORM membership.id
   FROM public.organization_members AS membership
@@ -2780,7 +2823,9 @@ BEGIN
       AND role.domain = 'designer'
     ORDER BY user_role.role_id, user_role.id
     FOR SHARE OF user_role;
-    IF NOT FOUND THEN
+    -- Lock above, authority from the DEFINER helper: FOUND would be false for
+    -- any co-member, whose RLS hides the lead's user_roles row.
+    IF NOT public.has_designer_domain_role(NEW.designer_id) THEN
       RAISE EXCEPTION 'studio_id_not_designer_studio';
     END IF;
 
@@ -2862,13 +2907,7 @@ BEGIN
              AND lead_membership.status = 'active'
              AND lead_membership.role <> 'guest'
          )
-         AND EXISTS (
-           SELECT 1
-           FROM public.user_roles AS user_role
-           JOIN public.roles AS role ON role.id = user_role.role_id
-           WHERE user_role.user_id = NEW.designer_id
-             AND role.domain = 'designer'
-         )
+         AND public.has_designer_domain_role(NEW.designer_id)
          AND NEW.status = 'draft'
          AND NEW.invoice_number IS NULL
          AND NEW.issue_date IS NULL
@@ -7056,6 +7095,89 @@ BEGIN
       )
   ) THEN
     RAISE EXCEPTION '00511 trigger authority contract is wrong';
+  END IF;
+
+  -- Finding #1 helper. Shape, ownership and ACL.
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_proc AS routine
+    JOIN pg_roles AS owner ON owner.oid = routine.proowner
+    JOIN pg_language AS language ON language.oid = routine.prolang
+    WHERE routine.oid =
+      to_regprocedure('public.has_designer_domain_role(uuid)')
+      AND owner.rolname = 'postgres'
+      AND language.lanname = 'sql'
+      AND routine.prosecdef
+      AND routine.provolatile = 's'::"char"
+      AND NOT routine.proleakproof
+      AND pg_get_function_result(routine.oid) = 'boolean'
+      AND pg_get_function_arguments(routine.oid) = 'p_user_id uuid'
+      AND routine.proconfig
+            = ARRAY['search_path=pg_catalog, public, pg_temp']::text[]
+  ) THEN
+    RAISE EXCEPTION '00511 designer-role authority helper shape is wrong';
+  END IF;
+
+  -- EXECUTE is exactly {authenticated, service_role} plus the owner. anon and
+  -- PUBLIC must hold nothing: prod's default privileges auto-grant on new
+  -- public functions, so the REVOKE above is load-bearing, not decorative.
+  IF (
+    SELECT COALESCE(array_agg(
+             COALESCE(grantee.rolname, 'PUBLIC')::text
+             ORDER BY COALESCE(grantee.rolname, 'PUBLIC')::text
+           ), ARRAY[]::text[])
+    FROM pg_proc AS routine
+    CROSS JOIN LATERAL aclexplode(
+      COALESCE(routine.proacl, acldefault('f', routine.proowner))
+    ) AS acl
+    LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+    WHERE routine.oid =
+      to_regprocedure('public.has_designer_domain_role(uuid)')
+      AND acl.privilege_type = 'EXECUTE'
+  ) IS DISTINCT FROM ARRAY['authenticated', 'postgres', 'service_role']::text[]
+     OR EXISTS (
+       SELECT 1
+       FROM pg_proc AS routine
+       CROSS JOIN LATERAL aclexplode(
+         COALESCE(routine.proacl, acldefault('f', routine.proowner))
+       ) AS acl
+       LEFT JOIN pg_roles AS grantor ON grantor.oid = acl.grantor
+       WHERE routine.oid =
+         to_regprocedure('public.has_designer_domain_role(uuid)')
+         AND (
+           acl.privilege_type <> 'EXECUTE'
+           OR acl.is_grantable
+           OR grantor.rolname IS DISTINCT FROM 'postgres'
+         )
+     ) THEN
+    RAISE EXCEPTION '00511 designer-role authority helper ACL is wrong';
+  END IF;
+
+  -- Both triggers must derive lead-designer authority through the helper. The
+  -- inline `PERFORM user_role.id ... FOR SHARE OF user_role` stays (it holds
+  -- the canonical lock position), but its FOUND must no longer decide anything:
+  -- an invoker-side read is empty for a co-member and silently refuses a write
+  -- that RLS and the trigger's own co-member branch both admit.
+  IF EXISTS (
+    SELECT 1
+    FROM pg_proc AS routine
+    WHERE routine.oid IN (
+      to_regprocedure('public.set_invoice_studio_id()'),
+      to_regprocedure('public.set_project_studio_id()')
+    )
+      AND (
+        position('public.has_designer_domain_role(' IN routine.prosrc) = 0
+        OR position(
+             E'FOR SHARE OF user_role;\n  v_lead_has_designer_role := FOUND;'
+             IN routine.prosrc
+           ) > 0
+        OR position(
+             E'FOR SHARE OF user_role;\n    IF NOT FOUND THEN'
+             IN routine.prosrc
+           ) > 0
+      )
+  ) THEN
+    RAISE EXCEPTION '00511 studio triggers judge designer role under caller RLS';
   END IF;
 
   IF EXISTS (
