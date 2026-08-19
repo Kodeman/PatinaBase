@@ -1395,7 +1395,7 @@ BEGIN
   END IF;
 
   -- A fresh composer holds the project before its child latch. The final
-  -- 00512 close path must wait at that same root, then fail on the committed
+  -- draft-close path must wait at that same root, then fail on the committed
   -- positive milestone rather than deadlocking invoice/child-first.
   PERFORM extensions.dblink_exec(
     'd485_atomic_first',
