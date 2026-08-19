@@ -149,3 +149,59 @@ delivery log directly (see below) rather than inferred from our tables.
 - No secrets or PII included above — only event ids, types, timestamps, and
   internal row ids/amounts/status already visible to anyone with prod DB
   access.
+
+## 2026-08-18 browser-verified corrections
+
+Browser-verified against the Stripe Dashboard tonight. This supersedes parts
+of the analysis above where noted.
+
+**(a) All affected traffic is test mode.** Every event and session referenced
+above (`cs_test_…` checkout sessions, the three `invoice_payments` rows) is
+`livemode: false` — Stripe test/sandbox data. No real funds are stuck and no
+customer was charged and left unreconciled; the three payment rows are test
+artifacts, not production money.
+
+**(b) Two different Stripe accounts have delivered to prod's webhook
+endpoint**, not one:
+
+- `…JmCVe1Jxdu` — **Middle West Studio**, the account Kody is signed into in
+  the Dashboard. Its webhook endpoint (`we_1TsqNv…`) shows **zero event
+  deliveries, ever** — this account has never successfully or
+  unsuccessfully delivered to our endpoint.
+- `…JomPTxIV9m` — an **unknown second account**. By elimination, this is the
+  account behind both the 2026-07-08 events in `stripe_webhook_events`
+  (`evt_1TqtT1JomPTxIV9m…`, `evt_3TqtSzJomPTxIV9m…`) and the six rejected
+  2026-08-12 deliveries described above.
+
+**(c) Root cause, reframed.** The original write-up above attributed the
+gap purely to a stale signing secret on one account. The actual mechanism:
+prod's `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` most likely belong to
+**different Stripe accounts**. The 2026-08-18 secret fix aligned the webhook
+secret to the Middle West Studio endpoint — but Middle West Studio's
+endpoint has delivered nothing, ever, so that fix does not explain any of
+the observed 400s. Deliveries from the second account (`…JomPTxIV9m`), which
+*is* where the real traffic came from, would still fail signature
+verification today, because the webhook secret now on file is not that
+account's secret.
+
+**(d) Required action, updated.** Resending from the Middle West Studio
+dashboard (as step 1 above suggests) will not work, because none of the
+affected events exist there (see (e)). The actual next step:
+
+1. Kody decides which Stripe account is canonical for prod.
+2. Align **both** secrets to that one account:
+   `supabase secrets set STRIPE_SECRET_KEY=... STRIPE_WEBHOOK_SECRET=...`
+   sourced from the same account's Dashboard, not mixed.
+3. Only after that, run one test checkout end-to-end and confirm the
+   `checkout.session.completed` → `payment_intent.succeeded` webhook pair
+   lands in `stripe_webhook_events` and flips the matching
+   `invoice_payments` row. That proves the rail, not just the secret
+   comparison.
+
+**(e) The 8/12 events cannot be resent from the Middle West Studio
+dashboard** — they don't exist there (zero deliveries on `we_1TsqNv…`, per
+(b)). Resending them requires signing into the second account
+(`…JomPTxIV9m`) and finding them in that account's webhook delivery log.
+
+**(f) No DB rows changed tonight.** This section is evidence and analysis
+only — same read-only posture as the rest of this document.

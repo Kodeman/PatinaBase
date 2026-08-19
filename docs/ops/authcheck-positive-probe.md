@@ -55,14 +55,30 @@ close that gap.
    portal at `app.patina.cloud` / `admin.patina.cloud` — any portal backed by
    Supabase Auth against prod works, since the token is a plain Supabase
    session token, not portal-specific).
-2. Open browser DevTools → **Application** tab (Chrome) or **Storage** tab
-   (Firefox) → **Local Storage** → the site's origin.
-3. Find the key **`sb-bkvcixdmuyejfzcijpdg-auth-token`** (`bkvcixdmuyejfzcijpdg`
-   is the Strata/prod Supabase project ref — do not use a key with a
-   different ref, that would be a local or staging session).
-4. The value is a JSON string. Copy the `access_token` field out of it —
-   that is the JWT to use, NOT the whole localStorage value and NOT the
-   `refresh_token` field.
+2. app.patina.cloud stores the session in a **cookie**, not localStorage
+   (`@supabase/ssr` cookie-based storage). Open browser DevTools →
+   **Application** tab (Chrome) or **Storage** tab (Firefox) → **Cookies** →
+   the site's origin (e.g. `https://app.patina.cloud`).
+3. Find the cookie named **`sb-bkvcixdmuyejfzcijpdg-auth-token`**
+   (`bkvcixdmuyejfzcijpdg` is the Strata/prod Supabase project ref — do not
+   use a cookie with a different ref, that would be a local or staging
+   session). This project's session is a single, unchunked cookie — there is
+   no `.0`/`.1`-suffixed pair to reassemble here.
+4. Copy the cookie's value. It is `base64-`-prefixed base64url-encoded JSON
+   — decode it and pull the `access_token` field out of the result. That is
+   the JWT to use, NOT the raw cookie value and NOT the `refresh_token`
+   field. Pasting `document.cookie` into the console and hand-picking the
+   field is messy (the string is URL-encoded and shares the line with every
+   other cookie); the reliable path is: DevTools copy the single cookie
+   value, then decode it in a terminal:
+   ```bash
+   node -e '
+   const raw = "PASTE_COOKIE_VALUE_HERE";
+   const json = JSON.parse(Buffer.from(raw.replace(/^base64-/, ""), "base64url").toString("utf8"));
+   console.log(json.access_token);
+   '
+   ```
+   The decoded JSON has the same shape Supabase has always used:
    ```json
    {
      "access_token": "eyJhbGciOiJSUzI1NiIs...",
@@ -83,6 +99,12 @@ only reads it from an environment variable so it never appears in shell
 history or `ps aux`).
 
 ## Running the probe
+
+`/v1/_authcheck` deliberately serves no CORS headers and returns a `404` for
+an `OPTIONS` preflight — a browser-origin `fetch()` against it (from the
+DevTools console or any page JS) can never succeed, by design. This is not a
+gap to route around by finding the right headers; it means the probe is
+terminal-only, always run outside the browser:
 
 ```bash
 PATINA_PROBE_JWT='eyJhbGciOiJSUzI1NiIs...' ./scripts/probe-authcheck.sh
@@ -117,11 +139,11 @@ guessing from the response body:
 
 1. **Token expired** — re-copy `access_token` from localStorage; it may have
    rotated since you copied it (grab it again right before running).
-2. **Wrong project/ref** — confirm the localStorage key was
+2. **Wrong project/ref** — confirm the cookie was
    `sb-bkvcixdmuyejfzcijpdg-auth-token` (prod), not a local
-   (`sb-127...`/`sb-localhost...`) or staging-ref key.
+   (`sb-127...`/`sb-localhost...`) or staging-ref cookie.
 3. **Copied the wrong field** — must be `access_token`, not `refresh_token`
-   or the raw localStorage JSON blob.
+   or the raw decoded JSON blob.
 4. **Worker-side**: the RLS login (`DB_FRESH` Hyperdrive binding) could be
    unavailable — this collapses to the same 404, so a genuinely valid token
    still won't clear if that binding is down. Check
