@@ -58,15 +58,25 @@ def runner_writing(output_path, payload: bytes = b"spz-bytes", returncode: int =
 
 
 def test_default_template_is_the_real_binarys_real_argv():
-    """`ply_to_spz <input.ply> <output.spz>` — two positionals, no flags.
+    """`ply_to_spz_v3 <input.ply> <output.spz>` — two positionals, no flags.
 
     Read off cli_tools/src/ply_to_spz.cpp in the pinned nianticlabs/spz tag the
-    image builds. The previous default (`spz convert …`) named a subcommand that
-    has never existed in any published version of the crate that shipped a
-    binary, which is why every splat run would have failed after training.
+    image builds, which `tools/ply_to_spz_v3.cpp` copies. The previous default
+    (`spz convert …`) named a subcommand that has never existed in any published
+    version of the crate that shipped a binary, which is why every splat run
+    would have failed after training.
     """
     argv = spz_argv("/w/splat.ply", "/w/room.spz", DEFAULT_SPZ_COMMAND)
-    assert argv == ["/usr/local/bin/ply_to_spz", "/w/splat.ply", "/w/room.spz"]
+    assert argv == ["/usr/local/bin/ply_to_spz_v3", "/w/splat.ply", "/w/room.spz"]
+
+
+def test_the_default_converter_is_the_version_pinned_one_not_the_stock_cli():
+    """The stock CLI writes SPZ v4, which Spark 2.1.0 cannot read at all — it
+    gunzips every file and rejects any header version outside 1–3, and 2.1.0 is
+    the newest published Spark (W2-EVIDENCE.md §10b fault 2). Defaulting to the
+    stock binary would ship an artifact no viewer can open, which is precisely
+    what W2 did once."""
+    assert DEFAULT_SPZ_COMMAND.split()[0].endswith("/ply_to_spz_v3")
 
 
 def test_env_overrides_the_template(monkeypatch):
@@ -80,7 +90,7 @@ def test_substitution_is_into_argv_elements_never_a_shell_string(monkeypatch):
     """A path with a space (or anything shell-special) must stay ONE argument —
     the template is split before substitution, never after."""
     argv = spz_argv("/w/my room.ply", "/w/out.spz", DEFAULT_SPZ_COMMAND)
-    assert argv == ["/usr/local/bin/ply_to_spz", "/w/my room.ply", "/w/out.spz"]
+    assert argv == ["/usr/local/bin/ply_to_spz_v3", "/w/my room.ply", "/w/out.spz"]
 
 
 def test_a_template_missing_a_placeholder_is_refused():
@@ -102,7 +112,7 @@ def test_a_successful_conversion_returns_the_output_path(ply, tmp_path):
     out = tmp_path / "room.spz"
     run = runner_writing(out)
     assert compress_ply_to_spz(ply, out, runner=run) == out
-    assert run.calls[0][0] == "/usr/local/bin/ply_to_spz"
+    assert run.calls[0][0] == "/usr/local/bin/ply_to_spz_v3"
     assert str(ply) in run.calls[0]
 
 

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hmac
 import os
+from pathlib import Path
 from typing import Any, Callable
 
 from . import SPLAT_CACHE_MOUNT
@@ -78,6 +79,22 @@ SPZ_SOURCE_REPO = "https://github.com/nianticlabs/spz.git"
 SPZ_SOURCE_TAG = "v3.0.0"
 SPZ_SOURCE_COMMIT = "5bf2945de1a003cee07133b1e495fe9c6ffdc7e7"
 SPZ_BINARY_PATH = "/usr/local/bin/ply_to_spz"
+
+# The converter the pipeline actually calls. The stock CLI above has no version
+# flag and therefore writes SPZ format version 4 (ZSTD streams, no outer gzip);
+# `@sparkjsdev/spark` 2.1.0 — the portal's reader, and the newest published —
+# gunzips every file and rejects any header version outside 1–3, so a v4
+# artifact is unreadable in the viewer and 2.1.0 has no upgrade to reach for.
+# `tools/ply_to_spz_v3.cpp` is the same 20 lines with `pack_options.version = 3`,
+# built against the same pinned library. W2-EVIDENCE.md §10b fault 2.
+SPZ_V3_BINARY_PATH = "/usr/local/bin/ply_to_spz_v3"
+
+# Repo-owned sources copied into the image: the v3 CLI and the build-time proof
+# that it writes v3. Resolved from this file rather than the process CWD so
+# `modal deploy` works from anywhere in the monorepo.
+_SCAN_MODAL_TOOLS = Path(__file__).resolve().parents[2] / "tools"
+_SPZ_V3_SOURCE_IN_IMAGE = "/opt/patina-spz/ply_to_spz_v3.cpp"
+_SPZ_SMOKE_IN_IMAGE = "/opt/patina-spz/spz_v3_smoke.py"
 
 SPLAT_GPU = "L4"
 RENDERS_GPU = "L40S"
@@ -311,20 +328,59 @@ if modal is not None:
         # that can fail on a day the image has to rebuild. The apt-get runs
         # HERE, in this layer, rather than in the image's `apt_install` call for
         # the same cache reason as above.
+        #
+        # THE VERSION PIN, AND WHY IT IS A SECOND BINARY RATHER THAN A PATCH.
+        # `cli_tools/src/ply_to_spz.cpp` builds a default `spz::PackOptions`,
+        # whose `version` is `LATEST_SPZ_HEADER_VERSION` = 4 at this commit, and
+        # exposes no flag to change it. Version 4 is a different container, not
+        # a variant: `saveSpz` writes a 32-byte plaintext NGSP header plus ZSTD
+        # streams, where versions 1–3 take the `o.version <
+        # MIN_ZSTD_SPZ_HEADER_VERSION` branch and gzip a 16-byte legacy header
+        # plus one stream. Spark 2.1.0 reads only the latter. So the pipeline
+        # builds its own 20-line CLI (`tools/ply_to_spz_v3.cpp`, repo-owned)
+        # that sets `pack_options.version = 3` against this same library.
+        #
+        # Appended to the pinned CMakeLists rather than vendored as a separate
+        # project so the tool links exactly what `ply_to_spz` links — zlib and
+        # zstd reach it transitively through the static `spz` target, and
+        # nothing here has to guess at link flags that CMake already resolved.
+        # The append happens AFTER the SHA assertion above, so "we built these
+        # bytes" still describes every upstream file.
+        .add_local_file(
+            str(_SCAN_MODAL_TOOLS / "ply_to_spz_v3.cpp"), _SPZ_V3_SOURCE_IN_IMAGE, copy=True
+        )
+        .add_local_file(
+            str(_SCAN_MODAL_TOOLS / "spz_v3_smoke.py"), _SPZ_SMOKE_IN_IMAGE, copy=True
+        )
         .run_commands(
             "apt-get update && apt-get install -y --no-install-recommends "
             "zlib1g-dev libzstd-dev && rm -rf /var/lib/apt/lists/*",
             "git clone https://github.com/nianticlabs/spz.git /opt/spz-src",
             f"git -C /opt/spz-src checkout {SPZ_SOURCE_COMMIT}",
             f'test "$(git -C /opt/spz-src rev-parse HEAD)" = "{SPZ_SOURCE_COMMIT}"',
+            "printf '%s\\n' "
+            f"'add_executable(ply_to_spz_v3 {_SPZ_V3_SOURCE_IN_IMAGE})' "
+            "'target_link_libraries(ply_to_spz_v3 PRIVATE spz)' "
+            "'target_include_directories(ply_to_spz_v3 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)' "
+            ">> /opt/spz-src/CMakeLists.txt",
             "cmake -S /opt/spz-src -B /opt/spz-src/build -DCMAKE_BUILD_TYPE=Release "
             "-DSPZ_BUILD_TOOLS=ON -DBUILD_TESTING=OFF",
-            "cmake --build /opt/spz-src/build --target ply_to_spz -j $(nproc)",
+            "cmake --build /opt/spz-src/build --target ply_to_spz ply_to_spz_v3 -j $(nproc)",
             f"install -m 0755 /opt/spz-src/build/ply_to_spz {SPZ_BINARY_PATH}",
-            # Proves the binary runs in THIS image, at image-build time rather
+            f"install -m 0755 /opt/spz-src/build/ply_to_spz_v3 {SPZ_V3_BINARY_PATH}",
+            # Proves the binaries run in THIS image, at image-build time rather
             # than after an L4 has been paid for. argc < 3 prints the usage line
             # and exits 1, so a zero exit here would mean something unexpected.
             f"{SPZ_BINARY_PATH} 2>&1 | grep -q 'Usage: ply_to_spz'",
+            f"{SPZ_V3_BINARY_PATH} 2>&1 | grep -q 'Usage: ply_to_spz_v3'",
+            # And proves the OUTPUT, which is the claim that actually matters:
+            # a real conversion of a real (tiny) splat PLY, asserted to be a
+            # gzip container whose decompressed header carries magic NGSP and
+            # format version 3 — plus the contrast assertion that the stock CLI
+            # still writes plaintext v4, so the v3 result is measuring our flag
+            # and not a library default. See tools/spz_v3_smoke.py.
+            f"python -u {_SPZ_SMOKE_IN_IMAGE} "
+            f"--v3-binary {SPZ_V3_BINARY_PATH} --stock-binary {SPZ_BINARY_PATH}",
             "rm -rf /opt/spz-src/build",
         )
         # Final runtime PATH: cargo drops out again. Nothing at runtime needs

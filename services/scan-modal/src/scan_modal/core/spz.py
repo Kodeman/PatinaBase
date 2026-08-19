@@ -15,13 +15,31 @@ path at all, and every splat run would have trained for tens of minutes and
 then failed at compression. See W2-EVIDENCE.md §4 B.
 
 The converter is now Niantic's own C++ reference implementation
-(github.com/nianticlabs/spz), built from a pinned tag in `_SPLAT_IMAGE` and
-installed at `/usr/local/bin/ply_to_spz`. Its argv is two positionals and
-nothing else — read off `cli_tools/src/ply_to_spz.cpp`, which is 24 lines and
-whose entire usage string is `ply_to_spz <input.ply> <output.spz>`. That is a
-much more stable surface than a Rust CLI in 0.0.x, but it is still a binary in
-an image, so it stays DATA: `SPZ_COMMAND` is an argv template read from the
-environment, and everything here is exercised with the runner faked.
+(github.com/nianticlabs/spz), built from a pinned tag in `_SPLAT_IMAGE`. Its
+argv is two positionals and nothing else — read off `cli_tools/src/ply_to_spz.cpp`,
+which is 24 lines and whose entire usage string is
+`ply_to_spz <input.ply> <output.spz>`. That is a much more stable surface than a
+Rust CLI in 0.0.x, but it is still a binary in an image, so it stays DATA:
+`SPZ_COMMAND` is an argv template read from the environment, and everything here
+is exercised with the runner faked.
+
+THE FORMAT VERSION, WHICH IS NOT A DETAIL
+─────────────────────────────────────────
+The stock CLI has no version flag, so it writes `LATEST_SPZ_HEADER_VERSION` —
+**4** at the pinned tag. Version 4 is a different container, not a variant:
+`saveSpz` writes a 32-byte plaintext `NgspFileHeader` plus ZSTD streams, where
+versions 1–3 take the `o.version < MIN_ZSTD_SPZ_HEADER_VERSION` branch and gzip
+a 16-byte legacy header plus one stream. The portal's reader,
+`@sparkjsdev/spark` 2.1.0, gunzips every file and then rejects any header
+version outside 1–3 — and 2.1.0 is the newest published Spark, so there is no
+upgrade to reach for. A v4 artifact is therefore unreadable in the viewer, which
+is exactly what W2 shipped and diagnosed (W2-EVIDENCE.md §10b fault 2).
+
+So the default is `ply_to_spz_v3` — `tools/ply_to_spz_v3.cpp`, the same 20 lines
+with `pack_options.version = 3`, built against the same pinned library and
+asserted at image-build time to emit gzip + magic `NGSP` + version 3
+(`tools/spz_v3_smoke.py`). Version 3 loses nothing: `MIN_SMALLEST_THREE_QUATERNIONS_VERSION`
+is 3, so it carries the same rotation encoding v4 does.
 
 `SPZ_COMMAND` is a shell-free argv template. `{input}` and `{output}` are the
 only substitutions, and they are substituted into ARGV ELEMENTS — never joined
@@ -69,11 +87,14 @@ __all__ = [
 SPZ_COMMAND_ENV = "SPZ_COMMAND"
 SPZ_MODE_ENV = "SPZ_MODE"
 
-#: The default argv template: Niantic's `ply_to_spz`, input then output, no
+#: The default argv template: the repo's `ply_to_spz_v3`, input then output, no
 #: flags. Spelled as an ABSOLUTE path rather than a bare name — the image's
 #: PATH is rewritten twice during the build, and a converter that silently
 #: resolves to something else is the failure mode this file already had once.
-DEFAULT_SPZ_COMMAND = "/usr/local/bin/ply_to_spz {input} {output}"
+#: `/usr/local/bin/ply_to_spz` (the stock v4 CLI) is still installed beside it,
+#: and `SPZ_COMMAND` can still name it — but only for someone who wants a v4
+#: artifact deliberately, because no shipping Spark can read one.
+DEFAULT_SPZ_COMMAND = "/usr/local/bin/ply_to_spz_v3 {input} {output}"
 
 #: Convert to `.spz` with the pinned Niantic binary. The normal path.
 MODE_SPZ = "spz"
