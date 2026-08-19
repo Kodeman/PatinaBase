@@ -836,7 +836,13 @@ Fixed in `apps/designer-portal/next.config.js` — a new `scanR2Origin`, read fr
 header, and by the fetch itself: **200, `application/octet-stream`, 25 798 805
 bytes**, reaching the page.
 
-### Fault 2 — the artifact is SPZ **v4**; the viewer reads SPZ **v1–v3**. OPEN.
+### Fault 2 — the artifact is SPZ **v4**; the viewer reads SPZ **v1–v3**. FIXED (§14.1).
+
+> **Closed 2026-08-19.** Route (2) below was taken: `tools/ply_to_spz_v3.cpp`
+> pins `pack_options.version = 3`, and the artifact now on staging is a gzip
+> container carrying magic `NGSP` and version 3, decoded by Spark 2.1.0's own
+> reader and drawn in the portal. The diagnosis below is left standing because
+> it is what made the fix a two-line change instead of a search.
 
 With the bytes arriving, the next error is:
 
@@ -894,7 +900,7 @@ from the artifact's own bytes and the two libraries' sources.
 | Stage says why it failed | never | `?splatDebug=1`, stage-labelled |
 | R2 bytes reach the browser | CSP-refused, silently | **200, 25 798 805 B** |
 | Console without the flag | silent | still silent (verified) |
-| SPLAT draws the room | no | **no — blocked on fault 2** |
+| SPLAT draws the room | no | **yes — §14.5, fault 2 closed** |
 
 ---
 
@@ -932,13 +938,11 @@ patina-staging` is empty; nothing is left running.
    bbox top; with 3.3 m walls it is a metre off the wall tops. Lighting is sized
    for a floor slab and needs sizing for a room.
 
-2b. **SPLAT still cannot draw the room: the artifact is SPZ v4, the viewer reads
-   v1–v3** (§10b, fault 2). The CSP half is fixed and deployed; this half is a
-   converter-vs-library format-generation mismatch and needs the splat export
-   tail re-run with either `SPZ_MODE=gzip-ply` or a `ply_to_spz` pinned to
-   `pack_options.version = 3`. It is the last thing between this wave and a
-   rendered walkthrough on screen, and it is the pipeline's to take, not the
-   portal's.
+2b. ~~**SPLAT still cannot draw the room: the artifact is SPZ v4, the viewer
+   reads v1–v3**~~ (§10b, fault 2). **CLOSED — §14.1/§14.5.** Route 2 was taken:
+   `tools/ply_to_spz_v3.cpp` pins `pack_options.version = 3`, the image build
+   asserts the output's bytes, and the re-run artifact draws in the staging
+   portal.
 
 3. **The fixed USDZ→GLB converter is committed but not deployed** (§8,
    `386baaad`). `services/aesthete-inference` is outside this lane's rails, so
@@ -949,10 +953,10 @@ patina-staging` is empty; nothing is left running.
    blocker. Note that every scan converted before that deploy carries a
    floor-only GLB and would need re-conversion to benefit.
 
-4. **`inputs.config` is unreachable from the queue** (§4 E). Unchanged. The
-   closed per-stage contract is a good design; the cost knob (`maxIterations`)
-   still has no route, and 30 000 iterations is now known to cost 64 minutes of
-   L4, which makes the knob worth more than it was.
+4. ~~**`inputs.config` is unreachable from the queue**~~ (§4 E). **CLOSED —
+   §14.2.** `agent_tasks.payload.config` now reaches the spawn body verbatim
+   through `extractStageConfig`, with a `splat_config` contract variant asserted
+   on both sides, and the default budget turns on the training-frame count.
 
 5. **`media_objects.owner_user_id` is NULL on all rows**, splat's included.
    `scan_worker_register_media_object` does not set it. Still harmless — the
@@ -978,7 +982,9 @@ patina-staging` is empty; nothing is left running.
    in the log: the mesh/depth data that would seed initialization is not being
    passed, and random init on 42 views is the weakest starting point available.
    A visual pass on the splat, and a decision about seeding from `mesh.ply`, are
-   both owed before anyone calls this good.
+   both owed before anyone calls this good. **Seeding: done (§13.4). Visual
+   pass: done (§14.5) — and the answer is no, the reconstruction is not a
+   recognisable room. The item stays open on quality, now with a picture.**
 
 9. **The staging fixtures persist.** Markers
    `seed:rendered-room-v2-w2-prod-copy` and
@@ -1471,3 +1477,341 @@ owed (§13.6).
    rectangle shape and the teardown have no fake to check them against. A
    minimal stub `bpy` module in `tests/` would close it, and would have caught
    the emitter-size clamp that used to sit below the planner.
+
+---
+
+## 14. The close — SPLAT draws the room
+
+Three defects stood between §13 and a walkthrough on screen: the artifact was in
+a container the viewer cannot open (§10b fault 2), the cost/quality knob the run
+needed had no route from the queue (§12 item 4), and the export always took the
+last checkpoint even when the run's own metrics said an earlier one was better
+(§13.6). All three are closed here, and the result was walked.
+
+### 14.1 The SPZ version pin — §10b fault 2 CLOSED
+
+`ply_to_spz` takes two positionals and no version flag, so it writes
+`LATEST_SPZ_HEADER_VERSION` — 4 at the pinned v3.0.0 commit. The fix is
+`services/scan-modal/tools/ply_to_spz_v3.cpp`: Niantic's own 20-line CLI with
+one line added, `pack_options.version = 3`, compiled against the same pinned
+library by appending three lines to its `CMakeLists.txt` **after** the SHA
+assertion, so "we built these bytes" still describes every upstream file. Both
+binaries are installed; `core/spz.py`'s `DEFAULT_SPZ_COMMAND` now names the v3
+one, and `SPZ_COMMAND` can still reach the stock CLI for anyone who wants a v4
+artifact deliberately.
+
+**Version 3 is not a downgrade.** `MIN_SMALLEST_THREE_QUATERNIONS_VERSION` is 3
+in the same source, so v3 carries the same smallest-three rotation encoding v4
+does. What changes is only the container: `saveSpz`'s
+`o.version < MIN_ZSTD_SPZ_HEADER_VERSION` branch writes a 16-byte
+`LegacyPackedGaussiansHeader` plus one **gzip** stream, where v4 writes a
+32-byte plaintext `NgspFileHeader` plus ZSTD streams.
+
+That distinction is why the assertion had to be written from the source rather
+than from the shape of a v4 file. **`NGSP` and the version field are not at
+offset 0 and 4 of a v1–3 file** — they are at offset 0 and 4 of its
+*decompressed* bytes, behind a gzip whose own magic is what sits at offset 0.
+An assertion that read the first eight bytes of a v3 file looking for `NGSP`
+would fail on a correct artifact.
+
+`tools/spz_v3_smoke.py` runs **inside the image build**, converts a real (tiny,
+64-point, SH-degree-3) splat PLY, and asserts all of it. Verbatim from the
+`modal deploy` that shipped this:
+
+```
+=> Step 12: RUN python -u /opt/patina-spz/spz_v3_smoke.py --v3-binary /usr/local/bin/ply_to_spz_v3 --stock-binary /usr/local/bin/ply_to_spz
+[spz-smoke] /usr/local/bin/ply_to_spz_v3: gzip container, magic NGSP, version 3, 64 points, 444 bytes — OK
+[spz-smoke] /usr/local/bin/ply_to_spz: plaintext NGSP, version 4 — the v3 assertion is measuring our flag, not the library default
+```
+
+The second line is not decoration. It is what proves the first line measures
+`pack_options.version = 3` and not a property the pinned library would have had
+anyway; if a future bump of `SPZ_SOURCE_COMMIT` changes the stock default, that
+line fails and says so.
+
+**Proven on a laptop before any Modal time was bought**, in §9.0's discipline:
+the same three pinned `src/cc/*.cc` files compiled locally against Homebrew
+zlib/zstd produced byte-identical output (444 bytes, version 3), and
+`@sparkjsdev/spark` 2.1.0's own `SpzReader`, run under Node against it, parsed
+the header and decoded all 64 centres — while the stock binary's v4 output
+failed in Spark's gunzip, exactly as §10b predicted.
+
+### 14.2 `inputs.config` is reachable — §12 item 4 CLOSED
+
+The Modal side had always read `inputs.config.maxIterations`; nothing could put
+it there. Now `agent_tasks.payload.config` reaches the spawn body:
+
+- `extractStageConfig(payload)` (dispatcher `lib.ts`) returns the payload's
+  `config` when it is a populated plain object, and `undefined` for absent,
+  empty, null, array or scalar — so a task that sets nothing produces a body
+  **byte-identical** to the one it produced before this change.
+- `buildModalDispatchBody` emits `inputs.config` only when present — absent, not
+  null, the same rule `glbUrl` follows, because the Modal side reads it for
+  truthiness.
+- The dispatcher **reads nothing inside it.** `splat_job` owns every key's
+  meaning and its default. A dispatcher that learned the key set would be a
+  second place to change whenever a stage gains a setting, which is the
+  dual-ownership that put `meshUrl`/`meshPlyUrl` on the wire in W1.
+- `contract.json` gains a `splat_config` variant, and both halves of the
+  lockstep assert it: the Deno test that the builder produces it and that the
+  base `splat` stage still carries no `config`; the pytest that
+  `parse_spawn_body` accepts it and that `splat_job` reads the knob out of it.
+
+**The default policy changed too, and it is a measurement, not a preference.**
+§13.6 recorded 42 views peaking by step 4 000 and declining past ~18 000, so
+`default_max_iterations` returns **12 000 for ≤ 60 training frames and 30 000
+above**. 60 is the nearest round number above the 42 that was measured; a denser
+capture has not been measured and keeps splatfacto's own budget. Which branch
+fired is on the artifact as `maxIterationsSource`.
+
+### 14.3 The export takes the best checkpoint
+
+Two facts from nerfstudio 1.1.5's source shaped this:
+
+- **`save_only_latest_checkpoint` defaults to `True`,** and `save_checkpoint`
+  unlinks every other `.ckpt` as each new one lands. "Export the best
+  checkpoint" was impossible by construction — the best one was already deleted.
+  `train_argv` now passes `--save-only-latest-checkpoint False`.
+- **`ns-export gaussian-splat` has no checkpoint flag.** `Exporter` carries only
+  `load_config` and `output_dir`; `eval_setup` → `eval_load_checkpoint` takes
+  `sorted(...)[-1]` of the checkpoint directory whenever `config.load_step is
+  None`. But `load_step` is read straight from the parsed yaml and — unlike
+  `load_dir`, which `eval_setup` unconditionally recomputes — is never
+  overwritten. So a **copy** of `config.yml` with `load_step` set is the
+  supported lever, and it is non-destructive: nothing is pruned, and a resumed
+  run still finds the newest checkpoint.
+
+`core/checkpoints.py` holds the pure part — parse the step out of
+`step-{step:09d}.ckpt`, restrict the search to steps that actually have a
+checkpoint (eval runs every 1 000 and saves land every 2 000, so the true peak
+is often at a step nothing can be exported from), pick the best held-out PSNR,
+break ties toward the **earlier** step, and rewrite one anchored `load_step:`
+line. `jobs/splat_job.py` holds the IO: read
+`Eval Images Metrics Dict (all images)/psnr` out of the run's tensorboard event
+file, write `config-best.yml` beside nerfstudio's own config, point `ns-export`
+at it. Every failure path — no tensorboard, no event file, no PSNR tag, an
+unrecognisable config — degrades to "export the latest" and records which,
+because losing a quality improvement must never cost the artifact after the GPU
+has been paid for.
+
+Both halves are on the artifact: `exportCheckpointStep`, `exportCheckpointPsnr`,
+`exportCheckpointReason`, `evalPointsConsidered`.
+
+### 14.4 The run
+
+Task `552ca6c4-69e1-4331-8372-3695a8292b73`, enqueued through
+`enqueue_agent_task` with `payload.config = {"maxIterations": 12000}` and
+dispatched by invoking `dispatch-scan-modal` with the staging service-role
+bearer. `{"claimed":1,"spawned":1,"failed":0,"deferred":0,"superseded":0}`
+HTTP 200. The `output/` and `exports/` directories were removed from the Volume
+first, so `resumed: false` and this is a fresh run.
+
+| | |
+|---|---|
+| Fixture | scan `cd72ad9b-…`, `room_files` `5bc4cef2-…` v1 (unchanged) |
+| Pose carrier | `photosSource: "rows"` — 42 frames, 0 missing |
+| Iterations | **12 000**, `maxIterationsSource: "config"` |
+| Seed | `seedPoints: 100000` — `gaussian_count` at step 0 is 100 000, not 50 000 |
+| Wall clock | **1 496 121 ms = 24.9 min** (08:38:13Z → 09:03:09Z) |
+| Checkpoint commits | **6** |
+| Checkpoints kept | 2 000 · 4 000 · 6 000 · 8 000 · 10 000 · 11 999 |
+| Gaussians at step 11 990 | 1 194 923 |
+| **Exported from** | **step 2 000**, held-out PSNR **16.116**, `best_eval_psnr` |
+| Gaussians in the artifact | **499 005** |
+| `.ply` | 123 754 833 B |
+| `.spz` | **8 767 038 B** — 14.12× |
+
+**The proof that the config reached the job** is not the provenance field alone
+(which the job writes about itself); it is nerfstudio's own progress line,
+`1590 (13.25%)` — 1590/12000 — in the training log of a run whose predecessor
+printed `16460 (54.87%)` against 30 000.
+
+**The checkpoint choice, checked against the file it was made from.** Read back
+off the Volume's event file:
+
+| step | held-out PSNR | LPIPS | checkpoint on disk |
+|---|---|---|---|
+| 1 000 | 15.262 | 0.8035 | — |
+| **2 000** | **16.116** | 0.6728 | ✓ **exported** |
+| 3 000 | 15.047 | 0.7275 | — |
+| 4 000 | 16.103 | 0.6348 | ✓ |
+| 5 000 | 15.970 | 0.6315 | — |
+| 6 000 | 15.728 | 0.6917 | ✓ |
+| 7 000 | 15.992 | 0.6278 | — |
+| 8 000 | 15.865 | 0.6259 | ✓ |
+| 9 000 | 15.958 | 0.6751 | — |
+| 10 000 | 15.889 | 0.6178 | ✓ |
+| 11 000 | 15.862 | 0.6171 | — |
+| 11 999 | — | — | ✓ (no eval at this step) |
+
+`evalPointsConsidered: 5` is exactly the count of rows that are both measured
+and exportable. nerfstudio's final save lands at **11 999**, not 12 000, and the
+all-images eval fires only on multiples of 1 000 — so the last checkpoint has no
+metric of its own and could never have been chosen on evidence.
+
+`config.yml` still reads `load_step: null`; `config-best.yml`, written beside
+it, reads `load_step: 2000`. The lever worked and left nerfstudio's own state
+file alone.
+
+**⚠ And the metric that drove it is the weakest thing in this section.** Step
+2 000 beat step 4 000 by **0.013 dB** — noise — and the tie-break toward the
+earlier step then chose the sparser model. Meanwhile LPIPS, the perceptual
+metric, improves almost monotonically across the whole run (0.804 → 0.617) and
+would have chosen step 11 000; SSIM is flat. PSNR is the criterion this lane was
+asked to implement and it is implemented faithfully, but on this fixture it is
+close to uninformative, and §14.6 records that as the finding it is rather than
+shipping a quiet change to the rule.
+
+### 14.5 The artifact, and the walk
+
+**At rest**, fetched through the capability URL and parsed locally:
+
+```
+offset 0 (at rest) : 1f 8b 08 00 00 00 00 00 00 03 …      gzip container
+decompressed       : 32 435 341 B
+offset 0 (inflated): 4e 47 53 50 03 00 00 00 3d 9d 07 00 03 0c 00 00
+                     "NGSP"      version 3   499 005      shDeg 3, fracBits 12
+```
+
+**Through Spark's own reader** — `@sparkjsdev/spark` 2.1.0's `SpzReader` in
+Node, on these exact bytes:
+
+```
+header: { version: 3, numSplats: 499005, shDegree: 3, fractionalBits: 12, flagAntiAlias: false }
+centers decoded: 499005
+```
+
+**Registry and read path:**
+
+| | |
+|---|---|
+| `media_objects` | `a9b6cbb8-4d32-4967-a23d-7b4c50174657`, `stored`, 8 767 038 B |
+| sha256 | `de4228a58cd891a6610ce50475d14f9462feb04c2db786df320cfb2d1f3f9f4a` |
+| `room_files.artifacts.splat` | `{"version": 1, "object_id": "a9b6cbb8-…"}` |
+| `artifacts.renders` | survived the write — still `count: 29` |
+| `…/artifacts/splat` | **200** `{kind, url, expiresAt}` |
+| the presigned `url` | **200**, `application/octet-stream`, **8 767 038 B** |
+| sha256 of what the client received | `de4228a5…` — **equal to the registry's** |
+
+**The walk.** Staging designer portal, signed in as the seed identity that owns
+the scan, Room View → **SPLAT**:
+
+| | |
+|---|---|
+| The room draws | **yes** — Gaussians on screen, first paint within a few seconds |
+| Orbit | **yes** — the view rotates under a drag; two angles below |
+| Console | **clean** — no errors, no warnings, no CSP violations |
+| `?splatDebug=1` | not needed |
+
+![SPLAT, first angle](w2-splat-walk/splat-angle-a.jpg)
+
+![SPLAT, orbited](w2-splat-walk/splat-angle-b.jpg)
+
+**What the pictures show, said plainly.** The read path is finished: bytes → CSP
+→ Spark → WebGL → pixels, interactive. The *reconstruction* is not a room. It is
+a dense clump with long spiky Gaussians around it, and nothing in it is
+recognisable as the kitchen the 42 photos were taken in. That is the first
+visual answer anyone has given §12 item 8, and it is a "no". It is not a
+regression this lane introduced — no earlier splat had ever been looked at — but
+nobody should read `exportCheckpointReason: best_eval_psnr` on this row as "this
+is the best-looking splat of the run". See §14.6.
+
+**One route fact worth writing down**, found the slow way: `/room/[id]` takes a
+**scan** id, not a `rooms.id`. Handed a room id, `useRoomScan` issues
+`room_scans?id=eq.<room-id>` with `.single()`, PostgREST answers **406**, and the
+page renders "This room is still being drawn." — the same empty state an unparsed
+scan gets, with the real cause only in the console as
+`Cannot coerce the result to a single JSON object`.
+
+### 14.6 What this closes, and what it does not
+
+**Closed.**
+
+- §10b **fault 2** — the SPZ version mismatch. Fixed at the converter, asserted
+  at image-build time, proven on the shipped artifact's bytes, and drawn.
+- §12 item **4** — `inputs.config` unreachable from the queue. Reachable, with a
+  measured default policy and a lockstep contract on both sides.
+- §12 item **8**, first half — "a visual pass on the splat" is **done**. The
+  answer is recorded above and it is not a good one.
+- §13.6's promoted finding — the run no longer drives past its own best result
+  and then ships the worse one. It now costs 24.9 minutes of L4 instead of 64.4,
+  and it exports on evidence.
+
+**Open, and sharper than before.**
+
+1. **Held-out PSNR is close to useless as a selector on this fixture.** The
+   spread across every exportable checkpoint is 16.116 → 15.728 — 0.39 dB — and
+   the winning margin is 0.013 dB. LPIPS moves 0.19 over the same run and moves
+   in one direction. The next lane should decide between switching the criterion
+   to LPIPS, requiring a minimum margin before preferring an earlier step, or
+   flipping the tie-break to the later step. All three are one-line changes in
+   `core/checkpoints.py` and all three are testable at the pure seam; none should
+   be made without a run that compares the pictures, because the metric is
+   exactly what is in doubt.
+
+2. **Splat quality is the wave's real remaining gap.** 42 frames over a 292 sq ft
+   room, at any checkpoint, is very sparse for splatting. The candidates — more
+   frames, COLMAP pose refine (scoped in the W2 plan, never exercised), masking
+   the ceiling-less void, a denser seed — are a programme, not a patch, and want
+   a ruling on how much reconstruction quality W2 is meant to deliver at all.
+
+3. **`/room/[id]` fails opaquely for a bad id.** A 406 on a `.single()` renders
+   as "still being drawn", which reads as a pipeline state and is not one. Not
+   this lane's to fix; recorded because it cost this lane twenty minutes.
+
+4. **The final checkpoint is never a candidate.** nerfstudio saves at
+   `max_num_iterations - 1` and evaluates on multiples of
+   `steps_per_eval_all_images`, so the last checkpoint has no metric and is only
+   ever reached by the fallback path. Harmless today, and worth knowing before
+   anyone tunes the cadences.
+
+**Unchanged.** §12 items 3, 5, 6, 7, 9, 10, 11, and §13.8's new items 1–7.
+
+### 14.7 W2 exit criteria
+
+> **Exit.** A staging scan shows mesh GLB, splat, and render gallery end to end
+> through the new read path. — DELIVERY-PLAN.md §W2
+
+| Criterion | State | Evidence |
+|---|---|---|
+| `splat` runs on Modal L4 from ARKit poses | **met** | §9.1, §13.6, §14.4 — three real runs |
+| `.ply` → SPZ, in a container the viewer reads | **met** | §14.1, §14.5 — v3 + gzip, Spark-decoded |
+| Resumable across preemption | **met** | §7.3, §9.1 — checkpoint committed during training |
+| `renders` on L40S — corners, top-down, turntable | **met** | §13.5 cycle 4, all PASS |
+| IFC export | **met** | landed in W2, `e82271d4` |
+| Artifacts + registry rows in R2 | **met** | §9.3, §14.5 — sha256 matches at rest and over the wire |
+| Typed `/v1/scan/*` read routes + capability URLs | **met** | §9.4, §14.5 — 200 on a user JWT, never service_role |
+| Portal reads mesh GLB through them | **met** | MESH mode, §10 |
+| Portal reads renders through them | **met** | render gallery, `e74896ff` |
+| **Portal draws the splat through them** | **met** | **§14.5 — the walk** |
+| COLMAP pose-prior refine behind config | **deferred** | scoped in the plan; never wired, never run |
+| Reconstruction quality fit to show a designer | **NOT met** | §14.5, §14.6 item 2 — needs a ruling |
+| No production route, no production write | **held** | staging Supabase + `patina-staging` Modal only |
+
+**The exit as written is met.** The exit as a designer would read it is not: the
+splat draws, and what it draws is not yet a room. That gap is item 2 above and it
+is the honest condition on which W2 should be reviewed.
+
+### 14.8 Cost
+
+| Item | Measure |
+|---|---|
+| Image builds (2 × ~55 s CPU, spz layer only) | ≈ **$0.01** |
+| `splat`, 24.9 min on L4 | ≈ **$0.33** |
+| CPU probes (Volume pulls, R2 read, capability probes) | ≈ **$0.01** |
+| **This close, total** | ≈ **$0.35** |
+| W2 running total (§11 $0.94 + §13.7 $1.13 + this) | ≈ **$2.42** |
+
+Against a **$5** ceiling for this lane. `modal container list --env
+patina-staging` is empty; nothing is left running.
+
+### 14.9 Staging state left behind
+
+- The seed account's password was reset again to mint a browser session and the
+  §14.5 JWT (`rr2-seed@…`, staging GoTrue admin API) — §12 item 10, unchanged in
+  kind.
+- The splat cache Volume holds six checkpoints for this job key instead of one,
+  which is the cost of `--save-only-latest-checkpoint False` and the point of it.
+- `room.spz` at the same key is now the v3, step-2 000 artifact; the v4 bytes
+  §9.3 measured are gone, replaced in place with the registry row updated.
+- No fixture rows were added or removed. §12 item 9's two markers stand.
