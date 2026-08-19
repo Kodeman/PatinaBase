@@ -11257,3 +11257,39 @@ DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.get_outbox_events(integer, boolean), public.get_outbox_counts() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.caller_can_access_room_scan(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_media_upload_intent(uuid, text, text, text, text, bigint, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_media_upload_intent(uuid, text, text, text, text, bigint, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.confirm_media_upload(uuid, text, text, bigint) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.confirm_media_upload(uuid, text, text, bigint) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00498_media_upload_intent_and_scan_version_lock.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.room_files_scan_version_lock() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

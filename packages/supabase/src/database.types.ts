@@ -28975,6 +28975,10 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      caller_can_access_room_scan: {
+        Args: { p_scan_id: string }
+        Returns: boolean
+      }
       can_access_item_feedback_anchor: {
         Args: {
           p_board_item_id: string
@@ -29264,6 +29268,15 @@ export type Database = {
         Args: { p_disclosed_impact?: Json; p_window_id: string }
         Returns: string
       }
+      confirm_media_upload: {
+        Args: {
+          p_etag: string
+          p_object_id: string
+          p_sha256: string
+          p_size: number
+        }
+        Returns: Json
+      }
       confirm_project_decision_review: {
         Args: {
           p_decision_id: string
@@ -29442,6 +29455,18 @@ export type Database = {
           p_ffe_item_ids: string[]
           p_name: string
           p_project_id: string
+        }
+        Returns: Json
+      }
+      create_media_upload_intent: {
+        Args: {
+          p_artifact_kind: string
+          p_bucket: string
+          p_declared_mime: string
+          p_declared_sha256: string
+          p_declared_size: number
+          p_filename: string
+          p_scan_id: string
         }
         Returns: Json
       }
