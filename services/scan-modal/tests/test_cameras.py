@@ -17,6 +17,8 @@ from scan_modal.core.cameras import (
     BboxError,
     CORNER_STANDOFF,
     EYE_HEIGHT_M,
+    RENDER_HEIGHT,
+    RENDER_WIDTH,
     TOP_DOWN_PADDING,
     TURNTABLE_FRAMES,
     TURNTABLE_STANDOFF,
@@ -120,11 +122,38 @@ def test_top_down_sits_above_the_centroid_and_looks_straight_down():
     assert top.look_at[2] < top.location[2]
 
 
-def test_top_down_ortho_scale_frames_the_LONGER_horizontal_axis():
-    """Framing on the shorter axis would crop the room out of a 4:3 plate."""
+def test_top_down_ortho_scale_fits_BOTH_axes_in_the_frame():
+    """`ortho_scale` spans the render's WIDTH, so depth must be converted into
+    width units before the two axes are compared. ROOM is 4 m × 3 m — exactly
+    the render's 4:3 — so it is the one shape where framing on the longer axis
+    alone is also correct, which is why the bug hid here."""
+    aspect = RENDER_WIDTH / RENDER_HEIGHT
     assert by_name()["top_down"].ortho_scale == pytest.approx(4.0 * TOP_DOWN_PADDING)
+
+    # Deeper than 3/4 of its width: framing on max(sx, sy) would crop it.
     tall = Bbox.from_points((-1.0, -5.0, 0.0), (1.0, 5.0, 2.5))
-    assert by_name(tall)["top_down"].ortho_scale == pytest.approx(10.0 * TOP_DOWN_PADDING)
+    assert by_name(tall)["top_down"].ortho_scale == pytest.approx(
+        10.0 * aspect * TOP_DOWN_PADDING
+    )
+
+    # A wide room is still framed on its width.
+    wide = Bbox.from_points((-6.0, -1.0, 0.0), (6.0, 1.0, 2.5))
+    assert by_name(wide)["top_down"].ortho_scale == pytest.approx(12.0 * TOP_DOWN_PADDING)
+
+
+def test_top_down_frame_actually_contains_the_room_for_any_aspect():
+    """The property the number is for: both extents fit, with padding to spare."""
+    aspect = RENDER_WIDTH / RENDER_HEIGHT
+    for lo, hi in (
+        ((-2.0, -1.5, 0.0), (2.0, 1.5, 2.5)),
+        ((-1.0, -5.0, 0.0), (1.0, 5.0, 2.5)),
+        ((-6.059, -2.035, -1.303), (2.168, 5.470, -1.303)),  # the staging scan
+    ):
+        bbox = Bbox.from_points(lo, hi)
+        scale = by_name(bbox)["top_down"].ortho_scale
+        sx, sy, _ = bbox.size
+        assert scale >= sx * TOP_DOWN_PADDING - 1e-9
+        assert scale / aspect >= sy * TOP_DOWN_PADDING - 1e-9
 
 
 # ── the turntable ───────────────────────────────────────────────────────────

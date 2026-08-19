@@ -163,9 +163,22 @@ def _top_down_shot(bbox: Bbox) -> CameraShot:
         # Straight down. The look_at sits on the floor plane so the seam's
         # track-to has a non-degenerate direction to work with.
         look_at=(cx, cy, bbox.floor_z),
-        # Ortho scale covers the LONGER horizontal axis; the render is 4:3, so
-        # framing on the shorter one would crop the room.
-        ortho_scale=max(sx, sy) * TOP_DOWN_PADDING,
+        # Blender maps `ortho_scale` onto the LARGER render dimension — here the
+        # 1280 px width — so the visible HEIGHT is only `ortho_scale * H / W`.
+        # `max(sx, sy)` therefore crops every room deeper than three quarters of
+        # its width: the first real staging render (8.23 m × 7.51 m) framed at
+        # 9.05 m and lost ~10% of the floor off the top and bottom of the cover
+        # plate. The depth has to be converted into width units before the two
+        # axes can be compared at all.
+        #
+        # The camera looks straight down under `to_track_quat("-Z", "Y")`, which
+        # puts world +X along the image width and world +Y along its height, so
+        # sx is the width axis and sy the height axis — not interchangeable.
+        #
+        # This survived a golden case because the fixture room is 4 m × 3 m:
+        # its 0.75 aspect is exactly the render's, the one shape for which the
+        # old expression is right.
+        ortho_scale=max(sx, sy * (RENDER_WIDTH / RENDER_HEIGHT)) * TOP_DOWN_PADDING,
     )
 
 
