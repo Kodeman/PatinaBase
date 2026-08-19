@@ -11257,3 +11257,51 @@ DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.get_outbox_events(integer, boolean), public.get_outbox_counts() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.engage_trade_scope(uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.engage_trade_scope(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_scope_change(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_scope_change(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE ON TABLE public.project_ffe_items FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE ON TABLE public.organizations FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE ON TABLE public.project_phases FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00510_post_00483_grant_and_scope_repairs.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, TRUNCATE ON TABLE public.purchase_orders FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

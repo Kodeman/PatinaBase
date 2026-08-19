@@ -58,6 +58,7 @@ renumbering at whichever program's integration lands second.
 | 00494–00497 | Phase 2 (Cloudflare/media backfill program — this workstream and its siblings) |
 | 00498–00502 | Rendered Room v2 (scan pipeline) — **note:** this lane already has files at 00489–00492 authored under a different numbering rationale (see gap note above). Rendered Room v2 must explicitly confirm whether 00498–00502 is additive to 00489–00492 or a renumbering target for them before using this band, so the two don't end up double-booked. |
 | 00503–00509 | Phase 3 |
+| 00510 | **TAKEN** — `00510_post_00483_grant_and_scope_repairs.sql` (branch `fix/post-00483-grant-gaps`, 2026-08-18). Post-00483 hotfix: project-documents storage policy caller-binding, `assignment_scope` derivation in `engage_trade_scope` / `apply_scope_change`, anon write-grant narrowing on four public tables. Numbered ABOVE the three reserved bands deliberately so it shifts none of them; the 00494–00509 gap is intentional and stays reserved. |
 
 No file in `supabase/migrations/` on `main`, and no commit in `git log --all`, currently
 occupies any number in 00494–00509 — the three bands are collision-free as reserved.
