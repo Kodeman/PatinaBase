@@ -13,7 +13,7 @@ pnpm supabase:start
 pnpm --filter @patina/admin-portal dev
 ```
 
-Before starting, confirm `NEXT_PUBLIC_SUPABASE_URL` points to the intended local environment. The browser uses `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`; server proxy deployments also configure `SUPABASE_JWT_ISSUER` and `SUPABASE_PROJECT_REF`. `SUPABASE_SERVICE_ROLE_KEY` is server-only.
+Before starting, confirm `NEXT_PUBLIC_SUPABASE_URL` points to the intended local environment. The browser uses `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`; server proxy deployments also configure `SUPABASE_JWT_ISSUER` for JWT-issuer validation. The auth cookie name is pinned via `NEXT_PUBLIC_SUPABASE_STORAGE_KEY` (Workstream D-B1) rather than derived from the Supabase project ref — `SUPABASE_PROJECT_REF` is not consumed by this portal's own code. `SUPABASE_SERVICE_ROLE_KEY` is server-only.
 
 The portal listens on `http://localhost:3001`. Retained local services use their standard ports: orders `3015`, media `3014`, and projects `3016`.
 

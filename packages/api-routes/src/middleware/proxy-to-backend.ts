@@ -129,9 +129,14 @@ const BLOCKED_HEADERS = new Set([
  * This used to be reconstructed as `sb-<project-ref>-auth-token`, where the
  * ref came from `SUPABASE_PROJECT_REF` or — when that was unset (the case in
  * every prod `wrangler.jsonc` today) — parsed out of the host of
- * `NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_URL`. `SUPABASE_PROJECT_REF` is not
- * consumed anywhere else in this codebase, so that reconstruction existed
- * purely to name this cookie. If the URL is ever repointed (e.g. to
+ * `NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_URL`. `SUPABASE_PROJECT_REF` had no
+ * OTHER consumer in this file (its only call site was this cookie-name
+ * reconstruction), so that reconstruction is fully replaced here — but the
+ * env var itself is still read elsewhere in the repo for an unrelated
+ * purpose: `scripts/emails/deploy-auth-templates.mjs` uses it to select the
+ * Supabase Management API project ref when deploying GoTrue email
+ * templates. That's a different concern and is untouched by this change.
+ * If the URL is ever repointed (e.g. to
  * api.patina.cloud) while the underlying Supabase project stays the same,
  * the reconstructed name would silently change and this proxy would stop
  * finding the auth cookie on every forwarded request — the same hazard
