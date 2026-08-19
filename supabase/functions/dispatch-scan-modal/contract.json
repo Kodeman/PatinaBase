@@ -15,6 +15,11 @@
     "W2 note 2: `renders` builds its scene from capturedRoomJsonUrl and MERGES",
     "glbUrl on top, so captured_room is required and the GLB is optional — the",
     "renders_no_glb variant is the shape a scan with no model_url_gltf gets.",
+    "W2 note 3: `splat_config` is the shape a splat task gets when its",
+    "agent_tasks payload carries a `config` object. The dispatcher forwards it",
+    "VERBATIM and reads nothing inside it; splat_job owns every key's meaning",
+    "and its default. A task without one produces the base `splat` shape",
+    "unchanged, which is why config lives in a variant and not in the stage.",
     "`variants` holds shapes that are not a stage of their own. splat_rows is",
     "the pose-carrier fallback: the ingest stage strips `photosManifest` as",
     "device-local, so photos_manifest_url is null for a large share of scans and",
@@ -84,6 +89,29 @@
       "traceId": "44444444-4444-4444-8444-444444444448",
       "inputs": {
         "capturedRoomJsonUrl": "https://example.invalid/storage/v1/object/sign/room-scans/captured_room/u/r/captured_room.json?token=placeholder"
+      }
+    },
+    "splat_config": {
+      "taskId": "11111111-1111-4111-8111-111111111116",
+      "leaseToken": "dispatch-scan-modal:99999999-9999-4999-8999-999999999999",
+      "scanId": "22222222-2222-4222-8222-222222222222",
+      "roomFileId": "33333333-3333-4333-8333-333333333333",
+      "roomFileVersion": 4,
+      "taskType": "scan_pipeline.splat",
+      "traceId": "44444444-4444-4444-8444-444444444449",
+      "inputs": {
+        "photosSource": "manifest",
+        "photosManifestUrl": "https://example.invalid/storage/v1/object/sign/room-scans/manifests/u/r/photos_metadata.ndjson?token=placeholder",
+        "photoUrls": [
+          "https://example.invalid/storage/v1/object/sign/room-scans/photos/u/r/hero.heic?token=placeholder",
+          "https://example.invalid/storage/v1/object/sign/room-scans/photos/u/r/auto_001.50.heic?token=placeholder"
+        ],
+        "capturedRoomJsonUrl": "https://example.invalid/storage/v1/object/sign/room-scans/captured_room/u/r/captured_room.json?token=placeholder",
+        "photoUrlsCapped": false,
+        "photoCount": 2,
+        "config": {
+          "maxIterations": 12000
+        }
       }
     },
     "splat_rows": {

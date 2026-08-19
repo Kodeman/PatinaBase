@@ -332,6 +332,32 @@ export interface SplatInputs {
   photoUrlsCapped: boolean;
   /** How many usable photo rows the scan actually has, cap or no cap. */
   photoCount: number;
+  /** The task payload's own `config`, passed through UNINSPECTED. See
+   *  `extractStageConfig`. Absent when the task carried none. */
+  config?: Record<string, unknown>;
+}
+
+/** The task payload's `config` object, if it has a usable one.
+ *
+ *  The dispatcher does not read, validate or default any key inside it. That is
+ *  deliberate: `config.maxIterations` is the Modal side's knob, splat_job owns
+ *  its policy and its bounds, and a dispatcher that learned the key set would be
+ *  a second place to change every time a stage gains a setting — the exact
+ *  dual-ownership that put `meshUrl`/`meshPlyUrl` on the wire in W1. What is
+ *  checked here is only that the value is a plain object worth forwarding: an
+ *  array, a scalar, a null or an empty object all mean "no config", so the
+ *  spawn body stays byte-identical to what it was before for every task that
+ *  does not set one.
+ *
+ *  W2-EVIDENCE.md §4 E, §13.6 — the knob was unreachable, and §13.6 measured it
+ *  to be a quality control rather than only a cost one. */
+export function extractStageConfig(
+  payload: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | undefined {
+  const config = payload?.config;
+  if (typeof config !== "object" || config === null || Array.isArray(config)) return undefined;
+  const entries = config as Record<string, unknown>;
+  return Object.keys(entries).length > 0 ? entries : undefined;
 }
 
 /** A `room_scan_images` row that carries a usable camera pose. Anything short
@@ -436,6 +462,10 @@ export function buildModalDispatchBody(p: DispatchParams): Record<string, unknow
       } else {
         inputs.photoRecords = p.inputs.photoRecords;
       }
+      // Absent, not null — same rule as `glbUrl`. splat_job reads
+      // `inputs.config` for truthiness, and an explicit null on the wire reads
+      // as "there is one" to a shape check.
+      if (p.inputs.config) inputs.config = p.inputs.config;
       break;
     }
     case "renders":

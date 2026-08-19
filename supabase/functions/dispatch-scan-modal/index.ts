@@ -40,6 +40,7 @@ import {
   claimGroups,
   DISPATCH_TASK_TYPES,
   decideDispatchFailure,
+  extractStageConfig,
   extractTaskInputIds,
   isPoseBearing,
   isSpawnSuccess,
@@ -233,12 +234,16 @@ async function resolvePhotoCandidates(
 }
 
 /** Resolve the presigned inputs one Modal STAGE needs for one task.
- *  Throws with a short, safe (no-URL, no-body) reason on any failure. */
+ *  Throws with a short, safe (no-URL, no-body) reason on any failure.
+ *
+ *  `config` is the task payload's own settings object, already extracted and
+ *  never inspected here — only `splat` forwards one today. */
 async function resolveDispatchInputs(
   admin: Supa,
   stage: DispatchStage,
   scanId: string,
   roomFileVersion: number,
+  config?: Record<string, unknown>,
 ): Promise<{ roomFileId: string; inputs: DispatchInputs }> {
   const { data: scan, error: scanErr } = await admin
     .from("room_scans")
@@ -325,6 +330,7 @@ async function resolveDispatchInputs(
         capturedRoomJsonUrl,
         photoUrlsCapped: cap.capped,
         photoCount: cap.total,
+        ...(config ? { config } : {}),
       },
     };
   }
@@ -442,7 +448,9 @@ async function dispatchOne(
 
   let resolved: { roomFileId: string; inputs: DispatchInputs };
   try {
-    resolved = await resolveDispatchInputs(admin, stage, scanId, roomFileVersion);
+    resolved = await resolveDispatchInputs(
+      admin, stage, scanId, roomFileVersion, extractStageConfig(task.payload),
+    );
   } catch (err) {
     // An owner-prefix rejection is terminal, not a retry candidate: the row's
     // url column points outside this scan's own prefix, and no number of
