@@ -91,6 +91,30 @@ public enum APIConfiguration {
         }
     }
 
+    /// Edge API worker base URL, or nil when the app was not built with one.
+    ///
+    /// The ONLY base URL here with no per-target literal, and the absence is
+    /// the design: the Phase-2 upload interface is `MEDIA_UPLOADS: "off"` in
+    /// every committed environment and asserted `off` on production
+    /// (`infra/edge-api-worker/OPERATIONS.md`). A committed default would be a
+    /// hostname this app reaches for before anything on the other end is meant
+    /// to answer — and the one hostname that must never be defaulted to is the
+    /// production one. Nil means dormant: `ScanUploadShadowLeg` builds no
+    /// client and the primary path is the only path.
+    ///
+    /// Set it per-build via the `EDGE_API_URL` Info.plist key (an
+    /// `INFOPLIST_KEY_EDGE_API_URL` build setting reaches it), or via the
+    /// process environment for a scheme-level override — the same
+    /// environment-first shape `AppConfiguration.postHogHost` uses.
+    public static var edgeAPIURL: URL? {
+        let raw = ProcessInfo.processInfo.environment["EDGE_API_URL"]
+            ?? Bundle.main.infoDictionary?["EDGE_API_URL"] as? String
+        guard let raw, !raw.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return nil
+        }
+        return URL(string: raw.trimmingCharacters(in: .whitespaces))
+    }
+
     /// Search API URL (Typesense)
     public static var searchURL: URL {
         AppConfiguration.supabaseURL

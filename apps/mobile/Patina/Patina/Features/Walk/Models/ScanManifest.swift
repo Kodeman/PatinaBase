@@ -669,18 +669,44 @@ public nonisolated struct ArtifactUploadState: Codable, Equatable, Sendable {
     public var lastError: String?
     public var attempts: Int
 
+    // MARK: - R2 shadow leg
+    //
+    // Outcome of the `scanUploadShadowR2` leg for this artifact. Device-local
+    // only — this struct is JSON inside `RoomScanPackage.artifactStateJSON`, so
+    // recording the shadow here costs no migration and cannot reach a server
+    // that is not meant to hear about it yet.
+    //
+    // All three are OPTIONAL so a package sealed before this build still
+    // decodes, and nil is a real third state: the leg was never ATTEMPTED
+    // (toggle off, no `EDGE_API_URL`, artifact over the size cap, or a kind the
+    // interface has no name for) as opposed to attempted and failed.
+
+    /// True once the shadow upload reached a confirmed registry row.
+    public var shadowUploaded: Bool?
+    /// The digest the shadow leg computed off disk and declared to the intent.
+    public var shadowSha256: String?
+    /// Whether the confirmed digest came back equal to `shadowSha256` — the
+    /// leg's whole point, since the primary path never re-reads what it sent.
+    public var shadowMatched: Bool?
+
     public init(
         kind: ScanManifest.ArtifactKind,
         status: Status = .pending,
         remoteUrl: String? = nil,
         lastError: String? = nil,
-        attempts: Int = 0
+        attempts: Int = 0,
+        shadowUploaded: Bool? = nil,
+        shadowSha256: String? = nil,
+        shadowMatched: Bool? = nil
     ) {
         self.kind = kind
         self.status = status
         self.remoteUrl = remoteUrl
         self.lastError = lastError
         self.attempts = attempts
+        self.shadowUploaded = shadowUploaded
+        self.shadowSha256 = shadowSha256
+        self.shadowMatched = shadowMatched
     }
 }
 

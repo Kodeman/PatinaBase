@@ -533,24 +533,47 @@ extension RoomScanSyncService {
         package.updateArtifact(artifactState)
 
         let capturedState = artifactState
-        group.addTask { [artifact, totalBytes, capturedState] in
+        // Nil unless BOTH the `scanUploadShadowR2` toggle is on and the build
+        // carries an `EDGE_API_URL`. Read per artifact so flipping the toggle
+        // takes effect without restarting a sync in progress.
+        let shadowLeg = ScanUploadShadowLeg.live()
+        group.addTask { [artifact, totalBytes, capturedState, shadowLeg] in
             do {
-                let remoteUrl = try await self.artifactUploader.uploadArtifact(
-                    artifact: artifact,
-                    from: bundleURL,
-                    userId: userId,
-                    roomId: roomId,
-                    scanId: scanId
+                // The shadow runs INSIDE `afterPrimary`, which reaches it only
+                // once the primary upload has returned and can neither throw
+                // nor alter what it returned. See that function's comment.
+                let (remoteUrl, shadowOutcome) = try await ScanUploadShadowLeg.afterPrimary(
+                    primary: {
+                        try await self.artifactUploader.uploadArtifact(
+                            artifact: artifact,
+                            from: bundleURL,
+                            userId: userId,
+                            roomId: roomId,
+                            scanId: scanId
+                        )
+                    },
+                    shadow: { uploaded in
+                        // A nil result is a sidecar the primary never sent, so
+                        // there are no bytes in Storage for the shadow to be a
+                        // shadow OF.
+                        guard uploaded != nil, let shadowLeg else { return .notAttempted }
+                        return await shadowLeg.run(
+                            artifact: artifact,
+                            fileURL: bundleURL.appendingPathComponent(artifact.relativePath),
+                            scanId: scanId
+                        )
+                    }
                 )
 
                 if let url = remoteUrl {
-                    let done = ArtifactUploadState(
+                    var done = ArtifactUploadState(
                         kind: capturedState.kind,
                         status: .uploaded,
                         remoteUrl: url,
                         lastError: nil,
                         attempts: capturedState.attempts
                     )
+                    done.apply(shadow: shadowOutcome)
                     await MainActor.run { package.updateArtifact(done) }
 
                     if let column = ArtifactUploader.scanColumn(for: artifact.kind) {
