@@ -11258,6 +11258,114 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.media_registry TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.media_registry TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.media_registry FROM anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.media_registry FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.register_media_entry( text, text, text, text, int, text, text, text, bigint, int, int, text, uuid, jsonb, uuid ) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.register_media_entry( text, text, text, text, int, text, text, text, bigint, int, int, text, uuid, jsonb, uuid ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_media_entry_state(uuid, text, text, bigint, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_media_entry_state(uuid, text, text, bigint, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_media_entry_legal_hold(uuid, boolean, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_media_entry_legal_hold(uuid, boolean, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  REVOKE UPDATE ON public.media_registry FROM service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  GRANT UPDATE ( version, bucket, bucket_class, object_key, sha256, etag, declared_mime, observed_mime, declared_size_bytes, observed_size_bytes, width, height, access_class, lifecycle_state, retention_until, subject_type, subject_id, provenance, created_by, created_at, updated_at, gc_marked_at, gc_confirmed_at, deleted_at ) ON public.media_registry TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00495_media_upload_intents.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.media_upload_intents TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00495_media_upload_intents.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.media_upload_intents FROM anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00495_media_upload_intents.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_media_upload_intent_v2( uuid, text, text, text, text, text, text, text, bigint, text, uuid, timestamptz ) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00495_media_upload_intents.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_media_upload_intent_v2( uuid, text, text, text, text, text, text, text, bigint, text, uuid, timestamptz ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00495_media_upload_intents.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.confirm_media_upload_intent_v2(uuid, text, text, text, bigint, boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00495_media_upload_intents.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.confirm_media_upload_intent_v2(uuid, text, text, text, bigint, boolean) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00498_media_upload_intent_and_scan_version_lock.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.caller_can_access_room_scan(uuid) FROM PUBLIC, anon, authenticated;
