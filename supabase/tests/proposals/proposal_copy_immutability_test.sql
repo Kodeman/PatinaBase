@@ -401,6 +401,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_copy_actor(uuid, text) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.copy_proposal_signed_ip(
   p_proposal_id uuid
@@ -414,6 +415,7 @@ AS $$
   FROM public.proposals AS proposal
   WHERE proposal.id = p_proposal_id
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.copy_proposal_signed_ip(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_fingerprint_change(
   p_label text,
@@ -437,6 +439,7 @@ BEGIN
     format('%s must change the reviewed-copy fingerprint', p_label);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.expect_fingerprint_change(text, text) TO PUBLIC;
 
 -- The guard census is deliberately exact. Adding another proposal-owned copy
 -- table requires an explicit classification here and in the serializer.
@@ -1723,8 +1726,24 @@ $$;
 -- Draft share preview is an explicit product contract. Revised editions are
 -- the only lifecycle state that is superseded: creation and resolution fail
 -- closed, and a rejected resolve never increments the token's view count.
-SELECT pg_temp.assume_copy_actor('e8000000-0000-4000-8000-000000000001');
+-- CREATE TEMP TABLE must run as the unrestricted session owner: an earlier
+-- SET LOCAL ROLE authenticated (line 1664) is still in effect here with no
+-- RESET ROLE in between, and 00483 revokes database TEMPORARY from
+-- authenticated/anon/service_role by design (asserted at the bottom of 00483
+-- itself) — so a temp table created while impersonating a restricted role
+-- fails "permission denied for schema pg_temp_N". This is a real, intentional
+-- prod boundary, not a bug to grant around.
+RESET ROLE;
 CREATE TEMP TABLE draft_share_token (token text NOT NULL) ON COMMIT DROP;
+-- Both GRANTs must run as postgres, the temp table's owner: authenticated
+-- has no GRANT OPTION on it, so issuing GRANT SELECT ... TO service_role
+-- after the SET LOCAL ROLE authenticated below would silently no-op
+-- ("WARNING: no privileges were granted") and leave service_role unable to
+-- read the row it needs further down.
+GRANT INSERT ON draft_share_token TO authenticated;
+GRANT SELECT ON draft_share_token TO service_role;
+SELECT pg_temp.assume_copy_actor('e8000000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
 INSERT INTO draft_share_token
 SELECT token
 FROM public.create_document_share(
@@ -1733,7 +1752,6 @@ FROM public.create_document_share(
   '{"itemDetails":true}'::jsonb,
   now() + interval '1 day'
 );
-GRANT SELECT ON draft_share_token TO service_role;
 
 DO $$
 DECLARE

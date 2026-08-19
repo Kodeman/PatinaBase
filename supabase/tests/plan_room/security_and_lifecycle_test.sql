@@ -67,6 +67,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_user_role(p_user_id uuid)
 RETURNS void
@@ -81,6 +82,7 @@ BEGIN
   EXECUTE 'SET LOCAL ROLE authenticated';
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user_role(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.reset_user_role()
 RETURNS void
@@ -91,6 +93,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', NULL, true);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_user_role() TO PUBLIC;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- ACLs, helper contracts, and groups 12a / 1 / 2 / 3

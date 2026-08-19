@@ -58,6 +58,7 @@ BEGIN
   EXECUTE 'SET LOCAL ROLE authenticated';
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_service()
 RETURNS void AS $$
@@ -68,6 +69,7 @@ BEGIN
   EXECUTE 'SET LOCAL ROLE service_role';
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_service() TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.reset_role()
 RETURNS void AS $$
@@ -76,6 +78,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', '', true);
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
 -- Realistic payload: 2 walls + 1 window (child of wall A) + 1 detected object.
 -- wall_ref on the window carries wall A's apple_id → must resolve to its row id.

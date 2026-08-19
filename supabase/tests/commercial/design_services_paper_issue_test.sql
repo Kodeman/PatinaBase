@@ -55,6 +55,7 @@ BEGIN
   )::text, true);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid, text) TO PUBLIC;
 
 -- The field-identity oracle, carried over from executed_on_paper_test.sql §1:
 -- surrogate keys and clock readings collapse to a token (NULL-vs-set survives,
@@ -74,6 +75,7 @@ RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$
   FROM jsonb_each(p_row) AS e
   WHERE NOT (e.key = ANY (p_drop));
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.shape(jsonb, text[]) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.jdiff(p_a jsonb, p_b jsonb)
 RETURNS text LANGUAGE sql IMMUTABLE AS $$
@@ -84,6 +86,7 @@ RETURNS text LANGUAGE sql IMMUTABLE AS $$
         UNION SELECT jsonb_object_keys(p_b)) AS keys
   WHERE (p_a->k) IS DISTINCT FROM (p_b->k);
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.jdiff(jsonb, jsonb) TO PUBLIC;
 
 -- Deliberately in the past: a printed copy is signed before it is typed in.
 CREATE OR REPLACE FUNCTION pg_temp.paper_date() RETURNS date
@@ -97,9 +100,11 @@ CREATE OR REPLACE FUNCTION pg_temp.assume_role(p_user_id uuid)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   PERFORM pg_temp.assume_user(p_user_id);
+GRANT EXECUTE ON FUNCTION pg_temp.paper_date() TO PUBLIC;
   EXECUTE 'SET LOCAL ROLE authenticated';
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_role(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.reset_role()
 RETURNS void LANGUAGE plpgsql AS $$
@@ -107,6 +112,7 @@ BEGIN
   EXECUTE 'RESET ROLE';
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (0) FIXTURE — one studio, one client, one outsider, and one client who has
@@ -203,6 +209,7 @@ BEGIN
     ))
   );
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.mint_agreement(uuid, text, uuid, uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.send_agreement(p_id uuid)
 RETURNS void LANGUAGE plpgsql AS $$
@@ -213,6 +220,7 @@ BEGIN
     p_id, v_snapshot->>'documentFingerprint', NULL, TIMESTAMPTZ '2027-01-01 00:00:00+00'
   );
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.send_agreement(uuid) TO PUBLIC;
 
 SELECT pg_temp.assume_user('1a000000-0000-4000-8000-000000000001');
 -- 01 = the emailed control. 02 = the paper-issued twin, never sent.
@@ -399,6 +407,7 @@ BEGIN
   ASSERT v_bad = 0,
     format('%s: %s row(s) name a paper issuer without being issued on paper', p_where, v_bad);
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assert_stamps_disjoint(text) TO PUBLIC;
 
 SELECT pg_temp.assert_stamps_disjoint('after section 2');
 
@@ -1004,6 +1013,7 @@ BEGIN
          (SELECT s.active_section FROM public.document_state s WHERE s.proposal_id = p.id)
   FROM public.proposals p WHERE p.id = p_id;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.mark(text, text, uuid) TO PUBLIC;
 
 SELECT pg_temp.mint_agreement('1a300000-0000-4000-8000-00000000000b', 'Walk · emailed');
 SELECT pg_temp.mint_agreement('1a300000-0000-4000-8000-00000000000c', 'Walk · paper');

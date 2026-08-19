@@ -59,19 +59,26 @@ VALUES (
 );
 
 -- One empty placeholder = an existing slot.
-INSERT INTO public.project_ffe_items (
-  id, project_id, project_room_id, name, doc_code, status, quantity, sort_order
-)
+INSERT INTO public.project_ffe_items (id,
+    project_id,
+    project_room_id,
+    assignment_scope,
+    name,
+    doc_code,
+    status,
+    quantity,
+    sort_order)
 VALUES (
-  '5b000000-0000-4000-8000-000000000501',
-  '5b000000-0000-4000-8000-000000000101',
-  '5b000000-0000-4000-8000-000000000201',
-  'Chair placeholder',
-  'LR-01',
-  'specified',
-  1,
-  0
-);
+    '5b000000-0000-4000-8000-000000000501',
+    '5b000000-0000-4000-8000-000000000101',
+    '5b000000-0000-4000-8000-000000000201',
+    'room',
+    'Chair placeholder',
+    'LR-01',
+    'specified',
+    1,
+    0
+  );
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id uuid)
 RETURNS void

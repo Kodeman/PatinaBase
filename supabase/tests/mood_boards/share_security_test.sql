@@ -32,6 +32,7 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', p_role, true);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_mood_board_actor(uuid, text) TO PUBLIC;
 
 -- A mutable draft board gives the share resolver both safe and deliberately
 -- unsafe item data to project.

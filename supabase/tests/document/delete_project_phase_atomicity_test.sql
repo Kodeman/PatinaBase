@@ -200,6 +200,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_topology_actor(uuid) TO PUBLIC;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_topology_failure(
   p_sql text,
@@ -229,6 +230,7 @@ BEGIN
            p_message_fragment, v_message);
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.expect_topology_failure(text, text, text) TO PUBLIC;
 
 -- Stronger than a browser forgery: execute as the same definer owner as the
 -- real boundaries, but carry a valid project+transaction token for project A
@@ -266,6 +268,7 @@ BEGIN
   );
 END;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.attempt_wrong_scope_phase_batch(uuid, uuid, text) TO PUBLIC;
 
 -- ACLs are explicit in both directions; private helpers and diagnostic writes
 -- are never callable by an authenticated browser.
