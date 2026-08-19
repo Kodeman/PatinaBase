@@ -604,8 +604,12 @@ BEGIN
 END;
 $$;
 
+-- 00511 makes notify_decision_required service-role only (its sole callers are
+-- the decision-reminder edge functions, which run as service_role). Invoke it
+-- the way prod does — as service_role — rather than as an authenticated portal
+-- caller the RPC no longer admits.
 SELECT pg_temp.assume_approval_actor('a4370000-0000-4000-8000-000000000004');
-SET LOCAL ROLE authenticated;
+SET LOCAL ROLE service_role;
 SELECT public.notify_decision_required((
   SELECT (payload->>'decisionId')::uuid
   FROM approval_437_results WHERE label = 'notify'

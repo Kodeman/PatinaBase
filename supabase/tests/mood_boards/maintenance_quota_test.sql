@@ -55,7 +55,12 @@ BEGIN
     'SELECT'
   ), 'raw unfurl usage must be service-only';
 
-  ASSERT has_function_privilege(
+  -- 00511 narrows consume_board_unfurl_quota to service_role only (and its body
+  -- RAISEs 'requires service_role' for any other caller). Its sole caller is the
+  -- capture-from-url edge function, which runs as service_role — no authenticated
+  -- portal path invokes it. authenticated EXECUTE was defense-in-depth surface
+  -- with no user; the grant now matches the body guard.
+  ASSERT NOT has_function_privilege(
     'authenticated',
     'public.consume_board_unfurl_quota(uuid)',
     'EXECUTE'
@@ -99,13 +104,20 @@ BEGIN
 END;
 $$;
 
-DO $$
+-- 00511 makes consume_board_unfurl_quota service-role only (both the EXECUTE
+-- grant and a current_setting('role') body gate) and requires an explicit
+-- p_user_id — no auth.uid() fallback. Its sole caller is the capture-from-url
+-- edge function, which runs as service_role and names the verified user. Drive
+-- the quota mechanics that way: establish the database role at the top level
+-- (as PostgREST would) rather than through the JWT-claims-only actor helper.
+
+-- Rolling ten-minute window, as the service-role edge caller naming user …004.
+SET LOCAL ROLE service_role;
+DO $rolling$
 DECLARE
   v_result jsonb;
   v_attempt integer;
   v_count integer;
-  v_day_start timestamptz;
-  v_elapsed interval;
 BEGIN
   DELETE FROM public.board_unfurl_usage
   WHERE user_id IN (
@@ -113,17 +125,17 @@ BEGIN
     'a0000000-0000-0000-0000-000000000005'
   );
 
-  PERFORM pg_temp.assume_mood_board_actor(
-    'a0000000-0000-0000-0000-000000000004'
-  );
-
   FOR v_attempt IN 1..10 LOOP
-    v_result := public.consume_board_unfurl_quota(NULL::uuid);
+    v_result := public.consume_board_unfurl_quota(
+      'a0000000-0000-0000-0000-000000000004'
+    );
     ASSERT (v_result->>'allowed')::boolean,
       format('rolling quota attempt %s should be accepted: %s', v_attempt, v_result);
   END LOOP;
 
-  v_result := public.consume_board_unfurl_quota(NULL::uuid);
+  v_result := public.consume_board_unfurl_quota(
+    'a0000000-0000-0000-0000-000000000004'
+  );
   ASSERT NOT (v_result->>'allowed')::boolean
      AND v_result->>'reason' = 'ten_minute_limit'
      AND (v_result->>'retry_after_seconds')::integer > 0,
@@ -134,30 +146,38 @@ BEGIN
   WHERE user_id = 'a0000000-0000-0000-0000-000000000004';
   ASSERT v_count = 10,
     'rejected rolling-window attempt must not consume a usage row';
+END;
+$rolling$;
+RESET ROLE;
 
+-- No authenticated caller may invoke the RPC at all now — the old per-user
+-- impersonation guard is subsumed by the service-role gate (EXECUTE is revoked
+-- from authenticated, so the call is refused before the body runs).
+SET LOCAL ROLE authenticated;
+DO $denied$
+BEGIN
   BEGIN
     PERFORM public.consume_board_unfurl_quota(
       'a0000000-0000-0000-0000-000000000005'
     );
-    RAISE EXCEPTION 'user unexpectedly consumed another user quota';
+    RAISE EXCEPTION 'authenticated caller unexpectedly consumed quota';
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
+END;
+$denied$;
+RESET ROLE;
 
-  -- An authenticated database role without user claims cannot impersonate a
-  -- target by supplying p_user_id.
-  PERFORM pg_temp.assume_mood_board_actor(NULL, 'authenticated');
-  BEGIN
-    PERFORM public.consume_board_unfurl_quota(
-      'a0000000-0000-0000-0000-000000000005'
-    );
-    RAISE EXCEPTION 'claimless authenticated caller unexpectedly consumed quota';
-  EXCEPTION WHEN insufficient_privilege THEN
-    NULL;
-  END;
-
-  -- A service-role edge caller has no user sub and must name the verified user.
-  PERFORM pg_temp.assume_mood_board_actor(NULL, 'service_role');
+-- A service-role edge caller names the verified user, and the daily cap denies
+-- the 101st event in a UTC day.
+SET LOCAL ROLE service_role;
+DO $service_and_daily$
+DECLARE
+  v_result jsonb;
+  v_count integer;
+  v_day_start timestamptz;
+  v_elapsed interval;
+BEGIN
   v_result := public.consume_board_unfurl_quota(
     'a0000000-0000-0000-0000-000000000005'
   );
@@ -182,11 +202,9 @@ BEGIN
     v_day_start
   FROM generate_series(1, 100);
 
-  PERFORM pg_temp.assume_mood_board_actor(
+  v_result := public.consume_board_unfurl_quota(
     'a0000000-0000-0000-0000-000000000004'
   );
-  v_result := public.consume_board_unfurl_quota(NULL::uuid);
-
   ASSERT NOT (v_result->>'allowed')::boolean,
     '100 accepted events in one UTC day must deny the next attempt';
   IF v_elapsed > interval '10 minutes' THEN
@@ -205,7 +223,8 @@ BEGIN
   ASSERT v_count = 100,
     'rejected daily-limit attempt must not consume a usage row';
 END;
-$$;
+$service_and_daily$;
+RESET ROLE;
 
 INSERT INTO public.board_asset_gc_candidates(object_name)
 VALUES (

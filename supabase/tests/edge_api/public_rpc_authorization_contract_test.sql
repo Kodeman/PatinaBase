@@ -143,8 +143,14 @@ VALUES
     'c4840000-0000-4000-8000-000000000011'
   );
 
--- The project trigger is a real nested caller of the now-internal
--- _primary_studio_for helper; direct app EXECUTE is not required.
+-- 00511 replaces 00484's _primary_studio_for auto-derivation. It now only
+-- auto-derives a studio for a lead who (a) holds a designer-domain role and
+-- (b) belongs to exactly one active design_studio. Actor …001 is a super_admin
+-- (domain 'admin', not 'designer') and an admin — not a designer — of studio
+-- …010, so 00511 correctly declines to guess a studio for them and leaves
+-- studio_id NULL (this postgres-session insert takes the bounded-migration
+-- bypass, so the row still lands). This is the 00484→00511 strengthening: a
+-- non-designer lead is no longer silently assigned a studio.
 INSERT INTO public.projects (id, name, designer_id, created_by)
 VALUES (
   'c4840000-0000-4000-8000-000000000061',
@@ -159,8 +165,8 @@ BEGIN
     SELECT project.studio_id
     FROM public.projects AS project
     WHERE project.id = 'c4840000-0000-4000-8000-000000000061'
-  ) = 'c4840000-0000-4000-8000-000000000010'::uuid,
-    'the trusted project trigger lost its internal primary-studio lookup';
+  ) IS NULL,
+    '00511 must not auto-derive a studio for a non-designer lead';
 END
 $primary_studio_nested_contract$;
 
