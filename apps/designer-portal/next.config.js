@@ -44,7 +44,34 @@ const nextConfig = {
       edgeApiOrigin = null;
     }
 
-    const supabaseConnectOrigins = [supabaseFrameOrigin, supabaseRealtimeOrigin, edgeApiOrigin].filter(Boolean).join(' ');
+    // The edge API only MINTS the capability URL; the bytes are fetched straight
+    // from R2's S3 endpoint by whoever holds it, so that origin needs its own
+    // connect-src grant. Missing it is what blocked SPLAT on staging after the
+    // worker-CORS, wasm-unsafe-eval, and R2-bucket-CORS fixes had all landed —
+    // and it was invisible for a reason worth writing down: @sparkjsdev/spark
+    // fetches the splat from inside a blob: Web Worker. A worker inherits the
+    // owning document's CSP but reports its violations in its OWN context, so
+    // DevTools showed no console error, no network row, and no CSP warning on
+    // the main thread. All the page saw was `TypeError: Failed to fetch` thrown
+    // out of Spark's `decodeBytesUrl`, which the canvas routed to its quiet
+    // error state. `?splatDebug=1` (splat/splat-debug.ts) is what surfaced it,
+    // and a `securitypolicyviolation` listener on the document is what named
+    // the directive: `connect-src blocked https://<account>.r2.cloudflarestorage.com/…`.
+    //
+    // The grant is one exact origin, not a wildcard: it is an S3 endpoint whose
+    // every object is already presign-gated, and widening it to `*.r2.cloudflarestorage.com`
+    // would name every Cloudflare account's R2 rather than ours. Unset degrades
+    // to nothing, same pattern as edgeApiOrigin.
+    let scanR2Origin = null;
+    try {
+      scanR2Origin = process.env.NEXT_PUBLIC_SCAN_R2_ENDPOINT
+        ? new URL(process.env.NEXT_PUBLIC_SCAN_R2_ENDPOINT).origin
+        : null;
+    } catch {
+      scanR2Origin = null;
+    }
+
+    const supabaseConnectOrigins = [supabaseFrameOrigin, supabaseRealtimeOrigin, edgeApiOrigin, scanR2Origin].filter(Boolean).join(' ');
 
     // CSP directives - adapted for development vs production
     const cspDirectives = [

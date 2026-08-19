@@ -200,6 +200,23 @@ The override reaches `useSplatUrl` via `dev-splat-url.ts`, which hands the stage
 which mounts the canvas. `NODE_ENV` is inlined at build time, so the guard folds to a
 constant `null` in production and the parameter is inert there.
 
+## Reading a failure
+
+Every failure here lands on one quiet line, which is right for a designer and useless
+for debugging a deployed build. `?splatDebug=1` (`splat-debug.ts`) prints the stage
+(`webgl` · `spark-renderer` · `splat-mesh` · `initialize` · `frame`) and the scrubbed
+message and stack into the stagecap, and logs the same to the console:
+
+```
+https://<host>/room/<scanId>?splatDebug=1
+```
+
+Unlike `?splatUrl=` this one **survives the production build**, deliberately: it is
+what found the two staging faults in W2-EVIDENCE §10b, neither of which reproduced in
+dev. It shows an error string and 300 characters of stack, never data, and truncates
+every URL at its `?` so a screenshot cannot leak a capability URL's SigV4 signature.
+Without the flag nothing is rendered and nothing is logged.
+
 ## The data seam
 
 `useSplatUrl` (`packages/supabase/src/hooks/use-splat-url.ts`) is the only thing that

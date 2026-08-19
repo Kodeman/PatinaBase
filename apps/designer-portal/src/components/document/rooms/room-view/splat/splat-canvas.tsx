@@ -41,6 +41,11 @@
  * Camera controls are Orbit's own `createOrbitController` — `controls.ts` is deliberately
  * three-free plain `{x,y,z}` math, so all four projections share one piece of interaction
  * math with no adaptation.
+ *
+ * Every failure path below is quiet by design, and all five land on the same line. That
+ * makes a deployed-only failure unreadable, so each one also records its scrubbed shape
+ * through `fail(stage, err)`; `?splatDebug=1` is what shows it. See `splat-debug.ts` for
+ * why that flag survives the production build when `?splatUrl=` does not.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -54,6 +59,13 @@ import {
   CREAM,
   type BuiltSplatScene,
 } from './splat-scene';
+import {
+  describeSplatFailure,
+  splatDebugEnabled,
+  useSplatDebug,
+  type SplatFailure,
+  type SplatFailureStage,
+} from './splat-debug';
 
 const FOV_DEG = 38;
 const CANVAS_HEIGHT = 560;
@@ -68,12 +80,39 @@ export interface SplatCanvasProps {
 export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<CanvasStatus>('loading');
+  /**
+   * The scrubbed shape of whatever went wrong, recorded on every failure path and
+   * rendered only under `?splatDebug=1`. Recorded unconditionally because the flag
+   * resolves after mount and a failure can precede it — and because holding two
+   * scrubbed strings costs nothing.
+   */
+  const [failure, setFailure] = useState<SplatFailure | null>(null);
+  const debug = useSplatDebug();
 
   useEffect(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;
 
     setStatus('loading');
+    setFailure(null);
+
+    // Read directly rather than depending on `debug`: the hook's value flips after
+    // mount, and taking it as a dependency would tear down and rebuild the whole
+    // WebGL context the moment the flag resolved.
+    const debugging = splatDebugEnabled(window.location.search);
+
+    const fail = (stage: SplatFailureStage, err: unknown) => {
+      const described = describeSplatFailure(stage, err);
+      setFailure(described);
+      if (debugging) {
+        // Scrubbed strings only — the raw error can carry the capability URL's
+        // SigV4 query, and the console is the one place a screenshot would keep it.
+        console.error(
+          `[splat:${described.stage}] ${described.message}`,
+          described.stack ?? '',
+        );
+      }
+    };
 
     // Fresh canvas per mount (StrictMode-safe — see orbit-canvas.tsx's header).
     const canvas = document.createElement('canvas');
@@ -85,9 +124,10 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
     try {
       renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
       if (!renderer.getContext()) throw new Error('no webgl context');
-    } catch {
+    } catch (err) {
       renderer?.dispose?.();
       canvas.remove();
+      fail('webgl', err);
       setStatus('webgl-failed');
       return;
     }
@@ -146,8 +186,9 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
      * belongs in the same quiet state a failed load lands in.
      */
     const runFrame = () => {
-      frame().catch(() => {
+      frame().catch((err: unknown) => {
         if (cancelled) return;
+        fail('frame', err);
         setStatus('error');
       });
     };
@@ -157,7 +198,10 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
     try {
       spark = new SparkRenderer({ renderer: gl, onDirty: invalidate });
       splatMesh = new SplatMesh({ url: splatUrl });
-    } catch {
+    } catch (err) {
+      // Which of the two threw is the first fork in the diagnosis, and `spark`
+      // being set already answers it without splitting the try.
+      fail(spark ? 'splat-mesh' : 'spark-renderer', err);
       disposeSplatParts({ spark: spark ?? undefined, splatMesh: splatMesh ?? undefined });
       gl.dispose();
       gl.forceContextLoss?.();
@@ -220,8 +264,9 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
         runFrame();
         setStatus('ready');
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
+        fail('initialize', err);
         disposeSplatParts(parts);
         setStatus('error');
       });
@@ -260,12 +305,21 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
         )}
       </div>
       {!live && (
-        <div className="flex h-[560px] w-full items-center justify-center px-6 text-center">
+        <div className="flex h-[560px] w-full flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="text-[12px] italic text-[var(--text-muted)]">
             {status === 'webgl-failed'
               ? 'This device can’t render Splat — Mesh and Plan carry the room.'
               : 'The walkthrough couldn’t be loaded — Mesh and Plan carry the room.'}
           </p>
+          {debug && failure && (
+            <pre
+              data-testid="splat-debug"
+              className="max-h-[380px] max-w-full overflow-auto whitespace-pre-wrap break-all border border-[var(--doc-ink-border)] px-3 py-2 text-left font-mono text-[10px] leading-[1.5] text-[var(--color-aged-oak)]"
+            >
+              {failure.stage}: {failure.message}
+              {failure.stack ? `\n${failure.stack}` : ''}
+            </pre>
+          )}
         </div>
       )}
     </>

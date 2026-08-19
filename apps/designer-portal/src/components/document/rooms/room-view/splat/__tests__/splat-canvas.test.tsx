@@ -363,6 +363,14 @@ describe('SplatCanvas — failure states', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps the error to itself unless ?splatDebug=1 was typed', async () => {
+    render(<SplatCanvas splatUrl={URL_A} />);
+    meshInstances[0].fail();
+    await settle();
+
+    expect(screen.queryByTestId('splat-debug')).not.toBeInTheDocument();
+  });
+
   it('says so plainly when the device has no WebGL at all', () => {
     contextAvailable = false;
     const { container } = render(<SplatCanvas splatUrl={URL_A} />);
@@ -376,5 +384,87 @@ describe('SplatCanvas — failure states', () => {
     expect(meshInstances).toHaveLength(0);
     expect(rendererInstances[0].dispose).toHaveBeenCalled();
     expect(container.querySelector('canvas')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The `?splatDebug=1` plumbing. What this proves is that the flag reaches BOTH exits —
+ * the stagecap and the console — and that the stage label distinguishes the three
+ * failure sites that otherwise render identically. It does not prove the scrubber
+ * works; `splat-debug.test.ts` owns that.
+ */
+describe('SplatCanvas — ?splatDebug=1', () => {
+  const withSearch = (search: string) => {
+    window.history.replaceState({}, '', `/room/abc${search}`);
+  };
+
+  let consoleError: jest.SpyInstance;
+
+  beforeEach(() => {
+    withSearch('?splatDebug=1');
+    consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleError.mockRestore();
+    withSearch('');
+  });
+
+  it('surfaces a failed load’s message in the stagecap and on the console', async () => {
+    render(<SplatCanvas splatUrl={URL_A} />);
+    meshInstances[0].fail(); // rejects with Error('404')
+    await settle();
+
+    const block = await screen.findByTestId('splat-debug');
+    expect(block).toHaveTextContent('initialize');
+    expect(block).toHaveTextContent('404');
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining('[splat:initialize] 404'),
+      expect.anything(),
+    );
+  });
+
+  it('keeps the quiet line alongside the debug block rather than replacing it', async () => {
+    render(<SplatCanvas splatUrl={URL_A} />);
+    meshInstances[0].fail();
+    await settle();
+
+    await screen.findByTestId('splat-debug');
+    expect(
+      screen.getByText('The walkthrough couldn’t be loaded — Mesh and Plan carry the room.'),
+    ).toBeInTheDocument();
+  });
+
+  it('names the frame stage when a sort fails while mounted', async () => {
+    render(<SplatCanvas splatUrl={URL_A} />);
+    sparkInstances[0].holdSort();
+    meshInstances[0].land();
+    await settle();
+    await nextFrame();
+
+    sparkInstances[0].failSort?.(new Error('sort failed'));
+    await settle();
+
+    const block = await screen.findByTestId('splat-debug');
+    expect(block).toHaveTextContent('frame');
+    expect(block).toHaveTextContent('sort failed');
+  });
+
+  it('names the webgl stage when there is no context', async () => {
+    contextAvailable = false;
+    render(<SplatCanvas splatUrl={URL_A} />);
+
+    const block = await screen.findByTestId('splat-debug');
+    expect(block).toHaveTextContent('webgl');
+    expect(block).toHaveTextContent('no webgl context');
+  });
+
+  it('stays silent on the console when the flag is absent', async () => {
+    withSearch('');
+    render(<SplatCanvas splatUrl={URL_A} />);
+    meshInstances[0].fail();
+    await settle();
+
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });

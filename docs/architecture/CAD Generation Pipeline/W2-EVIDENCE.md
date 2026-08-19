@@ -784,6 +784,120 @@ light or to stand inside of. They are the next wave's work, not this one's.
 
 ---
 
+## 10b. The viewer — why SPLAT stayed dark, and what is still in the way
+
+The artifact was proven correct at rest (§9.3) and correct over the wire (§9.4).
+It still would not draw in the staging portal, on a stage that showed nothing at
+all: no console error, no network row, no CSP warning — only the canvas's quiet
+"The walkthrough couldn't be loaded" line. Two separate faults were hiding under
+that silence, and the first had to be removed before the second could be seen.
+
+### The instrument that made it speak
+
+`?splatDebug=1` (`splat/splat-debug.ts`). Every failure path in `splat-canvas.tsx`
+now records its stage and its scrubbed message; the flag is what renders them and
+what logs them. Unlike `?splatUrl=` it survives the production build on purpose —
+the fault only reproduced in a deployed bundle, where there is no dev server and
+no unminified frame. It reveals an error string and 300 characters of stack,
+never data, and every URL in the text is truncated at its `?` so a screenshot of
+a debug run cannot hand anyone a live SigV4 grant.
+
+### Fault 1 — CSP `connect-src` did not name R2. FIXED.
+
+```
+initialize: Failed to fetch
+TypeError: Failed to fetch
+    at decodeBytesUrl (blob:https://patina-designer-portal-staging…:1003:30)
+    at loadPackedSplats (blob:https://patina-designer-portal-staging…:1095:30)
+```
+
+Named exactly, by a `securitypolicyviolation` listener on the document:
+
+```
+connect-src blocked
+https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com/patina-staging-media-artifacts-us/scan_artifacts/cd72ad9b-…/v1/room.spz
+```
+
+The edge worker only **mints** the capability URL; the bytes come straight from
+R2's S3 endpoint, and that origin was in nobody's `connect-src`. The three
+earlier fixes — worker CORS preflight, `wasm-unsafe-eval`, R2 bucket CORS — were
+all real and all necessary, and none of them was this one.
+
+**Why it was invisible, which is the part worth keeping:** `@sparkjsdev/spark`
+fetches the splat from inside a **blob: Web Worker**. A worker inherits the
+owning document's CSP but reports its violations in its own context, so DevTools'
+main-thread console and network panel both showed a clean page while the request
+was being refused. Any future "silent, no network activity" failure in a
+worker-backed library should be checked against CSP first.
+
+Fixed in `apps/designer-portal/next.config.js` — a new `scanR2Origin`, read from
+`NEXT_PUBLIC_SCAN_R2_ENDPOINT` and pinned in `wrangler.jsonc` to the same value
+`infra/edge-api-worker/wrangler.jsonc` presigns against. Verified on the deployed
+header, and by the fetch itself: **200, `application/octet-stream`, 25 798 805
+bytes**, reaching the page.
+
+### Fault 2 — the artifact is SPZ **v4**; the viewer reads SPZ **v1–v3**. OPEN.
+
+With the bytes arriving, the next error is:
+
+```
+initialize: Invalid gzip header
+```
+
+The first 16 bytes of the object, read through the capability URL in the browser:
+
+```
+4e 47 53 50 | 04 00 00 00 | 1a 91 11 00 | 03 0c 00 06
+NGSP        | version 4   | 1 151 258   | shDeg 3, fracBits 12, flags 0, …
+```
+
+Not gzip-wrapped (`1f 8b`), and **format version 4**. Both facts are the same
+fact, and both come from the converter this wave installed:
+
+- `ply_to_spz` (Niantic spz, v3.0.0 tag) takes two positionals and **no version
+  flag** — `spz::PackOptions pack_options; spz::saveSpz(splat, pack_options,
+  argv[2]);` — so it writes `LATEST_SPZ_HEADER_VERSION`.
+- In that same source, `saveSpz` gzips only `if (o.version < MIN_ZSTD_SPZ_HEADER_VERSION)`
+  — "legacy gzip path for versions 1–3". Version 4+ is a different container
+  (`NgspFileHeader`, 12 reserved bytes) carrying **ZSTD** streams. That is also
+  why 1.15 M Gaussians fit in 25.8 MB with no outer gzip.
+- `@sparkjsdev/spark` 2.1.0's SPZ reader opens every file through a
+  `GunzipReader` and then rejects the header outright:
+  `if (this.version < 1 || this.version > 3) throw new Error("Unsupported SPZ version: …")`.
+
+So gzipping the object would not help either — it would trade "Invalid gzip
+header" for "Unsupported SPZ version: 4". **2.1.0 is the latest published Spark**
+(`npm view @sparkjsdev/spark versions` → `…, 2.0.0, 2.1.0`), so there is no
+upgrade to reach for. This is a format-generation mismatch between the pipeline's
+converter and the viewer library, not a viewer defect and not a CSP defect.
+
+**Three ways out, for whoever takes it:**
+
+1. **`SPZ_MODE=gzip-ply`** — the escape hatch `35aae854` already built: skip the
+   converter, gzip the PLY, store it with `Content-Encoding: gzip`. Spark's PLY
+   reader is the one the dev fixture walk already proved. Zero new code; costs
+   size (a gzipped PLY is several times an SPZ).
+2. **Pin the converter's output version** — build `ply_to_spz` with
+   `pack_options.version = 3` (a two-line patch to a CLI we already compile from
+   source at image-build time). Keeps SPZ's size win and is the better long-term
+   answer.
+3. Wait for Spark to read v4. Not available today.
+
+Either (1) or (2) needs a re-run of the splat export tail before SPLAT can draw
+this room. **No GPU time was spent from this lane** — the diagnosis is entirely
+from the artifact's own bytes and the two libraries' sources.
+
+### What is proven now
+
+| | Before | After |
+|---|---|---|
+| Stage says why it failed | never | `?splatDebug=1`, stage-labelled |
+| R2 bytes reach the browser | CSP-refused, silently | **200, 25 798 805 B** |
+| Console without the flag | silent | still silent (verified) |
+| SPLAT draws the room | no | **no — blocked on fault 2** |
+
+---
+
 ## 11. Cost — the close
 
 | Item | Measure |
@@ -817,6 +931,14 @@ patina-staging` is empty; nothing is left running.
 2. **The top-down plate is blown out** (§10). The key light sits 1 m above the
    bbox top; with 3.3 m walls it is a metre off the wall tops. Lighting is sized
    for a floor slab and needs sizing for a room.
+
+2b. **SPLAT still cannot draw the room: the artifact is SPZ v4, the viewer reads
+   v1–v3** (§10b, fault 2). The CSP half is fixed and deployed; this half is a
+   converter-vs-library format-generation mismatch and needs the splat export
+   tail re-run with either `SPZ_MODE=gzip-ply` or a `ply_to_spz` pinned to
+   `pack_options.version = 3`. It is the last thing between this wave and a
+   rendered walkthrough on screen, and it is the pipeline's to take, not the
+   portal's.
 
 3. **The fixed USDZ→GLB converter is committed but not deployed** (§8,
    `386baaad`). `services/aesthete-inference` is outside this lane's rails, so
