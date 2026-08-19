@@ -1,12 +1,22 @@
 # SD-hardening (canonical studio authority) — W7 follow-on register
 
 **Status:** scoped, not landed. Ruled 2026-08-18: the whole SD tranche folds into **one**
-properly-reviewed follow-on program. Phase 1 (PR #28) and the edge-API auth path (PR #29) land
-on their own; this SD work lands *after* Phase 1, as its own reviewed program.
+properly-reviewed follow-on program. **Ruled 2026-08-19 (Kody): SPLIT.** The landing set is
+**`00511` + `00513`**; **`00512` is parked for redesign** (see below). Phase 1 (PR #28) and the
+edge-API auth path (PR #29) land on their own; this SD work lands *after* Phase 1.
 
-**Carrier branch:** `followon/sd-hardening-v3` (branched from `followon/sd-hardening-v2` tip
-`79a0d1b5`, with `origin/main` merged in). Nothing is on `main`. Nothing is applied to staging
-or prod.
+**Carrier branch (landing set):** `followon/sd-hardening-v3` — now carries **only 00511 + 00513**.
+Branched from `followon/sd-hardening-v2` tip `79a0d1b5`, with `origin/main` merged in. Nothing is
+on `main`. Nothing is applied to staging or prod.
+
+**Parked:** `00512_public_sd_caller_hardening.sql` + its contract test are removed from the landing
+branch and held on `followon/sd-caller-hardening-00512`. Charter + redesign requirements:
+`docs/follow-ups/sd-caller-hardening-00512-followon.md`. It carried a real regression against
+live-prod behavior (blocks the authenticated portal path that deletes/re-points milestone-backed
+draft invoice lines — 4 prod drafts reachable today). `00512` stays reserved-parked; `00513` keeps
+its number. **00511 works standalone**: it touches neither the milestone latch nor the scope-change
+functions, and its `create_draft_invoice` DEFINER inserts are admitted by prod's existing 00397
+latch.
 
 This register is the authoritative scope. It supersedes the plan's terse "W7 — 00488 canonical
 studio authority" line with what the 2026-08-18 adversarial review actually found.
@@ -27,7 +37,7 @@ studio authority" line with what the 2026-08-18 adversarial review actually foun
 | Artifact | State | Notes |
 |---|---|---|
 | `supabase/migrations/00511_public_sd_hardening.sql` (7272 lines) | authored, **contract test NOT green** | was 00487; recovered/renumbered from the old descoped 00488; the "lock narrowing" commit `01d411ea` *is* this whole file (the file did not exist at its parent) |
-| `supabase/migrations/00512_public_sd_caller_hardening.sql` | authored, **contract test GREEN end-to-end** (`public_sd_caller_hardening_contract_test.sql`, local exit 0) | was 00488 |
+| `supabase/migrations/00512_public_sd_caller_hardening.sql` | **PARKED — not in the landing set** (branch `followon/sd-caller-hardening-00512`) | was 00488; latch-detach rewrite regresses live prod behavior — see `sd-caller-hardening-00512-followon.md` |
 | `supabase/migrations/00513_invoice_numbering_studio_uniqueness.sql` (70 lines) | authored, **proven & load-bearing**, SAFE-to-land | was 00489; independent of 00511; sits above it by number |
 | `supabase/tests/edge_api/public_sd_hardening_contract_test.sql` | **stops at line 6187** on finding #1 | passes cleanly through 6088 once 00513 is in place |
 
