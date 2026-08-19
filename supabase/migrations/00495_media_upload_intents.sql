@@ -41,6 +41,36 @@
 -- would admit a single row.
 --
 -- Adds GRANT/REVOKE and a new table → regenerate seed/00-legacy-grants.sql.
+--
+-- ─── Adversarial review fix-forwards (in-place edit — unapplied anywhere) ───
+--   W-4  confirm_media_upload_intent_v2 now rejects a confirm whose
+--        expires_at has already passed (P0445). DISCOVERED WHILE FIXING:
+--        the natural-looking "UPDATE status='expired' THEN RAISE EXCEPTION"
+--        cannot actually persist that update — PL/pgSQL's EXCEPTION blocks
+--        establish an implicit SAVEPOINT, and ANY caller that catches this
+--        function's exception (a BEGIN/EXCEPTION wrapper, or a PostgREST/
+--        RPC transaction that aborts on error) rolls back everything the
+--        function did since entry, including its own "mark expired" write —
+--        there is no way to make one write in this function durable across
+--        an exception raised from the SAME function without an autonomous-
+--        transaction mechanism (dblink/pg_background), which is out of
+--        scope here. So this refuses (P0445) WITHOUT attempting to persist
+--        'expired' — every retry against a lapsed intent gets P0445 again,
+--        which is itself a safe, idempotent refusal. Actually persisting
+--        'expired' status is the reaper cron's job, deferred to a later
+--        wave (as already noted) — that cron runs in its OWN transaction,
+--        so its UPDATE is not subject to this constraint.
+--   W-5  idempotency was scoped to idempotency_key ALONE — a different
+--        actor reusing the same key string received the FIRST actor's
+--        intent id (a cross-actor handoff of upload authorization). The
+--        unique constraint is now (actor, idempotency_key), and the replay
+--        comparison now checks the FULL declared payload (all 11 fields:
+--        actor, bucket, bucket_class, object_key, access_class,
+--        declared_sha256, declared_mime, declared_size_bytes, subject_type,
+--        subject_id, expires_at) instead of 5.
+--   W-6  same advisory-lock race as 00494 §3 (FOR UPDATE locks nothing when
+--        no row exists yet) applies here too — extended proactively for
+--        consistency, keyed on (actor, idempotency_key).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ─── 1. media_upload_intents ─────────────────────────────────────────────────
@@ -75,7 +105,10 @@ CREATE TABLE IF NOT EXISTS public.media_upload_intents (
   confirmed_at          timestamptz,
   expires_at            timestamptz,
 
-  CONSTRAINT media_upload_intents_idempotency_key_uniq UNIQUE (idempotency_key)
+  -- W-5: scoped to (actor, idempotency_key), NOT idempotency_key alone —
+  -- an idempotency key is only a promise within ONE actor's own retries,
+  -- never a shared namespace across actors.
+  CONSTRAINT media_upload_intents_actor_idempotency_key_uniq UNIQUE (actor, idempotency_key)
 );
 
 COMMENT ON TABLE public.media_upload_intents IS
@@ -182,24 +215,46 @@ BEGIN
     RAISE EXCEPTION 'create_media_upload_intent_v2: p_idempotency_key must be non-empty';
   END IF;
 
+  -- W-6 (extended from 00494 §3 for consistency): lock the (actor,
+  -- idempotency_key) identity BEFORE the SELECT so two concurrent creates
+  -- with the same key from the same actor cannot both take the INSERT
+  -- branch below.
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended(p_actor::text || '/' || p_idempotency_key, 0)
+  );
+
+  -- W-5: scoped to (actor, idempotency_key) — a DIFFERENT actor reusing this
+  -- exact key string finds NOTHING here (NOT FOUND) and falls through to a
+  -- brand-new INSERT of their OWN intent, never the other actor's.
   SELECT * INTO v_existing
     FROM public.media_upload_intents
-   WHERE idempotency_key = p_idempotency_key
+   WHERE actor = p_actor AND idempotency_key = p_idempotency_key
      FOR UPDATE;
 
   IF FOUND THEN
-    IF v_existing.bucket = p_bucket
+    -- W-5: compares the FULL declared payload (all 11 fields), not just 5 —
+    -- a replay must match EVERY field the caller declared, not merely the
+    -- five checked before this fix, or a caller could "replay" into a
+    -- different subject_type/subject_id/expires_at than what was actually
+    -- declared for the returned intent id.
+    IF v_existing.actor = p_actor
+       AND v_existing.bucket = p_bucket
        AND v_existing.bucket_class = p_bucket_class
        AND v_existing.object_key = p_object_key
        AND v_existing.access_class = p_access_class
        AND v_existing.declared_sha256 = p_declared_sha256
+       AND v_existing.declared_mime IS NOT DISTINCT FROM p_declared_mime
+       AND v_existing.declared_size_bytes IS NOT DISTINCT FROM p_declared_size_bytes
+       AND v_existing.subject_type IS NOT DISTINCT FROM p_subject_type
+       AND v_existing.subject_id IS NOT DISTINCT FROM p_subject_id
+       AND v_existing.expires_at IS NOT DISTINCT FROM p_expires_at
     THEN
       RETURN v_existing.id;   -- idempotent replay
     END IF;
 
     RAISE EXCEPTION
-      'create_media_upload_intent_v2: idempotency_key % already used with different parameters',
-      p_idempotency_key
+      'create_media_upload_intent_v2: idempotency_key % already used by actor % with different parameters',
+      p_idempotency_key, p_actor
       USING ERRCODE = 'P0441';
   END IF;
 
@@ -277,6 +332,19 @@ BEGIN
       'confirm_media_upload_intent_v2: intent % is % — cannot confirm',
       p_intent_id, v_intent.status
       USING ERRCODE = 'P0444';
+  END IF;
+
+  -- W-4: a still-'intent' row whose expires_at has already passed is
+  -- refused (P0445). Deliberately does NOT also UPDATE status='expired'
+  -- here — see the header note: that write cannot survive this function
+  -- raising, in ANY caller that catches the exception (which is effectively
+  -- every realistic caller, since a raised exception aborts the enclosing
+  -- transaction). Persisting 'expired' is the reaper cron's job (deferred).
+  IF v_intent.expires_at IS NOT NULL AND v_intent.expires_at < now() THEN
+    RAISE EXCEPTION
+      'confirm_media_upload_intent_v2: intent % expired at % — cannot confirm',
+      p_intent_id, v_intent.expires_at
+      USING ERRCODE = 'P0445';
   END IF;
 
   -- The one check this RPC exists to make: the bytes the caller is vouching

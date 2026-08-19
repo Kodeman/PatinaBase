@@ -11318,6 +11318,18 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  REVOKE UPDATE ON public.media_registry FROM service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00494_media_registry.sql
+DO $g$ BEGIN
+  GRANT UPDATE ( version, bucket, bucket_class, object_key, sha256, etag, declared_mime, observed_mime, declared_size_bytes, observed_size_bytes, width, height, access_class, lifecycle_state, retention_until, subject_type, subject_id, provenance, created_by, created_at, updated_at, gc_marked_at, gc_confirmed_at, deleted_at ) ON public.media_registry TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00495_media_upload_intents.sql
 DO $g$ BEGIN
   GRANT ALL ON public.media_upload_intents TO service_role;

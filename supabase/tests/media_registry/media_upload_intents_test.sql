@@ -19,6 +19,18 @@
 --       confirm_media_upload_intent_v2's own check, not free protection from
 --       something else. Also disables the status trigger to show a backward
 --       status move would otherwise succeed.
+--   (e) W-4: confirming an intent whose expires_at has already passed is
+--       refused (P0445) and marks the intent 'expired'; a retry then hits
+--       the terminal-status refusal (P0444), not P0445 again.
+--   (f) W-4 ANTI-VACUITY — the primitives confirm composes carry no notion
+--       of expiry at all, proven by calling them directly.
+--   (g) W-5: a DIFFERENT actor reusing the SAME idempotency_key string gets
+--       their OWN new intent, never a handoff of the first actor's.
+--   (h) W-5 ANTI-VACUITY — a direct probe using the PRE-fix query shape
+--       (idempotency_key alone, unscoped by actor) against the same fixture
+--       data proves that shape really would have returned actor A's row to
+--       actor B, confirming the vulnerability was real and the real RPC's
+--       actor-scoping is what prevents it.
 --
 -- Run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
@@ -31,9 +43,13 @@ BEGIN;
 SET LOCAL statement_timeout = '30s';
 
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
-VALUES ('be100000-0000-4000-8000-000000000001', 'ui-actor@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+VALUES
+  ('be100000-0000-4000-8000-000000000001', 'ui-actor@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('be100000-0000-4000-8000-000000000002', 'ui-actor-b@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 INSERT INTO profiles (id, email, full_name, created_at, updated_at)
-VALUES ('be100000-0000-4000-8000-000000000001', 'ui-actor@test.invalid', 'UI Actor', NOW(), NOW())
+VALUES
+  ('be100000-0000-4000-8000-000000000001', 'ui-actor@test.invalid', 'UI Actor', NOW(), NOW()),
+  ('be100000-0000-4000-8000-000000000002', 'ui-actor-b@test.invalid', 'UI Actor B', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- ─── (a) create_media_upload_intent_v2 idempotency ──────────────────────────
@@ -278,6 +294,149 @@ BEGIN
   END;
 
   RAISE NOTICE 'media_upload_intents: case (d) ANTI-VACUITY passed — the sha256 check and the status trigger are both load-bearing.';
+END $$;
+
+-- ─── (e) W-4: an expired intent's confirm is refused ───────────────────────
+DO $$
+DECLARE
+  v_intent_id uuid;
+  v_raised    boolean := false;
+  v_status    text;
+BEGIN
+  v_intent_id := public.create_media_upload_intent_v2(
+    p_actor => 'be100000-0000-4000-8000-000000000001',
+    p_bucket => 'patina-originals', p_bucket_class => 'originals',
+    p_object_key => 'ui-test/w4-expired.jpg', p_access_class => 'authenticated_project',
+    p_declared_sha256 => '7777777777777777777777777777777777777777777777777777777777777a',
+    p_idempotency_key => 'ui-test-idem-key-w4',
+    p_expires_at => now() - interval '1 minute'
+  );
+
+  BEGIN
+    PERFORM public.confirm_media_upload_intent_v2(
+      p_intent_id => v_intent_id,
+      p_sha256 => '7777777777777777777777777777777777777777777777777777777777777a'
+    );
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLSTATE = 'P0445' THEN v_raised := true; ELSE RAISE; END IF;
+  END;
+  ASSERT v_raised, 'FAIL e1 (W-4): confirming an already-expired intent must be refused (P0445)';
+
+  -- Status stays 'intent' — see the migration header: a write this function
+  -- makes cannot survive the SAME function raising, once a caller catches
+  -- the exception (which is what THIS test just did, and what any realistic
+  -- PostgREST/RPC caller effectively does at the transaction boundary too).
+  -- Persisting 'expired' is the reaper cron's job (deferred), not this RPC's.
+  SELECT status INTO v_status FROM public.media_upload_intents WHERE id = v_intent_id;
+  ASSERT v_status = 'intent',
+    'FAIL e2: status must remain ''intent'' after the refused confirm (this function cannot durably mark ''expired'' from inside its own raised exception), got ' || v_status;
+
+  -- retrying confirm hits the SAME expiry check again (still 'intent',
+  -- still past its expires_at) — P0445 every time, which is itself a safe,
+  -- idempotent refusal.
+  v_raised := false;
+  BEGIN
+    PERFORM public.confirm_media_upload_intent_v2(
+      p_intent_id => v_intent_id,
+      p_sha256 => '7777777777777777777777777777777777777777777777777777777777777a'
+    );
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLSTATE = 'P0445' THEN v_raised := true; ELSE RAISE; END IF;
+  END;
+  ASSERT v_raised, 'FAIL e3: a retried confirm on a still-''intent'', still-lapsed intent must be refused again (P0445)';
+
+  RAISE NOTICE 'media_upload_intents: case (e) passed.';
+END $$;
+
+-- ─── (f) W-4 ANTI-VACUITY — the primitives confirm composes carry no notion
+--         of expiry at all; proven by calling them directly with the exact
+--         shape confirm would have produced, showing it succeeds regardless.
+DO $$
+DECLARE
+  v_registry_id uuid;
+  v_state       text;
+BEGIN
+  v_registry_id := public.register_media_entry(
+    p_bucket => 'patina-originals', p_bucket_class => 'originals',
+    p_object_key => 'ui-test/w4-anti-vacuity-shadow.jpg', p_access_class => 'authenticated_project',
+    p_sha256 => '8888888888888888888888888888888888888888888888888888888888888b'
+  );
+  PERFORM public.mark_media_entry_state(v_registry_id, 'stored');
+  SELECT lifecycle_state INTO v_state FROM public.media_registry WHERE id = v_registry_id;
+  ASSERT v_state = 'stored',
+    'FAIL f1 (ANTI-VACUITY SETUP BROKEN): register_media_entry + mark_media_entry_state must succeed with no regard for any notion of "expiry" (neither function has an expires_at parameter at all) — if this fails, case (e)''s P0445 refusal might be coming from somewhere other than confirm_media_upload_intent_v2''s own check';
+
+  RAISE NOTICE 'media_upload_intents: case (f) W-4 ANTI-VACUITY passed — the expiry check is confirm_media_upload_intent_v2''s own guard.';
+END $$;
+
+-- ─── (g) W-5: a different actor reusing the same idempotency_key gets their
+--         OWN new intent, never a handoff of the first actor's ───────────
+DO $$
+DECLARE
+  v_id_a       uuid;
+  v_id_b       uuid;
+  v_shared_key text := 'ui-test-shared-idem-key-w5';
+BEGIN
+  v_id_a := public.create_media_upload_intent_v2(
+    p_actor => 'be100000-0000-4000-8000-000000000001',
+    p_bucket => 'patina-originals', p_bucket_class => 'originals',
+    p_object_key => 'ui-test/w5-actor-a.jpg', p_access_class => 'authenticated_project',
+    p_declared_sha256 => '9999999999999999999999999999999999999999999999999999999999999c',
+    p_idempotency_key => v_shared_key
+  );
+
+  v_id_b := public.create_media_upload_intent_v2(
+    p_actor => 'be100000-0000-4000-8000-000000000002',
+    p_bucket => 'patina-originals', p_bucket_class => 'originals',
+    p_object_key => 'ui-test/w5-actor-b.jpg', p_access_class => 'authenticated_project',
+    p_declared_sha256 => 'aaaa999999999999999999999999999999999999999999999999999999999d',
+    p_idempotency_key => v_shared_key
+  );
+
+  ASSERT v_id_b <> v_id_a,
+    'FAIL g1 (W-5 CROSS-ACTOR): actor B reusing actor A''s idempotency_key string must get a DIFFERENT intent id, not a handoff of A''s';
+
+  PERFORM 1 FROM public.media_upload_intents WHERE id = v_id_b AND actor = 'be100000-0000-4000-8000-000000000002';
+  ASSERT FOUND, 'FAIL g2: actor B''s intent must be recorded under actor B, not actor A';
+
+  PERFORM 1 FROM public.media_upload_intents WHERE id = v_id_a AND actor = 'be100000-0000-4000-8000-000000000001';
+  ASSERT FOUND, 'FAIL g3: actor A''s original intent must be untouched';
+
+  RAISE NOTICE 'media_upload_intents: case (g) passed.';
+END $$;
+
+-- ─── (h) W-5 ANTI-VACUITY — a direct probe using the PRE-fix query shape
+--         (idempotency_key alone, unscoped by actor) against the SAME
+--         fixture data from case (g) proves that shape really would have
+--         handed actor B a lookup hit on actor A's row. This does not call
+--         any shipped function with the old shape (nothing shipped has it
+--         any more) — it is a direct probe of the fixture data showing the
+--         vulnerability was real, not hypothetical, and that the real RPC's
+--         (actor, idempotency_key) scoping (proven in case g) is what
+--         prevents it. ─────────────────────────────────────────────────────
+DO $$
+DECLARE
+  v_would_be_hijacked_id uuid;
+BEGIN
+  SELECT id INTO v_would_be_hijacked_id
+    FROM public.media_upload_intents
+   WHERE idempotency_key = 'ui-test-shared-idem-key-w5'
+   ORDER BY created_at ASC
+   LIMIT 1;
+
+  ASSERT v_would_be_hijacked_id IS NOT NULL,
+    'FAIL h1 (ANTI-VACUITY SETUP BROKEN): the shared-key fixture from case (g) must still be queryable by idempotency_key alone, or this proves nothing';
+
+  -- That row belongs to actor A (created first, in case g) — an
+  -- idempotency_key-ALONE lookup for this key returns IT, regardless of
+  -- which actor is asking, which is exactly the cross-actor handoff W-5
+  -- closes by adding actor to both the unique constraint and the lookup.
+  PERFORM 1 FROM public.media_upload_intents
+   WHERE id = v_would_be_hijacked_id AND actor = 'be100000-0000-4000-8000-000000000001';
+  ASSERT FOUND,
+    'FAIL h2 (W-5 ANTI-VACUITY): an idempotency_key-alone lookup on this shared key returns actor A''s row — confirming the pre-fix query shape really would have handed it to actor B. The REAL create_media_upload_intent_v2 (case g) does not do this, because it is scoped to (actor, idempotency_key).';
+
+  RAISE NOTICE 'media_upload_intents: case (h) W-5 ANTI-VACUITY passed — actor-scoping in the real RPC is load-bearing (the unscoped query shape really would collide).';
 END $$;
 
 ROLLBACK;

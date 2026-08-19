@@ -40,6 +40,32 @@
 -- reach this table through the media service, not directly.
 --
 -- Adds GRANT/REVOKE and a new table → regenerate seed/00-legacy-grants.sql.
+--
+-- ─── Adversarial review fix-forwards (in-place edit — unapplied anywhere) ───
+--   W-1  legal_hold/retention_until now block a HARD DELETE too (new BEFORE
+--        DELETE trigger, §2b) and retention_until now blocks the soft
+--        →'deleted' transition the same way legal_hold already did (§2).
+--        gc_marked_at/gc_confirmed_at stay unused until B-W7 (GC wave).
+--   W-2  legal_hold/legal_hold_reason carved out of service_role's column-
+--        level UPDATE grant (§5b) — only mark_media_entry_legal_hold (a
+--        SECURITY DEFINER RPC, unaffected by this REVOKE since it runs as
+--        the function owner) may flip them; a direct UPDATE outside that
+--        RPC now fails ACL, not merely convention.
+--   W-3  DECIDED: subject_type/subject_id are now fixed at FIRST
+--        registration, full stop — a later register_media_entry call may
+--        only restate them exactly (including NULL=NULL), never fill them
+--        from NULL. The alternative (documenting fill-from-NULL as an
+--        accepted service_role-only retro-publication primitive) was
+--        rejected: nothing about this registry's use case needs a NULL-
+--        subject row to be retro-bindable, and the capability is a live
+--        "retro-publish a NULL-subject row onto any published product"
+--        primitive for as long as it exists. See §3.
+--   W-6  register_media_entry's FOR UPDATE locked nothing when no row
+--        existed yet, so two concurrent first-registrations of the same
+--        identity could both take the INSERT branch and the loser got a
+--        raw 23505 instead of a P0430-shaped refusal. Fixed with
+--        pg_advisory_xact_lock keyed on the (bucket, object_key, version)
+--        identity, acquired BEFORE the SELECT (§3).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ─── 1. media_registry ───────────────────────────────────────────────────────
@@ -187,7 +213,16 @@ BEGIN
         OLD.id, COALESCE(OLD.legal_hold_reason, 'no reason recorded')
         USING ERRCODE = 'P0421';
     END IF;
-    RETURN NEW;   -- deleted is reachable from any non-deleted state once hold clears
+    -- W-1: retention_until is a second, independent hold — a row can be
+    -- under retention without ever having been legal_hold'd (e.g. a
+    -- released_deliverable with a compliance retention window).
+    IF OLD.retention_until IS NOT NULL AND OLD.retention_until > now() THEN
+      RAISE EXCEPTION
+        'media_registry: % is under retention until %; deletion refused',
+        OLD.id, OLD.retention_until
+        USING ERRCODE = 'P0425';
+    END IF;
+    RETURN NEW;   -- deleted is reachable from any non-deleted state once hold/retention clear
   END IF;
 
   IF NOT (v_rank ? OLD.lifecycle_state) OR NOT (v_rank ? NEW.lifecycle_state) THEN
@@ -213,6 +248,41 @@ CREATE TRIGGER media_registry_guard_lifecycle_transition_trg
   FOR EACH ROW
   WHEN (NEW.lifecycle_state IS DISTINCT FROM OLD.lifecycle_state)
   EXECUTE FUNCTION public.media_registry_guard_lifecycle_transition();
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 2b. Hard-delete guard (W-1) — legal_hold/retention_until must survive a
+--     real SQL DELETE, not only the soft →'deleted' lifecycle transition
+--     the trigger above covers. Without this, legal_hold only protected the
+--     RPC path; a service_role connection running a bare DELETE bypassed it
+--     entirely (service_role holds DELETE via the blanket GRANT ALL below).
+-- ═══════════════════════════════════════════════════════════════════════════
+CREATE OR REPLACE FUNCTION public.media_registry_guard_hard_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF OLD.legal_hold THEN
+    RAISE EXCEPTION
+      'media_registry: % is under legal hold (%); hard DELETE refused',
+      OLD.id, COALESCE(OLD.legal_hold_reason, 'no reason recorded')
+      USING ERRCODE = 'P0423';
+  END IF;
+  IF OLD.retention_until IS NOT NULL AND OLD.retention_until > now() THEN
+    RAISE EXCEPTION
+      'media_registry: % is under retention until %; hard DELETE refused',
+      OLD.id, OLD.retention_until
+      USING ERRCODE = 'P0424';
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS media_registry_guard_hard_delete_trg ON public.media_registry;
+CREATE TRIGGER media_registry_guard_hard_delete_trg
+  BEFORE DELETE ON public.media_registry
+  FOR EACH ROW
+  EXECUTE FUNCTION public.media_registry_guard_hard_delete();
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 3. register_media_entry — write-once identity on (bucket, object_key,
@@ -266,8 +336,17 @@ BEGIN
     RAISE EXCEPTION 'register_media_entry: p_version must be >= 1';
   END IF;
 
-  -- FOR UPDATE holds the row across the write-once checks below so two
-  -- concurrent registrations of the same identity cannot both pass them.
+  -- W-6: an advisory lock keyed on the identity, acquired BEFORE the SELECT,
+  -- serializes ALL concurrent register_media_entry calls for this identity —
+  -- including the case where no row exists yet, which a bare `FOR UPDATE`
+  -- cannot lock (there is no row to lock). Without this, two concurrent
+  -- first-registrations of the same (bucket, object_key, version) could both
+  -- reach the INSERT below; the loser got a raw 23505 unique_violation
+  -- instead of this function's own P0430-shaped refusal.
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended(p_bucket || '/' || p_object_key || '/' || p_version::text, 0)
+  );
+
   SELECT * INTO v_existing
     FROM public.media_registry
    WHERE bucket = p_bucket AND object_key = p_object_key AND version = p_version
@@ -293,18 +372,21 @@ BEGIN
         p_bucket, p_object_key, p_version, v_existing.access_class, p_access_class
         USING ERRCODE = 'P0430';
     END IF;
-    IF v_existing.subject_type IS NOT NULL AND p_subject_type IS NOT NULL
-       AND v_existing.subject_type IS DISTINCT FROM p_subject_type THEN
+    -- W-3 (DECIDED — see header): subject_type/subject_id are fixed at
+    -- FIRST registration. A later call may only restate them EXACTLY,
+    -- including NULL=NULL — filling them in from NULL is refused, not
+    -- silently allowed. Without this, whoever holds the register_media_entry
+    -- door (service_role) could take a NULL-subject row registered for one
+    -- purpose and retro-bind it onto ANY published product or visible
+    -- project after the fact, moving it into media_registry_select's
+    -- visible set with no record that the binding happened later than
+    -- creation.
+    IF v_existing.subject_type IS DISTINCT FROM p_subject_type
+       OR v_existing.subject_id IS DISTINCT FROM p_subject_id THEN
       RAISE EXCEPTION
-        'register_media_entry: subject_type is write-once for %/%  v%  (already %, refusing %)',
-        p_bucket, p_object_key, p_version, v_existing.subject_type, p_subject_type
-        USING ERRCODE = 'P0430';
-    END IF;
-    IF v_existing.subject_id IS NOT NULL AND p_subject_id IS NOT NULL
-       AND v_existing.subject_id IS DISTINCT FROM p_subject_id THEN
-      RAISE EXCEPTION
-        'register_media_entry: subject_id is write-once for %/%  v%  (already %, refusing %)',
-        p_bucket, p_object_key, p_version, v_existing.subject_id, p_subject_id
+        'register_media_entry: subject_type/subject_id are fixed at first registration for %/%  v%  (already %/%, refusing %/%)',
+        p_bucket, p_object_key, p_version,
+        v_existing.subject_type, v_existing.subject_id, p_subject_type, p_subject_id
         USING ERRCODE = 'P0430';
     END IF;
 
@@ -315,8 +397,6 @@ BEGIN
       declared_size_bytes = COALESCE(p_declared_size_bytes, v_existing.declared_size_bytes),
       width               = COALESCE(p_width, v_existing.width),
       height              = COALESCE(p_height, v_existing.height),
-      subject_type        = COALESCE(v_existing.subject_type, p_subject_type),
-      subject_id          = COALESCE(v_existing.subject_id, p_subject_id),
       provenance          = COALESCE(v_existing.provenance, '{}'::jsonb) || COALESCE(p_provenance, '{}'::jsonb),
       created_by          = COALESCE(v_existing.created_by, p_created_by),
       updated_at          = now()
@@ -435,6 +515,30 @@ GRANT EXECUTE ON FUNCTION public.mark_media_entry_legal_hold(uuid, boolean, text
   TO service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 5b. W-2 — column-privilege approach: legal_hold/legal_hold_reason are
+--     carved OUT of service_role's UPDATE grant. mark_media_entry_legal_hold
+--     is SECURITY DEFINER and runs as the function OWNER, so this REVOKE
+--     does not affect it — the RPC keeps working. What it blocks is a
+--     service_role-authenticated caller running a bare
+--     `UPDATE media_registry SET legal_hold = false ...` outside the RPC
+--     (skipping the reason-required-when-holding check and leaving no
+--     record of who lifted it, beyond whatever `updated_at` shows).
+--
+-- REVOKE UPDATE (whole table) then re-GRANT on every OTHER column is the
+-- only way to narrow a table-level grant to column granularity in Postgres
+-- — a bare `REVOKE UPDATE (col) ON t FROM role` cannot carve a hole out of
+-- an existing table-level grant.
+-- ═══════════════════════════════════════════════════════════════════════════
+REVOKE UPDATE ON public.media_registry FROM service_role;
+GRANT UPDATE (
+  version, bucket, bucket_class, object_key,
+  sha256, etag, declared_mime, observed_mime, declared_size_bytes, observed_size_bytes,
+  width, height, access_class, lifecycle_state, retention_until,
+  subject_type, subject_id, provenance, created_by,
+  created_at, updated_at, gc_marked_at, gc_confirmed_at, deleted_at
+) ON public.media_registry TO service_role;
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- 6. Verify-block — the default-priv trap. Supabase's 2026-05-30 grant-flip
 --    means a fresh local stack and prod can disagree about creation-time
 --    grants; this block fails the migration transaction itself rather than
@@ -476,5 +580,27 @@ BEGIN
   END IF;
   IF NOT has_table_privilege('service_role', 'public.media_registry', 'INSERT') THEN
     RAISE EXCEPTION '00494 verify: service_role must hold INSERT on media_registry';
+  END IF;
+
+  -- W-2: service_role must NOT hold column-level UPDATE on legal_hold /
+  -- legal_hold_reason — only mark_media_entry_legal_hold's SECURITY DEFINER
+  -- may touch them.
+  IF has_column_privilege('service_role', 'public.media_registry', 'legal_hold', 'UPDATE') THEN
+    RAISE EXCEPTION '00494 verify: service_role must not hold column UPDATE on media_registry.legal_hold';
+  END IF;
+  IF has_column_privilege('service_role', 'public.media_registry', 'legal_hold_reason', 'UPDATE') THEN
+    RAISE EXCEPTION '00494 verify: service_role must not hold column UPDATE on media_registry.legal_hold_reason';
+  END IF;
+  -- ...but every other column must still be updatable, or the RPCs above
+  -- (register_media_entry / mark_media_entry_state, both called as their
+  -- SECURITY DEFINER owner, but still worth confirming the ACL narrowing
+  -- above did not overshoot) would have nothing to write through as a
+  -- direct service_role UPDATE either, silently changing this table's
+  -- operational contract.
+  IF NOT has_column_privilege('service_role', 'public.media_registry', 'lifecycle_state', 'UPDATE') THEN
+    RAISE EXCEPTION '00494 verify: service_role must still hold column UPDATE on media_registry.lifecycle_state';
+  END IF;
+  IF NOT has_column_privilege('service_role', 'public.media_registry', 'retention_until', 'UPDATE') THEN
+    RAISE EXCEPTION '00494 verify: service_role must still hold column UPDATE on media_registry.retention_until';
   END IF;
 END $$;
