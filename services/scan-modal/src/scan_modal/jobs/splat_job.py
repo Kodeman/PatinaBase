@@ -50,6 +50,7 @@ from ..core import spz as _spz
 from ..core.captured_room import parse_captured_room_meters
 from ..core.checkpoints import (
     CHECKPOINT_GLOB,
+    EVAL_LPIPS_TAGS,
     EVAL_PSNR_TAGS,
     CheckpointChoice,
     checkpoint_steps,
@@ -71,7 +72,7 @@ from . import _common
 __all__ = ["STAGE", "ARTIFACT_KIND", "InputError", "run_splat", "splat_object_key",
            "train_argv", "export_argv", "workspace_paths", "checkpoint_marker",
            "CheckpointCommitter", "ensure_seed_points", "default_max_iterations",
-           "read_eval_psnr", "choose_export_config"]
+           "read_eval_metrics", "choose_export_config"]
 
 STAGE = "splat"
 ARTIFACT_KIND = "splat"
@@ -251,37 +252,49 @@ def export_argv(paths: dict[str, Path], config_path: Path | None = None) -> list
     ]
 
 
-def read_eval_psnr(run_dir: Path) -> list[tuple[int, float]]:
-    """Held-out PSNR per step, from the run's tensorboard event file.
+def read_eval_metrics(run_dir: Path) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
+    """Held-out LPIPS and PSNR per step, from the run's tensorboard event file.
 
-    Returns `[]` — never raises — when there is nothing readable. Every failure
-    here (no event file, an unreadable one, tensorboard absent) has the same
-    correct consequence: export the final checkpoint, which is what this stage
-    did before. Losing a quality improvement must not lose the artifact.
+    Returns `([], [])` — never raises — when there is nothing readable. Every
+    failure here (no event file, an unreadable one, tensorboard absent) has the
+    same correct consequence: export the final checkpoint, which is what this
+    stage did before either metric existed. Losing a quality improvement must
+    not lose the artifact.
+
+    Both scalars are read from one `EventAccumulator.Reload()` — they come off
+    the same `writer.put_dict` call in nerfstudio (see `core/checkpoints.py`),
+    so there is no reason to reload the event file twice.
     """
     try:
         from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
     except ImportError:  # pragma: no cover - image-only dependency
         _common.log_skip(STAGE, "eval_metrics_unavailable", reason="tensorboard_missing")
-        return []
+        return [], []
 
     try:
         if not any(run_dir.glob("events.out.tfevents.*")):
             _common.log_skip(STAGE, "eval_metrics_unavailable", reason="no_event_file")
-            return []
+            return [], []
         # 0 = keep every scalar. The default (1 000) subsamples by reservoir,
         # which would silently drop the peak this whole mechanism looks for.
         accumulator = EventAccumulator(str(run_dir), size_guidance={"scalars": 0})
         accumulator.Reload()
         tags = set(accumulator.Tags().get("scalars", []))
-        for tag in EVAL_PSNR_TAGS:
-            if tag in tags:
-                return [(int(e.step), float(e.value)) for e in accumulator.Scalars(tag)]
-        _common.log_skip(STAGE, "eval_metrics_unavailable", reason="no_psnr_tag")
-        return []
+
+        def _series(candidates: tuple[str, ...]) -> list[tuple[int, float]]:
+            for tag in candidates:
+                if tag in tags:
+                    return [(int(e.step), float(e.value)) for e in accumulator.Scalars(tag)]
+            return []
+
+        lpips_pairs = _series(EVAL_LPIPS_TAGS)
+        psnr_pairs = _series(EVAL_PSNR_TAGS)
+        if not lpips_pairs and not psnr_pairs:
+            _common.log_skip(STAGE, "eval_metrics_unavailable", reason="no_metric_tags")
+        return lpips_pairs, psnr_pairs
     except Exception as exc:  # noqa: BLE001 - see docstring
         _common.log_skip(STAGE, "eval_metrics_unavailable", error=type(exc).__name__)
-        return []
+        return [], []
 
 
 def choose_export_config(paths: dict[str, Path]) -> tuple[Path, CheckpointChoice | None]:
@@ -295,7 +308,8 @@ def choose_export_config(paths: dict[str, Path]) -> tuple[Path, CheckpointChoice
     checkpoints = paths["checkpoints"]
     steps = checkpoint_steps(p.name for p in checkpoints.glob(CHECKPOINT_GLOB)) \
         if checkpoints.is_dir() else []
-    choice = select_checkpoint(read_eval_psnr(paths["run"]), steps)
+    lpips_pairs, psnr_pairs = read_eval_metrics(paths["run"])
+    choice = select_checkpoint(lpips_pairs, psnr_pairs, steps)
     if choice is None or not steps or choice.step == steps[-1]:
         # Nothing to pin: either there are no checkpoints to choose between, or
         # the best one is already the one `eval_setup`'s max-step glob will find.
@@ -306,7 +320,7 @@ def choose_export_config(paths: dict[str, Path]) -> tuple[Path, CheckpointChoice
     except (OSError, ValueError) as exc:
         _common.log_skip(STAGE, "checkpoint_pin_failed", error=type(exc).__name__)
         return paths["config"], CheckpointChoice(
-            step=steps[-1], psnr=None, reason="latest_config_unpinnable",
+            step=steps[-1], lpips=None, psnr=None, reason="latest_config_unpinnable",
             considered=choice.considered,
         )
 
@@ -729,7 +743,13 @@ def run_splat(
             # Which checkpoint these bytes came from, and on what evidence.
             # Before this, the export was always the last checkpoint and there
             # was nothing on the artifact to say so (W2-EVIDENCE.md §13.6).
+            # LPIPS is the primary selector and PSNR the tiebreak/fallback
+            # (W2-EVIDENCE.md §14.6 item 1) — `exportCheckpointReason` is the
+            # basis ("best_lpips" | "psnr-fallback" | "latest_no_eval_metrics" |
+            # "latest_config_unpinnable"), and both metrics are kept regardless
+            # of which one decided the choice.
             "exportCheckpointStep": choice.step if choice else None,
+            "exportCheckpointLpips": choice.lpips if choice else None,
             "exportCheckpointPsnr": choice.psnr if choice else None,
             "exportCheckpointReason": choice.reason if choice else "no_checkpoints",
             "evalPointsConsidered": choice.considered if choice else 0,

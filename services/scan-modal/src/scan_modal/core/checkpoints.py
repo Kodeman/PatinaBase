@@ -7,19 +7,43 @@ holding a plateau to about 18 000, and then falling to **13.54 by 29 000** — b
 where the unseeded run ended (W2-EVIDENCE.md §13.6). The artifact that got stored
 was the last checkpoint, so the pipeline spent forty-five minutes of L4 training
 past its own best result and then shipped the worse one. Cutting the iteration
-budget helps (see `default_max_iterations`), but a budget is a guess made before
-the run; the eval curve is a measurement made during it, and the peak moves with
-the room. Exporting from the best checkpoint is the part that does not need to
-be guessed.
+budget helps (see `default_max_iterations` in `jobs/splat_job.py`), but a budget
+is a guess made before the run; the eval curve is a measurement made during it,
+and the peak moves with the room. Exporting from the best checkpoint is the part
+that does not need to be guessed.
+
+WHY PSNR STOPPED BEING THE SELECTOR (W2-EVIDENCE.md §14.6 item 1)
+───────────────────────────────────────────────────────────────
+Re-reading the same held-out curve at full checkpoint resolution found the
+"peak" PSNR result decided by a **0.013 dB** margin over its nearest competing
+checkpoint — noise, not signal, on a sparse-view room splat. Over the identical
+window, held-out **LPIPS moved 0.19, monotonically** — a perceptual-similarity
+metric that actually tracked the run instead of oscillating within measurement
+error. So the rule is now: **LPIPS (lower is better) is primary**, and PSNR
+is only the tiebreak for an exact LPIPS tie, and the fallback for a run whose
+event file has PSNR but no usable LPIPS series. Both numbers are still carried
+on every `CheckpointChoice` — see its docstring — because a stored artifact
+should be readable without re-deriving which metric decided it.
 
 WHAT NERFSTUDIO 1.1.5 ACTUALLY GIVES US, READ OFF ITS SOURCE
 ────────────────────────────────────────────────────────────
 - `Trainer.eval_iteration` writes eval metrics through `writer.put_dict`, and
   `Writer.write_scalar_dict` names each scalar `f"{name}/{key}"`. splatfacto's
-  `get_image_metrics_and_images` returns the key `psnr`. So the held-out curve
-  is the tensorboard scalar **`Eval Images Metrics Dict (all images)/psnr`**,
-  emitted every `steps_per_eval_all_images` (1 000 for splatfacto), with
-  `Eval Images Metrics/psnr` (one image, every 100) as a weaker second source.
+  `Model.get_image_metrics_and_images` (`nerfstudio/models/splatfacto.py`)
+  returns `metrics_dict = {"psnr": ..., "ssim": ..., "lpips": ...}` — LPIPS is
+  computed **unconditionally** alongside PSNR (`self.lpips = LearnedPerceptual-
+  ImagePatchSimilarity(normalize=True)`, `metrics_dict["lpips"] = float(lpips)`)
+  every single eval iteration; only the extra `cc_*` (colour-corrected) variants
+  are gated behind `config.color_corrected_metrics`. `get_average_eval_image_
+  metrics` (`pipelines/base_pipeline.py`) passes that same dict through
+  unfiltered. **No training-invocation flag is needed to emit LPIPS** — it is
+  on the wire the moment PSNR is.
+- The held-out curve is therefore the tensorboard scalar pair
+  **`Eval Images Metrics Dict (all images)/{psnr,lpips}`**, emitted every
+  `steps_per_eval_all_images` (1 000 for splatfacto), with
+  `Eval Images Metrics/{psnr,lpips}` (one image, every 100) as a weaker second
+  source for each — same cadence, same preference order, same tag scheme,
+  because both scalars come out of the same `put_dict` call.
 - There is **no JSON metrics file** written during `ns-train`; `benchmark_info`
   belongs to the separate `ns-eval` command. The event file is the only on-disk
   record, it sits in the run directory itself (`relative_log_dir` defaults to
@@ -46,6 +70,7 @@ from typing import Iterable, Mapping, Sequence
 
 __all__ = [
     "CHECKPOINT_GLOB",
+    "EVAL_LPIPS_TAGS",
     "EVAL_PSNR_TAGS",
     "LOAD_STEP_PATTERN",
     "CheckpointChoice",
@@ -60,8 +85,19 @@ CHECKPOINT_GLOB = "*.ckpt"
 _CHECKPOINT_NAME = re.compile(r"^step-(\d+)\.ckpt$")
 
 #: In preference order. The first is the average over ALL held-out images and is
-#: the number §13.6 reports; the second is a single eval image and is noisier,
+#: the number §14.6 reports; the second is a single eval image and is noisier,
 #: but it is emitted 10× more often and is better than exporting blind.
+#: The PRIMARY selection signal — see the module docstring for why PSNR (below)
+#: was demoted to a tiebreak/fallback.
+EVAL_LPIPS_TAGS = (
+    "Eval Images Metrics Dict (all images)/lpips",
+    "Eval Images Metrics/lpips",
+)
+
+#: Same preference order and cadence as `EVAL_LPIPS_TAGS` — both scalars come
+#: off the same `put_dict` call (see module docstring). Kept as the tiebreak for
+#: an exact LPIPS tie, and as the whole basis when a run has no usable LPIPS
+#: series (older event file, tag missing, all-NaN).
 EVAL_PSNR_TAGS = (
     "Eval Images Metrics Dict (all images)/psnr",
     "Eval Images Metrics/psnr",
@@ -78,15 +114,24 @@ LOAD_STEP_PATTERN = re.compile(r"^load_step:.*$", re.MULTILINE)
 class CheckpointChoice:
     """Which step to export from, and why — the `why` is provenance, not a log.
 
-    `psnr` is None whenever the choice was not made from a measurement, which is
-    the same condition as `reason != "best_eval_psnr"`. Both are carried so a
-    stored artifact can be read without re-deriving the rule.
+    Both `lpips` and `psnr` are carried regardless of which one decided the
+    choice, so a stored artifact can be read without re-deriving the rule:
+
+    - `reason == "best_lpips"`: `lpips` is the winning value; `psnr` is that
+      same step's reading if one exists (it decided nothing unless `lpips` was
+      exactly tied with another candidate).
+    - `reason == "psnr-fallback"`: the run had no usable held-out LPIPS series
+      at all, so the old PSNR-only rule picked the step; `lpips` is None.
+    - `reason == "latest_no_eval_metrics"`: neither metric was usable; both are
+      None and the choice is the newest checkpoint on disk.
     """
 
     step: int
+    lpips: float | None
     psnr: float | None
     reason: str
-    #: How many (step, psnr) pairs were available at checkpointed steps.
+    #: How many (step, value) pairs were available, at checkpointed steps, for
+    #: whichever metric decided the choice (LPIPS normally, PSNR on fallback).
     considered: int = 0
 
 
@@ -102,11 +147,31 @@ def checkpoint_steps(names: Iterable[str]) -> list[int]:
     return sorted(steps)
 
 
+def _scored_at_steps(
+    pairs: Mapping[int, float] | Sequence[tuple[int, float]],
+    exportable: set[int],
+) -> dict[int, float]:
+    """One metric's (step, value) pairs, restricted to steps with a checkpoint.
+
+    A step can be written more than once across a resume; the later write is
+    the one that describes the checkpoint now on disk, so later entries in
+    `pairs` overwrite earlier ones for the same step. NaN is not a measurement.
+    """
+    items = pairs.items() if isinstance(pairs, Mapping) else pairs
+    scored: dict[int, float] = {}
+    for step, value in items:
+        step = int(step)
+        if step in exportable and value == value:  # NaN is not a measurement
+            scored[step] = float(value)
+    return scored
+
+
 def select_checkpoint(
+    lpips_by_step: Mapping[int, float] | Sequence[tuple[int, float]],
     psnr_by_step: Mapping[int, float] | Sequence[tuple[int, float]],
     available_steps: Sequence[int],
 ) -> CheckpointChoice | None:
-    """Pick the checkpoint with the best held-out PSNR.
+    """Pick the checkpoint with the best held-out LPIPS, PSNR as tiebreak.
 
     The search is deliberately restricted to steps that HAVE a checkpoint. Eval
     runs every 1 000 steps and checkpoints land every 2 000, so the best eval
@@ -114,9 +179,17 @@ def select_checkpoint(
     be asserting a metric for a checkpoint nobody measured. Picking the best
     among the exportable ones is the honest version of the same idea.
 
-    Ties go to the EARLIER step: two checkpoints of equal held-out quality are
-    not equal artifacts — the earlier one has had less opportunity to overfit,
-    and §13.6's curve falls monotonically after its plateau.
+    LPIPS is lower-is-better and is the primary signal (see the module
+    docstring for why: on a sparse-view room splat PSNR's "best" checkpoint was
+    a 0.013 dB margin — noise — while LPIPS moved 0.19 monotonically over the
+    same window). Ties on LPIPS are broken by the HIGHER PSNR at that step, and
+    a step with no PSNR reading loses any such tie. A run with no usable LPIPS
+    series at all (missing tag, all-NaN, no event file) falls back to the old
+    best-PSNR rule, recorded as `reason="psnr-fallback"`.
+
+    Ties (on whichever metric decided it) go to the EARLIER step: two
+    checkpoints of equal held-out quality are not equal artifacts — the earlier
+    one has had less opportunity to overfit.
 
     Returns None only when there is no checkpoint at all; a run with checkpoints
     but no usable metrics still gets a choice (the latest), so the caller never
@@ -126,30 +199,42 @@ def select_checkpoint(
     if not steps:
         return None
 
-    pairs = psnr_by_step.items() if isinstance(psnr_by_step, Mapping) else psnr_by_step
     exportable = set(steps)
-    scored: dict[int, float] = {}
-    for step, value in pairs:
-        step = int(step)
-        if step in exportable and value == value:  # NaN is not a measurement
-            # A step can be written more than once across a resume; the later
-            # write is the one that describes the checkpoint now on disk.
-            scored[step] = float(value)
+    lpips_scored = _scored_at_steps(lpips_by_step, exportable)
+    psnr_scored = _scored_at_steps(psnr_by_step, exportable)
 
-    if not scored:
+    if lpips_scored:
+        def _key(step: int) -> tuple[float, float, int]:
+            # Lower LPIPS wins; among ties, higher PSNR wins (so its negation
+            # sorts first); a step with no PSNR reading loses any such tie.
+            psnr_tiebreak = -psnr_scored[step] if step in psnr_scored else float("inf")
+            return (lpips_scored[step], psnr_tiebreak, step)
+
+        best_step = min(lpips_scored, key=_key)
         return CheckpointChoice(
-            step=steps[-1],
-            psnr=None,
-            reason="latest_no_eval_metrics",
-            considered=0,
+            step=best_step,
+            lpips=lpips_scored[best_step],
+            psnr=psnr_scored.get(best_step),
+            reason="best_lpips",
+            considered=len(lpips_scored),
         )
 
-    best_step = min(scored, key=lambda s: (-scored[s], s))
+    if psnr_scored:
+        best_step = min(psnr_scored, key=lambda s: (-psnr_scored[s], s))
+        return CheckpointChoice(
+            step=best_step,
+            lpips=None,
+            psnr=psnr_scored[best_step],
+            reason="psnr-fallback",
+            considered=len(psnr_scored),
+        )
+
     return CheckpointChoice(
-        step=best_step,
-        psnr=scored[best_step],
-        reason="best_eval_psnr",
-        considered=len(scored),
+        step=steps[-1],
+        lpips=None,
+        psnr=None,
+        reason="latest_no_eval_metrics",
+        considered=0,
     )
 
 
