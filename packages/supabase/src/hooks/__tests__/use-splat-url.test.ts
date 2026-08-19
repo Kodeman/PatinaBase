@@ -39,33 +39,58 @@ const from = vi.fn((_table: string) => {
   return lastBuilder;
 });
 
+/** The session the resolver leg reads its bearer token from. */
+let session: { access_token: string } | null = { access_token: 'session-token' };
+const getSession = vi.fn(async () => ({ data: { session } }));
+
 vi.mock('@supabase/ssr', () => ({
-  createBrowserClient: () => ({ from }),
+  createBrowserClient: () => ({ from, auth: { getSession } }),
 }));
 
 /** What the mocked `useQuery` should hand back for the next `useSplatUrl` call. */
 let queryState: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };
-/** The config the hook handed `useQuery` — the hook itself returns the DERIVED
- *  `SplatSource`, so the query has to be captured on the way in. */
-let lastQueryConfig: QueryConfig | null = null;
+/** The same, for the resolver leg — kept separate so a test can hold the artifact
+ *  row fixed while varying only what the capability route said. */
+let capabilityState: { data: unknown; isLoading: boolean; isFetched: boolean } = {
+  data: undefined,
+  isLoading: false,
+  isFetched: false,
+};
+/** Every config the hook handed `useQuery` this render — the hook itself returns
+ *  the DERIVED `SplatSource`, so the queries have to be captured on the way in. */
+let issued: QueryConfig[] = [];
 
 interface QueryConfig {
   queryKey: unknown[];
   enabled: boolean;
-  queryFn: () => Promise<SplatArtifactRef | null>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  queryFn: () => Promise<any>;
 }
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: Record<string, unknown>) => {
-    lastQueryConfig = config as unknown as QueryConfig;
-    return { ...config, ...queryState };
+    issued.push(config as unknown as QueryConfig);
+    const key = (config.queryKey as unknown[])[0];
+    return key === 'room-file-splat-url'
+      ? { ...config, ...capabilityState }
+      : { ...config, ...queryState };
   },
 }));
 
-/** The query `useSplatUrl` just issued. */
+function issuedWithKey(key: string): QueryConfig {
+  const found = issued.filter((config) => config.queryKey[0] === key).at(-1);
+  if (!found) throw new Error(`useSplatUrl issued no ${key} query`);
+  return found;
+}
+
+/** The artifact-presence query `useSplatUrl` just issued. */
 function query(): QueryConfig {
-  if (!lastQueryConfig) throw new Error('useSplatUrl issued no query');
-  return lastQueryConfig;
+  return issuedWithKey('room-file-splat-artifact');
+}
+
+/** The capability-URL query `useSplatUrl` just issued. */
+function capabilityQuery(): QueryConfig {
+  return issuedWithKey('room-file-splat-url');
 }
 
 // Import AFTER the mocks are wired up.
@@ -75,15 +100,25 @@ import {
   SPLAT_ARTIFACT_KIND,
   type SplatArtifactRef,
 } from '../use-splat-url';
+import {
+  edgeApiBaseUrl,
+  fetchScanArtifact,
+  ScanArtifactError,
+} from '../../lib/scan-artifact-url';
 
 const REF: SplatArtifactRef = { object_id: '11111111-2222-3333-4444-555555555555', version: 3 };
 
 beforeEach(() => {
   tableResult = { data: null, error: null };
   queryState = { data: undefined, isLoading: false };
+  capabilityState = { data: undefined, isLoading: false, isFetched: false };
+  session = { access_token: 'session-token' };
   lastBuilder = null;
-  lastQueryConfig = null;
+  issued = [];
   from.mockClear();
+  getSession.mockClear();
+  delete process.env.NEXT_PUBLIC_EDGE_API_URL;
+  vi.unstubAllGlobals();
 });
 
 describe('readSplatArtifactRef', () => {
@@ -222,5 +257,170 @@ describe('useSplatUrl — the derived contract', () => {
     queryState = { data: REF, isLoading: false };
     expect(useSplatUrl('rf-1', { urlSource: '' }).unavailable).toBe('read-path-pending');
     expect(useSplatUrl('rf-1', { urlSource: null }).unavailable).toBe('read-path-pending');
+  });
+});
+
+describe('useSplatUrl — the capability-URL resolver leg', () => {
+  const CAPABILITY = {
+    url: 'https://account.r2.cloudflarestorage.com/bucket/splat.spz?X-Amz-Signature=abc',
+    expiresAt: '2026-08-18T12:44:56.789Z',
+  };
+
+  it('stays disabled, and reports read-path-pending, when NEXT_PUBLIC_EDGE_API_URL is unset', () => {
+    // Every environment today: the Worker's own SCAN_ROUTES flag rests at `off`
+    // until the R2 credentials exist, so the seam must behave exactly as it did
+    // before the resolver existed rather than firing a request at nothing.
+    queryState = { data: REF, isLoading: false };
+    const source = useSplatUrl('rf-1');
+
+    expect(capabilityQuery().enabled).toBe(false);
+    expect(source.url).toBeNull();
+    expect(source.unavailable).toBe('read-path-pending');
+    expect(source.hasArtifact).toBe(true);
+  });
+
+  it('stays disabled when the Room File registers no splat — nothing to resolve', () => {
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://edge.example';
+    queryState = { data: null, isLoading: false };
+    useSplatUrl('rf-1');
+    expect(capabilityQuery().enabled).toBe(false);
+  });
+
+  it('stays disabled behind a urlSource override — the override is authoritative', () => {
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://edge.example';
+    queryState = { data: REF, isLoading: false };
+    const source = useSplatUrl('rf-1', { urlSource: '/fixtures/splat/room-fixture.ply' });
+
+    expect(capabilityQuery().enabled).toBe(false);
+    expect(source.url).toBe('/fixtures/splat/room-fixture.ply');
+  });
+
+  it('calls the typed route with the session bearer and no cache', async () => {
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://edge.example/';
+    queryState = { data: REF, isLoading: false };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ kind: 'splat', ...CAPABILITY }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    useSplatUrl('rf-1');
+    expect(capabilityQuery().enabled).toBe(true);
+    expect(capabilityQuery().queryKey).toEqual(['room-file-splat-url', 'rf-1']);
+    await expect(capabilityQuery().queryFn()).resolves.toEqual(CAPABILITY);
+
+    expect(getSession).toHaveBeenCalled();
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    // The trailing slash on the configured base must not double up.
+    expect(url).toBe('https://edge.example/v1/scan/room-files/rf-1/artifacts/splat');
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer session-token');
+    // The response carries a URL that expires; caching it would hand out a dead one.
+    expect(init.cache).toBe('no-store');
+  });
+
+  it('refuses to ask without a session rather than sending an anonymous request', async () => {
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://edge.example';
+    queryState = { data: REF, isLoading: false };
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    session = null;
+
+    useSplatUrl('rf-1');
+    await expect(capabilityQuery().queryFn()).rejects.toThrow('no session');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('hands the resolved capability URL through as the ordinary source', () => {
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://edge.example';
+    queryState = { data: REF, isLoading: false };
+    capabilityState = { data: CAPABILITY, isLoading: false, isFetched: true };
+
+    const source = useSplatUrl('rf-1');
+    expect(source.url).toBe(CAPABILITY.url);
+    expect(source.unavailable).toBeNull();
+    expect(source.hasArtifact).toBe(true);
+    expect(source.isLoading).toBe(false);
+  });
+
+  it('reads a 404 as typed absence — registered, but nothing servable', () => {
+    // The route collapses "not yours", "no such row", and "no confirmed bytes"
+    // into one 404 on purpose. The viewer gets one honest answer: nothing to show.
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://edge.example';
+    queryState = { data: REF, isLoading: false };
+    capabilityState = { data: null, isLoading: false, isFetched: true };
+
+    const source = useSplatUrl('rf-1');
+    expect(source.url).toBeNull();
+    expect(source.unavailable).toBe('no-artifact');
+    expect(source.hasArtifact).toBe(false);
+    // The ref is still reported for telemetry — the row said it was registered.
+    expect(source.artifact).toEqual(REF);
+  });
+
+  it('stays pending — never "absent" — while the capability request is in flight', () => {
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://edge.example';
+    queryState = { data: REF, isLoading: false };
+    capabilityState = { data: undefined, isLoading: true, isFetched: false };
+
+    const source = useSplatUrl('rf-1');
+    expect(source.unavailable).toBe('read-path-pending');
+    expect(source.hasArtifact).toBe(true);
+    expect(source.isLoading).toBe(true);
+  });
+});
+
+describe('fetchScanArtifact', () => {
+  it('resolves null without a base URL, and never fetches', async () => {
+    const fetchMock = vi.fn();
+    await expect(fetchScanArtifact('rf-1', 'splat', 'token', fetchMock as unknown as typeof fetch)).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reads a 404 as absent and a 401 as an error', async () => {
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://edge.example';
+    const notFound = vi.fn(async () => new Response('{}', { status: 404 }));
+    await expect(
+      fetchScanArtifact('rf-1', 'splat', 'token', notFound as unknown as typeof fetch),
+    ).resolves.toBeNull();
+
+    // An expired session must surface as an error, not as "this room has no splat".
+    const unauthorized = vi.fn(async () => new Response('{}', { status: 401 }));
+    await expect(
+      fetchScanArtifact('rf-1', 'splat', 'token', unauthorized as unknown as typeof fetch),
+    ).rejects.toThrow(ScanArtifactError);
+  });
+
+  it('returns the renders shot map, dropping malformed entries', async () => {
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://edge.example';
+    const body = {
+      kind: 'renders',
+      shots: {
+        corner_ne: { url: 'https://r2/corner.jpg', expiresAt: '2026-08-18T12:44:56.789Z' },
+        broken: { url: 42 },
+      },
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));
+    await expect(
+      fetchScanArtifact('rf-1', 'renders', 'token', fetchMock as unknown as typeof fetch),
+    ).resolves.toEqual({
+      kind: 'renders',
+      shots: {
+        corner_ne: { url: 'https://r2/corner.jpg', expiresAt: '2026-08-18T12:44:56.789Z' },
+      },
+    });
+  });
+
+  it('trims a trailing slash off the configured base URL', async () => {
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://edge.example//';
+    const fetchMock = vi.fn(async (_input: string) => new Response('{}', { status: 404 }));
+    await fetchScanArtifact('rf 1', 'glb', 'token', fetchMock as unknown as typeof fetch);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://edge.example/v1/scan/room-files/rf%201/artifacts/glb',
+    );
+  });
+
+  it('reports the base URL only when one is configured', () => {
+    expect(edgeApiBaseUrl()).toBeNull();
+    process.env.NEXT_PUBLIC_EDGE_API_URL = '   ';
+    expect(edgeApiBaseUrl()).toBeNull();
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://edge.example';
+    expect(edgeApiBaseUrl()).toBe('https://edge.example');
   });
 });

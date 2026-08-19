@@ -8,6 +8,7 @@ export const ALERT_EVENTS = {
   configurationInvalid: 'edge_api_configuration_invalid',
   requestFailure: 'edge_api_request_failure',
   proxyOriginRejected: 'edge_api_proxy_origin_rejected',
+  scanArtifactFailure: 'edge_api_scan_artifact_failure',
 } as const;
 
 export type AlertEventName = (typeof ALERT_EVENTS)[keyof typeof ALERT_EVENTS];
@@ -16,6 +17,7 @@ export type RouteClass =
   | 'catalog.products'
   | 'internal.health'
   | 'auth.check'
+  | 'scan.artifact'
   | 'compat.auth'
   | 'compat.realtime'
   | 'compat.rest'
@@ -47,6 +49,14 @@ export interface AlertLogEvent {
   freshDigest?: string;
   hyperdriveDigest?: string;
   status?: number;
+  /**
+   * Which scan artifact kind a `scan.artifact` request asked for — `splat`,
+   * `glb`, or `renders`. A closed vocabulary and not tenant data, which is the
+   * whole bar for this allowlist: the Room File id, the bucket, the object key,
+   * and the capability URL itself are all deliberately absent, and the `traceId`
+   * is the only handle an operator gets on an individual request.
+   */
+  artifactKind?: string;
 }
 
 const OPTIONAL_LOG_FIELDS = [
@@ -61,6 +71,7 @@ const OPTIONAL_LOG_FIELDS = [
   'freshDigest',
   'hyperdriveDigest',
   'status',
+  'artifactKind',
 ] as const satisfies readonly (keyof AlertLogEvent)[];
 
 export function structuredLog(input: AlertLogEvent): void {
@@ -86,6 +97,7 @@ export function createTraceId(
 export function routeClassFor(pathname: string): RouteClass {
   if (pathname === '/v1/catalog/products') return 'catalog.products';
   if (pathname === '/v1/_authcheck') return 'auth.check';
+  if (pathname.startsWith('/v1/scan/')) return 'scan.artifact';
   if (pathname === '/_internal/health') return 'internal.health';
   if (pathname === '/auth/v1' || pathname.startsWith('/auth/v1/')) {
     return 'compat.auth';

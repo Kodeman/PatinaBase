@@ -22,6 +22,13 @@
     "LEGACY_FETCH_TIMEOUT_MS": "3000",
     "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
     "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+    // The scan read path (Rendered Room v2 W2). "off" leaves
+    // /v1/scan/room-files/:id/artifacts/:kind unrouted; "on" additionally
+    // requires SCAN_R2_ACCESS_KEY_ID and SCAN_R2_SECRET_ACCESS_KEY as Wrangler
+    // secrets, and validateRuntimeConfig boots the worker 503 without them.
+    "SCAN_ROUTES": "off",
+    "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
+    "SCAN_R2_BUCKET": "patina-staging-media-artifacts-us",
   },
   // Provisioning inserts real Hyperdrive IDs here. Three bindings exist:
   // DB_FRESH (authenticated RLS login, edge_rls_login), DB_CATALOG_FRESH
@@ -47,6 +54,9 @@
         "LEGACY_FETCH_TIMEOUT_MS": "3000",
         "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
         "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+        "SCAN_ROUTES": "off",
+        "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
+        "SCAN_R2_BUCKET": "patina-staging-media-artifacts-us",
       },
       // Add the real binding IDs here (DB_FRESH, DB_CATALOG_FRESH,
       // DB_PUBLIC_CACHE). Each local binding also gets
@@ -69,6 +79,12 @@
         "LEGACY_FETCH_TIMEOUT_MS": "3000",
         "COMPATIBILITY_FETCH_TIMEOUT_MS": "10000",
         "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+        // Off until SCAN_R2_ACCESS_KEY_ID and SCAN_R2_SECRET_ACCESS_KEY exist as
+        // staging secrets (OPERATIONS.md "Scan read path"). Flipping this to
+        // "on" without them is refused at boot, not served empty.
+        "SCAN_ROUTES": "off",
+        "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
+        "SCAN_R2_BUCKET": "patina-staging-media-artifacts-us",
       },
       // Resting at rung 3 (hyperdrive/100). DB_FRESH and DB_PUBLIC_CACHE carry
       // real staging Hyperdrive IDs; both currently point at edge_catalog_login.
@@ -103,6 +119,11 @@
         // review finding W-1 — a 10s proxy abort in front of stripe-webhook (sync DB writes + email sends) risks silent event loss inside Stripe's ~30s window.
         "COMPATIBILITY_FETCH_TIMEOUT_MS": "30000",
         "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+        // Production stays off for the whole of this plan — the scan read path
+        // ships to staging only (DELIVERY-PLAN W2 "Does not").
+        "SCAN_ROUTES": "off",
+        "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
+        "SCAN_R2_BUCKET": "patina-media-artifacts-us",
       },
       // Provisioned against Strata's direct endpoint
       // (db.bkvcixdmuyejfzcijpdg.supabase.co:5432, never the pooler).

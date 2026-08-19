@@ -217,3 +217,111 @@ describe('validate-config Hyperdrive binding contract', () => {
     expect(errors).toEqual([]);
   });
 });
+
+// ── The scan read path's config contract ─────────────────────────────────────
+// Mirrors validateRuntimeConfig in src/env.ts. Both gates exist because they
+// catch the fault at different moments: this one before a deploy leaves the
+// laptop, that one at the worker's boot boundary.
+
+function scanErrors(label: string, scope: unknown): string[] {
+  const errors: string[] = [];
+  validateScope(label, scope, errors);
+  return errors.filter((error) => error.includes('SCAN_'));
+}
+
+function withVars(
+  scope: { vars: Record<string, string> },
+  vars: Record<string, unknown>,
+) {
+  const merged = { ...scope, vars: { ...scope.vars, ...vars } };
+  for (const [name, value] of Object.entries(vars)) {
+    if (value === undefined) delete merged.vars[name];
+  }
+  return merged;
+}
+
+describe('validate-config scan read path', () => {
+  it('accepts every committed scope as-is', () => {
+    for (const [label, scope] of [
+      ['default', config],
+      ['env.local', config.env.local],
+      ['env.staging', config.env.staging],
+      ['env.production', config.env.production],
+    ] as const) {
+      expect(scanErrors(label, scope)).toEqual([]);
+    }
+  });
+
+  it('keeps every environment resting at SCAN_ROUTES=off', () => {
+    // The plan ships the read path to STAGING only, and only once the R2
+    // credentials exist; production is off for the whole of it.
+    for (const scope of [
+      config,
+      config.env.local,
+      config.env.staging,
+      config.env.production,
+    ]) {
+      expect(scope.vars.SCAN_ROUTES).toBe('off');
+    }
+  });
+
+  it('rejects any SCAN_ROUTES value that is not off or on', () => {
+    for (const value of ['true', 'ON', '1', '', undefined]) {
+      expect(
+        scanErrors(
+          'env.staging',
+          withVars(config.env.staging, { SCAN_ROUTES: value }),
+        ),
+      ).toContainEqual(expect.stringContaining('SCAN_ROUTES must be'));
+    }
+  });
+
+  it('rejects an R2 endpoint that is not a bare https origin', () => {
+    for (const value of [
+      'http://account.r2.cloudflarestorage.com',
+      'https://account.r2.cloudflarestorage.com/bucket',
+      'account.r2.cloudflarestorage.com',
+      '',
+    ]) {
+      expect(
+        scanErrors(
+          'env.staging',
+          withVars(config.env.staging, { SCAN_R2_ENDPOINT: value }),
+        ),
+      ).toContainEqual(expect.stringContaining('SCAN_R2_ENDPOINT must be'));
+    }
+  });
+
+  it('refuses SCAN_ROUTES=on without a provisioned DB_FRESH binding', () => {
+    const errors = scanErrors('env.staging', {
+      ...withVars(config.env.staging, { SCAN_ROUTES: 'on' }),
+      hyperdrive: [],
+    });
+    expect(errors).toContainEqual(
+      expect.stringContaining('SCAN_ROUTES=on requires a provisioned DB_FRESH'),
+    );
+  });
+
+  it('accepts SCAN_ROUTES=on when DB_FRESH is provisioned', () => {
+    expect(
+      scanErrors(
+        'env.staging',
+        withVars(config.env.staging, { SCAN_ROUTES: 'on' }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('refuses the R2 credentials as committed variables', () => {
+    for (const name of ['SCAN_R2_ACCESS_KEY_ID', 'SCAN_R2_SECRET_ACCESS_KEY']) {
+      const errors: string[] = [];
+      validateScope(
+        'env.staging',
+        withVars(config.env.staging, { [name]: 'leaked' }),
+        errors,
+      );
+      expect(errors).toContainEqual(
+        expect.stringContaining(`${name} must be a Wrangler secret`),
+      );
+    }
+  });
+});

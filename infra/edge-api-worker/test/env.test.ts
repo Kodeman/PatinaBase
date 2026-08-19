@@ -19,6 +19,9 @@ function env(overrides: Partial<EdgeApiEnv> = {}): EdgeApiEnv {
     LEGACY_FETCH_TIMEOUT_MS: '100',
     COMPATIBILITY_FETCH_TIMEOUT_MS: '100',
     WEBSOCKET_HANDSHAKE_TIMEOUT_MS: '50',
+    SCAN_ROUTES: 'off',
+    SCAN_R2_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
+    SCAN_R2_BUCKET: 'patina-staging-media-artifacts-us',
     ...overrides,
   } as EdgeApiEnv;
 }

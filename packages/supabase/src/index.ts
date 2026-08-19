@@ -68,6 +68,14 @@ export {
   type ResolvedVendor,
 } from './lib/vendors';
 export {
+  edgeApiBaseUrl,
+  fetchScanArtifact,
+  ScanArtifactError,
+  type ScanArtifactKind,
+  type ScanCapabilityUrl,
+  type ScanRendersResponse,
+} from './lib/scan-artifact-url';
+export {
   captureProduct,
   type CaptureProductInput,
   type CaptureProductResult,

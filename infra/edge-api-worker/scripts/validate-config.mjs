@@ -13,8 +13,16 @@ const requiredVars = [
   'LEGACY_FETCH_TIMEOUT_MS',
   'COMPATIBILITY_FETCH_TIMEOUT_MS',
   'WEBSOCKET_HANDSHAKE_TIMEOUT_MS',
+  'SCAN_ROUTES',
+  'SCAN_R2_ENDPOINT',
+  'SCAN_R2_BUCKET',
 ];
+// Every name here must be a Wrangler secret and must never appear in `vars`.
+// The scan credentials are additionally CONDITIONAL for the --provisioned
+// inventory: they are only required where SCAN_ROUTES is "on", so an
+// environment resting at "off" stays provisionable without them.
 const requiredSecrets = ['SUPABASE_ANON_KEY'];
+const scanSecrets = ['SCAN_R2_ACCESS_KEY_ID', 'SCAN_R2_SECRET_ACCESS_KEY'];
 const KNOWN_HYPERDRIVE_BINDINGS = new Set([
   'DB_FRESH',
   'DB_CATALOG_FRESH',
@@ -42,7 +50,7 @@ export function validateScope(label, scope, errors) {
       errors.push(`${label}: missing ${name}`);
     }
   }
-  for (const name of requiredSecrets) {
+  for (const name of [...requiredSecrets, ...scanSecrets]) {
     if (Object.hasOwn(scope.vars ?? {}, name)) {
       errors.push(`${label}: ${name} must be a Wrangler secret, not a committed variable`);
     }
@@ -92,6 +100,21 @@ export function validateScope(label, scope, errors) {
       errors.push(`${label}: invalid ${name}`);
     }
   }
+  // The scan read path, mirroring validateRuntimeConfig in src/env.ts. The R2
+  // endpoint must be a bare https origin — a path component would change the
+  // object a signature covers — and there is no loopback exemption because R2
+  // has no local stand-in.
+  const scanRoutes = scope.vars?.SCAN_ROUTES;
+  if (scanRoutes !== 'off' && scanRoutes !== 'on') {
+    errors.push(`${label}: SCAN_ROUTES must be "off" or "on"`);
+  }
+  try {
+    const endpoint = new URL(scope.vars?.SCAN_R2_ENDPOINT);
+    if (endpoint.protocol !== 'https:' || endpoint.pathname !== '/') throw new Error();
+  } catch {
+    errors.push(`${label}: SCAN_R2_ENDPOINT must be an https origin with no path`);
+  }
+
   let provisionedBindings = new Set();
   if (!Array.isArray(scope.hyperdrive)) {
     errors.push(`${label}: hyperdrive must be an explicit array`);
@@ -138,6 +161,15 @@ export function validateScope(label, scope, errors) {
       `${label}: CATALOG_SOURCE=${source} requires a provisioned DB_FRESH Hyperdrive binding for the authenticated path`,
     );
   }
+  // SCAN_ROUTES=on reads user-scoped rows under the caller's RLS on the
+  // uncached login. Without DB_FRESH the route could only ever 404, which is
+  // indistinguishable from "this scan has no artifacts" — the same silent-
+  // failure shape the catalog rungs above are written to prevent.
+  if (scanRoutes === 'on' && !provisionedBindings.has('DB_FRESH')) {
+    errors.push(
+      `${label}: SCAN_ROUTES=on requires a provisioned DB_FRESH Hyperdrive binding`,
+    );
+  }
 }
 
 function main() {
@@ -176,7 +208,12 @@ function main() {
           const parsed = JSON.parse(result.stdout);
           const secrets = Array.isArray(parsed) ? parsed : parsed.secrets;
           const names = new Set(secrets.map((secret) => secret.name));
-          for (const name of requiredSecrets) {
+          const scope = environment === 'default' ? config : config.env?.[environment];
+          const expected = [
+            ...requiredSecrets,
+            ...(scope?.vars?.SCAN_ROUTES === 'on' ? scanSecrets : []),
+          ];
+          for (const name of expected) {
             if (!names.has(name)) errors.push(`env.${environment}: missing Wrangler secret ${name}`);
           }
         } catch {

@@ -132,15 +132,83 @@ authorizes serving the public view did not run, so no shared cache may retain
 the body. A run of these events during a rollout means the canary's correctness
 guarantee is off, even though every response is 200.
 
+## Scan read path (`/v1/scan/*`)
+
+`GET /v1/scan/room-files/:roomFileId/artifacts/:kind` — `kind` is `splat`, `glb`,
+or `renders`. Single kinds answer `{kind, url, expiresAt}`; `renders` answers
+`{kind, shots: {<shot name>: {url, expiresAt}}}`. `url` is a 600-second
+SigV4 query-signed R2 GET; every response is `private, no-store`.
+
+**Authorization is the caller's own RLS.** The route verifies the Supabase JWT
+and then reads inside ONE `SET LOCAL ROLE authenticated` transaction on
+`DB_FRESH` — the uncached binding. `room_files`' delegation to `room_scans`
+(00341) and `media_objects_select`'s delegation to the same (00489) decide
+visibility; the worker adds no predicate of its own. There is **no `scan_reader`
+role and no `scan_media_read` view** on this path: that view is a service
+capability with no tenant predicate, and 00490 requires one before any login
+role inherits it. User-scoped rows never ride `DB_PUBLIC_CACHE`.
+
+Only `lifecycle_state` `stored` or `verified` is signed. A `pending` object has
+no confirmed bytes and `deleted` is terminal; signing either would hand the
+portal a URL that 404s at R2.
+
+Missing or invalid JWT is **401**. Everything else — malformed id, unknown kind,
+a Room File the caller cannot see, no artifact of that kind, no servable object
+— is an identical **404**. A 403 would confirm the row exists, which is the
+mood-board bug class this plan gates against.
+
+### `SCAN_ROUTES` and the two pending secrets
+
+`SCAN_ROUTES` is `off` in **every** committed environment, including production
+— the read path ships to staging only (DELIVERY-PLAN W2 "Does not"). `off`
+leaves the path unrouted, so it 404s like any unknown path and the environment
+does not advertise that a scan surface exists.
+
+`on` additionally requires, or the worker boots 503 with
+`edge_api_configuration_invalid`:
+
+| Piece | Where | State |
+| --- | --- | --- |
+| `SCAN_R2_ENDPOINT` | `wrangler.jsonc` var | committed (`https://<account>.r2.cloudflarestorage.com`, bare origin, no path) |
+| `SCAN_R2_BUCKET` | `wrangler.jsonc` var | committed (`patina-staging-media-artifacts-us` on staging) |
+| `DB_FRESH` | Hyperdrive binding | provisioned on staging and production |
+| `SCAN_R2_ACCESS_KEY_ID` | Wrangler secret | **PENDING — does not exist** |
+| `SCAN_R2_SECRET_ACCESS_KEY` | Wrangler secret | **PENDING — does not exist** |
+
+The two secrets are an R2 API token's access key id and secret. Minting one is a
+Cloudflare dashboard action and is **not** something this repo's tooling can do.
+The same pair belongs in the Modal `scan-r2` secret (`R2_ACCESS_KEY_ID` /
+`R2_SECRET_ACCESS_KEY`), which is also still a placeholder — so one token, set in
+both places, keeps the writer and the reader on the same credentials.
+
+Turning the read path on, once a token exists:
+
+```sh
+npx wrangler secret put SCAN_R2_ACCESS_KEY_ID --env staging
+npx wrangler secret put SCAN_R2_SECRET_ACCESS_KEY --env staging
+# then flip env.staging vars.SCAN_ROUTES to "on" in wrangler.jsonc
+npm run config:check
+npm run config:check:provisioned -- staging
+npx wrangler deploy --env staging
+```
+
+`config:check:provisioned` requires the two secrets **only** where that scope's
+`SCAN_ROUTES` is `on`, so an environment resting at `off` stays provisionable
+without them. Rollback is the same flip back to `"off"` plus a deploy — a config
+change, not a code change.
+
 ## Cloudflare log alert contract
 
 Alert filters match the exact `event` and `severity` fields below. Log payloads
 contain only the documented allowlisted operational fields: `event`, `severity`,
 `traceId`, `routeClass`, `fallback`, `comparison`, `binding`, `legacyCount`,
 `freshCount`, `hyperdriveCount`, `mismatchedIdCount`, `legacyDigest`,
-`freshDigest`, `hyperdriveDigest`, and `status`. Digests are 8-hex FNV-1a hashes
-of the normalized result set — they discriminate differing content without
-logging catalog data.
+`freshDigest`, `hyperdriveDigest`, `status`, and `artifactKind`. Digests are
+8-hex FNV-1a hashes of the normalized result set — they discriminate differing
+content without logging catalog data. `artifactKind` is a closed vocabulary
+(`splat`, `glb`, `renders`); the scan route's Room File id, bucket, object key,
+and minted capability URL are all deliberately absent, so `traceId` is the only
+handle on an individual scan request.
 
 | Event filter | Severity | Meaning |
 | --- | --- | --- |
@@ -152,6 +220,7 @@ logging catalog data.
 | `edge_api_compatibility_timeout` | `error` | Supabase compatibility upstream did not complete before its deadline. |
 | `edge_api_configuration_invalid` | `critical` | Runtime variables encode an invalid catalog state or incomplete configuration. |
 | `edge_api_request_failure` | `error` | An otherwise unclassified request failure reached the router boundary. |
+| `edge_api_scan_artifact_failure` | `error` | The scan read path could not answer: the RLS read failed, or presigning did. Never emitted for an unauthorized caller or an artifact that simply is not there — both of those are ordinary 401/404s and are not logged. `artifactKind` names the kind asked for. |
 | `edge_api_proxy_origin_rejected` | `error` | The proxy refused to forward a request whose resolved upstream escaped the pinned origin or the compatibility path set. Expected count is zero — any occurrence is a probe or a bug. Action: investigate the `traceId`; no notification wiring change. |
 
 Cloudflare email notification provisioning remains an operator action. The Worker

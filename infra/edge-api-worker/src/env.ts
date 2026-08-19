@@ -1,4 +1,5 @@
 export type CatalogSource = 'legacy' | 'shadow' | 'hyperdrive';
+export type ScanRoutesMode = 'off' | 'on';
 
 export interface EdgeApiEnv extends CloudflareBindings {
   // DB_FRESH is the authenticated RLS login (SET ROLE authenticated) for the
@@ -13,6 +14,10 @@ export interface EdgeApiEnv extends CloudflareBindings {
   ACCESS_AUDIENCE?: string;
   HEALTH_SERVICE_TOKEN_ID?: string;
   HEALTH_SERVICE_TOKEN_SECRET?: string;
+  // R2 credentials for the scan read path's capability URLs. Wrangler secrets,
+  // never committed vars — and only required when SCAN_ROUTES is "on".
+  SCAN_R2_ACCESS_KEY_ID?: string;
+  SCAN_R2_SECRET_ACCESS_KEY?: string;
 }
 
 export interface RuntimeConfig {
@@ -21,6 +26,7 @@ export interface RuntimeConfig {
   legacyFetchTimeoutMs: number;
   compatibilityFetchTimeoutMs: number;
   websocketHandshakeTimeoutMs: number;
+  scanRoutes: ScanRoutesMode;
 }
 
 export class ConfigurationError extends Error {
@@ -61,6 +67,24 @@ function requiredHttpUrl(value: unknown): string {
     return candidate;
   }
   throw new ConfigurationError();
+}
+
+// The R2 S3 endpoint must be a bare https origin: a path component would move
+// the object a signature covers, and http would put a capability URL on the wire
+// in clear. Unlike the Supabase upstream there is no loopback exemption — R2 has
+// no local stand-in in this worker.
+function requiredHttpsOrigin(value: unknown): string {
+  const candidate = requiredString(value);
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new ConfigurationError();
+  }
+  if (parsed.protocol !== 'https:' || parsed.pathname !== '/') {
+    throw new ConfigurationError();
+  }
+  return candidate;
 }
 
 function integerInRange(value: unknown, minimum: number, maximum: number): number {
@@ -110,7 +134,27 @@ export function validateRuntimeConfig(env: EdgeApiEnv): RuntimeConfig {
     throw new ConfigurationError();
   }
 
+  // The scan read path is declared per-env exactly like the catalog source, and
+  // for the same reason: "on" with a missing piece must be LOUD. A scan route
+  // that boots without its RLS binding, its R2 endpoint, or its credentials
+  // would 404 every request — indistinguishable from "this scan has no splat".
+  // So the flag is validated against everything its path reads, and a gap fails
+  // the whole worker closed (503 + edge_api_configuration_invalid) rather than
+  // degrading into a silent, permanent absence.
+  const scanRoutes = env.SCAN_ROUTES;
+  if (scanRoutes !== 'off' && scanRoutes !== 'on') {
+    throw new ConfigurationError();
+  }
+  if (scanRoutes === 'on') {
+    requiredHttpsOrigin(env.SCAN_R2_ENDPOINT);
+    requiredString(env.SCAN_R2_BUCKET);
+    requiredString(env.SCAN_R2_ACCESS_KEY_ID);
+    requiredString(env.SCAN_R2_SECRET_ACCESS_KEY);
+    if (!env.DB_FRESH) throw new ConfigurationError();
+  }
+
   return {
+    scanRoutes,
     catalogSource: source,
     catalogHyperdrivePercent: percentage,
     legacyFetchTimeoutMs: integerInRange(

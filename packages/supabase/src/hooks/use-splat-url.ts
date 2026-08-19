@@ -15,21 +15,26 @@
  * 00489 ruled `artifacts` the canonical home for new versioned artifacts, and the
  * splat is one.
  *
- * Resolving that ref to something a browser can fetch is the half that does not
- * exist yet. The intended path (00490's comment, plan §2 R5 / §3 W2) is:
+ * Resolving that ref to something a browser can fetch now runs through the typed
+ * read path (plan §2 R5 / §3 W2):
  *
  *     room_files.artifacts.splat.object_id
- *       → public.scan_media_read  (kind / bucket / object_key / access_class)
- *       → a typed /v1/scan/* route on the edge API Worker
- *       → a short-lived capability URL against R2
+ *       → GET /v1/scan/room-files/:id/artifacts/splat on the edge API Worker
+ *       → the caller's OWN RLS on room_files + media_objects, in one
+ *         SET LOCAL ROLE authenticated transaction on the uncached binding
+ *       → a 600-second R2 capability URL
  *
- * and every rung of it is W2 work gated behind PR #28. `scan_media_read` exists
- * today but is SELECT-able only by `scan_reader`, a NOLOGIN role no browser
- * session can reach, and it carries no tenant predicate — 00490 says in as many
- * words that W2 must add one before any login role inherits it. So there is no
- * honest way for this hook to produce a URL right now, and it does not invent
- * one: it reports the artifact's PRESENCE and an explicit
- * `unavailable: 'read-path-pending'`.
+ * Note what is NOT in that chain: `public.scan_media_read`. That view is
+ * SELECT-able only by `scan_reader` and carries no tenant predicate, so 00490
+ * requires one before any login role inherits it — the route runs the caller's
+ * own policies instead, which is strictly stronger and needs no new role.
+ *
+ * The route is behind the Worker's `SCAN_ROUTES` flag, which rests at `off` in
+ * every environment until the R2 credentials exist, and this hook is behind
+ * `NEXT_PUBLIC_EDGE_API_URL`. With that unset — every environment today — the
+ * hook's behavior is exactly what it was before the resolver existed: it reports
+ * the artifact's PRESENCE and an explicit `unavailable: 'read-path-pending'`,
+ * and invents no URL.
  *
  * ── WHY PRESENCE LIVES HERE AND NOT IN THE CALLER ─────────────────────────────
  * The portal never parses the `artifacts` jsonb. It asks this hook one question
@@ -40,6 +45,11 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import {
+  edgeApiBaseUrl,
+  fetchScanArtifact,
+  type ScanCapabilityUrl,
+} from '../lib/scan-artifact-url';
 
 // Lazy client getter to avoid module-level initialization during SSR.
 const getSupabase = () => createBrowserClient();
@@ -57,14 +67,21 @@ export interface SplatArtifactRef {
 
 /**
  * Why there is no fetchable URL.
- *  · `no-artifact`       — this Room File version registers no `splat` entry.
- *  · `read-path-pending` — a splat IS registered, but the capability-URL route
- *                          that would resolve it is not built yet (see header).
+ *  · `no-artifact`       — there is nothing to show: this Room File version
+ *                          registers no `splat` entry, OR the read path is wired
+ *                          and answered 404 for it. The route collapses every
+ *                          "you get nothing" case into one answer on purpose (a
+ *                          403 would confirm the row exists), so this hook does
+ *                          not try to unpick it either.
+ *  · `read-path-pending` — a splat IS registered but no URL has arrived: either
+ *                          `NEXT_PUBLIC_EDGE_API_URL` is unset in this build, or
+ *                          the capability request is still in flight.
  */
 export type SplatUnavailableReason = 'no-artifact' | 'read-path-pending';
 
 export interface SplatSource {
-  /** True when this Room File version registers a `splat` artifact. */
+  /** True when there is a splat to show — registered, and servable if the read
+   *  path is wired to say so. */
   hasArtifact: boolean;
   /** The ref exactly as recorded, for telemetry and for the future resolver. */
   artifact: SplatArtifactRef | null;
@@ -147,22 +164,90 @@ export function useSplatUrl(
     },
   });
 
+  const artifact = query.data ?? null;
+  // The read path is wired per build. Unset — every environment today, since the
+  // Worker's own SCAN_ROUTES flag rests at `off` until the R2 credentials exist
+  // — leaves this leg disabled and the hook exactly as it behaved before.
+  const readPathWired = edgeApiBaseUrl() !== null;
+
+  const capability = useQuery<ScanCapabilityUrl | null>({
+    queryKey: ['room-file-splat-url', roomFileId],
+    enabled:
+      enabled &&
+      Boolean(roomFileId) &&
+      !urlSource &&
+      readPathWired &&
+      artifact != null,
+    // A capability URL lives 600 s. Re-mint well inside that rather than at the
+    // edge of it: a URL that expires mid-download is a broken viewer.
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const supabase = getSupabase();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('no session');
+
+      const result = await fetchScanArtifact(
+        roomFileId as string,
+        SPLAT_ARTIFACT_KIND,
+        session.access_token,
+      );
+      // `renders` is the only kind that answers a shot map, and this hook never
+      // asks for it.
+      return result && 'url' in result ? result : null;
+    },
+  });
+
   if (urlSource) {
     return {
       hasArtifact: true,
-      artifact: query.data ?? null,
+      artifact,
       url: urlSource,
       unavailable: null,
       isLoading: false,
     };
   }
 
-  const artifact = query.data ?? null;
+  if (artifact == null) {
+    return {
+      hasArtifact: false,
+      artifact: null,
+      url: null,
+      unavailable: 'no-artifact',
+      isLoading: query.isLoading,
+    };
+  }
+
+  if (!readPathWired) {
+    return {
+      hasArtifact: true,
+      artifact,
+      url: null,
+      unavailable: 'read-path-pending',
+      isLoading: query.isLoading,
+    };
+  }
+
+  if (capability.data) {
+    return {
+      hasArtifact: true,
+      artifact,
+      url: capability.data.url,
+      unavailable: null,
+      isLoading: false,
+    };
+  }
+
+  // A resolved-but-empty answer is the route's 404: registered here, but not
+  // servable to this caller. Nothing to show, so the mode toggle and the stage
+  // agree — which is the entire reason presence is decided in this hook.
+  const resolvedAbsent = capability.isFetched && capability.data === null;
   return {
-    hasArtifact: artifact != null,
+    hasArtifact: !resolvedAbsent,
     artifact,
     url: null,
-    unavailable: artifact != null ? 'read-path-pending' : 'no-artifact',
-    isLoading: query.isLoading,
+    unavailable: resolvedAbsent ? 'no-artifact' : 'read-path-pending',
+    isLoading: query.isLoading || capability.isLoading,
   };
 }
