@@ -27,13 +27,47 @@ public struct ScanArtifactUploadState: Codable, Equatable, Sendable {
     public var attempts: Int
     public var lastError: String?
 
+    // MARK: - R2 shadow leg
+    //
+    // Outcome of the `field.scanUploadShadowR2` leg for this artifact
+    // (`FieldScanUploadShadowLeg`). Device-local only — this struct is JSON
+    // inside the durable `ScanUploadRecord` @Model, so recording the shadow here
+    // costs no migration and cannot reach a server that is not meant to hear
+    // about it yet.
+    //
+    // This is the home rather than `FieldScanManifest` because `manifest.json`
+    // IS an uploaded artifact (descriptor kind `bundleManifest`, column
+    // `bundle_manifest_url`): its bytes are hashed at upload time, merged
+    // server-side via `merge_scan_artifact_sha256`, and HEAD-checked by
+    // `confirm-scan-bundle`. Writing a shadow result into it would mutate a file
+    // whose checksum has already been declared, and would ship a measurement the
+    // dormancy contract says no server hears yet.
+    //
+    // All three are OPTIONAL so a record written by an earlier build still
+    // decodes, and nil is a real third state: the leg was never ATTEMPTED
+    // (toggle off, no `EDGE_API_URL`, artifact over the size cap, or a kind the
+    // interface has no name for) as opposed to attempted and failed.
+
+    /// True once the shadow upload reached a confirmed registry row.
+    public var shadowUploaded: Bool?
+    /// The digest the shadow leg computed off disk and declared to the intent.
+    public var shadowSha256: String?
+    /// Whether the confirmed digest came back equal to `shadowSha256` — the
+    /// leg's whole point, since the primary path only ever compares against the
+    /// sha it sent in its own `x-metadata` header.
+    public var shadowMatched: Bool?
+
     public init(kind: String, relativePath: String, mimeType: String,
                 storagePath: String? = nil, remoteUrl: String? = nil, sha256: String? = nil,
                 column: String? = nil, status: Status = .pending, attempts: Int = 0,
-                lastError: String? = nil) {
+                lastError: String? = nil, shadowUploaded: Bool? = nil,
+                shadowSha256: String? = nil, shadowMatched: Bool? = nil) {
         self.kind = kind; self.relativePath = relativePath; self.mimeType = mimeType
         self.storagePath = storagePath; self.remoteUrl = remoteUrl; self.sha256 = sha256
         self.column = column; self.status = status; self.attempts = attempts; self.lastError = lastError
+        self.shadowUploaded = shadowUploaded
+        self.shadowSha256 = shadowSha256
+        self.shadowMatched = shadowMatched
     }
 }
 
