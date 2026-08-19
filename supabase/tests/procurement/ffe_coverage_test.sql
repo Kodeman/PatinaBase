@@ -48,8 +48,24 @@ VALUES
   ('99999999-9999-4999-8999-999999999902', 'ffe-coverage-rival@test.invalid', 'FFE Coverage Rival', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO projects (id, name, designer_id, created_by)
-VALUES ('dd000000-0000-4000-8000-000000000001', 'FFE Coverage Test Project', '99999999-9999-4999-8999-999999999901', '99999999-9999-4999-8999-999999999901'); -- p1
+-- 00511 makes the design studio the canonical project/invoice authority: the
+-- lead must hold a designer-domain role and belong to the project's studio, and
+-- an invoice's studio_id must equal its project's (a NULL on either side can
+-- never satisfy the immutable-update parent check). Seed the owner designer's
+-- studio explicitly and name it on the project and invoices. Triggers are
+-- suppressed so the designer-role grant does not auto-provision a second studio.
+SET LOCAL session_replication_role = replica;
+INSERT INTO organizations (id, type, name, slug, status)
+VALUES ('dd010000-0000-4000-8000-000000000001', 'design_studio', 'FFE Coverage Studio', 'ffe-coverage-studio', 'active');
+INSERT INTO organization_members (user_id, organization_id, role, status)
+VALUES ('99999999-9999-4999-8999-999999999901', 'dd010000-0000-4000-8000-000000000001', 'owner', 'active');
+INSERT INTO user_roles (user_id, role_id, granted_by)
+SELECT '99999999-9999-4999-8999-999999999901', role.id, '99999999-9999-4999-8999-999999999901'
+FROM public.roles AS role WHERE role.name = 'studio_owner';
+SET LOCAL session_replication_role = origin;
+
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+VALUES ('dd000000-0000-4000-8000-000000000001', 'FFE Coverage Test Project', '99999999-9999-4999-8999-999999999901', '99999999-9999-4999-8999-999999999901', 'dd010000-0000-4000-8000-000000000001'); -- p1
 
 -- FF&E items:
 --   i_a 'dd200000-…01' — coverage walk (draft → issued → paid)     (case 2/3)
@@ -68,12 +84,12 @@ VALUES
 --   inv1 'dd100000-…01' — coverage walk for i_a (cases 2/3)
 --   inv2 'dd100000-…02' — void walk for i_b (case 4)
 --   inv3 'dd100000-…03' — re-bill of i_b after release (case 4)
-INSERT INTO invoices (id, project_id, designer_id, status, tax_rate)
+INSERT INTO invoices (id, project_id, designer_id, studio_id, status, tax_rate)
 VALUES
-  ('dd100000-0000-4000-8000-000000000000', 'dd000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999901', 'draft', 0),
-  ('dd100000-0000-4000-8000-000000000001', 'dd000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999901', 'draft', 0),
-  ('dd100000-0000-4000-8000-000000000002', 'dd000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999901', 'draft', 0),
-  ('dd100000-0000-4000-8000-000000000003', 'dd000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999901', 'draft', 0);
+  ('dd100000-0000-4000-8000-000000000000', 'dd000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999901', 'dd010000-0000-4000-8000-000000000001', 'draft', 0),
+  ('dd100000-0000-4000-8000-000000000001', 'dd000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999901', 'dd010000-0000-4000-8000-000000000001', 'draft', 0),
+  ('dd100000-0000-4000-8000-000000000002', 'dd000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999901', 'dd010000-0000-4000-8000-000000000001', 'draft', 0),
+  ('dd100000-0000-4000-8000-000000000003', 'dd000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999901', 'dd010000-0000-4000-8000-000000000001', 'draft', 0);
 
 -- ─── helpers ───────────────────────────────────────────────────────────────
 --

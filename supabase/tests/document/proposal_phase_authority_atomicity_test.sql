@@ -21,6 +21,13 @@ FROM (VALUES
   ('fb000000-0000-4000-8000-000000000006'::uuid, 'phase-client@test.invalid')
 ) AS fixture(id, email);
 
+-- Seed identities/orgs/roles with triggers suppressed. is_designer=true would
+-- otherwise auto-provision a personal studio (00295) for every designer, and a
+-- lead who then also joins the explicit Phase Studio would be in TWO design
+-- studios — which 00511 (single-studio derivation) cannot resolve. Real prod
+-- designers hold exactly one studio; keep the fixture that way. Triggers are
+-- restored to origin before any activation so set_project_studio_id runs.
+SET LOCAL session_replication_role = replica;
 INSERT INTO public.profiles (
   id, email, full_name, is_designer, created_at, updated_at
 )
@@ -52,6 +59,12 @@ VALUES
 
 -- 00511 requires every project lead to hold a designer-domain role; this
 -- fixture predates that invariant. Grant it to the studio members it creates.
+-- Suppress triggers while granting: a designer-role grant flips is_designer and
+-- auto-provisions a personal studio (00295), which would make this lead a
+-- member of TWO design studios and defeat 00511's single-studio derivation.
+-- Real prod designers hold exactly one studio; keep the fixture that way so the
+-- explicit Phase Studio remains the sole derivation candidate.
+SET LOCAL session_replication_role = replica;
 INSERT INTO public.user_roles (user_id, role_id, granted_by)
 SELECT DISTINCT membership.user_id, role.id, membership.user_id
 FROM public.organization_members AS membership
@@ -70,6 +83,7 @@ WHERE membership.organization_id IN (
   -- This fixture models designer identity explicitly on the profile, and its
   -- denial probes turn on it: the non-designer member must stay ineligible.
   AND role.name = 'studio_owner';
+SET LOCAL session_replication_role = origin;
 
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, client_name, client_email, status, source
