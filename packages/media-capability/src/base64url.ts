@@ -81,6 +81,32 @@ export function fromBase64Url(value: string): Uint8Array {
   return base64Decode(padded);
 }
 
+/**
+ * True iff `segment` is the UNIQUE canonical base64url encoding of its own
+ * decoded bytes — i.e. re-encoding fromBase64Url(segment) reproduces
+ * `segment` exactly.
+ *
+ * A naive decoder (this file's base64Decode included, without this guard)
+ * ignores non-zero padding bits in the final character and tolerates '='
+ * padding on input it wasn't asked to add itself. That means MANY different
+ * strings can decode to the SAME bytes — e.g. a 64-byte Ed25519 signature
+ * (64 = 21*3 + 1 leaves a 1-byte remainder, whose second base64 character
+ * carries only 2 meaningful bits out of 6) has dozens of string variants
+ * that all decode to the identical signature and therefore all verify
+ * successfully. Any consumer that keys replay/revocation off the token
+ * STRING (not the decoded bytes) is defeated by this — reject non-canonical
+ * input outright so exactly one string exists per byte value.
+ */
+export function isCanonicalBase64Url(segment: string): boolean {
+  if (typeof segment !== "string" || segment.length === 0) return false;
+  if (!/^[A-Za-z0-9_-]+$/.test(segment)) return false; // no padding, no stray characters
+  try {
+    return toBase64Url(fromBase64Url(segment)) === segment;
+  } catch {
+    return false;
+  }
+}
+
 export function pemToDer(pem: string): ArrayBuffer {
   const body = pem
     .replace(/-----BEGIN [^-]+-----/, "")
