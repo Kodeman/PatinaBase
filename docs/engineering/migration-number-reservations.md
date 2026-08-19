@@ -74,7 +74,7 @@ yet on prod.
 | Band        | Program                                                                                                                                                                                                                                    |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 00494–00497 | Phase 2 (Cloudflare/media backfill program — this workstream and its siblings)                                                                                                                                                             |
-| 00498–00502 | Rendered Room v2 (scan pipeline) — **confirmed by that lane** as this program's _future_ draws, purely additive to its already-consumed 00489–00492. Those four are **not** renumbered into this band. **00498 is now DRAWN** — see below. |
+| 00498–00502 | Rendered Room v2 (scan pipeline) — **confirmed by that lane** as this program's _future_ draws, purely additive to its already-consumed 00489–00492. Those four are **not** renumbered into this band. **00498–00501 are now DRAWN; 00502 is the band's last free number** — see below. |
 | 00503–00509 | Phase 3                                                                                                                                                                                                                                    |
 | 00510       | **TAKEN** — `00510_post_00483_grant_and_scope_repairs.sql` (branch `fix/post-00483-grant-gaps`, 2026-08-18). Post-00483 hotfix: project-documents storage policy caller-binding, `assignment_scope` derivation in `engage_trade_scope` / `apply_scope_change`, anon write-grant narrowing on four public tables. Numbered ABOVE the three bands above deliberately so it shifts none of them; the 00494–00509 gap is intentional and stays reserved. **Applied to prod 2026-08-19** (surgical single-migration push). |
 
@@ -85,6 +85,7 @@ yet on prod.
 | 00498  | `00498_media_upload_intent_and_scan_version_lock.sql` | branch `w3a/media-upload-intent`; applied to **staging**, NOT prod |
 | 00499  | `00499_upload_interface_hardening.sql`                | branch `w3a/upload-intent-hardening`; NOT applied to staging or prod |
 | 00500  | `00500_upload_kind_split.sql`                         | branch `feat/upload-kind-split`; NOT applied to staging or prod — **staging apply is ON HOLD**: a peer session is repairing staging's migration ledger, this migration awaits that repair's post-repair push path |
+| 00501  | `00501_upload_intent_quota_and_reaper.sql`            | branch `w4/upload-intent-quota-and-reaper`; NOT applied to staging or prod — awaiting merge, then the file-based staging push procedure |
 
 00498 carries W3-A: `create_media_upload_intent` / `confirm_media_upload` (the
 Phase-2 upload interface's registry side), the `caller_can_access_room_scan`
@@ -119,11 +120,29 @@ program redefining it must graft onto 00500's body. Mirrored in
 `infra/edge-api-worker/src/media-uploads.ts` and the Patina client's
 `MediaUploadIntentClient`/`ScanUploadShadowLeg` in the same lane.
 
-00501–00502 remain free for this lane.
+00501 closes security-review finding 11 (no quota, no per-scan slot cap, no
+reclamation of orphaned upload intents) on the upload-intent interface: a
+24-concurrently-pending-per-scan cap on `create_media_upload_intent` (P0416,
+Worker maps to 429), a new terminal `expired` lifecycle_state (forward-only
+like `deleted`; `mark_media_object_state` refuses to leave it), and
+`expire_stale_upload_intents(p_ttl default 48h)` — a SECURITY DEFINER reaper,
+scheduled daily via pg_cron (`expire-stale-upload-intents-daily`, direct RPC
+call, no edge function), that transitions stale `pending` upload-interface
+rows (identified by 00499's `provenance ->> 'source' = 'media_upload_intent'`
+discriminator — pipeline-registered rows are never touched) to `expired`.
+`public.expired_upload_originals` is a documented, ungranted-to-any-request-
+role seam view for a FUTURE R2 orphan-object cleanup job (deletion itself is
+out of scope — needs the write credential). It replaces
+`create_media_upload_intent` again (lineage now **00498 → 00499 → 00500 →
+00501**) and `mark_media_object_state` (lineage now **00489 → 00501**);
+`confirm_media_upload` is UNCHANGED — its existing "lifecycle_state <>
+'pending'" branch already answers a confirm on an expired row with P0413
+(state mismatch), proven by conformance test 18b rather than merely argued.
+**00502 is the band's last free number.**
 
-Apart from 00498, 00499, and 00500, no file in `supabase/migrations/` on `main`, and no
-commit in `git log --all`, currently occupies any number in 00494–00509 — the three
-bands are collision-free as reserved.
+Apart from 00498, 00499, 00500, and 00501, no file in `supabase/migrations/` on `main`,
+and no commit in `git log --all`, currently occupies any number in 00494–00509 — the
+three bands are collision-free as reserved.
 
 ## Discipline rules
 

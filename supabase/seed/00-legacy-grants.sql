@@ -11300,6 +11300,24 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00501_upload_intent_quota_and_reaper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.expire_stale_upload_intents(interval) FROM PUBLIC, anon, authenticated, scan_worker, scan_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00501_upload_intent_quota_and_reaper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.expired_upload_originals FROM PUBLIC, anon, authenticated, scan_worker, scan_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00501_upload_intent_quota_and_reaper.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.expired_upload_originals TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00510_post_00483_grant_and_scope_repairs.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.engage_trade_scope(uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;

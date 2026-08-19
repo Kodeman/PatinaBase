@@ -151,6 +151,19 @@ export class UploadMismatchError extends Error {
   }
 }
 
+/**
+ * The scan already holds the maximum number of concurrently-pending upload
+ * intents (00501, security-review finding 11). Answered 429 — the caller
+ * should confirm or let existing intents resolve before minting more, never
+ * retried immediately.
+ */
+export class UploadQuotaExceededError extends Error {
+  constructor() {
+    super('upload_quota_exceeded');
+    this.name = 'UploadQuotaExceededError';
+  }
+}
+
 export type MediaUploadRoute =
   | { kind: 'intent' }
   | { kind: 'confirm'; uploadId: string };
@@ -295,10 +308,10 @@ interface RegistryRow extends Record<string, unknown> {
 
 /**
  * Map a Postgres error from 00498 onto this module's error vocabulary. The
- * errcodes are the contract (00498 header): P0410 → 404, P0411 → 400,
- * P0412/P0413 → 409. Anything else propagates as itself and the router answers
- * 503 — an unrecognised database failure is never reported as a statement
- * about the caller's data.
+ * errcodes are the contract (00498 header, extended by 00501): P0410 → 404,
+ * P0411 → 400, P0412/P0413 → 409, P0416 → 429. Anything else propagates as
+ * itself and the router answers 503 — an unrecognised database failure is
+ * never reported as a statement about the caller's data.
  */
 function translateRpcError(error: unknown): Error {
   const code = (error as { code?: unknown } | null)?.code;
@@ -306,6 +319,7 @@ function translateRpcError(error: unknown): Error {
   if (code === 'P0411') return new UploadRequestError('rejected by the registry');
   if (code === 'P0412') return new UploadMismatchError('registry');
   if (code === 'P0413') return new UploadMismatchError('state');
+  if (code === 'P0416') return new UploadQuotaExceededError();
   return error instanceof Error ? error : new Error('registry failure');
 }
 
