@@ -11251,3 +11251,9 @@ DO $g$ BEGIN
   GRANT SELECT ON TABLE public.scan_media_read TO scan_reader;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00493_svc_shape_resolving_function_bodies.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.get_outbox_events(integer, boolean), public.get_outbox_counts() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
