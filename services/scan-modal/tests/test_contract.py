@@ -107,6 +107,42 @@ def test_each_stages_inputs_are_closed_no_cross_stage_keys():
     assert set(stages["renders"]["inputs"]) == {"capturedRoomJsonUrl", "glbUrl"}
 
 
+# ─── the queue's `config` knob ──────────────────────────────────────────────
+
+
+def test_the_splat_config_variant_is_accepted_and_spawns_splat():
+    variant = load_variants()["splat_config"]
+    payload, reason = modal_app.parse_spawn_body(variant)
+    assert reason == "ok" and payload is not None
+    assert payload["inputs"] == variant["inputs"]
+
+    calls: list[tuple[str, dict]] = []
+    status, _ = modal_app.handle_spawn(
+        {"Authorization": "Bearer tok"}, variant,
+        lambda name, p: calls.append((name, p)), expected_token="tok",
+    )
+    assert status == 202 and calls[0][0] == "splat"
+
+
+def test_the_splat_config_variant_is_the_base_shape_plus_config():
+    base = set(load_stages()["splat"]["inputs"])
+    variant = load_variants()["splat_config"]["inputs"]
+    assert set(variant) - base == {"config"}
+    assert base - set(variant) == set()
+    assert variant["config"] == {"maxIterations": 12000}
+
+
+def test_splat_job_reads_max_iterations_out_of_the_contract_config():
+    """The half that was dead code: `inputs.config.maxIterations` had no route
+    from the queue, so nothing ever exercised this read (W2-EVIDENCE.md §4 E)."""
+    variant = load_variants()["splat_config"]
+    config = variant["inputs"]["config"]
+    assert int(config["maxIterations"]) == 12000
+    # And the job's own default policy would have chosen the same number for a
+    # capture this size, which is why 12 000 is the contract's example.
+    assert splat_job.default_max_iterations(variant["inputs"]["photoCount"]) == 12000
+
+
 # ─── the splat pose-carrier fallback ────────────────────────────────────────
 
 

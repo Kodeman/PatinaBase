@@ -355,6 +355,162 @@ def test_the_export_reads_the_pinned_config(world):
     assert export[export.index("--load-config") + 1].endswith("/config.yml")
 
 
+# ── the iteration budget ────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("frames,expected", [
+    (1, 12000), (29, 12000), (42, 12000), (60, 12000),
+    (61, 30000), (80, 30000), (200, 30000),
+])
+def test_the_default_budget_turns_on_the_view_count(frames, expected):
+    """42 views of an 8.8 × 8.2 m room peaked at step 4 000 and declined past
+    ~18 000, so 30 000 is about twice too many for a sparse capture
+    (W2-EVIDENCE.md §13.6). A denser one has not been measured and keeps
+    splatfacto's own number."""
+    assert splat_job.default_max_iterations(frames) == expected
+
+
+def test_a_sparse_capture_gets_the_sparse_budget_by_default(world):
+    """The fixture writes two frames, so the policy — not the old 30 000 —
+    decides."""
+    db = RecordingDb()
+    splat_job.run_splat(payload(), db=db)
+    train = world.runs[0]
+    assert train[train.index("--max-num-iterations") + 1] == "12000"
+
+
+def test_where_the_budget_came_from_reaches_the_ledger(world):
+    db = RecordingDb()
+    result = splat_job.run_splat(payload(), db=db)
+    assert result["provenance"]["maxIterations"] == 12000
+    assert result["provenance"]["maxIterationsSource"] == "default"
+
+    db2 = RecordingDb()
+    chosen = splat_job.run_splat(payload(inputs={
+        "photosManifestUrl": MANIFEST_URL,
+        "photoUrls": list(PHOTO_URLS),
+        "capturedRoomJsonUrl": CAPTURED_URL,
+        "config": {"maxIterations": 7000},
+    }), db=db2)
+    assert chosen["provenance"]["maxIterations"] == 7000
+    assert chosen["provenance"]["maxIterationsSource"] == "config"
+
+
+# ── exporting from the best checkpoint ──────────────────────────────────────
+
+
+def test_training_keeps_every_checkpoint_not_just_the_latest(world):
+    """`save_only_latest_checkpoint` defaults to True and unlinks the others as
+    each new one lands — which would delete the best checkpoint long before the
+    export could choose it."""
+    db = RecordingDb()
+    splat_job.run_splat(payload(), db=db)
+    train = world.runs[0]
+    assert train[train.index("--save-only-latest-checkpoint") + 1] == "False"
+
+
+def _run_dir(tmp_path):
+    paths = splat_job.workspace_paths("scan-1", 4, tmp_path / "cache")
+    paths["checkpoints"].mkdir(parents=True, exist_ok=True)
+    return paths
+
+
+def test_choose_export_config_pins_the_best_checkpoint(tmp_path, monkeypatch):
+    paths = _run_dir(tmp_path)
+    for step in (2000, 4000, 6000):
+        (paths["checkpoints"] / f"step-{step:09d}.ckpt").write_bytes(b"ckpt")
+    paths["config"].write_text("method_name: splatfacto\nload_step: null\n")
+    monkeypatch.setattr(
+        splat_job, "read_eval_psnr",
+        lambda run_dir: [(2000, 15.0), (4000, 16.4), (6000, 14.1)],
+    )
+
+    config_path, choice = splat_job.choose_export_config(paths)
+
+    assert choice is not None and choice.step == 4000 and choice.reason == "best_eval_psnr"
+    assert config_path == paths["run"] / "config-best.yml"
+    assert "load_step: 4000" in config_path.read_text()
+    # The config nerfstudio wrote is left exactly as it was — a resumed run and
+    # any later manual export must still see their own state file.
+    assert "load_step: null" in paths["config"].read_text()
+
+
+def test_choose_export_config_uses_the_original_when_the_best_is_the_latest(tmp_path, monkeypatch):
+    paths = _run_dir(tmp_path)
+    for step in (2000, 4000):
+        (paths["checkpoints"] / f"step-{step:09d}.ckpt").write_bytes(b"ckpt")
+    paths["config"].write_text("load_step: null\n")
+    monkeypatch.setattr(splat_job, "read_eval_psnr", lambda run_dir: [(2000, 10.0), (4000, 20.0)])
+
+    config_path, choice = splat_job.choose_export_config(paths)
+
+    assert choice is not None and choice.step == 4000
+    assert config_path == paths["config"]
+    assert not (paths["run"] / "config-best.yml").exists()
+
+
+def test_choose_export_config_degrades_to_the_latest_without_metrics(tmp_path, monkeypatch):
+    paths = _run_dir(tmp_path)
+    (paths["checkpoints"] / "step-000002000.ckpt").write_bytes(b"ckpt")
+    (paths["checkpoints"] / "step-000004000.ckpt").write_bytes(b"ckpt")
+    paths["config"].write_text("load_step: null\n")
+    monkeypatch.setattr(splat_job, "read_eval_psnr", lambda run_dir: [])
+
+    config_path, choice = splat_job.choose_export_config(paths)
+
+    assert choice is not None
+    assert choice.step == 4000 and choice.reason == "latest_no_eval_metrics"
+    assert config_path == paths["config"]
+
+
+def test_an_unrecognisable_config_falls_back_rather_than_failing_the_run(tmp_path, monkeypatch):
+    """Losing a quality improvement must never cost the artifact — the run has
+    already spent its GPU time by this point."""
+    paths = _run_dir(tmp_path)
+    for step in (2000, 4000):
+        (paths["checkpoints"] / f"step-{step:09d}.ckpt").write_bytes(b"ckpt")
+    paths["config"].write_text("nothing here nerfstudio would recognise\n")
+    monkeypatch.setattr(splat_job, "read_eval_psnr", lambda run_dir: [(2000, 20.0), (4000, 10.0)])
+
+    config_path, choice = splat_job.choose_export_config(paths)
+
+    assert config_path == paths["config"]
+    assert choice is not None
+    assert choice.step == 4000 and choice.reason == "latest_config_unpinnable"
+
+
+def test_no_checkpoints_at_all_leaves_the_export_untouched(tmp_path, monkeypatch):
+    paths = _run_dir(tmp_path)
+    paths["config"].write_text("load_step: null\n")
+    monkeypatch.setattr(splat_job, "read_eval_psnr", lambda run_dir: [])
+
+    config_path, choice = splat_job.choose_export_config(paths)
+    assert config_path == paths["config"] and choice is None
+
+
+def test_read_eval_psnr_returns_empty_for_a_directory_with_no_event_file(tmp_path):
+    assert splat_job.read_eval_psnr(tmp_path) == []
+
+
+def test_read_eval_psnr_never_raises_on_an_unreadable_event_file(tmp_path):
+    (tmp_path / "events.out.tfevents.1.host.1.0").write_bytes(b"not an event file")
+    assert splat_job.read_eval_psnr(tmp_path) == []
+
+
+def test_the_chosen_checkpoint_reaches_the_ledger(world, monkeypatch, tmp_path):
+    """A stored splat must say which checkpoint it is and on what evidence —
+    before this, the export was always the last one and nothing recorded it."""
+    monkeypatch.setattr(splat_job, "read_eval_psnr", lambda run_dir: [(30000, 12.5)])
+    db = RecordingDb()
+    result = splat_job.run_splat(payload(), db=db)
+
+    provenance = result["provenance"]
+    assert provenance["exportCheckpointStep"] == 30000
+    assert provenance["exportCheckpointPsnr"] == 12.5
+    assert provenance["exportCheckpointReason"] == "best_eval_psnr"
+    assert provenance["evalPointsConsidered"] == 1
+
+
 # ── the room_scan_images pose-carrier fallback ──────────────────────────────
 
 

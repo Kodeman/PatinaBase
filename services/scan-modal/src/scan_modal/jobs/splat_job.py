@@ -48,6 +48,14 @@ from typing import Any, Callable, Sequence
 from .. import SPLAT_CACHE_MOUNT
 from ..core import spz as _spz
 from ..core.captured_room import parse_captured_room_meters
+from ..core.checkpoints import (
+    CHECKPOINT_GLOB,
+    EVAL_PSNR_TAGS,
+    CheckpointChoice,
+    checkpoint_steps,
+    select_checkpoint,
+    with_load_step,
+)
 from ..core.parametric_scene import build_scene_spec
 from ..core.seed_points import SEED_PLY_NAME, build_seed_ply
 from ..core.transforms import (
@@ -62,7 +70,8 @@ from . import _common
 
 __all__ = ["STAGE", "ARTIFACT_KIND", "InputError", "run_splat", "splat_object_key",
            "train_argv", "export_argv", "workspace_paths", "checkpoint_marker",
-           "CheckpointCommitter", "ensure_seed_points"]
+           "CheckpointCommitter", "ensure_seed_points", "default_max_iterations",
+           "read_eval_psnr", "choose_export_config"]
 
 STAGE = "splat"
 ARTIFACT_KIND = "splat"
@@ -81,7 +90,22 @@ METHOD = "splatfacto"
 #: What `--experiment-name` is passed as. Its own level in nerfstudio's output
 #: tree, above the method — see `workspace_paths`.
 EXPERIMENT_NAME = METHOD
+#: splatfacto's own default, and the right budget only for a densely-covered
+#: room. See `default_max_iterations` for why it is no longer the default here.
 DEFAULT_MAX_ITERATIONS = 30000
+#: The budget for a sparsely-covered room. MEASURED, not chosen: on this
+#: fixture's 42 views the seeded run's held-out PSNR peaked at 16.36 dB by step
+#: 4 000, held a plateau to ~18 000, then fell to 13.54 by 29 000 — the stored
+#: artifact was worse than one from a third of the compute (W2-EVIDENCE.md
+#: §13.6). 12 000 sits past the plateau's start with room for a room that
+#: converges later, and stops well before the decline.
+SPARSE_VIEW_MAX_ITERATIONS = 12000
+#: Above this many training frames the sparse-view budget stops applying. 42
+#: views is what was measured; 60 is the nearest round number above it that
+#: still reads as "sparse for splatting", and no run above it has been measured
+#: — a scan with 80 (the dispatcher's cap) keeps splatfacto's own 30 000 until
+#: someone measures otherwise.
+SPARSE_VIEW_FRAME_THRESHOLD = 60
 #: Save often enough that a preemption costs minutes, not the whole run.
 STEPS_PER_SAVE = 2000
 #: Wall-clock ceilings, well inside the function's own SPLAT_TIMEOUT_SECONDS.
@@ -171,6 +195,13 @@ def train_argv(paths: dict[str, Path], max_iterations: int, resume: bool) -> lis
         "--timestamp", RUN_TIMESTAMP,
         "--max-num-iterations", str(int(max_iterations)),
         "--steps-per-save", str(STEPS_PER_SAVE),
+        # `TrainerConfig.save_only_latest_checkpoint` defaults to True, and
+        # `Trainer.save_checkpoint` unlinks every other `.ckpt` the moment it
+        # writes a new one. That makes "export from the best checkpoint"
+        # impossible by construction: by the time training ends, the best one
+        # has already been deleted. Keeping them costs Volume space (six or
+        # seven files at STEPS_PER_SAVE) and buys the whole of §13.6's finding.
+        "--save-only-latest-checkpoint", "False",
         "--viewer.quit-on-train-completion", "True",
         "--vis", "tensorboard",
     ]
@@ -193,12 +224,95 @@ def train_argv(paths: dict[str, Path], max_iterations: int, resume: bool) -> lis
     return argv
 
 
-def export_argv(paths: dict[str, Path]) -> list[str]:
+def default_max_iterations(frame_count: int) -> int:
+    """The iteration budget for a room with this many training views.
+
+    §13.6 measured 42 views of an 8.8 × 8.2 m room peaking at step 4 000 and
+    declining past ~18 000, so splatfacto's own 30 000 is roughly twice too many
+    for a sparse capture — it costs 45 extra minutes of L4 to arrive at a worse
+    artifact. A denser capture has not been measured and keeps the stock budget.
+    """
+    if frame_count <= SPARSE_VIEW_FRAME_THRESHOLD:
+        return SPARSE_VIEW_MAX_ITERATIONS
+    return DEFAULT_MAX_ITERATIONS
+
+
+def export_argv(paths: dict[str, Path], config_path: Path | None = None) -> list[str]:
+    """`ns-export gaussian-splat`, optionally pointed at a pinned config copy.
+
+    The exporter has no checkpoint flag of its own — `eval_setup` reads whatever
+    `--load-config` names and only honours a non-null `load_step` from inside
+    it. See `core/checkpoints.py`.
+    """
     return [
         "ns-export", "gaussian-splat",
-        "--load-config", str(paths["config"]),
+        "--load-config", str(config_path or paths["config"]),
         "--output-dir", str(paths["exports"]),
     ]
+
+
+def read_eval_psnr(run_dir: Path) -> list[tuple[int, float]]:
+    """Held-out PSNR per step, from the run's tensorboard event file.
+
+    Returns `[]` — never raises — when there is nothing readable. Every failure
+    here (no event file, an unreadable one, tensorboard absent) has the same
+    correct consequence: export the final checkpoint, which is what this stage
+    did before. Losing a quality improvement must not lose the artifact.
+    """
+    try:
+        from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+    except ImportError:  # pragma: no cover - image-only dependency
+        _common.log_skip(STAGE, "eval_metrics_unavailable", reason="tensorboard_missing")
+        return []
+
+    try:
+        if not any(run_dir.glob("events.out.tfevents.*")):
+            _common.log_skip(STAGE, "eval_metrics_unavailable", reason="no_event_file")
+            return []
+        # 0 = keep every scalar. The default (1 000) subsamples by reservoir,
+        # which would silently drop the peak this whole mechanism looks for.
+        accumulator = EventAccumulator(str(run_dir), size_guidance={"scalars": 0})
+        accumulator.Reload()
+        tags = set(accumulator.Tags().get("scalars", []))
+        for tag in EVAL_PSNR_TAGS:
+            if tag in tags:
+                return [(int(e.step), float(e.value)) for e in accumulator.Scalars(tag)]
+        _common.log_skip(STAGE, "eval_metrics_unavailable", reason="no_psnr_tag")
+        return []
+    except Exception as exc:  # noqa: BLE001 - see docstring
+        _common.log_skip(STAGE, "eval_metrics_unavailable", error=type(exc).__name__)
+        return []
+
+
+def choose_export_config(paths: dict[str, Path]) -> tuple[Path, CheckpointChoice | None]:
+    """Decide which checkpoint to export from, and return the config to use.
+
+    Writes a SIBLING config (`config-best.yml`) rather than editing the one
+    nerfstudio wrote: the original is what a resumed run and any later manual
+    `ns-export` read, and a stage that mutates another program's state file
+    leaves a workspace that behaves differently the second time it is used.
+    """
+    checkpoints = paths["checkpoints"]
+    steps = checkpoint_steps(p.name for p in checkpoints.glob(CHECKPOINT_GLOB)) \
+        if checkpoints.is_dir() else []
+    choice = select_checkpoint(read_eval_psnr(paths["run"]), steps)
+    if choice is None or not steps or choice.step == steps[-1]:
+        # Nothing to pin: either there are no checkpoints to choose between, or
+        # the best one is already the one `eval_setup`'s max-step glob will find.
+        return paths["config"], choice
+
+    try:
+        pinned_text = with_load_step(paths["config"].read_text(), choice.step)
+    except (OSError, ValueError) as exc:
+        _common.log_skip(STAGE, "checkpoint_pin_failed", error=type(exc).__name__)
+        return paths["config"], CheckpointChoice(
+            step=steps[-1], psnr=None, reason="latest_config_unpinnable",
+            considered=choice.considered,
+        )
+
+    pinned = paths["run"] / "config-best.yml"
+    pinned.write_text(pinned_text)
+    return pinned, choice
 
 
 def checkpoint_marker(checkpoint_dir: Path) -> tuple[str, int, int] | None:
@@ -568,8 +682,14 @@ def run_splat(
         seed = ensure_seed_points(paths, captured_doc)
 
         resume = paths["checkpoints"].is_dir() and any(paths["checkpoints"].iterdir())
+        # `inputs.config` is the queue's knob. It reaches here because the
+        # dispatcher now passes `agent_tasks.payload.config` through verbatim
+        # (contract.json's `splat_config` variant); before that it was
+        # unreachable and this branch was dead code (W2-EVIDENCE.md §4 E).
         config = inputs.get("config") or {}
-        max_iterations = int(config.get("maxIterations") or DEFAULT_MAX_ITERATIONS)
+        requested = config.get("maxIterations")
+        max_iterations = int(requested or default_max_iterations(prep["frames"]))
+        iterations_source = "config" if requested else "default"
         # The watcher commits the Volume as each checkpoint lands, and its
         # shutdown is in a `finally`, so a preemption, a training timeout or an
         # operator stop all leave the last checkpoint durable — the resume path
@@ -580,7 +700,8 @@ def run_splat(
             raise RuntimeError(f"ns-train {METHOD} exited {code}")
 
         paths["exports"].mkdir(parents=True, exist_ok=True)
-        code = _run(export_argv(paths), EXPORT_TIMEOUT_S)
+        export_config, choice = choose_export_config(paths)
+        code = _run(export_argv(paths, export_config), EXPORT_TIMEOUT_S)
         if code != 0:
             raise RuntimeError(f"ns-export gaussian-splat exited {code}")
         ply = _resolve_ply(paths)
@@ -599,7 +720,19 @@ def run_splat(
             # not distinguishable after the fact from anything else on the row.
             "photosSource": photos_source,
             "maxIterations": max_iterations,
+            # Whether the budget came from the queue or from the view-count
+            # policy. A 12 000-iteration artifact is not self-describing —
+            # `default_max_iterations` can move, and a stored splat should say
+            # whether an operator chose its budget or the pipeline did.
+            "maxIterationsSource": iterations_source,
             "resumed": resume,
+            # Which checkpoint these bytes came from, and on what evidence.
+            # Before this, the export was always the last checkpoint and there
+            # was nothing on the artifact to say so (W2-EVIDENCE.md §13.6).
+            "exportCheckpointStep": choice.step if choice else None,
+            "exportCheckpointPsnr": choice.psnr if choice else None,
+            "exportCheckpointReason": choice.reason if choice else "no_checkpoints",
+            "evalPointsConsidered": choice.considered if choice else 0,
             "walls": len(parametric.walls),
             # How the optimiser started. A splat seeded off the parametric room
             # and one that began from random noise are the same artifact kind

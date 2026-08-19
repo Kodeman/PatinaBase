@@ -17,6 +17,7 @@ import {
   decideDispatchFailure,
   DEFAULT_VISIBILITY_TIMEOUT,
   DISPATCH_TASK_TYPES,
+  extractStageConfig,
   extractTaskInputIds,
   isPoseBearing,
   isSpawnSuccess,
@@ -239,6 +240,66 @@ Deno.test("buildModalDispatchBody: a splat body carries the cap fields verbatim"
     photoUrlsCapped: true,
     photoCount: 214,
   });
+});
+
+// ─── the queue's `config` knob ──────────────────────────────────────────────
+
+Deno.test("extractStageConfig: a populated object is forwarded as-is", () => {
+  const config = { maxIterations: 12000, somethingFuture: "x" };
+  assertEquals(extractStageConfig({ scan_id: "s", config }), config);
+});
+
+Deno.test("extractStageConfig: absent, empty, null, array and scalar all mean none", () => {
+  assertEquals(extractStageConfig({ scan_id: "s" }), undefined);
+  assertEquals(extractStageConfig({ config: {} }), undefined);
+  assertEquals(extractStageConfig({ config: null }), undefined);
+  assertEquals(extractStageConfig({ config: [1, 2] }), undefined);
+  assertEquals(extractStageConfig({ config: 12000 }), undefined);
+  assertEquals(extractStageConfig({ config: "12000" }), undefined);
+  assertEquals(extractStageConfig(null), undefined);
+  assertEquals(extractStageConfig(undefined), undefined);
+});
+
+Deno.test("extractStageConfig: does not read or validate any key inside", () => {
+  // The dispatcher forwards whatever the task set. A key it has never heard of
+  // must survive; a key it HAS heard of must not be coerced or defaulted.
+  const config = { maxIterations: "not-a-number", unknownKnob: { deep: true } };
+  assertEquals(extractStageConfig({ config }), config);
+});
+
+Deno.test("buildModalDispatchBody: a splat body carries config only when set", () => {
+  const base = {
+    taskId: "task-1",
+    leaseToken: "dispatch-scan-modal:lease-1",
+    scanId: "scan-1",
+    roomFileId: "rf-1",
+    roomFileVersion: 3,
+    taskType: "scan_pipeline.splat",
+    traceId: "trace-1",
+  };
+  const splatInputs = {
+    kind: "splat" as const,
+    photosSource: "manifest" as const,
+    photosManifestUrl: "https://signed.example/photos_metadata.ndjson?sig=1",
+    photoUrls: ["https://signed.example/a.heic?sig=2"],
+    capturedRoomJsonUrl: "https://signed.example/captured_room.json?sig=3",
+    photoUrlsCapped: false,
+    photoCount: 42,
+  };
+
+  const without = buildModalDispatchBody({ ...base, inputs: splatInputs });
+  assertFalse("config" in (without.inputs as Record<string, unknown>));
+
+  const withConfig = buildModalDispatchBody({
+    ...base,
+    inputs: { ...splatInputs, config: { maxIterations: 12000 } },
+  });
+  assertEquals((withConfig.inputs as Record<string, unknown>).config, { maxIterations: 12000 });
+  // And nothing else moved: the config-bearing body is the plain one plus one key.
+  assertEquals(
+    Object.keys(withConfig.inputs as Record<string, unknown>).sort(),
+    [...Object.keys(without.inputs as Record<string, unknown>), "config"].sort(),
+  );
 });
 
 Deno.test("buildModalDispatchBody: never leaks the bearer token into the body", () => {
@@ -503,6 +564,36 @@ Deno.test("contract.json: the splat_rows variant round-trips through the builder
   assertEquals(contractKeys(built), contractKeys(variant));
   assertEquals(built.inputs, variant.inputs);
   assertEquals(built.taskType, "scan_pipeline.splat");
+});
+
+Deno.test("contract.json: the splat_config variant round-trips through the builder", async () => {
+  const variant = (await readVariants()).splat_config;
+  const built = buildModalDispatchBody(paramsFor("splat", variant));
+  assertEquals(contractKeys(built), contractKeys(variant));
+  assertEquals(built.inputs, variant.inputs);
+  assertEquals(built.taskType, "scan_pipeline.splat");
+});
+
+Deno.test("contract.json: splat_config is the base splat shape plus config", async () => {
+  const stages = await readContract();
+  const variant = (await readVariants()).splat_config;
+  const base = new Set(Object.keys(stages.splat.inputs as ContractBody));
+  const withConfig = Object.keys(variant.inputs as ContractBody);
+  assertEquals(withConfig.filter((k) => !base.has(k)), ["config"]);
+  assertEquals(
+    (variant.inputs as ContractBody).config,
+    { maxIterations: 12000 },
+  );
+});
+
+Deno.test("contract.json: the base splat stage carries NO config", async () => {
+  // A task that sets nothing must produce exactly the body it produced before
+  // this knob existed — that is what makes the change safe to deploy ahead of
+  // any task using it.
+  const stages = await readContract();
+  assertFalse("config" in (stages.splat.inputs as ContractBody));
+  const built = buildModalDispatchBody(paramsFor("splat", stages.splat));
+  assertFalse("config" in (built.inputs as Record<string, unknown>));
 });
 
 Deno.test("contract.json: splat_rows carries photoRecords and NO manifest url", async () => {
