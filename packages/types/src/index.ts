@@ -11,6 +11,7 @@ export * from './catalog-product-summary';
 export * from './order';
 export * from './style-profile';
 export * from './api';
+export * from './capture-enrichment';
 // Export media types (re-exports MediaType locally to avoid conflict with catalog)
 export type {
   MediaAsset,
