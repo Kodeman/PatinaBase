@@ -58,6 +58,19 @@ export const ROOM_FILE_COPY = {
   downloadFailed: 'Could not download that drawing. Try again.',
   drawingsEmpty: 'No sheets were recorded for this version.',
 
+  // Render gallery (Rendered Room v2, W2 finale)
+  renderGalleryTitle: 'Renders',
+  renderGallerySubtitle: (n: number) => `${n} view${n === 1 ? '' : 's'}`,
+  renderShotAlt: (room: string, shot: string) => `${room}, ${shot.replace(/_/g, ' ')} view`,
+  renderShotLabel: {
+    top_down: 'Top-down',
+    corner_ne: 'Corner NE',
+    corner_nw: 'Corner NW',
+    corner_se: 'Corner SE',
+    corner_sw: 'Corner SW',
+    cover: 'Cover',
+  } as Record<string, string>,
+
   // Certificate section
   certificateTitle: 'Accuracy certificate',
   certScale: 'Scale fit',

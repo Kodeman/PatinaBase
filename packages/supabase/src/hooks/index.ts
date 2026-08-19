@@ -606,6 +606,12 @@ export type {
   SplatUnavailableReason,
   UseSplatUrlOptions,
 } from './use-splat-url';
+export { useRenderShots, readRendersArtifactPresence, RENDERS_ARTIFACT_KIND } from './use-render-shots';
+export type {
+  RenderShotsSource,
+  RenderShotsUnavailableReason,
+  UseRenderShotsOptions,
+} from './use-render-shots';
 export {
   useOpenDesignRequests,
   useClaimDesignRequest,

@@ -23,6 +23,7 @@ import { useRoomScan, useRoomFiles, useRoomFileMeasurements, useScanContextCaptu
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DrawingsSection } from './drawings-section';
+import { RenderGallerySection } from './render-gallery-section';
 import { CertificateSection } from './certificate-section';
 import { MeasurementsTable } from './measurements-table';
 import { CaptureContextSection } from './capture-context-section';
@@ -154,6 +155,7 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
       ) : (
         <>
           <DrawingsSection drawings={current.drawings} version={current.version} roomName={roomLabel} />
+          <RenderGallerySection roomFileId={current.id} roomName={roomLabel} />
           <CertificateSection certificate={current.certificate} />
           <MeasurementsTable measurements={measurements ?? []} />
           <CaptureContextSection captures={captures ?? []} />
