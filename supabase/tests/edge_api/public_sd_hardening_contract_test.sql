@@ -1697,13 +1697,13 @@ VALUES
   (
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '67873d9018516818c182ee716cdc7e4b45ffe6b6c5d03bc9285b35e7a031c12f',
+    '3ce8183f5490b21a6a087a6a21e8e36c2c1b4c51d1577da614799a473f99099b',
     ARRAY[]::text[]
   ),
   (
     'public.set_project_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'fe66293d1fc39149dba2abc85d6ecd7b948f786e53f7e4e5746a65b69e82028d',
+    '8113ca8a0b99edcce6220e97983ddf1f71576d099f5e3311044c571027929a02',
     ARRAY[]::text[]
   ),
   (
@@ -6159,11 +6159,17 @@ BEGIN
 END
 $cross_studio_created_by_reassignment_denial$;
 
--- set_invoice_studio_id's FOR SHARE OF user_role can't see designer 001's role
--- under RLS from a direct authenticated writer (pre-existing FOR SHARE+RLS
--- finding, flagged for review; real flow uses SECURITY DEFINER RPCs), so seed
--- the draft invoice as postgres. The immutable draft edits below still run as
--- co-member 002 — immutable updates skip the trigger's caller checks.
+-- Finding #1. The draft-invoice header UPDATE is the product's only direct
+-- authenticated invoice write (packages/supabase/src/hooks/use-invoices.ts);
+-- every other transition goes through a SECURITY DEFINER RPC. Until 00511's
+-- has_designer_domain_role helper landed, set_invoice_studio_id judged the
+-- LEAD designer's role under the WRITER's RLS, so a co-member saw no
+-- user_roles row and the trigger refused a write that both RLS and its own
+-- co-member branch admit. The edits below are therefore genuine authenticated
+-- co-member writes — seeding them as postgres would erase the assertion.
+-- The invoice is seeded with its real studio_id (the RPC path always supplies
+-- one); a NULL here cannot satisfy the immutable-update parent check
+-- project.studio_id = NEW.studio_id.
 RESET ROLE;
 INSERT INTO public.invoices (
   id, project_id, designer_id, client_id, studio_id,
@@ -6174,8 +6180,18 @@ VALUES (
   'd4852000-0000-4000-8000-000000000003',
   'd4850000-0000-4000-8000-000000000001',
   'd4850000-0000-4000-8000-000000000004',
-  NULL, 'draft', 'USD', 0, 0
+  'd4851000-0000-4000-8000-000000000001', 'draft', 'USD', 0, 0
 );
+
+DO $d485_draft_fixture_is_studio_bound$
+BEGIN
+  ASSERT (
+    SELECT invoice.studio_id = 'd4851000-0000-4000-8000-000000000001'
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000085'
+  ), 'draft fixture must be studio-bound for the immutable parent check';
+END
+$d485_draft_fixture_is_studio_bound$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
@@ -6195,6 +6211,83 @@ SET due_date = current_date + 30,
     total_cents = 150,
     memo = 'D485 exact-studio draft edit',
     internal_notes = 'D485 exact-studio internal draft note'
+WHERE id = 'd4857000-0000-4000-8000-000000000085';
+
+-- Finding #1, stated as an assertion rather than an incidental success: the
+-- co-member's edit landed, and it landed as the co-member, not as postgres.
+DO $d485_comember_draft_edit_landed$
+BEGIN
+  ASSERT current_user = 'authenticated'
+     AND auth.uid() = 'd4850000-0000-4000-8000-000000000002',
+    'co-member draft edit must run as the authenticated co-member';
+  ASSERT (
+    SELECT invoice.memo = 'D485 exact-studio draft edit'
+       AND invoice.total_cents = 150
+       AND invoice.studio_id = 'd4851000-0000-4000-8000-000000000001'
+       AND invoice.designer_id = 'd4850000-0000-4000-8000-000000000001'
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000085'
+  ), 'co-member draft header edit did not land';
+END
+$d485_comember_draft_edit_landed$;
+
+-- The lead designer's own draft edit is unchanged by the helper.
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+
+UPDATE public.invoices
+SET memo = 'D485 exact-studio lead draft edit'
+WHERE id = 'd4857000-0000-4000-8000-000000000085';
+
+DO $d485_lead_draft_edit_landed$
+BEGIN
+  ASSERT (
+    SELECT invoice.memo = 'D485 exact-studio lead draft edit'
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000085'
+  ), 'lead draft header edit regressed';
+END
+$d485_lead_draft_edit_landed$;
+
+-- A non-member of the invoice's studio is still refused. The helper answers
+-- only "does the lead hold a designer role"; it grants no one authority.
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000007', 'authenticated'
+);
+
+DO $d485_nonmember_draft_edit_denial$
+BEGIN
+  BEGIN
+    UPDATE public.invoices
+    SET memo = 'D485 cross-studio draft edit'
+    WHERE id = 'd4857000-0000-4000-8000-000000000085';
+    IF FOUND THEN
+      RAISE EXCEPTION 'cross-studio peer edited a draft invoice header'
+        USING ERRCODE = 'P4850';
+    END IF;
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+END
+$d485_nonmember_draft_edit_denial$;
+
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000002', 'authenticated'
+);
+
+DO $d485_nonmember_draft_edit_left_no_trace$
+BEGIN
+  ASSERT (
+    SELECT invoice.memo = 'D485 exact-studio lead draft edit'
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000085'
+  ), 'cross-studio denial mutated the draft header';
+END
+$d485_nonmember_draft_edit_left_no_trace$;
+
+UPDATE public.invoices
+SET memo = 'D485 exact-studio draft edit'
 WHERE id = 'd4857000-0000-4000-8000-000000000085';
 
 DO $direct_draft_identity_denial$
@@ -6371,10 +6464,32 @@ SELECT public.issue_invoice(
   'd4857000-0000-4000-8000-000000000095', current_date + 15
 );
 
+-- 00399 routes every hold/resume through set_project_operational_status: a raw
+-- status UPDATE is refused even as postgres. Put the project on hold the
+-- supported way, as its lead, before revoking the lead's designer role.
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+
+DO $d485_hold_project_before_revocation$
+DECLARE
+  v_status public.project_status;
+BEGIN
+  SELECT project.status INTO v_status
+  FROM public.projects AS project
+  WHERE project.id = 'd4852000-0000-4000-8000-000000000003';
+  PERFORM public.set_project_operational_status(
+    'd4852000-0000-4000-8000-000000000003', v_status, 'on_hold'
+  );
+  ASSERT (
+    SELECT project.status = 'on_hold'
+    FROM public.projects AS project
+    WHERE project.id = 'd4852000-0000-4000-8000-000000000003'
+  ), 'project did not enter on_hold through set_project_operational_status';
+END
+$d485_hold_project_before_revocation$;
+
 RESET ROLE;
-UPDATE public.projects
-SET status = 'on_hold'
-WHERE id = 'd4852000-0000-4000-8000-000000000003';
 DELETE FROM public.user_roles
 WHERE id = 'd4859100-0000-4000-8000-000000000001';
 
@@ -6455,9 +6570,6 @@ $owner_service_invoice_transition_success$;
 
 RESET ROLE;
 
-UPDATE public.projects
-SET status = 'active'
-WHERE id = 'd4852000-0000-4000-8000-000000000003';
 INSERT INTO public.user_roles (id, user_id, role_id, granted_by)
 VALUES (
   'd4859100-0000-4000-8000-000000000001',
@@ -6465,6 +6577,26 @@ VALUES (
   'd4859000-0000-4000-8000-000000000001',
   'd4850000-0000-4000-8000-000000000001'
 );
+
+-- Resume the same way it was held (00399): the raw status UPDATE is refused
+-- even as postgres. The designer role is restored first so the lead can act.
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+
+DO $d485_resume_project_after_restoration$
+BEGIN
+  PERFORM public.set_project_operational_status(
+    'd4852000-0000-4000-8000-000000000003', 'on_hold', 'active'
+  );
+  ASSERT (
+    SELECT project.status = 'active'
+    FROM public.projects AS project
+    WHERE project.id = 'd4852000-0000-4000-8000-000000000003'
+  ), 'project did not resume through set_project_operational_status';
+END
+$d485_resume_project_after_restoration$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
@@ -6791,13 +6923,21 @@ BEGIN
     ASSERT SQLERRM = 'studio_id_not_designer_studio';
   END;
 
+  -- A raw lead change is denied, but not by set_project_studio_id: BEFORE
+  -- triggers fire in name order, so 00399's
+  -- guard_project_terminal_identity_integrity refuses first and its message is
+  -- the one that surfaces. Assert the refusal that actually governs this write
+  -- rather than the one this probe was drafted against.
   BEGIN
     UPDATE public.projects
     SET designer_id = 'd4850000-0000-4000-8000-000000000002'
     WHERE id = 'd4852000-0000-4000-8000-000000000002';
     RAISE EXCEPTION 'designer ownership update crossed the canonical studio';
-  EXCEPTION WHEN raise_exception THEN
-    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  EXCEPTION WHEN check_violation THEN
+    -- 00399 raises with ERRCODE check_violation, not the trigger's P0001.
+    ASSERT SQLERRM
+      = 'project lead may only change through reassign_project_lead',
+      format('unexpected lead-change refusal: %L', SQLERRM);
   END;
 
   BEGIN
@@ -6808,8 +6948,13 @@ BEGIN
       WHERE id = 'd4853000-0000-4000-8000-000000000030'
     );
     RAISE EXCEPTION 'proposal-backed project client crossed its proposal';
-  EXCEPTION WHEN raise_exception THEN
-    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  EXCEPTION WHEN check_violation THEN
+    -- Shadowed the same way as the lead change above: 00399's
+    -- guard_project_terminal_identity_integrity sorts before
+    -- set_project_studio_id and refuses first, with check_violation.
+    ASSERT SQLERRM
+      = 'project client identity may only change through set_document_client',
+      format('unexpected client-change refusal: %L', SQLERRM);
   END;
 
   BEGIN
