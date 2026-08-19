@@ -49,9 +49,17 @@ const nextConfig = {
     // CSP directives - adapted for development vs production
     const cspDirectives = [
       "default-src 'self'",
+      // `wasm-unsafe-eval` (prod leg) is the narrow CSP source for WebAssembly
+      // compilation specifically — NOT a general eval allowance. Without it,
+      // @sparkjsdev/spark's `WebAssembly.instantiateStreaming()` for the SPLAT
+      // projection's Rust splat-decode module throws a CompileError citing
+      // `'unsafe-eval'` and the stage hangs forever on its loading line
+      // ("Bringing the walkthrough up…") — confirmed live on staging. Dev's
+      // `'unsafe-eval'` already covers WASM instantiation too (which is why
+      // this never surfaced locally), so the dev leg is unchanged.
       isDevelopment
         ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-        : "script-src 'self' 'unsafe-inline' https://us-assets.i.posthog.com",
+        : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://us-assets.i.posthog.com",
       "style-src 'self' 'unsafe-inline'",
       // Images: prod screenshots/assets come from https://api.patina.cloud
       // (covered by https:). In dev, private-bucket signed URLs are served over
