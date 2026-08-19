@@ -65,6 +65,13 @@
         "MEDIA_SERVICE_URL": "https://patina-media-svc-worker-staging.kody-be3.workers.dev",
         "PROJECTS_SERVICE_URL": "https://patina-projects-worker-staging.kody-be3.workers.dev",
         "NEXT_PUBLIC_EDGE_API_URL": "https://patina-edge-api-staging.kody-be3.workers.dev",
+        // The R2 S3 endpoint the capability URLs are presigned against — must
+        // match infra/edge-api-worker/wrangler.jsonc's SCAN_R2_ENDPOINT for the
+        // same environment, or SPLAT is CSP-blocked (see next.config.js). Read
+        // ONLY by next.config.js's connect-src at build time, so it must also be
+        // exported on the build path; a wrangler-vars-only value is invisible to
+        // `next build`, exactly as for NEXT_PUBLIC_EDGE_API_URL above.
+        "NEXT_PUBLIC_SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
         // PostHog is disabled in staging (empty key, above) — the flag would
         // otherwise resolve fail-closed and hide Room View/Room File entirely.
         // Same override mechanism playwright.config.ts uses for CI.
