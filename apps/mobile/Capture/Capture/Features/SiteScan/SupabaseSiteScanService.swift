@@ -63,6 +63,23 @@ final class SupabaseSiteScanService: SiteScanService {
         }
         return uploader
     }()
+    /// The R2 shadow leg, or nil when dormant (toggle off, or no
+    /// `EDGE_API_URL` in this build — both true of every committed build).
+    ///
+    /// A measurement leg only: it runs after the primary background upload has
+    /// already succeeded, and its per-artifact confirm on the edge API worker is
+    /// a separate chain from this service's bundle-level `confirm-scan-bundle`
+    /// call. Built fresh per artifact so the toggle is read live; the session
+    /// closures are the same ones `backgroundUploader` uses, because CaptureKit
+    /// does not link supabase-swift.
+    private func shadowUploadLeg() -> FieldScanUploadShadowLeg? {
+        FieldScanUploadShadowLeg.live(
+            edgeAPIURL: AppConfiguration.edgeAPIURL,
+            accessToken: { [weak self] in try? await self?.client.auth.session.accessToken },
+            refreshSession: { [weak self] in _ = try? await self?.client.auth.refreshSession() }
+        )
+    }
+
     private var artifactContinuations:
         [ScanArtifactTransferKey: CheckedContinuation<Result<Void, FieldBackgroundScanUploader.UploadError>, Never>] = [:]
     /// Completions that arrived with no waiter yet — a task that finished (or was
@@ -650,15 +667,14 @@ final class SupabaseSiteScanService: SiteScanService {
         working.storagePath = storagePath
 
         try requireActiveOwner(context.owner)
-        let uploaded = await uploadViaBackground(
-            backgroundDescriptor(
-                for: descriptor,
-                fileURL: fileURL,
-                sha: sha,
-                storagePath: storagePath,
-                context: context
-            )
+        let (uploaded, shadowOutcome) = await uploadWithShadowMeasurement(
+            descriptor,
+            fileURL: fileURL,
+            sha: sha,
+            storagePath: storagePath,
+            context: context
         )
+        working.apply(shadow: shadowOutcome)
         try requireActiveOwner(context.owner)
         guard uploaded else {
             try recordArtifactFailure(
@@ -682,6 +698,47 @@ final class SupabaseSiteScanService: SiteScanService {
         working.status = .uploaded
         working.remoteUrl = RoomScanStoragePath.storedReference(forObjectPath: storagePath)
         return working
+    }
+
+    /// The primary background upload, with the dormant R2 shadow leg behind it.
+    ///
+    /// The returned `Bool` is exactly what `uploadViaBackground` produced —
+    /// `afterPrimary` cannot alter it, cannot throw, and cannot reach the shadow
+    /// when the primary failed. The shadow leg itself is nil unless BOTH the
+    /// `field.scanUploadShadowR2` toggle is on and the build carries an
+    /// `EDGE_API_URL`; it is resolved per artifact so flipping the toggle takes
+    /// effect without restarting an upload in progress.
+    private func uploadWithShadowMeasurement(
+        _ descriptor: ScanUploadDescriptor,
+        fileURL: URL,
+        sha: String?,
+        storagePath: String,
+        context: ArtifactUploadContext
+    ) async -> (value: Bool, shadow: FieldScanUploadShadowLeg.Outcome) {
+        let shadowLeg = shadowUploadLeg()
+        return await FieldScanUploadShadowLeg.afterPrimary(
+            primary: {
+                await uploadViaBackground(
+                    backgroundDescriptor(
+                        for: descriptor,
+                        fileURL: fileURL,
+                        sha: sha,
+                        storagePath: storagePath,
+                        context: context
+                    )
+                )
+            },
+            shadow: { didUpload in
+                // A failed primary leaves no bytes in Storage for the shadow to
+                // be a shadow OF.
+                guard didUpload, let shadowLeg else { return .notAttempted }
+                return await shadowLeg.run(
+                    descriptor: descriptor,
+                    fileURL: fileURL,
+                    scanId: context.scanID
+                )
+            }
+        )
     }
 
     private func backgroundDescriptor(
