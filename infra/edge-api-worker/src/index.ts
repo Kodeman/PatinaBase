@@ -20,6 +20,7 @@ import {
 } from './env';
 import {
   assertObservedMatchesDeclared,
+  assertUploadCaller,
   confirmUpload,
   createUploadIntent,
   headUploadedObject,
@@ -85,6 +86,7 @@ export interface WorkerDependencies {
     env: EdgeApiEnv,
     target: ScanArtifactRequest,
   ): Promise<ScanArtifactObject[]>;
+  authorizeUpload(request: Request, env: EdgeApiEnv): Promise<void>;
   createUploadIntent(
     request: Request,
     env: EdgeApiEnv,
@@ -118,6 +120,7 @@ const defaultDependencies: WorkerDependencies = {
     withVerifiedSupabaseTransaction(request, env, work),
   resolveScanArtifacts: (request, env, target) =>
     resolveScanArtifacts(request, env, target),
+  authorizeUpload: (request, env) => assertUploadCaller(request, env),
   createUploadIntent: (request, env, input) =>
     createUploadIntent(request, env, input),
   resolveUploadForConfirm: (request, env, uploadId) =>
@@ -618,6 +621,12 @@ async function handleUploadIntent(
   let input: UploadIntentInput;
   let intent: UploadIntent;
   try {
+    // The caller, BEFORE the body. An unauthenticated request must not buy a
+    // JSON read and parse first — and a 401 that arrives after a 400 for a
+    // malformed body would also be telling an anonymous caller which of their
+    // two problems the Worker noticed.
+    await dependencies.authorizeUpload(request, env);
+
     let body: unknown;
     try {
       body = await request.json();
@@ -628,6 +637,21 @@ async function handleUploadIntent(
     intent = await dependencies.createUploadIntent(request, env, input);
   } catch (error) {
     return uploadErrorResponse(error, traceId, 'intent', dependencies);
+  }
+
+  // An intent for an object that has ALREADY LANDED is a restatement, not a
+  // request for a new capability. 00498 returns the existing row for an exact
+  // restatement so a client that lost the response to a successful confirm gets
+  // a stable answer — but signing a fresh PUT for it would hand that client a
+  // thirty-minute licence to overwrite confirmed bytes, under a checksum the
+  // registry already recorded and the scan read path already serves. There is
+  // nothing left to upload, so there is no URL to give: answer with the row.
+  if (intent.lifecycleState !== 'pending') {
+    return privateJson(
+      { uploadId: intent.uploadId, lifecycle: intent.lifecycleState },
+      200,
+      traceId,
+    );
   }
 
   let signed: { url: string; expiresAt: string };

@@ -83,6 +83,7 @@ yet on prod.
 | Number | File                                                  | Landed state                                                       |
 | ------ | ----------------------------------------------------- | ------------------------------------------------------------------ |
 | 00498  | `00498_media_upload_intent_and_scan_version_lock.sql` | branch `w3a/media-upload-intent`; applied to **staging**, NOT prod |
+| 00499  | `00499_upload_interface_hardening.sql`                | branch `w3a/upload-intent-hardening`; NOT applied to staging or prod |
 
 00498 carries W3-A: `create_media_upload_intent` / `confirm_media_upload` (the
 Phase-2 upload interface's registry side), the `caller_can_access_room_scan`
@@ -93,9 +94,22 @@ documented and deferred to W3. It replaces `scan_worker_update_room_file`, so th
 lineage for that function is now **00490 → 00492 → 00498**; a later program
 redefining it must graft onto 00498's body, not 00492's.
 
-00499–00502 remain free for this lane.
+00499 is **W3-A's review closure**, drawn immediately after 00498: one shared
+`is_originals_bucket` pattern (replacing the bare regex 00498 inlined, which
+00499 would otherwise have had to duplicate), an originals-bucket pin and an
+etag shape bound on `confirm_media_upload`, a now-mandatory R2-observed checksum
+(the `put_condition` provenance value is retired — see
+`infra/edge-api-worker/OPERATIONS.md` "What the R2 probe established"), and two
+new refusals on `register_media_object`: the `scan_originals/` prefix (P0414)
+and un-storing a `verified` or upload-interface row (P0415). It replaces
+`create_media_upload_intent`, `confirm_media_upload`, and
+`register_media_object`, so those functions' lineages are now
+**00498 → 00499** and **00489 → 00499** respectively; a later program redefining
+any of them must graft onto 00499's body.
 
-Apart from 00498, no file in `supabase/migrations/` on `main`, and no commit in
+00500–00502 remain free for this lane.
+
+Apart from 00498 and 00499, no file in `supabase/migrations/` on `main`, and no commit in
 `git log --all`, currently occupies any number in 00494–00509 — the three bands
 are collision-free as reserved.
 

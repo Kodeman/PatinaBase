@@ -289,35 +289,85 @@ END $$;
 --   12. The per-scan advisory lock, on both sides.
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- ─── extra fixtures: a designer-client, an association, and a stranger ───────
--- Carla holds a designer_clients row for Alice (00020 leg 2). Dana holds an
--- ACTIVE room_scan_associations row (00020 leg 3). Bob (above) holds nothing.
+-- ─── extra fixtures: every leg of room_scans' visibility, in BOTH directions ─
+-- Assertion 9 below is an EQUIVALENCE gate, and an equivalence gate is only as
+-- good as its fixtures: if every actor is invisible, "mirror agrees with policy"
+-- holds vacuously, and if every actor is visible, a mirror that returned a bare
+-- `true` would pass. So each of the four legs gets a POSITIVE fixture that must
+-- be visible and a NEGATIVE one that must not, and assertion 9 pins the expected
+-- direction per actor rather than only comparing the two answers.
+--
+--   leg                     positive        negative
+--   00014 owner             Alice           Bob (holds nothing)
+--   00020 designer-client   Carla           Gina  (holds a row for the WRONG client)
+--   00020 association       Dana  (active)  Iris  (revoked)
+--   00316 studio co-member  Emma  (Carla's  Fiona (active member of a DIFFERENT
+--                                  studio)          organization)
+--
+-- Hank is a fifth actor and a deliberate ODDITY: he holds a designer_clients row
+-- for Alice with status 'completed'. He is asserted VISIBLE, because the 00020
+-- policy's designer-client leg filters on nothing but (designer_id, client_id)
+-- — there is no status predicate on that leg at all (00020:138-156), and the
+-- 00316 studio leg is unfiltered the same way. That is a surprising property
+-- worth pinning: if someone later narrows the policy to `status = 'active'`
+-- without narrowing caller_can_access_room_scan to match, Hank's row is what
+-- catches the drift.
 
 INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
 VALUES
   ('c5555555-5555-4555-8555-555555555555', 'scan-rls-carla@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('d6666666-6666-4666-8666-666666666666', 'scan-rls-dana@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('d6666666-6666-4666-8666-666666666666', 'scan-rls-dana@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('e7777777-7777-4777-8777-777777777777', 'scan-rls-emma@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('f8888888-8888-4888-8888-888888888888', 'scan-rls-fiona@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('a9999999-9999-4999-8999-999999999999', 'scan-rls-gina@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('ba111111-1111-4111-8111-111111111111', 'scan-rls-iris@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('cb222222-2222-4222-8222-222222222222', 'scan-rls-hank@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO profiles (id, email, full_name, created_at, updated_at)
 VALUES
   ('c5555555-5555-4555-8555-555555555555', 'scan-rls-carla@test.invalid', 'Scan RLS Carla', NOW(), NOW()),
-  ('d6666666-6666-4666-8666-666666666666', 'scan-rls-dana@test.invalid',  'Scan RLS Dana',  NOW(), NOW())
+  ('d6666666-6666-4666-8666-666666666666', 'scan-rls-dana@test.invalid',  'Scan RLS Dana',  NOW(), NOW()),
+  ('e7777777-7777-4777-8777-777777777777', 'scan-rls-emma@test.invalid',  'Scan RLS Emma',  NOW(), NOW()),
+  ('f8888888-8888-4888-8888-888888888888', 'scan-rls-fiona@test.invalid', 'Scan RLS Fiona', NOW(), NOW()),
+  ('a9999999-9999-4999-8999-999999999999', 'scan-rls-gina@test.invalid',  'Scan RLS Gina',  NOW(), NOW()),
+  ('ba111111-1111-4111-8111-111111111111', 'scan-rls-iris@test.invalid',  'Scan RLS Iris',  NOW(), NOW()),
+  ('cb222222-2222-4222-8222-222222222222', 'scan-rls-hank@test.invalid',  'Scan RLS Hank',  NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+-- 00020 leg 2, positive: Carla holds an active designer_clients row for Alice.
+-- Gina, the negative, holds one for BOB — the leg must bind on the SCAN OWNER,
+-- not merely on the caller holding some client relationship somewhere.
+-- Hank's is 'completed' (see the note above: still visible, deliberately).
 INSERT INTO designer_clients (designer_id, client_id, status)
-VALUES (
-  'c5555555-5555-4555-8555-555555555555',
-  'a1111111-1111-4111-8111-111111111111',
-  'active'
-);
+VALUES
+  ('c5555555-5555-4555-8555-555555555555', 'a1111111-1111-4111-8111-111111111111', 'active'),
+  ('a9999999-9999-4999-8999-999999999999', 'b2222222-2222-4222-8222-222222222222', 'active'),
+  ('cb222222-2222-4222-8222-222222222222', 'a1111111-1111-4111-8111-111111111111', 'completed');
 
+-- 00020 leg 3, positive and negative: Dana's association is active, Iris's is
+-- revoked. UNIQUE(scan_id, designer_id) is why these are two different actors.
 INSERT INTO room_scan_associations (scan_id, consumer_id, designer_id, association_type, status, access_level)
-VALUES (
-  'c3333333-3333-4333-8333-333333333333',
-  'a1111111-1111-4111-8111-111111111111',
-  'd6666666-6666-4666-8666-666666666666',
-  'explicit', 'active', 'full'
-);
+VALUES
+  ('c3333333-3333-4333-8333-333333333333', 'a1111111-1111-4111-8111-111111111111',
+   'd6666666-6666-4666-8666-666666666666', 'explicit', 'active',  'full'),
+  ('c3333333-3333-4333-8333-333333333333', 'a1111111-1111-4111-8111-111111111111',
+   'ba111111-1111-4111-8111-111111111111', 'explicit', 'revoked', 'full');
+
+-- 00316 leg: is_studio_comember (00315) requires both users to hold an
+-- organization_members row in the SAME organization, both 'active', both with a
+-- role other than 'guest'. Emma shares Carla's studio, so she reaches Alice's
+-- scan through Carla's client relationship. Fiona is an equally active member of
+-- a DIFFERENT organization, which must not reach anything.
+INSERT INTO organizations (id, type, name, slug)
+VALUES
+  ('cc333333-3333-4333-8333-333333333333', 'design_studio', 'Scan RLS Studio', 'scan-rls-studio'),
+  ('dd444444-4444-4444-8444-444444444444', 'design_studio', 'Scan RLS Other',  'scan-rls-other');
+
+INSERT INTO organization_members (user_id, organization_id, role, status)
+VALUES
+  ('c5555555-5555-4555-8555-555555555555', 'cc333333-3333-4333-8333-333333333333', 'owner',  'active'),
+  ('e7777777-7777-4777-8777-777777777777', 'cc333333-3333-4333-8333-333333333333', 'member', 'active'),
+  ('f8888888-8888-4888-8888-888888888888', 'dd444444-4444-4444-8444-444444444444', 'owner',  'active');
 
 -- ─── 8: grant surface of the 00498 functions ────────────────────────────────
 -- The two route RPCs are reachable by `authenticated` and by nobody else. The
@@ -362,25 +412,54 @@ END $$;
 -- the helper's answer must equal what the REAL policies return under
 -- `SET LOCAL ROLE authenticated` for that same user. A policy change this
 -- mirror does not track fails HERE rather than opening a hole quietly.
+--
+-- Equivalence ALONE is not enough, and that was the review's finding: a mirror
+-- that always returned `false` would satisfy it on an all-invisible fixture set,
+-- and a policy that had been widened to `true` would satisfy it on an
+-- all-visible one. So each actor carries its EXPECTED direction, asserted
+-- against the real policy before the two answers are compared. Every leg of
+-- room_scans' visibility is represented in both directions (see the fixture
+-- note above), so drift in EITHER direction — a policy that stops granting, or
+-- a mirror that starts — trips this gate.
 
 DO $$
 DECLARE
   actor        uuid;
-  actors       uuid[] := ARRAY[
-    'a1111111-1111-4111-8111-111111111111',  -- owner
-    'b2222222-2222-4222-8222-222222222222',  -- stranger
-    'c5555555-5555-4555-8555-555555555555',  -- designer-client
-    'd6666666-6666-4666-8666-666666666666'   -- active association
-  ]::uuid[];
+  expected     boolean;
+  leg          text;
   rls_visible  boolean;
   helper_says  boolean;
+  cases        text[][] := ARRAY[
+    -- actor                                   expected  leg
+    ARRAY['a1111111-1111-4111-8111-111111111111', 'true',  '00014 owner'],
+    ARRAY['b2222222-2222-4222-8222-222222222222', 'false', 'unrelated stranger'],
+    ARRAY['c5555555-5555-4555-8555-555555555555', 'true',  '00020 designer-client (active)'],
+    ARRAY['cb222222-2222-4222-8222-222222222222', 'true',  '00020 designer-client (completed — the leg has no status filter)'],
+    ARRAY['a9999999-9999-4999-8999-999999999999', 'false', '00020 designer-client for a DIFFERENT client'],
+    ARRAY['d6666666-6666-4666-8666-666666666666', 'true',  '00020 association (active)'],
+    ARRAY['ba111111-1111-4111-8111-111111111111', 'false', '00020 association (revoked)'],
+    ARRAY['e7777777-7777-4777-8777-777777777777', 'true',  '00316 studio co-member'],
+    ARRAY['f8888888-8888-4888-8888-888888888888', 'false', '00316 member of a DIFFERENT organization']
+  ];
+  i            int;
 BEGIN
-  FOREACH actor IN ARRAY actors LOOP
+  FOR i IN 1 .. array_length(cases, 1) LOOP
+    actor    := cases[i][1]::uuid;
+    expected := cases[i][2]::boolean;
+    leg      := cases[i][3];
+
     -- The REAL answer: what room_scans' own policies return for this caller.
     PERFORM pg_temp.assume_user(actor);
     SELECT EXISTS (SELECT 1 FROM room_scans WHERE id = 'c3333333-3333-4333-8333-333333333333')
       INTO rls_visible;
     PERFORM pg_temp.reset_role();
+
+    -- DIRECTION, asserted against the policy itself. This is what stops the
+    -- equivalence below from holding vacuously in either direction.
+    ASSERT rls_visible = expected,
+      'FAIL 9a: room_scans RLS gives ' || rls_visible || ' for ' || leg
+      || ' (' || actor || '), expected ' || expected
+      || ' — the fixture or the policy has moved';
 
     -- The MIRROR's answer, evaluated with the same claims but as the owner
     -- role (which is how a SECURITY DEFINER body sees it).
@@ -394,18 +473,12 @@ BEGIN
     PERFORM set_config('request.jwt.claims', NULL, true);
 
     ASSERT helper_says = rls_visible,
-      'FAIL 9: caller_can_access_room_scan disagrees with room_scans RLS for ' || actor
+      'FAIL 9b: caller_can_access_room_scan disagrees with room_scans RLS for '
+      || leg || ' (' || actor || ')'
       || ' (policy says ' || rls_visible || ', mirror says ' || helper_says || ')';
   END LOOP;
 
-  -- And the shape the loop cannot prove on its own: the fixtures must not all
-  -- be visible, or the equivalence above would hold vacuously.
-  PERFORM pg_temp.assume_user('b2222222-2222-4222-8222-222222222222');
-  ASSERT NOT EXISTS (SELECT 1 FROM room_scans WHERE id = 'c3333333-3333-4333-8333-333333333333'),
-    'FAIL 9: the stranger fixture must NOT see the scan, or assertion 9 is vacuous';
-  PERFORM pg_temp.reset_role();
-
-  RAISE NOTICE 'PASS 9: the mirrored predicate agrees with room_scans RLS on all four fixtures';
+  RAISE NOTICE 'PASS 9: the mirrored predicate agrees with room_scans RLS, in the expected direction, on all % fixtures across all four legs', array_length(cases, 1);
 END $$;
 
 -- ─── 10: create_media_upload_intent ─────────────────────────────────────────
@@ -560,7 +633,7 @@ BEGIN
   -- 11a: a size disagreement is P0412 and leaves the row PENDING — the object
   -- stays unservable and the client can simply re-PUT.
   BEGIN
-    PERFORM public.confirm_media_upload(target, repeat('c', 64), '"etag"', 999);
+    PERFORM public.confirm_media_upload(target, repeat('c', 64), '"' || repeat('1', 32) || '"', 999);
     RAISE EXCEPTION 'FAIL 11a: a size mismatch was confirmed';
   EXCEPTION
     WHEN SQLSTATE 'P0412' THEN NULL;
@@ -570,7 +643,7 @@ BEGIN
 
   -- 11b: a checksum disagreement, likewise.
   BEGIN
-    PERFORM public.confirm_media_upload(target, repeat('d', 64), '"etag"', 1024);
+    PERFORM public.confirm_media_upload(target, repeat('d', 64), '"' || repeat('1', 32) || '"', 1024);
     RAISE EXCEPTION 'FAIL 11b: a checksum mismatch was confirmed';
   EXCEPTION
     WHEN SQLSTATE 'P0412' THEN NULL;
@@ -580,7 +653,7 @@ BEGIN
   RAISE NOTICE 'PASS 11a/11b: a mismatch refuses with P0412 and leaves the row pending';
 
   -- 11c: a match lands `stored` and records HOW the checksum was established.
-  result := public.confirm_media_upload(target, repeat('c', 64), '"real-etag"', 1024);
+  result := public.confirm_media_upload(target, repeat('c', 64), '"' || repeat('2', 32) || '"', 1024);
   ASSERT result ->> 'lifecycle_state' = 'stored',
     'FAIL 11c: a matching confirm must land stored';
   ASSERT (result ->> 'changed')::boolean,
@@ -591,7 +664,7 @@ BEGIN
 
   -- 11d: a retried confirm of the SAME bytes is idempotent, not an error — a
   -- client cannot tell a lost response from a lost upload.
-  result := public.confirm_media_upload(target, repeat('c', 64), '"real-etag"', 1024);
+  result := public.confirm_media_upload(target, repeat('c', 64), '"' || repeat('2', 32) || '"', 1024);
   ASSERT result ->> 'lifecycle_state' = 'stored',
     'FAIL 11d: a repeated confirm must stay stored';
   ASSERT NOT (result ->> 'changed')::boolean,
@@ -599,7 +672,7 @@ BEGIN
 
   -- But DIFFERENT bytes for an already-stored object is a real conflict.
   BEGIN
-    PERFORM public.confirm_media_upload(target, repeat('e', 64), '"other"', 4096);
+    PERFORM public.confirm_media_upload(target, repeat('e', 64), '"' || repeat('3', 32) || '"', 4096);
     RAISE EXCEPTION 'FAIL 11d: a stored object was re-confirmed with different bytes';
   EXCEPTION
     WHEN SQLSTATE 'P0413' THEN NULL;
@@ -615,7 +688,7 @@ BEGIN
     true
   );
   BEGIN
-    PERFORM public.confirm_media_upload(target, repeat('c', 64), '"real-etag"', 1024);
+    PERFORM public.confirm_media_upload(target, repeat('c', 64), '"' || repeat('2', 32) || '"', 1024);
     RAISE EXCEPTION 'FAIL 11e: Bob confirmed an upload against Alice''s scan';
   EXCEPTION
     WHEN SQLSTATE 'P0410' THEN NULL;
@@ -623,7 +696,7 @@ BEGIN
   -- ...and an id that does not exist at all raises the SAME errcode.
   BEGIN
     PERFORM public.confirm_media_upload(
-      'f7777777-7777-4777-8777-777777777777', repeat('c', 64), '"x"', 1024
+      'f7777777-7777-4777-8777-777777777777', repeat('c', 64), '"' || repeat('4', 32) || '"', 1024
     );
     RAISE EXCEPTION 'FAIL 11e: a nonexistent object did not raise P0410';
   EXCEPTION
@@ -677,6 +750,261 @@ BEGIN
     'FAIL 12b: 00490''s lease refusal was lost in the 00498 replace';
 
   RAISE NOTICE 'PASS 12: both the insert and merge paths take pg_advisory_xact_lock(498, hashtext(scan_id))';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 00499 — W3-A review closure
+--
+--   13. is_originals_bucket — the one pattern, and its grant surface.
+--   14. confirm_media_upload — the originals-bucket pin (finding 12) and the
+--       etag shape bound (finding 14).
+--   15. register_media_object — the reserved prefix and the un-store refusal
+--       (finding 13), INCLUDING the pipeline retry that must still work.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ─── 13: is_originals_bucket ────────────────────────────────────────────────
+
+DO $$
+DECLARE
+  name text;
+BEGIN
+  FOREACH name IN ARRAY ARRAY[
+    'patina-media-originals-us',
+    'patina-staging-media-originals-us'
+  ] LOOP
+    ASSERT public.is_originals_bucket(name),
+      'FAIL 13a: is_originals_bucket must accept the deployed originals bucket ' || name;
+  END LOOP;
+
+  -- The artifacts buckets are the ones this must never accept: they are what a
+  -- confirm pointed at the wrong row would otherwise reach.
+  FOREACH name IN ARRAY ARRAY[
+    'patina-media-artifacts-us',
+    'patina-staging-media-artifacts-us',
+    'patina-staging-media-originals-us-evil',
+    'xpatina-staging-media-originals-us',
+    ''
+  ] LOOP
+    ASSERT NOT public.is_originals_bucket(name),
+      'FAIL 13a: is_originals_bucket must reject ' || quote_literal(name);
+  END LOOP;
+  ASSERT NOT public.is_originals_bucket(NULL),
+    'FAIL 13a: is_originals_bucket(NULL) must be false, not null';
+  RAISE NOTICE 'PASS 13a: is_originals_bucket accepts both originals buckets and nothing else';
+
+  -- It discloses the bucket naming scheme and is only ever called from inside a
+  -- definer body, so no request-facing role holds it.
+  ASSERT NOT has_function_privilege('authenticated', 'public.is_originals_bucket(text)', 'EXECUTE'),
+    'FAIL 13b: authenticated must NOT hold EXECUTE on is_originals_bucket';
+  ASSERT NOT has_function_privilege('anon', 'public.is_originals_bucket(text)', 'EXECUTE'),
+    'FAIL 13b: anon must NOT hold EXECUTE on is_originals_bucket';
+  RAISE NOTICE 'PASS 13b: is_originals_bucket is callable only from inside a definer body';
+
+  -- Finding 16: there must be exactly ONE copy of the pattern. Both callers
+  -- must go through the helper, or a bucket rename fixes one and misses the
+  -- other.
+  ASSERT (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+           WHERE n.nspname = 'public'
+             AND p.proname IN ('create_media_upload_intent', 'confirm_media_upload')
+             AND p.prosrc LIKE '%media-originals-us%') = 0,
+    'FAIL 13c: the originals-bucket pattern is inlined in an RPC — it belongs only in is_originals_bucket';
+  ASSERT (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+           WHERE n.nspname = 'public'
+             AND p.proname IN ('create_media_upload_intent', 'confirm_media_upload')
+             AND p.prosrc LIKE '%is_originals_bucket%') = 2,
+    'FAIL 13c: both upload RPCs must pin the bucket through is_originals_bucket';
+  RAISE NOTICE 'PASS 13c: exactly one originals-bucket pattern, used by both upload RPCs';
+END $$;
+
+-- ─── 14: confirm_media_upload — bucket pin and etag shape ───────────────────
+-- Alice owns scan c333…; the artifacts row d444… registered in section 6 names
+-- the ARTIFACTS bucket and IS visible to her. That is the finding-12 shape
+-- exactly: a row the caller can legitimately see, which confirm must still
+-- refuse, because confirming it would have the Worker HEAD a pipeline output
+-- with the WRITE credential and stamp a checksum onto it.
+
+DO $$
+DECLARE
+  sqlstate_got text;
+BEGIN
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', 'a1111111-1111-4111-8111-111111111111',
+                      'role', 'authenticated')::text,
+    true
+  );
+
+  BEGIN
+    PERFORM public.confirm_media_upload(
+      'd4444444-4444-4444-8444-444444444444',
+      repeat('a', 64), '"' || repeat('b', 32) || '"', 2048
+    );
+    RAISE EXCEPTION 'FAIL 14a: confirm accepted an ARTIFACTS-bucket row';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS sqlstate_got = RETURNED_SQLSTATE;
+    ASSERT sqlstate_got = 'P0410',
+      'FAIL 14a: an artifacts-bucket row must be refused as P0410 (the same 404 an '
+      || 'invisible row gets), got ' || sqlstate_got;
+  END;
+  RAISE NOTICE 'PASS 14a: confirm_media_upload refuses a visible row that is not in an originals bucket';
+
+  PERFORM set_config('request.jwt.claims', NULL, true);
+END $$;
+
+-- The etag bound and the now-mandatory observed checksum, on a REAL pending
+-- upload-interface row so the refusal is the argument check and not the bucket
+-- pin firing first.
+
+DO $$
+DECLARE
+  intent       jsonb;
+  upload_id    uuid;
+  sqlstate_got text;
+  bad_etag     text;
+BEGIN
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', 'a1111111-1111-4111-8111-111111111111',
+                      'role', 'authenticated')::text,
+    true
+  );
+
+  intent := public.create_media_upload_intent(
+    'c3333333-3333-4333-8333-333333333333', 'mesh', 'etag-probe.ply',
+    'patina-staging-media-originals-us', repeat('c', 64), 4096, 'model/ply'
+  );
+  upload_id := (intent ->> 'object_id')::uuid;
+
+  FOREACH bad_etag IN ARRAY ARRAY[
+    'not-hex-at-all',
+    repeat('a', 31),                       -- too short
+    repeat('a', 33),                       -- too long
+    repeat('a', 32) || '-',                -- multipart suffix with no part count
+    repeat('a', 32) || '-123456',          -- part count out of range
+    '"' || repeat('a', 32) || '" evil',    -- trailing junk after the quoted form
+    repeat('a', 4096)                      -- unbounded blob
+  ] LOOP
+    BEGIN
+      PERFORM public.confirm_media_upload(upload_id, repeat('c', 64), bad_etag, 4096);
+      RAISE EXCEPTION 'FAIL 14b: confirm accepted a malformed etag %', quote_literal(bad_etag);
+    EXCEPTION WHEN OTHERS THEN
+      GET STACKED DIAGNOSTICS sqlstate_got = RETURNED_SQLSTATE;
+      ASSERT sqlstate_got = 'P0411',
+        'FAIL 14b: a malformed etag must be P0411, got ' || sqlstate_got
+        || ' for ' || quote_literal(bad_etag);
+    END;
+  END LOOP;
+  RAISE NOTICE 'PASS 14b: confirm_media_upload bounds the etag shape';
+
+  -- The 2026-08-19 probe showed R2 always reports the digest for an object that
+  -- came through the presigned PUT, so a confirm without one is evidence the
+  -- bytes did not — 00499 refuses it where 00498 recorded 'put_condition'.
+  BEGIN
+    PERFORM public.confirm_media_upload(upload_id, NULL, NULL, 4096);
+    RAISE EXCEPTION 'FAIL 14c: confirm accepted a NULL observed checksum';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS sqlstate_got = RETURNED_SQLSTATE;
+    ASSERT sqlstate_got = 'P0411',
+      'FAIL 14c: a NULL observed checksum must be P0411, got ' || sqlstate_got;
+  END;
+  RAISE NOTICE 'PASS 14c: confirm_media_upload requires the R2-observed checksum';
+
+  -- And the positive: the well-formed quoted-hex etag R2 actually returns still
+  -- lands, or 14b would be proving only that the function rejects everything.
+  PERFORM public.confirm_media_upload(
+    upload_id, repeat('c', 64), '"' || repeat('d', 32) || '"', 4096
+  );
+  ASSERT (SELECT lifecycle_state FROM public.media_objects WHERE id = upload_id) = 'stored',
+    'FAIL 14d: a well-formed confirm must still land the object as stored';
+  ASSERT (SELECT provenance ->> 'sha256_verified_by' FROM public.media_objects WHERE id = upload_id)
+         = 'r2_head',
+    'FAIL 14d: a landed confirm must record sha256_verified_by = r2_head (put_condition is retired)';
+  RAISE NOTICE 'PASS 14d: a well-formed confirm lands, and records r2_head provenance';
+
+  PERFORM set_config('request.jwt.claims', NULL, true);
+END $$;
+
+-- ─── 15: register_media_object — the pipeline door's two new refusals ───────
+
+DO $$
+DECLARE
+  sqlstate_got text;
+  artifact_id  uuid;
+  upload_id    uuid;
+BEGIN
+  -- 15a: the scan_originals/ namespace belongs to the upload interface.
+  BEGIN
+    PERFORM public.register_media_object(
+      'patina-staging-media-originals-us',
+      'scan_originals/c3333333-3333-4333-8333-333333333333/mesh/stolen.ply',
+      'authenticated_project'
+    );
+    RAISE EXCEPTION 'FAIL 15a: register_media_object accepted a scan_originals/ key';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS sqlstate_got = RETURNED_SQLSTATE;
+    ASSERT sqlstate_got = 'P0414',
+      'FAIL 15a: a scan_originals/ key must be refused as P0414, got ' || sqlstate_got;
+  END;
+  RAISE NOTICE 'PASS 15a: register_media_object refuses the upload interface''s namespace';
+
+  -- 15b: THE PIPELINE'S RETRY MUST STILL WORK. Its stages are
+  -- register -> PUT -> mark(stored) on a deterministic per-version key, so a
+  -- retried stage re-registers a row that is already 'stored'. A blanket
+  -- downgrade refusal would break that, and this asserts it was not taken.
+  artifact_id := public.register_media_object(
+    'patina-staging-media-artifacts-us', 'scans/retry-probe/1/splat.spz',
+    'authenticated_project', p_scan_id => 'c3333333-3333-4333-8333-333333333333'::uuid
+  );
+  PERFORM public.mark_media_object_state(artifact_id, 'stored', repeat('e', 64), 'etag', 10);
+  PERFORM public.register_media_object(
+    'patina-staging-media-artifacts-us', 'scans/retry-probe/1/splat.spz',
+    'authenticated_project', p_scan_id => 'c3333333-3333-4333-8333-333333333333'::uuid
+  );
+  ASSERT (SELECT lifecycle_state FROM public.media_objects WHERE id = artifact_id) = 'pending',
+    'FAIL 15b: the pipeline''s register -> PUT -> mark retry must still reset an ARTIFACT to pending';
+  RAISE NOTICE 'PASS 15b: the pipeline''s re-register of a stored ARTIFACT still works';
+
+  -- 15c: but a 'verified' row may not be un-said. Nothing in services/scan-modal
+  -- ever marks 'verified', so no legitimate caller re-registers over one.
+  PERFORM public.mark_media_object_state(artifact_id, 'stored');
+  PERFORM public.mark_media_object_state(artifact_id, 'verified');
+  BEGIN
+    PERFORM public.register_media_object(
+      'patina-staging-media-artifacts-us', 'scans/retry-probe/1/splat.spz',
+      'authenticated_project', p_scan_id => 'c3333333-3333-4333-8333-333333333333'::uuid
+    );
+    RAISE EXCEPTION 'FAIL 15c: register_media_object un-said a verified row';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS sqlstate_got = RETURNED_SQLSTATE;
+    ASSERT sqlstate_got = 'P0415',
+      'FAIL 15c: un-storing a verified row must be P0415, got ' || sqlstate_got;
+  END;
+  RAISE NOTICE 'PASS 15c: register_media_object cannot reset a verified row to pending';
+
+  -- 15d: and an UPLOAD-INTERFACE row that has landed may not be un-said either,
+  -- identified by its PROVENANCE rather than by its key — so the guard survives
+  -- a change to the key layout that 15a's prefix check would not.
+  SELECT id INTO upload_id FROM public.media_objects
+   WHERE provenance ->> 'source' = 'media_upload_intent'
+     AND lifecycle_state = 'stored'
+   LIMIT 1;
+  ASSERT upload_id IS NOT NULL,
+    'FAIL 15d: expected the confirmed upload row from section 14 as a fixture';
+  UPDATE public.media_objects SET object_key = 'scans/relocated/1/mesh.ply',
+                                  bucket = 'patina-staging-media-artifacts-us'
+   WHERE id = upload_id;
+  BEGIN
+    PERFORM public.register_media_object(
+      'patina-staging-media-artifacts-us', 'scans/relocated/1/mesh.ply',
+      'authenticated_project', p_scan_id => 'c3333333-3333-4333-8333-333333333333'::uuid
+    );
+    RAISE EXCEPTION 'FAIL 15d: register_media_object un-said a confirmed upload row';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS sqlstate_got = RETURNED_SQLSTATE;
+    ASSERT sqlstate_got = 'P0415',
+      'FAIL 15d: un-storing a confirmed upload row must be P0415, got ' || sqlstate_got;
+  END;
+  RAISE NOTICE 'PASS 15d: a confirmed upload row is protected by provenance, not only by its key';
 END $$;
 
 -- ─── done — rollback so this file is re-runnable ────────────────────────────
