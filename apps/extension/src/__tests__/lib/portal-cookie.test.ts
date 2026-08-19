@@ -1,5 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { readPortalSessionTokens, isSessionCookieName } from '../../lib/portal-cookie';
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  readPortalSessionTokens,
+  isSessionCookieName,
+} from "../../lib/portal-cookie";
 
 /**
  * Exercises readPortalSessionTokens against a fake chrome.cookies.getAll that
@@ -15,11 +18,12 @@ import { readPortalSessionTokens, isSessionCookieName } from '../../lib/portal-c
  * coverage of the pin itself.
  */
 
-const COOKIE_NAME = 'sb-bkvcixdmuyejfzcijpdg-auth-token';
-const BASE64_PREFIX = 'base64-';
+const COOKIE_NAME = "sb-bkvcixdmuyejfzcijpdg-auth-token";
+const BASE64_PREFIX = "base64-";
 
 // ── encoder: port of @supabase/ssr stringToBase64URL (UTF-8 -> base64url, no padding) ──
-const TO_BASE64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'.split('');
+const TO_BASE64URL =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".split("");
 
 function stringToUTF8(str: string, emit: (byte: number) => void): void {
   for (let i = 0; i < str.length; i += 1) {
@@ -64,7 +68,7 @@ function stringToBase64URL(str: string): string {
     queue = queue << (6 - queuedBits);
     out.push(TO_BASE64URL[queue & 63]);
   }
-  return out.join('');
+  return out.join("");
 }
 
 // ── fake chrome.cookies ──
@@ -81,40 +85,33 @@ function installCookies(cookies: FakeCookie[]): void {
 }
 
 const SESSION = {
-  access_token: 'access-token-abc',
-  refresh_token: 'refresh-token-xyz',
+  access_token: "access-token-abc",
+  refresh_token: "refresh-token-xyz",
   expires_at: 1893456000,
-  token_type: 'bearer',
-  user: { id: 'user-1', email: 'designer@example.com', name: 'Renée 😀 Désigner' },
+  token_type: "bearer",
+  user: {
+    id: "user-1",
+    email: "designer@example.com",
+    name: "Renée 😀 Désigner",
+  },
 };
 
 function ssrCookieValue(session: unknown): string {
   return BASE64_PREFIX + stringToBase64URL(JSON.stringify(session));
 }
 
-describe('readPortalSessionTokens', () => {
+describe("readPortalSessionTokens", () => {
   beforeEach(() => {
     installCookies([]);
   });
 
-  it('decodes a single base64-encoded cookie', async () => {
-    installCookies([{ name: COOKIE_NAME, value: ssrCookieValue(SESSION), domain: 'app.patina.cloud' }]);
-
-    const tokens = await readPortalSessionTokens();
-
-    expect(tokens).toEqual({
-      access_token: SESSION.access_token,
-      refresh_token: SESSION.refresh_token,
-    });
-  });
-
-  it('recombines chunked cookies (no base cookie present)', async () => {
-    const full = ssrCookieValue(SESSION);
-    const mid = Math.floor(full.length / 2);
+  it("decodes a single base64-encoded cookie", async () => {
     installCookies([
-      // intentionally out of order to prove ordered reassembly
-      { name: `${COOKIE_NAME}.1`, value: full.slice(mid), domain: 'app.patina.cloud' },
-      { name: `${COOKIE_NAME}.0`, value: full.slice(0, mid), domain: 'app.patina.cloud' },
+      {
+        name: COOKIE_NAME,
+        value: ssrCookieValue(SESSION),
+        domain: "app.patina.cloud",
+      },
     ]);
 
     const tokens = await readPortalSessionTokens();
@@ -125,16 +122,51 @@ describe('readPortalSessionTokens', () => {
     });
   });
 
-  it('preserves UTF-8 user metadata through the base64url round-trip', async () => {
-    installCookies([{ name: COOKIE_NAME, value: ssrCookieValue(SESSION), domain: 'app.patina.cloud' }]);
+  it("recombines chunked cookies (no base cookie present)", async () => {
+    const full = ssrCookieValue(SESSION);
+    const mid = Math.floor(full.length / 2);
+    installCookies([
+      // intentionally out of order to prove ordered reassembly
+      {
+        name: `${COOKIE_NAME}.1`,
+        value: full.slice(mid),
+        domain: "app.patina.cloud",
+      },
+      {
+        name: `${COOKIE_NAME}.0`,
+        value: full.slice(0, mid),
+        domain: "app.patina.cloud",
+      },
+    ]);
+
+    const tokens = await readPortalSessionTokens();
+
+    expect(tokens).toEqual({
+      access_token: SESSION.access_token,
+      refresh_token: SESSION.refresh_token,
+    });
+  });
+
+  it("preserves UTF-8 user metadata through the base64url round-trip", async () => {
+    installCookies([
+      {
+        name: COOKIE_NAME,
+        value: ssrCookieValue(SESSION),
+        domain: "app.patina.cloud",
+      },
+    ]);
     // Sanity: the encoder/decoder round-trip keeps multibyte chars intact, so a
     // valid session is returned rather than a JSON-parse failure.
     await expect(readPortalSessionTokens()).resolves.not.toBeNull();
   });
 
-  it('decodes a raw (non-base64) JSON cookie for back-compat', async () => {
+  it("decodes a raw (non-base64) JSON cookie for back-compat", async () => {
     installCookies([
-      { name: COOKIE_NAME, value: encodeURIComponent(JSON.stringify(SESSION)), domain: 'app.patina.cloud' },
+      {
+        name: COOKIE_NAME,
+        value: encodeURIComponent(JSON.stringify(SESSION)),
+        domain: "app.patina.cloud",
+      },
     ]);
 
     const tokens = await readPortalSessionTokens();
@@ -145,30 +177,55 @@ describe('readPortalSessionTokens', () => {
     });
   });
 
-  it('returns null when no session cookie is present', async () => {
-    installCookies([{ name: 'unrelated', value: 'x', domain: 'app.patina.cloud' }]);
-    expect(await readPortalSessionTokens()).toBeNull();
-  });
-
-  it('returns null when the cookie lacks tokens', async () => {
+  it("returns null when no session cookie is present", async () => {
     installCookies([
-      { name: COOKIE_NAME, value: ssrCookieValue({ foo: 'bar' }), domain: 'app.patina.cloud' },
+      { name: "unrelated", value: "x", domain: "app.patina.cloud" },
     ]);
     expect(await readPortalSessionTokens()).toBeNull();
   });
 
-  it('returns null when the cookie value is undecodable', async () => {
-    installCookies([{ name: COOKIE_NAME, value: 'base64-%%%not-valid', domain: 'app.patina.cloud' }]);
+  it("returns null when the cookie lacks tokens", async () => {
+    installCookies([
+      {
+        name: COOKIE_NAME,
+        value: ssrCookieValue({ foo: "bar" }),
+        domain: "app.patina.cloud",
+      },
+    ]);
+    expect(await readPortalSessionTokens()).toBeNull();
+  });
+
+  it("returns null when the cookie value is undecodable", async () => {
+    installCookies([
+      {
+        name: COOKIE_NAME,
+        value: "base64-%%%not-valid",
+        domain: "app.patina.cloud",
+      },
+    ]);
     expect(await readPortalSessionTokens()).toBeNull();
   });
 });
 
-describe('isSessionCookieName', () => {
-  it('matches the base cookie and its chunks, not unrelated names', () => {
-    expect(isSessionCookieName('sb-api-auth-token', 'sb-api-auth-token')).toBe(true);
-    expect(isSessionCookieName('sb-api-auth-token.0', 'sb-api-auth-token')).toBe(true);
-    expect(isSessionCookieName('sb-api-auth-token.12', 'sb-api-auth-token')).toBe(true);
-    expect(isSessionCookieName('sb-api-auth-token-code-verifier', 'sb-api-auth-token')).toBe(false);
-    expect(isSessionCookieName('other-cookie', 'sb-api-auth-token')).toBe(false);
+describe("isSessionCookieName", () => {
+  it("matches the base cookie and its chunks, not unrelated names", () => {
+    expect(isSessionCookieName("sb-api-auth-token", "sb-api-auth-token")).toBe(
+      true,
+    );
+    expect(
+      isSessionCookieName("sb-api-auth-token.0", "sb-api-auth-token"),
+    ).toBe(true);
+    expect(
+      isSessionCookieName("sb-api-auth-token.12", "sb-api-auth-token"),
+    ).toBe(true);
+    expect(
+      isSessionCookieName(
+        "sb-api-auth-token-code-verifier",
+        "sb-api-auth-token",
+      ),
+    ).toBe(false);
+    expect(isSessionCookieName("other-cookie", "sb-api-auth-token")).toBe(
+      false,
+    );
   });
 });

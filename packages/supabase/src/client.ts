@@ -1,7 +1,13 @@
-import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/supabase-js';
-import { createBrowserClient as createSSRBrowserClient, createServerClient as createSSRServerClient } from '@supabase/ssr';
-import type { Database } from './database.types';
-import { getCookieDomain } from './lib/cookie-domain';
+import {
+  createClient as createSupabaseClient,
+  SupabaseClient,
+} from "@supabase/supabase-js";
+import {
+  createBrowserClient as createSSRBrowserClient,
+  createServerClient as createSSRServerClient,
+} from "@supabase/ssr";
+import type { Database } from "./database.types";
+import { getCookieDomain } from "./lib/cookie-domain";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SUPABASE CLIENT FACTORY
@@ -27,7 +33,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
  * (see each portal's `wrangler.jsonc` `staging` block).
  */
 export const SUPABASE_AUTH_STORAGE_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY || 'sb-bkvcixdmuyejfzcijpdg-auth-token';
+  process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY ||
+  "sb-bkvcixdmuyejfzcijpdg-auth-token";
 
 /**
  * Build the auth-cookie options based on the resolved cookie domain. When a
@@ -43,9 +50,9 @@ function buildAuthCookieOptions(host?: string) {
   if (!domain) return {};
   return {
     domain,
-    sameSite: 'lax' as const,
+    sameSite: "lax" as const,
     secure: true,
-    path: '/',
+    path: "/",
   };
 }
 
@@ -54,7 +61,7 @@ function buildAuthCookieOptions(host?: string) {
  * Now delegates to createBrowserClient() in browser context to share the singleton
  */
 export function createClient(): SupabaseClient<Database> {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     // In browser, use the SSR browser client singleton for consistent auth state
     return createBrowserClient() as SupabaseClient<Database>;
   }
@@ -74,12 +81,16 @@ declare global {
 
 export function createBrowserClient(): SupabaseClient<Database> {
   const cookieOptions = buildAuthCookieOptions();
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     if (!globalThis.__supabaseBrowserClient) {
-      globalThis.__supabaseBrowserClient = createSSRBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
-        cookieOptions,
-        auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
-      }) as unknown as SupabaseClient<Database>;
+      globalThis.__supabaseBrowserClient = createSSRBrowserClient<Database>(
+        supabaseUrl,
+        supabaseAnonKey,
+        {
+          cookieOptions,
+          auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
+        },
+      ) as unknown as SupabaseClient<Database>;
     }
     return globalThis.__supabaseBrowserClient;
   }
@@ -114,22 +125,34 @@ export function createEphemeralAuthClient(): SupabaseClient<Database> {
  */
 export function createMiddlewareClient(
   request: {
-    cookies: { get: (name: string) => { name: string; value: string } | undefined; getAll: () => { name: string; value: string }[]; set: (name: string, value: string) => void };
+    cookies: {
+      get: (name: string) => { name: string; value: string } | undefined;
+      getAll: () => { name: string; value: string }[];
+      set: (name: string, value: string) => void;
+    };
     headers?: { get: (name: string) => string | null };
   },
-  response: { cookies: { set: (cookie: { name: string; value: string; [key: string]: unknown }) => void } }
+  response: {
+    cookies: {
+      set: (cookie: {
+        name: string;
+        value: string;
+        [key: string]: unknown;
+      }) => void;
+    };
+  },
 ) {
   // Detect host so cookies can be scoped to `.patina.cloud` in production
   // while remaining host-only on localhost.
   // Prefer x-forwarded-host if set (e.g. behind a future reverse proxy that
   // rewrites the inbound Host header). The current cloudflared topology
   // preserves the original Host, so this falls back to `host` in production.
-  const forwardedHost = request.headers?.get('x-forwarded-host') ?? undefined;
-  const rawHost = request.headers?.get('host') ?? undefined;
+  const forwardedHost = request.headers?.get("x-forwarded-host") ?? undefined;
+  const rawHost = request.headers?.get("host") ?? undefined;
   const host = forwardedHost ?? rawHost;
   // Strip an optional `:port` suffix so `localhost:3000` is recognised as
   // `localhost` and skipped, and `app.patina.cloud:443` matches our suffix.
-  const hostname = host?.replace(/:\d+$/, '');
+  const hostname = host?.replace(/:\d+$/, "");
   const cookieOptions = buildAuthCookieOptions(hostname);
 
   return createSSRServerClient<Database>(supabaseUrl, supabaseAnonKey, {
@@ -139,7 +162,13 @@ export function createMiddlewareClient(
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+      setAll(
+        cookiesToSet: {
+          name: string;
+          value: string;
+          options?: Record<string, unknown>;
+        }[],
+      ) {
         cookiesToSet.forEach(({ name, value, options }) => {
           // Set on request so downstream Route Handlers see refreshed tokens
           request.cookies.set(name, value);
@@ -168,7 +197,7 @@ export function createAdminClient(serviceRoleKey?: string) {
     global: {
       // Disable Next.js fetch caching for server-side admin operations
       fetch: (url: RequestInfo | URL, options?: RequestInit) =>
-        fetch(url, { ...options, cache: 'no-store' }),
+        fetch(url, { ...options, cache: "no-store" }),
     },
   });
 }

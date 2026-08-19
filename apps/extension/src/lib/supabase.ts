@@ -1,9 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
-import { chromeStorageAdapter } from './chrome-storage-adapter';
+import { createClient } from "@supabase/supabase-js";
+import { chromeStorageAdapter } from "./chrome-storage-adapter";
 
 export const SUPABASE_URL = process.env.PLASMO_PUBLIC_SUPABASE_URL!;
 export const SUPABASE_ANON_KEY = process.env.PLASMO_PUBLIC_SUPABASE_ANON_KEY!;
-export const PORTAL_URL = process.env.PLASMO_PUBLIC_PORTAL_URL || 'https://app.patina.cloud';
+export const PORTAL_URL =
+  process.env.PLASMO_PUBLIC_PORTAL_URL || "https://app.patina.cloud";
 
 /**
  * Pinned auth cookie name (Workstream D-B1, docs/engineering/repoint-b0-audit.md §5).
@@ -19,7 +20,8 @@ export const PORTAL_URL = process.env.PLASMO_PUBLIC_PORTAL_URL || 'https://app.p
  * entirely.
  */
 export const SUPABASE_AUTH_STORAGE_KEY =
-  process.env.PLASMO_PUBLIC_SUPABASE_STORAGE_KEY || 'sb-bkvcixdmuyejfzcijpdg-auth-token';
+  process.env.PLASMO_PUBLIC_SUPABASE_STORAGE_KEY ||
+  "sb-bkvcixdmuyejfzcijpdg-auth-token";
 
 /**
  * Shared Supabase client singleton for the extension.

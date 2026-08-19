@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Workstream D-B1 (docs/engineering/repoint-b0-audit.md §5): pins the
@@ -18,41 +18,49 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * network access.
  */
 
-const PROD_URL = 'https://bkvcixdmuyejfzcijpdg.supabase.co';
-const PROD_ANON_KEY = 'prod-anon-key';
+const PROD_URL = "https://bkvcixdmuyejfzcijpdg.supabase.co";
+const PROD_ANON_KEY = "prod-anon-key";
 
 /** Same formula @supabase/ssr / @supabase/supabase-js use to derive the
  * DEFAULT storage key when no explicit `auth.storageKey` is passed:
  * `sb-<url-host-first-label>-auth-token`. This is the "legacy derivation"
  * the pinned constant must match for the CURRENT prod URL. */
 function legacyDerivedStorageKey(url: string): string {
-  return `sb-${new URL(url).hostname.split('.')[0]}-auth-token`;
+  return `sb-${new URL(url).hostname.split(".")[0]}-auth-token`;
 }
 
-const mockCreateBrowserClient = vi.fn((_url: string, _key: string, options?: unknown) => ({
-  __fake: 'browser-client',
-  options,
-}));
-const mockCreateServerClient = vi.fn((_url: string, _key: string, options?: unknown) => ({
-  __fake: 'server-client',
-  options,
-}));
+const mockCreateBrowserClient = vi.fn(
+  (_url: string, _key: string, options?: unknown) => ({
+    __fake: "browser-client",
+    options,
+  }),
+);
+const mockCreateServerClient = vi.fn(
+  (_url: string, _key: string, options?: unknown) => ({
+    __fake: "server-client",
+    options,
+  }),
+);
 
-vi.mock('@supabase/ssr', () => ({
+vi.mock("@supabase/ssr", () => ({
   createBrowserClient: (...args: unknown[]) =>
-    (mockCreateBrowserClient as unknown as (...a: unknown[]) => unknown)(...args),
+    (mockCreateBrowserClient as unknown as (...a: unknown[]) => unknown)(
+      ...args,
+    ),
   createServerClient: (...args: unknown[]) =>
-    (mockCreateServerClient as unknown as (...a: unknown[]) => unknown)(...args),
+    (mockCreateServerClient as unknown as (...a: unknown[]) => unknown)(
+      ...args,
+    ),
 }));
 
 const ORIGINAL_ENV = { ...process.env };
 
 async function importFreshClientModule() {
   vi.resetModules();
-  return import('../client');
+  return import("../client");
 }
 
-describe('D-B1: pinned auth storage key', () => {
+describe("D-B1: pinned auth storage key", () => {
   beforeEach(() => {
     mockCreateBrowserClient.mockClear();
     mockCreateServerClient.mockClear();
@@ -76,47 +84,56 @@ describe('D-B1: pinned auth storage key', () => {
     vi.resetModules();
   });
 
-  it('(a) the pinned constant equals the legacy URL-derived name for the current prod URL', async () => {
+  it("(a) the pinned constant equals the legacy URL-derived name for the current prod URL", async () => {
     const { SUPABASE_AUTH_STORAGE_KEY } = await importFreshClientModule();
 
-    expect(SUPABASE_AUTH_STORAGE_KEY).toBe('sb-bkvcixdmuyejfzcijpdg-auth-token');
+    expect(SUPABASE_AUTH_STORAGE_KEY).toBe(
+      "sb-bkvcixdmuyejfzcijpdg-auth-token",
+    );
     expect(SUPABASE_AUTH_STORAGE_KEY).toBe(legacyDerivedStorageKey(PROD_URL));
   });
 
-  it('(a) NEXT_PUBLIC_SUPABASE_STORAGE_KEY overrides the literal fallback', async () => {
-    process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY = 'sb-override-auth-token';
+  it("(a) NEXT_PUBLIC_SUPABASE_STORAGE_KEY overrides the literal fallback", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY = "sb-override-auth-token";
 
     const { SUPABASE_AUTH_STORAGE_KEY } = await importFreshClientModule();
 
-    expect(SUPABASE_AUTH_STORAGE_KEY).toBe('sb-override-auth-token');
+    expect(SUPABASE_AUTH_STORAGE_KEY).toBe("sb-override-auth-token");
   });
 
-  it('(b) createBrowserClient (SSR-fallback / no-window branch) passes the pinned key', async () => {
-    const { createBrowserClient, SUPABASE_AUTH_STORAGE_KEY } = await importFreshClientModule();
+  it("(b) createBrowserClient (SSR-fallback / no-window branch) passes the pinned key", async () => {
+    const { createBrowserClient, SUPABASE_AUTH_STORAGE_KEY } =
+      await importFreshClientModule();
 
     createBrowserClient();
 
     expect(mockCreateBrowserClient).toHaveBeenCalledTimes(1);
-    const options = mockCreateBrowserClient.mock.calls[0][2] as { auth?: { storageKey?: string } };
+    const options = mockCreateBrowserClient.mock.calls[0][2] as {
+      auth?: { storageKey?: string };
+    };
     expect(options.auth?.storageKey).toBe(SUPABASE_AUTH_STORAGE_KEY);
-    expect(options.auth?.storageKey).toBe('sb-bkvcixdmuyejfzcijpdg-auth-token');
+    expect(options.auth?.storageKey).toBe("sb-bkvcixdmuyejfzcijpdg-auth-token");
   });
 
-  it('(b) createBrowserClient (browser/singleton branch) passes the pinned key', async () => {
+  it("(b) createBrowserClient (browser/singleton branch) passes the pinned key", async () => {
     // @ts-expect-error -- minimal window shim to hit the browser branch
-    globalThis.window = { location: { hostname: 'app.patina.cloud' } };
+    globalThis.window = { location: { hostname: "app.patina.cloud" } };
 
-    const { createBrowserClient, SUPABASE_AUTH_STORAGE_KEY } = await importFreshClientModule();
+    const { createBrowserClient, SUPABASE_AUTH_STORAGE_KEY } =
+      await importFreshClientModule();
 
     createBrowserClient();
 
     expect(mockCreateBrowserClient).toHaveBeenCalledTimes(1);
-    const options = mockCreateBrowserClient.mock.calls[0][2] as { auth?: { storageKey?: string } };
+    const options = mockCreateBrowserClient.mock.calls[0][2] as {
+      auth?: { storageKey?: string };
+    };
     expect(options.auth?.storageKey).toBe(SUPABASE_AUTH_STORAGE_KEY);
   });
 
-  it('(b) createMiddlewareClient passes the pinned key through to createServerClient', async () => {
-    const { createMiddlewareClient, SUPABASE_AUTH_STORAGE_KEY } = await importFreshClientModule();
+  it("(b) createMiddlewareClient passes the pinned key through to createServerClient", async () => {
+    const { createMiddlewareClient, SUPABASE_AUTH_STORAGE_KEY } =
+      await importFreshClientModule();
 
     const fakeRequest = {
       cookies: {
@@ -131,8 +148,10 @@ describe('D-B1: pinned auth storage key', () => {
     createMiddlewareClient(fakeRequest, fakeResponse);
 
     expect(mockCreateServerClient).toHaveBeenCalledTimes(1);
-    const options = mockCreateServerClient.mock.calls[0][2] as { auth?: { storageKey?: string } };
+    const options = mockCreateServerClient.mock.calls[0][2] as {
+      auth?: { storageKey?: string };
+    };
     expect(options.auth?.storageKey).toBe(SUPABASE_AUTH_STORAGE_KEY);
-    expect(options.auth?.storageKey).toBe('sb-bkvcixdmuyejfzcijpdg-auth-token');
+    expect(options.auth?.storageKey).toBe("sb-bkvcixdmuyejfzcijpdg-auth-token");
   });
 });
