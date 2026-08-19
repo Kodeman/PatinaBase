@@ -26,12 +26,12 @@ type CaptureEnrichmentMessageV1 = {
 
 ## Test tiers
 
-| Tier | What it proves | Where it runs |
-| --- | --- | --- |
-| `DB-sql` | Ledger/state-machine correctness — `capture_enrichment_runs` transitions, outbox insertion atomicity, idempotent claim-by-revision, RLS on `proposal_captures`/`field_captures`. No network, no AI calls. | pgTAP / SQL test suite against a local Postgres (`supabase db reset` + seed), same lane as other migration tests. |
-| `workerd-mock` | Consumer/dispatcher logic — message parsing (`parseCaptureEnrichmentMessageV1`), retry classification, batch dispatch, Workers AI call shaping — against mocked bindings. No real model call, no real network egress. | Miniflare/workerd unit test (vitest-pool-workers style), same lane as `infra/edge-api-worker` tests. |
-| `live-metered` | Real Workers AI model behavior (moondream OCR/caption, whisper transcription, gemma normalization) that a mock cannot stand in for. Costs money and quota; kept to the smallest case set that proves real-model behavior. | Deployed staging Worker calling real Cloudflare-hosted models, run deliberately (not on every PR). |
-| `deno-ssrf` | Egress/redirect safety on the extension URL-capture intake path — the fetch that resolves a submitted product-image URL must not follow a redirect into a private/reserved address. | Deno test against the intake edge function's fetch wrapper, isolated from the rest of the Deno edge-function suite because it asserts network-boundary behavior rather than business logic. |
+| Tier           | What it proves                                                                                                                                                                                                            | Where it runs                                                                                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DB-sql`       | Ledger/state-machine correctness — `capture_enrichment_runs` transitions, outbox insertion atomicity, idempotent claim-by-revision, RLS on `proposal_captures`/`field_captures`. No network, no AI calls.                 | pgTAP / SQL test suite against a local Postgres (`supabase db reset` + seed), same lane as other migration tests.                                                                           |
+| `workerd-mock` | Consumer/dispatcher logic — message parsing (`parseCaptureEnrichmentMessageV1`), retry classification, batch dispatch, Workers AI call shaping — against mocked bindings. No real model call, no real network egress.     | Miniflare/workerd unit test (vitest-pool-workers style), same lane as `infra/edge-api-worker` tests.                                                                                        |
+| `live-metered` | Real Workers AI model behavior (moondream OCR/caption, whisper transcription, gemma normalization) that a mock cannot stand in for. Costs money and quota; kept to the smallest case set that proves real-model behavior. | Deployed staging Worker calling real Cloudflare-hosted models, run deliberately (not on every PR).                                                                                          |
+| `deno-ssrf`    | Egress/redirect safety on the extension URL-capture intake path — the fetch that resolves a submitted product-image URL must not follow a redirect into a private/reserved address.                                       | Deno test against the intake edge function's fetch wrapper, isolated from the rest of the Deno edge-function suite because it asserts network-boundary behavior rather than business logic. |
 
 `DB-sql` and `workerd-mock` are the default tiers — nearly every case below
 runs on both because ledger correctness and dispatcher correctness are
@@ -43,6 +43,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: extension URL capture — valid image
 
 **GS-01 — Valid public product image, full enrichment success**
+
 - Producer: Chrome extension URL capture.
 - Setup: seed a `proposal_captures` row with a public, directly-fetchable
   product image URL; no existing `capture_enrichment_runs` row for it.
@@ -61,6 +62,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: SSRF / redirect safety
 
 **GS-02 — Redirect to a private/reserved address is refused**
+
 - Producer: Chrome extension URL capture.
 - Setup: submitted product URL responds with a redirect (3xx) whose
   `Location` resolves to a private, loopback, link-local, or otherwise
@@ -78,6 +80,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: duplicate delivery and stale revision
 
 **GS-03 — Duplicate delivery of the same message is a no-op**
+
 - Producer: pg_cron reconciler (at-least-once redelivery) or Queue
   redelivery after a consumer ack that didn't commit cleanly.
 - Setup: a run already reached `ready` for `enrichmentRunId` X at
@@ -93,6 +96,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 - Tier: `DB-sql`, `workerd-mock`.
 
 **GS-04 — Stale content revision is ignored in favor of current**
+
 - Producer: pg_cron reconciler delivering a message minted before a newer
   capture edit bumped the revision.
 - Setup: capture's `contentRevision` has advanced from N to N+1 (e.g. the
@@ -109,6 +113,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: deleted / dismissed / superseded capture
 
 **GS-05 — Source capture deleted before enrichment completes**
+
 - Producer: designer-portal or Field delete action racing the enrichment
   consumer.
 - Setup: capture is deleted (or soft-deleted per source-specific lifecycle)
@@ -121,6 +126,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 - Tier: `DB-sql`, `workerd-mock`.
 
 **GS-06 — Capture dismissed by the designer before enrichment completes**
+
 - Producer: designer-portal dismiss action.
 - Setup: capture status flips to dismissed after outbox insertion, before
   consumer claim.
@@ -132,6 +138,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 - Tier: `DB-sql`, `workerd-mock`.
 
 **GS-07 — Capture superseded by a newer capture of the same target**
+
 - Producer: repeat capture of the same product/source (e.g. re-scraped URL,
   re-photographed item) creating a newer capture that supersedes the
   original.
@@ -147,6 +154,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: personal / studio / catalog source semantics
 
 **GS-08 — Personal-source capture enrichment scope**
+
 - Producer: any capture surface, source flagged personal (private to the
   capturing user/designer).
 - Setup: capture belongs to a personal, non-shared scope.
@@ -159,6 +167,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 - Tier: `DB-sql`.
 
 **GS-09 — Studio-source capture enrichment scope**
+
 - Producer: any capture surface, source flagged studio-shared.
 - Setup: capture belongs to a studio, visible to co-members per studio RLS.
 - Trigger: normal enrichment run.
@@ -169,6 +178,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 - Tier: `DB-sql`.
 
 **GS-10 — Catalog-source capture enrichment scope**
+
 - Producer: capture destined for/attached to a shared product-catalog
   entry.
 - Setup: capture's target is a catalog product, not a personal/studio-only
@@ -184,6 +194,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: multilingual OCR and normalization
 
 **GS-11 — Multilingual OCR with English normalization and original retention**
+
 - Producer: extension URL capture or Field capture with in-image text in a
   non-English language (e.g. a foreign-language product label).
 - Setup: source image contains non-English text Moondream can OCR.
@@ -203,6 +214,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: Field audio transcription
 
 **GS-12 — Field audio transcription success**
+
 - Producer: Patina Field capture with a voice note.
 - Setup: audio is a supported format/duration within Whisper limits.
 - Trigger: asynchronous transcription (`@cf/openai/whisper-large-v3-turbo`)
@@ -214,6 +226,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 - Tier: `workerd-mock`; `live-metered` for one real pass.
 
 **GS-13 — Field audio unsupported media**
+
 - Producer: Patina Field capture with an audio format/codec Whisper cannot
   process.
 - Setup: audio file has an unsupported container/codec or is corrupt.
@@ -229,6 +242,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 - Tier: `workerd-mock`.
 
 **GS-14 — Field audio timeout with partial completion**
+
 - Producer: Patina Field capture with a long voice note.
 - Setup: transcription exceeds the platform timeout mid-stream.
 - Trigger: Workers AI call times out after producing partial output.
@@ -245,6 +259,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: suggestion precedence over confirmed data
 
 **GS-15 — Empty field is prefilled by a suggestion**
+
 - Producer: any enrichment run whose target field (e.g. material, color)
   is currently empty/unset.
 - Setup: target field has never been set by a designer or device
@@ -258,6 +273,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 - Tier: `DB-sql`.
 
 **GS-16 — Designer-entered field is never overwritten by a suggestion**
+
 - Producer: any enrichment run whose target field already has a
   designer-entered or device-confirmed value.
 - Setup: field was explicitly set by a human (or confirmed device data)
@@ -274,6 +290,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: controlled-vocabulary matching
 
 **GS-17 — Matched controlled-vocabulary candidate**
+
 - Producer: any enrichment run producing a category/material/color/style
   candidate.
 - Setup: candidate value produced by normalization matches an entry in the
@@ -287,6 +304,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 - Tier: `DB-sql`, `workerd-mock`.
 
 **GS-18 — Unmatched controlled-vocabulary candidate retained separately**
+
 - Producer: any enrichment run producing a candidate with no controlled-
   vocabulary match (e.g. a novel material name).
 - Setup: normalization output has no matching entry in the current
@@ -303,6 +321,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: terminal error and manual retry
 
 **GS-19 — Terminal model/config error**
+
 - Producer: any enrichment run hitting a non-retryable failure (invalid
   input, oversized payload, access/configuration error).
 - Setup: e.g. a malformed image, a payload exceeding the model's size
@@ -316,6 +335,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 - Tier: `workerd-mock`.
 
 **GS-20 — Manual retry after terminal error**
+
 - Producer: designer or Field user triggering a manual retry action on a
   `failed` run.
 - Setup: run from GS-19 is in `failed` state.
@@ -332,6 +352,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: embedding freshness
 
 **GS-21 — Nomic job key changes with content revision/hash**
+
 - Producer: the Nomic embedding pipeline (inference Container), triggered
   independently of Workers AI enrichment.
 - Setup: a capture/product's content revision or hash changes (e.g. because
@@ -349,6 +370,7 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 ### Family: message envelope validation
 
 **GS-22 — Malformed queue message is rejected, not thrown past**
+
 - Producer: any producer path (pg_cron dispatcher or a bug injecting a
   malformed body), exercising `parseCaptureEnrichmentMessageV1` directly.
 - Setup: message bodies missing a required field, with `schemaVersion` not
@@ -366,20 +388,20 @@ are called out explicitly only where no cheaper tier can prove the behavior.
 
 ## Coverage summary
 
-| Runbook family | Cases |
-| --- | --- |
-| Valid public-image extension capture | GS-01 |
-| Redirect to private/reserved address | GS-02 |
-| Duplicate delivery / stale revision | GS-03, GS-04 |
-| Deleted / dismissed / superseded | GS-05, GS-06, GS-07 |
-| Personal / studio / catalog semantics | GS-08, GS-09, GS-10 |
-| Multilingual OCR + English normalization | GS-11 |
-| Field audio success / unsupported / timeout-partial | GS-12, GS-13, GS-14 |
-| Empty vs. designer-entered precedence | GS-15, GS-16 |
-| Matched / unmatched vocabulary | GS-17, GS-18 |
-| Terminal error + manual retry | GS-19, GS-20 |
-| Nomic job key keyed to content revision | GS-21 |
-| Message envelope validation (contract-adjacent, not in runbook list) | GS-22 |
+| Runbook family                                                       | Cases               |
+| -------------------------------------------------------------------- | ------------------- |
+| Valid public-image extension capture                                 | GS-01               |
+| Redirect to private/reserved address                                 | GS-02               |
+| Duplicate delivery / stale revision                                  | GS-03, GS-04        |
+| Deleted / dismissed / superseded                                     | GS-05, GS-06, GS-07 |
+| Personal / studio / catalog semantics                                | GS-08, GS-09, GS-10 |
+| Multilingual OCR + English normalization                             | GS-11               |
+| Field audio success / unsupported / timeout-partial                  | GS-12, GS-13, GS-14 |
+| Empty vs. designer-entered precedence                                | GS-15, GS-16        |
+| Matched / unmatched vocabulary                                       | GS-17, GS-18        |
+| Terminal error + manual retry                                        | GS-19, GS-20        |
+| Nomic job key keyed to content revision                              | GS-21               |
+| Message envelope validation (contract-adjacent, not in runbook list) | GS-22               |
 
 22 cases total across 4 tiers (`DB-sql`, `workerd-mock`, `live-metered`,
 `deno-ssrf`). None are built yet — this register exists so the Phase 3

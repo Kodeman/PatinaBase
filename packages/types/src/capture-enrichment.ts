@@ -28,7 +28,7 @@ export type CaptureEnrichmentMessageV1 = {
 /** One field-level validation failure from {@link parseCaptureEnrichmentMessageV1}. */
 export type CaptureEnrichmentMessageV1ParseError = {
   /** Name of the offending field, or `(root)` when the input itself is not a plausible object. */
-  field: keyof CaptureEnrichmentMessageV1 | '(root)';
+  field: keyof CaptureEnrichmentMessageV1 | "(root)";
   reason: string;
 };
 
@@ -53,11 +53,15 @@ export type CaptureEnrichmentMessageV1ParseResult =
  * not yet trusted. Collects every field error rather than failing fast, so
  * a caller can log/report the full set of problems in one line.
  */
-export function parseCaptureEnrichmentMessageV1(input: unknown): CaptureEnrichmentMessageV1ParseResult {
-  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+export function parseCaptureEnrichmentMessageV1(
+  input: unknown,
+): CaptureEnrichmentMessageV1ParseResult {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
     return {
       ok: false,
-      errors: [{ field: '(root)', reason: 'expected a non-null, non-array object' }],
+      errors: [
+        { field: "(root)", reason: "expected a non-null, non-array object" },
+      ],
     };
   }
 
@@ -65,24 +69,39 @@ export function parseCaptureEnrichmentMessageV1(input: unknown): CaptureEnrichme
   const errors: CaptureEnrichmentMessageV1ParseError[] = [];
 
   if (record.schemaVersion !== 1) {
-    errors.push({ field: 'schemaVersion', reason: 'must be the literal number 1' });
-  }
-
-  if (typeof record.enrichmentRunId !== 'string' || record.enrichmentRunId.trim().length === 0) {
-    errors.push({ field: 'enrichmentRunId', reason: 'must be a non-empty string' });
+    errors.push({
+      field: "schemaVersion",
+      reason: "must be the literal number 1",
+    });
   }
 
   if (
-    typeof record.contentRevision !== 'number' ||
+    typeof record.enrichmentRunId !== "string" ||
+    record.enrichmentRunId.trim().length === 0
+  ) {
+    errors.push({
+      field: "enrichmentRunId",
+      reason: "must be a non-empty string",
+    });
+  }
+
+  if (
+    typeof record.contentRevision !== "number" ||
     !Number.isFinite(record.contentRevision) ||
     !Number.isInteger(record.contentRevision) ||
     record.contentRevision < 0
   ) {
-    errors.push({ field: 'contentRevision', reason: 'must be a non-negative integer' });
+    errors.push({
+      field: "contentRevision",
+      reason: "must be a non-negative integer",
+    });
   }
 
-  if (typeof record.traceId !== 'string' || record.traceId.trim().length === 0) {
-    errors.push({ field: 'traceId', reason: 'must be a non-empty string' });
+  if (
+    typeof record.traceId !== "string" ||
+    record.traceId.trim().length === 0
+  ) {
+    errors.push({ field: "traceId", reason: "must be a non-empty string" });
   }
 
   if (errors.length > 0) {

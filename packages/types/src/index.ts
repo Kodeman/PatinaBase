@@ -1,17 +1,17 @@
 // Common Types
-export * from './common';
-export * from './user';
-export * from './designer';
-export * from './dev-accounts';
-export * from './product';
-export * from './product-configuration';
-export * from './catalog';
-export * from './catalog-search';
-export * from './catalog-product-summary';
-export * from './order';
-export * from './style-profile';
-export * from './api';
-export * from './capture-enrichment';
+export * from "./common";
+export * from "./user";
+export * from "./designer";
+export * from "./dev-accounts";
+export * from "./product";
+export * from "./product-configuration";
+export * from "./catalog";
+export * from "./catalog-search";
+export * from "./catalog-product-summary";
+export * from "./order";
+export * from "./style-profile";
+export * from "./api";
+export * from "./capture-enrichment";
 // Export media types (re-exports MediaType locally to avoid conflict with catalog)
 export type {
   MediaAsset,
@@ -28,34 +28,34 @@ export type {
   ViewMode,
   SortField,
   SortOrder,
-} from './media';
+} from "./media";
 
 // Domain-specific Types
-export * from './events';
-export * from './proposal';
-export * from './commercial';
-export * from './project';
-export * from './project-v2';
-export * from './ffe';
-export * from './phase-config';
-export * from './residential-workflow';
-export * from './procurement-lifecycle';
-export * from './field-config';
-export * from './studio-config';
-export * from './scope';
-export * from './scope-change';
-export * from './comms';
-export * from './aesthete';
-export * from './timeline';
-export * from './permissions';
-export * from './mood-board';
+export * from "./events";
+export * from "./proposal";
+export * from "./commercial";
+export * from "./project";
+export * from "./project-v2";
+export * from "./ffe";
+export * from "./phase-config";
+export * from "./residential-workflow";
+export * from "./procurement-lifecycle";
+export * from "./field-config";
+export * from "./studio-config";
+export * from "./scope";
+export * from "./scope-change";
+export * from "./comms";
+export * from "./aesthete";
+export * from "./timeline";
+export * from "./permissions";
+export * from "./mood-board";
 
 // Value Objects
-export * from './value-objects/email.vo';
-export * from './value-objects/phone-number.vo';
-export * from './value-objects/money.vo';
-export * from './value-objects/color.vo';
-export * from './value-objects/url.vo';
+export * from "./value-objects/email.vo";
+export * from "./value-objects/phone-number.vo";
+export * from "./value-objects/money.vo";
+export * from "./value-objects/color.vo";
+export * from "./value-objects/url.vo";
 
 // Value Objects with naming conflicts - export with 'VO' suffix to avoid conflicts with interfaces
 export {
@@ -63,42 +63,42 @@ export {
   InvalidAddressError,
   type AddressComponents,
   type Country,
-} from './value-objects/address.vo';
+} from "./value-objects/address.vo";
 
 export {
   Dimensions as DimensionsVO,
   InvalidDimensionsError,
   type DimensionUnit,
-} from './value-objects/dimensions.vo';
+} from "./value-objects/dimensions.vo";
 
 export {
   Weight as WeightVO,
   InvalidWeightError,
   type WeightUnit,
-} from './value-objects/weight.vo';
+} from "./value-objects/weight.vo";
 
 // ============================================================================
 // Strata Types (merged from @patina/shared)
 // ============================================================================
 
 // Teaching workflow types (style attribution, client matching, validation)
-export * from './teaching';
+export * from "./teaching";
 
 // Extraction types (Chrome extension product/vendor capture)
-export * from './extraction';
+export * from "./extraction";
 
 // Vendor management types (profiles, trade accounts, reviews)
-export * from './strata-vendor';
+export * from "./strata-vendor";
 
 // Room scan & 3D viewer types
-export * from './room-scan';
+export * from "./room-scan";
 
 // Analytics & engagement tracking types
-export * from './analytics';
+export * from "./analytics";
 
 // Notification, campaign, audience, and automation types
 // Exported as namespace to avoid conflicts with comms.ts NotificationType/Channel/Status/Priority
-export * as Notifications from './strata-notifications';
+export * as Notifications from "./strata-notifications";
 
 // Email-builder block-prop types are non-conflicting, so also re-export them at
 // the top level — the email-builder props-forms import them directly by name.
@@ -117,12 +117,12 @@ export type {
   NotificationBlockProps,
   MakerSpotlightProps,
   FooterBlockProps,
-} from './strata-notifications';
+} from "./strata-notifications";
 
 // User management types (organizations, RBAC, GDPR)
 // Exported as namespace to avoid conflicts with user.ts Role/Permission/UserRole
-export * as UserManagement from './user-management';
+export * as UserManagement from "./user-management";
 
 // Vendor pipeline types (discovery → live partnership, Claude Cowork integration)
 // Exported as namespace to avoid conflict with catalog.ts Vendor
-export * as VendorPipeline from './vendor-pipeline';
+export * as VendorPipeline from "./vendor-pipeline";
