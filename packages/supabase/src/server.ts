@@ -2,11 +2,12 @@
  * Supabase server-side utilities for Next.js portals.
  * Provides authenticated server client creation via cookies.
  */
-import { createServerClient as createSSRServerClient } from '@supabase/ssr';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { cookies, headers } from 'next/headers';
-import type { Database } from './database.types';
-import { getCookieDomain } from './lib/cookie-domain';
+import { createServerClient as createSSRServerClient } from "@supabase/ssr";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { cookies, headers } from "next/headers";
+import type { Database } from "./database.types";
+import { getCookieDomain } from "./lib/cookie-domain";
+import { SUPABASE_AUTH_STORAGE_KEY } from "./client";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -25,10 +26,10 @@ async function resolveServerCookieOptions() {
     // rewrites the inbound Host header). The current cloudflared topology
     // preserves the original Host, so this falls back to `host` in production.
     host =
-      headerStore.get('x-forwarded-host') ??
-      headerStore.get('host') ??
+      headerStore.get("x-forwarded-host") ??
+      headerStore.get("host") ??
       undefined;
-    host = host?.replace(/:\d+$/, '');
+    host = host?.replace(/:\d+$/, "");
   } catch {
     // `headers()` isn't available in some contexts (e.g. static rendering).
     // Fall back to env-var / window detection inside getCookieDomain().
@@ -37,9 +38,9 @@ async function resolveServerCookieOptions() {
   if (!domain) return {};
   return {
     domain,
-    sameSite: 'lax' as const,
+    sameSite: "lax" as const,
     secure: true,
-    path: '/',
+    path: "/",
   };
 }
 
@@ -54,7 +55,7 @@ export function createServiceClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
     throw new Error(
-      'SUPABASE_SERVICE_ROLE_KEY is not set — cannot create service client',
+      "SUPABASE_SERVICE_ROLE_KEY is not set — cannot create service client",
     );
   }
   return createClient<Database>(supabaseUrl, serviceKey, {
@@ -79,16 +80,26 @@ export async function createServerClient(): Promise<SupabaseClient<Database>> {
   // supabase-js generics until @supabase/ssr is bumped to a matching release.
   return createSSRServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookieOptions,
+    auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
     cookies: {
       getAll() {
         return cookieStore.getAll();
       },
-      setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+      setAll(
+        cookiesToSet: {
+          name: string;
+          value: string;
+          options?: Record<string, unknown>;
+        }[],
+      ) {
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
             // Merge cookieOptions defensively so domain/secure flags are
             // always applied — even if a caller passes per-cookie overrides.
-            cookieStore.set(name, value, { ...cookieOptions, ...options } as any)
+            cookieStore.set(name, value, {
+              ...cookieOptions,
+              ...options,
+            } as any),
           );
         } catch {
           // setAll can throw in Server Components (read-only cookies)
@@ -105,7 +116,10 @@ export async function createServerClient(): Promise<SupabaseClient<Database>> {
  */
 export async function getUser() {
   const supabase = await createServerClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
   if (error || !user) return null;
   return user;
 }
@@ -116,7 +130,10 @@ export async function getUser() {
  */
 export async function getSession() {
   const supabase = await createServerClient();
-  const { data: { session }, error } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
   if (error || !session) return null;
   return session;
 }
