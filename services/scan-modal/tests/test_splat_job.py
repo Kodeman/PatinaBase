@@ -421,13 +421,13 @@ def test_choose_export_config_pins_the_best_checkpoint(tmp_path, monkeypatch):
         (paths["checkpoints"] / f"step-{step:09d}.ckpt").write_bytes(b"ckpt")
     paths["config"].write_text("method_name: splatfacto\nload_step: null\n")
     monkeypatch.setattr(
-        splat_job, "read_eval_psnr",
-        lambda run_dir: [(2000, 15.0), (4000, 16.4), (6000, 14.1)],
+        splat_job, "read_eval_metrics",
+        lambda run_dir: ([(2000, 0.20), (4000, 0.05), (6000, 0.30)], []),
     )
 
     config_path, choice = splat_job.choose_export_config(paths)
 
-    assert choice is not None and choice.step == 4000 and choice.reason == "best_eval_psnr"
+    assert choice is not None and choice.step == 4000 and choice.reason == "best_lpips"
     assert config_path == paths["run"] / "config-best.yml"
     assert "load_step: 4000" in config_path.read_text()
     # The config nerfstudio wrote is left exactly as it was — a resumed run and
@@ -440,7 +440,10 @@ def test_choose_export_config_uses_the_original_when_the_best_is_the_latest(tmp_
     for step in (2000, 4000):
         (paths["checkpoints"] / f"step-{step:09d}.ckpt").write_bytes(b"ckpt")
     paths["config"].write_text("load_step: null\n")
-    monkeypatch.setattr(splat_job, "read_eval_psnr", lambda run_dir: [(2000, 10.0), (4000, 20.0)])
+    monkeypatch.setattr(
+        splat_job, "read_eval_metrics",
+        lambda run_dir: ([(2000, 0.30), (4000, 0.05)], []),
+    )
 
     config_path, choice = splat_job.choose_export_config(paths)
 
@@ -454,13 +457,33 @@ def test_choose_export_config_degrades_to_the_latest_without_metrics(tmp_path, m
     (paths["checkpoints"] / "step-000002000.ckpt").write_bytes(b"ckpt")
     (paths["checkpoints"] / "step-000004000.ckpt").write_bytes(b"ckpt")
     paths["config"].write_text("load_step: null\n")
-    monkeypatch.setattr(splat_job, "read_eval_psnr", lambda run_dir: [])
+    monkeypatch.setattr(splat_job, "read_eval_metrics", lambda run_dir: ([], []))
 
     config_path, choice = splat_job.choose_export_config(paths)
 
     assert choice is not None
     assert choice.step == 4000 and choice.reason == "latest_no_eval_metrics"
     assert config_path == paths["config"]
+
+
+def test_choose_export_config_falls_back_to_psnr_without_lpips(tmp_path, monkeypatch):
+    """A run whose event file has PSNR but no usable LPIPS series still gets a
+    real choice — the pre-LPIPS rule — recorded as `psnr-fallback`."""
+    paths = _run_dir(tmp_path)
+    for step in (2000, 4000, 6000):
+        (paths["checkpoints"] / f"step-{step:09d}.ckpt").write_bytes(b"ckpt")
+    paths["config"].write_text("load_step: null\n")
+    monkeypatch.setattr(
+        splat_job, "read_eval_metrics",
+        lambda run_dir: ([], [(2000, 15.0), (4000, 16.4), (6000, 14.1)]),
+    )
+
+    config_path, choice = splat_job.choose_export_config(paths)
+
+    assert choice is not None
+    assert choice.step == 4000 and choice.psnr == 16.4 and choice.lpips is None
+    assert choice.reason == "psnr-fallback"
+    assert "load_step: 4000" in config_path.read_text()
 
 
 def test_an_unrecognisable_config_falls_back_rather_than_failing_the_run(tmp_path, monkeypatch):
@@ -470,7 +493,10 @@ def test_an_unrecognisable_config_falls_back_rather_than_failing_the_run(tmp_pat
     for step in (2000, 4000):
         (paths["checkpoints"] / f"step-{step:09d}.ckpt").write_bytes(b"ckpt")
     paths["config"].write_text("nothing here nerfstudio would recognise\n")
-    monkeypatch.setattr(splat_job, "read_eval_psnr", lambda run_dir: [(2000, 20.0), (4000, 10.0)])
+    monkeypatch.setattr(
+        splat_job, "read_eval_metrics",
+        lambda run_dir: ([(2000, 0.05), (4000, 0.30)], []),
+    )
 
     config_path, choice = splat_job.choose_export_config(paths)
 
@@ -482,32 +508,52 @@ def test_an_unrecognisable_config_falls_back_rather_than_failing_the_run(tmp_pat
 def test_no_checkpoints_at_all_leaves_the_export_untouched(tmp_path, monkeypatch):
     paths = _run_dir(tmp_path)
     paths["config"].write_text("load_step: null\n")
-    monkeypatch.setattr(splat_job, "read_eval_psnr", lambda run_dir: [])
+    monkeypatch.setattr(splat_job, "read_eval_metrics", lambda run_dir: ([], []))
 
     config_path, choice = splat_job.choose_export_config(paths)
     assert config_path == paths["config"] and choice is None
 
 
-def test_read_eval_psnr_returns_empty_for_a_directory_with_no_event_file(tmp_path):
-    assert splat_job.read_eval_psnr(tmp_path) == []
+def test_read_eval_metrics_returns_empty_for_a_directory_with_no_event_file(tmp_path):
+    assert splat_job.read_eval_metrics(tmp_path) == ([], [])
 
 
-def test_read_eval_psnr_never_raises_on_an_unreadable_event_file(tmp_path):
+def test_read_eval_metrics_never_raises_on_an_unreadable_event_file(tmp_path):
     (tmp_path / "events.out.tfevents.1.host.1.0").write_bytes(b"not an event file")
-    assert splat_job.read_eval_psnr(tmp_path) == []
+    assert splat_job.read_eval_metrics(tmp_path) == ([], [])
 
 
 def test_the_chosen_checkpoint_reaches_the_ledger(world, monkeypatch, tmp_path):
     """A stored splat must say which checkpoint it is and on what evidence —
-    before this, the export was always the last one and nothing recorded it."""
-    monkeypatch.setattr(splat_job, "read_eval_psnr", lambda run_dir: [(30000, 12.5)])
+    before this, the export was always the last one and nothing recorded it.
+    Both metrics land on the provenance record even though LPIPS decided it."""
+    monkeypatch.setattr(
+        splat_job, "read_eval_metrics", lambda run_dir: ([(30000, 0.18)], [(30000, 12.5)]),
+    )
     db = RecordingDb()
     result = splat_job.run_splat(payload(), db=db)
 
     provenance = result["provenance"]
     assert provenance["exportCheckpointStep"] == 30000
+    assert provenance["exportCheckpointLpips"] == 0.18
     assert provenance["exportCheckpointPsnr"] == 12.5
-    assert provenance["exportCheckpointReason"] == "best_eval_psnr"
+    assert provenance["exportCheckpointReason"] == "best_lpips"
+    assert provenance["evalPointsConsidered"] == 1
+
+
+def test_the_psnr_fallback_reaches_the_ledger(world, monkeypatch, tmp_path):
+    """A run with no usable LPIPS still records what decided its checkpoint."""
+    monkeypatch.setattr(
+        splat_job, "read_eval_metrics", lambda run_dir: ([], [(30000, 12.5)]),
+    )
+    db = RecordingDb()
+    result = splat_job.run_splat(payload(), db=db)
+
+    provenance = result["provenance"]
+    assert provenance["exportCheckpointStep"] == 30000
+    assert provenance["exportCheckpointLpips"] is None
+    assert provenance["exportCheckpointPsnr"] == 12.5
+    assert provenance["exportCheckpointReason"] == "psnr-fallback"
     assert provenance["evalPointsConsidered"] == 1
 
 
