@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * RenderGallerySection — a horizontal strip of the room's registered Modal
@@ -19,18 +19,25 @@
  * the shot map's own (sorted-by-name) key order.
  */
 
-import { useState } from 'react';
-import { useRenderShots } from '@patina/supabase';
-import { SectionHeading } from './drawings-section';
-import { FullScreenViewerShell } from '@/components/document/overlays/full-screen-viewer-shell';
-import { ROOM_FILE_COPY as C } from './room-file-copy';
+import { useState } from "react";
+import { useRenderShots } from "@patina/supabase";
+import { SectionHeading } from "./drawings-section";
+import { FullScreenViewerShell } from "@/components/document/overlays/full-screen-viewer-shell";
+import { ROOM_FILE_COPY as C } from "./room-file-copy";
 
 /** Fixed display order — cover first, then the 4 corners, then top-down.
  *  Anything not in this set (i.e. every `turntable_NNN` frame) is excluded. */
-const SHOT_ORDER = ['cover', 'corner_ne', 'corner_nw', 'corner_se', 'corner_sw', 'top_down'];
+const SHOT_ORDER = [
+  "cover",
+  "corner_ne",
+  "corner_nw",
+  "corner_se",
+  "corner_sw",
+  "top_down",
+];
 
 function shotLabel(shot: string): string {
-  return C.renderShotLabel[shot] ?? shot.replace(/_/g, ' ');
+  return C.renderShotLabel[shot] ?? shot.replace(/_/g, " ");
 }
 
 export interface RenderGallerySectionProps {
@@ -38,7 +45,10 @@ export interface RenderGallerySectionProps {
   roomName: string;
 }
 
-export function RenderGallerySection({ roomFileId, roomName }: RenderGallerySectionProps) {
+export function RenderGallerySection({
+  roomFileId,
+  roomName,
+}: RenderGallerySectionProps) {
   const { hasArtifact, shots, unavailable } = useRenderShots(roomFileId);
   const [openShot, setOpenShot] = useState<string | null>(null);
 
@@ -55,7 +65,10 @@ export function RenderGallerySection({ roomFileId, roomName }: RenderGallerySect
 
   return (
     <section className="mt-10">
-      <SectionHeading title={C.renderGalleryTitle} meta={C.renderGallerySubtitle(tiles.length)} />
+      <SectionHeading
+        title={C.renderGalleryTitle}
+        meta={C.renderGallerySubtitle(tiles.length)}
+      />
 
       <ul className="mt-4 flex gap-3 overflow-x-auto pb-1">
         {tiles.map((shot) => (

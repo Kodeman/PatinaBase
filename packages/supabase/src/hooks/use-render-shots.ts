@@ -24,14 +24,18 @@
  * when a renders artifact IS registered, and stays silent otherwise.
  */
 
-import { useQuery } from '@tanstack/react-query';
-import { createBrowserClient } from '../client';
-import { edgeApiBaseUrl, fetchScanArtifact, type ScanCapabilityUrl } from '../lib/scan-artifact-url';
+import { useQuery } from "@tanstack/react-query";
+import { createBrowserClient } from "../client";
+import {
+  edgeApiBaseUrl,
+  fetchScanArtifact,
+  type ScanCapabilityUrl,
+} from "../lib/scan-artifact-url";
 
 const getSupabase = () => createBrowserClient();
 
 /** The artifact key the renders stage registers under in `room_files.artifacts`. */
-export const RENDERS_ARTIFACT_KIND = 'renders';
+export const RENDERS_ARTIFACT_KIND = "renders";
 
 /**
  * Total and defensive, like `readSplatArtifactRef`: `artifacts` is jsonb with
@@ -40,25 +44,27 @@ export const RENDERS_ARTIFACT_KIND = 'renders';
  * render. Only presence is asked here — no ref is extracted or returned.
  */
 export function readRendersArtifactPresence(artifacts: unknown): boolean {
-  if (!artifacts || typeof artifacts !== 'object' || Array.isArray(artifacts)) return false;
+  if (!artifacts || typeof artifacts !== "object" || Array.isArray(artifacts))
+    return false;
   const entry = (artifacts as Record<string, unknown>)[RENDERS_ARTIFACT_KIND];
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
 
   const obj = entry as Record<string, unknown>;
-  if (typeof obj.object_id === 'string' && obj.object_id.length > 0) return true;
+  if (typeof obj.object_id === "string" && obj.object_id.length > 0)
+    return true;
 
   // Legacy/tolerated fallback: a flat `{ shot name -> ref }` map with no
   // `shots`/`object_id` of its own — present if any value looks like a ref.
   return Object.values(obj).some(
     (value) =>
       value != null &&
-      typeof value === 'object' &&
+      typeof value === "object" &&
       !Array.isArray(value) &&
-      typeof (value as Record<string, unknown>).object_id === 'string',
+      typeof (value as Record<string, unknown>).object_id === "string",
   );
 }
 
-export type RenderShotsUnavailableReason = 'no-artifact' | 'read-path-pending';
+export type RenderShotsUnavailableReason = "no-artifact" | "read-path-pending";
 
 export interface RenderShotsSource {
   /** True when this Room File version registers a renders manifest at all. */
@@ -89,19 +95,21 @@ export function useRenderShots(
   const { enabled = true } = options;
 
   const presenceQuery = useQuery<boolean>({
-    queryKey: ['room-file-renders-artifact', roomFileId],
+    queryKey: ["room-file-renders-artifact", roomFileId],
     enabled: enabled && Boolean(roomFileId),
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
-        .from('room_files')
-        .select('id, artifacts')
-        .eq('id', roomFileId as string)
+        .from("room_files")
+        .select("id, artifacts")
+        .eq("id", roomFileId as string)
         .maybeSingle();
 
       if (error) throw error;
-      return readRendersArtifactPresence((data as { artifacts?: unknown } | null)?.artifacts);
+      return readRendersArtifactPresence(
+        (data as { artifacts?: unknown } | null)?.artifacts,
+      );
     },
   });
 
@@ -109,7 +117,7 @@ export function useRenderShots(
   const readPathWired = edgeApiBaseUrl() !== null;
 
   const shotsQuery = useQuery<Record<string, ScanCapabilityUrl> | null>({
-    queryKey: ['room-file-renders-shots', roomFileId],
+    queryKey: ["room-file-renders-shots", roomFileId],
     enabled: enabled && Boolean(roomFileId) && readPathWired && hasArtifact,
     // Capability URLs live 600 s — re-mint well inside that window rather than
     // at its edge, matching `useSplatUrl`.
@@ -119,14 +127,14 @@ export function useRenderShots(
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('no session');
+      if (!session?.access_token) throw new Error("no session");
 
       const result = await fetchScanArtifact(
         roomFileId as string,
         RENDERS_ARTIFACT_KIND,
         session.access_token,
       );
-      return result && 'shots' in result ? result.shots : null;
+      return result && "shots" in result ? result.shots : null;
     },
   });
 
@@ -134,7 +142,7 @@ export function useRenderShots(
     return {
       hasArtifact: false,
       shots: null,
-      unavailable: 'no-artifact',
+      unavailable: "no-artifact",
       isLoading: presenceQuery.isLoading,
     };
   }
@@ -143,7 +151,7 @@ export function useRenderShots(
     return {
       hasArtifact: true,
       shots: null,
-      unavailable: 'read-path-pending',
+      unavailable: "read-path-pending",
       isLoading: presenceQuery.isLoading,
     };
   }
@@ -163,7 +171,7 @@ export function useRenderShots(
   return {
     hasArtifact: !resolvedAbsent,
     shots: null,
-    unavailable: resolvedAbsent ? 'no-artifact' : 'read-path-pending',
+    unavailable: resolvedAbsent ? "no-artifact" : "read-path-pending",
     isLoading: presenceQuery.isLoading || shotsQuery.isLoading,
   };
 }

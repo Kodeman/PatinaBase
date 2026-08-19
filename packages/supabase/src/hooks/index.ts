@@ -7,7 +7,7 @@ export {
   useCreateProduct,
   useUpdateProduct,
   useCreateDraftProduct,
-} from './use-products';
+} from "./use-products";
 export {
   productConfigurationKeys,
   useProductConfigurationDefinition,
@@ -27,23 +27,23 @@ export {
   usePrepareConfigurationQuoteRequest,
   usePlaceProductConfiguration,
   useReviseProjectFFEConfiguration,
-} from './use-product-configurations';
+} from "./use-product-configurations";
 export {
   useLayerProducts,
   useLayerCounts,
   type LayerProductLayer,
   type LayerProductRow,
   type UseLayerProductsOptions,
-} from './use-layer-products';
+} from "./use-layer-products";
 export {
   useCaptureProduct,
   type UseCaptureProductOptions,
-} from './use-capture-product';
+} from "./use-capture-product";
 export {
   usePromotionCandidates,
   type PromotionCandidate,
   type UsePromotionCandidatesOptions,
-} from './use-promotion-candidates';
+} from "./use-promotion-candidates";
 export {
   useCrossLayerSearch,
   buildCrossLayerOrFilter,
@@ -51,7 +51,7 @@ export {
   type CrossLayerSearchResult,
   type UseCrossLayerSearchOptions,
   type CrossLayerSearchField,
-} from './use-cross-layer-search';
+} from "./use-cross-layer-search";
 export {
   usePromoteToStudio,
   useDemoteToPersonal,
@@ -59,27 +59,27 @@ export {
   type UsePromoteToStudioOptions,
   type UseDemoteToPersonalOptions,
   type UsePromoteBatchToStudioOptions,
-} from './use-promote-to-studio';
+} from "./use-promote-to-studio";
 export {
   useNominateVendor,
   useLatestVendorNomination,
   type UseNominateVendorOptions,
   type VendorNominationRow,
-} from './use-nominate-vendor';
+} from "./use-nominate-vendor";
 export {
   useVendorStudioStats,
   computeSignalStrength,
   type VendorStudioStats,
   type SignalStrength,
-} from './use-vendor-studio-stats';
+} from "./use-vendor-studio-stats";
 export {
   useAdminNominations,
   useSetNominationStatus,
   type AdminNominationRow,
   type SetNominationStatusInput,
   type UseAdminNominationsOptions,
-} from './use-admin-nominations';
-export { useLibraryPilotEnabled } from './use-library-pilot-flag';
+} from "./use-admin-nominations";
+export { useLibraryPilotEnabled } from "./use-library-pilot-flag";
 export type {
   ProductWithVendorPricing,
   VendorPricingInfo,
@@ -87,19 +87,19 @@ export type {
   UseProductsOptions,
   CreateDraftProductInput,
   ProductPrice,
-} from './use-products';
+} from "./use-products";
 export {
   useFFECategories,
   useCreateFFECategory,
   useDeleteFFECategory,
   slugifyFFECategoryLabel,
-} from './use-ffe-categories';
+} from "./use-ffe-categories";
 export type {
   FFECategory,
   UseFFECategoriesOptions,
   CreateFFECategoryInput,
-} from './use-ffe-categories';
-export { useStyles, useCreateStyle } from './use-styles';
+} from "./use-ffe-categories";
+export { useStyles, useCreateStyle } from "./use-styles";
 export {
   useProjects,
   useProject,
@@ -110,7 +110,7 @@ export {
   useAddProductToProject,
   useRemoveProductFromProject,
   useUpdateProjectProductNotes,
-} from './use-projects';
+} from "./use-projects";
 export {
   useSession,
   useUser,
@@ -140,8 +140,13 @@ export {
   useRefreshSession,
   useSignOutAllDevices,
   useSignOutOtherDevices,
-} from './use-auth';
-export type { OAuthProvider, MfaFactorType, MfaFactor, UserSession } from './use-auth';
+} from "./use-auth";
+export type {
+  OAuthProvider,
+  MfaFactorType,
+  MfaFactor,
+  UserSession,
+} from "./use-auth";
 export {
   usePortalQrAuth,
   type PortalQrAuthFailure,
@@ -149,13 +154,13 @@ export {
   type PortalQrAuthResult,
   type PortalQrAuthSnapshot,
   type PortalQrAuthState,
-} from './use-portal-qr-auth';
+} from "./use-portal-qr-auth";
 export {
   useAmbientQrAuth,
   type AmbientQrAuthOptions,
   type AmbientQrAuthResult,
   type AmbientQrPhase,
-} from './use-ambient-qr-auth';
+} from "./use-ambient-qr-auth";
 export {
   // Designer Onboarding (Phase 3)
   useMyDesignerApplication,
@@ -167,13 +172,13 @@ export {
   useRejectDesignerApplication,
   useMarkApplicationUnderReview,
   useDesignerApplicationStats,
-} from './use-onboarding';
+} from "./use-onboarding";
 export type {
   DesignerApplicationStatus,
   DesignerApplication,
   DesignerApplicationInput,
   DesignerApplicationWithProfile,
-} from './use-onboarding';
+} from "./use-onboarding";
 export {
   useStyleArchetypes,
   useAllStyles,
@@ -191,14 +196,14 @@ export {
   useDesignerTeachingStats,
   useDesignerTaughtToday,
   useSubmitTeaching,
-} from './use-teaching';
+} from "./use-teaching";
 export {
   useSimilarProducts,
   useProductEmbeddingStatus,
   useProductsNeedingEmbeddings,
   useEmbeddingStats,
   useProductsForStyle,
-} from './use-similarity';
+} from "./use-similarity";
 export {
   useVendors,
   useVendor,
@@ -212,8 +217,11 @@ export {
   useVoteOnSpecialization,
   useFindOrCreateVendor,
   useSearchVendors,
-} from './use-vendors';
-export type { FindOrCreateVendorInput, FindOrCreateVendorResult } from './use-vendors';
+} from "./use-vendors";
+export type {
+  FindOrCreateVendorInput,
+  FindOrCreateVendorResult,
+} from "./use-vendors";
 export {
   useLeads,
   useLead,
@@ -225,18 +233,22 @@ export {
   useBeginDiscovery,
   useNurtureLead,
   useDeclineLead,
-} from './use-leads';
-export type { Lead, LeadFilters } from './use-leads';
-export { useDiscovery, useUpsertDiscovery, useBeginDirection } from './use-discovery';
+} from "./use-leads";
+export type { Lead, LeadFilters } from "./use-leads";
+export {
+  useDiscovery,
+  useUpsertDiscovery,
+  useBeginDirection,
+} from "./use-discovery";
 export {
   useCeremonyForRelationship,
   useRefreshOfferedSlots,
-} from './use-match-ceremony';
+} from "./use-match-ceremony";
 export type {
   CeremonyForRelationship,
   CeremonyOfferedSlot,
   RefreshOfferedSlotsInput,
-} from './use-match-ceremony';
+} from "./use-match-ceremony";
 export type {
   ClientDiscovery,
   DiscoveryRead,
@@ -246,7 +258,7 @@ export type {
   AvoidItem,
   DecisionMaker,
   UpsertDiscoveryInput,
-} from './use-discovery';
+} from "./use-discovery";
 export {
   useClients,
   useClient,
@@ -260,8 +272,13 @@ export {
   useClientProjects,
   useAddClient,
   useInviteAndLinkClient,
-} from './use-clients';
-export type { DesignerClient, ClientLifecycleStage, ClientMessage, ClientFilters } from './use-clients';
+} from "./use-clients";
+export type {
+  DesignerClient,
+  ClientLifecycleStage,
+  ClientMessage,
+  ClientFilters,
+} from "./use-clients";
 export {
   // Client Decisions
   useClientDecisions,
@@ -289,7 +306,7 @@ export {
   useCreateDecisionComment,
   useUpdateDecisionComment,
   useDeleteDecisionComment,
-} from './use-decisions';
+} from "./use-decisions";
 export type {
   ClientDecision,
   ClientDecisionOption,
@@ -307,7 +324,7 @@ export type {
   DecisionComment,
   DecisionOverride,
   ConsentMethod,
-} from './use-decisions';
+} from "./use-decisions";
 export {
   PROJECT_APPROVAL_CONTRACT,
   projectApprovalKeys,
@@ -327,7 +344,7 @@ export {
   useRespondProjectApproval,
   useWithdrawProjectApproval,
   useSupersedeProjectApproval,
-} from './use-project-approvals';
+} from "./use-project-approvals";
 export type {
   ProjectApprovalArtifactKind,
   ProjectApprovalArtifactCandidate,
@@ -339,7 +356,7 @@ export type {
   ProjectApprovalCreatePayload,
   ProjectApprovalActionResult,
   ProjectApprovalInvalidationScope,
-} from './use-project-approvals';
+} from "./use-project-approvals";
 export {
   projectContextualHandoffKeys,
   invalidateProjectContextualHandoffs,
@@ -350,7 +367,7 @@ export {
   useApproveSiteRequestItem,
   useRequestSiteRequestRedo,
   useCloseSiteRequest,
-} from './use-project-contextual-handoffs';
+} from "./use-project-contextual-handoffs";
 export type {
   ContextualHandoffSourceKind,
   ContextualHandoffActorKind,
@@ -367,7 +384,7 @@ export type {
   SiteRequestRoomChoice,
   SiteRequestActionDetail,
   ProjectContextualHandoffInvalidationScope,
-} from './use-project-contextual-handoffs';
+} from "./use-project-contextual-handoffs";
 export {
   // Project Coordination (Track 5 — the ball-in-court)
   useCoordinationItems,
@@ -391,7 +408,7 @@ export {
   useProjectRoster,
   isProjectArtifactApproval,
   excludeProjectArtifactApprovals,
-} from './use-coordination';
+} from "./use-coordination";
 export type {
   Court,
   CoordinationKind,
@@ -415,13 +432,21 @@ export type {
   RemoveProjectPartyInput,
   RecordPartySmsConsentInput,
   ProjectRosterRow,
-} from './use-coordination';
+} from "./use-coordination";
 // Field Coordination (Wave 5) — SMS triage, cross-project field rollup, and the
 // per-party thread / composer / field-link data layer.
-export { useSmsReviewQueue, useReviewSmsMessage, smsReviewKeys } from './use-sms-review';
-export type { SmsReviewMessage, FieldParsedIntent, ReviewSmsInput } from './use-sms-review';
-export { useFieldActivity, fieldActivityKeys } from './use-field-activity';
-export type { FieldActivityRow } from './use-field-activity';
+export {
+  useSmsReviewQueue,
+  useReviewSmsMessage,
+  smsReviewKeys,
+} from "./use-sms-review";
+export type {
+  SmsReviewMessage,
+  FieldParsedIntent,
+  ReviewSmsInput,
+} from "./use-sms-review";
+export { useFieldActivity, fieldActivityKeys } from "./use-field-activity";
+export type { FieldActivityRow } from "./use-field-activity";
 export {
   usePartySmsThread,
   useSendPartySms,
@@ -431,16 +456,20 @@ export {
   useFieldMediaUrl,
   fieldLinkUrl,
   partySmsKeys,
-} from './use-party-sms';
-export type { PartySmsMessage, FieldLinkToken } from './use-party-sms';
+} from "./use-party-sms";
+export type { PartySmsMessage, FieldLinkToken } from "./use-party-sms";
 export {
   usePeopleDirectory,
   usePerson,
   peopleKeys,
   FIELD_ROSTER_ROLES,
   isFieldRosterRole,
-} from './use-people';
-export type { PartyRole, PeopleDirectoryRow, PeopleFilters } from './use-people';
+} from "./use-people";
+export type {
+  PartyRole,
+  PeopleDirectoryRow,
+  PeopleFilters,
+} from "./use-people";
 export {
   // Client Reviews
   useClientReviews,
@@ -449,27 +478,37 @@ export {
   useSubmitReview,
   useTogglePortfolioPublish,
   useCompletedProjectsWithoutReview,
-} from './use-reviews';
-export type { ClientReview, ReviewFilters, ReviewStats, CompletedProject } from './use-reviews';
+} from "./use-reviews";
+export type {
+  ClientReview,
+  ReviewFilters,
+  ReviewStats,
+  CompletedProject,
+} from "./use-reviews";
 export {
   useMyPendingReviewRequests,
   useMySubmittedReviews,
-} from './use-client-side-reviews';
-export type { ClientPendingReview } from './use-client-side-reviews';
+} from "./use-client-side-reviews";
+export type { ClientPendingReview } from "./use-client-side-reviews";
 export {
   // Client Nurture
   useNurtureTouchpoints,
   useUpdateTouchpoint,
   useCreateTouchpoint,
-} from './use-nurture';
-export type { ClientNurtureTouchpoint, NurtureFilters, TouchpointType, TouchpointStatus } from './use-nurture';
+} from "./use-nurture";
+export type {
+  ClientNurtureTouchpoint,
+  NurtureFilters,
+  TouchpointType,
+  TouchpointStatus,
+} from "./use-nurture";
 export {
   // Client Activity
   useClientActivity,
   useProjectActivityFromLog,
   useLogActivity,
-} from './use-activity';
-export type { ClientActivity, ActivityType } from './use-activity';
+} from "./use-activity";
+export type { ClientActivity, ActivityType } from "./use-activity";
 export {
   useProposals,
   useProposal,
@@ -506,13 +545,13 @@ export {
   useRecordOfflineSignature,
   useDeclineProposal,
   useRequestProposalChange,
-} from './use-proposals';
+} from "./use-proposals";
 export type {
   ProposalEmailDeliveryState,
   ProposalEmailDispatchOutcome,
   ProposalEmailDispatchStatus,
-} from './use-proposals';
-export { commercialKeys } from './use-commercial-documents';
+} from "./use-proposals";
+export { commercialKeys } from "./use-commercial-documents";
 export type {
   Proposal,
   ProposalItem,
@@ -526,31 +565,35 @@ export type {
   ProposalTemplate,
   ProposalEngagementEvent,
   ProposalEngagementStats,
-} from './use-proposals';
+} from "./use-proposals";
 export {
   useEarnings,
   useEarningsStats,
   useMonthlyEarnings,
   usePayouts,
   usePayoutStats,
-} from './use-earnings';
-export type { DesignerEarning, DesignerPayout, EarningsFilters } from './use-earnings';
+} from "./use-earnings";
+export type {
+  DesignerEarning,
+  DesignerPayout,
+  EarningsFilters,
+} from "./use-earnings";
 export {
   useProfile,
   useUpdateProfile,
   useSettings,
   useUpdateSettings,
   useUploadAvatar,
-} from './use-settings';
-export type { UserProfile, UserSettings } from './use-settings';
+} from "./use-settings";
+export type { UserProfile, UserSettings } from "./use-settings";
 export {
   useAvailability,
   useSetAvailability,
   useAvailabilityRealtime,
   availabilityKeys,
   AVAILABILITY_STATUSES,
-} from './use-availability';
-export type { AvailabilityStatus } from './use-availability';
+} from "./use-availability";
+export type { AvailabilityStatus } from "./use-availability";
 export {
   useRoomScans,
   useRoomScan,
@@ -561,28 +604,28 @@ export {
   useAssociateRoomScanWithProject,
   useProjectRoomScans,
   useSignedScanModelUrl,
-} from './use-room-scans';
+} from "./use-room-scans";
 export type {
   RoomScan,
   RoomScanDimensions,
   RoomScanFeatures,
   RoomScanStyleSignals,
   RoomScanFilters,
-} from './use-room-scans';
+} from "./use-room-scans";
 export {
   useRoomScanPhotos,
   useRoomScanCovers,
   resolveCoverPhoto,
   dedupeRoomScanPhotos,
   publicUrlToPath,
-} from './use-room-scan-photos';
-export type { RoomScanPhotoRow, RoomScanPhoto } from './use-room-scan-photos';
+} from "./use-room-scan-photos";
+export type { RoomScanPhotoRow, RoomScanPhoto } from "./use-room-scan-photos";
 export {
   useRoomFiles,
   useGeneratedRoomFilesByScan,
   useRoomFileMeasurements,
   useScanContextCaptures,
-} from './use-room-files';
+} from "./use-room-files";
 export type {
   RoomFile,
   RoomFileListItem,
@@ -598,20 +641,28 @@ export type {
   RoomFileMeasurement,
   ScanContextCapture,
   ToleranceClass,
-} from './use-room-files';
-export { useSplatUrl, readSplatArtifactRef, SPLAT_ARTIFACT_KIND } from './use-splat-url';
+} from "./use-room-files";
+export {
+  useSplatUrl,
+  readSplatArtifactRef,
+  SPLAT_ARTIFACT_KIND,
+} from "./use-splat-url";
 export type {
   SplatArtifactRef,
   SplatSource,
   SplatUnavailableReason,
   UseSplatUrlOptions,
-} from './use-splat-url';
-export { useRenderShots, readRendersArtifactPresence, RENDERS_ARTIFACT_KIND } from './use-render-shots';
+} from "./use-splat-url";
+export {
+  useRenderShots,
+  readRendersArtifactPresence,
+  RENDERS_ARTIFACT_KIND,
+} from "./use-render-shots";
 export type {
   RenderShotsSource,
   RenderShotsUnavailableReason,
   UseRenderShotsOptions,
-} from './use-render-shots';
+} from "./use-render-shots";
 export {
   useOpenDesignRequests,
   useClaimDesignRequest,
@@ -620,7 +671,7 @@ export {
   useCeremony,
   useSaveCeremonyDraft,
   useCeremonyComplete,
-} from './use-design-requests';
+} from "./use-design-requests";
 export type {
   OpenDesignRequest,
   ClaimDesignRequestResult,
@@ -631,7 +682,7 @@ export type {
   CeremonyCompleteResult,
   CeremonyDraftPatch,
   CeremonyCompleteInput,
-} from './use-design-requests';
+} from "./use-design-requests";
 export {
   useRooms,
   useRoom,
@@ -646,7 +697,7 @@ export {
   useClientStyleSignals,
   useRecalculateStyleSignals,
   useScanModelUrl,
-} from './use-rooms';
+} from "./use-rooms";
 export type {
   Room,
   RoomFeature,
@@ -654,7 +705,7 @@ export type {
   UserStyleSignals,
   RoomFilters,
   RoomType,
-} from './use-rooms';
+} from "./use-rooms";
 export {
   useRoomScanAssociations,
   useRoomScanAssociation,
@@ -668,19 +719,19 @@ export {
   useDenyAccessRequest,
   useRevokeScanAccess,
   useUpdateAccessLevel,
-} from './use-room-scan-associations';
+} from "./use-room-scan-associations";
 export {
   useSaveMeasurements,
   useSaveAnnotations,
   useSaveRoomScanData,
-} from './use-room-scan-data';
-export { useRoomGeometry } from './use-room-geometry';
+} from "./use-room-scan-data";
+export { useRoomGeometry } from "./use-room-geometry";
 export type {
   RoomGeometryDocument,
   RoomGeometryHeader,
   RoomGeometryElement,
   RoomGeometryData,
-} from './use-room-geometry';
+} from "./use-room-geometry";
 export {
   useOrganizations,
   useOrganization,
@@ -697,7 +748,7 @@ export {
   useTransferOrganizationOwnership,
   useSetMyMemberTitle,
   useUpdateMemberStaffRole,
-} from './use-organizations';
+} from "./use-organizations";
 export type {
   Organization,
   OrganizationType,
@@ -710,13 +761,13 @@ export type {
   OrganizationMemberWithProfile,
   CreateOrganizationInput,
   InviteMemberInput,
-} from './use-organizations';
-export { useStudioIdentity } from './use-studio-identity';
+} from "./use-organizations";
+export { useStudioIdentity } from "./use-studio-identity";
 export type {
   StudioIdentity,
   StudioIdentitySource,
   UseStudioIdentityParams,
-} from './use-studio-identity';
+} from "./use-studio-identity";
 export {
   useUserRoles,
   useUserPermissions,
@@ -735,14 +786,14 @@ export {
   hasPermission,
   hasAnyPermission,
   hasAllPermissions,
-} from './use-permissions';
+} from "./use-permissions";
 export type {
   Role,
   RoleDomain,
   Permission,
   UserRoleAssignment,
   PermissionContext,
-} from './use-permissions';
+} from "./use-permissions";
 export {
   // API Key Management (Phase 4)
   useOrganizationApiKeys,
@@ -753,7 +804,7 @@ export {
   useRevokeApiKey,
   useRegenerateApiKey,
   API_KEY_SCOPES,
-} from './use-api-keys';
+} from "./use-api-keys";
 export type {
   ApiKey,
   ApiKeyEnvironment,
@@ -761,7 +812,7 @@ export type {
   ApiKeyScope,
   CreateApiKeyInput,
   CreateApiKeyResult,
-} from './use-api-keys';
+} from "./use-api-keys";
 export {
   // Audit Logging (Phase 4)
   useAuditLogs,
@@ -770,7 +821,7 @@ export {
   useAuditLogStats,
   useCreateAuditLog,
   useLogAction,
-} from './use-audit-logs';
+} from "./use-audit-logs";
 export type {
   AuditAction,
   AuditResource,
@@ -778,7 +829,7 @@ export type {
   AuditLogWithUser,
   AuditLogFilters,
   CreateAuditLogInput,
-} from './use-audit-logs';
+} from "./use-audit-logs";
 export {
   // GDPR Compliance (Phase 4)
   useMyDataExportRequests,
@@ -793,7 +844,7 @@ export {
   useGrantConsent,
   useRevokeConsent,
   CONSENT_TYPES,
-} from './use-gdpr';
+} from "./use-gdpr";
 export type {
   DataExportStatus,
   DataExportRequest,
@@ -802,34 +853,34 @@ export type {
   DataExportContent,
   ConsentRecord,
   ConsentType,
-} from './use-gdpr';
+} from "./use-gdpr";
 export {
   // Engagement Tracking
   useEngagementScore,
   useMyEngagementScore,
   useRecentEngagementEvents,
   useTrackEngagementEvent,
-} from './use-engagement';
+} from "./use-engagement";
 export type {
   AnalyticsPlatform,
   EngagementTier,
   EngagementScore,
   EngagementEvent,
   EngagementEventFilters,
-} from './use-engagement';
+} from "./use-engagement";
 export {
   // Waitlist Management
   useWaitlistEntries,
   useWaitlistStats,
   useWaitlistEntry,
   useInsertWaitlistEntry,
-} from './use-waitlist';
+} from "./use-waitlist";
 export type {
   WaitlistEntry,
   WaitlistFilters,
   WaitlistStats,
   WaitlistInsertInput,
-} from './use-waitlist';
+} from "./use-waitlist";
 export {
   // Insights Dashboard (Admin)
   useInsightsOverview,
@@ -841,7 +892,7 @@ export {
   useConversionFunnel,
   useDesignerFunnel,
   useConsumerFunnel,
-} from './use-insights';
+} from "./use-insights";
 export type {
   InsightsOverview,
   WaitlistTimeSeriesPoint,
@@ -850,12 +901,12 @@ export type {
   TopEngagedUser,
   PlatformActiveUsers,
   FunnelStep,
-} from './use-insights';
+} from "./use-insights";
 export {
   // Notification Preferences
   useNotificationPreferences,
   useUpdateNotificationPreferences,
-} from './use-notification-preferences';
+} from "./use-notification-preferences";
 export {
   // Campaigns
   useCampaigns,
@@ -867,21 +918,21 @@ export {
   useDeleteCampaign,
   useCancelCampaign,
   useAbVariantStats,
-} from './use-campaigns';
-export type { AbVariantStats } from './use-campaigns';
+} from "./use-campaigns";
+export type { AbVariantStats } from "./use-campaigns";
 export {
   // Communications Dashboard
   useCommsDashboard,
   useRecentActivity,
   useUpcomingSends,
-} from './use-comms-dashboard';
+} from "./use-comms-dashboard";
 export type {
   CommsDashboardStats,
   CommsDashboardData,
   SendVolumePoint,
   RecentActivity,
   ScheduledSend,
-} from './use-comms-dashboard';
+} from "./use-comms-dashboard";
 export {
   // Email Templates
   useTemplates,
@@ -890,7 +941,7 @@ export {
   useUpdateTemplate,
   useDeleteTemplate,
   useTemplatePreview,
-} from './use-templates';
+} from "./use-templates";
 export {
   // Audience Segments
   useAudienceSegments,
@@ -899,7 +950,7 @@ export {
   useUpdateAudienceSegment,
   useDeleteAudienceSegment,
   useEstimateAudienceSize,
-} from './use-audience-segments';
+} from "./use-audience-segments";
 export {
   // Communications Analytics
   useAnalyticsOverview,
@@ -907,7 +958,7 @@ export {
   useRevenueAttribution,
   useEngagementCohorts,
   useDeliveryHealth,
-} from './use-analytics';
+} from "./use-analytics";
 export type {
   TimeSeriesPoint,
   TopCampaign,
@@ -919,7 +970,7 @@ export type {
   EngagementCohortTier,
   EngagementCohortsData,
   DeliveryHealthData,
-} from './use-analytics';
+} from "./use-analytics";
 export {
   // Automations
   useAutomations,
@@ -933,11 +984,11 @@ export {
   useAutomationEnrollments,
   useEnrollInAutomation,
   useUnenrollFromAutomation,
-} from './use-automations';
+} from "./use-automations";
 export type {
   AutomationEnrollment,
   AutomationEnrollmentsPage,
-} from './use-automations';
+} from "./use-automations";
 export {
   // Scope Builder
   useProposalScopeRooms,
@@ -967,14 +1018,14 @@ export {
   useRemoveProposalScheduleMilestone,
   mapProposalPhaseRowToScheduleInput,
   mapProposalScheduleMilestoneRowToScheduleInput,
-} from './use-scope-builder';
+} from "./use-scope-builder";
 export type {
   ProposalScopeRoom,
   ProposalPhase,
   ProposalExclusion,
   ProposalPaymentMilestone,
   ProposalScheduleMilestone,
-} from './use-scope-builder';
+} from "./use-scope-builder";
 export {
   // Project v2 (scope-aware)
   useProjectV2,
@@ -991,7 +1042,7 @@ export {
   useProjectPaymentMilestones,
   useUpdatePaymentMilestoneStatus,
   useProjectFinancials,
-} from './use-project-v2';
+} from "./use-project-v2";
 export {
   useArchiveProjectSelection,
   useCreateNamedProjectNeed,
@@ -1003,8 +1054,11 @@ export {
   usePublishProjectReview,
   useSupersedeProjectSelection,
   useTriageProjectFfeItems,
-} from './use-project-ffe-ga';
-export type { ProjectFfeReadiness, ProjectReviewAttention } from './use-project-ffe-ga';
+} from "./use-project-ffe-ga";
+export type {
+  ProjectFfeReadiness,
+  ProjectReviewAttention,
+} from "./use-project-ffe-ga";
 export type {
   FFEItemFilters,
   ProjectNarrativeSection,
@@ -1016,7 +1070,7 @@ export type {
   UpdateFFEItemPricingInput,
   BulkReassignFfeVendorInput,
   BulkReassignFfeVendorResult,
-} from './use-project-v2';
+} from "./use-project-v2";
 export {
   specBookKeys,
   useProjectSpecBook,
@@ -1028,7 +1082,7 @@ export {
   useRenderSpecBookArtifact,
   useCreateSpecBookShare,
   useRevokeDocumentShare,
-} from './use-spec-books';
+} from "./use-spec-books";
 export type {
   SpecBookAudience,
   SpecBookIssueType,
@@ -1044,18 +1098,18 @@ export type {
   SpecBookWorkbench,
   UpdateProjectFfeSpecInput,
   PrepareSpecBookIssueInput,
-} from './use-spec-books';
+} from "./use-spec-books";
 export {
   // Proposal Activation
   useActivateProposal,
-} from './use-proposal-activation';
+} from "./use-proposal-activation";
 export {
   // Proposal Captures (Wave 2)
   useProposalCaptures,
   useAssignCapture,
   useConsumeCapture,
   useDismissCapture,
-} from './use-proposal-captures';
+} from "./use-proposal-captures";
 export type {
   ProposalCapture,
   UseProposalCapturesOptions,
@@ -1063,7 +1117,7 @@ export type {
   ConsumeCaptureInput,
   ConsumeCaptureResult,
   DismissCaptureInput,
-} from './use-proposal-captures';
+} from "./use-proposal-captures";
 export {
   // Project Team & Permissions (00084)
   useProjectTeamMembers,
@@ -1071,22 +1125,19 @@ export {
   useRemoveProjectTeamMember,
   useProjectPermissions,
   useReassignLead,
-} from './use-project-team';
+} from "./use-project-team";
 export type {
   ProjectRole,
   ProjectTeamMember,
   ProjectPermissions,
-} from './use-project-team';
+} from "./use-project-team";
 export {
   // Proposal Team (00137)
   useProposalTeamMembers,
   useAddProposalTeamMember,
   useRemoveProposalTeamMember,
-} from './use-proposal-team';
-export type {
-  ProposalRole,
-  ProposalTeamMember,
-} from './use-proposal-team';
+} from "./use-proposal-team";
+export type { ProposalRole, ProposalTeamMember } from "./use-proposal-team";
 export {
   // Scope Changes
   COMPLETED_PROJECT_SCOPE_CHANGE_ERROR,
@@ -1100,24 +1151,27 @@ export {
   useApplyScopeChange,
   useCreateClientScopeChangeRequest,
   useCancelClientScopeChangeRequest,
-} from './use-scope-changes';
-export type { ClientScopeChangeRequestReceipt } from './use-scope-changes';
-export { useProjectDocuments } from './use-project-documents';
-export type { ProjectDocument, ProjectDocumentKind } from './use-project-documents';
+} from "./use-scope-changes";
+export type { ClientScopeChangeRequestReceipt } from "./use-scope-changes";
+export { useProjectDocuments } from "./use-project-documents";
+export type {
+  ProjectDocument,
+  ProjectDocumentKind,
+} from "./use-project-documents";
 export {
   useClientNotifications,
   useMarkClientNotificationRead,
   useMarkAllClientNotificationsRead,
-} from './use-client-notifications';
+} from "./use-client-notifications";
 export type {
   ClientNotification,
   ClientNotificationKind,
-} from './use-client-notifications';
+} from "./use-client-notifications";
 export {
   useUploadCommsAttachment,
   useSignedCommsAttachmentUrl,
-} from './use-comms-attachments';
-export { useProductBySourceUrl } from './use-product-source-url';
+} from "./use-comms-attachments";
+export { useProductBySourceUrl } from "./use-product-source-url";
 export {
   // Duplicate Detection
   useDuplicateCheck,
@@ -1126,13 +1180,13 @@ export {
   useDismissDuplicate,
   useMarkAsDuplicate,
   useMergeDuplicates,
-} from './use-duplicate-detection';
+} from "./use-duplicate-detection";
 export type {
   DuplicateMatch,
   DuplicateCheckResult,
   DuplicateGroup,
   DuplicateReport,
-} from './use-duplicate-detection';
+} from "./use-duplicate-detection";
 export {
   // Notification DLQ (admin)
   useDlqEntries,
@@ -1140,27 +1194,27 @@ export {
   useRetryDlqEntry,
   useBulkRetryDlq,
   dlqKeys,
-} from './use-dlq';
+} from "./use-dlq";
 export type {
   DlqEntry,
   DlqFilters,
   DlqListResult,
   RetryDlqResult,
   BulkRetryDlqResult,
-} from './use-dlq';
+} from "./use-dlq";
 export {
   useCompanionConversation,
   useCompanionHistory,
   useSendCompanionMessage,
   useCompanionQuickActions,
-} from './use-companion';
+} from "./use-companion";
 export {
   useInboxNotifications,
   useInboxMessages,
   useUnreadInboxCount,
   useInboxNotificationsRealtime,
   inboxKeys,
-} from './use-inbox';
+} from "./use-inbox";
 export type {
   InboxNotification,
   InboxNotificationFilters,
@@ -1168,14 +1222,14 @@ export type {
   InboxNotificationStatus,
   InboxNotificationChannel,
   InboxMessage,
-} from './use-inbox';
+} from "./use-inbox";
 export type {
   CompanionMessage,
   CompanionResponse,
   QuickAction,
   CompanionContext,
   CompanionConversation,
-} from './use-companion';
+} from "./use-companion";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // In-app messaging (Phase 2 — see docs/prds/in-app-messaging-prd.md)
@@ -1209,7 +1263,7 @@ export {
   useCoordinationItemThread,
   useEnsureCoordinationItemThread,
   commsKeys,
-} from './use-comms';
+} from "./use-comms";
 export type {
   ThreadKind,
   ParticipantRole,
@@ -1226,7 +1280,7 @@ export type {
   SendMessageInput,
   ThreadOverride,
   EnsureItemThreadInput,
-} from './use-comms';
+} from "./use-comms";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Phase deliverables + gates (Wave 4 — see migrations 00133, 00134)
@@ -1238,8 +1292,8 @@ export {
   useToggleDeliverableCompleted,
   useReorderDeliverables,
   useDeleteDeliverable,
-} from './use-phase-deliverables';
-export type { PhaseDeliverable } from './use-phase-deliverables';
+} from "./use-phase-deliverables";
+export type { PhaseDeliverable } from "./use-phase-deliverables";
 
 export {
   usePhaseGates,
@@ -1249,8 +1303,12 @@ export {
   useSatisfyGate,
   useDesignerOverrideGate,
   computePhaseGateStatus,
-} from './use-phase-gates';
-export type { PhaseGate, PhaseGateKind, PhaseGateStatus } from './use-phase-gates';
+} from "./use-phase-gates";
+export type {
+  PhaseGate,
+  PhaseGateKind,
+  PhaseGateStatus,
+} from "./use-phase-gates";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Phase templates (Wave 5 — see migration 00135)
@@ -1258,13 +1316,13 @@ export type { PhaseGate, PhaseGateKind, PhaseGateStatus } from './use-phase-gate
 export {
   usePhaseTemplates,
   useApplyPhaseTemplate,
-} from './use-phase-templates';
+} from "./use-phase-templates";
 export type {
   PhaseTemplate,
   PhaseTemplatePhase,
   PhaseTemplateDeliverable,
   PhaseTemplateGate,
-} from './use-phase-templates';
+} from "./use-phase-templates";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Color palette + paint colors (Wave 3 — see migrations 00131, 00132)
@@ -1277,7 +1335,7 @@ export {
   useUpsertSwatch,
   useDeleteSwatch,
   useReorderSwatches,
-} from './use-palettes';
+} from "./use-palettes";
 export type {
   PaletteSwatchRole,
   ProposalPalette,
@@ -1285,9 +1343,9 @@ export type {
   PaletteWithSwatches,
   UpsertPaletteInput,
   UpsertSwatchInput,
-} from './use-palettes';
-export { useSearchPaintColors, usePaintColor } from './use-paint-colors';
-export type { PaintColor, PaintColorBrand } from './use-paint-colors';
+} from "./use-palettes";
+export { useSearchPaintColors, usePaintColor } from "./use-paint-colors";
+export type { PaintColor, PaintColorBrand } from "./use-paint-colors";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Procurement Workspace v1 (Wave 1.2 — see migration 00148)
@@ -1332,7 +1390,7 @@ export {
   useMarkProcurementNotificationRead,
   // Sprint 3 / Wave 3.3 — Capture-to-slot integration
   useAssignProductToFfeSlot,
-} from './use-procurement';
+} from "./use-procurement";
 export type {
   PaymentPattern,
   POPaymentKind,
@@ -1372,7 +1430,7 @@ export type {
   // Sprint 3 / Wave 3.2 — Procurement notifications (migration 00151)
   ProcurementNotificationKind,
   ProcurementNotification,
-} from './use-procurement';
+} from "./use-procurement";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Mood boards (Wave 1 — see migration 00179)
@@ -1397,7 +1455,7 @@ export {
   summarizeBoard,
   normalizeBoardOwner,
   boardOwnerQueryKeys,
-} from './use-boards';
+} from "./use-boards";
 export type {
   BoardOwnerInput,
   BoardItemType,
@@ -1414,16 +1472,16 @@ export type {
   UpdateBoardItemInput,
   ApplyBoardRoomStateInput,
   BoardLayoutPosition,
-} from './use-boards';
+} from "./use-boards";
 export {
   emptyBoardVerdictCounts,
   summarizeBoardVerdicts,
-} from './board-verdicts';
+} from "./board-verdicts";
 export type {
   BoardVerdictCounts,
   BoardVerdictProjection,
   BoardItemVerdictProjection,
-} from './board-verdicts';
+} from "./board-verdicts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Invoicing money core (Wave 1 — see migration 00178)
@@ -1451,7 +1509,7 @@ export {
   computeArAging,
   invoiceDaysOverdue,
   AR_BUCKET_LABELS,
-} from './use-invoices';
+} from "./use-invoices";
 export type {
   Invoice,
   ArAging,
@@ -1475,7 +1533,7 @@ export type {
   OnlinePaymentMethod,
   InvoicePaymentOptions,
   NotifyCheckIntentResult,
-} from './use-invoices';
+} from "./use-invoices";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Studio billing settings (invoice payment-method surcharge config —
@@ -1484,8 +1542,8 @@ export type {
 export {
   useStudioBillingSettings,
   useUpdateStudioBillingSettings,
-} from './use-studio-billing';
-export type { StudioBillingSettings } from './use-studio-billing';
+} from "./use-studio-billing";
+export type { StudioBillingSettings } from "./use-studio-billing";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Direct orders — client "buy now" on Patina-managed products, the third
@@ -1495,15 +1553,19 @@ export {
   useDirectOrders,
   useCreateDirectOrder,
   useStartDirectOrderCheckout,
-} from './use-direct-orders';
-export type { DirectOrder, DirectOrderStatus, DirectOrderShipping } from './use-direct-orders';
+} from "./use-direct-orders";
+export type {
+  DirectOrder,
+  DirectOrderStatus,
+  DirectOrderShipping,
+} from "./use-direct-orders";
 
 // Aesthete Engine — Wave 3B hooks batch (design §5.2 prefill, §8 taste, §8.5 Your Eye)
 export {
   useProductDnaDraft,
   resolveSpectrumPrefill,
   summarizeDraftFacts,
-} from './use-product-dna';
+} from "./use-product-dna";
 export type {
   ProductDnaDraft,
   DnaDraftBody,
@@ -1512,7 +1574,7 @@ export type {
   DnaDraftPatina,
   SpectrumPrefill,
   SpectrumPrefillSource,
-} from './use-product-dna';
+} from "./use-product-dna";
 export {
   useDueTasteProbes,
   useJudgmentPool,
@@ -1525,7 +1587,7 @@ export {
   useMyStyleConfidence,
   buildJudgmentDeck,
   nudgeBiasStrength,
-} from './use-aesthete-taste';
+} from "./use-aesthete-taste";
 export type {
   JudgmentChoice,
   JudgmentContext,
@@ -1540,17 +1602,17 @@ export type {
   SignatureBiasRow,
   BiasOverride,
   StyleConfidenceRow,
-} from './use-aesthete-taste';
+} from "./use-aesthete-taste";
 // 3C — the Engine's ask path (aesthete-ask edge fn). Appended at the END per
 // the wave-3 barrel contention rule (3B owns this file's body this wave;
 // conductor resolves the export list on merge).
-export { useEngineAsk } from './use-engine-ask';
+export { useEngineAsk } from "./use-engine-ask";
 export type {
   EngineAskItem,
   EngineAskMatchSource,
   EngineAskResult,
   UseEngineAskOptions,
-} from './use-engine-ask';
+} from "./use-engine-ask";
 // Feedback layer (docs/ledger/patina-feedback-layer-prd.md) — capture, ledger,
 // triage, close-the-loop.
 export {
@@ -1563,7 +1625,7 @@ export {
   useReactToFeedback,
   useReplyToFeedback,
   useMarkFeedbackSeen,
-} from './use-feedback';
+} from "./use-feedback";
 export type {
   Feedback,
   FeedbackBucket,
@@ -1573,7 +1635,7 @@ export type {
   FeedbackEventKind,
   FeedbackFilters,
   CreateFeedbackInput,
-} from './use-feedback';
+} from "./use-feedback";
 
 // Schedule & Boards Wave 2 · Track C — document shares (C2) + per-line verdicts (C3)
 export {
@@ -1582,8 +1644,8 @@ export {
   useCreateShare,
   useCreateBoardShare,
   useRevokeShare,
-} from './use-document-shares';
-export type { DocumentShare, CreatedShare } from './use-document-shares';
+} from "./use-document-shares";
+export type { DocumentShare, CreatedShare } from "./use-document-shares";
 
 export {
   useBoardTemplates,
@@ -1591,11 +1653,11 @@ export {
   useMaterializeBoardTemplate,
   useRenameBoardTemplate,
   useDeleteBoardTemplate,
-} from './use-board-templates';
-export type { BoardTemplate } from './use-board-templates';
+} from "./use-board-templates";
+export type { BoardTemplate } from "./use-board-templates";
 
-export { useRecentBoards } from './use-recent-boards';
-export type { RecentBoard } from './use-recent-boards';
+export { useRecentBoards } from "./use-recent-boards";
+export type { RecentBoard } from "./use-recent-boards";
 export {
   useProposalFeedback,
   useClientProposalFeedback,
@@ -1605,8 +1667,12 @@ export {
   useSubmitVerdict,
   useReplyToItemFeedback,
   useResolveFeedback,
-} from './use-item-feedback';
-export type { ItemFeedback, ItemFeedbackEvent, Verdict } from './use-item-feedback';
+} from "./use-item-feedback";
+export type {
+  ItemFeedback,
+  ItemFeedbackEvent,
+  Verdict,
+} from "./use-item-feedback";
 
 // Schedule & Boards Wave 3 · Track A — Designer-Taught Intelligence (A1/C4/B6/A3)
 export {
@@ -1614,15 +1680,15 @@ export {
   useLogSuggestionEvent,
   useSwapLineToProduct,
   useEscalateFeedbackToDecision,
-} from './use-taught-alternatives';
+} from "./use-taught-alternatives";
 export type {
   TaughtAlternative,
   SuggestionContext,
   SuggestionAction,
   SuggestionEventInput,
-} from './use-taught-alternatives';
-export { useCaptureFromUrl } from './use-capture-from-url';
-export type { CaptureFromUrlResult } from './use-capture-from-url';
+} from "./use-taught-alternatives";
+export { useCaptureFromUrl } from "./use-capture-from-url";
+export type { CaptureFromUrlResult } from "./use-capture-from-url";
 
 // The Document · Schedule (C4) — the Spine's data layer: read-only
 // schedule_milestones/schedule_revisions + useResolvedSchedule, the single
@@ -1634,15 +1700,20 @@ export {
   useResolvedSchedule,
   mapPhaseRowToScheduleInput,
   mapMilestoneRowToScheduleInput,
-} from './use-schedule';
-export type { PhaseRow, MilestoneRow, ScheduleRevisionRow, UseResolvedScheduleResult } from './use-schedule';
+} from "./use-schedule";
+export type {
+  PhaseRow,
+  MilestoneRow,
+  ScheduleRevisionRow,
+  UseResolvedScheduleResult,
+} from "./use-schedule";
 
 export {
   invalidateProjectWorkflow,
   projectWorkflowQueryKey,
   useProjectWorkflow,
   type ProjectWorkflowRow,
-} from './use-project-workflow';
+} from "./use-project-workflow";
 
 // The Document · Schedule (C4) — Slice 03 (Compose): write paths for
 // schedule_milestones + the project_phases chain columns, delete-with-relink,
@@ -1659,16 +1730,16 @@ export {
   useCopyScheduleAsBuilt,
   useCommitScheduleEdit,
   serializeRippleEditForRpc,
-} from './use-schedule-compose';
+} from "./use-schedule-compose";
 export type {
   DeleteProjectPhaseReceipt,
   RipplePendingEditInput,
   SerializedRippleEdit,
-} from './use-schedule-compose';
+} from "./use-schedule-compose";
 
 // The shared invalidate-then-materialize tail every schedule-shaping
 // mutation hook above calls in its onSuccess (00480).
-export { settleScheduleWrite } from './schedule-write-settle';
+export { settleScheduleWrite } from "./schedule-write-settle";
 
 // The Document · Schedule — Wave 2 (R109/R110, I130): schedule_proposals, the
 // one home for every proposed anchor, and its two designer acts.
@@ -1677,8 +1748,8 @@ export {
   useCommitScheduleProposal,
   useDismissScheduleProposal,
   SCHEDULE_PROPOSAL_READ_LIMIT,
-} from './use-schedule-proposals';
-export type { ScheduleProposalRow } from './use-schedule-proposals';
+} from "./use-schedule-proposals";
+export type { ScheduleProposalRow } from "./use-schedule-proposals";
 
 // The Document · Schedule — Wave 3 (R112, I126): the install window's three
 // faces. Hold is studio-only and moves nothing; confirm writes the anchor;
@@ -1688,16 +1759,20 @@ export {
   useHoldInstallWindow,
   useConfirmInstallWindow,
   useReleaseInstallWindow,
-} from './use-install-window';
+} from "./use-install-window";
 export type {
   InstallWindowRow,
   ScheduleDisclosedImpactInput,
-} from './use-install-window';
+} from "./use-install-window";
 
 // The Room View (W2-T2) — The Rooms roster's data hook: room_scan_documents
 // rows + their geometry elements, one query per scan set.
-export { useRoomRoster } from './use-room-roster';
-export type { RoomRosterScan, RoomRosterScanRow, RoomRosterGeometryElementRow } from './use-room-roster';
+export { useRoomRoster } from "./use-room-roster";
+export type {
+  RoomRosterScan,
+  RoomRosterScanRow,
+  RoomRosterGeometryElementRow,
+} from "./use-room-roster";
 
 // Field Capture P2 (Layer 3) — Refine's published artifacts: the delivery
 // record in `room_files.present.refine` (an OBJECT — `present.refine_engine`
@@ -1710,12 +1785,12 @@ export {
   DEFAULT_REFINE_ARTIFACT_NAMES,
   REFINE_PRESENT_KEY,
   REFINE_DELIVERY_CONTRACT,
-} from './use-scan-refine-artifacts';
+} from "./use-scan-refine-artifacts";
 export type {
   ScanRefineArtifacts,
   ScanRefineArtifactSet,
   UseScanRefineArtifactsOptions,
-} from './use-scan-refine-artifacts';
+} from "./use-scan-refine-artifacts";
 
 // The Rolodex (Call Sheet Wave 2, R1) — the shared studio contact book:
 // `studio_contacts` (00417), fully shared at the studio, plus the
@@ -1730,7 +1805,7 @@ export {
   usePromoteToStudioContact,
   useStudioContactHistory,
   studioContactKeys,
-} from './use-studio-contacts';
+} from "./use-studio-contacts";
 export type {
   StudioContact,
   AddStudioContactInput,
@@ -1738,7 +1813,7 @@ export type {
   StudioContactFilters,
   StudioContactHistory,
   PromoteToStudioContactInput,
-} from './use-studio-contacts';
+} from "./use-studio-contacts";
 
 // The Plan Room (00429) — sheets, prints, batches, issues, transmittals: the
 // bundle query, the ceremonies, and the client-portal shared set.
@@ -1755,7 +1830,7 @@ export {
   useReissuePlanTransmittalLink,
   useRevokePlanTransmittalLink,
   useClientPlanSet,
-} from './use-plan-room';
+} from "./use-plan-room";
 export type {
   PlanSheet,
   PlanPrint,
@@ -1773,4 +1848,4 @@ export type {
   PrintUploadInput,
   FilePlanPrintEntry,
   ClientPlanSheet,
-} from './use-plan-room';
+} from "./use-plan-room";
