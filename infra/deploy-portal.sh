@@ -201,7 +201,39 @@ elif [ "$PREFLIGHT_STORAGE_KEY" != "$DERIVED_STORAGE_KEY" ] && [ "$PREFLIGHT_STO
   exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# D-B2 (docs/engineering/repoint-b0-audit.md): runtime-resolved origin check.
+#
+# apps/*/src/app/layout.tsx emits globalThis.__PATINA_SUPABASE_ORIGIN from a
+# server-read SUPABASE_ORIGIN_RUNTIME env var (falling back to the same
+# build-time NEXT_PUBLIC_SUPABASE_URL already validated above).
+# packages/supabase/src/client.ts resolves that global AT
+# CLIENT-CONSTRUCTION TIME, ahead of NEXT_PUBLIC_SUPABASE_URL — so if
+# SUPABASE_ORIGIN_RUNTIME is ever set to something other than the build-time
+# URL, every browser Supabase call in this build would silently target a
+# DIFFERENT project than the one the bundle's anon key/storage key were
+# compiled against. That's a broken-auth failure mode as bad as the
+# empty-env white-screen this preflight already guards, so it must fail
+# CLOSED rather than ship a cross-project client. SUPABASE_ORIGIN_RUNTIME is
+# unset everywhere today (this wave changes no value), so this check is inert
+# until a future repoint sets it.
+# ---------------------------------------------------------------------------
+PREFLIGHT_ORIGIN_RUNTIME="$(resolve_next_public_var SUPABASE_ORIGIN_RUNTIME)"
+if [ -n "$PREFLIGHT_ORIGIN_RUNTIME" ] && [ "$PREFLIGHT_ORIGIN_RUNTIME" != "$PREFLIGHT_URL" ]; then
+  echo "ERROR: refusing to build ${PORTAL} portal — SUPABASE_ORIGIN_RUNTIME=" >&2
+  echo "       ${PREFLIGHT_ORIGIN_RUNTIME} diverges from the build-time" >&2
+  echo "       NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL} this bundle is" >&2
+  echo "       compiled against. packages/supabase/src/client.ts resolves the" >&2
+  echo "       runtime origin FIRST, so this build's client would silently" >&2
+  echo "       target a different Supabase project than its anon key/storage" >&2
+  echo "       key were compiled for. Align SUPABASE_ORIGIN_RUNTIME with" >&2
+  echo "       NEXT_PUBLIC_SUPABASE_URL, or unset it to inherit the" >&2
+  echo "       build-time value, before deploying." >&2
+  exit 1
+fi
+
 echo "==> [0/3] Preflight OK: NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL}"
+echo "==> [0/3] Preflight OK: runtime-origin path resolves (SUPABASE_ORIGIN_RUNTIME=${PREFLIGHT_ORIGIN_RUNTIME:-<unset, inherits build-time URL>})"
 echo
 
 # ---------------------------------------------------------------------------

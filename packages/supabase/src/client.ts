@@ -13,8 +13,46 @@ import { getCookieDomain } from "./lib/cookie-domain";
 // SUPABASE CLIENT FACTORY
 // ═══════════════════════════════════════════════════════════════════════════
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+/**
+ * Runtime-resolvable Supabase origin (Workstream D-B2,
+ * docs/engineering/repoint-b0-audit.md).
+ *
+ * Each portal's root layout emits `globalThis.__PATINA_SUPABASE_ORIGIN` from
+ * a `next/script` `beforeInteractive` inline script, read from a server-side
+ * env var — guaranteed by Next's runtime to execute before hydration/app
+ * interactivity, regardless of the client's construction path. That lets a
+ * later repoint flip a var + redeploy the head script instead of rebuilding
+ * every portal bundle (today, `NEXT_PUBLIC_SUPABASE_URL` is inlined into the
+ * bundle at build time by `infra/deploy-portal.sh`, so a repoint = a
+ * rebuild).
+ *
+ * This wave only makes the origin runtime-RESOLVABLE at today's value — no
+ * value changes, no bucketing/rollout logic. That's a later gated cutover.
+ */
+declare global {
+  // eslint-disable-next-line no-var
+  var __PATINA_SUPABASE_ORIGIN: string | undefined;
+}
+
+/**
+ * Resolves the Supabase origin. MUST be called at client-construction time,
+ * never hoisted into a module-scope const — a module-scope const evaluates
+ * once at bundle-eval time, before the head script above has a chance to run,
+ * and would silently pin the build-time fallback forever (the white-screen
+ * failure mode this getter exists to avoid).
+ */
+function getSupabaseUrl(): string {
+  if (
+    typeof globalThis !== "undefined" &&
+    typeof globalThis.__PATINA_SUPABASE_ORIGIN === "string" &&
+    globalThis.__PATINA_SUPABASE_ORIGIN.length > 0
+  ) {
+    return globalThis.__PATINA_SUPABASE_ORIGIN;
+  }
+  return process.env.NEXT_PUBLIC_SUPABASE_URL!;
+}
 
 /**
  * Pinned auth storage key (Workstream D-B1, docs/engineering/repoint-b0-audit.md §5).
@@ -66,7 +104,7 @@ export function createClient(): SupabaseClient<Database> {
     return createBrowserClient() as SupabaseClient<Database>;
   }
   // Server-side, create a basic client
-  return createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey);
+  return createSupabaseClient<Database>(getSupabaseUrl(), supabaseAnonKey);
 }
 
 /**
@@ -84,7 +122,7 @@ export function createBrowserClient(): SupabaseClient<Database> {
   if (typeof window !== "undefined") {
     if (!globalThis.__supabaseBrowserClient) {
       globalThis.__supabaseBrowserClient = createSSRBrowserClient<Database>(
-        supabaseUrl,
+        getSupabaseUrl(),
         supabaseAnonKey,
         {
           cookieOptions,
@@ -95,7 +133,7 @@ export function createBrowserClient(): SupabaseClient<Database> {
     return globalThis.__supabaseBrowserClient;
   }
   // SSR fallback - create new instance (will be replaced on client)
-  return createSSRBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
+  return createSSRBrowserClient<Database>(getSupabaseUrl(), supabaseAnonKey, {
     cookieOptions,
     auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
   }) as unknown as SupabaseClient<Database>;
@@ -110,7 +148,7 @@ export function createBrowserClient(): SupabaseClient<Database> {
  * operation is still current.
  */
 export function createEphemeralAuthClient(): SupabaseClient<Database> {
-  return createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey, {
+  return createSupabaseClient<Database>(getSupabaseUrl(), supabaseAnonKey, {
     auth: {
       autoRefreshToken: false,
       detectSessionInUrl: false,
@@ -155,7 +193,7 @@ export function createMiddlewareClient(
   const hostname = host?.replace(/:\d+$/, "");
   const cookieOptions = buildAuthCookieOptions(hostname);
 
-  return createSSRServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+  return createSSRServerClient<Database>(getSupabaseUrl(), supabaseAnonKey, {
     cookieOptions,
     auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
     cookies: {
@@ -188,7 +226,7 @@ export function createMiddlewareClient(
  */
 export function createAdminClient(serviceRoleKey?: string) {
   const key = serviceRoleKey || process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  const adminUrl = process.env.SUPABASE_INTERNAL_URL || supabaseUrl;
+  const adminUrl = process.env.SUPABASE_INTERNAL_URL || getSupabaseUrl();
   return createSupabaseClient<Database>(adminUrl, key, {
     auth: {
       autoRefreshToken: false,
