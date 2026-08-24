@@ -155,6 +155,7 @@ const MINIMAL_EXTRACTED_DATA = {
     legHeight: null,
     clearance: null,
     unit: 'in' as const,
+    raw: '32"W x 34"H x 30"D',
   },
   materials: [],
   colors: null,
