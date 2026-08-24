@@ -11569,3 +11569,69 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.issue_trade_draw_invoice(uuid), public.prepare_spec_book_issue( uuid, text[], text, text, uuid, text, jsonb ), public.publish_project_review(jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00514_capture_enrichment_ledger.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.capture_enrichment_runs FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00514_capture_enrichment_ledger.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.capture_enrichment_runs TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00514_capture_enrichment_ledger.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.capture_enrichment_runs TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00514_capture_enrichment_ledger.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.capture_enrichment_outbox FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00514_capture_enrichment_ledger.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.capture_enrichment_outbox TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00515_capture_enrichment_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.enqueue_capture_enrichment(text, uuid, integer, text, text, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00515_capture_enrichment_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.enqueue_capture_enrichment(text, uuid, integer, text, text, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00515_capture_enrichment_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_capture_enrichment_run(uuid, integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00515_capture_enrichment_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_capture_enrichment_run(uuid, integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00515_capture_enrichment_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_capture_enrichment_result(uuid, jsonb, jsonb, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00515_capture_enrichment_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_capture_enrichment_result(uuid, jsonb, jsonb, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

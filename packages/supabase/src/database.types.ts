@@ -1168,6 +1168,98 @@ export type Database = {
           },
         ];
       };
+      capture_enrichment_outbox: {
+        Row: {
+          content_revision: number;
+          created_at: string;
+          dispatched_at: string | null;
+          enrichment_run_id: string;
+          id: string;
+          schema_version: number;
+          trace_id: string;
+        };
+        Insert: {
+          content_revision: number;
+          created_at?: string;
+          dispatched_at?: string | null;
+          enrichment_run_id: string;
+          id?: string;
+          schema_version?: number;
+          trace_id: string;
+        };
+        Update: {
+          content_revision?: number;
+          created_at?: string;
+          dispatched_at?: string | null;
+          enrichment_run_id?: string;
+          id?: string;
+          schema_version?: number;
+          trace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "capture_enrichment_outbox_enrichment_run_id_fkey";
+            columns: ["enrichment_run_id"];
+            isOneToOne: false;
+            referencedRelation: "capture_enrichment_runs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      capture_enrichment_runs: {
+        Row: {
+          attempts: number;
+          content_hash: string | null;
+          content_revision: number;
+          created_at: string;
+          dispatched_at: string | null;
+          error_class: string | null;
+          id: string;
+          model_metadata: Json;
+          pipeline_version: string | null;
+          provenance: Json;
+          status: string;
+          suggestions: Json;
+          target_id: string;
+          target_type: string;
+          updated_at: string;
+        };
+        Insert: {
+          attempts?: number;
+          content_hash?: string | null;
+          content_revision: number;
+          created_at?: string;
+          dispatched_at?: string | null;
+          error_class?: string | null;
+          id?: string;
+          model_metadata?: Json;
+          pipeline_version?: string | null;
+          provenance?: Json;
+          status?: string;
+          suggestions?: Json;
+          target_id: string;
+          target_type: string;
+          updated_at?: string;
+        };
+        Update: {
+          attempts?: number;
+          content_hash?: string | null;
+          content_revision?: number;
+          created_at?: string;
+          dispatched_at?: string | null;
+          error_class?: string | null;
+          id?: string;
+          model_metadata?: Json;
+          pipeline_version?: string | null;
+          provenance?: Json;
+          status?: string;
+          suggestions?: Json;
+          target_id?: string;
+          target_type?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       catalog_feed_batches: {
         Row: {
           auto_count: number | null;
@@ -29368,6 +29460,10 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      claim_capture_enrichment_run: {
+        Args: { p_content_revision: number; p_run_id: string };
+        Returns: string;
+      };
       claim_design_request: { Args: { p_lead_id: string }; Returns: Json };
       claim_invoice_checkout_attempt: {
         Args: {
@@ -29678,6 +29774,56 @@ export type Database = {
           id: string;
           token: string;
         }[];
+      };
+      create_draft_invoice: {
+        Args: {
+          p_expected_client_id: string;
+          p_expected_designer_id: string;
+          p_expected_studio_id: string;
+          p_internal_notes?: string;
+          p_lines?: Json;
+          p_memo?: string;
+          p_payment_terms_days?: number;
+          p_project_id: string;
+          p_tax_rate?: number;
+        };
+        Returns: {
+          amount_paid_cents: number;
+          ar_flagged_at: string | null;
+          ar_last_chased_at: string | null;
+          client_id: string | null;
+          created_at: string;
+          currency: string;
+          designer_id: string;
+          due_date: string | null;
+          id: string;
+          internal_notes: string | null;
+          invoice_number: string | null;
+          issue_date: string | null;
+          last_reminder_at: string | null;
+          memo: string | null;
+          paid_at: string | null;
+          payment_terms_days: number;
+          project_id: string;
+          reminder_count: number;
+          sent_at: string | null;
+          status: string;
+          stripe_checkout_session_id: string | null;
+          studio_id: string | null;
+          subtotal_cents: number;
+          tax_cents: number;
+          tax_rate: number;
+          total_cents: number;
+          updated_at: string;
+          void_reason: string | null;
+          voided_at: string | null;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "invoices";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       create_field_link: {
         Args: { p_party_id: string };
@@ -30152,6 +30298,17 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      enqueue_capture_enrichment: {
+        Args: {
+          p_content_hash?: string;
+          p_content_revision: number;
+          p_pipeline_version?: string;
+          p_provenance?: Json;
+          p_target_id: string;
+          p_target_type: string;
+        };
+        Returns: string;
       };
       enroll_designer_onboarding: {
         Args: { p_user_id: string };
@@ -31030,6 +31187,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      has_designer_domain_role: {
+        Args: { p_user_id: string };
+        Returns: boolean;
+      };
       hold_install_window: {
         Args: { p_ends_on: string; p_project_id: string; p_starts_on: string };
         Returns: string;
@@ -31797,6 +31958,15 @@ export type Database = {
       };
       record_activation_event: {
         Args: { p_event_name: string; p_properties?: Json; p_user_id: string };
+        Returns: undefined;
+      };
+      record_capture_enrichment_result: {
+        Args: {
+          p_model_metadata: Json;
+          p_run_id: string;
+          p_status: string;
+          p_suggestions: Json;
+        };
         Returns: undefined;
       };
       record_custom_commission_milestone: {
