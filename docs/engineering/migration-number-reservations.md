@@ -102,6 +102,7 @@ which keeps its number.
 | ------ | ---------------------------------------- | ---------------------------------------------------------------- |
 | 00514  | `00514_capture_enrichment_ledger.sql`    | branch `feat/capture-enrichment-ledger`; local replay only, NOT applied to staging or prod |
 | 00515  | `00515_capture_enrichment_rpcs.sql`      | branch `feat/capture-enrichment-ledger`; local replay only, NOT applied to staging or prod |
+| 00516  | `00516_capture_producer_idempotency.sql` | branch `feat/capture-producer-idempotency` (C-A2); local replay only, NOT applied to staging or prod |
 
 00514 adds `public.capture_enrichment_runs` (the orthogonal execution ledger
 for AI capture enrichment — target type/id, content revision, status,
@@ -122,9 +123,21 @@ discriminated outcome — `claimed` / `ignore_duplicate` / `ignore_stale` /
 `ignore_terminal`), and `record_capture_enrichment_result` (writes
 suggestions/status; never mutates `proposal_captures`; may prefill an
 allowlisted, currently-empty TEXT column on `field_captures` but never
-overwrites a non-empty one — the never-overwrite rule enforced in SQL). 00516–00520
-remain free for the rest of Phase 3 (pg_cron outbox reconciler, any
-additional RPCs the Cloudflare Queue consumer needs).
+overwrites a non-empty one — the never-overwrite rule enforced in SQL).
+
+00516 (C-A2) wires `enqueue_capture_enrichment` into the two capture
+producers: extends `commit_field_capture` (00235, CREATE OR REPLACE, body
+otherwise unchanged) with one added enqueue call, widens
+`enqueue_capture_enrichment`'s grant to `authenticated` (needed because
+commit_field_capture is SECURITY INVOKER — a nested DEFINER call does not
+inherit the callee's owner privileges), adds `proposal_captures.client_capture_id`
+(nullable UUID, unique index) for backfill-free rollout onto the existing
+table, and adds a new `commit_proposal_capture` SECURITY DEFINER RPC
+(products + product_styles + proposal_captures in one transaction, upsert-
+on-conflict, enqueues enrichment) as the single write path for the Chrome
+extension and the designer-portal URL-paste flow. 00517–00520 remain free
+for the rest of Phase 3 (pg_cron outbox reconciler, any additional RPCs the
+Cloudflare Queue consumer needs).
 
 ### Drawn from 00494–00497
 
