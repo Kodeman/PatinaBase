@@ -93,6 +93,7 @@ import {
   useAssignCapture,
   useConsumeCapture,
   useDismissCapture,
+  useCommitProposalCapture,
 } from '../use-proposal-captures';
 
 beforeEach(() => {
@@ -327,5 +328,99 @@ describe('useDismissCapture', () => {
       mutationFn: (input: { captureId: string }) => Promise<unknown>;
     };
     await expect(config.mutationFn({ captureId: 'c1' })).rejects.toThrow('boom');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useCommitProposalCapture (Phase 3 / C-A2, migration 00516)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useCommitProposalCapture', () => {
+  it('calls the commit_proposal_capture RPC with mapped argument names, including the idempotency key', async () => {
+    rpcMock.mockResolvedValue({
+      data: {
+        capture_id: 'cap-1',
+        product_id: 'prod-1',
+        status: 'inbox',
+        created: true,
+        enrichment_run_id: 'run-1',
+      },
+      error: null,
+    });
+
+    const config = useCommitProposalCapture() as unknown as {
+      mutationFn: (input: {
+        clientCaptureId: string;
+        payload: { name: string; sourceUrl: string };
+        styleIds?: string[];
+        proposalId?: string | null;
+        scopeRoomId?: string | null;
+        ffeCategorySlug?: string | null;
+      }) => Promise<unknown>;
+    };
+
+    const result = await config.mutationFn({
+      clientCaptureId: 'client-cap-1',
+      payload: { name: 'Coastal armchair', sourceUrl: 'https://example.com/armchair' },
+      styleIds: ['s1'],
+      proposalId: 'p1',
+      scopeRoomId: 'r1',
+      ffeCategorySlug: 'seating',
+    });
+
+    expect(rpcMock).toHaveBeenCalledWith('commit_proposal_capture', {
+      p_client_capture_id: 'client-cap-1',
+      p_payload: { name: 'Coastal armchair', sourceUrl: 'https://example.com/armchair' },
+      p_style_ids: ['s1'],
+      p_proposal_id: 'p1',
+      p_scope_room_id: 'r1',
+      p_ffe_category_slug: 'seating',
+    });
+    expect(result).toEqual({
+      captureId: 'cap-1',
+      productId: 'prod-1',
+      status: 'inbox',
+      created: true,
+      enrichmentRunId: 'run-1',
+    });
+  });
+
+  it('omits optional targeting args instead of sending null', async () => {
+    rpcMock.mockResolvedValue({
+      data: { capture_id: 'cap-2', product_id: 'prod-2', status: 'inbox', created: true, enrichment_run_id: null },
+      error: null,
+    });
+
+    const config = useCommitProposalCapture() as unknown as {
+      mutationFn: (input: {
+        clientCaptureId: string;
+        payload: { sourceUrl: string };
+      }) => Promise<unknown>;
+    };
+
+    await config.mutationFn({
+      clientCaptureId: 'client-cap-2',
+      payload: { sourceUrl: 'https://example.com/bench' },
+    });
+
+    const callArgs = rpcMock.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(callArgs.p_client_capture_id).toBe('client-cap-2');
+    expect('p_proposal_id' in callArgs ? callArgs.p_proposal_id : undefined).toBeUndefined();
+    expect('p_style_ids' in callArgs ? callArgs.p_style_ids : undefined).toBeUndefined();
+  });
+
+  it('rethrows RPC errors', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: new Error('payload.sourceUrl is required') });
+
+    const config = useCommitProposalCapture() as unknown as {
+      mutationFn: (input: {
+        clientCaptureId: string;
+        payload: Record<string, unknown>;
+      }) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({ clientCaptureId: 'client-cap-3', payload: {} })
+    ).rejects.toThrow('payload.sourceUrl is required');
   });
 });
