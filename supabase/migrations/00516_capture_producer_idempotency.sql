@@ -24,22 +24,41 @@
 --      proposal_captures row at all. It now goes through the same
 --      commit_proposal_capture RPC as the extension.
 --
--- ACL note (deliberate, reviewed change to 00515's posture): 00515 granted
--- EXECUTE on enqueue_capture_enrichment to service_role only, revoking
--- authenticated/anon, because at that point no producer called it yet.
+-- ACL note (revised — closes a cross-tenant hole found in adversarial
+-- review of the first cut of this migration): the first cut widened
+-- enqueue_capture_enrichment itself to `authenticated`, reasoning that its
+-- own (target_type, target_id, content_revision) idempotency made a wider
+-- caller set harmless. It is NOT harmless: enqueue_capture_enrichment takes
+-- a bare target_id with no ownership check of its own (that check happens
+-- one layer up, in the producer RPCs), so granting it directly to
+-- `authenticated` let any signed-in caller enqueue an enrichment run
+-- against ANY capture id — including someone else's — over PostgREST. Three
+-- concrete exploits: (1) suppression — enqueue a high content_revision
+-- against a victim's real capture id so claim_capture_enrichment_run's
+-- staleness check (00515) cancels the victim's own in-flight run; (2) spam/
+-- cost amplification — enqueue arbitrary (target_type, target_id) pairs to
+-- burn worker/model spend with no ownership gate; (3) unsolicited writes —
+-- ledger rows attached to a capture the caller doesn't own.
+--
+-- Fix: enqueue_capture_enrichment stays exactly at 00515's posture —
+-- service_role-only, `authenticated`/`anon` REVOKEd — nothing in this
+-- migration grants it further. A NEW wrapper,
+-- enqueue_capture_enrichment_for_producer (below, SECURITY DEFINER), is the
+-- only thing `authenticated` gets EXECUTE on. It re-verifies the caller
+-- owns the target row (field_captures.designer_id / proposal_captures.
+-- designer_id = auth.uid()) BEFORE calling the service-role primitive, so
+-- the ownership check that PostgREST's RLS would otherwise provide is
+-- enforced explicitly in-body — same pattern commit_field_capture and
+-- commit_proposal_capture already use for their own writes.
+--
 -- commit_field_capture is SECURITY INVOKER (00235) — its calls run as the
 -- CALLING role (authenticated via PostgREST), never switching to a function
--- owner. So for it to call enqueue_capture_enrichment inside its own
--- transaction, `authenticated` needs direct EXECUTE — nesting a DEFINER call
--- inside an INVOKER function does not borrow the callee's owner privileges.
--- commit_proposal_capture (below) is SECURITY DEFINER and therefore does NOT
--- strictly need this grant (object owners always have implicit EXECUTE on
--- objects they themselves own), but the grant is kept symmetric across both
--- producer paths rather than relying on ownership incidentally lining up.
--- enqueue_capture_enrichment's own body still validates target_type/
--- target_id itself and is idempotent by (target_type, target_id,
--- content_revision) — a widened caller set cannot create duplicate runs or
--- read/mutate result data (claim/record stay service_role-only).
+-- owner, so it cannot reach the service-role-only primitive directly; it
+-- now calls the wrapper instead (see its body below). commit_proposal_capture
+-- is SECURITY DEFINER and therefore already runs as the function owner, who
+-- has implicit EXECUTE on every object they own — it keeps calling
+-- enqueue_capture_enrichment directly, unaffected by this ACL, and gets no
+-- new grant.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -66,22 +85,107 @@ CREATE UNIQUE INDEX IF NOT EXISTS proposal_captures_client_capture_id_uq
 COMMENT ON COLUMN public.proposal_captures.client_capture_id IS
   'Client-generated idempotency key (mirrors field_captures.client_capture_id, 00233). Minted once at capture time by the producer (extension content script / portal URL-paste) and persisted across retries so a repeated submission upserts the same row instead of duplicating it. NULL on rows written before 00516.';
 
--- ─── enqueue_capture_enrichment: widen to authenticated ─────────────────────
--- See banner. commit_field_capture (SECURITY INVOKER) needs this directly;
--- commit_proposal_capture (SECURITY DEFINER, below) does not strictly need
--- it but is unaffected either way.
-GRANT EXECUTE ON FUNCTION public.enqueue_capture_enrichment(text, uuid, integer, text, text, jsonb) TO authenticated;
+-- enqueue_capture_enrichment itself is not meant to be touched by this
+-- migration — it stays exactly at 00515's service_role-only posture. No
+-- GRANT to authenticated/anon here (see banner). The explicit REVOKE below
+-- is defensive idempotency: an earlier, pre-review revision of THIS same
+-- migration (00516) briefly granted `authenticated` EXECUTE on the
+-- primitive before that was found and reverted (see banner) — any
+-- environment that already applied that earlier revision needs this REVOKE
+-- to actually undo it; a fresh environment that never saw the old revision
+-- finds it a no-op.
+REVOKE EXECUTE ON FUNCTION public.enqueue_capture_enrichment(text, uuid, integer, text, text, jsonb) FROM authenticated;
 
 DO $$
 BEGIN
   IF has_function_privilege('anon', 'public.enqueue_capture_enrichment(text, uuid, integer, text, text, jsonb)', 'EXECUTE') THEN
     RAISE EXCEPTION 'ACL: anon must not have EXECUTE on enqueue_capture_enrichment';
   END IF;
-  IF NOT has_function_privilege('authenticated', 'public.enqueue_capture_enrichment(text, uuid, integer, text, text, jsonb)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'ACL: authenticated must have EXECUTE on enqueue_capture_enrichment (needed by commit_field_capture / commit_proposal_capture)';
+  IF has_function_privilege('authenticated', 'public.enqueue_capture_enrichment(text, uuid, integer, text, text, jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'ACL: authenticated must not have EXECUTE on enqueue_capture_enrichment (it must go through enqueue_capture_enrichment_for_producer)';
   END IF;
   IF NOT has_function_privilege('service_role', 'public.enqueue_capture_enrichment(text, uuid, integer, text, text, jsonb)', 'EXECUTE') THEN
     RAISE EXCEPTION 'ACL: service_role must still have EXECUTE on enqueue_capture_enrichment';
+  END IF;
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- enqueue_capture_enrichment_for_producer — the ONLY path `authenticated`
+-- gets to enrichment enqueue. SECURITY DEFINER so it can reach the
+-- service-role-only primitive, but it first re-verifies the caller owns the
+-- target row — closing the cross-tenant hole described in the banner above.
+-- Used by commit_field_capture (SECURITY INVOKER, cannot reach the
+-- primitive directly). commit_proposal_capture does not need it — it is
+-- SECURITY DEFINER and already has implicit owner EXECUTE on the primitive.
+-- ═══════════════════════════════════════════════════════════════════════════
+CREATE OR REPLACE FUNCTION public.enqueue_capture_enrichment_for_producer(
+  p_target_type      text,
+  p_target_id        uuid,
+  p_content_revision integer,
+  p_content_hash     text DEFAULT NULL,
+  p_pipeline_version text DEFAULT NULL,
+  p_provenance       jsonb DEFAULT '{}'::jsonb
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'enqueue_capture_enrichment_for_producer: not authenticated'
+      USING ERRCODE = '42501'; -- insufficient_privilege
+  END IF;
+
+  IF p_target_type = 'field_capture' THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.field_captures
+       WHERE id = p_target_id AND designer_id = v_uid
+    ) THEN
+      RAISE EXCEPTION 'enqueue_capture_enrichment_for_producer: caller does not own field_capture %', p_target_id
+        USING ERRCODE = '42501'; -- insufficient_privilege
+    END IF;
+  ELSIF p_target_type = 'proposal_capture' THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.proposal_captures
+       WHERE id = p_target_id AND designer_id = v_uid
+    ) THEN
+      RAISE EXCEPTION 'enqueue_capture_enrichment_for_producer: caller does not own proposal_capture %', p_target_id
+        USING ERRCODE = '42501'; -- insufficient_privilege
+    END IF;
+  ELSE
+    -- Same invalid-target_type guard as the primitive (22023), so a bad
+    -- caller sees a consistent error class either way.
+    RAISE EXCEPTION 'enqueue_capture_enrichment_for_producer: invalid target_type %', p_target_type
+      USING ERRCODE = '22023';
+  END IF;
+
+  RETURN public.enqueue_capture_enrichment(
+    p_target_type      => p_target_type,
+    p_target_id        => p_target_id,
+    p_content_revision => p_content_revision,
+    p_content_hash     => p_content_hash,
+    p_pipeline_version => p_pipeline_version,
+    p_provenance       => p_provenance
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.enqueue_capture_enrichment_for_producer(text, uuid, integer, text, text, jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.enqueue_capture_enrichment_for_producer(text, uuid, integer, text, text, jsonb) TO authenticated;
+
+COMMENT ON FUNCTION public.enqueue_capture_enrichment_for_producer(text, uuid, integer, text, text, jsonb) IS
+  'Ownership-checked wrapper around the service_role-only enqueue_capture_enrichment (00515), for SECURITY INVOKER producer RPCs (commit_field_capture) that run as authenticated and therefore cannot reach the primitive directly. Verifies the caller owns the target field_captures/proposal_captures row (designer_id = auth.uid()) before enqueueing. Never grant EXECUTE on the underlying primitive to authenticated/anon directly — always go through this wrapper.';
+
+DO $$
+BEGIN
+  IF has_function_privilege('anon', 'public.enqueue_capture_enrichment_for_producer(text, uuid, integer, text, text, jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'ACL: anon must not have EXECUTE on enqueue_capture_enrichment_for_producer';
+  END IF;
+  IF NOT has_function_privilege('authenticated', 'public.enqueue_capture_enrichment_for_producer(text, uuid, integer, text, text, jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'ACL: authenticated must have EXECUTE on enqueue_capture_enrichment_for_producer (needed by commit_field_capture)';
   END IF;
 END $$;
 
@@ -253,8 +357,12 @@ BEGIN
   -- schemas); enqueue_capture_enrichment's own (target_type, target_id,
   -- content_revision) uniqueness still makes every re-commit of the SAME
   -- capture (same client_capture_id => same v_capture.id) a no-op re-enqueue
-  -- rather than a duplicate run.
-  PERFORM public.enqueue_capture_enrichment(
+  -- rather than a duplicate run. Goes through enqueue_capture_enrichment_for_
+  -- producer (not the primitive) because this function is SECURITY INVOKER —
+  -- see the ACL note at the top of this migration. v_capture.id was just
+  -- inserted/updated with designer_id = v_uid above, so the wrapper's
+  -- ownership check always passes for this caller's own row.
+  PERFORM public.enqueue_capture_enrichment_for_producer(
     p_target_type      => 'field_capture',
     p_target_id        => v_capture.id,
     p_content_revision => 1,
@@ -381,9 +489,11 @@ COMMENT ON FUNCTION commit_field_capture(UUID, TEXT, JSONB, UUID, UUID, TEXT, UU
 -- check that RLS would otherwise provide is done explicitly in-body instead
 -- (auth.uid() ownership, exactly as commit_field_capture already does).
 --
--- Payload envelope (p_payload), all keys optional except name:
+-- Payload envelope (p_payload), all keys optional except sourceUrl:
 --   name, description, sourceUrl, images[], priceRetailCents,
---   materials[], colors[] (names), finish, availableColors[], vendorId,
+--   materials[], colors[] (names), finish, availableColors[], dimensions{}
+--   (stored verbatim as products.dimensions JSONB — { width, height, depth,
+--   unit, ... } per BuildProductPayloadInput), vendorId,
 --   retailerId, captureSource ('web_extension'|'portal'|'manual'|'import'),
 --   captureProvenance{}, productStatus ('draft'|'published', default
 --   'draft'), rawPayload{} (stored verbatim as proposal_captures.raw_payload
@@ -486,7 +596,7 @@ BEGIN
   IF v_capture.product_id IS NULL THEN
     INSERT INTO products (
       name, description, source_url, images, price_retail,
-      materials, colors, finish, available_colors,
+      materials, colors, finish, available_colors, dimensions,
       vendor_id, retailer_id, captured_by, captured_at,
       capture_source, capture_provenance,
       layer, owner_user_id, status
@@ -501,6 +611,7 @@ BEGIN
       field_capture_jsonb_text_array(v_payload->'colors'),
       v_payload->>'finish',
       field_capture_jsonb_text_array(v_payload->'availableColors'),
+      v_payload->'dimensions',
       NULLIF(v_payload->>'vendorId', '')::uuid,
       NULLIF(v_payload->>'retailerId', '')::uuid,
       v_uid,
