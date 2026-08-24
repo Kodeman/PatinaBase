@@ -239,6 +239,15 @@ export async function saveToLibrary(
  * minted fresh here since this is a direct save with no offline-queue retry
  * path (a failure throws to the caller; the queue-drain path in
  * background.ts is the one that persists and reuses an id across retries).
+ *
+ * NOT behind the `capture-producer-idempotency` PostHog flag that gates the
+ * designer-portal's AddFromUrl path: the extension has no established
+ * feature-flag runtime for this — background.ts's MV3 service-worker
+ * context has no `window`/`localStorage`, which posthog-js (this app's only
+ * PostHog client) requires, so background.ts's queue-drain literally cannot
+ * evaluate a flag. To keep both extension producers on one behavior, this
+ * direct-save path also ships new-path-only rather than gating just one of
+ * the two. Approved as part of the C-A2 fix-up (see commit).
  */
 export async function saveToInbox(
   draft: DraftSlice,

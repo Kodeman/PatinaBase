@@ -278,6 +278,14 @@ async function syncQueue(): Promise<void> {
           // (`captureStatus = target === 'proposal' && allTargeted ? …`) —
           // an 'inbox' target always holds regardless of what targeting
           // fields happen to be set on the queue item.
+          //
+          // NOT behind the `capture-producer-idempotency` PostHog flag that
+          // gates the designer-portal's AddFromUrl path: this queue drain
+          // runs in the MV3 background service worker, which has no
+          // `window`/`localStorage` — posthog-js (this extension's only
+          // PostHog client, see lib/analytics.ts) cannot initialize there,
+          // so there is no flag runtime to evaluate. Ships new-path-only
+          // (matches effects.ts's saveToInbox, same rationale).
           const productStatus = target === 'inbox' && !captureData.url ? 'draft' : 'published';
           const targeted = target === 'proposal';
 
