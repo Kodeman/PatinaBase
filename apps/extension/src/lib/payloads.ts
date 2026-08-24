@@ -248,6 +248,7 @@ export function buildCommitProposalCaptureArgs(
       colors: product.colors,
       finish: product.finish,
       availableColors: product.available_colors,
+      dimensions: product.dimensions,
       vendorId: product.vendor_id,
       retailerId: product.retailer_id,
       captureSource: product.capture_source,

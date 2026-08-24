@@ -184,6 +184,9 @@ export interface CommitProposalCapturePayload {
   colors?: string[];
   finish?: string | null;
   availableColors?: string[];
+  /** Stored verbatim as products.dimensions JSONB — { width, height, depth,
+   *  unit, ... } (see BuildProductPayloadInput in the extension's payloads.ts). */
+  dimensions?: Record<string, unknown> | null;
   vendorId?: string | null;
   retailerId?: string | null;
   captureSource?: 'web_extension' | 'portal' | 'manual' | 'import';

@@ -143,7 +143,19 @@ const MINIMAL_EXTRACTED_DATA = {
   productName: 'Coastal armchair',
   description: null,
   price: null,
-  dimensions: null,
+  dimensions: {
+    width: 32,
+    height: 34,
+    depth: 30,
+    seatHeight: 18,
+    seatDepth: null,
+    seatWidth: null,
+    armHeight: null,
+    backHeight: null,
+    legHeight: null,
+    clearance: null,
+    unit: 'in' as const,
+  },
   materials: [],
   colors: null,
   finish: null,
@@ -223,6 +235,44 @@ describe('buildCommitProposalCaptureArgs', () => {
     expect(args.p_proposal_id).toBe('p1');
     expect(args.p_scope_room_id).toBe('r1');
     expect(args.p_ffe_category_slug).toBe('seating');
+  });
+
+  it('carries dimensions through to the RPC payload (regression: 00516 products INSERT + this envelope both dropped it)', () => {
+    const product = buildProductInsertPayload({
+      productName: 'Coastal armchair',
+      extractedData: MINIMAL_EXTRACTED_DATA,
+      price: '',
+      images: [],
+      vendorId: null,
+      retailerId: null,
+      userId: 'u1',
+    });
+
+    // Sanity: buildProductInsertPayload itself must have produced a real
+    // dimensions object from MINIMAL_EXTRACTED_DATA — otherwise this test
+    // would pass vacuously even if buildCommitProposalCaptureArgs dropped it.
+    expect(product.dimensions).toMatchObject({ width: 32, height: 34, depth: 30, unit: 'in' });
+
+    const args = buildCommitProposalCaptureArgs({
+      clientCaptureId: 'cc-dims-1',
+      product,
+      productStatus: 'draft',
+      styleIds: [],
+      proposalId: null,
+      scopeRoomId: null,
+      ffeCategorySlug: null,
+      rawPayload: {},
+      thumbnailUrl: null,
+    });
+
+    expect(args.p_payload.dimensions).toEqual(product.dimensions);
+    expect(args.p_payload.dimensions).toMatchObject({
+      width: 32,
+      height: 34,
+      depth: 30,
+      seatHeight: 18,
+      unit: 'in',
+    });
   });
 
   it('never leaks a bare snake_case products row shape into p_payload', () => {
