@@ -143,6 +143,73 @@ def test_splat_job_reads_max_iterations_out_of_the_contract_config():
     assert splat_job.default_max_iterations(variant["inputs"]["photoCount"]) == 12000
 
 
+# ─── the COLMAP pose-prior config variant ───────────────────────────────────
+
+
+def test_the_splat_pose_refine_variant_is_accepted_and_spawns_splat():
+    variant = load_variants()["splat_pose_refine"]
+    payload, reason = modal_app.parse_spawn_body(variant)
+    assert reason == "ok" and payload is not None
+    assert payload["inputs"] == variant["inputs"]
+
+    calls: list[tuple[str, dict]] = []
+    status, _ = modal_app.handle_spawn(
+        {"Authorization": "Bearer tok"}, variant,
+        lambda name, p: calls.append((name, p)), expected_token="tok",
+    )
+    assert status == 202 and calls[0][0] == "splat"
+
+
+# ─── the dense-frame keyframe source ────────────────────────────────────────
+
+
+def test_the_splat_keyframes_variant_is_accepted_and_spawns_splat():
+    variant = load_variants()["splat_keyframes"]
+    payload, reason = modal_app.parse_spawn_body(variant)
+    assert reason == "ok" and payload is not None
+    assert payload["inputs"] == variant["inputs"]
+
+    calls: list[tuple[str, dict]] = []
+    status, _ = modal_app.handle_spawn(
+        {"Authorization": "Bearer tok"}, variant,
+        lambda name, p: calls.append((name, p)), expected_token="tok",
+    )
+    assert status == 202 and calls[0][0] == "splat"
+
+
+def test_the_pose_refine_variant_is_the_base_shape_plus_config():
+    base = set(load_stages()["splat"]["inputs"])
+    variant = load_variants()["splat_pose_refine"]["inputs"]
+    assert set(variant) - base == {"config"}
+    assert base - set(variant) == set()
+    assert variant["config"] == {"poseRefine": "colmap"}
+
+
+def test_splat_job_defaults_pose_refine_to_none_and_leaves_the_seed_alone(tmp_path):
+    """The base splat shape carries no `poseRefine`; the job must treat that as
+    the parametric-seed path and never invoke COLMAP."""
+    base_config = load_stages()["splat"]["inputs"].get("config") or {}
+    prov = splat_job.apply_pose_refine({"base": tmp_path}, base_config)
+    assert prov == {"poseRefine": "none", "seedSource": "parametric"}
+
+
+def test_the_splat_keyframes_variant_is_the_base_shape_plus_keyframe_fields_and_config():
+    base = set(load_stages()["splat"]["inputs"])
+    inputs = load_variants()["splat_keyframes"]["inputs"]
+    assert set(inputs) - base == {"keyframesArchiveUrl", "keyframeIndexUrl", "config"}
+    assert base - set(inputs) == set()
+    assert inputs["config"] == {"frameSource": "keyframes", "maxIterations": 12000}
+
+
+def test_splat_job_reads_the_keyframe_source_out_of_the_contract():
+    """The dense-frame lever: the contract's keyframe variant names
+    frameSource='keyframes', and splat_job resolves that to the keyframe
+    carrier. Both URLs are present, so the job would train on the dense stream."""
+    inputs = load_variants()["splat_keyframes"]["inputs"]
+    assert inputs["config"]["frameSource"] == "keyframes"
+    assert inputs["keyframesArchiveUrl"] and inputs["keyframeIndexUrl"]
+
+
 # ─── the splat pose-carrier fallback ────────────────────────────────────────
 
 

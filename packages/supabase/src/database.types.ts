@@ -30303,6 +30303,17 @@ export type Database = {
         }
         Returns: string
       }
+      enqueue_capture_enrichment_for_producer: {
+        Args: {
+          p_content_hash?: string
+          p_content_revision: number
+          p_pipeline_version?: string
+          p_provenance?: Json
+          p_target_id: string
+          p_target_type: string
+        }
+        Returns: string
+      }
       enroll_designer_onboarding: {
         Args: { p_user_id: string }
         Returns: undefined

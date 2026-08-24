@@ -7,11 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * rename the auth cookie — which would mass-log-out every session and break
  * the extension's independent re-derivation.
  *
- * `packages/supabase/src/client.ts` reads env vars at MODULE LOAD TIME (not
- * inside the exported functions), so every test here resets the module
+ * `packages/supabase/src/client.ts` reads most env vars at MODULE LOAD TIME
+ * (not inside the exported functions), so every test here resets the module
  * registry and re-imports fresh after setting `process.env` — the only way
  * to exercise different env combinations against this module's top-level
- * consts.
+ * consts. The Supabase ORIGIN is the one exception (Workstream D-B2, below):
+ * it's resolved lazily by `getSupabaseUrl()` at client-construction time so
+ * a runtime `globalThis.__PATINA_SUPABASE_ORIGIN` override (emitted by each
+ * portal's root-layout head script) can win without a fresh module import.
  *
  * `@supabase/ssr` is mocked so we can assert on exactly what options each
  * constructor passes through, without needing a real Supabase project or
@@ -153,5 +156,108 @@ describe("D-B1: pinned auth storage key", () => {
     };
     expect(options.auth?.storageKey).toBe(SUPABASE_AUTH_STORAGE_KEY);
     expect(options.auth?.storageKey).toBe("sb-bkvcixdmuyejfzcijpdg-auth-token");
+  });
+});
+
+describe("D-B2: runtime-resolved Supabase origin", () => {
+  const RUNTIME_ORIGIN = "https://api.patina.cloud";
+
+  beforeEach(() => {
+    mockCreateBrowserClient.mockClear();
+    mockCreateServerClient.mockClear();
+    process.env.NEXT_PUBLIC_SUPABASE_URL = PROD_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = PROD_ANON_KEY;
+    delete process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY;
+    // @ts-expect-error -- test-only global cleanup guard
+    delete globalThis.window;
+    delete globalThis.__supabaseBrowserClient;
+    delete globalThis.__PATINA_SUPABASE_ORIGIN;
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    // @ts-expect-error -- test-only global cleanup guard
+    delete globalThis.window;
+    delete globalThis.__supabaseBrowserClient;
+    delete globalThis.__PATINA_SUPABASE_ORIGIN;
+    vi.resetModules();
+  });
+
+  it("falls back to the build-time NEXT_PUBLIC_SUPABASE_URL inline when the runtime global is absent (today's common case)", async () => {
+    const { createMiddlewareClient } = await importFreshClientModule();
+
+    createMiddlewareClient(
+      {
+        cookies: { get: () => undefined, getAll: () => [], set: () => undefined },
+        headers: { get: () => null },
+      },
+      { cookies: { set: () => undefined } },
+    );
+
+    expect(mockCreateServerClient).toHaveBeenCalledTimes(1);
+    expect(mockCreateServerClient.mock.calls[0][0]).toBe(PROD_URL);
+  });
+
+  it("prefers globalThis.__PATINA_SUPABASE_ORIGIN over the build-time inline when both are present", async () => {
+    globalThis.__PATINA_SUPABASE_ORIGIN = RUNTIME_ORIGIN;
+    const { createMiddlewareClient } = await importFreshClientModule();
+
+    createMiddlewareClient(
+      {
+        cookies: { get: () => undefined, getAll: () => [], set: () => undefined },
+        headers: { get: () => null },
+      },
+      { cookies: { set: () => undefined } },
+    );
+
+    expect(mockCreateServerClient).toHaveBeenCalledTimes(1);
+    expect(mockCreateServerClient.mock.calls[0][0]).toBe(RUNTIME_ORIGIN);
+  });
+
+  it("resolves the global at client-construction time, not module-eval time — setting it AFTER import still wins", async () => {
+    const { createBrowserClient } = await importFreshClientModule();
+
+    // Module already imported above with no global set. A module-scope
+    // const would have captured the build-time URL at that point and never
+    // see this later assignment; the lazy getter must still pick it up.
+    globalThis.__PATINA_SUPABASE_ORIGIN = RUNTIME_ORIGIN;
+
+    createBrowserClient();
+
+    expect(mockCreateBrowserClient).toHaveBeenCalledTimes(1);
+    expect(mockCreateBrowserClient.mock.calls[0][0]).toBe(RUNTIME_ORIGIN);
+  });
+
+  it("falls back when the global is present but empty-string (guards against a blank head-script env var)", async () => {
+    globalThis.__PATINA_SUPABASE_ORIGIN = "";
+    const { createBrowserClient } = await importFreshClientModule();
+
+    createBrowserClient();
+
+    expect(mockCreateBrowserClient).toHaveBeenCalledTimes(1);
+    expect(mockCreateBrowserClient.mock.calls[0][0]).toBe(PROD_URL);
+  });
+
+  it("client construction still works end-to-end when the global is absent (regression: today's default path)", async () => {
+    const { createBrowserClient, createMiddlewareClient } =
+      await importFreshClientModule();
+
+    expect(() => createBrowserClient()).not.toThrow();
+    expect(() =>
+      createMiddlewareClient(
+        {
+          cookies: {
+            get: () => undefined,
+            getAll: () => [],
+            set: () => undefined,
+          },
+          headers: { get: () => null },
+        },
+        { cookies: { set: () => undefined } },
+      ),
+    ).not.toThrow();
+
+    expect(mockCreateBrowserClient.mock.calls[0][0]).toBe(PROD_URL);
+    expect(mockCreateServerClient.mock.calls[0][0]).toBe(PROD_URL);
   });
 });
