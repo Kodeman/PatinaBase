@@ -389,6 +389,15 @@ if modal is not None:
         # on this PATH.
         .env({"PATH": "/usr/local/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:"
                       "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"})
+        # COLMAP for the optional pose-prior seed (`config.poseRefine: colmap`,
+        # jobs/colmap_refine.py). Ubuntu 22.04's package is a CPU-capable build;
+        # the pre-step drives it with `--Sift*.use_gpu 0` because a headless L4
+        # has no GL context for GPU SIFT and CPU SIFT on ~42 frames is minutes.
+        # Inert unless a task opts in. Appended as a LATE layer ON PURPOSE: put
+        # in the early apt_install it would invalidate the torch/nerfstudio/spz
+        # layers and force the multi-hour rebuild those layers' comments warn
+        # about; here it is one cheap layer on top of them.
+        .apt_install("colmap")
         .add_local_python_source("scan_modal")
     )
 

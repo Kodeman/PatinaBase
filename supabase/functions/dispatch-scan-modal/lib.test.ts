@@ -574,6 +574,22 @@ Deno.test("contract.json: the splat_config variant round-trips through the build
   assertEquals(built.taskType, "scan_pipeline.splat");
 });
 
+Deno.test("contract.json: the splat_pose_refine variant round-trips through the builder", async () => {
+  const variant = (await readVariants()).splat_pose_refine;
+  const built = buildModalDispatchBody(paramsFor("splat", variant));
+  assertEquals(contractKeys(built), contractKeys(variant));
+  assertEquals(built.inputs, variant.inputs);
+  assertEquals(built.taskType, "scan_pipeline.splat");
+});
+
+Deno.test("contract.json: splat_pose_refine carries poseRefine in its config", async () => {
+  const variant = (await readVariants()).splat_pose_refine;
+  assertEquals(
+    (variant.inputs as ContractBody).config,
+    { poseRefine: "colmap" },
+  );
+});
+
 Deno.test("contract.json: splat_config is the base splat shape plus config", async () => {
   const stages = await readContract();
   const variant = (await readVariants()).splat_config;

@@ -1135,3 +1135,134 @@ def test_a_stale_ply_file_path_is_CLEARED_when_this_room_seeds_nothing(world, tm
     assert db.completed
     assert result["provenance"]["seedPoints"] == 0
     assert "ply_file_path" not in json.loads(paths["transforms"].read_text())
+
+
+# ── COLMAP pose-prior pre-step (config.poseRefine) ──────────────────────────
+#
+# `apply_pose_refine` is the seam splat_job uses to swap the parametric seed for
+# a COLMAP-triangulated one. Driven here by a fake colmap runner (a real SQLite
+# db + a synthetic text model), so no COLMAP or GPU is needed.
+
+import sqlite3 as _sqlite3  # noqa: E402
+import struct as _struct  # noqa: E402
+
+import numpy as _np  # noqa: E402
+
+from scan_modal.core import colmap_model as _cm  # noqa: E402
+from scan_modal.io.ply import read_ply_vertices as _read_ply  # noqa: E402
+
+
+def _seed_workspace(tmp_path: Path) -> dict:
+    paths = splat_job.workspace_paths("scan-c", 4, tmp_path / "cache")
+    paths["images"].mkdir(parents=True, exist_ok=True)
+    frames = []
+    for i in range(4):
+        name = f"frame_{i}.jpg"
+        (paths["images"] / name).write_bytes(b"\xff\xd8\xff\xd9")
+        m = _np.eye(4)
+        m[:3, 3] = (float(i), 0.5, -0.2)
+        frames.append({
+            "file_path": f"images/{name}", "w": 100, "h": 100,
+            "fl_x": 90.0, "fl_y": 90.0, "cx": 50.0, "cy": 50.0,
+            "transform_matrix": [[float(v) for v in r] for r in m],
+        })
+    paths["transforms"].write_text(json.dumps(
+        {"camera_model": "PINHOLE", "frames": frames, "ply_file_path": "sparse_pc.ply"}
+    ))
+    # A pre-existing (parametric) seed, so we can prove COLMAP replaced it.
+    paths["seed_ply"].write_bytes(b"PARAMETRIC-SEED-PLACEHOLDER")
+    return paths
+
+
+def _fake_colmap_run(*, points: int, registered: int):
+    def run(argv, timeout):
+        sub = argv[1]
+
+        def opt(flag):
+            return Path(argv[argv.index(flag) + 1])
+
+        if sub == "feature_extractor":
+            db, image_dir = opt("--database_path"), opt("--image_path")
+            con = _sqlite3.connect(str(db))
+            con.execute("CREATE TABLE cameras (camera_id INTEGER PRIMARY KEY, model INTEGER, "
+                        "width INTEGER, height INTEGER, params BLOB, prior_focal_length INTEGER)")
+            con.execute("CREATE TABLE images (image_id INTEGER PRIMARY KEY, name TEXT, camera_id INTEGER)")
+            for i, p in enumerate(sorted(image_dir.glob("*.jpg")), start=1):
+                con.execute("INSERT INTO cameras VALUES (?,2,100,100,?,0)",
+                            (i, _struct.pack("<4d", 1.0, 50.0, 50.0, 0.0)))
+                con.execute("INSERT INTO images VALUES (?,?,?)", (i, p.name, i))
+            con.commit(); con.close()
+            return 0
+        if sub in ("exhaustive_matcher", "sequential_matcher"):
+            return 0
+        if sub == "point_triangulator":
+            seed, out = opt("--input_path"), opt("--output_path")
+            out.mkdir(parents=True, exist_ok=True)
+            images = _cm.parse_images_txt((seed / "images.txt").read_text())
+            (out / "cameras.txt").write_text((seed / "cameras.txt").read_text())
+            lines = ["# images"]
+            for idx, img in enumerate(images):
+                qw, qx, qy, qz = img.qvec
+                tx, ty, tz = img.tvec
+                lines.append(f"{img.image_id} {qw} {qx} {qy} {qz} {tx} {ty} {tz} {img.camera_id} {img.name}")
+                lines.append("1.0 2.0 1" if idx < registered else "")
+            (out / "images.txt").write_text("\n".join(lines) + "\n")
+            pts = ["# points"] + [f"{i+1} {i*0.01} {i*0.02} {i*0.03} 100 110 120 0.5 1 0" for i in range(points)]
+            (out / "points3D.txt").write_text("\n".join(pts) + "\n")
+            return 0
+        if sub == "model_converter":
+            src, out = opt("--input_path"), opt("--output_path")
+            out.mkdir(parents=True, exist_ok=True)
+            for n in ("cameras.txt", "images.txt", "points3D.txt"):
+                if (src / n).is_file():
+                    (out / n).write_text((src / n).read_text())
+            return 0
+        return 0
+    return run
+
+
+def test_pose_refine_colmap_replaces_the_seed_and_records_provenance(tmp_path, monkeypatch):
+    paths = _seed_workspace(tmp_path)
+    monkeypatch.setattr(splat_job, "_run", _fake_colmap_run(points=4000, registered=4))
+
+    prov = splat_job.apply_pose_refine(paths, {"poseRefine": "colmap"})
+
+    assert prov["seedSource"] == "colmap"
+    assert prov["colmapOk"] is True
+    assert prov["seedPoints"] == 4000
+    # The seed on disk is now the COLMAP cloud, not the parametric placeholder.
+    xyz = _read_ply(paths["seed_ply"].read_bytes())
+    assert xyz.shape == (4000, 3)
+    assert json.loads(paths["transforms"].read_text())["ply_file_path"] == "sparse_pc.ply"
+
+
+def test_pose_refine_falls_back_to_parametric_when_colmap_under_registers(tmp_path, monkeypatch):
+    paths = _seed_workspace(tmp_path)
+    monkeypatch.setattr(splat_job, "_run", _fake_colmap_run(points=50, registered=4))
+
+    prov = splat_job.apply_pose_refine(paths, {"poseRefine": "colmap"})
+
+    assert prov["seedSource"] == "parametric"
+    assert prov["colmapOk"] is False and prov["colmapReason"] == "low_points"
+    # The parametric seed is untouched.
+    assert paths["seed_ply"].read_bytes() == b"PARAMETRIC-SEED-PLACEHOLDER"
+
+
+def test_pose_refine_none_is_a_noop(tmp_path):
+    paths = _seed_workspace(tmp_path)
+    prov = splat_job.apply_pose_refine(paths, {})
+    assert prov == {"poseRefine": "none", "seedSource": "parametric"}
+    assert paths["seed_ply"].read_bytes() == b"PARAMETRIC-SEED-PLACEHOLDER"
+
+
+def test_pose_refine_reuses_its_result_on_resume(tmp_path, monkeypatch):
+    paths = _seed_workspace(tmp_path)
+    monkeypatch.setattr(splat_job, "_run", _fake_colmap_run(points=4000, registered=4))
+    first = splat_job.apply_pose_refine(paths, {"poseRefine": "colmap"})
+
+    def boom(argv, timeout):
+        raise AssertionError("COLMAP re-ran on resume")
+
+    monkeypatch.setattr(splat_job, "_run", boom)
+    second = splat_job.apply_pose_refine(paths, {"poseRefine": "colmap"})
+    assert second == first
