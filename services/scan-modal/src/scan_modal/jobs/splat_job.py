@@ -712,10 +712,16 @@ def apply_pose_refine(paths: dict[str, Path], config: dict[str, Any]) -> dict[st
 
     bundle = bool(config.get("poseRefineBundle", False))
     frames = colmap_frames_from_transforms(paths)
-    outcome = _colmap_refine.run_colmap_refine(
-        paths["base"], frames, run=_run,
-        timeout_s=COLMAP_TIMEOUT_S, bundle_adjust=bundle,
-    )
+    kwargs: dict[str, Any] = {"timeout_s": COLMAP_TIMEOUT_S, "bundle_adjust": bundle}
+    # `poseRefineMinPoints` overrides the usefulness gate for measurement: a
+    # feature-poor room can register cleanly yet triangulate a very sparse cloud
+    # (W2-EVIDENCE.md §15 — 40/42 registered, 1 612 points), and forcing that
+    # sparse cloud through is how the COLMAP seed itself gets measured rather
+    # than inferred. Absent, the default MIN_TRIANGULATED_POINTS stands.
+    min_points = config.get("poseRefineMinPoints")
+    if isinstance(min_points, (int, float)) and not isinstance(min_points, bool) and min_points >= 0:
+        kwargs["min_points"] = int(min_points)
+    outcome = _colmap_refine.run_colmap_refine(paths["base"], frames, run=_run, **kwargs)
     prov = outcome.provenance()
     if outcome.ok and outcome.ply_bytes:
         paths["seed_ply"].write_bytes(outcome.ply_bytes)

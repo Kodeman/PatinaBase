@@ -1248,6 +1248,19 @@ def test_pose_refine_falls_back_to_parametric_when_colmap_under_registers(tmp_pa
     assert paths["seed_ply"].read_bytes() == b"PARAMETRIC-SEED-PLACEHOLDER"
 
 
+def test_pose_refine_min_points_override_forces_a_sparse_seed(tmp_path, monkeypatch):
+    """`poseRefineMinPoints` lowers the usefulness gate so a sparse but valid
+    COLMAP cloud is used — how §15 measures the COLMAP seed itself."""
+    paths = _seed_workspace(tmp_path)
+    monkeypatch.setattr(splat_job, "_run", _fake_colmap_run(points=1612, registered=4))
+
+    prov = splat_job.apply_pose_refine(paths, {"poseRefine": "colmap", "poseRefineMinPoints": 10})
+
+    assert prov["seedSource"] == "colmap" and prov["colmapOk"] is True
+    assert prov["seedPoints"] == 1612
+    assert _read_ply(paths["seed_ply"].read_bytes()).shape == (1612, 3)
+
+
 def test_pose_refine_none_is_a_noop(tmp_path):
     paths = _seed_workspace(tmp_path)
     prov = splat_job.apply_pose_refine(paths, {})
