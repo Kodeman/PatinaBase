@@ -245,17 +245,28 @@ with its own review — it is **not** what `00521` does.
   persisted an asset to prod; R2 is effectively unused (census: `patina-raw` 0 objects,
   `patina-processed` 1×10-byte smoke artifact). So the rename rewrites no data and the
   data-plane blast radius is **effectively nil**.
-- **Does the running prod container break the instant the rename lands?** If it is
-  serving a Prisma-**default**-shaped client, yes — every DB-bearing route would
-  `42P01`/`42703` from the rename until the snake_case image is deployed. If it is
-  already serving a snake_case client (the committed/generated client in the repo is
-  snake_case — see the discrepancy note below), it is *already* unable to query prod's
-  PascalCase tables today, and `00521` + redeploy **fixes** it. Either way the fix is
-  the same swap.
+- **Does the running prod container break the instant the rename lands? Conclusion
+  (A).** The image deployed to `patina-media-svc-worker` on **2026-08-12** (version
+  `e1df1e79-9fef-43cb-a3ea-a8dbba00372d`, the currently-live rollback target) was built
+  from a **pre-`@map` source revision**, so it serves a **Prisma-DEFAULT-shaped client**
+  and **works against prod's PascalCase/camelCase shape today**. Therefore the rename is
+  a **real exposure to minimize, not a latent fix**: the instant `00521` lands, that
+  running container's DB-bearing routes `42P01`/`42703` until the snake_case image is
+  deployed. This is why the window is coordinated migrate-**then**-deploy with a warm
+  pre-built image — to make the gap sub-minute. (The `@map`-era source in the repo would
+  build a snake_case client; but that is not what is deployed today — the live image
+  predates it. The §7 note-6 discrepancy is resolved in favor of (A).)
+- **Window callers (who can hit a 5xx during the gap):** the only surfaces that route to
+  `svc_media` DB reads/writes are **admin-portal media routes** and **designer-portal
+  media routes** (via the `@patina/api-routes` proxy to `patina-media-svc-worker`), and
+  **iOS Patina Field (Capture) receiving an upload** (upload-session / asset-ledger
+  routes). Admin media surfaces are kody-only. With **0 rows and no real media traffic**
+  today, any mid-gap hit is a transient 5xx on an empty surface, not data loss.
 - **Net exposure:** the migrate→deploy gap only. With **0 rows and no real media
   traffic**, even a multi-minute gap has no data-plane impact; the < 5 min target is
   comfortable. The only user-visible surface that could touch `svc_media` mid-gap is a
-  media data route returning 5xx — and none carry live data today.
+  media data route (the callers named above) returning 5xx — and none carry live data
+  today.
 
 ---
 
@@ -280,12 +291,14 @@ tolerates all of them at runtime; none block the deploy:
 5. **`background_removal_requests` / its 2 enums:** present in the source schema and in
    `services/media/prisma/migrations`, **absent on prod**. Added by the follow-on
    `migrate-deploy.sh`, not by `00521`.
-6. **Discrepancy vs the brief:** the brief states the committed generated client is
-   "Prisma-default-shaped and matches PROD". In this tree the generated client
-   (`services/media/src/generated/prisma-client/schema.prisma`, untracked, regenerated
-   from source) is **snake_case**. This does not change the migration (any built image
-   is snake_case regardless), but it means the currently-deployed container may already
-   be unable to query prod — strengthening, not weakening, the case for reconciliation.
+6. **Generated-client vs deployed-image (resolved → conclusion A):** the *source* tree's
+   regenerated client (`services/media/src/generated/prisma-client/schema.prisma`,
+   untracked) is **snake_case**, so any image built *now* is snake_case. But the image
+   **actually deployed on prod today** (`e1df1e79`, 2026-08-12) predates the `@map`
+   source and is **Prisma-default-shaped, and works against prod's current PascalCase
+   shape** — see §6, conclusion (A). So the reconciliation is a coordinated window that
+   trades a sub-minute working→broken→working gap for the unfreeze, not a fix for an
+   already-broken container.
 
 ---
 
