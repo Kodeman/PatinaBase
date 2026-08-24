@@ -8,7 +8,7 @@ import {
   useLayerProducts,
   useLayerCounts,
   useCaptureFromUrl,
-  useCaptureProduct,
+  useCommitProposalCapture,
   type ProposalCapture,
   type LayerProductLayer,
   type LayerProductRow,
@@ -765,17 +765,20 @@ function capturePriceCents(c: ProposalCapture): number | null {
 
 /**
  * Add-from-URL (A3, capture mode). Reads a pasted product page server-side
- * behind the SSRF-guarded `capture-from-url` edge function, drops a personal
- * draft via `captureProduct`, then picks it — mirroring the CapturesTab's own
- * promote-then-pick flow. Inline error only (R83: no toast).
+ * behind the SSRF-guarded `capture-from-url` edge function, then commits a
+ * `proposal_captures` row + personal draft product via the idempotent
+ * `commit_proposal_capture` RPC (Phase 3 / C-A2, migration 00516) — replacing
+ * the old bare `captureProduct` insert, which left no capture row and no
+ * idempotency key behind. Picks the result immediately, mirroring the
+ * CapturesTab's own promote-then-pick flow. Inline error only (R83: no toast).
  */
 function AddFromUrl({ onPick }: { onPick: (pick: TabPick) => void }) {
   const { user } = useAuth();
   const captureFromUrl = useCaptureFromUrl();
-  const captureProduct = useCaptureProduct();
+  const commitProposalCapture = useCommitProposalCapture();
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const busy = captureFromUrl.isPending || captureProduct.isPending;
+  const busy = captureFromUrl.isPending || commitProposalCapture.isPending;
 
   const handleAdd = async () => {
     const trimmed = url.trim();
@@ -787,15 +790,29 @@ function AddFromUrl({ onPick }: { onPick: (pick: TabPick) => void }) {
     }
     try {
       const extracted = await captureFromUrl.mutateAsync({ url: trimmed, mode: 'capture' });
-      const result = await captureProduct.mutateAsync({
-        name: extracted.name ?? undefined,
-        images: extracted.images ?? undefined,
-        sourceUrl: extracted.sourceUrl ?? trimmed,
-        priceRetailCents: extracted.priceRetailCents ?? undefined,
-        description: extracted.description ?? undefined,
-        detectedVendorName: extracted.brand ?? undefined,
-        ownerUserId: user.id,
-        captureSource: 'url_paste',
+      // Minted once per submission — a retry of THIS handleAdd call (not
+      // exposed today, but future-proofed) should reuse the same id rather
+      // than risk a duplicate capture/product.
+      const clientCaptureId = crypto.randomUUID();
+      const sourceUrl = extracted.sourceUrl ?? trimmed;
+      const result = await commitProposalCapture.mutateAsync({
+        clientCaptureId,
+        payload: {
+          name: extracted.name ?? undefined,
+          description: extracted.description ?? undefined,
+          sourceUrl,
+          images: extracted.images ?? undefined,
+          priceRetailCents: extracted.priceRetailCents ?? undefined,
+          captureSource: 'portal',
+          productStatus: 'published',
+          thumbnailUrl: extracted.images?.[0] ?? undefined,
+          rawPayload: {
+            name: extracted.name ?? null,
+            description: extracted.description ?? null,
+            price_retail_cents: extracted.priceRetailCents ?? null,
+            vendor: extracted.brand ? { name: extracted.brand } : null,
+          },
+        },
       });
       setUrl('');
       onPick({
@@ -806,6 +823,7 @@ function AddFromUrl({ onPick }: { onPick: (pick: TabPick) => void }) {
         priceTradeCents: null, // URL captures carry no trade cost
         vendorName: extracted.brand ?? null,
         layer: 'personal',
+        captureId: result.captureId,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That URL could not be read.');
