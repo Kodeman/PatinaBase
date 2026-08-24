@@ -91,6 +91,7 @@ __all__ = [
     "RIGHT_ROTATION_CAMERA",
     "parse_photos_manifest",
     "parse_photo_rows",
+    "parse_keyframe_index",
     "frame_file_name",
     "nerfstudio_pose",
     "build_transforms",
@@ -261,6 +262,92 @@ def parse_photo_rows(records: Any) -> list[PhotoPose]:
     if not poses:
         raise ManifestError("photoRecords is empty")
     return poses
+
+
+#: A row-major 4x4 identity, flat-16 — the pose ARKit writes for a keyframe
+#: captured before tracking has converged. The Field keyframe recorder always
+#: fires the first keyframe (motion-triggered "first keyframe always",
+#: FieldKeyframeRecorder.swift), so the opening frame can carry an identity
+#: transform and no real camera; training it would place a phantom view at the
+#: world origin.
+_IDENTITY_C2W = tuple(float(v) for v in np.eye(4).reshape(-1))
+
+
+def parse_keyframe_index(text: str) -> list[PhotoPose]:
+    """Parse `keyframes/keyframe_index.ndjson` into ordered poses.
+
+    THE SAME GEOMETRY, A THIRD CARRIER. The Field accuracy lane
+    (`apps/mobile/Capture/.../FieldKeyframeRecorder.swift`,
+    `KeyframeIndexEntry`) records a dense, motion-triggered, sharpness-gated
+    RGB keyframe stream — the 100-view signal this stage exists to train on
+    instead of the ~42 context photos. Its NDJSON line differs from
+    `photos_metadata.ndjson` only in field NAMES, not in geometry:
+
+        heicPath                 ← relativePath   (bundle-relative RGB path)
+        width, height            ← width, height  (ENCODED portrait HEIC extent)
+        cameraTransform          ← cameraTransform (row-major flat 16, IDENTICAL)
+        intrinsics.fx/fy/cx/cy   ← cameraIntrinsics.fx/fy/cx/cy (native frame)
+        intrinsics.imageWidth    ← cameraIntrinsics.width
+        intrinsics.imageHeight   ← cameraIntrinsics.height
+        timestampSeconds         ← timestampSeconds
+
+    So each line is translated onto the `_photo_pose` shape and the existing
+    `nerfstudio_pose` / `build_transforms` consume it UNCHANGED — every
+    convention in the module docstring, the portrait-rotation detection
+    included, applies verbatim (keyframes are 1440×1920 HEIC with intrinsics in
+    the 1920×1440 native landscape frame, so `needs_right_rotation` fires).
+
+    Order is re-derived from `timestampSeconds` (then path), not trusted from
+    file order, exactly as `parse_photos_manifest` does. The first keyframe can
+    carry an identity pose (fired before tracking converged); an identity-pose
+    frame is DROPPED rather than trained as a phantom view at the origin.
+    """
+    poses: list[PhotoPose] = []
+    for lineno, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ManifestError(f"keyframe index line {lineno} is not JSON: {exc.msg}") from exc
+        if not isinstance(entry, dict):
+            raise ManifestError(f"keyframe index line {lineno} is not a JSON object")
+        intr = entry.get("intrinsics")
+        if not isinstance(intr, dict):
+            raise ManifestError(f"keyframe index line {lineno} is missing intrinsics")
+        translated = {
+            "relativePath": entry.get("heicPath"),
+            "width": entry.get("width"),
+            "height": entry.get("height"),
+            "cameraTransform": entry.get("cameraTransform"),
+            "cameraIntrinsics": {
+                "fx": intr.get("fx"),
+                "fy": intr.get("fy"),
+                "cx": intr.get("cx"),
+                "cy": intr.get("cy"),
+                # imageWidth/imageHeight name the native sensor frame the
+                # intrinsics were measured in — the same role `width`/`height`
+                # play inside `cameraIntrinsics` for a photo entry.
+                "width": intr.get("imageWidth"),
+                "height": intr.get("imageHeight"),
+            },
+            "timestampSeconds": entry.get("timestampSeconds"),
+        }
+        poses.append(_photo_pose(translated))
+    if not poses:
+        raise ManifestError("keyframe index contains no entries")
+
+    kept = [p for p in poses if p.c2w != _IDENTITY_C2W]
+    if not kept:
+        raise ManifestError("keyframe index has no non-identity keyframe poses")
+    return sorted(
+        kept,
+        key=lambda p: (
+            p.timestamp_seconds if p.timestamp_seconds is not None else 0.0,
+            p.relative_path,
+        ),
+    )
 
 
 # ── frame naming ────────────────────────────────────────────────────────────

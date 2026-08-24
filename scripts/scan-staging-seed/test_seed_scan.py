@@ -335,6 +335,32 @@ def test_build_copy_manifest_captures_the_present_artifacts():
     assert manifest.photo_capped is False
 
 
+def test_build_copy_manifest_captures_the_dense_frame_streams():
+    """Dense-frame path (a): keyframes.tar / depth.tar resolve through their
+    columns, and the three column-less side-indexes are derived by prefix-swap
+    off a resolved archive key's verified owner segments into their B-18
+    folders (keyframe index/summary → keyframes/, depth index → depth/)."""
+    manifest = ss.build_copy_manifest(_scan_row(), [_image_row(0)], _keys_mod())
+    assert manifest.keyframes_archive_src_key == f"bundle/{PROD_UID}/{PROD_RID}/keyframes.tar"
+    assert manifest.keyframe_index_src_key == f"keyframes/{PROD_UID}/{PROD_RID}/keyframe_index.ndjson"
+    assert manifest.keyframe_summary_src_key == f"keyframes/{PROD_UID}/{PROD_RID}/keyframe_summary.json"
+    assert manifest.depth_archive_src_key == f"depth/{PROD_UID}/{PROD_RID}/depth.tar"
+    assert manifest.depth_index_src_key == f"depth/{PROD_UID}/{PROD_RID}/depth_index.ndjson"
+
+
+def test_build_copy_manifest_dense_frame_streams_absent_when_columns_null():
+    row = _scan_row(scan_bundle_url=None, depth_archive_url=None)
+    manifest = ss.build_copy_manifest(row, [_image_row(0)], _keys_mod())
+    assert manifest.keyframes_archive_src_key is None
+    assert manifest.keyframe_index_src_key is None
+    assert manifest.keyframe_summary_src_key is None
+    assert manifest.depth_archive_src_key is None
+    assert manifest.depth_index_src_key is None
+    joined = " | ".join(manifest.skipped)
+    assert "keyframes archive" in joined
+    assert "depth archive" in joined
+
+
 def test_build_copy_manifest_notes_null_columns_as_skipped():
     manifest = ss.build_copy_manifest(_scan_row(), [_image_row(0)], _keys_mod())
     joined = " | ".join(manifest.skipped)
@@ -347,12 +373,16 @@ def test_build_copy_manifest_notes_explicitly_out_of_scope_artifacts_as_skipped(
     manifest = ss.build_copy_manifest(_scan_row(), [_image_row(0)], _keys_mod())
     joined = " | ".join(manifest.skipped)
     assert "usdz" in joined
-    assert "depth archive" in joined
-    assert "bundle/keyframes archive" in joined
     assert "bundle manifest.json" in joined
     # never-present columns on this fixture aren't noted (nothing to skip)
     assert "world map" not in joined
     assert "coverage heatmap" not in joined
+    # depth + keyframes are NO LONGER in the out-of-scope skip lines — dense-
+    # frame path (a) copies them (they resolve as src keys, see the dedicated
+    # test above), so no "out of scope" reason names them.
+    out_of_scope = [s for s in manifest.skipped if "out of scope" in s]
+    assert not any("depth archive" in s for s in out_of_scope)
+    assert not any("keyframes archive" in s for s in out_of_scope)
 
 
 def test_build_copy_manifest_detects_hero_present():

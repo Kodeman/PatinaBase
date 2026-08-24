@@ -28,6 +28,7 @@ from scan_modal.core.transforms import (
     build_transforms,
     frame_file_name,
     nerfstudio_pose,
+    parse_keyframe_index,
     parse_photos_manifest,
 )
 
@@ -447,3 +448,111 @@ def test_build_transforms_is_deterministic():
 def test_build_transforms_refuses_an_empty_frame_list():
     with pytest.raises(ManifestError):
         build_transforms([])
+
+
+# ── keyframe index (the dense-frame third carrier) ───────────────────────────
+
+
+def keyframe_entry(**overrides):
+    """One `keyframe_index.ndjson` line, in the shape Field's
+    `KeyframeIndexEntry` encodes: `heicPath`, top-level `width`/`height` (the
+    encoded PORTRAIT HEIC extent), `cameraTransform` row-major flat-16, and
+    `intrinsics.{fx,fy,cx,cy,imageWidth,imageHeight}` in the native landscape
+    frame. Defaults reproduce the real capture: 1440×1920 pixels, 1920×1440
+    intrinsics — so `needs_right_rotation` fires."""
+    base = {
+        "heicPath": "keyframes/keyframe_000002_0001_500.heic",
+        "depthPath": "keyframes/keyframe_000002_0001_500.bin",
+        "timestampSeconds": 1.5,
+        "frameTimestamp": 1.5,
+        "cameraTransform": [
+            1.0, 0.0, 0.0, 2.0,
+            0.0, 1.0, 0.0, 3.0,
+            0.0, 0.0, 1.0, 4.0,
+            0.0, 0.0, 0.0, 1.0,
+        ],
+        "intrinsics": {
+            "fx": 1500.0, "fy": 1500.0, "cx": 960.0, "cy": 720.0,
+            "imageWidth": 1920, "imageHeight": 1440,
+        },
+        "sharpness": 2266.0,
+        "width": 1440,
+        "height": 1920,
+        "hasDepth": True,
+        "smoothedDepth": True,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_keyframe_index_parses_one_line_per_keyframe_and_skips_blanks():
+    text = "\n".join([
+        json.dumps(keyframe_entry(heicPath="keyframes/k1.heic", timestampSeconds=1.0)),
+        "  ",
+        json.dumps(keyframe_entry(heicPath="keyframes/k2.heic", timestampSeconds=2.0)),
+    ])
+    poses = parse_keyframe_index(text)
+    assert [p.relative_path for p in poses] == ["keyframes/k1.heic", "keyframes/k2.heic"]
+
+
+def test_keyframe_index_maps_onto_the_same_pose_as_an_equivalent_photo():
+    """The whole reason no new geometry is needed: a keyframe line and a photo
+    line describing the same camera produce the SAME nerfstudio frame."""
+    kf = parse_keyframe_index(json.dumps(keyframe_entry(heicPath="keyframes/k.heic")))[0]
+    ph = parse_photos_manifest(json.dumps(entry(
+        relativePath="keyframes/k.heic", width=1440, height=1920,
+        cameraTransform=[
+            1.0, 0.0, 0.0, 2.0,
+            0.0, 1.0, 0.0, 3.0,
+            0.0, 0.0, 1.0, 4.0,
+            0.0, 0.0, 0.0, 1.0,
+        ],
+        cameraIntrinsics={"fx": 1500.0, "fy": 1500.0, "cx": 960.0, "cy": 720.0,
+                          "width": 1920, "height": 1440},
+    )))[0]
+    assert nerfstudio_pose(kf) == nerfstudio_pose(ph)
+
+
+def test_keyframe_index_applies_the_portrait_rotation():
+    kf = parse_keyframe_index(json.dumps(keyframe_entry()))[0]
+    assert kf.needs_right_rotation
+    matrix, intr = nerfstudio_pose(kf)
+    # fx'/fy' swap and cx' = intr_height - cy under the 90° CW rotation (§2).
+    assert (intr["fl_x"], intr["fl_y"]) == (1500.0, 1500.0)
+    assert intr["cx"] == 1440.0 - 720.0
+    assert intr["cy"] == 960.0
+
+
+def test_keyframe_index_drops_the_identity_pre_tracking_frame():
+    text = "\n".join([
+        json.dumps(keyframe_entry(heicPath="keyframes/k0.heic", timestampSeconds=0.5,
+                                  cameraTransform=list(IDENTITY_16))),
+        json.dumps(keyframe_entry(heicPath="keyframes/k1.heic", timestampSeconds=1.5)),
+    ])
+    poses = parse_keyframe_index(text)
+    assert [p.relative_path for p in poses] == ["keyframes/k1.heic"]
+
+
+def test_keyframe_index_orders_by_timestamp_not_file_order():
+    text = "\n".join([
+        json.dumps(keyframe_entry(heicPath="keyframes/late.heic", timestampSeconds=9.0)),
+        json.dumps(keyframe_entry(heicPath="keyframes/early.heic", timestampSeconds=1.0)),
+    ])
+    assert [p.relative_path for p in parse_keyframe_index(text)] == [
+        "keyframes/early.heic", "keyframes/late.heic",
+    ]
+
+
+def test_keyframe_index_empty_or_all_identity_is_a_manifest_error():
+    with pytest.raises(ManifestError):
+        parse_keyframe_index("\n  \n")
+    with pytest.raises(ManifestError):
+        parse_keyframe_index(json.dumps(keyframe_entry(cameraTransform=list(IDENTITY_16))))
+
+
+@pytest.mark.parametrize("missing", ["heicPath", "cameraTransform", "intrinsics"])
+def test_keyframe_index_missing_required_field_is_a_manifest_error(missing):
+    bad = keyframe_entry()
+    del bad[missing]
+    with pytest.raises(ManifestError):
+        parse_keyframe_index(json.dumps(bad))

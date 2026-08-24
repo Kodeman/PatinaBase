@@ -116,6 +116,8 @@ interface RoomScanRow {
   captured_room_json_url: string | null;
   photos_manifest_url: string | null;
   model_url_gltf: string | null;
+  /** Dense-frame path (a): `keyframes.tar`, the 100-view posed RGB stream. */
+  scan_bundle_url: string | null;
 }
 
 interface RoomFileRow {
@@ -248,7 +250,7 @@ async function resolveDispatchInputs(
   const { data: scan, error: scanErr } = await admin
     .from("room_scans")
     .select(
-      "id, user_id, room_id, mesh_url, captured_room_json_url, photos_manifest_url, model_url_gltf",
+      "id, user_id, room_id, mesh_url, captured_room_json_url, photos_manifest_url, model_url_gltf, scan_bundle_url",
     )
     .eq("id", scanId)
     .maybeSingle();
@@ -310,13 +312,33 @@ async function resolveDispatchInputs(
     const cap = capPhotoKeys(usable.map((c) => c.key));
     const capped = usable.slice(0, cap.keys.length);
 
+    // Dense-frame path (a): if the scan carries a keyframes.tar (scan_bundle_url),
+    // presign it AND its column-less side-index (keyframe_index.ndjson, derived
+    // in the keyframes/ folder off the scan's OWN owner segments — never off the
+    // archive's key). Both are signed together or not at all; the Modal side's
+    // `config.frameSource` decides whether the job trains on them or the photos.
+    // A scan without keyframes signs nothing here and dispatches exactly as before.
+    const keyframesArchiveKey = ownedKey(scanRow.scan_bundle_url, scanRow);
+    let keyframeIndexKey: string | null = null;
+    if (keyframesArchiveKey) {
+      keyframeIndexKey = `keyframes/${scanRow.user_id}/${scanRow.room_id}/keyframe_index.ndjson`;
+      // Owner-anchor the derived key through the same gate every signed key
+      // passes — it is owner-derived, but the check must never be skipped.
+      if (!keyMatchesScanOwner(keyframeIndexKey, scanRow.user_id, scanRow.room_id)) {
+        throw new KeyPrefixError();
+      }
+    }
+
     // One batched call for the photos (up to PHOTO_URL_CAP); the manifest is
-    // only signed on the path that has one.
-    const [photoUrls, capturedRoomJsonUrl, photosManifestUrl] = await Promise.all([
-      signKeys(admin, cap.keys, "photo"),
-      signOne(admin, capturedRoomKey, "captured_room"),
-      manifestKey ? signOne(admin, manifestKey, "photos_manifest") : Promise.resolve(undefined),
-    ]);
+    // only signed on the path that has one, and the keyframe pair only when present.
+    const [photoUrls, capturedRoomJsonUrl, photosManifestUrl, keyframesArchiveUrl, keyframeIndexUrl] =
+      await Promise.all([
+        signKeys(admin, cap.keys, "photo"),
+        signOne(admin, capturedRoomKey, "captured_room"),
+        manifestKey ? signOne(admin, manifestKey, "photos_manifest") : Promise.resolve(undefined),
+        keyframesArchiveKey ? signOne(admin, keyframesArchiveKey, "keyframes_archive") : Promise.resolve(undefined),
+        keyframeIndexKey ? signOne(admin, keyframeIndexKey, "keyframe_index") : Promise.resolve(undefined),
+      ]);
 
     return {
       roomFileId,
@@ -330,6 +352,7 @@ async function resolveDispatchInputs(
         capturedRoomJsonUrl,
         photoUrlsCapped: cap.capped,
         photoCount: cap.total,
+        ...(keyframesArchiveUrl && keyframeIndexUrl ? { keyframesArchiveUrl, keyframeIndexUrl } : {}),
         ...(config ? { config } : {}),
       },
     };
