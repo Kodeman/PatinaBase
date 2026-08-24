@@ -11638,12 +11638,6 @@ END $g$;
 
 -- 00516_capture_producer_idempotency.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.enqueue_capture_enrichment(text, uuid, integer, text, text, jsonb) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00516_capture_producer_idempotency.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION commit_field_capture(UUID, TEXT, JSONB, UUID, UUID, TEXT, UUID) FROM PUBLIC;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

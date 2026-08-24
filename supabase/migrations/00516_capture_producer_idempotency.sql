@@ -577,6 +577,7 @@ BEGIN
     thumbnail_url      = EXCLUDED.thumbnail_url,
     status             = EXCLUDED.status
   WHERE proposal_captures.status NOT IN ('consumed', 'dismissed')
+    AND proposal_captures.designer_id = v_uid
   RETURNING * INTO v_capture;
 
   -- Conflict skipped (row already consumed or dismissed): idempotent no-op,
