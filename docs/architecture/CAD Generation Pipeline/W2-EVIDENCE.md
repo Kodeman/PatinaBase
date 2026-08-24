@@ -1816,3 +1816,112 @@ patina-staging` is empty; nothing is left running.
 - `room.spz` at the same key is now the v3, step-2 000 artifact; the v4 bytes
   §9.3 measured are gone, replaced in place with the registry row updated.
 - No fixture rows were added or removed. §12 item 9's two markers stand.
+
+---
+
+## 15. Dense-frame path (a) — the 100-keyframe splat (2026-08-24)
+
+The decisive test of §12 item 8 ("the splat is a dense clump, not a room"): train
+the splat on the **dense RGB keyframe stream** the capture already uploaded
+(100 posed keyframes) instead of the ~42 hero photos, and look at the result.
+Feasibility + spec: `DENSE-FRAME-FEASIBILITY.md`. Code:
+`feat(scan-modal): dense-frame path (a)` + two follow-on fixes.
+
+### 15.1 Bringing the dense frames to staging
+
+`scripts/scan-staging-seed copy-prod` was extended to also copy the two posed
+capture archives and their side-indexes from prod scan `83f0d63d` to the staging
+copy `cd72ad9b`. All five landed, **sha256 + size verified**, sizes identical to
+prod:
+
+| object | bytes | column |
+|---|---|---|
+| `bundle/…/keyframes.tar` | 34,719,232 | `scan_bundle_url` |
+| `keyframes/…/keyframe_index.ndjson` | 69,818 | (column-less) |
+| `keyframes/…/keyframe_summary.json` | 91 | (column-less) |
+| `depth/…/depth.tar` | 12,770,304 | `depth_archive_url` |
+| `depth/…/depth_index.ndjson` | 53,872 | (column-less) |
+
+Transport note: the tars + NDJSON indexes must be PUT as `application/octet-stream`
+(matching the iOS `ScanUploadDescriptor`) — the staging bucket's mime allowlist
+415-rejects `application/x-tar`.
+
+### 15.2 The run
+
+Trained on **v2** (`room_files` `b1d203c1`), NOT v1 — the parallel COLMAP lane
+holds v1, and `splat_job` hardcodes `RUN_TIMESTAMP="patina"`, so two runs on the
+same scan/version share the checkpoint dir and the `room.spz` key; version-scoping
+isolates them cleanly. Enqueued via `enqueue_agent_task` with
+`payload.config={"frameSource":"keyframes","maxIterations":12000}` and the
+camelCase dual-key (`scanId`/`roomFileId` — `scan_worker_update_room_file` rejects
+the ledger write without it), dispatched directly.
+
+| | keyframes (this run) | 42-hero baseline (§14.4) |
+|---|---|---|
+| Task | `0362db47` | `552ca6c4` |
+| Frame source | **keyframes** (`photosSource: keyframes`) | rows (42 hero) |
+| Frames used | **99** (100 − 1 identity pre-tracking frame), 0 missing | 42 |
+| Iterations | 12 000 (`config`) | 12 000 |
+| Seed | 100 000 (parametric) | 100 000 (parametric) |
+| Gaussians exported | **1,338,989** (0 NaN/Inf) | 499,005 |
+| `.ply` | 332,070,866 B | 123,754,833 B |
+| `.spz` | **29,699,959 B (28.3 MiB)** — sha `56b8c08f…` | 8,767,038 B |
+| Wall clock | **21.4 min** | 24.9 min |
+| `resumed` | false | false |
+
+media_object `c7028277`, key `scan_artifacts/cd72ad9b-…/v2/room.spz`, verified by
+`modal volume get` + sha256.
+
+### 15.3 Metrics caveat — held-out LPIPS/PSNR are N/A for this run
+
+The dense run tripped a **pre-existing nerfstudio 1.1.5 / gsplat bug** in the
+periodic **eval-IMAGE** render: `get_eval_image_metrics_and_images` →
+`get_outputs_for_camera` → gsplat `rasterization` asserts `opacities.shape==(N,)`
+and gets `torch.Size([100000])` — by the first eval (step 100) densification has
+moved the gaussian count off the 100k seed count, and the eval-camera render path
+desyncs opacities from means for exactly that case. The 42-view baseline never
+reached it (it evaled before densification moved the count), so it is a
+**dense-run-only** crash. Fix (`fix(scan-modal): disable the crashing eval-image
+render for dense splat runs`): `train_argv` disables the eval-IMAGE render when
+`frames > SPARSE_VIEW_FRAME_THRESHOLD`; eval-BATCH and the sparse/hero LPIPS
+export selector are untouched. Consequence: **no held-out LPIPS/PSNR logged** for
+the dense run, and the export fell back to the latest checkpoint (step 11999,
+`exportCheckpointReason: latest_no_eval_metrics`). The quantitative
+metric-vs-baseline comparison is therefore N/A; the **visual is the decisive
+result** (§15.4). Recovering a held-out metric on dense runs (re-enable eval only
+at the final step, or a manual PSNR on a couple held-out keyframes) is a follow-up.
+
+### 15.4 THE VISUAL VERDICT — recognizably a room, not a clump
+
+`splat.ply` pulled off the Volume, opacity/scale-filtered (**1,204,918 of
+1,338,989 gaussians survive → 90 % real, not floater haze**), rendered as three
+orthographic projections (`dense-frame-keyframe-splat-v2-views.png`):
+
+![Dense-frame keyframe splat — three orthographic projections](dense-frame-keyframe-splat-v2-views.png)
+
+- **Both elevations** (front X-Z, side Y-Z) show an unmistakable **floor plane**
+  (the bright horizontal band along the bottom), **furniture-height structure
+  resting on it** (a coherent layered mass at a consistent height), and a bounded
+  vertical extent thinning toward the ceiling — the signature of a room, not a
+  sphere of noise.
+- The **top-down** (X-Y) shows a bounded, roughly rectangular **room footprint**
+  with an open interior (floor) and distinct edge / furniture elements, coherent
+  wood / white / grey coloring.
+- It is still **soft and hazy** — an under-constrained splat, not crisp geometry,
+  with real floater haze at the edges. But the coherent room organization the
+  42-hero baseline lacked ("a dense clump, not a room") is clearly present.
+
+**Verdict:** the 99-view dense stream (2.36× the heroes) + parametric seed crosses
+the clump → room line. §12 item 8 is answered affirmatively: **dense-frame
+training visibly fixes the clump.** This is consistent with the COLMAP lane's
+independent finding that view/feature density is the binding constraint on this
+fixture.
+
+### 15.5 Spend + state left behind
+
+~$1.5 of L4 across an aborted collision run (§ stopped before checkpoint), two
+failed v2 attempts (eval-image crash, then the dual-key ledger-write rejection),
+and the clean completing run — well under the ceiling. Left behind: staging
+`cd72ad9b` now carries the five dense-frame objects + `scan_bundle_url`/
+`depth_archive_url`; `room_files` v2 (`b1d203c1`) holds the keyframe splat
+artifact. No containers left running.
