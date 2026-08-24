@@ -574,6 +574,53 @@ Deno.test("contract.json: the splat_config variant round-trips through the build
   assertEquals(built.taskType, "scan_pipeline.splat");
 });
 
+Deno.test("contract.json: the splat_keyframes variant round-trips through the builder", async () => {
+  const variant = (await readVariants()).splat_keyframes;
+  const built = buildModalDispatchBody(paramsFor("splat", variant));
+  assertEquals(contractKeys(built), contractKeys(variant));
+  assertEquals(built.inputs, variant.inputs);
+  assertEquals(built.taskType, "scan_pipeline.splat");
+});
+
+Deno.test("contract.json: splat_keyframes is the base splat shape plus the keyframe pair and config", async () => {
+  const stages = await readContract();
+  const variant = (await readVariants()).splat_keyframes;
+  const base = new Set(Object.keys(stages.splat.inputs as ContractBody));
+  const extra = Object.keys(variant.inputs as ContractBody).filter((k) => !base.has(k)).sort();
+  assertEquals(extra, ["config", "keyframeIndexUrl", "keyframesArchiveUrl"]);
+  assertEquals(
+    (variant.inputs as ContractBody).config,
+    { frameSource: "keyframes", maxIterations: 12000 },
+  );
+});
+
+Deno.test("buildModalDispatchBody: the keyframe pair reaches the wire only when both are set", async () => {
+  const stages = await readContract();
+  // The base splat stage has no keyframes → neither key reaches the wire.
+  const baseBody = buildModalDispatchBody(paramsFor("splat", stages.splat));
+  const baseInputs = baseBody.inputs as Record<string, unknown>;
+  assertFalse("keyframesArchiveUrl" in baseInputs);
+  assertFalse("keyframeIndexUrl" in baseInputs);
+
+  // A half-present pair (archive without index) is dropped, not half-emitted.
+  const half = buildModalDispatchBody({
+    ...paramsFor("splat", stages.splat),
+    inputs: {
+      kind: "splat" as const,
+      photosSource: "manifest" as const,
+      photosManifestUrl: "m",
+      photoUrls: ["p"],
+      capturedRoomJsonUrl: "c",
+      photoUrlsCapped: false,
+      photoCount: 1,
+      keyframesArchiveUrl: "kf.tar",
+    } as unknown as DispatchInputs,
+  });
+  const halfInputs = half.inputs as Record<string, unknown>;
+  assertFalse("keyframesArchiveUrl" in halfInputs);
+  assertFalse("keyframeIndexUrl" in halfInputs);
+});
+
 Deno.test("contract.json: splat_config is the base splat shape plus config", async () => {
   const stages = await readContract();
   const variant = (await readVariants()).splat_config;

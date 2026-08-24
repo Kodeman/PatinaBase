@@ -57,6 +57,75 @@ def manifest_line(name: str, order: int) -> str:
 
 MANIFEST = "\n".join([manifest_line("hero.heic", 0), manifest_line("auto_001.50.heic", 1)])
 
+# ── dense-frame (keyframe) fixtures ──────────────────────────────────────────
+KEYFRAMES_ARCHIVE_URL = "https://example/sign/room-scans/bundle/u/r/keyframes.tar?token=t"
+KEYFRAME_INDEX_URL = "https://example/sign/room-scans/keyframes/u/r/keyframe_index.ndjson?token=t"
+
+# heicPaths are `keyframes/<name>`; the first line is the identity pre-tracking
+# frame, which parse_keyframe_index drops, so two trainable poses remain.
+_KF_NAMES = ["keyframe_000001_0000_500.heic", "keyframe_000002_0001_000.heic",
+             "keyframe_000003_0001_500.heic"]
+
+
+def keyframe_index_line(name: str, order: int, identity: bool = False) -> str:
+    transform = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] \
+        if identity else [
+            1.0, 0.0, 0.0, float(order),
+            0.0, 1.0, 0.0, 1.5,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0,
+        ]
+    return json.dumps({
+        "heicPath": f"keyframes/{name}",
+        "depthPath": None,
+        "timestampSeconds": float(order),
+        "frameTimestamp": float(order),
+        "cameraTransform": transform,
+        "intrinsics": {"fx": 1500.0, "fy": 1500.0, "cx": 960.0, "cy": 720.0,
+                       "imageWidth": 1920, "imageHeight": 1440},
+        "sharpness": 2000.0,
+        "width": 1440,
+        "height": 1920,
+        "hasDepth": False,
+        "smoothedDepth": False,
+    })
+
+
+KEYFRAME_INDEX = "\n".join([
+    keyframe_index_line(_KF_NAMES[0], 0, identity=True),
+    keyframe_index_line(_KF_NAMES[1], 1),
+    keyframe_index_line(_KF_NAMES[2], 2),
+])
+
+
+def _build_keyframes_tar() -> bytes:
+    import io
+    import tarfile
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        for name in _KF_NAMES:
+            data = b"heic-bytes-for-" + name.encode()
+            info = tarfile.TarInfo(name=f"keyframes/{name}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+KEYFRAMES_TAR = _build_keyframes_tar()
+
+
+def keyframe_inputs(**overrides):
+    inputs = {
+        "photosManifestUrl": MANIFEST_URL,
+        "photoUrls": list(PHOTO_URLS),
+        "capturedRoomJsonUrl": CAPTURED_URL,
+        "keyframesArchiveUrl": KEYFRAMES_ARCHIVE_URL,
+        "keyframeIndexUrl": KEYFRAME_INDEX_URL,
+        "config": {"frameSource": "keyframes"},
+    }
+    inputs.update(overrides)
+    return inputs
+
 CAPTURED_ROOM = {
     "walls": [
         {"identifier": "w1", "dimensions": [4.0, 2.5, 0.1],
@@ -106,6 +175,10 @@ def world(monkeypatch, tmp_path):
             return MANIFEST.encode()
         if url == CAPTURED_URL:
             return json.dumps(CAPTURED_ROOM).encode()
+        if url == KEYFRAME_INDEX_URL:
+            return KEYFRAME_INDEX.encode()
+        if url == KEYFRAMES_ARCHIVE_URL:
+            return KEYFRAMES_TAR
         return b"heic-bytes"
 
     def fake_write_frame(data, dest):
@@ -1135,3 +1208,63 @@ def test_a_stale_ply_file_path_is_CLEARED_when_this_room_seeds_nothing(world, tm
     assert db.completed
     assert result["provenance"]["seedPoints"] == 0
     assert "ply_file_path" not in json.loads(paths["transforms"].read_text())
+
+
+# ── dense-frame path (a): the keyframe frame source ─────────────────────────
+
+
+def test_keyframes_source_trains_on_the_untarred_dense_stream(world, tmp_path):
+    result = splat_job.run_splat(payload(inputs=keyframe_inputs()), db=RecordingDb())
+    prov = result["provenance"]
+    assert prov["photosSource"] == "keyframes"
+    assert prov["frameSource"] == "keyframes"
+    # Three index lines, the first an identity pre-tracking frame that is
+    # dropped, so two trainable views — untarred and transcoded by object name.
+    assert prov["frames"] == 2
+    assert set(world.frames) == {
+        "keyframe_000002_0001_000.jpg", "keyframe_000003_0001_500.jpg",
+    }
+    doc = json.loads(splat_job.workspace_paths("scan-1", 4, tmp_path / "cache")["transforms"].read_text())
+    assert {f["file_path"] for f in doc["frames"]} == {
+        "images/keyframe_000002_0001_000.jpg", "images/keyframe_000003_0001_500.jpg",
+    }
+
+
+def test_frame_source_auto_prefers_keyframes_when_the_archive_is_present(world):
+    result = splat_job.run_splat(
+        payload(inputs=keyframe_inputs(config={"frameSource": "auto"})), db=RecordingDb(),
+    )
+    assert result["provenance"]["photosSource"] == "keyframes"
+
+
+def test_frame_source_defaults_to_auto_and_takes_keyframes(world):
+    inputs = keyframe_inputs()
+    del inputs["config"]  # no config at all → auto → keyframes when present
+    result = splat_job.run_splat(payload(inputs=inputs), db=RecordingDb())
+    assert result["provenance"]["photosSource"] == "keyframes"
+
+
+def test_frame_source_photos_forces_the_hero_path_even_with_keyframes(world):
+    result = splat_job.run_splat(
+        payload(inputs=keyframe_inputs(config={"frameSource": "photos"})), db=RecordingDb(),
+    )
+    # The hero manifest carrier drove the run, not the dense stream.
+    assert result["provenance"]["photosSource"] == "manifest"
+    assert result["provenance"]["frameSource"] == "photos"
+
+
+def test_frame_source_keyframes_without_an_archive_fails_loudly(world):
+    with pytest.raises(splat_job.InputError):
+        splat_job.run_splat(payload(inputs={
+            "photosManifestUrl": MANIFEST_URL,
+            "photoUrls": list(PHOTO_URLS),
+            "capturedRoomJsonUrl": CAPTURED_URL,
+            "config": {"frameSource": "keyframes"},
+        }), db=RecordingDb())
+
+
+def test_a_scan_without_keyframes_is_unchanged_by_the_dense_frame_branch(world):
+    # No keyframe inputs at all → the base photo path, photosSource=manifest.
+    result = splat_job.run_splat(payload(), db=RecordingDb())
+    assert result["provenance"]["photosSource"] == "manifest"
+    assert result["provenance"]["frameSource"] == "auto"

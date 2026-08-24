@@ -203,7 +203,10 @@ class ReadOnlyClient:
         self._client = httpx.Client(
             base_url=base_url.rstrip("/"),
             headers=_rest_headers(service_role_key),
-            timeout=60.0,
+            # 300 s, not 60: the dense-frame archives (keyframes.tar ~34 MiB,
+            # depth.tar ~12 MiB) are downloaded whole into memory, and a 60 s
+            # read could time out mid-archive on a slow link.
+            timeout=300.0,
         )
 
     def get_rest(self, table: str, params: dict[str, str]) -> Any:
@@ -506,6 +509,16 @@ class CopyManifest:
     photo_source_image_ids: list[str]  # same order/length as photo_src_keys
     photo_total_available: int
     photo_capped: bool
+    # Dense-frame path-(a): the two posed capture streams and their side-indexes.
+    # keyframes.tar / depth.tar resolve through their dedicated room_scans URL
+    # columns (scan_bundle_url / depth_archive_url); the three side-indexes are
+    # COLUMN-LESS (keys.py KIND_TO_FOLDER) and are derived by prefix-swap off a
+    # resolved archive key's verified owner segments — never guessed.
+    keyframes_archive_src_key: str | None
+    keyframe_index_src_key: str | None
+    keyframe_summary_src_key: str | None
+    depth_archive_src_key: str | None
+    depth_index_src_key: str | None
     skipped: list[str]  # human-readable reasons, e.g. "mesh.ply: mesh_url is null on source"
 
 
@@ -533,9 +546,18 @@ def build_copy_manifest(
     photos manifest (if present), up to `photo_cap` full-res photos in
     display_order/captured_at/id order (the rows arrive pre-ordered — this
     function does not re-sort), a hero thumbnail (if present), and scan.glb
-    IFF model_url_gltf is set. Deliberately SKIPS depth archive, world map,
-    bundle/keyframes archive, and the USDZ — recorded in `skipped` with a
-    reason rather than silently dropped."""
+    IFF model_url_gltf is set.
+
+    DENSE-FRAME path (a): the two posed capture streams — keyframes.tar
+    (100 posed RGB HEIC keyframes, via scan_bundle_url) and depth.tar (86 posed
+    depth frames, via depth_archive_url) — plus their side-indexes
+    (keyframe_index.ndjson, keyframe_summary.json, depth_index.ndjson) are ALSO
+    copied when present, so the staging fixture can train a splat on the dense
+    RGB stream rather than the 42 heroes. The archives resolve through their
+    columns; the column-less indexes are derived by prefix-swap off a resolved
+    archive key's verified owner segments into their B-18 folders. Still SKIPS
+    world map, bundle manifest, coverage heatmap and the USDZ — recorded in
+    `skipped` with a reason rather than silently dropped."""
     prod_user_id = str(scan_row["user_id"])
     prod_room_id = str(scan_row["room_id"])
     skipped: list[str] = []
@@ -555,12 +577,41 @@ def build_copy_manifest(
         scan_row.get("model_url_gltf"), prod_user_id, prod_room_id, keys_mod, "scan.glb", skipped,
     )
 
+    # Dense-frame path (a): the two posed capture archives, each via its own
+    # room_scans URL column. keyframes.tar (RGB) and depth.tar (depth) are the
+    # whole point of this extension — bringing them across is what lets staging
+    # train a splat on the 100-keyframe stream instead of the 42 heroes.
+    keyframes_archive_key = _owned_key_or_none(
+        scan_row.get("scan_bundle_url"), prod_user_id, prod_room_id, keys_mod,
+        "keyframes archive (keyframes.tar)", skipped,
+    )
+    depth_archive_key = _owned_key_or_none(
+        scan_row.get("depth_archive_url"), prod_user_id, prod_room_id, keys_mod,
+        "depth archive (depth.tar)", skipped,
+    )
+
+    # The side-indexes are COLUMN-LESS (keys.py KIND_TO_FOLDER: keyframeIndex/
+    # keyframeSummary → "keyframes", depthIndex → "depth"). Their keys are
+    # derived by prefix-swap off a resolved archive key's verified owner
+    # segments — the archive already passed assert_owner_prefix, so its
+    # {uid}/{room} is exactly the scan owner's, and no key is guessed from an
+    # unvalidated source. keyframes.tar lives in the "bundle" folder while its
+    # index lives in "keyframes", so the folder comes from KIND_TO_FOLDER, not
+    # from the archive key's own folder.
+    def _sibling_index_key(archive_key: str | None, kind: str, filename: str) -> str | None:
+        if not archive_key:
+            return None
+        uid, room = keys_mod.owner_segments_from_key(archive_key)
+        return f"{keys_mod.KIND_TO_FOLDER[kind]}/{uid}/{room}/{filename}"
+
+    keyframe_index_key = _sibling_index_key(keyframes_archive_key, "keyframeIndex", "keyframe_index.ndjson")
+    keyframe_summary_key = _sibling_index_key(keyframes_archive_key, "keyframeSummary", "keyframe_summary.json")
+    depth_index_key = _sibling_index_key(depth_archive_key, "depthIndex", "depth_index.ndjson")
+
     # Explicitly-skipped artifact kinds — never attempted, always noted.
     for label, col in (
         ("usdz (scan.usdz)", "model_url"),
-        ("depth archive (depth.tar)", "depth_archive_url"),
         ("world map", "world_map_url"),
-        ("bundle/keyframes archive", "scan_bundle_url"),
         ("bundle manifest.json", "bundle_manifest_url"),
         ("coverage heatmap", "coverage_heatmap_url"),
     ):
@@ -596,6 +647,11 @@ def build_copy_manifest(
         photo_source_image_ids=photo_ids[:photo_cap],
         photo_total_available=total_available,
         photo_capped=capped,
+        keyframes_archive_src_key=keyframes_archive_key,
+        keyframe_index_src_key=keyframe_index_key,
+        keyframe_summary_src_key=keyframe_summary_key,
+        depth_archive_src_key=depth_archive_key,
+        depth_index_src_key=depth_index_key,
         skipped=skipped,
     )
 
@@ -737,6 +793,12 @@ def execute_copy_prod(
                 "captured_room_json_url": None,
                 "photos_manifest_url": None,
                 "model_url_gltf": None,
+                # Dense-frame path (a): the two posed capture archives get their
+                # dedicated columns set so the dispatcher can presign them. The
+                # column-less side-indexes are uploaded but carry no column —
+                # the dispatcher/job derive their keys by prefix-swap.
+                "scan_bundle_url": None,
+                "depth_archive_url": None,
             }
 
             if manifest.captured_room_src_key:
@@ -758,6 +820,28 @@ def execute_copy_prod(
                 dst = rewrite_key(manifest.glb_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
                 uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.glb_src_key, dst, "model/gltf-binary"))
                 url_columns["model_url_gltf"] = dst
+
+            # Dense-frame path (a): keyframes.tar + depth.tar (column-backed) and
+            # their side-indexes (column-less). Each is downloaded from prod
+            # (read-only), re-uploaded to the rewritten staging key, and verified
+            # by size+sha256 like every other object.
+            if manifest.keyframes_archive_src_key:
+                dst = rewrite_key(manifest.keyframes_archive_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.keyframes_archive_src_key, dst, "application/x-tar"))
+                url_columns["scan_bundle_url"] = dst
+            if manifest.keyframe_index_src_key:
+                dst = rewrite_key(manifest.keyframe_index_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.keyframe_index_src_key, dst, "application/x-ndjson"))
+            if manifest.keyframe_summary_src_key:
+                dst = rewrite_key(manifest.keyframe_summary_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.keyframe_summary_src_key, dst, "application/json"))
+            if manifest.depth_archive_src_key:
+                dst = rewrite_key(manifest.depth_archive_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.depth_archive_src_key, dst, "application/x-tar"))
+                url_columns["depth_archive_url"] = dst
+            if manifest.depth_index_src_key:
+                dst = rewrite_key(manifest.depth_index_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.depth_index_src_key, dst, "application/x-ndjson"))
 
             photo_dst_keys: list[str] = []
             for src_key in manifest.photo_src_keys:

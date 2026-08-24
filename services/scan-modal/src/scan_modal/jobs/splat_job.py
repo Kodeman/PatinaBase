@@ -62,6 +62,7 @@ from ..core.seed_points import SEED_PLY_NAME, build_seed_ply
 from ..core.transforms import (
     build_transforms,
     frame_file_name,
+    parse_keyframe_index,
     parse_photo_rows,
     parse_photos_manifest,
 )
@@ -107,6 +108,14 @@ SPARSE_VIEW_MAX_ITERATIONS = 12000
 #: — a scan with 80 (the dispatcher's cap) keeps splatfacto's own 30 000 until
 #: someone measures otherwise.
 SPARSE_VIEW_FRAME_THRESHOLD = 60
+#: Frame cap for the KEYFRAME source. The dispatcher's 80-cap gates the per-URL
+#: hero-photo list; keyframes instead arrive as one `keyframes.tar` the job
+#: untars, so that cap never applies to them — but an unusually long Field walk
+#: can fire up to `maxKeyframes` (500) keyframes, and training every one would
+#: blow the L4 budget for no quality gain past a well-distributed ~120 views of
+#: one room. 120 clears the 100 this fixture carries (the point of the exercise)
+#: with headroom, and bounds the pathological case. Applied in capture order.
+KEYFRAME_FRAME_CAP = 120
 #: Save often enough that a preemption costs minutes, not the whole run.
 STEPS_PER_SAVE = 2000
 #: Wall-clock ceilings, well inside the function's own SPLAT_TIMEOUT_SECONDS.
@@ -577,6 +586,74 @@ def _prepare_workspace(
     return {"frames": len(kept), "reused": False, "missing": missing}
 
 
+def _prepare_keyframe_workspace(
+    paths: dict[str, Path],
+    keyframe_index_url: str,
+    keyframes_archive_url: str,
+) -> dict[str, Any]:
+    """Download + untar the dense RGB keyframe stream and write `transforms.json`.
+
+    The dense-frame path (a) analogue of `_prepare_workspace`: the poses come
+    from `keyframe_index.ndjson` (parsed by `core.transforms.parse_keyframe_index`
+    onto the identical nerfstudio frame shape the photo carriers produce) and the
+    pixels from `keyframes.tar` — ONE object the job untars, rather than a capped
+    list of per-photo presigned URLs. Every keyframe HEIC member is transcoded to
+    the JPEG nerfstudio reads (`_write_frame`), matched to its pose by object
+    basename, exactly as the photo path matches by `relativePath`'s final segment.
+
+    Skipped wholesale when a previous (preempted) attempt already wrote the
+    workspace — the same cheap half of the resumable pattern, safe because the
+    workspace is job-keyed on the room-file version.
+    """
+    if paths["transforms"].is_file():
+        document = _json.loads(paths["transforms"].read_text())
+        return {"frames": len(document.get("frames", [])), "reused": True, "missing": 0}
+
+    poses = parse_keyframe_index(_fetch(keyframe_index_url).decode("utf-8"))
+    # Preserve the analogue of the dispatcher's 80-cap: keyframes ride a single
+    # tar, so nothing capped them upstream — bound the frame count here, in
+    # capture (timestamp) order, which `parse_keyframe_index` already imposed.
+    poses = poses[:KEYFRAME_FRAME_CAP]
+
+    paths["images"].mkdir(parents=True, exist_ok=True)
+
+    import io
+    import tarfile
+
+    # The keyframe HEICs (and their `.bin` depth sidecars) live inside the tar
+    # under `keyframes/<name>`. Index members by BASENAME so a pose's
+    # `heicPath` ("keyframes/keyframe_000001_….heic") resolves regardless of the
+    # archive's internal nesting — the same "only the final segment is read"
+    # rule `frame_file_name` and the photo matcher use.
+    tar_bytes = _fetch(keyframes_archive_url)
+    members_by_name: dict[str, tarfile.TarInfo] = {}
+    with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:*") as tar:
+        for member in tar.getmembers():
+            if member.isfile():
+                members_by_name[member.name.rsplit("/", 1)[-1]] = member
+
+        kept, missing = [], 0
+        for pose in poses:
+            basename = pose.relative_path.rsplit("/", 1)[-1]
+            member = members_by_name.get(basename)
+            if member is None:
+                # A pose whose HEIC is absent from the tar is not trainable; a
+                # positional guess would be worse than dropping it.
+                missing += 1
+                continue
+            extracted = tar.extractfile(member)
+            if extracted is None:
+                missing += 1
+                continue
+            _write_frame(extracted.read(), paths["images"] / frame_file_name(pose.relative_path))
+            kept.append(pose)
+
+    if not kept:
+        raise InputError("no keyframe HEIC in the archive matched a keyframe_index pose")
+    paths["transforms"].write_text(_json.dumps(build_transforms(kept), sort_keys=True))
+    return {"frames": len(kept), "reused": False, "missing": missing}
+
+
 def ensure_seed_points(paths: dict[str, Path], captured_room_json: Any) -> dict[str, Any]:
     """Write the seed point cloud and name it in `transforms.json`.
 
@@ -667,21 +744,48 @@ def run_splat(
         photo_records = inputs.get("photoRecords")
         photo_urls = inputs.get("photoUrls") or []
         captured_url = inputs.get("capturedRoomJsonUrl")
-        # The sidecar is often absent (ingest strips it as device-local), so
-        # EITHER pose carrier is acceptable — but not neither.
-        if not manifest_url and not photo_records:
+        keyframes_archive_url = inputs.get("keyframesArchiveUrl")
+        keyframe_index_url = inputs.get("keyframeIndexUrl")
+        keyframes_available = bool(keyframes_archive_url and keyframe_index_url)
+
+        # DENSE-FRAME path (a): `config.frameSource` decides whether this run
+        # trains on the 100-keyframe dense RGB stream or the ~42 hero photos.
+        # `auto` (the default) prefers keyframes WHEN the dispatcher signed them,
+        # else falls back to photos — so a scan without a keyframe archive keeps
+        # the exact behaviour it had before this branch existed. `keyframes`
+        # forces the dense stream and fails loudly if it is not present rather
+        # than silently training the wrong, sparser input; `photos` forces the
+        # hero path even when keyframes exist. The job decides, not the
+        # dispatcher (W2-EVIDENCE §12 item 8 — this is the quality lever).
+        config = inputs.get("config") or {}
+        frame_source = str(config.get("frameSource") or "auto").lower()
+        if frame_source not in ("auto", "keyframes", "photos"):
+            raise InputError(f"inputs.config.frameSource must be auto|keyframes|photos, got {frame_source!r}")
+        if frame_source == "keyframes" and not keyframes_available:
             raise InputError(
-                "inputs.photosManifestUrl or inputs.photoRecords is required"
+                "inputs.config.frameSource='keyframes' but no keyframesArchiveUrl/"
+                "keyframeIndexUrl was dispatched for this scan"
             )
-        if not captured_url or not photo_urls:
-            raise InputError(
-                "inputs.photoUrls and inputs.capturedRoomJsonUrl are required"
-            )
+        use_keyframes = keyframes_available and frame_source in ("auto", "keyframes")
+
+        if not use_keyframes:
+            # The sidecar is often absent (ingest strips it as device-local), so
+            # EITHER pose carrier is acceptable — but not neither.
+            if not manifest_url and not photo_records:
+                raise InputError(
+                    "inputs.photosManifestUrl or inputs.photoRecords is required"
+                )
+            if not photo_urls:
+                raise InputError("inputs.photoUrls is required for the photos frame source")
+        if not captured_url:
+            raise InputError("inputs.capturedRoomJsonUrl is required")
         if not scan_id:
             raise InputError("scanId is required")
-        # Derived from which carrier actually arrived, not from the dispatcher's
-        # own label — this is the job saying what it did.
-        photos_source = "manifest" if manifest_url else "rows"
+        # Derived from what actually drove the run, not the dispatcher's label —
+        # this is the job saying which input it trained on.
+        photos_source = (
+            "keyframes" if use_keyframes else ("manifest" if manifest_url else "rows")
+        )
 
         # Parsed for its own sake: an unreadable parametric room means the
         # capture is broken, and finding that out now costs a download rather
@@ -692,15 +796,18 @@ def run_splat(
 
         paths = workspace_paths(scan_id, room_file_version)
         paths["base"].mkdir(parents=True, exist_ok=True)
-        prep = _prepare_workspace(paths, manifest_url, photo_records, photo_urls)
+        prep = (
+            _prepare_keyframe_workspace(paths, keyframe_index_url, keyframes_archive_url)
+            if use_keyframes
+            else _prepare_workspace(paths, manifest_url, photo_records, photo_urls)
+        )
         seed = ensure_seed_points(paths, captured_doc)
 
         resume = paths["checkpoints"].is_dir() and any(paths["checkpoints"].iterdir())
-        # `inputs.config` is the queue's knob. It reaches here because the
-        # dispatcher now passes `agent_tasks.payload.config` through verbatim
-        # (contract.json's `splat_config` variant); before that it was
-        # unreachable and this branch was dead code (W2-EVIDENCE.md §4 E).
-        config = inputs.get("config") or {}
+        # `inputs.config` is the queue's knob (read above for frameSource). It
+        # reaches here because the dispatcher passes `agent_tasks.payload.config`
+        # through verbatim (contract.json's `splat_config` variant); before that
+        # it was unreachable and this branch was dead code (W2-EVIDENCE.md §4 E).
         requested = config.get("maxIterations")
         max_iterations = int(requested or default_max_iterations(prep["frames"]))
         iterations_source = "config" if requested else "default"
@@ -733,6 +840,10 @@ def run_splat(
             # room_scan_images rows and one trained off the uploaded sidecar are
             # not distinguishable after the fact from anything else on the row.
             "photosSource": photos_source,
+            # The requested frame-source policy (auto|keyframes|photos) that
+            # produced `photosSource`. A dense-frame splat and a hero-photo one
+            # are the same artifact kind; this says which lever was pulled.
+            "frameSource": frame_source,
             "maxIterations": max_iterations,
             # Whether the budget came from the queue or from the view-count
             # policy. A 12 000-iteration artifact is not self-describing —

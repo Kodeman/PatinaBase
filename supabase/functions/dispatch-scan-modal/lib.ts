@@ -332,6 +332,17 @@ export interface SplatInputs {
   photoUrlsCapped: boolean;
   /** How many usable photo rows the scan actually has, cap or no cap. */
   photoCount: number;
+  /** Dense-frame path (a): a presigned GET for the scan's `keyframes.tar` (the
+   *  100-view dense RGB stream, via `room_scans.scan_bundle_url`), present ONLY
+   *  when the scan carries one. The Modal side untars it. Paired with
+   *  `keyframeIndexUrl`; `config.frameSource` decides whether the job trains on
+   *  these or the hero photos. Absent (not null) when the scan has no keyframe
+   *  archive, so a scan without one produces the exact body it did before. */
+  keyframesArchiveUrl?: string;
+  /** Presigned GET for `keyframe_index.ndjson` (per-keyframe pose + intrinsics).
+   *  Column-less: its key is derived in the `keyframes/` folder off the scan's
+   *  own owner segments. Present iff `keyframesArchiveUrl` is. */
+  keyframeIndexUrl?: string;
   /** The task payload's own `config`, passed through UNINSPECTED. See
    *  `extractStageConfig`. Absent when the task carried none. */
   config?: Record<string, unknown>;
@@ -461,6 +472,15 @@ export function buildModalDispatchBody(p: DispatchParams): Record<string, unknow
         inputs.photosManifestUrl = p.inputs.photosManifestUrl;
       } else {
         inputs.photoRecords = p.inputs.photoRecords;
+      }
+      // Dense-frame path (a): the keyframe archive + index ride alongside the
+      // photo carrier when the scan has them; `config.frameSource` (below) tells
+      // the Modal side which to train on. Absent (not both, not one) when the
+      // scan has no keyframes — the two are signed and emitted together, so a
+      // half-present pair can never reach the wire.
+      if (p.inputs.keyframesArchiveUrl && p.inputs.keyframeIndexUrl) {
+        inputs.keyframesArchiveUrl = p.inputs.keyframesArchiveUrl;
+        inputs.keyframeIndexUrl = p.inputs.keyframeIndexUrl;
       }
       // Absent, not null — same rule as `glbUrl`. splat_job reads
       // `inputs.config` for truthiness, and an explicit null on the wire reads
