@@ -761,6 +761,16 @@ def execute_copy_prod(
             "photo_total_available": manifest.photo_total_available,
             "photo_copied_count": len(manifest.photo_src_keys),
             "photo_capped": manifest.photo_capped,
+            # Dense-frame path (a): the resolved source keys (null when a column
+            # is absent). Surfaced so a --dry-run proves the archives + indexes
+            # resolve against real prod without any staging write.
+            "dense_frames": {
+                "keyframes_archive_src_key": manifest.keyframes_archive_src_key,
+                "keyframe_index_src_key": manifest.keyframe_index_src_key,
+                "keyframe_summary_src_key": manifest.keyframe_summary_src_key,
+                "depth_archive_src_key": manifest.depth_archive_src_key,
+                "depth_index_src_key": manifest.depth_index_src_key,
+            },
             "skipped": manifest.skipped,
             "dry_run": dry_run,
             "uploads": [],
@@ -776,7 +786,10 @@ def execute_copy_prod(
         with httpx.Client(
             base_url=staging_url.rstrip("/"),
             headers=_rest_headers(staging_service_role_key),
-            timeout=120.0,
+            # 300 s: the dense-frame archives (keyframes.tar ~34 MiB, depth.tar
+            # ~12 MiB) are PUT whole, and a 120 s total-operation timeout can
+            # expire mid-write on a slow uplink (WriteTimeout).
+            timeout=300.0,
         ) as staging:
             # 1. Ensure the staging room exists (GET-then-POST, mirrors _upsert_row).
             room_row = {
@@ -825,23 +838,29 @@ def execute_copy_prod(
             # their side-indexes (column-less). Each is downloaded from prod
             # (read-only), re-uploaded to the rewritten staging key, and verified
             # by size+sha256 like every other object.
+            # Content types MATCH the iOS uploader's ScanUploadDescriptor
+            # (Capture/.../ScanUploadDescriptor.swift): the tars and the NDJSON
+            # side-indexes ship as application/octet-stream ("semantic x-tar, but
+            # TRANSPORT is octet-stream"), the summary as application/json. The
+            # staging bucket enforces a mime allowlist that rejects x-tar, so
+            # matching the real uploader is also what makes the PUT succeed.
             if manifest.keyframes_archive_src_key:
                 dst = rewrite_key(manifest.keyframes_archive_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
-                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.keyframes_archive_src_key, dst, "application/x-tar"))
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.keyframes_archive_src_key, dst, "application/octet-stream"))
                 url_columns["scan_bundle_url"] = dst
             if manifest.keyframe_index_src_key:
                 dst = rewrite_key(manifest.keyframe_index_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
-                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.keyframe_index_src_key, dst, "application/x-ndjson"))
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.keyframe_index_src_key, dst, "application/octet-stream"))
             if manifest.keyframe_summary_src_key:
                 dst = rewrite_key(manifest.keyframe_summary_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
                 uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.keyframe_summary_src_key, dst, "application/json"))
             if manifest.depth_archive_src_key:
                 dst = rewrite_key(manifest.depth_archive_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
-                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.depth_archive_src_key, dst, "application/x-tar"))
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.depth_archive_src_key, dst, "application/octet-stream"))
                 url_columns["depth_archive_url"] = dst
             if manifest.depth_index_src_key:
                 dst = rewrite_key(manifest.depth_index_src_key, prod_user_id, prod_room_id, staging_user_id, room_id)
-                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.depth_index_src_key, dst, "application/x-ndjson"))
+                uploads.append(_download_verify_upload(source, staging, BUCKET, manifest.depth_index_src_key, dst, "application/octet-stream"))
 
             photo_dst_keys: list[str] = []
             for src_key in manifest.photo_src_keys:
