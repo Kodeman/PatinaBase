@@ -189,13 +189,26 @@ def workspace_paths(scan_id: str, room_file_version: Any, root: Path | None = No
     }
 
 
-def train_argv(paths: dict[str, Path], max_iterations: int, resume: bool) -> list[str]:
+def train_argv(paths: dict[str, Path], max_iterations: int, resume: bool,
+               eval_images: bool = True) -> list[str]:
     """`ns-train splatfacto` over a COLMAP-free `transforms.json`.
 
     The three dataparser flags are what keep the reconstruction in ARKit metres
     with gravity already applied — `core/transforms.py` did the orientation
     exactly, so letting nerfstudio re-estimate it from the mean camera up-vector
     would replace a measurement with a guess.
+
+    `eval_images` gates the periodic EVAL-IMAGE render. On a DENSE capture
+    (the 100-keyframe source), splatfacto's `get_eval_image_metrics_and_images`
+    → gsplat `rasterization` trips `assert opacities.shape == (N,)` at the first
+    eval image (step 100): densification is far enough along by then that the
+    gaussian count no longer equals the seed count, and nerfstudio 1.1.5's
+    eval-camera render path (`get_outputs_for_camera`) desyncs opacities from
+    means for exactly that case — a pre-existing nerfstudio/gsplat bug the 42-
+    view baseline never reached (it evaled before densification moved the count).
+    Disabling ONLY the eval-image render (not eval-batch) sidesteps the crash and
+    costs only the periodic image preview + LPIPS tag; held-out PSNR still logs
+    via `get_eval_loss_dict`, which renders through the training path that works.
     """
     argv = [
         "ns-train", METHOD,
@@ -215,6 +228,11 @@ def train_argv(paths: dict[str, Path], max_iterations: int, resume: bool) -> lis
         "--viewer.quit-on-train-completion", "True",
         "--vis", "tensorboard",
     ]
+    if not eval_images:
+        # Push both eval-image cadences past the run so the crashing render never
+        # fires. Eval-BATCH (held-out PSNR) is untouched and still logs.
+        off = str(int(max_iterations) + 1)
+        argv += ["--steps-per-eval-image", off, "--steps-per-eval-all-images", off]
     if resume:
         argv += ["--load-dir", str(paths["checkpoints"])]
     argv += [
@@ -815,8 +833,13 @@ def run_splat(
         # shutdown is in a `finally`, so a preemption, a training timeout or an
         # operator stop all leave the last checkpoint durable — the resume path
         # is only real if something committed before the container died.
+        # A dense capture (keyframes, ~100 views) disables the eval-IMAGE render
+        # that crashes nerfstudio 1.1.5 once densification moves the gaussian
+        # count off the seed count (see train_argv). Sparse captures keep it, so
+        # the LPIPS-based export selector is unchanged for the hero path.
+        eval_images = prep["frames"] <= SPARSE_VIEW_FRAME_THRESHOLD
         with _checkpoint_watch(paths["checkpoints"], checkpoint_commit) as committer:
-            code = _run(train_argv(paths, max_iterations, resume), TRAIN_TIMEOUT_S)
+            code = _run(train_argv(paths, max_iterations, resume, eval_images), TRAIN_TIMEOUT_S)
         if code != 0:
             raise RuntimeError(f"ns-train {METHOD} exited {code}")
 
@@ -844,6 +867,11 @@ def run_splat(
             # produced `photosSource`. A dense-frame splat and a hero-photo one
             # are the same artifact kind; this says which lever was pulled.
             "frameSource": frame_source,
+            # Whether the periodic eval-IMAGE render ran. Off for dense captures
+            # to dodge the nerfstudio 1.1.5 eval-camera opacity-shape crash (see
+            # train_argv); when off, LPIPS tags are absent and the export
+            # selector falls back to held-out PSNR / latest.
+            "evalImages": eval_images,
             "maxIterations": max_iterations,
             # Whether the budget came from the queue or from the view-count
             # policy. A 12 000-iteration artifact is not self-describing —

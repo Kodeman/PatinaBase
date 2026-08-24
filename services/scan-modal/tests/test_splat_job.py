@@ -898,6 +898,21 @@ def test_the_run_directory_matches_nerfstudios_own_four_level_layout():
     assert paths["run"].relative_to(paths["output"]).parts == (experiment, method, timestamp)
 
 
+def test_train_argv_keeps_eval_image_by_default_and_disables_it_for_dense():
+    """A dense capture disables the eval-IMAGE render that crashes nerfstudio
+    1.1.5 once densification moves the gaussian count off the seed count; a
+    sparse capture keeps it (LPIPS export selector unchanged)."""
+    paths = splat_job.workspace_paths("scan-1", 4)
+    on = splat_job.train_argv(paths, 12000, resume=False, eval_images=True)
+    assert "--steps-per-eval-image" not in on
+    assert "--steps-per-eval-all-images" not in on
+
+    off = splat_job.train_argv(paths, 12000, resume=False, eval_images=False)
+    # Both cadences pushed one step past the run, so neither ever fires.
+    assert off[off.index("--steps-per-eval-image") + 1] == "12001"
+    assert off[off.index("--steps-per-eval-all-images") + 1] == "12001"
+
+
 def test_the_object_key_carries_scan_and_room_file_version():
     assert splat_job.splat_object_key("s1", 7) == "scan_artifacts/s1/v7/room.spz"
 
