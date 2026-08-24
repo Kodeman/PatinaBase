@@ -1816,3 +1816,180 @@ patina-staging` is empty; nothing is left running.
 - `room.spz` at the same key is now the v3, step-2 000 artifact; the v4 bytes
   §9.3 measured are gone, replaced in place with the registry row updated.
 - No fixture rows were added or removed. §12 item 9's two markers stand.
+
+---
+
+## 15. The COLMAP pose-prior seed — §14.6 item 2 / §14.7's deferred lever, run
+
+§14.7 listed "COLMAP pose-prior refine behind config" as **deferred** — "scoped
+in the plan; never wired, never run" — and §14.6 item 2 named it a candidate for
+the wave's real remaining gap: *reconstruction quality on 42 frames*. This
+section wires it and runs it twice against the parametric-seed baseline. The
+headline is measured, not inferred, and it is a **no**: on this capture COLMAP
+registers the poses fine and recovers real geometry, but the geometry is too
+sparse to seed a better splat than the dense parametric prior — so it slightly
+**hurts**. The binding constraint is frame density, not pose quality.
+
+### 15.1 What was built
+
+A config-gated pre-step in `splat_job`, `config.poseRefine: colmap` (default
+`none`, so every existing run is byte-for-byte unchanged). It reduces the parked
+scan-pipeline engine (`refine_colmap_backend`) to the `colmap` CLI:
+
+1. `feature_extractor` — SIFT on the 42 transcoded frames, **CPU**
+   (`--Sift*.use_gpu 0`: a headless L4 has no GL context, and CPU SIFT on 42
+   frames is minutes).
+2. the database's per-image intrinsics are rewritten to the **device's own**
+   PINHOLE fx/fy/cx/cy (the parked engine's `rewrite_intrinsics_preserving_ids`,
+   in SQLite), replacing COLMAP's guess.
+3. `exhaustive_matcher` — 42 frames is 861 pairs.
+4. a **known-pose seed model** carrying the ARKit poses unchanged, ids aligned
+   to the database.
+5. `point_triangulator` — adds 3-D points **without moving a pose**.
+6. bundle adjustment is available (`poseRefineBundle`) but **off by default**: on
+   the parked engine's 49-frame subject BA improved reprojection RMSE but
+   *worsened* loop-rotation RMSE and never reached publication, and keeping the
+   ARKit poses means the splat is never worse-*posed* than the baseline.
+7. the triangulated points replace the parametric seed under the same file name
+   `transforms.json` already points at.
+
+**Fail-closed.** Any COLMAP failure, an under-registered solve (< 50% of frames
+contributing an observation), or too few points (< 2 000, overridable by
+`poseRefineMinPoints` for measurement) leaves the parametric seed in place and
+trains as today. COLMAP failing on 42 wide-baseline room photos is a **result,
+not an error** — it is reported, not raised.
+
+**The frame is derived, not asserted.** COLMAP's world is made *equal to*
+nerfstudio's world, so triangulated points come out in the frame the cameras and
+the parametric cloud already live in — no extra change of basis. The one
+non-trivial step, the nerfstudio↔COLMAP camera-basis flip (OpenGL +Y-up/−Z vs
+OpenCV +Y-down/+Z) and the c2w↔w2c inversion, is round-trip tested. All of it is
+behind a subprocess seam; the pure logic and the SQLite rewrite run under pytest
+with a fake `colmap` — **512 scan-modal tests green, no GPU** — and the Deno
+dispatch contract stays green on the new `splat_pose_refine` variant.
+
+### 15.2 Did COLMAP register? — yes, cleanly
+
+Two fresh runs on the fixture (scan `cd72ad9b-…`, `room_files` `5bc4cef2-…` v1,
+42 frames, `photosSource: rows`), the Volume's `output/` cleared first so both
+are `resumed: false`, LPIPS-primary checkpoint selector (§14.6 item 1). Both
+dispatched via `dispatch-scan-modal` / the staging pg_cron sweep.
+
+| | run 1 — task `ae3ee5fb-…` | run 2 — task `796b47eb-…` |
+|---|---|---|
+| `config` | `{poseRefine: colmap, maxIterations: 12000}` | `{poseRefine: colmap, poseRefineMinPoints: 10, maxIterations: 12000}` |
+| **COLMAP registered / 42** | **40** | **40** |
+| Triangulated points | **1 612** | **1 612** |
+| Mean track length | 2.73 | 2.71 |
+| **Mean reprojection error** | **1.559 px** | **1.541 px** |
+| Poses refined (BA) | no | no |
+| `colmapReason` → seed used | `low_points` → **parametric fallback** | `ok` → **COLMAP seed used** |
+
+**COLMAP registration is not the problem.** 40 of 42 wide-baseline photos
+register, at **~1.5 px** mean reprojection error — that is a *good* solve, and it
+is direct evidence the raw ARKit poses are geometrically self-consistent. Whatever
+the "unrefined external poses" concern was, on this capture the poses are sound;
+pose-prior refinement has nothing to fix. The failure mode is elsewhere: a
+feature-poor painted room yields only **1 612** triangulated points with a mean
+track length of **2.7** (most points seen by two or three cameras), far below the
+100 000-point parametric cloud and even below splatfacto's 50 000 random default.
+
+Run 1 therefore fell back to the parametric seed by the default gate (a correct
+production choice). Run 2 lowered the gate (`poseRefineMinPoints: 10`) to **force
+the COLMAP seed through** and measure it directly rather than infer it.
+
+### 15.3 The comparison — the COLMAP seed makes the splat worse
+
+Everything except the seed is held constant: 42 frames, the same ARKit poses,
+12 000 iterations, the LPIPS-primary selector, which chose step **10 000** in
+every case.
+
+| | parametric seed (baseline, run 1) | COLMAP seed (run 2) |
+|---|---|---|
+| Seed source | parametric, **100 000** pts | colmap, **1 612** pts |
+| Held-out **LPIPS** @ export | **0.6199** | **0.6640** |
+| Held-out **PSNR** @ export | **16.334** dB | **15.070** dB |
+| Export checkpoint | step 10 000, `best_lpips` | step 10 000, `best_lpips` |
+| Gaussians in artifact | ~1 156 000 | ~1 230 000 |
+| `.ply` | 286 701 994 B | 305 040 106 B |
+| `.spz` | 25 019 608 B | 26 078 444 B |
+| Wall clock | 27.8 min | 29.8 min |
+
+**Both metrics degrade.** LPIPS (perceptual, lower is better) rises **0.620 →
+0.664**; PSNR falls **16.33 → 15.07 dB (−1.26 dB)**. This is the cleanest
+statement the wave has: at a fixed step, fixed poses, fixed budget, swapping the
+dense parametric seed for the sparse COLMAP seed **hurts** the reconstruction.
+The parametric cloud, though a *guess*, covers every wall, floor, opening and
+object uniformly; 1 612 real points cannot, and splatfacto densifying up to
+~1.2 M Gaussians from so few seeds is more poorly constrained early, not better.
+
+*(Note on the baseline row: the hero `a9b6cbb8` of §14.5 was a PSNR-era,
+step-2 000 export — 499 005 Gaussians, 8.77 MB. Both runs here re-select on
+LPIPS and land on step 10 000, a denser, larger artifact. Run 1 is the honest
+apples-to-apples parametric baseline for run 2, since only the seed differs; the
+coordinator confirmed run-1 LPIPS 0.6199 / PSNR 16.334 as the comparison point.)*
+
+### 15.4 Visual verdict — what COLMAP recovered, and what it did not
+
+The 1 612-point COLMAP seed, fetched off the Volume and read directly (`modal
+volume get sparse_pc.ply`), is **real room structure, not noise** — and also not
+enough. Top-down it traces a coherent floor/wall footprint (a 20×20 occupancy
+grid is 29 % filled along a connected room shape), but with a drift **streak of
+outlier points trailing out to X ≈ −11 m** on an ~8–9 m room, and vertically it
+is a thin band (floor and lower walls; no ceiling, few upper-wall points). PCA
+flatness 0.046 — planar, floor-dominated. So COLMAP genuinely reconstructs part
+of the room from the ARKit-posed photos, but sparsely and with floaters that
+seed Gaussians *outside* the walls.
+
+The trained splat itself is, by the numbers, **not less clump-like** than the
+parametric baseline — ~1.23 M Gaussians and a *worse* held-out LPIPS/PSNR at the
+same step. §14.5 already read the parametric splat of this fixture as "a dense
+clump with long spiky Gaussians… not recognisable as the kitchen"; the
+COLMAP-seeded one is at best the same and measurably worse, so it does not turn
+the clump into a room. The artifact draws through the read path (registry
+`a9b6cbb8`, sha256 `ea6c5d4a…`, 26 078 444 B, `stored`) — the pipeline works end
+to end — but the *reconstruction* is not improved.
+
+### 15.5 The verdict — pose-prior alone does not move the needle; dense frames do
+
+> **Pose-prior refinement is not the lever for this capture, and the run proves
+> it rather than assuming it.** COLMAP registers 40/42 frames at ~1.5 px, so the
+> ARKit poses were never the quality suspect. What 42 wide-baseline photos of a
+> feature-poor room *cannot* give is dense multi-view geometry: COLMAP
+> triangulates 1 612 points, and seeding from them is **worse** than the dense
+> parametric prior (LPIPS 0.664 vs 0.620, PSNR 15.07 vs 16.33 dB). The binding
+> constraint is **view / feature density**, exactly as §14.6 item 2 suspected.
+
+This closes the "COLMAP pose-prior refine behind config" line of §14.7: it is now
+wired, config-reachable (`poseRefine`), tested, and **run** — and the honest
+answer is that it does not improve the splat on a sparse capture and should stay
+`none` by default. It **strengthens the dense-frame case**: the next lever worth
+pulling is more, closer-baseline frames (or the dense-frame capture stream the
+CAD-pipeline feasibility work is uploading), not better poses. Pose refinement
+(BA) is left off deliberately and untested-on-real-data here, because the parked
+engine already found BA worsens loop-rotation and the 1.5 px reprojection says
+there is nothing for it to win.
+
+### 15.6 Cost and staging state
+
+| Item | Measure |
+|---|---|
+| Image rebuild (colmap as a late apt layer; torch/nerfstudio/spz cached) | ≈ **$0.01** |
+| `splat` run 1, 27.8 min L4 | ≈ **$0.37** |
+| `splat` run 2, 29.8 min L4 | ≈ **$0.40** |
+| One preempted/retried attempt (~5 min) | ≈ **$0.07** |
+| CPU probes (Volume gets/rms, DB) | ≈ **$0.01** |
+| **This section, total** | ≈ **$0.86** |
+
+Against the lane's **$8** ceiling for this effort. `modal container list --env
+patina-staging` is empty after the runs.
+
+- The fixture's `room.spz` (registry `a9b6cbb8`, unchanged id) now holds the
+  **run-2 COLMAP-seeded** splat (the worse of the two, kept as the honest record
+  of what this section produced; the original §14.5 step-2 000 bytes were already
+  gone, replaced by §14's own re-runs). A future run with `poseRefine` omitted
+  restores the parametric artifact.
+- The Volume keeps this run's COLMAP models (`colmap_seed/`, `colmap_txt/`, the
+  1 612-point `sparse_pc.ply`) and checkpoints under the one job key.
+- No fixture rows added or removed; two `scan_pipeline.splat` tasks
+  (`ae3ee5fb-…`, `796b47eb-…`) recorded as `done`.

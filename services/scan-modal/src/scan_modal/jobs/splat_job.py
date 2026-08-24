@@ -65,14 +65,17 @@ from ..core.transforms import (
     parse_photo_rows,
     parse_photos_manifest,
 )
+from ..core import colmap_model as _colmap_model
 from ..io import r2 as _r2
 from ..io.db import LeaseRejected, ScanWorkerDb, StaleVersion
 from . import _common
+from . import colmap_refine as _colmap_refine
 
 __all__ = ["STAGE", "ARTIFACT_KIND", "InputError", "run_splat", "splat_object_key",
            "train_argv", "export_argv", "workspace_paths", "checkpoint_marker",
            "CheckpointCommitter", "ensure_seed_points", "default_max_iterations",
-           "read_eval_metrics", "choose_export_config"]
+           "read_eval_metrics", "choose_export_config", "colmap_frames_from_transforms",
+           "apply_pose_refine", "COLMAP_TIMEOUT_S"]
 
 STAGE = "splat"
 ARTIFACT_KIND = "splat"
@@ -120,6 +123,11 @@ STEPS_PER_SAVE = 2000
 #: and remains a real bound on a wedged run.
 TRAIN_TIMEOUT_S = 4800.0
 EXPORT_TIMEOUT_S = 600.0
+#: Ceiling for the whole COLMAP pose-prior pre-step (feature extraction +
+#: matching + triangulation, CPU SIFT). ~42 frames is minutes; 1800 s is a hard
+#: bound on a wedged phase. Well inside SPLAT_TIMEOUT_SECONDS with the training
+#: budget it precedes. Only consumed when `config.poseRefine == "colmap"`.
+COLMAP_TIMEOUT_S = 1800.0
 #: How often the checkpoint watcher looks for a new checkpoint to commit.
 CHECKPOINT_POLL_S = 60.0
 
@@ -626,6 +634,112 @@ def ensure_seed_points(paths: dict[str, Path], captured_room_json: Any) -> dict[
         return {"seedPoints": 0, "seedReused": False}
 
 
+# ── COLMAP pose-prior refinement (config-gated pre-step) ─────────────────────
+
+
+def colmap_frames_from_transforms(paths: dict[str, Path]) -> list[_colmap_model.FrameLike]:
+    """Read `transforms.json` into the `FrameLike` rows COLMAP's seed needs.
+
+    The image NAME is the transcoded file's basename — the same name COLMAP's
+    `feature_extractor` sees under `images/`, which is how the seed model's
+    images are matched to the database's features. `image_id`/`camera_id` are
+    placeholders; `run_colmap_refine` overwrites them with the database's own.
+    """
+    document = _json.loads(paths["transforms"].read_text())
+    frames: list[_colmap_model.FrameLike] = []
+    for fr in document.get("frames", []):
+        name = str(fr["file_path"]).rsplit("/", 1)[-1]
+        frames.append(
+            _colmap_model.FrameLike(
+                image_id=0, camera_id=0, name=name,
+                transform_matrix=fr["transform_matrix"],
+                width=int(fr["w"]), height=int(fr["h"]),
+                fx=float(fr["fl_x"]), fy=float(fr["fl_y"]),
+                cx=float(fr["cx"]), cy=float(fr["cy"]),
+            )
+        )
+    return frames
+
+
+def _ensure_ply_named(paths: dict[str, Path]) -> None:
+    """Make sure `transforms.json` names the seed PLY. Parametric seeding leaves
+    the key unset for a room that yields zero points, and a successful COLMAP
+    seed must still be read."""
+    document = _json.loads(paths["transforms"].read_text())
+    if isinstance(document, dict) and document.get("ply_file_path") != SEED_PLY_NAME:
+        document["ply_file_path"] = SEED_PLY_NAME
+        paths["transforms"].write_text(_json.dumps(document, sort_keys=True))
+
+
+def _apply_refined_poses(paths: dict[str, Path], refined: dict[str, list[list[float]]]) -> None:
+    """Rewrite each frame's `transform_matrix` with the bundle-adjusted pose,
+    matched by the image's basename. Only reached when BA actually moved them."""
+    document = _json.loads(paths["transforms"].read_text())
+    for fr in document.get("frames", []):
+        name = str(fr["file_path"]).rsplit("/", 1)[-1]
+        if name in refined:
+            fr["transform_matrix"] = refined[name]
+    paths["transforms"].write_text(_json.dumps(document, sort_keys=True))
+
+
+def apply_pose_refine(paths: dict[str, Path], config: dict[str, Any]) -> dict[str, Any]:
+    """Run the COLMAP pose-prior pre-step when the queue asks for it.
+
+    `config.poseRefine` selects the seed: `"colmap"` triangulates a cloud off the
+    photographs (ARKit poses as priors), anything else (default) leaves the
+    parametric seed `ensure_seed_points` already wrote. On success the COLMAP
+    cloud REPLACES the parametric one under the same file name transforms.json
+    points at, so nothing else in the pipeline changes; `config.poseRefineBundle`
+    additionally lets bundle adjustment refine the poses (off by default, because
+    the ARKit poses are metric and gravity-aligned and BA can drift them).
+
+    Never fatal, and never worse than the parametric path: any COLMAP failure or
+    an under-registered solve leaves the parametric seed in place. The returned
+    dict is provenance folded onto the artifact.
+    """
+    pose_refine = str(config.get("poseRefine") or "none").lower()
+    if pose_refine != "colmap":
+        return {"poseRefine": pose_refine, "seedSource": "parametric"}
+
+    # Resume: COLMAP already ran for this workspace. Its seed and marker persist
+    # on the Volume, so a preempted run does not pay for SfM twice.
+    marker = paths["base"] / "colmap_refine.json"
+    if marker.is_file():
+        try:
+            return _json.loads(marker.read_text())
+        except (OSError, ValueError):
+            pass
+
+    bundle = bool(config.get("poseRefineBundle", False))
+    frames = colmap_frames_from_transforms(paths)
+    kwargs: dict[str, Any] = {"timeout_s": COLMAP_TIMEOUT_S, "bundle_adjust": bundle}
+    # `poseRefineMinPoints` overrides the usefulness gate for measurement: a
+    # feature-poor room can register cleanly yet triangulate a very sparse cloud
+    # (W2-EVIDENCE.md §15 — 40/42 registered, 1 612 points), and forcing that
+    # sparse cloud through is how the COLMAP seed itself gets measured rather
+    # than inferred. Absent, the default MIN_TRIANGULATED_POINTS stands.
+    min_points = config.get("poseRefineMinPoints")
+    if isinstance(min_points, (int, float)) and not isinstance(min_points, bool) and min_points >= 0:
+        kwargs["min_points"] = int(min_points)
+    outcome = _colmap_refine.run_colmap_refine(paths["base"], frames, run=_run, **kwargs)
+    prov = outcome.provenance()
+    if outcome.ok and outcome.ply_bytes:
+        paths["seed_ply"].write_bytes(outcome.ply_bytes)
+        _ensure_ply_named(paths)
+        if outcome.refined_frames:
+            _apply_refined_poses(paths, outcome.refined_frames)
+        prov["seedSource"] = "colmap"
+        prov["seedPoints"] = outcome.point_count
+    else:
+        # The parametric seed ensure_seed_points wrote stays in place.
+        prov["seedSource"] = "parametric"
+    try:
+        marker.write_text(_json.dumps(prov, sort_keys=True))
+    except OSError:
+        pass
+    return prov
+
+
 # ── the job ─────────────────────────────────────────────────────────────────
 
 
@@ -694,13 +808,20 @@ def run_splat(
         paths["base"].mkdir(parents=True, exist_ok=True)
         prep = _prepare_workspace(paths, manifest_url, photo_records, photo_urls)
         seed = ensure_seed_points(paths, captured_doc)
-
-        resume = paths["checkpoints"].is_dir() and any(paths["checkpoints"].iterdir())
         # `inputs.config` is the queue's knob. It reaches here because the
-        # dispatcher now passes `agent_tasks.payload.config` through verbatim
+        # dispatcher passes `agent_tasks.payload.config` through verbatim
         # (contract.json's `splat_config` variant); before that it was
         # unreachable and this branch was dead code (W2-EVIDENCE.md §4 E).
         config = inputs.get("config") or {}
+        # COLMAP pose-prior seed, if the queue asked for it. Runs after the
+        # parametric seed and replaces it on success; a failure or an
+        # under-registered solve leaves the parametric seed untouched. Default
+        # `none` — existing behaviour is byte-for-byte unchanged.
+        refine = apply_pose_refine(paths, config)
+        seed_points_final = int(refine.get("seedPoints", seed["seedPoints"]))
+        seed_source = refine.get("seedSource", "parametric")
+
+        resume = paths["checkpoints"].is_dir() and any(paths["checkpoints"].iterdir())
         requested = config.get("maxIterations")
         max_iterations = int(requested or default_max_iterations(prep["frames"]))
         iterations_source = "config" if requested else "default"
@@ -754,10 +875,16 @@ def run_splat(
             "exportCheckpointReason": choice.reason if choice else "no_checkpoints",
             "evalPointsConsidered": choice.considered if choice else 0,
             "walls": len(parametric.walls),
-            # How the optimiser started. A splat seeded off the parametric room
-            # and one that began from random noise are the same artifact kind
-            # and are not otherwise distinguishable after the fact.
-            "seedPoints": seed["seedPoints"],
+            # How the optimiser started. A splat seeded off the parametric room,
+            # one seeded off COLMAP-triangulated geometry, and one that began
+            # from random noise are the same artifact kind and are not otherwise
+            # distinguishable after the fact. `seedSource` names which, and the
+            # `colmap*` keys (present only under `poseRefine: colmap`) carry the
+            # SfM's registration outcome — the evidence for whether the
+            # pose-prior seed helped or fell back.
+            "seedPoints": seed_points_final,
+            "seedSource": seed_source,
+            **{k: v for k, v in refine.items() if k not in ("seedPoints", "seedSource")},
             # Which compressor produced these bytes, and what it started from.
             # `spz` and `gzip-ply` are different containers behind the same
             # artifact kind, and the ratio is the whole reason the stage
