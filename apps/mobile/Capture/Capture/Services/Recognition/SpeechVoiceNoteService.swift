@@ -8,22 +8,40 @@
 //  reading of it (R114.1): the .m4a is written from the same engine tap that
 //  feeds recognition, the recognition request rotates at
 //  VoiceRecordingPolicy.segmentRotationSeconds while the file stays
-//  continuous, and an interruption opens segment N+1. A failed AVAudioFile
-//  open OR write is non-fatal — the note ships transcript-only rather than
-//  blocking. One instance serves many notes, so every per-note field is reset
-//  in startLiveTranscription().
+//  continuous, and an interruption or a route change opens segment N+1. If the
+//  file cannot be opened the note still records and transcribes to the end —
+//  rotation runs off the segment clock, not off the file — and ships
+//  transcript-only; a segment that took no audio is dropped in finish() rather
+//  than shipped as a zero-length record. One instance serves many notes, so
+//  every per-note field is reset in startLiveTranscription().
 
 import Foundation
 import AVFoundation
 import Speech
+import os
 import CaptureKit
 import CaptureKitMocks
 
 public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable {
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private let audioEngine = AVAudioEngine()
-    private var request: SFSpeechAudioBufferRecognitionRequest?
-    private var task: SFSpeechRecognitionTask?
+
+    /// `request` is READ on the render thread (installTap) and REPLACED on
+    /// rotationQueue at every 50 s rotation. A non-atomic class-reference store
+    /// racing a load can over-release, so both go through an unfair lock: the
+    /// tap takes one uncontended lock per buffer (nanoseconds) and holds a
+    /// strong reference for the rest of the callback.
+    private let requestBox = OSAllocatedUnfairLock<SFSpeechAudioBufferRecognitionRequest?>(
+        uncheckedState: nil)
+    private var request: SFSpeechAudioBufferRecognitionRequest? {
+        get { requestBox.withLockUnchecked { $0 } }
+        set { requestBox.withLock { $0 = newValue } }
+    }
+    private let taskBox = OSAllocatedUnfairLock<SFSpeechRecognitionTask?>(uncheckedState: nil)
+    private var task: SFSpeechRecognitionTask? {
+        get { taskBox.withLockUnchecked { $0 } }
+        set { taskBox.withLock { $0 = newValue } }
+    }
 
     private var latestTranscript = ""
     private var startedAt: Date?
@@ -42,9 +60,16 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     private var audioSegments: [String] = []
     private var segmentStartedAt: Date?
     private var noteStartedAt: Date?
-    private var interrupted = false
+    /// False whenever no note is recording. Guards the interruption-resume and
+    /// configuration-change paths: without it, a note whose engine failed to
+    /// start leaves an armed observer that would later reactivate the session
+    /// and open a segment while the user sits on the manual-entry sheet — a hot
+    /// mic with nothing on screen saying so. Also the rotation latch: a Bool is
+    /// a single byte, so the render thread cannot read it torn.
+    private var noteIsActive = false
     private var onDeviceRecognition = false
     private var interruptionObserver: NSObjectProtocol?
+    private var configChangeObserver: NSObjectProtocol?
     /// Held so the interruption-resume path can reinstall THE SAME tap, which
     /// needs the live stream's continuation and has no local one in scope.
     private var continuation: AsyncThrowingStream<TranscriptChunk, Error>.Continuation?
@@ -64,10 +89,12 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     }
 
     deinit {
-        if let interruptionObserver {
-            // The observer is the TOKEN, never `self` — see finish().
-            NotificationCenter.default.removeObserver(interruptionObserver)
-        }
+        // Same teardown finish() does. A screen dismissed mid-note otherwise
+        // leaves the mic live, other apps ducked, and the recording indicator lit.
+        removeObservers()
+        noteIsActive = false
+        stopEngineAndCloseSegment()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     public func requestAuthorization() async -> Bool {
@@ -95,7 +122,8 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         audioSegments = []
         segmentStartedAt = nil
         noteStartedAt = Date()
-        interrupted = false
+        continuation = nil
+        noteIsActive = false
         rotationInFlight = false
 
         guard let recognizer, recognizer.isAvailable else {
@@ -114,8 +142,9 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         let format = inputNode.outputFormat(forBus: 0)
         onDeviceRecognition = recognizer.supportsOnDeviceRecognition
         request.requiresOnDeviceRecognition = onDeviceRecognition
+        noteIsActive = true
         openSegment(format: format)
-        observeInterruptions()
+        observeAudioSessionAndEngine()
 
         return AsyncThrowingStream { continuation in
             self.continuation = continuation
@@ -137,7 +166,12 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
                 self.audioEngine.prepare()
                 try self.audioEngine.start()
             } catch {
+                // Neither consumer calls finish() on this path, so disarm here or
+                // the observers outlive the abandoned note and reopen the mic.
                 inputNode.removeTap(onBus: 0)
+                self.noteIsActive = false
+                self.removeObservers()
+                self.closeCurrentSegment()
                 continuation.finish(throwing: error)
             }
         }
@@ -145,27 +179,17 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
 
     @MainActor
     public func finish() async -> VoiceNoteResult {
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
-        }
+        noteIsActive = false
+        stopEngineAndCloseSegment()
         request?.endAudio()
         task?.finish()
         request = nil
         task = nil
+        continuation = nil
+        removeObservers()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 
         let duration = startedAt.map { Date().timeIntervalSince($0) } ?? 0
-        audioFile = nil
-        continuation = nil
-        if let interruptionObserver {
-            // addObserver(forName:object:queue:using:) returns an opaque TOKEN.
-            // The observer is not `self`, so removeObserver(self, name:…) removes
-            // nothing and every recording leaks another block onto a service that
-            // lives as long as the screen.
-            NotificationCenter.default.removeObserver(interruptionObserver)
-            self.interruptionObserver = nil
-        }
         return VoiceNoteResult(
             transcript: latestTranscript,
             audioFilename: audioFilename,
@@ -175,8 +199,8 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         )
     }
 
-    /// The ONE tap in the class. The start path and the interruption-resume
-    /// path install this, so the two cannot drift apart.
+    /// The ONE tap in the class. The start path, the interruption-resume path
+    /// and the configuration-change path install this, so they cannot drift.
     private func installTap(on input: AVAudioInputNode, format: AVAudioFormat) {
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self else { return }
@@ -194,11 +218,15 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         }
     }
 
-    /// A failed open is deliberately non-fatal: recognition continues and the
-    /// note ships transcript-only. Never block a capture (R108.5).
+    /// A failed open costs the audio and NOTHING else: the segment clock starts
+    /// regardless, so rotation still fires and the transcript runs to the cap
+    /// instead of truncating at SFSpeechRecognizer's ~60 s. Never block a
+    /// capture (R108.5).
     /// The channel count comes from the TAP's format — hardcoding 1 against a
     /// two-channel USB or Bluetooth input is the write-crash in installTap.
     private func openSegment(format: AVAudioFormat) {
+        // Before the mediaDirectory guard: rotation must not depend on the file.
+        segmentStartedAt = Date()
         guard let mediaDirectory else { return }
         let name = VoiceRecordingPolicy.segmentFilename(noteID: noteID,
                                                         index: audioSegments.count)
@@ -212,10 +240,56 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             ])
             audioSegments.append(name)
             if audioFilename == nil { audioFilename = name }
-            segmentStartedAt = Date()
         } catch {
             audioFile = nil
             analytics.event("voice.audio_write_failed", ["reason": "open"])
+        }
+    }
+
+    /// Closes the open segment, and DROPS it if no audio ever reached it.
+    /// A file that was opened and never written is listed by
+    /// CaptureStore.missingRequiredMedia as required-local; being zero-length it
+    /// fails that check with a CaptureMediaAvailabilityError, which is not a
+    /// LocalSyncError and so is not deferrable — one empty segment would hard-fail
+    /// a note that would otherwise have synced transcript-only.
+    /// Callers must remove the tap first: this reads the file's frame count.
+    private func closeCurrentSegment() {
+        let frames: AVAudioFramePosition
+        if let file = audioFile { frames = file.length } else { return }
+        audioFile = nil     // releasing it finalises the container on disk
+        guard let name = audioSegments.last, let mediaDirectory else { return }
+        let url = mediaDirectory.appendingPathComponent(name)
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        // Keep the segment on ANY evidence of audio. Two independent signals
+        // because dropping a real recording is far worse than shipping an empty
+        // one: 1 KiB is a quarter-second at 32 kbps and far above a bare
+        // container header.
+        guard frames == 0, size <= 1024 else { return }
+        audioSegments.removeLast()
+        if audioFilename == name { audioFilename = audioSegments.first }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    private func stopEngineAndCloseSegment() {
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
+        closeCurrentSegment()
+    }
+
+    private func removeObservers() {
+        // addObserver(forName:object:queue:using:) returns an opaque TOKEN.
+        // The observer is not `self`, so removeObserver(self, name:…) removes
+        // nothing and every recording leaks another block onto a service that
+        // lives as long as the screen.
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+            self.interruptionObserver = nil
+        }
+        if let configChangeObserver {
+            NotificationCenter.default.removeObserver(configChangeObserver)
+            self.configChangeObserver = nil
         }
     }
 
@@ -228,7 +302,8 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         recognizer: SFSpeechRecognizer,
         continuation: AsyncThrowingStream<TranscriptChunk, Error>.Continuation
     ) {
-        guard !rotationInFlight,
+        guard noteIsActive,
+              !rotationInFlight,
               let startedAt = segmentStartedAt,
               VoiceRecordingPolicy.shouldRotate(
                 elapsedInSegment: Date().timeIntervalSince(startedAt)) else { return }
@@ -240,7 +315,8 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
 
     /// Rotate the RECOGNIZER, never the file. SFSpeechRecognizer caps at ~60 s
     /// per request; the .m4a for this segment stays one continuous file.
-    /// ENFORCES the cap — a policy that is unit-tested and never invoked
+    /// ENDS the note at the cap — stops the mic, closes the file and stops
+    /// rotating — because a policy that is unit-tested and never enforced
     /// reports green over behaviour that cannot happen.
     private func rotate(recognizer: SFSpeechRecognizer,
                         continuation: AsyncThrowingStream<TranscriptChunk, Error>.Continuation) {
@@ -249,10 +325,18 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         let elapsed = noteStartedAt.map { Date().timeIntervalSince($0) } ?? 0
         if VoiceRecordingPolicy.shouldEnd(totalElapsed: elapsed,
                                           segmentCount: audioSegments.count) {
+            // FIRST, and before the latch is released by `defer`: the next tap
+            // buffer is ~21 ms away and would otherwise still see shouldRotate,
+            // post rotate() again, take this branch again — forever, emitting
+            // voice.finish each time while the file grew past the cap.
+            noteIsActive = false
+            segmentStartedAt = nil
             continuation.yield(TranscriptChunk(
                 text: latestTranscript, isFinal: true))
             continuation.finish()
             analytics.event("voice.finish", ["reason": "cap"])
+            // The UI half of ending a note belongs to the sheets; the mic is ours.
+            DispatchQueue.main.async { [weak self] in self?.endAtCap() }
             return
         }
 
@@ -274,15 +358,26 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         }
     }
 
+    private func endAtCap() {
+        stopEngineAndCloseSegment()
+        request?.endAudio()
+        task?.finish()
+        removeObservers()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
     /// Nothing in the app observed audio interruptions before this.
     /// `.began`: iOS has ALREADY stopped the engine and torn down the session.
     /// `.ended` with .shouldResume: reactivate the session, restart the engine,
     /// reinstall the tap, THEN open segment N+1. A `guard audioEngine.isRunning`
     /// at `.ended` can never be true and would make the resume path dead code.
-    private func observeInterruptions() {
-        if let interruptionObserver {
-            NotificationCenter.default.removeObserver(interruptionObserver)
-        }
+    /// AVAudioEngineConfigurationChange is the OTHER half: plugging AirPods in
+    /// or out raises no interruption at all, and Apple's contract is that the
+    /// tap is then invalid. Without this the engine keeps running, every buffer
+    /// fails installTap's format guard, and the rest of the note is a 40-second
+    /// file under a 4-minute transcript.
+    private func observeAudioSessionAndEngine() {
+        removeObservers()
         interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: AVAudioSession.sharedInstance(),
@@ -293,32 +388,49 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
                   let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
             switch type {
             case .began:
-                self.audioFile = nil
+                self.stopEngineAndCloseSegment()
                 self.segmentStartedAt = nil
-                self.interrupted = true
                 self.analytics.event("voice.interrupted", ["reason": "began"])
             case .ended:
                 let optionsRaw = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
-                guard AVAudioSession.InterruptionOptions(rawValue: optionsRaw)
-                    .contains(.shouldResume) else { return }
-                do {
-                    let session = AVAudioSession.sharedInstance()
-                    try session.setCategory(.record, mode: .measurement, options: .duckOthers)
-                    try session.setActive(true, options: .notifyOthersOnDeactivation)
-                    let input = self.audioEngine.inputNode
-                    let format = input.outputFormat(forBus: 0)
-                    input.removeTap(onBus: 0)
-                    self.installTap(on: input, format: format)
-                    self.audioEngine.prepare()
-                    try self.audioEngine.start()
-                    self.openSegment(format: format)
-                    self.interrupted = false
-                } catch {
-                    self.analytics.event("voice.audio_write_failed", ["reason": "resume"])
-                }
+                guard self.noteIsActive,
+                      AVAudioSession.InterruptionOptions(rawValue: optionsRaw)
+                        .contains(.shouldResume) else { return }
+                self.reopenEngineAndSegment(reason: "resume")
             @unknown default:
                 break
             }
+        }
+        configChangeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: audioEngine,
+            queue: .main
+        ) { [weak self] _ in
+            // isRunning is checked HERE, unlike at .ended: a config change during
+            // an interruption must not restart the mic under the phone call.
+            guard let self, self.noteIsActive, self.audioEngine.isRunning else { return }
+            self.reopenEngineAndSegment(reason: "route")
+        }
+    }
+
+    /// Remove the stale tap, re-read the input format, reinstall, restart, and
+    /// open segment N+1 at the format the route actually delivers now.
+    private func reopenEngineAndSegment(reason: String) {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            let input = audioEngine.inputNode
+            if audioEngine.isRunning { audioEngine.stop() }
+            input.removeTap(onBus: 0)
+            closeCurrentSegment()
+            let format = input.outputFormat(forBus: 0)
+            installTap(on: input, format: format)
+            audioEngine.prepare()
+            try audioEngine.start()
+            openSegment(format: format)
+        } catch {
+            analytics.event("voice.audio_write_failed", ["reason": reason])
         }
     }
 

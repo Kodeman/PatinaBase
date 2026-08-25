@@ -208,8 +208,12 @@ struct VoiceNoteSheet: View {
         specimen.voiceTranscript = text
         specimen.voiceAudioFilename = result?.audioFilename
         specimen.voiceAudioSegmentsRaw = result?.audioSegments
-        specimen.voiceTranscriptSourceRaw = (result?.transcript.isEmpty == false)
-            ? "device" : "device_partial"
+        // attach() is shared with the manual-entry fallback: with no recorder
+        // result the text was typed, and 'designer' is the schema's word for it
+        // (00530). Labelling it device_partial would claim speech and imply audio.
+        specimen.voiceTranscriptSourceRaw = result.map {
+            $0.transcript.isEmpty ? "device_partial" : "device"
+        } ?? "designer"
         specimen.captureKindRaw = "note"
         specimen.voiceDurationSeconds = result?.durationSeconds
         specimen.setValue(text, for: .note, source: .voice)
