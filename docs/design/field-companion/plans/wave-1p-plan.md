@@ -52,7 +52,9 @@ Every task's requirements implicitly include this section. Copied from `AGENTS.m
 
 Recorded here because §1.4 names them as Wave 1P prerequisites and they are **decisions, not code**:
 
-1. **Enable the existing `room-file` PostHog flag for the pilot cohort** (FC-R10). Every `RoomFilesSection` row links to `/room/${scan.id}/file`, which is `useFeatureFlag("room-file")` and fail-closed (`apps/designer-portal/src/components/room-file/room-file-view.tsx` — import `:29`, call `:63`). Without the flag on, Task 3 ships rows whose destination is dark. **Kody / orchestrator owns this. PostHog flag mutation is forbidden from this lane.**
+1. **Enable the existing `room-file` PostHog flag for the pilot cohort** (FC-R10). Every `RoomFilesSection` row links to `/room/${scan.id}/file`, which is `useFeatureFlag("room-file")` and fail-closed (`apps/designer-portal/src/components/room-file/room-file-view.tsx` — import `:29`, call `:63`). **Kody / orchestrator owns this. PostHog flag mutation is forbidden from this lane.**
+
+   ⚠ **Correction to spec §11.2, verified in review.** The spec says the rows' *"every destination is dark"*, and this plan said the same. It is overstated. `room-file-view.tsx` fail-closes to a real, styled page reading **"Room File isn't available yet."** (`:96-102`) — not a blank screen, not a 404, not an error. So mounting with the flag OFF gives a designed "not yet" landing, not a broken link. The flag decision is therefore about **payoff, not safety**: without it the Room-files rows are inert but harmless.
 2. **Brand-voice pass on `apps/designer-portal/src/components/room-file/room-file-copy.ts`**, whose own header (`:1-10`) calls every string in it ESCALATE-class provisional. Task 3 puts `C.sectionTitle` (`:14`, `"Room Files"`) on the project spread. **Design-owned; not changed by this plan.**
 
 ---
@@ -2099,6 +2101,19 @@ Plan §1.4's acceptance, measured honestly.
   pnpm --filter @patina/supabase test
   pnpm --filter @patina/designer-portal test
   ```
+  ⚠ **Plus the checks CI will actually run on this branch.** The pre-push hook printed the
+  affected-plan for these commits: 15 checks, wider than the list above because this wave edits
+  the shared `@patina/supabase` package. Run at least these, which the list above does NOT cover:
+  ```bash
+  pnpm --filter @patina/admin-portal build     # admin's build ENFORCES types (designer's does not)
+  pnpm --filter @patina/admin-portal test
+  pnpm --filter @patina/client-portal test
+  pnpm --filter @patina/client-portal type-check
+  pnpm --filter @patina/extension test
+  pnpm --filter @patina/manufacturer-portal type-check
+  ```
+  A shared-package type change can pass the designer build and fail admin's — that is the whole
+  reason admin is listed separately in `patina-portal-features`. Record each result.
   Paste the real output tail of each, and **diff the two full-suite counts against Task 0's recorded baseline.** A failure absent from the baseline is this wave's, not pre-existing.
 - [ ] **A5 — record the parked and escalated items:**
   - `room-file` flag enablement for the pilot cohort — outside this lane (FC-R10, §1.4 prerequisite 1). **PARKED.**
