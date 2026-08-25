@@ -115,7 +115,7 @@ test("path classifier uses real service builds and fans shared packages to consu
   );
   assert.ok(
     servicePlan.checks.some((check) =>
-      check.command.includes("@patina/orders build"),
+      check.command.includes("turbo run build --filter=@patina/orders"),
     ),
   );
   assert.equal(
