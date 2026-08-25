@@ -120,7 +120,7 @@ struct CaptureStoreLadderTests {
         #expect(outcome.failures.isEmpty)
     }
 
-    @Test func removingStoreFilesTakesTheWholeSqliteTrio() throws {
+    @Test func settingStoreFilesAsideTakesTheWholeSqliteTrio() throws {
         let directory = Self.scratchDirectory()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -129,26 +129,164 @@ struct CaptureStoreLadderTests {
             FileManager.default.createFile(atPath: path, contents: Data("x".utf8))
         }
 
-        #expect(CaptureStore.removeStoreFiles(at: url))
+        #expect(CaptureStore.setStoreFilesAside(at: url))
 
         for path in [url.path, url.path + "-wal", url.path + "-shm"] {
             #expect(FileManager.default.fileExists(atPath: path) == false)
+            #expect(FileManager.default.fileExists(atPath: path + ".bak"))
         }
     }
 
-    @Test func removingStoreFilesReportsFalseWhenThereWasNothingToRemove() {
+    @Test func settingStoreFilesAsideReportsFalseWhenThereWasNothingToSetAside() {
         let url = Self.scratchDirectory().appendingPathComponent("absent.store")
-        #expect(CaptureStore.removeStoreFiles(at: url) == false)
+        #expect(CaptureStore.setStoreFilesAside(at: url) == false)
+    }
+
+    @Test func settingAsideOverwritesAnEarlierGenerationRatherThanFailing() throws {
+        let directory = Self.scratchDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("x.store")
+        FileManager.default.createFile(atPath: url.path + ".bak", contents: Data("older".utf8))
+        try Data("newer".utf8).write(to: url)
+
+        #expect(CaptureStore.setStoreFilesAside(at: url))
+
+        #expect(try Data(contentsOf: URL(fileURLWithPath: url.path + ".bak"))
+            == Data("newer".utf8))
+    }
+
+    // MARK: a locked device is not an incompatible store
+
+    // iOS relaunches Field in the background for the site-scan upload session
+    // (`sessionSendsLaunchEvents`), and `CaptureApp` builds `AppContainer` — and
+    // so runs this ladder — as a stored property. After a reboot but before the
+    // first unlock, a perfectly good store simply cannot be decrypted and throws
+    // the SAME opaque error as an incompatible one. Resetting there would delete
+    // the designer's captures with no UI on screen to say so.
+    @Test func aLockedStoreIsLeftAloneAndReportedDeferred() throws {
+        let directory = Self.scratchDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("locked.store")
+        let bytes = Data("this is not a SQLite file".utf8)
+        try bytes.write(to: url)
+
+        let outcome = CaptureStore.openRung(ModelConfiguration(url: url), named: "test",
+                                            isProtectedDataAvailable: { false })
+
+        #expect(outcome.container == nil)
+        #expect(outcome.didReset == false)
+        #expect(outcome.deferredUntilUnlock)
+        #expect(try Data(contentsOf: url) == bytes)          // untouched, byte for byte
+        #expect(FileManager.default.fileExists(atPath: url.path + ".bak") == false)
+    }
+
+    @Test func aSetAsideStoreSurvivesTheResetAndGoesOnTheNextCleanOpen() throws {
+        let directory = Self.scratchDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("broken.store")
+        let bytes = Data("this is not a SQLite file".utf8)
+        try bytes.write(to: url)
+
+        let reset = CaptureStore.openRung(ModelConfiguration(url: url), named: "test")
+        #expect(reset.didReset)
+        #expect(reset.container != nil)
+        // Renamed, not deleted — the store is still recoverable from the container.
+        #expect(try Data(contentsOf: URL(fileURLWithPath: url.path + ".bak")) == bytes)
+
+        let clean = CaptureStore.openRung(ModelConfiguration(url: url), named: "test")
+        #expect(clean.container != nil)
+        #expect(clean.didReset == false)
+        #expect(FileManager.default.fileExists(atPath: url.path + ".bak") == false)
+    }
+
+    // MARK: every reset reaches the report, whichever rung answers
+
+    @Test func aResetOnAnEarlierRungIsReportedWhenALaterRungAnswers() throws {
+        let directory = Self.scratchDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let rungs = [
+            CaptureStore.DiskRung(
+                name: "first", persistence: .appGroup,
+                configuration: ModelConfiguration(
+                    url: directory.appendingPathComponent("first.store"))),
+            CaptureStore.DiskRung(
+                name: "second", persistence: .applicationSupport,
+                configuration: ModelConfiguration(
+                    url: directory.appendingPathComponent("second.store")))
+        ]
+
+        // Rung 1 set its store aside and STILL failed; rung 2 answers.
+        let store = CaptureStore.walk(rungs) { rung in
+            rung.name == "first"
+                ? CaptureStore.RungOutcome(container: nil,
+                                           failures: ["first: broken", "first after reset: broken"],
+                                           didReset: true,
+                                           deferredUntilUnlock: false)
+                : CaptureStore.openRung(rung.configuration, named: rung.name)
+        }
+
+        #expect(store.openReport.persistence == .applicationSupport)
+        #expect(store.openReport.didResetIncompatibleStore)   // NOT rung 2's false
+        #expect(store.openReport.failures.count == 2)
+    }
+
+    @Test func aResetOnAnEarlierRungIsReportedWhenTheRunEndsInMemory() {
+        let rungs = [CaptureStore.DiskRung(
+            name: "first", persistence: .appGroup,
+            configuration: ModelConfiguration(url: Self.scratchDirectory()
+                .appendingPathComponent("first.store")))]
+
+        let store = CaptureStore.walk(rungs) { _ in
+            CaptureStore.RungOutcome(container: nil, failures: ["first: broken"],
+                                     didReset: true, deferredUntilUnlock: true)
+        }
+
+        #expect(store.openReport.persistence == .inMemoryFallback)
+        #expect(store.openReport.didResetIncompatibleStore)
+        #expect(store.openReport.deferredUntilUnlock)
     }
 
     // MARK: rung 2 must be a different file from rung 1
 
-    @Test func applicationSupportRungIsNotTheAppGroupStore() {
-        let appGroupStore = ModelConfiguration(
-            groupContainer: .identifier(CaptureStore.appGroupID)).url
-        #expect(CaptureStore.applicationSupportStoreURL() != appGroupStore)
-        #expect(CaptureStore.applicationSupportStoreURL().path
-            .contains("/Containers/Shared/AppGroup/") == false)
+    // The shipped bug: rung 2 was `ModelConfiguration()`, whose
+    // `groupContainer: .automatic` default resolves straight back into the App
+    // Group — so it reopened the very file rung 1 had just failed on. Asserting
+    // against `diskRungs`, the single definition `resilient` walks, is what
+    // makes reverting rung 2 fail here.
+    //
+    // The URL alone cannot catch that revert from a test: `.automatic` reads the
+    // RUNNING process's `com.apple.security.application-groups` entitlement, and
+    // the xctest runner has none — so `ModelConfiguration().url` lands in
+    // Application Support here and in the App Group in the signed app, which is
+    // precisely the environment gap that let the bug ship. The declaration is
+    // the same in both, so that is what this pins: rung 2 asks for NO group
+    // container. Both reference values come from SwiftData's own API, so the
+    // pair still fails loudly if `GroupContainer` ever stops distinguishing them.
+    @Test func theApplicationSupportRungIsNotTheAppGroupStore() throws {
+        let rungs = CaptureStore.diskRungs(appGroupID: CaptureStore.appGroupID,
+                                           appGroupIsProvisioned: false)
+        #expect(rungs.count == 1)   // rung 1 is never even constructed unprovisioned
+        let rungTwo = try #require(rungs.first { $0.persistence == .applicationSupport })
+        let declaredGroup = String(describing: rungTwo.configuration.groupContainer)
+
+        #expect(declaredGroup == String(describing: ModelConfiguration.GroupContainer.none))
+        #expect(declaredGroup != String(describing: ModelConfiguration.GroupContainer.automatic))
+        #expect(rungTwo.configuration.url.path.contains("/Containers/Shared/AppGroup/") == false)
+        #expect(rungTwo.configuration.url.path.contains("/Library/Application Support/"))
+        #expect(rungTwo.configuration.url == CaptureStore.applicationSupportStoreURL())
+
+        // Mirror `resilient`'s own gate: resolving the group container when the
+        // entitlement is inert trips SwiftData's assertionFailure, which would
+        // take the whole run down instead of failing one test.
+        if FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: CaptureStore.appGroupID) != nil {
+            #expect(rungTwo.configuration.url != ModelConfiguration(
+                groupContainer: .identifier(CaptureStore.appGroupID)).url)
+        }
     }
 
     // MARK: the in-memory rung is never silent

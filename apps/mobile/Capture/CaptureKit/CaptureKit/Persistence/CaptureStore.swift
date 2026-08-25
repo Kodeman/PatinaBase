@@ -49,16 +49,23 @@ public enum CaptureStorePersistence: String, Sendable {
 /// the composition root can emit telemetry and the UI can tell the truth.
 public struct CaptureStoreOpenReport: Sendable {
     public let persistence: CaptureStorePersistence
-    /// An unreadable store was deleted and recreated empty.
+    /// An unreadable store was set aside (renamed to `.bak`) and recreated empty.
+    /// True if ANY rung did so, including one whose retry then failed.
     public let didResetIncompatibleStore: Bool
+    /// A store on disk could not be read because the device has not been
+    /// unlocked since boot. Nothing was set aside; the next foreground launch
+    /// opens the same store normally.
+    public let deferredUntilUnlock: Bool
     /// One localized line per failed rung, in ladder order.
     public let failures: [String]
 
     public init(persistence: CaptureStorePersistence,
                 didResetIncompatibleStore: Bool = false,
+                deferredUntilUnlock: Bool = false,
                 failures: [String] = []) {
         self.persistence = persistence
         self.didResetIncompatibleStore = didResetIncompatibleStore
+        self.deferredUntilUnlock = deferredUntilUnlock
         self.failures = failures
     }
 
@@ -107,64 +114,81 @@ public final class CaptureStore {
 
     /// Best-effort store that never crashes on a missing container.
     ///
-    /// `persistent: true` (real mode) walks a fallback ladder:
-    ///   1. App Group container (shared with the Share/Widget extensions),
-    ///   2. a store under THIS app's own Application Support,
-    ///   3. in-memory — reported as a degradation, never silently.
-    /// `persistent: false` (mock/preview/UITest) goes straight to in-memory.
+    /// `persistent: true` (real mode) walks the on-disk rungs of `diskRungs`
+    /// and only then falls to memory — reported as a degradation, never
+    /// silently. `persistent: false` (mock/preview/UITest) goes straight to
+    /// in-memory.
     ///
-    /// Rung 2 must be addressed by an explicit URL. `ModelConfiguration()`
-    /// defaults `groupContainer: .automatic`, which resolves to the app's App
-    /// Group whenever the entitlement is present — so the old rung 2 reopened
-    /// the very file rung 1 had just failed on and inherited its failure
-    /// verbatim (same sourceURL, same destinationURL). It was never a fallback.
-    public static func resilient(persistent: Bool = true,
-                                 appGroupID: String = CaptureStore.appGroupID) -> CaptureStore {
+    /// `isProtectedDataAvailable` is the reset's safety catch. iOS relaunches
+    /// Field in the background to hand off finished site-scan uploads, so the
+    /// ladder can run with no UI on screen and, after a reboot, before the
+    /// first unlock — where a perfectly good store is simply undecryptable.
+    /// The app passes `UIApplication.shared.isProtectedDataAvailable`;
+    /// CaptureKit stays UIKit-free, so it arrives as a closure.
+    public static func resilient(
+        persistent: Bool = true,
+        appGroupID: String = CaptureStore.appGroupID,
+        isProtectedDataAvailable: @MainActor () -> Bool = { true }
+    ) -> CaptureStore {
         guard persistent else {
             return CaptureStore(container: inMemoryContainer(),
                                 openReport: CaptureStoreOpenReport(persistence: .inMemoryByDesign))
         }
 
-        var failures: [String] = []
+        // Rung 1 is offered only when the App Group is actually provisioned: on
+        // an unsigned build the entitlement is inert and SwiftData *traps*
+        // (assertionFailure) instead of throwing, which a do/catch cannot
+        // intercept — so gate on the resolvable container URL first, exactly as
+        // `mediaDirectory()` does.
+        var seedFailures: [String] = []
+        let groupIsProvisioned = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupID) != nil
+        if !groupIsProvisioned {
+            let message = "App Group '\(appGroupID)' not provisioned (unsigned build?)"
+            seedFailures.append(message)
+            log.warning("\(message, privacy: .public); trying Application Support")
+        }
 
-        // Rung 1 — App Group. Only attempted when the group is actually
-        // provisioned: on an unsigned build the entitlement is inert and
-        // SwiftData *traps* (assertionFailure) instead of throwing, which a
-        // do/catch cannot intercept — so gate on the resolvable container URL
-        // first, exactly as `mediaDirectory()` does.
-        if FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: appGroupID) != nil {
-            let outcome = openRung(ModelConfiguration(groupContainer: .identifier(appGroupID)),
-                                   named: "App Group")
+        return walk(diskRungs(appGroupID: appGroupID,
+                              appGroupIsProvisioned: groupIsProvisioned),
+                    seedFailures: seedFailures) { rung in
+            openRung(rung.configuration, named: rung.name,
+                     isProtectedDataAvailable: isProtectedDataAvailable)
+        }
+    }
+
+    /// The ladder proper: walks the rungs in order and falls to memory only
+    /// after every one refuses.
+    ///
+    /// `didReset` and `deferredUntilUnlock` accumulate ACROSS rungs. A rung-1
+    /// reset whose retry also failed is the one path that actually moved the
+    /// designer's data; reporting only the answering rung's flag would leave
+    /// exactly that path silent. `open` is a seam so that accumulation is
+    /// testable without contriving a rung that fails twice.
+    static func walk(_ rungs: [DiskRung],
+                     seedFailures: [String] = [],
+                     open: (DiskRung) -> RungOutcome) -> CaptureStore {
+        var failures = seedFailures
+        var didReset = false
+        var deferredUntilUnlock = false
+
+        for rung in rungs {
+            let outcome = open(rung)
             failures += outcome.failures
+            didReset = didReset || outcome.didReset
+            deferredUntilUnlock = deferredUntilUnlock || outcome.deferredUntilUnlock
             if let container = outcome.container {
                 return CaptureStore(
                     container: container,
                     openReport: CaptureStoreOpenReport(
-                        persistence: .appGroup,
-                        didResetIncompatibleStore: outcome.didReset,
+                        persistence: rung.persistence,
+                        didResetIncompatibleStore: didReset,
+                        deferredUntilUnlock: deferredUntilUnlock,
                         failures: failures))
             }
-        } else {
-            let message = "App Group '\(appGroupID)' not provisioned (unsigned build?)"
-            failures.append(message)
-            log.warning("\(message, privacy: .public); trying Application Support")
         }
 
-        // Rung 2 — this app's own container, a genuinely different file.
-        let outcome = openRung(ModelConfiguration(url: applicationSupportStoreURL()),
-                               named: "Application Support")
-        failures += outcome.failures
-        if let container = outcome.container {
-            return CaptureStore(
-                container: container,
-                openReport: CaptureStoreOpenReport(
-                    persistence: .applicationSupport,
-                    didResetIncompatibleStore: outcome.didReset,
-                    failures: failures))
-        }
-
-        // Rung 3 — memory. Loud by construction: the report says so, the
+        // Last rung — memory. Loud by construction: the report says so, the
         // composition root emits `store.in_memory_fallback`, and the sync
         // surface prints the honest line next to the outbox depth.
         log.fault("""
@@ -172,17 +196,54 @@ public final class CaptureStore {
             NOT survive relaunch. Rungs: \(failures.joined(separator: " | "), privacy: .public)
             """)
         return CaptureStore(container: inMemoryContainer(),
-                            openReport: CaptureStoreOpenReport(persistence: .inMemoryFallback,
-                                                               failures: failures))
+                            openReport: CaptureStoreOpenReport(
+                                persistence: .inMemoryFallback,
+                                didResetIncompatibleStore: didReset,
+                                deferredUntilUnlock: deferredUntilUnlock,
+                                failures: failures))
+    }
+
+    struct DiskRung {
+        let name: String
+        let persistence: CaptureStorePersistence
+        let configuration: ModelConfiguration
+    }
+
+    /// The on-disk rungs `resilient` walks, in order — the single definition of
+    /// where the store may live, so the rung-2 regression guard asserts against
+    /// the configuration the app actually opens.
+    ///
+    /// Rung 2 must be addressed by an explicit URL. `ModelConfiguration()`
+    /// defaults `groupContainer: .automatic`, which resolves to the app's App
+    /// Group whenever the entitlement is present — so the old rung 2 reopened
+    /// the very file rung 1 had just failed on and inherited its failure
+    /// verbatim (same sourceURL, same destinationURL). It was never a fallback.
+    ///
+    /// The rung-1 configuration is built only when the caller has confirmed the
+    /// group resolves; constructing it otherwise is what trips SwiftData's trap.
+    static func diskRungs(appGroupID: String, appGroupIsProvisioned: Bool) -> [DiskRung] {
+        var rungs: [DiskRung] = []
+        if appGroupIsProvisioned {
+            rungs.append(DiskRung(
+                name: "App Group",
+                persistence: .appGroup,
+                configuration: ModelConfiguration(groupContainer: .identifier(appGroupID))))
+        }
+        rungs.append(DiskRung(
+            name: "Application Support",
+            persistence: .applicationSupport,
+            configuration: ModelConfiguration(url: applicationSupportStoreURL())))
+        return rungs
     }
 
     struct RungOutcome {
         var container: ModelContainer?
         var failures: [String] = []
         var didReset = false
+        var deferredUntilUnlock = false
     }
 
-    /// Opens one on-disk rung, and on failure deletes the store and retries
+    /// Opens one on-disk rung, and on failure sets the store aside and retries
     /// exactly ONCE.
     ///
     /// There is nothing to branch on: SwiftData collapses every load failure
@@ -192,15 +253,22 @@ public final class CaptureStore {
     /// values on mandatory destination attribute"`) reaches the log only,
     /// never the thrown value. Field is not live (Kody ruling 2026-08-24), so
     /// an unreadable store is reset rather than allowed to cost the designer
-    /// every future capture.
+    /// every future capture — but the reset renames rather than deletes, and
+    /// refuses to run at all while the device is locked, because a locked store
+    /// is indistinguishable here from an incompatible one and is perfectly good.
     static func openRung(_ config: ModelConfiguration,
-                         named rung: String) -> RungOutcome {
+                         named rung: String,
+                         isProtectedDataAvailable: @MainActor () -> Bool = { true })
+        -> RungOutcome {
         var outcome = RungOutcome()
         createParentDirectory(of: config.url)
 
         do {
             outcome.container = try ModelContainer(for: schema, configurations: [config])
             log.notice("Store opened on \(rung, privacy: .public) at \(config.url.path, privacy: .public)")
+            // A clean first-try open is the only proof that an earlier
+            // set-aside store is no longer worth keeping.
+            removeSetAsideStoreFiles(at: config.url)
             return outcome
         } catch {
             outcome.failures.append("\(rung): \(error.localizedDescription)")
@@ -210,9 +278,19 @@ public final class CaptureStore {
                 """)
         }
 
-        guard removeStoreFiles(at: config.url) else { return outcome }
+        guard storeFilesExist(at: config.url) else { return outcome }
+
+        guard isProtectedDataAvailable() else {
+            outcome.deferredUntilUnlock = true
+            let message = "\(rung): store locked (pre-first-unlock); not resetting"
+            outcome.failures.append(message)
+            log.notice("\(message, privacy: .public)")
+            return outcome
+        }
+
+        guard setStoreFilesAside(at: config.url) else { return outcome }
         outcome.didReset = true
-        log.notice("Reset incompatible store at \(config.url.path, privacy: .public); retrying \(rung, privacy: .public)")
+        log.notice("Set aside incompatible store at \(config.url.path, privacy: .public); retrying \(rung, privacy: .public)")
 
         do {
             outcome.container = try ModelContainer(for: schema, configurations: [config])
@@ -246,27 +324,62 @@ public final class CaptureStore {
         }
     }
 
-    /// Deletes the SQLite trio. Returns false when there was nothing to delete,
-    /// so a rung that failed for some other reason never claims a reset.
+    /// The SQLite trio for one store URL: the store, its write-ahead log, and
+    /// its shared-memory file. A reset that took only the first would leave a
+    /// WAL that reattaches to the new store.
+    static func storeFileTrio(at url: URL) -> [URL] {
+        [url,
+         URL(fileURLWithPath: url.path + "-wal"),
+         URL(fileURLWithPath: url.path + "-shm")]
+    }
+
+    static func storeFilesExist(at url: URL) -> Bool {
+        storeFileTrio(at: url).contains { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    /// The reset, which never deletes: the SQLite trio is renamed to
+    /// `<name>.bak`, one generation deep (a previous set is overwritten), so a
+    /// store set aside by mistake is still recoverable from the container.
+    /// Returns false when there was nothing to set aside, so a rung that failed
+    /// for some other reason never claims a reset.
     @discardableResult
-    static func removeStoreFiles(at url: URL) -> Bool {
+    static func setStoreFilesAside(at url: URL) -> Bool {
         let manager = FileManager.default
-        var removedAnything = false
-        for candidate in [url,
-                          URL(fileURLWithPath: url.path + "-wal"),
-                          URL(fileURLWithPath: url.path + "-shm")]
+        var movedAnything = false
+        for candidate in storeFileTrio(at: url)
         where manager.fileExists(atPath: candidate.path) {
+            let backup = URL(fileURLWithPath: candidate.path + ".bak")
             do {
-                try manager.removeItem(at: candidate)
-                removedAnything = true
+                if manager.fileExists(atPath: backup.path) {
+                    try manager.removeItem(at: backup)
+                }
+                try manager.moveItem(at: candidate, to: backup)
+                movedAnything = true
             } catch {
                 log.error("""
-                    Could not delete \(candidate.lastPathComponent, privacy: .public) \
+                    Could not set aside \(candidate.lastPathComponent, privacy: .public) \
                     (\(error.localizedDescription, privacy: .public))
                     """)
             }
         }
-        return removedAnything
+        return movedAnything
+    }
+
+    /// Drops a set-aside trio. Called only from a clean first-try open, which is
+    /// the one piece of evidence that the store it came from is not needed.
+    static func removeSetAsideStoreFiles(at url: URL) {
+        let manager = FileManager.default
+        for backup in storeFileTrio(at: url).map({ URL(fileURLWithPath: $0.path + ".bak") })
+        where manager.fileExists(atPath: backup.path) {
+            do {
+                try manager.removeItem(at: backup)
+            } catch {
+                log.error("""
+                    Could not delete \(backup.lastPathComponent, privacy: .public) \
+                    (\(error.localizedDescription, privacy: .public))
+                    """)
+            }
+        }
     }
 
     /// For a valid compiled schema this performs no disk I/O and cannot fail;

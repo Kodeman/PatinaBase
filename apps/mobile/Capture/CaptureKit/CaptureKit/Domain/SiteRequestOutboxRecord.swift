@@ -63,7 +63,7 @@ public final class SiteRequestOutboxRecord {
     public var payloadPath: String = ""
     public var mediaPaths: [String] = []
     public var checksumSHA256: String = ""
-    public var stateRaw: String = ""
+    public var stateRaw: String = SiteRequestOutboxState.queued.rawValue
     public var retryCount: Int = 0
     public var nextAttemptAt: Date?
     public var lastError: String?

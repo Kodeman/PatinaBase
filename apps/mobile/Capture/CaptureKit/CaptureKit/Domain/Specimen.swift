@@ -68,7 +68,7 @@ public final class Specimen {
     public var currencyCode: String?
     public var sourceURL: String?
     public var note: String?
-    public var categoryRaw: String = "" // SpecimenCategory.rawValue
+    public var categoryRaw: String = SpecimenCategory.unknown.rawValue
 
     // Tag/array attributes (smart-guess + manual)
     public var materials: [String] = []
@@ -123,9 +123,9 @@ public final class Specimen {
     // ── Routing + lifecycle + sync bookkeeping ──
     /// Visit-scoped capture grouping. Nil only for records created before Option B.
     public var captureSessionID: UUID?
-    public var destinationRaw: String = "" // CaptureDestination.rawValue
-    public var statusRaw: String = "" // CaptureStatus.rawValue
-    public var lifecycleRaw: String = "" // CaptureLifecycle.State.rawValue
+    public var destinationRaw: String = CaptureDestination.undecided.rawValue
+    public var statusRaw: String = CaptureStatus.draft.rawValue
+    public var lifecycleRaw: String = CaptureLifecycle.State.captured.rawValue
     public var remoteId: String?         // field_captures.id once committed
     public var committedProductId: String?
     public var lastSyncError: String?
@@ -192,7 +192,7 @@ public final class CapturePhoto {
     public var isPrimary: Bool = false
     public var isDuplicate: Bool = false
     public var order: Int = 0
-    public var captureModeRaw: String = "" // CameraMode.rawValue
+    public var captureModeRaw: String = CameraMode.photo.rawValue
     public var createdAt: Date = Date()
     public var specimen: Specimen?
 
@@ -222,10 +222,13 @@ public final class CapturePhoto {
 @Model
 public final class CaptureMeasurement {
     @Attribute(.unique) public var id: UUID = UUID()
-    public var axisRaw: String = "" // MeasurementAxis.rawValue
+    /// No init default exists for the axis — it is always supplied — so the
+    /// migration default is the one value that behaves exactly like an
+    /// unrecognised raw did: `.custom`, which claims no width/height/depth slot.
+    public var axisRaw: String = MeasurementAxis.custom.rawValue
     public var label: String?
     public var millimeters: Double = 0
-    public var sourceRaw: String = "" // MeasureSource.rawValue
+    public var sourceRaw: String = MeasureSource.manual.rawValue
     public var createdAt: Date = Date()
     public var specimen: Specimen?
 

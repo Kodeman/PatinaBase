@@ -117,10 +117,13 @@ struct SyncStatusScreen: View {
     }
 
     /// Said plainly, and in the one place the designer looks to know her work
-    /// is safe. There is no recovery she can perform, so this promises none.
+    /// is safe. There is no recovery she can perform, so this promises none —
+    /// and it must never send her to relaunch the app, which is the single
+    /// action that throws away everything this run is holding in memory.
     static let inMemoryWarning =
-        "This device could not open its capture store, so nothing here is saved. "
-        + "Close and reopen Patina Field before you rely on it."
+        "Nothing you capture here is being saved on this iPhone. "
+        + "Send what you have before you leave — anything still here is gone "
+        + "once the app closes."
 
     private var pendingCount: Int { rows.count + scanRows.count }
     private var hasRetryableTransfer: Bool {

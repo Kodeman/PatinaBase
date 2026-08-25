@@ -21,6 +21,7 @@
 
 import Foundation
 import SwiftData
+import UIKit
 import CaptureKit
 import CaptureKitMocks
 import PostHog
@@ -72,7 +73,14 @@ public final class AppContainer {
     let portalLogin = PortalLoginController()
 
     public init() {
-        let real = AppConfiguration.runsRealServices; let store = CaptureStore.resilient(persistent: real)
+        let real = AppConfiguration.runsRealServices
+        // iOS relaunches Field in the background for the site-scan upload
+        // session, so the ladder can run before the first unlock, where a good
+        // store simply cannot be decrypted. UIKit lives app-side; CaptureKit
+        // takes the answer as a closure.
+        let store = CaptureStore.resilient(
+            persistent: real,
+            isProtectedDataAvailable: { UIApplication.shared.isProtectedDataAvailable })
         self.store = store
 
         if real {
@@ -151,7 +159,7 @@ public final class AppContainer {
     }
 
     /// Telemetry for the store-open ladder. `store.reset_incompatible` fires
-    /// when an unreadable store was deleted and recreated (Kody ruling
+    /// when an unreadable store was set aside and recreated (Kody ruling
     /// 2026-08-24: Field is not live, a fresh install may reset the store);
     /// `store.in_memory_fallback` fires when persistence was asked for and
     /// every on-disk rung refused, which costs the designer every capture made
@@ -166,6 +174,7 @@ public final class AppContainer {
         }
         guard report.losesWorkOnRelaunch else { return }
         analytics.event("store.in_memory_fallback", [
+            "deferred_until_unlock": String(report.deferredUntilUnlock),
             "failures": report.failures.joined(separator: " | ")
         ])
     }

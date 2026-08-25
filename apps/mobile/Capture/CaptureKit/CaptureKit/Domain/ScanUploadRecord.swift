@@ -30,11 +30,11 @@ public final class ScanUploadRecord {
     public var projectID: String?
     public var projectRoomID: String?
     /// `room_scans.scan_schema_version` marker (3 = Field P1 instrument bundle).
-    public var scanSchemaVersion: Int = 0
+    public var scanSchemaVersion: Int = 3
     /// Per-artifact upload progress (Codable value array attribute).
     public var artifacts: [ScanArtifactUploadState] = []
     /// CaptureTransferPhase raw value, with legacy `"pending"` accepted as queued.
-    public var statusRaw: String = ""
+    public var statusRaw: String = CaptureTransferPhase.queued.rawValue
     public var lastError: String?
     public var retryCount: Int = 0
     /// The server-confirmed scan id. Nil until confirmation succeeds.
