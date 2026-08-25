@@ -18,6 +18,17 @@
 //  that IS published and later goes missing is a true loss and Task 9's.)
 //  One instance serves many notes, so every per-note field is reset in
 //  startLiveTranscription().
+//  CROSS-THREAD STATE. Four threads touch this object: the AVAudioEngine
+//  render thread (the tap), the serial rotationQueue, the Speech callback
+//  thread, and MainActor. Every stored property holding a reference ARC must
+//  retain and release therefore lives behind an OSAllocatedUnfairLock —
+//  request, task, the open segment, latestTranscript, audioSegments and
+//  continuation. @unchecked Sendable silences the compiler, not the race: an
+//  unsynchronized load racing a store on any of those is a retain against a
+//  buffer another thread is releasing, which surfaces as a sporadic
+//  EXC_BAD_ACCESS or a malloc double-free far from the site and gets blamed
+//  on Speech. The remaining unsynchronized fields (Bool, Date?, UUID) carry no
+//  refcount, so the worst they can do is a spurious rotation.
 
 import Foundation
 import AVFoundation
@@ -80,7 +91,17 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// never observe a file mid-write or a count that disagrees with the bytes.
     private let openSegmentBox = OSAllocatedUnfairLock<OpenSegment?>(uncheckedState: nil)
 
-    private var latestTranscript = ""
+    /// Written on the SPEECH CALLBACK thread and read on rotationQueue
+    /// (rotate() carries it across the recognizer swap) and on MainActor
+    /// (finish(), emitFinish()). No timing coincidence is needed: rotate()
+    /// reads while the old task is still delivering partials every
+    /// ~100-300 ms, so every 50 s rotation raced a String's COW buffer
+    /// reference before this lock.
+    private let transcriptBox = OSAllocatedUnfairLock<String>(uncheckedState: "")
+    private var latestTranscript: String {
+        get { transcriptBox.withLockUnchecked { $0 } }
+        set { transcriptBox.withLock { $0 = newValue } }
+    }
     private var startedAt: Date?
     /// The moment recording actually stopped — set ONCE per note, by whichever
     /// door reaches it first: the cap in rotate(), or finish() itself. Reading
@@ -102,7 +123,19 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// audio closes — never at open.
     private var audioFilename: String?
     /// Names of segments that took audio, in the order they closed.
-    private var audioSegments: [String] = []
+    /// READ on rotationQueue (the count that decides the cap, and the next
+    /// segment's index) while MainActor APPENDS in closeCurrentSegment() —
+    /// reachable from the interruption observer's .began branch, and from the
+    /// finish() that meets a just-posted rotate() at ~50 s. Through the
+    /// computed property below, append(_:) is a get-modify-set rather than one
+    /// atomic mutation; that is sound here because EVERY append is on the main
+    /// actor, so only the reads are cross-thread and making each individual
+    /// access atomic is exactly what removes the ARC race.
+    private let segmentsBox = OSAllocatedUnfairLock<[String]>(uncheckedState: [])
+    private var audioSegments: [String] {
+        get { segmentsBox.withLockUnchecked { $0 } }
+        set { segmentsBox.withLock { $0 = newValue } }
+    }
     private var segmentStartedAt: Date?
     private var noteStartedAt: Date?
     /// False whenever no note is recording. Guards the interruption-resume and
@@ -117,7 +150,17 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     private var configChangeObserver: NSObjectProtocol?
     /// Held so the interruption-resume path can reinstall THE SAME tap, which
     /// needs the live stream's continuation and has no local one in scope.
-    private var continuation: AsyncThrowingStream<TranscriptChunk, Error>.Continuation?
+    /// READ on the render thread (installTap) and written on MainActor.
+    /// AsyncThrowingStream.Continuation wraps a class reference, and
+    /// AVAudioEngine.stop() + removeTap(onBus:) do not contractually guarantee
+    /// that an in-flight tap callback has returned before finish() nils this.
+    private let continuationBox =
+        OSAllocatedUnfairLock<AsyncThrowingStream<TranscriptChunk, Error>.Continuation?>(
+            uncheckedState: nil)
+    private var continuation: AsyncThrowingStream<TranscriptChunk, Error>.Continuation? {
+        get { continuationBox.withLockUnchecked { $0 } }
+        set { continuationBox.withLock { $0 = newValue } }
+    }
     /// The tap runs on the render thread and may do exactly two things. Every
     /// recognizer swap is POSTED here instead of performed inline.
     private let rotationQueue = DispatchQueue(label: "cloud.patina.field.voice.rotation")
@@ -523,9 +566,16 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             return
         }
 
-        let carried = latestTranscript
+        // Order, not luck. The old recognition task is live and delivering
+        // partials at this instant, so a carry taken BEFORE endAudio() reports
+        // a transcript the old request then advances past — those words never
+        // reach the joined value below and are lost from the note. endAudio()
+        // first stops the old request taking audio; the read that follows is a
+        // single atomic take of transcriptBox, so it can neither observe a torn
+        // String nor race the callback thread's store.
         request?.endAudio()
         task?.finish()
+        let carried = latestTranscript
         let next = SFSpeechAudioBufferRecognitionRequest()
         next.shouldReportPartialResults = true
         next.requiresOnDeviceRecognition = onDeviceRecognition
