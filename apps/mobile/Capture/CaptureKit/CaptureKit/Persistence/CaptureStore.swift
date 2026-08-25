@@ -508,20 +508,46 @@ public final class CaptureStore {
     /// Required local media that cannot be read as non-empty regular files.
     /// Photos with a durable remote path no longer depend on their local copy.
     public func missingRequiredMedia(for specimen: Specimen) -> [String] {
+        missingRequiredPhotos(for: specimen) + missingVoiceSegments(for: specimen)
+    }
+
+    /// The photo half alone. A capture whose photo is gone is meaningless, so
+    /// photos stay hard-required — but the voice half must NOT be, because
+    /// CaptureMediaAvailabilityError is classified `.rejected` by the sync
+    /// service and `drainOwned` excludes a rejected specimen from the drain
+    /// query. Validating voice up front would orphan a whole note from the
+    /// sync queue over one lost segment, with no operator present to retry it.
+    public func missingRequiredPhotos(for specimen: Specimen) -> [String] {
         let photos = specimen.photos.sorted { $0.order < $1.order }
-        var required = photos.compactMap { photo -> String? in
+        return unreadable(photos.compactMap { photo -> String? in
             let remotePath = photo.remotePath?.trimmingCharacters(
                 in: .whitespacesAndNewlines
             ) ?? ""
             return remotePath.isEmpty ? photo.filename : nil
-        }
-        if let voice = specimen.voiceAudioFilename?.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        ), !voice.isEmpty {
-            required.append(voice)
-        }
+        })
+    }
 
-        return required.filter { filename in
+    /// Voice segments that still depend on a local copy. Mirrors the photo rule:
+    /// a segment carrying a durable remote path is exempt, exactly as an
+    /// uploaded photo is. Reported, never used to gate an upload.
+    private func missingVoiceSegments(for specimen: Specimen) -> [String] {
+        let uploaded = Set((specimen.voiceAudioRemotePathsRaw ?? [])
+            .compactMap { $0.split(separator: "/").last.map(String.init) }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+        var seen = Set<String>()
+        var names: [String] = []
+        let voiceNames = ([specimen.voiceAudioFilename]
+                          + (specimen.voiceAudioSegmentsRaw ?? []).map { Optional($0) })
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && !uploaded.contains($0) }
+        for name in voiceNames where seen.insert(name).inserted {
+            names.append(name)
+        }
+        return unreadable(names)
+    }
+
+    private func unreadable(_ filenames: [String]) -> [String] {
+        filenames.filter { filename in
             let fileURL = mediaURL(for: filename)
             let values = try? fileURL.resourceValues(
                 forKeys: [.isRegularFileKey, .fileSizeKey]
@@ -537,10 +563,110 @@ public final class CaptureStore {
         }
     }
 
+    /// Photos only — what `uploadMedia` gates on, so a voice segment whose local
+    /// file has gone missing reaches the per-segment DROP instead of throwing.
+    public func validateRequiredPhotos(for specimen: Specimen) throws {
+        let missing = missingRequiredPhotos(for: specimen)
+        guard missing.isEmpty else {
+            throw CaptureMediaAvailabilityError.missingLocalMedia(missing)
+        }
+    }
+
     @discardableResult
     public func writeMedia(_ data: Data, filename: String) throws -> URL {
         let url = mediaURL(for: filename)
         try data.write(to: url, options: .atomic)
         return url
+    }
+
+    // ── Media retention sweep (FC-R19 / P-3) ──
+
+    /// Runs the size-capped retention sweep: deletes oldest-first among media
+    /// files whose owning specimen already carries a durable remote path for
+    /// that file, stopping the moment local usage is back at/under
+    /// `MediaRetentionPolicy.softCapBytes`. A file with no stamped remote path
+    /// is never touched, however large the overage — the stamp (a photo's
+    /// `remotePath`, or a voice filename's entry in
+    /// `voiceAudioRemotePathsRaw`) is the only proof the server has the bytes.
+    @discardableResult
+    public func sweepMediaRetention() -> Int {
+        sweepMediaRetention(totalBytes: mediaDirectoryTotalBytes())
+    }
+
+    /// `totalBytes` is injectable so tests can drive the boundary without
+    /// writing anything close to the real 512 MB soft cap to disk.
+    @discardableResult
+    func sweepMediaRetention(totalBytes: Int64) -> Int {
+        var overage = MediaRetentionPolicy.overage(totalBytes: totalBytes)
+        guard overage > 0 else { return 0 }
+
+        let candidates = receiptedMediaFiles().sorted { $0.modifiedAt < $1.modifiedAt }
+        var deleted = 0
+        for candidate in candidates {
+            guard overage > 0 else { break }
+            guard (try? FileManager.default.removeItem(at: candidate.url)) != nil else { continue }
+            overage -= candidate.size
+            deleted += 1
+        }
+        return deleted
+    }
+
+    private struct ReceiptedMediaFile {
+        let url: URL
+        let size: Int64
+        let modifiedAt: Date
+    }
+
+    /// Every locally-persisted media file whose owning specimen has already
+    /// stamped a durable remote path for it: a photo's `remotePath`, or a
+    /// voice filename that appears (by trailing path component) in
+    /// `voiceAudioRemotePathsRaw`. These are the only files the sweep may
+    /// ever delete.
+    private func receiptedMediaFiles() -> [ReceiptedMediaFile] {
+        let specimens = (try? context.fetch(FetchDescriptor<Specimen>())) ?? []
+        var filenames = Set<String>()
+        for specimen in specimens {
+            for photo in specimen.photos {
+                let remotePath = photo.remotePath?.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ) ?? ""
+                if !remotePath.isEmpty { filenames.insert(photo.filename) }
+            }
+            let uploadedBasenames = Set((specimen.voiceAudioRemotePathsRaw ?? [])
+                .compactMap { $0.split(separator: "/").last.map(String.init) })
+            let voiceNames = ([specimen.voiceAudioFilename]
+                              + (specimen.voiceAudioSegmentsRaw ?? []).map { Optional($0) })
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            for name in voiceNames where uploadedBasenames.contains(name) {
+                filenames.insert(name)
+            }
+        }
+        return filenames.compactMap { name -> ReceiptedMediaFile? in
+            let url = mediaURL(for: name)
+            guard let values = try? url.resourceValues(
+                forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+            ), values.isRegularFile == true, let size = values.fileSize else { return nil }
+            return ReceiptedMediaFile(
+                url: url,
+                size: Int64(size),
+                modifiedAt: values.contentModificationDate ?? .distantFuture
+            )
+        }
+    }
+
+    private func mediaDirectoryTotalBytes() -> Int64 {
+        let dir = mediaDirectory()
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+        return urls.reduce(Int64(0)) { total, url in
+            guard let values = try? url.resourceValues(
+                forKeys: [.isRegularFileKey, .fileSizeKey]
+            ), values.isRegularFile == true, let size = values.fileSize else { return total }
+            return total + Int64(size)
+        }
     }
 }

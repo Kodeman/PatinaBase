@@ -22,6 +22,7 @@ import Foundation
 import SwiftData
 import CaptureKit
 import CaptureKitMocks
+import PostHog
 
 @Observable
 @MainActor
@@ -145,6 +146,7 @@ public final class AppContainer {
             await session.waitForReady()
             if let uid = session.userID {
                 analytics.identify(uid, properties: ["role": "designer", "platform": "ios"])
+                PostHogSDK.shared.reloadFeatureFlags()
             }
         }
     }

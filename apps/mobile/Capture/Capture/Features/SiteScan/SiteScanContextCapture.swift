@@ -6,8 +6,6 @@
 //  non-Pro path (photo from the regular camera, no pose). Each capture rides the
 //  EXISTING outbox → Capture Inbox via `ContextCaptureService` with the spatial
 //  address in provenance.
-//
-//  ⚠️ All user-facing strings are ESCALATE-class PLACEHOLDERS (flagged in the report).
 
 import SwiftUI
 import AVFoundation
@@ -25,12 +23,27 @@ final class SiteScanContextModel {
     private let projectID: String?
     private let projectRoomID: String?
     private let voice: any VoiceNoteService
+    private let analytics: any CaptureAnalytics
 
     var toast: String?
     var isRecordingVoice = false
     private var partialTranscript = ""
     private var voiceTask: Task<Void, Never>?
     private var recordingScope: CaptureLocalListScope?
+    /// §15.4: whether the live note is being transcribed at all. A note the
+    /// recognizer could not take is not a note whose words we "couldn't make
+    /// out" — that rung would claim an attempt that never happened.
+    private var noteIsTranscribing = true
+    /// Latches the permission round-trip in startVoice(). isRecordingVoice is
+    /// only set once the stream is live, which is now an await later, so
+    /// without this a second tap on Note during the prompt starts a second one.
+    private var voiceAuthInFlight = false
+
+    /// Fail-closed (Field Companion W1): the voice-note affordance is absent
+    /// unless the seam answers `true`.
+    var voiceCaptureEnabled: Bool {
+        analytics.isFeatureEnabled("field-companion-voice")
+    }
 
     init(
         store: CaptureStore,
@@ -39,6 +52,7 @@ final class SiteScanContextModel {
         projectID: String?,
         projectRoomID: String?,
         voice: any VoiceNoteService,
+        analytics: any CaptureAnalytics,
         scanSessionIdProvider: @escaping () -> String?,
         frameProvider: @escaping () async -> ContextFrameSnapshot?
     ) {
@@ -48,6 +62,7 @@ final class SiteScanContextModel {
         self.projectID = projectID
         self.projectRoomID = projectRoomID
         self.voice = voice
+        self.analytics = analytics
         self.scanSessionIdProvider = scanSessionIdProvider
         self.frameProvider = frameProvider
     }
@@ -83,10 +98,11 @@ final class SiteScanContextModel {
             provenance: provenance(pose: snapshot.poseRowMajor))
         await sync.enqueue(created.id)
         guard !Task.isCancelled, ownerScopeProvider() == creationScope else { return }
-        toast = "Photo added to Inbox"
+        toast = "Photo saved to this room."
     }
 
     func toggleVoice() {
+        guard voiceCaptureEnabled else { return }
         if isRecordingVoice { stopVoice() } else { startVoice() }
     }
 
@@ -96,25 +112,83 @@ final class SiteScanContextModel {
             reportOwnerUnavailable()
             return
         }
+        // F2 had NO door to the permission prompt. N4's sheet was the only
+        // caller of requestAuthorization() in the app, so a fresh install whose
+        // designer reached this overlay first was never asked — speech stayed
+        // .notDetermined, the rung read "unavailable" and read it forever.
+        // Ask here too. The mic is the only permission a note requires; a
+        // speech denial costs the words, not the note (§15.4), which is exactly
+        // what requestAuthorization() returns.
+        guard !voiceAuthInFlight else { return }
+        voiceAuthInFlight = true
+        Task { [weak self] in
+            guard let self else { return }
+            let micGranted = await self.voice.requestAuthorization()
+            self.voiceAuthInFlight = false
+            // The prompt is modal and the scan runs behind it — she may have
+            // left the room, or backgrounded the app, before answering.
+            guard !Task.isCancelled,
+                  !self.isRecordingVoice,
+                  self.ownerScopeProvider() == scope else { return }
+            guard micGranted else {
+                self.toast = "Microphone unavailable"
+                return
+            }
+            self.beginVoice(scope: scope)
+        }
+    }
+
+    private func beginVoice(scope: CaptureLocalListScope) {
         do {
             let stream = try voice.startLiveTranscription()
             recordingScope = scope
             isRecordingVoice = true
             partialTranscript = ""
+            // §15.4: the recognizer is unavailable or denied and the note is
+            // recording anyway. Said at the START, so she is not left watching
+            // a silent pill wondering whether anything is happening.
+            noteIsTranscribing = voice.isTranscribing
+            if !noteIsTranscribing { toast = VoiceNoteCopy.recognitionUnavailable }
             voiceTask = Task { [weak self] in
                 do {
                     for try await chunk in stream {
                         guard !Task.isCancelled else { return }
                         self?.partialTranscript = chunk.text
                     }
-                } catch {}
+                    // The 20-minute cap ends the note by finishing the stream
+                    // NORMALLY. stopVoice() is otherwise reachable only from
+                    // toggleVoice(), so without this the pill kept reading
+                    // "Stop" over a dead mic and up to twenty minutes of
+                    // recorded audio was never enqueued at all. The tap path
+                    // has already cleared isRecordingVoice, so this is a no-op
+                    // there.
+                    self?.stopVoice(reason: .capped)
+                } catch {
+                    // Recognition tore the note down. The audio it wrote is on
+                    // disk and is the record — end the note so it is enqueued
+                    // with whatever partial text there is, rather than dropped
+                    // in silence.
+                    self?.stopVoice(reason: .failed)
+                }
             }
         } catch {
             toast = "Microphone unavailable"
         }
     }
 
-    private func stopVoice() {
+    /// Why the note is ending. Only the nothing-was-captured copy differs; the
+    /// keep-the-audio path is identical, because on every one of these doors the
+    /// audio is still the record.
+    private enum VoiceEndReason {
+        case tapped, capped, failed
+    }
+
+    /// Ends a live note and enqueues it. Idempotent: the cap and the
+    /// recognition-error door can both arrive after the pill was already
+    /// tapped, and a second run would call finish() again — which returns the
+    /// same segments — and enqueue the take twice.
+    private func stopVoice(reason: VoiceEndReason = .tapped) {
+        guard isRecordingVoice else { return }
         voiceTask?.cancel()
         isRecordingVoice = false
         let creationScope = recordingScope
@@ -126,20 +200,62 @@ final class SiteScanContextModel {
                   self.ownerScopeProvider() == creationScope,
                   let service = self.service(for: creationScope) else { return }
             let transcript = result.transcript.isEmpty ? self.partialTranscript : result.transcript
-            guard !transcript.isEmpty || result.audioFilename != nil else {
-                self.toast = "Nothing recorded"
+            // The audio is the record. A note that transcribes to nothing on a noisy
+            // site used to be discarded with "Nothing recorded" — she spoke and
+            // nothing was kept. Keep anything we actually captured, and say plainly
+            // when the words did not come through.
+            //
+            // `transcript` is the LOCAL above, which already falls back to
+            // partialTranscript — key the copy off the same local the guard uses, or
+            // the two disagree about what "has text" means.
+            let hasAudio = !result.audioSegments.isEmpty
+            guard !transcript.isEmpty || hasAudio else {
+                self.toast = reason == .failed
+                    ? "Voice capture stopped before anything was kept — try the note again."
+                    : "Nothing was recorded — try holding the mic a moment longer."
                 return
+            }
+            // Held in a local and assigned ONCE at the end: the shipped code set the
+            // success toast unconditionally two lines later, so an honest failure
+            // message set earlier never rendered at all.
+            // The cap outranks the others: §15.4 forbids a silent stop, and a
+            // capped note is by construction one that recorded for twenty
+            // minutes, so "nothing was kept" cannot apply to it.
+            let message: String
+            if result.endedAtCap {
+                message = VoiceNoteCopy.capReached
+            } else if !transcript.isEmpty {
+                message = "Note saved to this room."
+            } else if self.noteIsTranscribing {
+                message = "We couldn't make out the words — the audio is here."
+            } else {
+                message = VoiceNoteCopy.recognitionUnavailable
+            }
+            // The honesty repair's own metric: a real recording committing with no
+            // words. The guard above already ensures transcript.isEmpty implies
+            // hasAudio here — read hasAudio anyway rather than assume it.
+            if transcript.isEmpty {
+                self.analytics.event("voice.empty_transcript", ["had_audio": String(hasAudio)])
             }
             let created = service.enqueueVoice(
                 transcript: transcript,
                 audioFilename: result.audioFilename,
+                audioSegments: result.audioSegments,
+                transcriptSource: transcript.isEmpty ? "device_partial" : "device",
                 durationSeconds: result.durationSeconds,
                 provenance: self.provenance(pose: nil))
             await self.sync.enqueue(created.id)
             guard !Task.isCancelled,
                   self.ownerScopeProvider() == creationScope else { return }
-            self.toast = "Voice note added to Inbox"
+            self.toast = message
         }
+    }
+
+    /// Leaving F2 mid-note. `deinit` closes the open segment but nothing
+    /// enqueues it, so the recording sat in the media directory with no capture
+    /// referring to it — audio orphaned, no capture, no toast.
+    func endVoiceIfNeeded() {
+        stopVoice()
     }
 
     private func service(for scope: CaptureLocalListScope) -> ContextCaptureService? {
@@ -173,11 +289,16 @@ struct SiteScanContextControls: View {
             }
             HStack(spacing: 14) {
                 pill("camera.fill", "Photo") { Task { await model.capturePhoto() } }
-                pill(model.isRecordingVoice ? "stop.circle.fill" : "mic.fill",
-                     model.isRecordingVoice ? "Stop" : "Note") { model.toggleVoice() }
+                if model.voiceCaptureEnabled {
+                    pill(model.isRecordingVoice ? "stop.circle.fill" : "mic.fill",
+                         model.isRecordingVoice ? "Stop" : "Note") { model.toggleVoice() }
+                }
             }
         }
         .accessibilityElement(children: .contain)
+        // Both F2 hosts render these controls, so this is the one place that
+        // catches every way off the surface mid-note.
+        .onDisappear { model.endVoiceIfNeeded() }
     }
 
     private func pill(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
@@ -234,7 +355,10 @@ struct SiteScanContextScreen: View {
                             workspaceID: container.session.workspaceID)
                     },
                     projectID: projectID, projectRoomID: projectRoomID,
-                    voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory()),
+                    voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
+                                                  analytics: container.analytics,
+                                                  surface: "f2"),
+                    analytics: container.analytics,
                     scanSessionIdProvider: { nil },      // no scan session on a non-Pro device
                     frameProvider: { [container] in
                         guard let frame = try? await container.camera.capture() else { return nil }
@@ -258,13 +382,13 @@ struct SiteScanContextScreen: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Reference capture")               // ESCALATE placeholder
+            Text("This iPhone can't measure a room.")
                 .font(CaptureType.eyebrow).textCase(.uppercase)
                 .foregroundStyle(CaptureColor.paper3)
-            Text("Photos & notes for this room")    // ESCALATE placeholder
+            Text("Photos & notes for this room.")
                 .font(CaptureType.title2)
                 .foregroundStyle(CaptureColor.paper)
-            Text("This device has no LiDAR, so this isn't a scan — these land in your Inbox.")  // ESCALATE
+            Text("These reach the studio as soon as you have signal — they're notes, not a scan.")
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.paper2)
         }

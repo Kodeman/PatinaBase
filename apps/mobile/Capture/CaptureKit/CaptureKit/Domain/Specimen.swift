@@ -79,6 +79,27 @@ public final class Specimen {
     public var voiceTranscript: String?
     public var voicePartialTranscript: String?
     public var voiceAudioFilename: String?      // relative path in App Group media dir
+    /// Ordered voice-audio segments in the App Group media dir. Additive and
+    /// OPTIONAL so SwiftData migrates lightweight — there is no VersionedSchema
+    /// in this app. `voiceAudioFilename` stays segment 0 for every reader that
+    /// predates segmentation.
+    public var voiceAudioSegmentsRaw: [String]?
+    /// Remote object paths for segments that have uploaded. Append-only and
+    /// order-independent: readers match a segment by the path's trailing
+    /// component, not by index, because `[String]?` cannot express a sparse
+    /// positional array when only some segments have uploaded.
+    /// This is what lets missingRequiredMedia exempt an uploaded segment the
+    /// way it already exempts an uploaded photo — without it a voice file is
+    /// required-LOCAL forever and one unreadable segment blocks a whole note.
+    public var voiceAudioRemotePathsRaw: [String]?
+    /// 'device' | 'device_partial' | 'designer' | 'server' — which reading
+    /// produced voiceTranscript. The app writes the first three; 'designer' is
+    /// manual entry, which claims no speech and implies no audio. 'server' is
+    /// the server's own transcription. 00530:55 admits all four.
+    public var voiceTranscriptSourceRaw: String?
+    /// 'note' | 'context' | nil. Wave 1's producer for the server's
+    /// capture_kind CHECK; nil means the server default 'specimen' applies.
+    public var captureKindRaw: String?
     public var voiceDurationSeconds: Double?
 
     // ── Codes (N2) — ["gtin:00123...", "url:https://...", "ean13:..."] ──

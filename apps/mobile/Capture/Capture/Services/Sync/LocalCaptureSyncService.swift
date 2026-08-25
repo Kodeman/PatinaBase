@@ -183,6 +183,10 @@ final class LocalCaptureSyncService: CaptureSyncService {
         let failed = failedCount()
         liveActivity?.end(.init(queued: 0, uploading: 0, failed: failed))
         analytics?.event("sync.drain.done", ["failed": "\(failed)"])
+        // A successful drain is a natural point to reclaim space: every
+        // receipt this pass landed is already stamped, so the size-capped
+        // sweep (FC-R19) can only find files that are safe to remove.
+        store.sweepMediaRetention()
         emitFromOutbox()
     }
 
@@ -299,7 +303,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
         remote: SupabaseCaptureGateway,
         userID: UUID
     ) async throws -> CommitReceipt {
-        let uploadedVoicePath = try await uploadMedia(
+        let voiceUpload = try await uploadMedia(
             for: specimen,
             owner: owner,
             remote: remote,
@@ -309,8 +313,21 @@ final class LocalCaptureSyncService: CaptureSyncService {
             specimen: specimen,
             device: Self.deviceInfo()
         )
-        if let uploadedVoicePath {
-            payload.voice?.audioPath = uploadedVoicePath
+        if !voiceUpload.paths.isEmpty {
+            payload.voice?.audioPath = voiceUpload.paths.first
+            payload.voice?.audioSegments = voiceUpload.paths
+        }
+        if voiceUpload.lost > 0 {
+            payload.voice?.audioLost = true
+            if voiceUpload.paths.isEmpty {
+                // Every segment was lost. audioSegments is always the ordered
+                // list of segments that exist server-side, so here it is empty
+                // — never the builder's bare local filenames, which would name
+                // objects nothing ever uploaded. Empty + audioLost separates
+                // "had audio, all of it is gone" from "had no audio" (no key).
+                payload.voice?.audioPath = nil
+                payload.voice?.audioSegments = []
+            }
         }
 
         let routing = CaptureRoutingContext(
@@ -362,8 +379,13 @@ final class LocalCaptureSyncService: CaptureSyncService {
         owner: CaptureOwnerIdentity,
         remote: SupabaseCaptureGateway,
         userID: UUID
-    ) async throws -> String? {
-        try store.validateRequiredMedia(for: specimen)
+    ) async throws -> (paths: [String], lost: Int) {
+        // Photos only. Validating voice here would throw
+        // CaptureMediaAvailabilityError, which shouldReject classifies as
+        // `.rejected`, and drainOwned excludes a rejected specimen from the
+        // drain query — one lost segment would orphan the note from sync
+        // forever. The per-segment drop below is what handles voice instead.
+        try store.validateRequiredPhotos(for: specimen)
 
         let folder = CaptureMediaPath.folder(
             userID: userID,
@@ -376,12 +398,16 @@ final class LocalCaptureSyncService: CaptureSyncService {
                 ) ?? "").isEmpty
             }
             .sorted { $0.order < $1.order }
-        let voiceFilename = specimen.voiceAudioFilename.flatMap { filename in
-            filename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? nil
-                : filename
-        }
-        let total = photos.count + (voiceFilename == nil ? 0 : 1)
+        let voiceFilenames: [String] = {
+            let raw = (specimen.voiceAudioSegmentsRaw?.isEmpty == false)
+                ? specimen.voiceAudioSegmentsRaw!
+                : [specimen.voiceAudioFilename].compactMap { $0 }
+            return raw
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }()
+        let stampedRemotePaths = stampedVoicePaths(for: specimen)
+        let total = photos.count + voiceFilenames.count
         var uploaded = 0
 
         for photo in photos {
@@ -402,26 +428,79 @@ final class LocalCaptureSyncService: CaptureSyncService {
             bumpProgress(specimen, uploaded: uploaded, total: total)
         }
 
-        var voicePath: String?
-        if let filename = voiceFilename {
-            try requireActiveOwner(owner)
-            let url = store.mediaURL(for: filename)
-            guard let data = try? Data(contentsOf: url), !data.isEmpty else {
-                throw CaptureMediaAvailabilityError
-                    .missingLocalMedia([filename])
+        var voicePaths: [String] = []
+        // Only ever an UNSTAMPED segment: one whose bytes this phone was still
+        // the only copy of and can no longer read. A receipted segment the
+        // retention sweep deleted is answered from its stamp, so `audioLost`
+        // still means what it says — written, and genuinely gone.
+        var lostSegments = 0
+        for filename in voiceFilenames {
+            var path = stampedRemotePaths[filename]
+            if path == nil {
+                path = try await uploadVoiceSegment(filename, for: specimen,
+                                                    owner: owner, remote: remote, folder: folder)
             }
-            let path = "\(folder)/\(filename)"
-            try await remote.upload(
-                data,
-                to: path,
-                contentType: Self.mimeType(for: filename)
-            )
-            voicePath = path
+            if let path { voicePaths.append(path) } else { lostSegments += 1 }
             uploaded += 1
             bumpProgress(specimen, uploaded: uploaded, total: total)
         }
+        if lostSegments > 0 {
+            analytics?.event("voice.audio_write_failed",
+                             ["reason": "missing_local", "count": String(lostSegments)])
+        }
         try? store.save()
-        return voicePath
+        return (paths: voicePaths, lost: lostSegments)
+    }
+
+    /// Filename → durable remote path for every segment this specimen has ALREADY
+    /// put on the server. The voice half of the `remotePath` exemption the photo
+    /// filter in `uploadMedia` applies — with one difference: `audioSegments`
+    /// must come back as the ordered list of objects the server holds, so an
+    /// already-stamped segment is not dropped from the list, it is answered from
+    /// its stamp, in place. Without this a second commit re-read a local file
+    /// the receipt deleter had already removed, counted the segment lost, and
+    /// wrote `audioSegments = []` over audio sitting intact in Storage.
+    private func stampedVoicePaths(for specimen: Specimen) -> [String: String] {
+        var byFilename: [String: String] = [:]
+        for raw in specimen.voiceAudioRemotePathsRaw ?? [] {
+            let path = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let name = path.split(separator: "/").last.map(String.init),
+                  !name.isEmpty else { continue }
+            byFilename[name] = path
+        }
+        return byFilename
+    }
+
+    /// Uploads one voice segment and stamps its durable remote path. Returns nil
+    /// — a DROP, not a throw — when the local file cannot be read:
+    /// CaptureMediaAvailabilityError is not a LocalSyncError, so isDeferrable
+    /// does not apply, and throwing would permanently stick a note that today
+    /// commits transcript-only after a segment failed to flush on a full disk
+    /// or was lost across a reinstall.
+    private func uploadVoiceSegment(
+        _ filename: String,
+        for specimen: Specimen,
+        owner: CaptureOwnerIdentity,
+        remote: SupabaseCaptureGateway,
+        folder: String
+    ) async throws -> String? {
+        try requireActiveOwner(owner)
+        let url = store.mediaURL(for: filename)
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+            return nil
+        }
+        let path = "\(folder)/\(filename)"
+        try await remote.upload(data, to: path,
+                                contentType: Self.mimeType(for: filename))
+        // Stamp the durable path so missingRequiredMedia exempts this segment
+        // from now on, exactly as it exempts an uploaded photo. Upload is
+        // upsert-idempotent and a deferred commit re-runs the whole drain, so
+        // the stamp must not double-append on replay.
+        if specimen.voiceAudioRemotePathsRaw?.contains(path) != true {
+            specimen.voiceAudioRemotePathsRaw =
+                (specimen.voiceAudioRemotePathsRaw ?? []) + [path]
+        }
+        return path
     }
 
     private func requireActiveOwner(_ owner: CaptureOwnerIdentity) throws {
@@ -596,6 +675,19 @@ final class LocalCaptureSyncService: CaptureSyncService {
             receiptID: captureID.uuidString))
         if let productID = result.productID { s.committedProductId = productID.uuidString }
 
+        // The receipt is the proof the server has the bytes. Until this
+        // landed, every segment stayed on the phone forever — uploadMedia
+        // never cleared a local file after a successful commit. Only a
+        // filename that is actually stamped in voiceAudioRemotePathsRaw
+        // (Task 9's writer) is receipted; a segment that was lost during
+        // upload never got a stamp, so it is left on disk rather than
+        // guessed at.
+        let receiptedSegments = Set((s.voiceAudioRemotePathsRaw ?? [])
+            .compactMap { $0.split(separator: "/").last.map(String.init) })
+        for name in (s.voiceAudioSegmentsRaw ?? []) where receiptedSegments.contains(name) {
+            try? FileManager.default.removeItem(at: store.mediaURL(for: name))
+        }
+
         // Server truth: only status=="saved" is a library landing. The only
         // other accepted receipt-backed result is the inbox safe harbor.
         let landedSaved = (result.status == "saved")
@@ -654,17 +746,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
     }
 
     private static func mimeType(for filename: String) -> String {
-        switch (filename as NSString).pathExtension.lowercased() {
-        case "heic", "heif": return "image/heic"
-        case "jpg", "jpeg":  return "image/jpeg"
-        case "png":          return "image/png"
-        case "webp":         return "image/webp"
-        case "m4a":          return "audio/x-m4a"
-        case "mp4":          return "audio/mp4"
-        case "aac":          return "audio/aac"
-        case "wav":          return "audio/wav"
-        default:             return "application/octet-stream"
-        }
+        CaptureMediaMime.forFilename(filename)
     }
 
     // ── snapshot plumbing ──────────────────────────────────────────────────────

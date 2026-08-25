@@ -65,17 +65,47 @@ public struct TranscriptChunk: Sendable {
 }
 public struct VoiceNoteResult: Sendable {
     public let transcript: String
+    /// Segment 0. Every shipped reader (payload, store, sync) keeps using this.
     public let audioFilename: String?
+    /// Ordered audio segments. Later segments exist only when an interruption
+    /// split the note; empty when no audio was written at all.
+    public let audioSegments: [String]
+    /// Whether recognition actually ran on-device. Recorded, not merely set:
+    /// voice.finish reports it, and the shipped permission string promises it.
+    public let onDevice: Bool
     public let durationSeconds: Double
-    public init(transcript: String, audioFilename: String?, durationSeconds: Double) {
-        self.transcript = transcript; self.audioFilename = audioFilename
+    /// The 20-minute / 24-segment cap ended this note, not the designer. The
+    /// surfaces read it to say so: §15.4 forbids a silent stop, and the cap is
+    /// otherwise indistinguishable from a normal end because it finishes the
+    /// stream NORMALLY.
+    public let endedAtCap: Bool
+    public init(transcript: String, audioFilename: String?,
+                audioSegments: [String] = [], onDevice: Bool = false,
+                durationSeconds: Double, endedAtCap: Bool = false) {
+        self.transcript = transcript
+        self.audioFilename = audioFilename
+        self.audioSegments = audioSegments.isEmpty
+            ? (audioFilename.map { [$0] } ?? [])
+            : audioSegments
+        self.onDevice = onDevice
         self.durationSeconds = durationSeconds
+        self.endedAtCap = endedAtCap
     }
 }
 public protocol VoiceNoteService: Sendable {
     func requestAuthorization() async -> Bool
     @MainActor func startLiveTranscription() throws -> AsyncThrowingStream<TranscriptChunk, Error>
     @MainActor func finish() async -> VoiceNoteResult
+    /// Whether the note that just started is also being TRANSCRIBED. False
+    /// when the recognizer is unavailable or unauthorized: §15.4 — the note
+    /// still records, and the surface says the honest line instead of a
+    /// placeholder promising words that are never coming.
+    @MainActor var isTranscribing: Bool { get }
+}
+
+public extension VoiceNoteService {
+    /// A conformer that always transcribes need say nothing.
+    @MainActor var isTranscribing: Bool { true }
 }
 
 // ── N5 Smart field guess (STUB now; Core ML later) ──

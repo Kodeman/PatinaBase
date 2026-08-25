@@ -49,12 +49,17 @@ public final class ContextCaptureService {
     /// only) when the audio file couldn't be persisted.
     @discardableResult
     public func enqueueVoice(transcript: String, audioFilename: String?,
+                             audioSegments: [String] = [],
+                             transcriptSource: String? = nil,
                              durationSeconds: Double,
                              provenance: ContextCaptureProvenance) -> Specimen {
         let draft = store.newDraft(owner: owner)
         apply(provenance, to: draft)
         draft.voiceTranscript = transcript.isEmpty ? nil : transcript
         draft.voiceAudioFilename = audioFilename
+        draft.voiceAudioSegmentsRaw = audioSegments
+        draft.voiceTranscriptSourceRaw = transcriptSource
+        draft.captureKindRaw = "context"
         draft.voiceDurationSeconds = durationSeconds
         finalize(draft)
         return draft

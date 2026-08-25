@@ -1,0 +1,68 @@
+61:Ruling: The rulings doc contains **no "Ratified by Kody — 2026-08-24" section** (grep for "Ratified" over `docs/design/field-companion/` returns nothing…
+63:Ruling: **No backward compatibility is owed in the app** (conductor standing fact 1 — Patina Field is not live anywhere). Legacy-decode paths, schema-ve…
+65:Ruling: **Task 10 is parked — `parked — held for 00516 merge`.** No file is created under `supabase/migrations/`, no `supabase db push`, no `supabase:re…
+67:Ruling: **Task 18.6's `gh pr create` is NOT executed.** The branch is pushed to origin at each task completion; integration is the orchestrator's. — Ope…
+69:Ruling: **No explicit `-derivedDataPath`.** `capture-gate.sh` accepts no such flag, and Xcode derives DerivedData from the project's absolute path — the…
+71:Ruling (P-1): **`voice.finish` is emitted from exactly one helper.** Task 8 writes the cap-end emission as the plan specifies; Task 17 then refactors bo…
+73:Ruling (P-2): **Task 8 adds `analytics` and `surface` to `SpeechVoiceNoteService`.** The type today is `init(mediaDirectory: URL? = nil)` with no analyt…
+75:Ruling (P-3): **Task 16's sweep is scoped explicitly.** `MediaRetentionPolicy` lands exactly as written; the sweep is a `CaptureStore` method that, when…
+77:Ruling (census drift): The plan expects `grep -rl 'commit_field_capture' supabase/migrations` → `00233` + `00235`; on `origin/main` it returns `00235` o…
+106:Ruling (pipelining): **The review of task N may overlap the implementer of task N+1 when, and only when, the two touch disjoint file sets.** Reviewers …
+108:Ruling (Task 2 split): **Task 2 steps 2.5 (signed device install) and 2.6 (PostHog proof) are deferred to Task 18's device pass**, and Task 2 therefore…
+110:Ruling (Task 2 xcconfig): **No CI pipeline is invented.** The brief says the `POSTHOG_API_KEY` build setting is "sourced from an .xcconfig that CI writ…
+130:Ruling: **Keep the `:128` edit and fix `:79` to match, rather than reverting `:128`.** The reviewer offered
+139:Ruling: **Finding 4 is dismissed, not fixed.** The conductor ran census step 1.1 centrally and handed the
+144:Ruling (serialisation): **The Task 1 fix round waits for the Task 2 implementer to finish.** My pipelining
+155:Ruling (subagent waiting): **Implementer briefs for this wave forbid background jobs and notification
+163:Ruling: **Wave 0.5's build-time PostHog mechanism replaces Task 2's, wholesale.** `origin/feat/field-companion-w05`
+184:Ruling: **Coordinator item (3a), "`surface='field-ios'` on every event", needs NO code — it already ships.**
+252:Ruling: **Task 10 is unparked and draws 00530.** Phase 3's `00516` merged to `main` at
+259:Ruling: **Fix the `routing.clear` cast — the plan's own SQL carries a live defect.** The draft author
+269:Ruling: **Follow the SPEC on the ACL, not the brief.** Brief 10.4 writes
+274:Ruling: **The `pnpm supabase:reset` is authorized under the lock protocol.** The local stack is SHARED by
+281:Ruling: **The stale reservations-doc line about 00516 is corrected in Task 10's commit.** The draft author
+382:Ruling (iOS concurrency limit): **Only ONE iOS writer at a time, regardless of source-file disjointness.**
+409:Ruling: **merge `origin/main` into `feat/field-companion-w1` to close the gap**, once the iOS lane is free.
+421:Ruling (Task 10, defensive payload projection — from the Wave 3 plan review, which reproduced the failure
+480:Ruling: **fix all three parts** — null the routing in the handler's UPDATE so it cannot re-trip the guard,
+491:Ruling: **EDIT 3 is in scope and sanctioned** — it is the conductor's ruling, dispatched before the review
+532:Ruling: **Task 10 must NOT regenerate `supabase/seed/00-legacy-grants.sql` (review finding 7).** Main
+551:Ruling (a) — **the residual org-scope escape is PARKED as pre-existing.** A second upsert failure can
+559:Ruling (b) — **`supabase/seed/00-legacy-grants.sql` stays untouched** (as already amended mid-round: main
+563:Ruling (c) — **nothing pushes to Strata from this lane, and 00516 must apply to prod before 00530.**
+581:Ruling: **change `1` → `2` on those two lines and nothing else in that file.** My guard-rail was aimed at
+682:Ruling: **`onDevice` is NOT a dead property; the reviewer lacked forward visibility.** Finding 1 (Important,
+775:Ruling: **`git push` failures from this session are the sandbox's HTTP proxy ("This proxy requires
+798:Ruling: **fix it despite being plan-mandated.** The plan's authorship does not grade its own work, and a
+828:Ruling (Task 9 concern 1 — HIGH, self-flagged, and I am ruling it FIXED): **the task's headline behaviour
+890:Ruling (coordinator, settling the question Task 9's review forwarded): **a dropped voice segment is OMITTED
+978:Ruling (1) — **Task 8 owns the empty-segment case, and it is re-rated Critical.** Task 8's Important #6 was
+988:Ruling (2) — **Task 9 owns true losses only.** A "loss" is a file that **existed and is gone** — full disk,
+994:Ruling (3) — **`endAtCap()` must guarantee the segment is CLOSED**, with finish semantics, not merely stop
+1024:Ruling: **the tap holding the lock across `AVAudioFile.write` is ACCEPTED for Wave 1.** — Any risk is
+1028:Ruling: **N3 / configuration-change fan-out (R2) stays a DEVICE-PASS item, not a code fix.** Mitigating it
+1045:Ruling: **when EVERY segment is lost, `audioSegments` must be `[]`, never a fallback to bare local
+1049:Ruling: **`currentSchemaVersion` does NOT move again in Wave 1.** `audioLost` and `audioSegments` are
+1070:Ruling: **the format comparison is ACCEPTED as the correct cycle-breaker for N3.** A latch alone only
+1156:Rulings on the nine new issues:
+1219:Ruling (lane scheduling): **Task 14 was dispatched ahead of Task 13** even though the plan orders 13 → 14.
+1250:Ruling: **the swipe-to-dismiss gap on S1 is PARKED and routed to the device pass, not fixed now.** The
+1283:Ruling: **always emitting on empty is ACCEPTED**, rather than only on a thrown write. — Absence of an event
+1299:Ruling: **released the stale lock.** The lock protocol exists to arbitrate a shared resource between
+1368:Ruling: **fix it, one line, round 4** — fall through to `designer` when the result carries neither
+1413:Ruling (Task 16 safety framing carried into the brief): **deleting a segment after its commit receipt is
+1437:Ruling: **finish the work rather than re-run the round.** ~200 lines of correct SQL sit in the tree; a fresh
+1461:Ruling: **the plan's device script was not sufficient and is replaced.** Three of its steps said "verify it
+1508:Ruling: **fix both.** The Critical is a plausible crash in the most ordinary interaction on the screen; the
+1557:Ruling: **the implementer's deviation from the brief's literal 16.1 snippet is ACCEPTED and is the better
+1698:Ruling: **do not chase `origin/main` again.** The one merge this wave performed was necessary — it closed the
+1724:Ruling: **#3 (duration measured from `startedAt`) correctly NOT fixed here — routed to Task 17.** The
+1752:Ruling: **the duration fix landed at the source, as Task 15 argued it should.** `:276` documents that the
+1781:Ruling: **`always await voice.finish()` ACCEPTED over the conditional I offered.** The implementer's
+1816:Ruling: **the conductor finished Task 10 itself** — took the lock, reset, ran both suites, committed. Two
+1846:Ruling: **one fix closes all of it — guard `finish()`'s emission and teardown on the note having been
+1852:Ruling: **Task 17's fence extended to a fifth file, `S3DestinationScreen.swift`.** Its header claims "This is
+1911:Ruling: **the check-then-write lock I used was the actual defect behind the race.** `[ -f lock ] || echo > lock`
+1962:Ruling: **PID-liveness on that lock is meaningless and I should not have used it.** The atomic `mkdir` lock
+2071:Ruling: **merged `origin/main` (`cde7c7628`) rather than rebasing onto it.** The branch contains **two merge
+2161:Ruling: **5(b) reworded the permission string rather than forcing on-device recognition — ACCEPTED, and it

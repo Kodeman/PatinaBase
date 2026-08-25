@@ -67,7 +67,7 @@ struct FieldCapturePayloadTests {
         #expect(dict["title"] as? String == "Lounge chair")
         #expect(dict["notes"] as? String == "warmer bouclé")
         #expect(dict["category"] as? String == "seating")
-        #expect(dict["schemaVersion"] as? Int == 1)
+        #expect(dict["schemaVersion"] as? Int == 2)
         // clientToken is the RPC arg, NOT a payload field
         #expect(dict["clientToken"] == nil)
 
@@ -144,7 +144,7 @@ struct FieldCapturePayloadTests {
         let dict = try json(FieldCapturePayload(specimen: s, device: Self.device))
 
         // Always present:
-        #expect(dict["schemaVersion"] as? Int == 1)
+        #expect(dict["schemaVersion"] as? Int == 2)
         #expect(dict["device"] as? [String: Any] != nil)
         #expect((dict["photos"] as? [Any])?.isEmpty == true)
 

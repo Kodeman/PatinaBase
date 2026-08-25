@@ -4,9 +4,13 @@
 //  N4 · Voice note — live transcribe. Hold to talk and the note transcribes on
 //  device in real time ("oak base, the warmer bouclé — rep is Dana"). "Attach
 //  note" saves transcript + audio to the specimen (source .voice); "Discard"
-//  drops the take. If the recogniser is unavailable (no mic permission, or the
-//  simulator), the sheet falls to a typed-note entry — the raw audio is always
-//  kept alongside the text when there is one.
+//  drops the take AND deletes its audio segments from the media directory. If
+//  the recogniser is unavailable (no mic permission, or the simulator), the
+//  sheet falls to a typed-note entry — the raw audio is always kept alongside
+//  the text when there is one. §15.4: when the RECOGNIZER is what is
+//  unavailable the note still records, the transcript pane carries the honest
+//  line instead of a promise of words, and the take falls to the typed editor
+//  when it ends. A note the cap ended says so rather than stopping silently.
 
 import SwiftUI
 import UIKit
@@ -27,6 +31,19 @@ struct VoiceNoteSheet: View {
     @State private var startedAt: Date?
     @State private var result: VoiceNoteResult?
     @State private var streamTask: Task<Void, Never>?
+    /// end() clears isRecording synchronously but assigns `result` from a Task,
+    /// so without this the primary re-enables in the gap and attach() labels a
+    /// genuine recording as hand-typed with no filename.
+    @State private var isFinishing = false
+    /// One gesture, one take. The cap clears isRecording mid-hold, so a gate on
+    /// isRecording would let a still-down finger begin a SECOND note.
+    @State private var gestureHeld = false
+    @State private var player = VoiceSegmentPlayer()
+    /// §15.4: the note is recording but nothing will transcribe it. Distinct
+    /// from manualFallback, which also covers "no microphone at all".
+    @State private var transcriptionUnavailable = false
+    /// The cap ended the take. Never a silent stop.
+    @State private var capNotice = false
 
     var body: some View {
         RecognitionSheetLayout {
@@ -41,8 +58,19 @@ struct VoiceNoteSheet: View {
             Spacer(minLength: 0)
         }
         .accessibilityIdentifier(CaptureScreenID.n4Voice.rawValue)
+        .onDisappear {
+            player.stop()
+            // SwiftUI does not call onEnded for a CANCELLED drag - a system edge
+            // swipe or the sheet's interactive-dismiss pan stealing the touch -
+            // and a latch left set means no later press can begin() at all.
+            gestureHeld = false
+        }
         .task {
             analytics.screen("N4.voice")
+            guard analytics.isFeatureEnabled("field-companion-voice") else {
+                manualFallback = true
+                return
+            }
             if authorized == nil {
                 let ok = await voice.requestAuthorization()
                 authorized = ok
@@ -58,16 +86,61 @@ struct VoiceNoteSheet: View {
             recordingStatus
             waveform
             transcriptCard
+            // The unavailable-recognizer rung already reads in the transcript
+            // pane; saying we could not make out the words on top of it would
+            // claim an attempt that never happened.
+            if hasAudio && transcript.isEmpty && !transcriptionUnavailable {
+                ladderLine("We couldn't make out the words — the audio is here.")
+            }
+            if capNotice { ladderLine(VoiceNoteCopy.capReached) }
+            if hasAudio { playbackControl }
             micButton
             RecognitionActionBar(
                 secondaryTitle: "Discard",
-                primaryTitle: "Attach note",
-                primaryEnabled: !transcript.isEmpty && !isRecording,
+                primaryTitle: transcript.isEmpty && hasAudio
+                    ? "Keep the recording"
+                    : "Attach note",
+                primaryEnabled: (!transcript.isEmpty || hasAudio) && !isRecording && !isFinishing,
                 secondaryRole: .destructive,
                 onSecondary: { discard() },
                 onPrimary: { attach() }
             )
         }
+    }
+
+    private var hasAudio: Bool { !(result?.audioSegments.isEmpty ?? true) }
+
+    /// One rung of §15.4's ladder, styled once so the four sites cannot drift.
+    private func ladderLine(_ text: String) -> some View {
+        Text(text)
+            .font(CaptureType.footnote)
+            .foregroundStyle(CaptureColor.inkSoft)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// §15.4 — what the transcript pane says when nothing is transcribing it.
+    /// "Your words appear here as you speak…" would be a promise the recorder
+    /// cannot keep on that rung.
+    private var transcriptPlaceholder: String {
+        transcriptionUnavailable
+            ? VoiceNoteCopy.recognitionUnavailable
+            : "Your words appear here as you speak…"
+    }
+
+    private var playbackControl: some View {
+        Button {
+            if player.isPlaying {
+                player.stop()
+            } else {
+                player.play((result?.audioSegments ?? []).map { store.mediaURL(for: $0) })
+            }
+        } label: {
+            Label(player.isPlaying ? "Stop" : "Play it back",
+                  systemImage: player.isPlaying ? "stop.fill" : "play.fill")
+                .font(CaptureType.callout)
+                .foregroundStyle(CaptureColor.verdigris)
+        }
+        .buttonStyle(.plain)
     }
 
     private var recordingStatus: some View {
@@ -104,7 +177,7 @@ struct VoiceNoteSheet: View {
 
     private var transcriptCard: some View {
         RecognitionCard {
-            Text(transcript.isEmpty ? "Your words appear here as you speak…" : "“\(transcript)”")
+            Text(transcript.isEmpty ? transcriptPlaceholder : "“\(transcript)”")
                 .font(CaptureType.body)
                 .foregroundStyle(transcript.isEmpty ? CaptureColor.inkSoft : CaptureColor.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -122,8 +195,8 @@ struct VoiceNoteSheet: View {
             .animation(.spring(duration: 0.2), value: isRecording)
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { _ in if !isRecording { begin() } }
-                    .onEnded { _ in end() }
+                    .onChanged { _ in if !gestureHeld { gestureHeld = true; begin() } }
+                    .onEnded { _ in gestureHeld = false; end() }
             )
             .accessibilityLabel("Hold to talk")
             .accessibilityAddTraits(.startsMediaSession)
@@ -137,7 +210,11 @@ struct VoiceNoteSheet: View {
                 Text("Type the note")
                     .font(CaptureType.eyebrow).textCase(.uppercase)
                     .foregroundStyle(CaptureColor.inkSoft)
-                Text("Voice capture isn't available here. Type the context and rep details.")
+                // Two doors lead here and only one of them is "no microphone":
+                // the recognition-error path (begin()'s catch) arrives with a
+                // real recording already in hand, and the single old line
+                // called that take a missing capability.
+                Text(manualEntryLine)
                     .font(CaptureType.footnote)
                     .foregroundStyle(CaptureColor.inkSoft)
                 TextEditor(text: $transcript)
@@ -146,10 +223,21 @@ struct VoiceNoteSheet: View {
                     .frame(minHeight: 120)
                     .scrollContentBackground(.hidden)
             }
+            // The live recorder's honesty ladder, on the path that actually
+            // needs it: audio with no words is a note worth keeping, and
+            // without the three lines below an audio-only take on the
+            // recognition-error route could not be attached at all.
+            if hasAudio && typedTranscript.isEmpty && !transcriptionUnavailable {
+                ladderLine("We couldn't make out the words — the audio is here.")
+            }
+            if capNotice { ladderLine(VoiceNoteCopy.capReached) }
+            if hasAudio { playbackControl }
             RecognitionActionBar(
                 secondaryTitle: "Discard",
-                primaryTitle: "Attach note",
-                primaryEnabled: !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                primaryTitle: typedTranscript.isEmpty && hasAudio
+                    ? "Keep the recording"
+                    : "Attach note",
+                primaryEnabled: (!typedTranscript.isEmpty || hasAudio) && !isFinishing,
                 secondaryRole: .destructive,
                 onSecondary: { discard() },
                 onPrimary: { attach() }
@@ -157,12 +245,44 @@ struct VoiceNoteSheet: View {
         }
     }
 
+    private var typedTranscript: String {
+        transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// THREE doors lead to this editor and they mean different things: the
+    /// recognizer was unavailable while the note recorded anyway (§15.4), the
+    /// recognition-error path which arrives holding a real recording, and an
+    /// actual absence of voice capture.
+    private var manualEntryLine: String {
+        if transcriptionUnavailable { return VoiceNoteCopy.recognitionUnavailable }
+        return hasAudio
+            ? "The words didn't come through. Type them here — the recording stays with the note."
+            : "Voice capture isn't available here. Type the context and rep details."
+    }
+
     // MARK: - Recording lifecycle
 
     private func begin() {
-        guard authorized != false else { manualFallback = true; return }
+        guard authorized != false else {
+            manualFallback = true
+            gestureHeld = false
+            return
+        }
+        // Without these, the instant take 2 starts the sheet prints the ladder
+        // line and offers Play over a live recording - take 1's segments are
+        // still in `result` - and Play would seize the session the recorder
+        // holds as .record.
+        result = nil
+        player.stop()
+        // Cleared BEFORE the start, so a throw on this take cannot leave the
+        // previous take's ladder rung showing on the manual sheet.
+        transcriptionUnavailable = false
+        capNotice = false
         do {
             let stream = try voice.startLiveTranscription()
+            // The note IS recording; only the words are not coming. Asked after
+            // the start, because that is when the recorder resolves it.
+            transcriptionUnavailable = !voice.isTranscribing
             isRecording = true
             startedAt = Date()
             transcript = ""
@@ -170,40 +290,109 @@ struct VoiceNoteSheet: View {
             streamTask = Task { @MainActor in
                 do {
                     for try await chunk in stream { transcript = chunk.text }
+                    // The recording cap ends the note by finishing the stream
+                    // NORMALLY, so the catch below never runs and the sheet
+                    // would keep reading RECORDING over a dead mic. On the
+                    // release path end() has already cleared isRecording and
+                    // this second call guards itself out.
+                    end()
                 } catch {
                     manualFallback = true
                     isRecording = false
+                    isFinishing = true
+                    // The recorder tore its own note down: endAbandonedNote()
+                    // cleared noteIsActive and has ALREADY emitted voice.finish
+                    // reason:"error". The segments it published still need a
+                    // referrer, or a real recording sits in the media dir
+                    // unreferenced and the note ships labelled as typed - so
+                    // finish() is still called, and takes its `guard wasActive`
+                    // early return: no second emission, no second deactivation
+                    // of the shared session, and the accumulated segment names
+                    // come back regardless.
+                    Task {
+                        result = await voice.finish()
+                        isFinishing = false
+                    }
                 }
             }
         } catch {
             manualFallback = true
             isRecording = false
+            gestureHeld = false
         }
     }
 
     private func end() {
         guard isRecording else { return }
         isRecording = false
+        isFinishing = true
         streamTask?.cancel()
         Task {
             let r = await voice.finish()
             result = r
             if !r.transcript.isEmpty { transcript = r.transcript }
+            capNotice = r.endedAtCap
+            // §15.4: nothing transcribed this take, so the take is done and the
+            // typed editor is where she finishes it — with the recording
+            // attached, playable, and preserved by VoiceAttachPolicy.
+            if transcriptionUnavailable { manualFallback = true }
+            isFinishing = false
         }
     }
 
     private func discard() {
+        player.stop()
         streamTask?.cancel()
-        if isRecording { Task { _ = await voice.finish() } }
-        coordinator?.dismissSheet()
+        Task {
+            // finish() is what returns the segment list, and it is safe to
+            // call SPECULATIVELY: its `guard wasActive` early return means a
+            // note the cap already ended, or one that never started, is not
+            // torn down twice, does not re-emit voice.finish under a second
+            // falsely-labelled reason, and does not deactivate the shared
+            // session again - while still handing back audioSegments, which is
+            // reset only by the next startLiveTranscription().
+            // Discard therefore always ASKS instead of reading `result`,
+            // which is nil for the whole window between end() and its Task
+            // resuming - and cancel() above gives that Task the main actor
+            // first, so the still-recording branch could never see it either.
+            let abandoned = await voice.finish()
+            for name in abandoned.audioSegments {
+                try? FileManager.default.removeItem(at: store.mediaURL(for: name))
+            }
+            await MainActor.run { coordinator?.dismissSheet() }
+        }
     }
 
     private func attach() {
         guard let specimen = currentSpecimen() else { return }
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         specimen.voiceTranscript = text
-        specimen.voiceAudioFilename = result?.audioFilename
-        specimen.voiceDurationSeconds = result?.durationSeconds
+        // This sheet is re-openable on a specimen that ALREADY carries audio —
+        // with the flag off it opens straight into the typed editor — and the
+        // take in hand is then nil. Writing it through unconditionally, as this
+        // did, nulled voiceAudioSegmentsRaw over a recording whose bytes are in
+        // Storage and whose remote-path stamps are only reachable BY those
+        // names: the next commit then wrote voice_audio_path = NULL and
+        // voice_audio_segments = '[]' over intact server audio. The rule lives
+        // in CaptureKit, tested: replace only on a take that published a
+        // segment; otherwise preserve every existing stamp and path.
+        let merged = VoiceAttachPolicy.merge(
+            existing: VoiceAttachment(audioFilename: specimen.voiceAudioFilename,
+                                      audioSegments: specimen.voiceAudioSegmentsRaw,
+                                      transcriptSource: specimen.voiceTranscriptSourceRaw,
+                                      durationSeconds: specimen.voiceDurationSeconds),
+            new: result)
+        specimen.voiceAudioFilename = merged.audioFilename
+        specimen.voiceAudioSegmentsRaw = merged.audioSegments
+        specimen.voiceTranscriptSourceRaw = merged.transcriptSource
+        specimen.voiceDurationSeconds = merged.durationSeconds
+        // The honesty repair's own metric: a real recording committing with no
+        // words. A take with an empty transcript is only a recording at all
+        // when it published a segment — read the count rather than assume it.
+        if let result, result.transcript.isEmpty, !result.audioSegments.isEmpty {
+            analytics.event("voice.empty_transcript", ["had_audio": "true"])
+        }
+        specimen.captureKindRaw = "note"
         specimen.setValue(text, for: .note, source: .voice)
         try? store.save()
         analytics.event("N4.attach", ["chars": String(text.count)])

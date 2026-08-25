@@ -62,8 +62,16 @@ end
 framework!(kit, project, 'CaptureKit')
 framework!(mocks, project, 'CaptureKitMocks')
 
+# Build-time secrets/config xcconfig (BuildSettings.xcconfig, committed;
+# #include?s a gitignored Secrets.xcconfig when present). This is what makes
+# POSTHOG_API_KEY survive an archive — see BuildSettings.xcconfig (FC-R14).
+build_settings_xcconfig_ref = project.new_file(
+  File.join(ROOT, 'Capture', 'App', 'Configuration', 'BuildSettings.xcconfig')
+)
+
 app.build_configurations.each do |c|
   common!(c)
+  c.base_configuration_reference = build_settings_xcconfig_ref
   s = c.build_settings
   s['PRODUCT_NAME'] = 'Capture'
   s['PRODUCT_BUNDLE_IDENTIFIER'] = 'cloud.patina.field'
@@ -75,6 +83,12 @@ app.build_configurations.each do |c|
   s['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
   s['CURRENT_PROJECT_VERSION'] = '1'
   s['MARKETING_VERSION'] = '0.1'
+  # POSTHOG_API_KEY itself is NOT set here: Xcode's GENERATE_INFOPLIST_FILE
+  # only auto-emits INFOPLIST_KEY_* for its own known/recognized Info.plist
+  # keys, not arbitrary custom ones. The build-time key instead reaches
+  # Info.plist via a literal `$(POSTHOG_API_KEY)` entry in the physical
+  # Capture/Info.plist (which GENERATE_INFOPLIST_FILE merges in), resolved
+  # from BuildSettings.xcconfig — see that file's header and FC-R14.
   s['INFOPLIST_KEY_CFBundleDisplayName'] = 'Patina Field'
   s['INFOPLIST_KEY_UILaunchScreen_Generation'] = 'YES'
   s['INFOPLIST_KEY_UIApplicationSceneManifest_Generation'] = 'YES'
@@ -84,8 +98,14 @@ app.build_configurations.each do |c|
     'Patina Field uses the camera to photograph products and read their labels, barcodes, and dimensions.'
   s['INFOPLIST_KEY_NSMicrophoneUsageDescription'] =
     'Used to record a quick voice note about a piece.'
+  # NOT "on-device": SpeechVoiceNoteService sets requiresOnDeviceRecognition
+  # from recognizer.supportsOnDeviceRecognition, so on an iPhone that cannot,
+  # the audio goes to Apple. The string has to be true on both paths — and
+  # forcing on-device instead would silently cost those iPhones transcription
+  # and make the wave's own `on_device` telemetry a constant.
   s['INFOPLIST_KEY_NSSpeechRecognitionUsageDescription'] =
-    'Transcribes your voice notes on-device.'
+    'Turns your voice notes into text. That happens on this iPhone where it can; ' \
+    'otherwise the recording is transcribed by Apple.'
   s['INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription'] =
     'Saves captures to your photo library.'
   s['INFOPLIST_KEY_NSPhotoLibraryUsageDescription'] =
@@ -123,7 +143,12 @@ app_group.new_file(File.join(ROOT, 'Capture', 'Info.plist'))
 app_group.new_file(File.join(ROOT, 'Capture', 'Capture.entitlements'))
 assets_ref = app_group.new_file(File.join(ROOT, 'Capture', 'Assets.xcassets'))
 icon_ref = app_group.new_file(File.join(ROOT, 'Capture', 'Resources', 'AppIcon.icon'))
-app.add_resources([assets_ref, icon_ref])
+# Required-reason API privacy manifest — App Store rejects an archive
+# without one once the app calls a "required reason" API (here: UserDefaults,
+# file-modification-date reads). Must ship in the Resources phase so it lands
+# at the top level of the app bundle.
+privacy_ref = app_group.new_file(File.join(ROOT, 'Capture', 'PrivacyInfo.xcprivacy'))
+app.add_resources([assets_ref, icon_ref, privacy_ref])
 
 # Unit tests (logic tests linking CaptureKit; no app host).
 tests = project.new_target(:unit_test_bundle, 'CaptureTests', :ios, DEPLOYMENT)

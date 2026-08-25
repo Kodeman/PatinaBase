@@ -174,6 +174,37 @@ final class ViewfinderModel {
         coordinator.navigate(to: .session)
     }
 
+    // MARK: Offline banner + reconnect drain (C1)
+
+    private var activeOwner: CaptureOwnerIdentity? {
+        CaptureOwnerIdentity(userID: session.userID, workspaceID: session.workspaceID)
+    }
+
+    /// The banner's copy is "No signal · saving on device" with queuedCount
+    /// presented as QUEUED, so it must be the outbox depth — the same source
+    /// LocalCaptureSyncService feeds to CaptureSyncAttributes.queued — not
+    /// sessionCount, which counts specimens in the current visit (:47, :133-137).
+    /// A designer with 12 already-synced captures and nothing queued must not
+    /// be told "12 queued".
+    ///
+    /// Mirrors LocalCaptureSyncService.scopedOutbox: the unscoped, device-wide
+    /// outbox is a safe fallback only in mock/local mode. With real sync active,
+    /// an unresolved owner (e.g. mid session-hydration) fails CLOSED — never
+    /// surface another owner's queued captures on a shared phone.
+    var outboxDepth: Int {
+        guard let owner = activeOwner else {
+            return AppConfiguration.runsRealServices ? 0 : store.outbox().count
+        }
+        return store.outbox(owner: owner).count
+    }
+
+    /// Regained connectivity never auto-drained before this; a day's captures
+    /// could sit in the outbox until she happened to open the tray.
+    func drainOnReconnect() async {
+        analytics.event("sync.reconnect_drain")
+        await sync.drain()
+    }
+
     // MARK: Work (W1 — designer/pro dashboard)
 
     func openWork() {
@@ -291,6 +322,16 @@ final class ViewfinderModel {
         Task { @MainActor in
             do {
                 try await sync.route(id, to: specimen.destination)
+                // The program's headline metric: whether a capture actually
+                // landed on a project (S1's persisted routing survives on
+                // `specimen.venue` by reference — the same object S1 mutated)
+                // or is committing roving.
+                if let venue = specimen.venue, venue.projectId != nil {
+                    analytics.event("capture.placed", ["basis": "manual",
+                                                        "has_room": String(venue.projectRoomId != nil)])
+                } else {
+                    analytics.event("capture.unplaced", [:])
+                }
                 coordinator.present(specimen.destination == .library
                     ? .savedTerminal(id)
                     : .inboxTerminal(id))
@@ -311,6 +352,16 @@ final class ViewfinderModel {
     func dismissCard() {
         cardSpecimen = nil
         CaptureHaptics.selection()
+    }
+
+    /// The C3 card's one tap to the only project picker in the app. S1 is
+    /// reachable from three places today and none of them is the capture path,
+    /// so a capture taken from the shutter could never inherit a project.
+    func placeFromCard() {
+        guard let id = cardSpecimen?.id else { return }
+        analytics.event("capture.place_tapped", ["surface": "c3"])
+        UserDefaults.standard.set("card", forKey: "capture.routingSource")
+        coordinator.present(.assignVenue(id))
     }
 
     // MARK: Plumbing
@@ -337,12 +388,7 @@ final class ViewfinderModel {
         draft.venue = venueStamp
         draft.category = .unknown
         draft.destination = context.routing.destination
-        var venue = draft.venue ?? VenueStamp()
-        venue.projectId = context.routing.projectID
-        venue.projectName = context.routing.projectName
-        venue.room = context.routing.room
-        venue.shelf = context.routing.shelf
-        draft.venue = venue
+        draft.venue = context.routing.stamped(onto: draft.venue ?? VenueStamp())
         return draft
     }
 

@@ -210,3 +210,123 @@ blitz-iphone call must also pass the same explicit `FIELD_DEVICE_UDID`. The
 exported JSON hashes the BGRA and HEIC bytes; compare those values after copying
 before using the fixture as Linux decoder evidence — at capture resolution the
 BGRA file is ~11 MB, so a truncated transfer is a real failure mode.
+
+## Distribution (Wave 0.5, FC-R14)
+
+Archive + export for TestFlight, standing up the path that never existed
+before (no `Fastfile`, no CI archive step, no ASC app record — plan
+`docs/design/field-companion/field-companion-plan.md` §1.5).
+
+```bash
+cd apps/mobile/Capture
+scripts/archive-testflight.sh                       # regenerate → archive → export
+scripts/archive-testflight.sh --skip-export          # archive only
+scripts/archive-testflight.sh --build-number 7       # override CURRENT_PROJECT_VERSION
+scripts/archive-testflight.sh --app-id <ASC_APP_ID>  # also upload via `asc builds upload`
+```
+
+Signing is automatic (`DEVELOPMENT_TEAM = VP22LXHT7L`, `CODE_SIGN_STYLE =
+Automatic`, hardcoded in `generate_project.rb`) and reuses the already-issued
+"Apple Distribution: Middle West Studio LLC (VP22LXHT7L)" certificate — the
+`archive` action itself signs with whatever Development identity Automatic
+signing resolves locally (this is normal Xcode behavior, not a bug: the
+intermediate archive is always Development-signed), and `-exportArchive`
+re-signs with the Distribution identity for the export options' `teamID`.
+Verify with `codesign -dvv Payload/Capture.app` on the exported `.ipa` —
+`Authority=Apple Distribution: Middle West Studio LLC (VP22LXHT7L)` and
+`TeamIdentifier=VP22LXHT7L`.
+
+Export options: `scripts/ExportOptions.plist` (`method: app-store-connect`,
+`teamID: VP22LXHT7L`, automatic signing). DerivedData and archive/export
+output live under this checkout's own `.build/` (gitignored, per-worktree —
+two worktrees archiving concurrently never collide).
+
+An App Store Connect **Admin**-role API key lets `-allowProvisioningUpdates`
+register the `cloud.patina.field` App ID and a distribution provisioning
+profile non-interactively, reusing the certificate above rather than minting
+a new one. Pass it via env vars (all three or none):
+
+```bash
+export ASC_KEY_ID=<key id>
+export ASC_ISSUER_ID=<issuer id>
+export ASC_PRIVATE_KEY_PATH=<path to .p8>
+```
+
+### Build-time PostHog key (FC-R14)
+
+`AppConfiguration.postHogAPIKey` reads `Info.plist`'s `POSTHOG_API_KEY`
+first — a **build-time** value, sourced from
+`Capture/App/Configuration/BuildSettings.xcconfig` (committed) and its
+optional `#include? "Secrets.xcconfig"`. This is the only resolution path
+that survives an archive: the `POSTHOG_API_KEY` **environment variable**
+fallback (still checked, lower priority) is only ever injected by an Xcode
+scheme's **Run** action — never a device install, TestFlight, or CI archive
+— so a key set only that way makes the telemetry gate pass on one Mac and
+ships silently blind in every real build.
+
+To set a real key for local archiving:
+
+```bash
+cp Capture/App/Configuration/Secrets.xcconfig.example \
+   Capture/App/Configuration/Secrets.xcconfig
+# edit POSTHOG_API_KEY = phc_...   (gitignored; never commit the real value)
+```
+
+Without `Secrets.xcconfig`, `POSTHOG_API_KEY` resolves to an empty string in
+`BuildSettings.xcconfig`'s default and analytics stays a no-op —
+fail-closed, not a build failure.
+
+### App Store Connect app record — BLOCKED on Kody
+
+There is **no App Store Connect app record for `cloud.patina.field`**
+(confirmed via `asc apps list --bundle-id cloud.patina.field` → zero
+results; the only registered app is `cloud.patina.app`, id `6762007888`).
+Creating one requires either the App Store Connect web UI or an interactive
+Apple ID sign-in (the `asc-app-create-ui` skill's iris/web-session path) —
+this program does not create Apple/ASC credentials or sign in
+interactively, so archive + export are as far as it goes without Kody.
+
+1. **Kody**: App Store Connect → Apps → **+** → **New App** — Platform iOS,
+   Name "Patina Field" (or similar available name), Primary language
+   en-US, Bundle ID `cloud.patina.field` (register it first in the
+   Developer portal if the picker doesn't offer it — `-allowProvisioningUpdates`
+   already registered the App ID during this program's own archive runs),
+   SKU any unique string (e.g. `PatinaField`). Alternatively, run the
+   `asc-app-create-ui` skill interactively (it drives Blitz's Apple ID web
+   session — not something this program does on its own).
+2. Note the numeric **App ID** App Store Connect shows after creation.
+3. Run: `scripts/archive-testflight.sh --app-id <APP_ID>` (or, with an
+   existing export, `asc builds upload --app <APP_ID> --ipa <path-to-ipa>
+   --wait`). Kody can also run interactive ASC steps directly in this
+   session with `! <command>`.
+4. First build on a new app also prompts App Store Connect for **export
+   compliance** (uses standard encryption — HTTPS only, no custom crypto)
+   and, before an actual TestFlight *release* (not just an upload), the
+   **privacy nutrition labels** (`asc-privacy-nutrition-labels` skill) —
+   neither is required to complete an upload itself.
+
+### Privacy manifest
+
+`Capture/PrivacyInfo.xcprivacy` declares the required-reason APIs the app
+actually calls: `NSPrivacyAccessedAPICategoryUserDefaults` (reason `CA92.1`
+— own app / app-group data only, e.g. `UserDefaults(suiteName:
+AppConfiguration.appGroupID)` in `SupabaseSessionService`) and
+`NSPrivacyAccessedAPICategoryFileTimestamp` (reason `3B52.1` —
+`contentModificationDateKey` reads in `SiteScanBundleHome`, and in
+`CaptureStore.receiptedMediaFiles()`, which orders the media-retention sweep
+oldest-first). It also declares what the app collects when a real PostHog key
+is configured: `NSPrivacyCollectedDataTypeUserID` (the Supabase user id passed
+to `identify`, linked, analytics + app functionality — feature flags are keyed
+on it) and `NSPrivacyCollectedDataTypeProductInteraction` (screen and event
+calls, linked because `identify` ties them to that id). Neither is used for
+tracking. This is the manifest, and is separate from the App Store nutrition
+labels above. `NSPrivacyTracking`
+is `false` with no tracking domains. Re-audit this file if new
+required-reason API usage (disk space, system boot time, active keyboards)
+is added — App Store rejects an archive whose actual API usage isn't
+covered. The four just-in-time usage strings App Store review expects
+(`NSCameraUsageDescription`, `NSMicrophoneUsageDescription`,
+`NSSpeechRecognitionUsageDescription`,
+`NSLocationWhenInUseUsageDescription`) were already set as
+`INFOPLIST_KEY_*` build settings in `generate_project.rb` — verified
+present in the exported `.ipa`'s `Info.plist`.

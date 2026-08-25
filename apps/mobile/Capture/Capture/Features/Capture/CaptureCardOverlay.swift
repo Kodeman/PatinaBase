@@ -16,6 +16,7 @@ struct CaptureCardOverlay: View {
     let onSave: () -> Void
     let onAddDetail: () -> Void
     let onDismiss: () -> Void
+    let onPlace: () -> Void
 
     @State private var dragOffset: CGFloat = 0
 
@@ -61,6 +62,22 @@ struct CaptureCardOverlay: View {
             guessRow(label: "Material",
                      value: specimen.materialNote ?? "—",
                      source: specimen.provenance(for: .material) ?? .smartGuess)
+
+            Button(action: onPlace) {
+                HStack(spacing: 6) {
+                    Text(placementLabel)
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(specimen.venue?.projectId == nil
+                                         ? CaptureColor.terracotta : CaptureColor.ink)
+                    Image(systemName: "chevron.down")
+                        .font(CaptureType.monoSmall)
+                        .foregroundStyle(CaptureColor.line2)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("card.placement")
 
             HStack(spacing: 12) {
                 Button(action: onAddDetail) {
@@ -108,5 +125,13 @@ struct CaptureCardOverlay: View {
 
     private var categoryLabel: String {
         specimen.category == .unknown ? "—" : specimen.category.rawValue.capitalized
+    }
+
+    private var placementLabel: String {
+        guard let venue = specimen.venue, let name = venue.projectName, !name.isEmpty else {
+            return "Not placed — tap to place"
+        }
+        guard let room = venue.room, !room.isEmpty else { return name }
+        return "\(name) · \(room)"
     }
 }

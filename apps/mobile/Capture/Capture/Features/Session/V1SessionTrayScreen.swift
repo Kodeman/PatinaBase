@@ -17,6 +17,8 @@ struct V1SessionTrayScreen: View {
     let coordinator: CaptureCoordinator
 
     @State private var items: [Specimen] = []
+    @State private var player = VoiceSegmentPlayer()
+    @State private var playingSpecimenID: UUID?
     private let sessionContext = CaptureSessionContextStore.shared
 
     private var groups: [(venue: String, items: [Specimen])] {
@@ -65,6 +67,7 @@ struct V1SessionTrayScreen: View {
         }
         .accessibilityIdentifier(CaptureScreenID.v1SessionTray.rawValue)
         .onAppear(perform: reload)
+        .onDisappear { player.stop() }
     }
 
     private func venueSection(_ venue: String, _ specimens: [Specimen]) -> some View {
@@ -93,10 +96,11 @@ struct V1SessionTrayScreen: View {
     }
 
     private func row(_ specimen: Specimen) -> some View {
-        Button {
-            coordinator.navigate(to: .specimen(specimen.id))
-        } label: {
-            HStack(spacing: 12) {
+        let playable = playableSegments(specimen)
+        return HStack(spacing: 12) {
+            Button {
+                coordinator.navigate(to: .specimen(specimen.id))
+            } label: {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(specimen.title ?? "Untitled capture")
                         .font(CaptureType.bodyEmph)
@@ -105,16 +109,75 @@ struct V1SessionTrayScreen: View {
                         .font(CaptureType.monoSmall)
                         .foregroundStyle(CaptureColor.inkSoft)
                 }
-                Spacer()
-                RouteStatusChip(kind: RouteFormat.status(for: specimen))
-                Image(systemName: "chevron.right")
-                    .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.line2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            if !playable.isEmpty {
+                playButton(specimen.id, playable)
+            }
+
+            // The play control has to sit OUTSIDE a navigation button to receive
+            // its own touches, which splits the row in two - and the chevron is
+            // the only thing on it that says "this row navigates", so the
+            // trailing block gets its own button rather than going inert.
+            Button {
+                coordinator.navigate(to: .specimen(specimen.id))
+            } label: {
+                HStack(spacing: 12) {
+                    RouteStatusChip(kind: RouteFormat.status(for: specimen))
+                    Image(systemName: "chevron.right")
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.line2)
+                }
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open capture")
+        }
+    }
+
+    /// The segments of this note whose bytes are still on THIS phone.
+    /// `voiceAudioSegmentsRaw` outlives them: once a capture is receipted the
+    /// sync service deletes the local files and leaves the array standing, and
+    /// VoiceSegmentPlayer skips an unreadable file in silence — so a control
+    /// gated on the array alone offered Play and then played nothing, with no
+    /// message. Playing the remote object instead is wave 4 (portal playback);
+    /// until then the control is simply absent once the audio has left.
+    private func playableSegments(_ specimen: Specimen) -> [URL] {
+        (specimen.voiceAudioSegmentsRaw ?? []).compactMap { name in
+            let url = store.mediaURL(for: name)
+            let values = try? url.resourceValues(
+                forKeys: [.isRegularFileKey, .fileSizeKey]
+            )
+            guard values?.isRegularFile == true,
+                  (values?.fileSize ?? 0) > 0 else { return nil }
+            return url
+        }
+    }
+
+    private func playButton(_ specimenID: UUID, _ segments: [URL]) -> some View {
+        let playing = player.isPlaying && playingSpecimenID == specimenID
+        return Button {
+            player.stop()
+            if playing {
+                playingSpecimenID = nil
+            } else {
+                playingSpecimenID = specimenID
+                player.play(segments)
+            }
+        } label: {
+            Image(systemName: playing ? "stop.fill" : "play.fill")
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.verdigris)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(CaptureColor.paper2))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(playing ? "Stop the voice note" : "Play the voice note")
     }
 
     private var footer: some View {
@@ -122,14 +185,24 @@ struct V1SessionTrayScreen: View {
             RouteActionButton("Review each", systemImage: "rectangle.stack", kind: .secondary) {
                 coordinator.present(.cullDeck)
             }
-            RouteActionButton("Route all \(items.count)", systemImage: "arrow.up.forward", kind: .primary) {
-                if let first = items.first { coordinator.present(.assignVenue(first.id)) }
+            // "Route all N" presented the picker for exactly ONE record. Until the
+            // visit spine lands, say what the button actually does: it places the
+            // next unplaced capture, one at a time.
+            RouteActionButton(placeButtonTitle, systemImage: "arrow.up.forward", kind: .primary) {
+                if let next = items.first(where: { $0.venue?.projectId == nil }) ?? items.first {
+                    coordinator.present(.assignVenue(next.id))
+                }
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
         .padding(.bottom, 8)
         .background(.ultraThinMaterial)
+    }
+
+    private var placeButtonTitle: String {
+        let unplaced = items.filter { $0.venue?.projectId == nil }.count
+        return unplaced > 0 ? "Place \(unplaced)" : "Review placement"
     }
 
     private var emptyState: some View {

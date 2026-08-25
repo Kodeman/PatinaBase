@@ -76,9 +76,11 @@ yet on prod.
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 00494–00497 | Phase 2 (Cloudflare/media backfill program — this workstream and its siblings). **00494/00495 now DRAWN** — see below. 00496/00497 remain free for this lane.                                                                                                                                                                                                                                                                                                                                                         |
 | 00498–00502 | Rendered Room v2 (scan pipeline) — **confirmed by that lane** as this program's _future_ draws, purely additive to its already-consumed 00489–00492. Those four are **not** renumbered into this band. **00498–00501 are now DRAWN; 00502 is the band's last free number** — see below.                                                                                                                                                                                                                                |
-| ~~00503–00509~~ 00514–00520 | Phase 3 (capture enrichment). The original 00503–00509 reservation is **superseded** — by the time C-A1 (execution ledger + outbox + atomic claim + result-recording) landed, the file-numbering head had advanced past that band (00510–00513 consumed by the post-00483 hotfix and the SD-hardening tranche below), so Phase 3 re-drew above the new head per discipline rule 2. **00514/00515 now DRAWN** — see below. 00516–00520 remain free for the rest of Phase 3 (dispatcher/reconciler cron, any further RPCs).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ~~00503–00509~~ 00514–00520 | Phase 3 (capture enrichment). The original 00503–00509 reservation is **superseded** — by the time C-A1 (execution ledger + outbox + atomic claim + result-recording) landed, the file-numbering head had advanced past that band (00510–00513 consumed by the post-00483 hotfix and the SD-hardening tranche below), so Phase 3 re-drew above the new head per discipline rule 2. **00514/00515/00516 now DRAWN** — see below. 00517–00520 remain free for the rest of Phase 3 (dispatcher/reconciler cron, any further RPCs).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 00510       | **TAKEN** — `00510_post_00483_grant_and_scope_repairs.sql` (branch `fix/post-00483-grant-gaps`, 2026-08-18). Post-00483 hotfix: project-documents storage policy caller-binding, `assignment_scope` derivation in `engage_trade_scope` / `apply_scope_change`, anon write-grant narrowing on four public tables. Numbered ABOVE the three bands above deliberately so it shifts none of them; the 00494–00509 gap is intentional and stays reserved. **Applied to prod 2026-08-19** (surgical single-migration push). |
 | 00511–00513 | **TAKEN** — the SD-hardening (canonical studio authority) tranche. Renumbered off its provisional 00487/00488/00489 after Phase 1 landed and 00489–00493/00498–00499/00510 were consumed. **SPLIT 2026-08-19 (Kody):** 00511+00513 land on `followon/sd-hardening-v3`; **00512 is parked** on `followon/sd-caller-hardening-00512` (reserved-parked, not landing). The 00512 gap in the applied sequence is intentional — **00513 is NOT renumbered down.** Scope register: `docs/follow-ups/sd-hardening-w7-followon.md`; parked charter: `docs/follow-ups/sd-caller-hardening-00512-followon.md`. NOT applied to staging or prod. |
+| 00521       | **TAKEN, recorded retroactively** — `00521_svc_media_shape_reconciliation.sql` (branch `feat/svc-media-shape-reconcile`, `ca2b0641b`, 2026-08-24 15:05, pushed to `origin`). Unfreezes the media deploy against prod's Prisma-shaped `svc_media`. This row was added by the Field Companion census: the lane landed the number without an accompanying reservation edit (discipline rule 5), and the next lane's census failed because of it. |
+| 00530–00535 | Field Companion (`docs/design/field-companion/`). **Confirmed clear 2026-08-24 by both live lanes** — cloudflare-phases Phase 2 stays at or below `00529`, and Phase 3 holds `00514–00520`. **`00530` MINTED 2026-08-24 (wave 1); `00531–00535` remain a symbolic reservation until Kody approves the rest of the build**, and each address is claimed at that file's landing after re-checking this file AND `supabase migration list` against Strata (rules 1–2, and the file-based push invariant in `docs/ops/strata-staging.md`). Six scheduled migrations: the W1 routing migration (wave 1), the visit/suggestion migration (wave 3), the margin migration + the time-entry migration + the punch back-reference migration (wave 4), and wave 6A's server-transcript migration. Wave 6B's `field_note_drafts` migration draws its number at its own landing, OUTSIDE this band, because 6B is unscheduled. |
 
 ### Drawn from 00511–00513 (SD-hardening tranche)
 
@@ -100,9 +102,9 @@ which keeps its number.
 
 | Number | File                                     | Landed state                                                    |
 | ------ | ---------------------------------------- | ---------------------------------------------------------------- |
-| 00514  | `00514_capture_enrichment_ledger.sql`    | branch `feat/capture-enrichment-ledger`; local replay only, NOT applied to staging or prod |
-| 00515  | `00515_capture_enrichment_rpcs.sql`      | branch `feat/capture-enrichment-ledger`; local replay only, NOT applied to staging or prod |
-| 00516  | `00516_capture_producer_idempotency.sql` | branch `feat/capture-producer-idempotency` (C-A2); local replay only, NOT applied to staging or prod |
+| 00514  | `00514_capture_enrichment_ledger.sql`    | branch `feat/capture-enrichment-ledger`; **APPLIED TO PROD 2026-08-25 (~09:30Z) by the Phase 3 lane**, together with 00515 and 00516 — corrected 2026-08-25, this row previously read "local replay only, NOT applied to staging or prod", which was wrong for prod (direct Strata ledger read). **Staging still owes 00514** |
+| 00515  | `00515_capture_enrichment_rpcs.sql`      | branch `feat/capture-enrichment-ledger`; **APPLIED TO PROD 2026-08-25 (~09:30Z) by the Phase 3 lane**, together with 00514 and 00516 — corrected 2026-08-25, this row previously read "local replay only, NOT applied to staging or prod", which was wrong for prod (direct Strata ledger read). **Staging still owes 00515** |
+| 00516  | `00516_capture_producer_idempotency.sql` | **MERGED to `main` (`db2128934`, 2026-08-24)**; **APPLIED TO PROD 2026-08-25 (~09:30Z) by the Phase 3 lane** — corrected 2026-08-25, this row previously read "NOT applied to staging or prod". Staging state unchanged by that apply — **staging still owes 00514–00516**. **`CREATE OR REPLACE FUNCTION commit_field_capture` from its 00235 body plus a `PERFORM public.enqueue_capture_enrichment_for_producer(...)` call** — the SECURITY DEFINER, ownership-checking wrapper 00516 itself creates. ⚠ **Corrected 2026-08-24:** this row previously read "plus an `enqueue_capture_enrichment(...)` call, and `GRANT EXECUTE ON enqueue_capture_enrichment TO authenticated`". That grant is exactly the cross-tenant hole 00516's own adversarial review removed; the shipped 00516 REVOKEs `authenticated` from the primitive and asserts the posture in a `DO` block. Also adds `proposal_captures.client_capture_id`. ⚠ Shared object — see the Field Companion band below |
 
 00514 adds `public.capture_enrichment_runs` (the orthogonal execution ledger
 for AI capture enrichment — target type/id, content revision, status,
@@ -124,20 +126,61 @@ discriminated outcome — `claimed` / `ignore_duplicate` / `ignore_stale` /
 suggestions/status; never mutates `proposal_captures`; may prefill an
 allowlisted, currently-empty TEXT column on `field_captures` but never
 overwrites a non-empty one — the never-overwrite rule enforced in SQL).
-
 00516 (C-A2) wires `enqueue_capture_enrichment` into the two capture
 producers: extends `commit_field_capture` (00235, CREATE OR REPLACE, body
-otherwise unchanged) with one added enqueue call, widens
-`enqueue_capture_enrichment`'s grant to `authenticated` (needed because
+otherwise unchanged) with one added enqueue call, adds the SECURITY DEFINER,
+ownership-checking wrapper `enqueue_capture_enrichment_for_producer` and
+grants EXECUTE on **that** to `authenticated` (needed because
 commit_field_capture is SECURITY INVOKER — a nested DEFINER call does not
-inherit the callee's owner privileges), adds `proposal_captures.client_capture_id`
+inherit the callee's owner privileges). ⚠ **Corrected 2026-08-24 during the
+Field Companion merge:** this paragraph previously said 00516 widens
+`enqueue_capture_enrichment`'s own grant to `authenticated`. That grant is
+exactly the cross-tenant hole 00516's adversarial review removed — the
+shipped 00516 REVOKEs `authenticated` from the primitive. Also adds `proposal_captures.client_capture_id`
 (nullable UUID, unique index) for backfill-free rollout onto the existing
 table, and adds a new `commit_proposal_capture` SECURITY DEFINER RPC
 (products + product_styles + proposal_captures in one transaction, upsert-
 on-conflict, enqueues enrichment) as the single write path for the Chrome
-extension and the designer-portal URL-paste flow. 00517–00520 remain free
-for the rest of Phase 3 (pg_cron outbox reconciler, any additional RPCs the
-Cloudflare Queue consumer needs).
+extension and the designer-portal URL-paste flow.
+
+00517–00520 remain free for the rest of Phase 3 (pg_cron outbox
+reconciler, any additional RPCs the Cloudflare Queue consumer needs).
+
+### Drawn from 00530–00535 (Field Companion)
+
+| Number | File | Landed state |
+| ------ | ---- | ------------ |
+| 00530  | `00530_field_capture_notes_and_routing.sql` | **DRAWN 2026-08-24** on branch `feat/field-companion-w1`; census re-run at landing (head `00521`, `0053*` clear on every ref). Local replay only — NOT applied to staging or prod. Its hard prerequisite is **satisfied on prod**: 00516 was applied there 2026-08-25 (~09:30Z) by the Phase 3 lane (lineage 00235 → 00516 → 00530). Staging still owes 00514–00516, so a staging push of 00530 remains blocked until 00516 lands there |
+| 00531  | `00531_grant_uuid_generate_v5_authenticated.sql` (uuid_generate_v5 grant hotfix) | **DRAWN from this band 2026-08-25** on branch `hotfix/uuid-generate-v5-grant`. Recorded here so the Field Companion waves draw from `00532–00535` and no lane re-uses `00531`. ⚠ **Filename corrected 2026-08-25** — this row previously named the file `00531_uuid_generate_v5_grant.sql`, which is not the file on that branch |
+
+`00530` is minted and `00531` is drawn (the `uuid_generate_v5` grant hotfix,
+branch `hotfix/uuid-generate-v5-grant`); `00532–00535` remain reserved
+symbolically so the two neighbouring lanes can plan around them. Every address is claimed at the
+landing of the file that needs it, after re-checking this file and
+`supabase migration list`.
+
+The wave-1 migration adds the note/audio lane to `field_captures`
+(`capture_kind`, `voice_audio_segments`, `voice_audio_purged_at`,
+`audio_retention`, `transcript_source`, `note_setting`), the provenance GIN
+index carried unbuilt since R112/R113, restates all five 00233 policies
+`TO authenticated` (they default to PUBLIC today), and replaces
+`commit_field_capture` so its **inbox** branch persists
+`project_id`/`project_room_id`/`shelf` — today only the library branch does
+(`00235:205-217` vs `:255-264`), so every note-shaped capture arrives with no
+project column. It introduces **no new `status` value**:
+`field_captures_org_inbox_select` keys on `status = 'inbox'`
+(`00233:175-188`), so a terminal status would silently revoke studio read.
+
+⚠ **`commit_field_capture` is a SHARED object with two live authors.**
+Phase 3's branch-authored `00516` replaces the same function. Whichever
+migration lands second **silently reverts the other** — no error, no failed
+migration. Per ruling FC-R18 the wave-1 replacement is authored from
+**00516's** body, with 00516 a hard prerequisite named in the migration
+header. Lineage: **00235 → 00516 → 00530**. 00516 merged to `main` at
+`db2128934` on 2026-08-24, so 00530 was authored from that merged body — and
+00516 was **applied to prod on 2026-08-25 (~09:30Z)** by the Phase 3 lane, so
+the prerequisite is met there. Staging has not had it, so 00530's staging push
+is still gated on that.
 
 ### Drawn from 00494–00497
 

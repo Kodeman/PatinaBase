@@ -5677,8 +5677,10 @@ export type Database = {
         Row: {
           app_version: string | null
           artifacts_sha256: Json
+          audio_retention: string
           barcode_symbology: string | null
           barcode_value: string | null
+          capture_kind: string
           capture_schema_version: number
           captured_accuracy_m: number | null
           captured_at: string
@@ -5701,6 +5703,7 @@ export type Database = {
           material_tags: string[] | null
           materials: string[] | null
           media_manifest_url: string | null
+          note_setting: string | null
           notes: string | null
           organization_id: string | null
           os_version: string | null
@@ -5721,6 +5724,7 @@ export type Database = {
           synced_at: string | null
           thumbnail_url: string | null
           title: string | null
+          transcript_source: string | null
           updated_at: string
           upload_completed_at: string | null
           upload_error: string | null
@@ -5730,6 +5734,8 @@ export type Database = {
           venue_label: string | null
           venue_place_id: string | null
           voice_audio_path: string | null
+          voice_audio_purged_at: string | null
+          voice_audio_segments: Json
           voice_duration_seconds: number | null
           voice_partial_transcript: string | null
           voice_transcript: string | null
@@ -5737,8 +5743,10 @@ export type Database = {
         Insert: {
           app_version?: string | null
           artifacts_sha256?: Json
+          audio_retention?: string
           barcode_symbology?: string | null
           barcode_value?: string | null
+          capture_kind?: string
           capture_schema_version?: number
           captured_accuracy_m?: number | null
           captured_at?: string
@@ -5761,6 +5769,7 @@ export type Database = {
           material_tags?: string[] | null
           materials?: string[] | null
           media_manifest_url?: string | null
+          note_setting?: string | null
           notes?: string | null
           organization_id?: string | null
           os_version?: string | null
@@ -5781,6 +5790,7 @@ export type Database = {
           synced_at?: string | null
           thumbnail_url?: string | null
           title?: string | null
+          transcript_source?: string | null
           updated_at?: string
           upload_completed_at?: string | null
           upload_error?: string | null
@@ -5790,6 +5800,8 @@ export type Database = {
           venue_label?: string | null
           venue_place_id?: string | null
           voice_audio_path?: string | null
+          voice_audio_purged_at?: string | null
+          voice_audio_segments?: Json
           voice_duration_seconds?: number | null
           voice_partial_transcript?: string | null
           voice_transcript?: string | null
@@ -5797,8 +5809,10 @@ export type Database = {
         Update: {
           app_version?: string | null
           artifacts_sha256?: Json
+          audio_retention?: string
           barcode_symbology?: string | null
           barcode_value?: string | null
+          capture_kind?: string
           capture_schema_version?: number
           captured_accuracy_m?: number | null
           captured_at?: string
@@ -5821,6 +5835,7 @@ export type Database = {
           material_tags?: string[] | null
           materials?: string[] | null
           media_manifest_url?: string | null
+          note_setting?: string | null
           notes?: string | null
           organization_id?: string | null
           os_version?: string | null
@@ -5841,6 +5856,7 @@ export type Database = {
           synced_at?: string | null
           thumbnail_url?: string | null
           title?: string | null
+          transcript_source?: string | null
           updated_at?: string
           upload_completed_at?: string | null
           upload_error?: string | null
@@ -5850,6 +5866,8 @@ export type Database = {
           venue_label?: string | null
           venue_place_id?: string | null
           voice_audio_path?: string | null
+          voice_audio_purged_at?: string | null
+          voice_audio_segments?: Json
           voice_duration_seconds?: number | null
           voice_partial_transcript?: string | null
           voice_transcript?: string | null

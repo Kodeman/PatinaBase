@@ -92,6 +92,33 @@ describe('designer portal development CSP', () => {
     },
   );
 
+  it.each(['development', 'production'])(
+    'allows the SPLAT viewer to fetch capability-URL bytes from the scan-artifact R2 host in %s',
+    async (env) => {
+      // Proven live: an authenticated GET to api.patina.cloud/v1/scan/.../artifacts/splat
+      // returns 200 + a capability URL on this exact R2 S3 endpoint, but without
+      // this host in connect-src the in-page fetch() of the bytes is CSP-blocked
+      // (confirmed via a SecurityPolicyViolationEvent). This host is hardcoded
+      // directly into connect-src (not only derived from
+      // NEXT_PUBLIC_SCAN_R2_ENDPOINT) so the grant does not depend on that env
+      // var being wired into every deploying environment's wrangler.jsonc.
+      process.env.NODE_ENV = env;
+
+      const rules = await nextConfig.headers();
+      const csp = rules[0]?.headers.find(
+        (header) => header.key === 'Content-Security-Policy',
+      )?.value;
+
+      const connectSrc = csp
+        ?.split('; ')
+        .find((directive) => directive.startsWith('connect-src '));
+
+      expect(connectSrc).toContain(
+        'https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com',
+      );
+    },
+  );
+
   it('does not widen connect-src when NEXT_PUBLIC_EDGE_API_URL is unset', async () => {
     process.env.NODE_ENV = 'production';
     delete process.env.NEXT_PUBLIC_EDGE_API_URL;

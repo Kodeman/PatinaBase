@@ -109,9 +109,17 @@ const nextConfig = {
       // the stage hangs on its loading line. The grant is narrow — a data: URL
       // carries bytes the document already holds, so it is not an exfiltration
       // path and reaches no network origin.
+      // The scan-artifact R2 host is also hardcoded here (not left to the
+      // scanR2Origin env-derivation above alone): the edge API only MINTS the
+      // capability URL, the bytes are fetched straight from this exact R2 S3
+      // endpoint, and this grant must not depend on NEXT_PUBLIC_SCAN_R2_ENDPOINT
+      // being wired into every deploying environment's wrangler.jsonc — a
+      // missing var there would silently drop the grant and reintroduce the
+      // connect-src block. One exact origin, not a wildcard, for the same
+      // reason scanR2Origin above is narrow.
       isDevelopment
-        ? "connect-src 'self' data: http://localhost:* ws://localhost:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : '')
-        : "connect-src 'self' data: https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : ''),
+        ? "connect-src 'self' data: http://localhost:* ws://localhost:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : '')
+        : "connect-src 'self' data: https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : ''),
       "media-src 'self' blob:",
       // The MESH projection's GLTFLoader spins up DRACO/KTX2 transcoder workers
       // from blob: URLs (see public/three/). Without this they fall back to
