@@ -126,7 +126,8 @@ public enum FieldInHandPlacement {
         guard draft.isUnplaced, let context = state.context, context.kind != nil else { return false }
         draft.captureSessionID = context.visitID
         draft.venue = context.routing.stamped(onto: draft.venue ?? VenueStamp())
-        draft.destination = context.routing.destination
+        draft.destination = FieldDestinationPolicy.stamp(
+            remembered: context.routing.destination, for: state)
         draft.inherit(context)
         return true
     }

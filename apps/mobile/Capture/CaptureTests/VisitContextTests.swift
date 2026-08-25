@@ -541,4 +541,53 @@ struct VisitContextTests {
         #expect(FieldDestinationPolicy.recommendation(
             for: stale, hasUnconfirmedGuess: false) == .library)
     }
+
+    /// FC-R2: `case nil` is what encodes "a kindless context is not a visit."
+    /// `visitState(for:)` cannot build one, but the policy accepts ANY
+    /// `CaptureVisitState`, so the guard shape is pinned here directly.
+    @Test func aKindlessContextIsNotAVisitToThePolicy() {
+        let kindless = CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now)
+        #expect(kindless.kind == nil)
+        for state in [CaptureVisitState.active(kindless), .stale(kindless)] {
+            #expect(FieldDestinationPolicy.destination(for: state) == .undecided)
+            #expect(FieldDestinationPolicy.recommendation(
+                for: state, hasUnconfirmedGuess: false) == .inbox)
+            #expect(FieldDestinationPolicy.stamp(remembered: .library, for: state) == .undecided)
+        }
+    }
+
+    /// R138. Routing memory is day-agnostic and outlives the visit that wrote
+    /// it, so a remembered `.library` would be STAMPED onto a new draft and walk
+    /// straight around `saveFromCard`'s `== .undecided` test. `.library` is
+    /// honoured only while a sourcing visit is open; everything else memory
+    /// still carries, so no explicit choice is ever overridden.
+    @Test func aRememberedLibraryNeedsAnOpenSourcingVisit() {
+        let sourcing = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now, kind: .sourcing))
+        let site = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now, kind: .site))
+
+        // Row 1 — the sourcing visit ended; the kindless context still carries
+        // its `.library`. S3 must ask again rather than mint a product.
+        #expect(FieldDestinationPolicy.stamp(remembered: .library, for: .none) == .undecided)
+        // Row 2 — one deliberate Library tap inside a SITE visit wrote memory.
+        // Every later capture on that visit must NOT inherit it.
+        #expect(FieldDestinationPolicy.stamp(remembered: .library, for: site) == .inbox)
+        // Row 3 — her explicit `.inbox` on a market run is still her choice.
+        #expect(FieldDestinationPolicy.stamp(remembered: .inbox, for: sourcing) == .inbox)
+        // Row 4 — the case that earned it, unchanged.
+        #expect(FieldDestinationPolicy.stamp(remembered: .library, for: sourcing) == .library)
+    }
+
+    /// The constraint is one-directional: it only ever holds `.library` back.
+    /// Nothing else memory carries is touched, in or out of a visit.
+    @Test func theStampConstrainsOnlyLibrary() {
+        let site = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now, kind: .site))
+        for state in [CaptureVisitState.none, site] {
+            #expect(FieldDestinationPolicy.stamp(remembered: .inbox, for: state) == .inbox)
+            #expect(FieldDestinationPolicy.stamp(remembered: .undecided, for: state) == .undecided)
+        }
+    }
 }

@@ -145,4 +145,22 @@ public enum FieldDestinationPolicy {
         guard state.context?.kind == .sourcing, !hasUnconfirmedGuess else { return .inbox }
         return .library
     }
+
+    /// What a NEW draft is born carrying. Routing memory is day-agnostic and
+    /// deliberately survives a visit's death (`CaptureSessionContextPolicy
+    /// .resolve`), so a remembered `.library` can outlive the sourcing visit
+    /// that earned it — and one deliberate Library tap on S3 inside a SITE
+    /// visit writes it too. Either way the stamp would walk straight around
+    /// `saveFromCard`'s `== .undecided` test and auto-route to Library.
+    ///
+    /// Memory carries every destination except `.library`, which only an open
+    /// sourcing visit grants. This only ever constrains UPWARD: a remembered
+    /// `.inbox` inside a sourcing visit is her explicit choice and still wins,
+    /// because inside a visit the stamp IS the decision — S3 never appears to
+    /// ask her a second time.
+    public static func stamp(remembered: CaptureDestination,
+                             for state: CaptureVisitState) -> CaptureDestination {
+        guard remembered == .library else { return remembered }
+        return destination(for: state)
+    }
 }

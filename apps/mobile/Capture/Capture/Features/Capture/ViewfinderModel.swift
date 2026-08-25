@@ -384,6 +384,8 @@ final class ViewfinderModel {
                 return
             }
             specimen.destination = resolved
+            specimen.status = .ready
+            specimen.touch()
             try? store.save()
         }
         Task { @MainActor in
@@ -391,9 +393,14 @@ final class ViewfinderModel {
                 // The program's headline metric, read BEFORE the route: placement
                 // and sync are different axes (FC-R6), so whether this capture
                 // landed on a project does not wait on the server to answer.
+                // KNOWN, and owned by Task 31: when `route` throws we hand off to
+                // S3, whose `choose(_:)` emits its own event — so a failed route
+                // double-counts one capture. `has_room` is the ID lane (FC-R5):
+                // `project_rooms.id` is what reaches `field_captures
+                // .project_room_id`, and a typed room name can exist with no id.
                 analytics.event(specimen.isUnplaced ? "capture.unplaced" : "capture.placed", [
                     "basis": visitState.isVisit ? "visit" : "manual",
-                    "has_room": (specimen.venue?.room?.isEmpty == false) ? "true" : "false"
+                    "has_room": String(specimen.venue?.projectRoomId != nil)
                 ])
                 try await sync.route(id, to: specimen.destination)
                 coordinator.present(specimen.destination == .library
@@ -536,7 +543,13 @@ final class ViewfinderModel {
 
         draft.venue = context.routing.stamped(onto: venueStamp ?? VenueStamp())
         draft.category = .unknown
-        draft.destination = context.routing.destination
+        // Asked of `context`, not the cached `visitState`: the draft is stamped
+        // from this context, so the two cannot disagree about whether the
+        // remembered `.library` still has an open sourcing visit behind it.
+        draft.destination = FieldDestinationPolicy.stamp(
+            remembered: context.routing.destination,
+            for: CaptureSessionContextPolicy.visitState(
+                for: context, now: Date(), calendar: .current))
         draft.inherit(context)
         return draft
     }
