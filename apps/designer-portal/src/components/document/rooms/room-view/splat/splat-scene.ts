@@ -27,14 +27,131 @@
  */
 
 import * as THREE from 'three';
-import { frameRoom, type CameraFraming } from '../orbit/controls';
+import { clamp, frameRoom, DEFAULT_AZIMUTH, MIN_POLAR, MAX_POLAR, type CameraFraming } from '../orbit/controls';
 import { CREAM } from '../model/model-scene';
 
 export { CREAM };
 
-/** Look-at height as a fraction of the splat's own height — the same standing-eye-level
- *  rule `model-scene.ts` uses, and unit-free for the same reason. */
-const EYE_FRACTION = 0.45;
+/**
+ * ── ORIENTATION ────────────────────────────────────────────────────────────────────
+ *
+ * A splat mesh does NOT arrive in three.js's Y-up frame, and there is exactly ONE
+ * transform to undo — not two. An earlier version of this file also composed in a
+ * claimed "Spark 180°-about-X flip", reasoning from the library's quickstart snippet
+ * (`butterfly.quaternion.set(1, 0, 0, 0)`) as if it were a renderer convention. It is
+ * not: per `@sparkjsdev/spark@2.1.0`'s own source, `SplatTransformer` (what actually
+ * places a `SplatMesh` for render) consumes the mesh's `matrixWorld` VERBATIM — no
+ * internal reorientation of any kind. The quickstart's flip is a PER-ASSET correction
+ * for that one COLMAP-trained demo splat's own Y-down authoring frame, not something
+ * Spark applies to every splat it renders. Composing it in here inverted the sign of
+ * the one real correction below.
+ *
+ * The one real correction: our own .spz is nerfstudio-trained from ARKit poses, and
+ * the pipeline that gets it there applies its own world-up change of basis BEFORE
+ * training: `ARKIT_TO_NERFSTUDIO` (`services/scan-modal/src/scan_modal/core/
+ * transforms.py:102-110`) rotates ARKit's Y-up world into nerfstudio's Z-up
+ * convention (gravity is real and known, so this is an exact rotation, not an
+ * estimate). `splat_job.py:248-250` trains with `--orientation-method none`, so
+ * nothing further reorients the result — the trained gaussians sit exactly in that
+ * transform's Z-up target frame. `ARKIT_TO_NERFSTUDIO`'s matrix (X unchanged,
+ * Y_nerf = −Z_arkit, Z_nerf = Y_arkit) is a rotation of +90° about X, so undoing it to
+ * land back in three.js's Y-up frame is its inverse: −90° about X.
+ *
+ * `SPLAT_ORIENTATION` is that inverse and NOTHING else composed with it:
+ *
+ *     THREE.Quaternion(x, y, z, w) for −90° about X
+ *       = (sin(−45°), 0, 0, cos(−45°)) = (−√½, 0, 0, √½)
+ *
+ * EMPIRICALLY SETTLED, not just derived: a robust per-axis measurement (percentile
+ * span, 300k samples) of the real prod .spz artifact (sha256 `88dbefcd…`,
+ * 29,397,094 bytes, 1,324,278 gaussians, SPZ v3, fracBits 12) — decoded centers, no
+ * rendering involved — found local-frame Z's p2–p98 span at 3.27 m, matching the
+ * room's known 3.30 m wall height almost exactly, with 90% of the mass inside a
+ * 2.41 m window and the single strongest density peak (16.5% of the bin mass) sitting
+ * at the LOW end of that window — the floor plane. X and Y spanned 7.57 m and 6.55 m,
+ * consistent with the room's 7.67 m plan length. That is nerfstudio Z-up exactly as
+ * `transforms.py` implies, with z increasing from floor to ceiling — the opposite of
+ * what the old `+90°-about-X` sign assumed, and the reason it rendered the ceiling
+ * BELOW the floor (an inside-out blob) rather than above it.
+ */
+export const SPLAT_ORIENTATION: THREE.Quaternion = new THREE.Quaternion(
+  -Math.SQRT1_2,
+  0,
+  0,
+  Math.SQRT1_2,
+);
+
+/**
+ * Rotate a mesh-local `Box3` by `orientation` and return the new axis-aligned bounds.
+ * `Box3.applyMatrix4` re-derives min/max from all 8 corners — the only correct way to
+ * keep a rotated box axis-aligned; a naive per-component transform of `min`/`max`
+ * would not. Pure three.js math: no Spark import, no WebGL, jsdom-testable exactly
+ * like `frameSplatInterior`.
+ */
+export function orientBounds(box: THREE.Box3, orientation: THREE.Quaternion): THREE.Box3 {
+  if (box.isEmpty() || !boxIsFinite(box)) return box.clone();
+  const rotation = new THREE.Matrix4().makeRotationFromQuaternion(orientation);
+  return box.clone().applyMatrix4(rotation);
+}
+
+/**
+ * The orientation a given splat SOURCE needs, keyed on its URL rather than guessed
+ * from its data. `/fixtures/…` is the one non-production source this repo can point
+ * Splat at: the committed dev fixture (`scripts/make-splat-fixture.mjs`), built Y-up
+ * BY CONSTRUCTION (floor at y=0, ceiling at y=height — no ARKit→nerfstudio pipeline
+ * involved), so it is the one case identity is correct. Every other URL — today a dev
+ * `?splatUrl=` override of something else, tomorrow the resolved R2 capability URL —
+ * is a real .spz off the pipeline described above and gets `SPLAT_ORIENTATION`.
+ *
+ * Declaring this per source, rather than inferring it from the loaded geometry, is
+ * the whole point: a green fixture render must never be able to stand in for having
+ * verified the real, rotated path.
+ */
+export function defaultSplatOrientation(splatUrl: string): THREE.Quaternion {
+  return splatUrl.startsWith('/fixtures/') ? new THREE.Quaternion() : SPLAT_ORIENTATION.clone();
+}
+
+/** Eye height above the splat's own floor (`box.min.y`), metres, pinned rather than
+ *  derived. `services/scan-modal/src/scan_modal/core/cameras.py`'s Modal-side rig
+ *  uses `EYE_HEIGHT_M = 1.5` for a diagonal establishing shot; we use 1.6 here — a
+ *  touch taller, and there is no reason the two must match: one composes a camera
+ *  shot, the other seats a designer who has stood up. */
+const EYE_HEIGHT_M = 1.6;
+
+/**
+ * Interior radius as a fraction of the room's own plan HALF-diagonal, not Orbit's
+ * exterior `frameRoom` fit (1.35 × the FULL diagonal, clamped to [0.6×, 2.55×]).
+ * `frameRoom` was authored for backing away from a room to frame the whole box in
+ * one exterior shot; its entire clamp band sits outside a room's own walls. Standing
+ * INSIDE the room a splat reconstructs, the camera belongs near the centre.
+ */
+const INTERIOR_RADIUS_FIT = 0.35;
+/** Absolute cap, metres — without it a large room's fit-radius still reads as
+ *  "back off toward the middle distance" rather than "stand near the centre". */
+const INTERIOR_RADIUS_CAP_M = 1.2;
+const INTERIOR_MIN_RADIUS_M = 0.15;
+const INTERIOR_MAX_RADIUS_FIT = 0.9;
+
+/** Flattened polar — an eye-level look, not Orbit's exterior downward tilt (1.08 rad
+ *  looks down into the room from above; standing inside it, level is correct). An
+ *  exact π/2 (1.5708) would be nice-sounding but is not what the room ever shows: it
+ *  sits outside `createOrbitController`'s own `[minPolar, maxPolar]` clamp (the SAME
+ *  band Orbit uses, `MAX_POLAR` = 1.45 rad — not narrowed for Splat, shared control
+ *  math rather than a second copy of it), so a literal π/2 here would return a
+ *  `CameraFraming` whose own `polar` field lies outside its own `maxPolar` field —
+ *  internally inconsistent, even though the CONTROLLER downstream would silently
+ *  clamp it back to 1.45 on first use. Returning `MAX_POLAR` directly keeps the two
+ *  in agreement: the polar this function reports is the polar the room actually
+ *  opens on. */
+const INTERIOR_POLAR = MAX_POLAR;
+
+/** `hypot(size.x, size.z)` beyond this reads as a floater-polluted or non-metric
+ *  splat (a stray point cloud spanning a building, garbage bounds from a bad train)
+ *  rather than a real room. Its centre and diagonal are not trustworthy, so this
+ *  falls back to the same unit-room framing the degenerate-box guard uses, rather
+ *  than computing a plausible-looking but meaningless "interior" camera from
+ *  garbage bounds. */
+const OVERSIZE_PLAN_M = 40;
 
 /** An `Object3D` the library also wants to free itself. Both Spark parts are this. */
 export interface DisposableObject3D extends THREE.Object3D {
@@ -50,36 +167,66 @@ export interface SplatSceneParts {
 
 export interface BuiltSplatScene {
   scene: THREE.Scene;
-  /** Camera framing derived from the splat's own bounds (see `frameSplat`). */
+  /** Camera framing derived from the splat's own bounds (see `frameSplatInterior`). */
   framing: CameraFraming;
   /** Hands each Spark part back to the library, then empties the scene. */
   dispose(): void;
 }
 
 /**
- * Camera framing for a loaded splat. Orbit's angles + diagonal-derived radius band
- * (`frameRoom`, reused verbatim — the same one piece of control math Plan, Orbit, and
- * Mesh all share), re-targeted onto the splat's own bounding-box centre at eye height.
+ * Camera framing for a loaded splat, standing INSIDE the room it reconstructs — not
+ * Orbit's exterior diagram. Keeps Orbit's azimuth and polar CLAMP BAND (shared control
+ * math, not a second copy of it) but replaces the exterior radius fit and default
+ * polar with interior-scaled ones (see the constants above): a designer opening Splat
+ * is meant to feel like they are standing in the room the walk captured, not backed up
+ * outside its walls looking in.
  *
  * Takes a `Box3` rather than an `Object3D` because a `SplatMesh` holds no three geometry
  * for `Box3.setFromObject` to measure — its extent comes from the library
- * (`SplatMesh.getBoundingBox()`). A degenerate or non-finite box falls back to a unit
- * room rather than emitting NaNs into the camera.
+ * (`SplatMesh.getBoundingBox()`), already rotated into Y-up by the caller (see
+ * `orientBounds` / `SPLAT_ORIENTATION` above — this function assumes ITS input is
+ * already correctly oriented). A degenerate, non-finite, or implausibly large box
+ * (`OVERSIZE_PLAN_M`) falls back to a unit room rather than placing a camera from
+ * bounds that cannot be trusted.
+ *
+ * The eye height is clamped into the box's own vertical span (`[box.min.y,
+ * box.max.y]`) rather than trusted as a bare `box.min.y + EYE_HEIGHT_M`. Two failure
+ * shapes motivate it, both real for a splat trained off a walk rather than measured:
+ * a stray floater far below the true floor drags `box.min.y` down with it, and a
+ * low or partial scan can leave less than `EYE_HEIGHT_M` of headroom between floor
+ * and ceiling. Either way, the eye must resolve to somewhere the box itself spans —
+ * never above the ceiling the scan actually captured, never below its floor.
  */
-export function frameSplat(box: THREE.Box3): CameraFraming {
+export function frameSplatInterior(box: THREE.Box3): CameraFraming {
   if (box.isEmpty() || !boxIsFinite(box)) return frameRoom(1, 1);
 
   const size = box.getSize(new THREE.Vector3());
+  const planDiagonal = Math.hypot(size.x, size.z);
+  if (planDiagonal > OVERSIZE_PLAN_M) return frameRoom(1, 1);
+
   const centre = box.getCenter(new THREE.Vector3());
-  const base = frameRoom(size.x, size.z);
+  const halfDiagonal = planDiagonal / 2;
+  const maxRadius = INTERIOR_MAX_RADIUS_FIT * halfDiagonal;
+  const radius = clamp(
+    Math.min(INTERIOR_RADIUS_FIT * halfDiagonal, INTERIOR_RADIUS_CAP_M),
+    INTERIOR_MIN_RADIUS_M,
+    maxRadius,
+  );
+  const eyeY = clamp(box.min.y + EYE_HEIGHT_M, box.min.y, box.max.y);
 
   return {
-    ...base,
     target: {
       x: centre.x,
-      y: box.min.y + size.y * EYE_FRACTION,
+      y: eyeY,
       z: centre.z,
     },
+    azimuth: DEFAULT_AZIMUTH,
+    polar: INTERIOR_POLAR,
+    radius,
+    minRadius: INTERIOR_MIN_RADIUS_M,
+    maxRadius,
+    minPolar: MIN_POLAR,
+    maxPolar: MAX_POLAR,
   };
 }
 
@@ -93,8 +240,16 @@ function boxIsFinite(box: THREE.Box3): boolean {
  * Compose the Splat scene: cream ground, the SparkRenderer, the SplatMesh. The renderer
  * goes in FIRST — it is the thing that services every splat in the scene, and Spark's
  * own quick-start adds it before any mesh. The mesh itself is added as-is: never
- * re-centred, re-scaled, or rotated, so what the designer orbits is what the walk
- * recorded.
+ * re-centred or re-scaled here.
+ *
+ * "Never rotated" no longer holds for the mesh as a whole, and that reversal happens
+ * ONE LAYER UP, not in this function. `splat-canvas.tsx` sets `splatMesh.quaternion`
+ * to `SPLAT_ORIENTATION` (or identity for the dev fixture, via
+ * `defaultSplatOrientation`) and orients the measured bounds with `orientBounds`
+ * BEFORE either the mesh or the bounds ever reach `buildSplatScene` — see the
+ * ORIENTATION section above for why an unrotated mesh renders inside-out. This
+ * function itself still touches neither rotation, position, nor scale; it composes
+ * whatever it is handed, and what it is handed is now already correctly oriented.
  */
 export function buildSplatScene(
   parts: SplatSceneParts,
@@ -113,7 +268,7 @@ export function buildSplatScene(
 
   return {
     scene,
-    framing: frameSplat(bounds),
+    framing: frameSplatInterior(bounds),
     dispose() {
       disposeSplatParts(parts);
       scene.clear();

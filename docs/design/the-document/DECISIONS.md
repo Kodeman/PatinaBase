@@ -9429,3 +9429,196 @@ I141 and its errata on the money seam.
   proposal is still out.
 
 *Entries add: I143 · last id = I143*
+
+### I144 · Splat interior camera — orientation reversal, exterior→interior framing, scale-invariant wheel zoom — 2026-08-25
+
+Not a Document-workstream change — Room View's SPLAT projection
+(`apps/designer-portal/src/components/document/rooms/room-view/{splat,orbit}/`) — but
+recorded here per this file's own convention for a decision that reverses a prior
+entry's stated design and that a designer would notice. Branch
+`fix/splat-interior-camera`, worktree `.codex/worktrees/agent-splatcam`. No merge, no
+deploy — implementation only, against a completed recon.
+
+**What was wrong.** The first Splat render was an inside-out blob, from three
+independent causes:
+
+1. **Orientation.** The `SplatMesh` was added UNROTATED. Spark's own quickstart
+   applies a 180°-about-X flip because a typical COLMAP-trained splat is Y-down; our
+   .spz is nerfstudio-trained from ARKit poses and the pipeline applies its own
+   world-up change of basis (`ARKIT_TO_NERFSTUDIO`, a +90° rotation about X,
+   `services/scan-modal/…/transforms.py:57-77`) BEFORE training, then trains with
+   `--orientation-method none` so nothing further reorients it. An unrotated mesh put
+   the room's height on the wrong axis.
+2. **Framing.** `frameSplat → frameRoom` (`orbit/controls.ts`) was authored for the
+   EXTERIOR Orbit diagram — radius 1.35× the plan diagonal, clamped to
+   `[0.6×, 2.55×]` — which backs a camera OFF a room to frame the whole box from
+   outside it. The entire clamp band sits outside a room's own walls.
+3. **Wheel zoom.** `radius += deltaY × 0.03` is an additive, fixed-WORLD-UNIT step
+   tuned for Orbit's feet-scale room (r ≈ 32) — imperceptible on a metre-scale
+   interior, oversaturated on anything smaller. `deltaMode` (Firefox "lines") was
+   unhandled.
+
+**What changed, file by file.**
+
+- `splat/splat-scene.ts` — exports `SPLAT_ORIENTATION` (the composed quaternion: Spark's
+  180°-about-X ∘ the inverse of `ARKIT_TO_NERFSTUDIO`'s +90°-about-X; both share the X
+  axis, so they commute and collapse to a single 90°-about-X rotation, numerically
+  identical to `ARKIT_TO_NERFSTUDIO` itself — a coincidence of the two corrections
+  sharing an axis, not one constant standing in for the other) and `orientBounds(box,
+  orientation)`, a pure, jsdom-testable rotation of a mesh-local `Box3` via
+  `Box3.applyMatrix4`. `frameSplat` is replaced by `frameSplatInterior(box)`: target =
+  splat centroid at `box.min.y + 1.6 m` (eye height — `cameras.py`'s Modal-side rig
+  uses 1.5 m for a different shot, the two were never required to match); radius =
+  `min(0.35 × half-diagonal, 1.2 m)`, clamped to `[0.15 m, 0.9 × half-diagonal]`;
+  azimuth kept at Orbit's 0.82 (now `export`ed from `controls.ts` as `DEFAULT_AZIMUTH`
+  rather than duplicated); polar flattened to `π/2` (still passes through
+  `createOrbitController`'s shared `[MIN_POLAR, MAX_POLAR]` = `[0.35, 1.45]` clamp, so
+  the live look settles at ~1.45 rad — "flattened to ~π/2", not exactly π/2, and the
+  band was left shared rather than narrowed for Splat alone); an oversize-plan guard
+  (`hypot(size.x, size.z) > 40 m`) falls back to the same unit-room framing the
+  degenerate/non-finite guard already used, for a floater-polluted or non-metric splat.
+  `defaultSplatOrientation(url)` keys identity vs. `SPLAT_ORIENTATION` on the URL
+  (`/fixtures/…` → identity) rather than inferring it from geometry — see the fixture
+  note below. `buildSplatScene`'s header is amended: it still touches neither
+  rotation, position, nor scale; the reversal from "never rotated" happens one layer
+  up, in `splat-canvas.tsx`, before either the mesh or the bounds reach this function.
+- `splat/splat-canvas.tsx` — sets `splatMesh.quaternion` to the resolved orientation
+  and calls `orientBounds` on the measured box BEFORE `buildSplatScene`, because
+  `getBoundingBox()` is mesh-LOCAL and does not reflect the object's own transform (the
+  quaternion fixes the render, `orientBounds` is what makes the camera agree with it).
+  `SplatCanvasProps` gains an optional `orientation` escape hatch; every real caller
+  omits it. `near` (from `clipPlanes`) is clamped to `≥ 0.05` — the interior
+  `minRadius` (0.15 m) drove the raw formula to ~0.0015, a near plane close enough to
+  z-fight against the room.
+- `orbit/controls.ts` — wheel zoom is now multiplicative:
+  `radius = clamp(radius * exp(deltaY_px × 0.0015), minRadius, maxRadius)`, with
+  `deltaMode` (Firefox lines → pixels, ×16) normalized first via the new exported
+  `normalizedWheelDelta`. One mouse notch (deltaY ≈ 100) → ×1.16 (~15%); one trackpad
+  tick (deltaY ≈ 3) → ×1.0045 (~0.5%). Shared by Plan, Orbit, Mesh, and Splat — a feel
+  change on all four, not a Splat-only tweak. `DEFAULT_AZIMUTH`, `MIN_POLAR`, and
+  `MAX_POLAR` are now exported for `splat-scene.ts` to share rather than duplicate.
+
+**The fixture question, reconciled by the orientation-prop route, not by
+regeneration.** `scripts/make-splat-fixture.mjs` builds
+`/fixtures/splat/room-fixture.ply` Y-up by construction — it never passes through the
+ARKit→nerfstudio pipeline, so it needs identity orientation, not `SPLAT_ORIENTATION`.
+The fixture was NOT regenerated. Instead, orientation is a declared property of the
+SOURCE (`defaultSplatOrientation`, keyed on URL, with `SplatCanvasProps.orientation` as
+an explicit override), so the dev fixture keeps passing identity while the real .spz
+path gets `SPLAT_ORIENTATION` — a green fixture render can never stand in for having
+verified the real, rotated path.
+
+**Tests.** `splat/__tests__/splat-scene.test.ts` extended: interior framing (target
+centroid + 1.6 m, radius below the half-diagonal, minRadius/maxRadius inside the
+shell, an absolute-cap case, degenerate + oversize fallbacks), `orientBounds` (a
+worked 90°-about-X rotation, identity passthrough, empty-box passthrough),
+`SPLAT_ORIENTATION`'s own components, and `defaultSplatOrientation`'s per-source
+behavior. `orbit/__tests__/controls.test.ts` (already existed — this program's file
+list said otherwise) gains a `wheel zoom` suite: multiplicative ratio invariant across
+room scales, the exact ~15%/~0.5% ratios, both clamps under repeated zoom, deltaMode
+line normalization (and pixel/line equivalence), and `preventDefault` — plus direct
+`normalizedWheelDelta` unit tests. `splat-chunk-boundary.test.ts` was left untouched
+and still passes: `splat-stage.tsx` was not touched.
+
+**Out of scope, deliberately — geometry plumbing, not this program.** No component
+between the resolved splat URL and `SplatCanvas` (`splat-stage.tsx`,
+`dev-splat-url.ts`, `room-view.tsx`) was touched. `defaultSplatOrientation`'s
+`/fixtures/…`-prefix keying is what makes the real app's actual dev-fixture walk
+correctly resolve identity without any of those files changing — but if the dev
+`?splatUrl=` override is ever pointed at some OTHER non-`/fixtures/` path that also
+happens to be Y-up, it will incorrectly receive `SPLAT_ORIENTATION`. That is accepted:
+the only committed non-pipeline source is the `/fixtures/` fixture, and the override's
+own header already scopes it to same-origin relative paths.
+
+**Also out of scope, per the brief:** Walk mode; any change to `splat-stage.tsx`,
+`dev-splat-url.ts`, or `room-view.tsx`; regenerating the fixture; any new chrome or
+controls UI (D1); shadows of any kind (D4).
+
+*Entries add: I144 · last id = I144*
+
+### I145 · Splat interior camera — I144's orientation sign was INVERTED, corrected + hardened on adversarial review — 2026-08-25
+
+Not a Document-workstream change, recorded here per this file's convention — same
+scope as I144 (branch `fix/splat-interior-camera`, PR #37, worktree
+`.codex/worktrees/agent-splatcam`). This entry does not edit I144; it corrects it.
+
+**The finding.** Adversarial review of I144 proved `SPLAT_ORIENTATION`'s sign backward,
+and an empirical measurement of the REAL prod .spz settled it with certainty rather
+than argument: sha256-verified artifact `88dbefcd…` (29,397,094 bytes, 1,324,278
+gaussians, SPZ v3, fracBits 12); robust per-axis center statistics (300k samples) — X
+p2–p98 span 7.57 m (≈ the room's 7.67 m plan length), Y 6.55 m, **Z 3.27 m ≈ the
+3.30 m wall height exactly, 90% of the mass in a 2.41 m window, strongest density peak
+(16.5% of bin mass) at the LOW end of that window — the floor plane.** That confirms
+the data is nerfstudio Z-up exactly as `transforms.py` implies, with z increasing from
+floor to ceiling. I144's derivation also composed in a Spark-internal "180°-about-X
+flip" that does not exist: `@sparkjsdev/spark@2.1.0`'s own source shows
+`SplatTransformer` consuming a mesh's `matrixWorld` verbatim — the quickstart's flip
+is a per-asset correction for one COLMAP demo splat's own authoring frame, not a
+renderer convention. Composing a nonexistent 180° flip with the real −90°-about-X
+correction (the inverse of `ARKIT_TO_NERFSTUDIO`) landed on `+90°-about-X` instead —
+the ceiling rendered BELOW the floor.
+
+**The fix.** `SPLAT_ORIENTATION` is now `new THREE.Quaternion(-Math.SQRT1_2, 0, 0,
+Math.SQRT1_2)` — `−90°` about X, undoing `ARKIT_TO_NERFSTUDIO`'s `+90°` alone, nothing
+else composed in. `splat-scene.ts`'s header comment is rewritten to derive this
+directly and cite the empirical measurement; `splat/README.md`'s Orientation section
+matches. A new `orientation × framing — physics invariant` suite in
+`splat-scene.test.ts` proves the correction: for a floor-at-z=0 local box,
+`orientBounds(...).min.y ≈ 0` and `.max.y ≈ h` (ceiling above floor), and
+`frameSplatInterior(oriented).target.y ≈ 1.6` (eye above the real floor, not
+underground). Reverting `SPLAT_ORIENTATION` to I144's `+90°` value makes every
+assertion in that suite fail — proved once, by running the new tests against the old
+sign before applying the fix, then again after.
+
+**Merge conditions closed alongside the sign flip.**
+
+- **Vertical/floater guard.** `frameSplatInterior`'s eye height is now `clamp(box.min.y
+  + EYE_HEIGHT_M, box.min.y, box.max.y)`, not a bare sum — a stray floater far below
+  the true floor, or a low/partial scan with under 1.6 m of headroom, can no longer
+  put the eye outside the box the scan itself spans (underground in the first case,
+  above the ceiling in the second). Two new tests cover both shapes.
+- **Polar consistency.** `INTERIOR_POLAR` is now `MAX_POLAR` (1.45 rad) directly,
+  not a bare `Math.PI / 2` that `createOrbitController`'s shared clamp band would
+  silently correct downstream. The `CameraFraming` `frameSplatInterior` returns is now
+  internally consistent: its own `polar` field already equals its own `maxPolar`
+  field, rather than a value outside the range the same object claims as its bounds.
+  The existing polar test was updated to assert `MAX_POLAR` instead of `π/2`.
+- **`orientation` prop dropped, `eslint-disable` removed with it.**
+  `SplatCanvasProps.orientation` — an escape hatch no real caller ever used — is
+  removed; `SplatCanvas` now resolves `defaultSplatOrientation(splatUrl)` internally
+  only. Its removal also let the effect's blanket `eslint-disable-next-line
+  react-hooks/exhaustive-deps` go: with `orientation` gone, the only prior
+  justification for it was `debug`, and `debug` (the hook value) was never actually
+  read inside the effect body to begin with — only in the JSX below it — so the rule
+  has nothing left to flag. `eslint` on the file now reports "Unused eslint-disable
+  directive" with the comment still in place; deleting it is what item 6 calls for.
+  Tests that need a specific orientation call `orientBounds` /
+  `defaultSplatOrientation` directly rather than through the prop.
+- **Two prior corrections in I144's own account, fixed here rather than in place
+  (I144 is append-only):**
+  - *Shared-controls surface count.* I144 said wheel zoom is "shared by Plan, Orbit,
+    Mesh, and Splat" — four surfaces. It is three: Plan is plain SVG with no wheel
+    handler and never rides `orbit/controls.ts` at all. `controls.ts`'s header and its
+    `WHEEL_ZOOM_RATE` comment, and `splat/README.md`'s wheel-zoom section, now say
+    Orbit/Mesh/Splat.
+  - *Near-plane raw value.* I144 said the interior `minRadius` "drove the raw
+    `clipPlanes` formula to ~0.0015." `clipPlanes` (`model-scene.ts:55`) already floors
+    `near` at `0.01` regardless of `minRadius`, so the value actually reaching
+    `splat-canvas.tsx` was `0.01`, not `~0.0015`. The raise to `≥ 0.05` stands (`0.01`
+    still z-fights at typical room scale) — only the stated reason changes.
+    `splat-canvas.tsx`'s comment and `splat/README.md` gain a corrected account.
+
+**Tests.** `splat/__tests__/splat-scene.test.ts`: `orientBounds`'s worked example
+updated to the corrected sign (ceiling now lands at oriented `y′ = 3`, not `y′ = 0`,
+for a local box with height 3); `SPLAT_ORIENTATION`'s own-component test updated to
+`x ≈ −√½`; the polar test updated to assert `MAX_POLAR`; four new tests — the two
+physics-invariant tests described above, and two floater/low-scan guard tests. No
+other suite needed touching: `splat-canvas.test.tsx` never exercised the dropped
+`orientation` prop, and `orbit/__tests__/controls.test.ts`'s wheel-zoom suite was
+unaffected by the surface-count correction (it was prose, not an assertion).
+
+**Out of scope, same boundary as I144.** No change to `splat-stage.tsx`,
+`dev-splat-url.ts`, or `room-view.tsx`; no new chrome or controls UI (D1); no shadows
+(D4); no fixture regeneration; no merge, no deploy.
+
+*Entries add: I145 · last id = I145*
