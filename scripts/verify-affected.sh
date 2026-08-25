@@ -59,7 +59,11 @@ fi
 
 for service in orders media projects; do
   if matches "^services/$service/"; then
-    run pnpm --filter "@patina/$service" build
+    # Route through turbo, not raw `pnpm --filter`, same as the apps block above:
+    # these services depend on dist-only @patina/auth, and raw pnpm skips turbo's
+    # `^build` graph, building the service against a stale (or absent) dist.
+    # Tests stay raw so they reuse the dist built above and keep --runInBand.
+    run pnpm exec turbo run build --filter="@patina/$service"
     run pnpm --filter "@patina/$service" test -- --runInBand
   fi
 done
