@@ -304,6 +304,10 @@ public extension Specimen {
     /// the FIRST commit, exactly as a capture taken inside a visit does. One that
     /// HAS committed needs the outbox to re-run `commit_field_capture`, so it is
     /// flagged for replay here and the ordinary drain does the rest.
+    /// The two ids are written unconditionally, but `room: nil` means KEEP THE
+    /// EXISTING LABEL, not clear it — so placing into a project with no room
+    /// leaves the old room name standing beside a nil `projectRoomId`. Callers
+    /// that mean "no room" must pass the replacement label themselves.
     func place(projectID: String?, projectRoomID: String?, room: String?) {
         var stamp = venue ?? VenueStamp()
         stamp.projectId = projectID

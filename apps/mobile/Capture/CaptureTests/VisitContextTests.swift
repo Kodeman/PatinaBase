@@ -317,12 +317,42 @@ struct VisitContextTests {
         let store = try CaptureStore.inMemory()
         let context = CaptureSessionContext(identity: identity, startedAt: now, lastActivityAt: now)
         let specimen = store.newDraft(sessionID: context.visitID)
+        // Seeded, not fresh: a fresh draft is already nil on every visit field,
+        // so asserting nil on one would pass with `inherit` as an empty body.
+        // Starting from a specimen that CARRIES a visit pins the clearing.
+        specimen.visitKind = .site
+        specimen.visitKit = .install
+        specimen.visitLabel = "Maple St"
+        specimen.visitStartedAt = now.addingTimeInterval(-3600)
+        specimen.visitEndedAt = now.addingTimeInterval(-600)
         specimen.inherit(context)
         try store.save()
 
         #expect(specimen.isUnplaced)
         #expect(specimen.visitKind == nil)
+        #expect(specimen.visitKit == nil)
         #expect(specimen.visitLabel == nil)
+        // The kind-guard in `inherit`: a kindless context must not ship a start
+        // time. A row with visit_started_at set and visit_kind NULL claims a
+        // visit that never happened.
+        #expect(specimen.visitStartedAt == nil)
+        #expect(specimen.visitEndedAt == nil)
         #expect(specimen.venue?.projectId == nil)
+    }
+
+    /// FC-R6 (Ruling 3): the unplaced set INCLUDES committed rows. PLACEMENT is
+    /// the only thing that clears `isUnplaced` — sync state never enters it, so
+    /// a capture that reached the server hours ago with no project still waits
+    /// on Today until she files it.
+    @MainActor
+    @Test func aCommittedCaptureWithNoProjectIsStillUnplaced() throws {
+        let store = try CaptureStore.inMemory()
+        let specimen = store.newDraft()
+        specimen.status = .committed
+        specimen.remoteId = "fc_1"
+        try store.save()
+
+        #expect(specimen.isUnplaced)
+        #expect(specimen.hasConfirmedCaptureReceipt)
     }
 }
