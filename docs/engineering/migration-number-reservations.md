@@ -79,6 +79,8 @@ yet on prod.
 | ~~00503–00509~~ 00514–00520 | Phase 3 (capture enrichment). The original 00503–00509 reservation is **superseded** — by the time C-A1 (execution ledger + outbox + atomic claim + result-recording) landed, the file-numbering head had advanced past that band (00510–00513 consumed by the post-00483 hotfix and the SD-hardening tranche below), so Phase 3 re-drew above the new head per discipline rule 2. **00514/00515 now DRAWN** — see below. 00516–00520 remain free for the rest of Phase 3 (dispatcher/reconciler cron, any further RPCs).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 00510       | **TAKEN** — `00510_post_00483_grant_and_scope_repairs.sql` (branch `fix/post-00483-grant-gaps`, 2026-08-18). Post-00483 hotfix: project-documents storage policy caller-binding, `assignment_scope` derivation in `engage_trade_scope` / `apply_scope_change`, anon write-grant narrowing on four public tables. Numbered ABOVE the three bands above deliberately so it shifts none of them; the 00494–00509 gap is intentional and stays reserved. **Applied to prod 2026-08-19** (surgical single-migration push). |
 | 00511–00513 | **TAKEN** — the SD-hardening (canonical studio authority) tranche. Renumbered off its provisional 00487/00488/00489 after Phase 1 landed and 00489–00493/00498–00499/00510 were consumed. **SPLIT 2026-08-19 (Kody):** 00511+00513 land on `followon/sd-hardening-v3`; **00512 is parked** on `followon/sd-caller-hardening-00512` (reserved-parked, not landing). The 00512 gap in the applied sequence is intentional — **00513 is NOT renumbered down.** Scope register: `docs/follow-ups/sd-hardening-w7-followon.md`; parked charter: `docs/follow-ups/sd-caller-hardening-00512-followon.md`. NOT applied to staging or prod. |
+| 00521       | **TAKEN, recorded retroactively** — `00521_svc_media_shape_reconciliation.sql` (branch `feat/svc-media-shape-reconcile`, `ca2b0641b`, 2026-08-24 15:05, pushed to `origin`). Unfreezes the media deploy against prod's Prisma-shaped `svc_media`. This row was added by the Field Companion census: the lane landed the number without an accompanying reservation edit (discipline rule 5), and the next lane's census failed because of it. |
+| 00530–00535 | Field Companion (`docs/design/field-companion/`). **Confirmed clear 2026-08-24 by both live lanes** — cloudflare-phases Phase 2 stays at or below `00529`, and Phase 3 holds `00514–00520`. **SYMBOLIC RESERVATION ONLY: nothing is minted until Kody approves the build**, and each address is claimed at that file's landing after re-checking this file AND `supabase migration list` against Strata (rules 1–2, and the file-based push invariant in `docs/ops/strata-staging.md`). Six scheduled migrations: the W1 routing migration (wave 1), the visit/suggestion migration (wave 3), the margin migration + the time-entry migration + the punch back-reference migration (wave 4), and wave 6A's server-transcript migration. Wave 6B's `field_note_drafts` migration draws its number at its own landing, OUTSIDE this band, because 6B is unscheduled. |
 
 ### Drawn from 00511–00513 (SD-hardening tranche)
 
@@ -102,6 +104,7 @@ which keeps its number.
 | ------ | ---------------------------------------- | ---------------------------------------------------------------- |
 | 00514  | `00514_capture_enrichment_ledger.sql`    | branch `feat/capture-enrichment-ledger`; local replay only, NOT applied to staging or prod |
 | 00515  | `00515_capture_enrichment_rpcs.sql`      | branch `feat/capture-enrichment-ledger`; local replay only, NOT applied to staging or prod |
+| 00516  | `00516_capture_producer_idempotency.sql` | branch `feat/capture-producer-idempotency` (sibling worktree); **`CREATE OR REPLACE FUNCTION commit_field_capture` from its 00235 body plus an `enqueue_capture_enrichment(...)` call**, and `GRANT EXECUTE ON enqueue_capture_enrichment TO authenticated`. NOT applied to staging or prod. ⚠ Shared object — see the Field Companion band below |
 
 00514 adds `public.capture_enrichment_runs` (the orthogonal execution ledger
 for AI capture enrichment — target type/id, content revision, status,
@@ -122,9 +125,38 @@ discriminated outcome — `claimed` / `ignore_duplicate` / `ignore_stale` /
 `ignore_terminal`), and `record_capture_enrichment_result` (writes
 suggestions/status; never mutates `proposal_captures`; may prefill an
 allowlisted, currently-empty TEXT column on `field_captures` but never
-overwrites a non-empty one — the never-overwrite rule enforced in SQL). 00516–00520
-remain free for the rest of Phase 3 (pg_cron outbox reconciler, any
+overwrites a non-empty one — the never-overwrite rule enforced in SQL). 00517–00520 remain free for the rest of Phase 3 (pg_cron outbox reconciler, any
 additional RPCs the Cloudflare Queue consumer needs).
+
+### Drawn from 00530–00535 (Field Companion)
+
+| Number | File | Landed state |
+| ------ | ---- | ------------ |
+| —      | `005NN_field_capture_notes_and_routing.sql` | **NOT YET DRAWN.** Wave 1; branch `feat/field-companion-w1` when it lands |
+
+Nothing in this band has been minted. The band is reserved symbolically so the
+two neighbouring lanes can plan around it; every address is claimed at the
+landing of the file that needs it, after re-checking this file and
+`supabase migration list`.
+
+The wave-1 migration adds the note/audio lane to `field_captures`
+(`capture_kind`, `voice_audio_segments`, `voice_audio_purged_at`,
+`audio_retention`, `transcript_source`, `note_setting`), the provenance GIN
+index carried unbuilt since R112/R113, restates all five 00233 policies
+`TO authenticated` (they default to PUBLIC today), and replaces
+`commit_field_capture` so its **inbox** branch persists
+`project_id`/`project_room_id`/`shelf` — today only the library branch does
+(`00235:205-217` vs `:255-264`), so every note-shaped capture arrives with no
+project column. It introduces **no new `status` value**:
+`field_captures_org_inbox_select` keys on `status = 'inbox'`
+(`00233:175-188`), so a terminal status would silently revoke studio read.
+
+⚠ **`commit_field_capture` is a SHARED object with two live authors.**
+Phase 3's branch-authored `00516` replaces the same function. Whichever
+migration lands second **silently reverts the other** — no error, no failed
+migration. Per ruling FC-R18 the wave-1 replacement is authored from
+**00516's** body, with 00516 a hard prerequisite named in the migration
+header. Lineage: **00235 → 00516 → 005NN**.
 
 ### Drawn from 00494–00497
 
