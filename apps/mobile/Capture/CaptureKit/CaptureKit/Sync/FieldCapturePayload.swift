@@ -40,10 +40,17 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
     /// 'note' | 'context' | nil. Read by the W1 migration into
     /// field_captures.capture_kind, which CHECKs ('specimen','note','context').
     public var captureKind: String?
+    /// The visit this capture was taken inside. Absent when there is no visit —
+    /// FC-R2's null kind is expressed as an omitted envelope, not an empty one.
+    public var visit: Visit?
+    /// ALWAYS distinct from the fact. Nothing reads this as truth, ever.
+    public var suggestion: Suggestion?
     public var schemaVersion: Int
 
-    /// Bumped only alongside a 00235-side reader change.
-    public static let currentSchemaVersion = 2
+    /// Bumped alongside a 00235-side (or successor) reader change. Wave 3 bumped
+    /// this from 2 to 3 to add the `visit`/`suggestion` envelopes and
+    /// `voice.noteSetting`; Task 9's migration reads both.
+    public static let currentSchemaVersion = 3
 
     // ── Nested envelopes (each key path is read individually by 00235) ────────
 
@@ -102,6 +109,8 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
         public var transcript: String?
         public var partialTranscript: String?
         public var durationSeconds: Double?
+        /// FC-R11: 'solo' | 'conversation', chosen at the start of the note.
+        public var noteSetting: String?
     }
 
     public struct Photo: Codable, Equatable, Sendable {
@@ -138,6 +147,27 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
             self.osVersion = osVersion
             self.appVersion = appVersion
         }
+    }
+
+    /// FC-R2 raw values ride the wire here: kind 'site' | 'sourcing',
+    /// kit 'walk_through' | 'trade_walk' | 'install'. Sourced from
+    /// `FieldVisitKind`/`FieldVisitKit` rawValues — never hand-written.
+    public struct Visit: Codable, Equatable, Sendable {
+        public var id: String?
+        public var kind: String?
+        public var kit: String?
+        public var label: String?
+        public var startedAt: String?
+        public var endedAt: String?
+    }
+
+    /// The SUGGESTION is always distinct from the fact. `confidence` orders the
+    /// tray and is NEVER RENDERED (Principle 4) — on the wire it is just a number.
+    public struct Suggestion: Codable, Equatable, Sendable {
+        public var projectId: String?
+        public var projectRoomId: String?
+        public var basis: String?
+        public var confidence: Double?
     }
 }
 
@@ -179,6 +209,8 @@ public extension FieldCapturePayload {
         self.provenance = s.provenanceRaw.isEmpty ? nil : s.provenanceRaw
         self.device = device
         self.captureKind = s.captureKindRaw?.nonEmpty
+        self.visit = Self.buildVisit(s)
+        self.suggestion = Self.buildSuggestion(s)
         self.schemaVersion = Self.currentSchemaVersion
     }
 
@@ -250,14 +282,37 @@ public extension FieldCapturePayload {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         let duration = s.voiceDurationSeconds
+        let noteSetting = s.noteSettingRaw?.nonEmpty
         guard transcript != nil || partial != nil || audioPath != nil
-                || !segments.isEmpty || duration != nil else { return nil }
+                || !segments.isEmpty || duration != nil || noteSetting != nil else { return nil }
         return Voice(audioPath: audioPath,
                      audioSegments: segments.isEmpty ? nil : segments,
                      transcriptSource: s.voiceTranscriptSourceRaw?.nonEmpty,
                      transcript: transcript,
                      partialTranscript: partial,
-                     durationSeconds: duration)
+                     durationSeconds: duration,
+                     noteSetting: noteSetting)
+    }
+
+    /// FC-R2's null kind is expressed as an OMITTED envelope: a capture taken
+    /// outside any visit carries no `visit.kind` to omit in the first place.
+    private static func buildVisit(_ s: Specimen) -> Visit? {
+        guard s.visitKindRaw?.nonEmpty != nil else { return nil }
+        return Visit(id: s.captureSessionID?.uuidString,
+                     kind: s.visitKindRaw?.nonEmpty,
+                     kit: s.visitKitRaw?.nonEmpty,
+                     label: s.visitLabel?.nonEmpty,
+                     startedAt: s.visitStartedAt.map(venueDateFormatter.string(from:)),
+                     endedAt: s.visitEndedAt.map(venueDateFormatter.string(from:)))
+    }
+
+    private static func buildSuggestion(_ s: Specimen) -> Suggestion? {
+        let project = s.suggestedProjectID?.nonEmpty
+        let room = s.suggestedProjectRoomID?.nonEmpty
+        let basis = s.suggestionBasisRaw?.nonEmpty
+        guard project != nil || room != nil || basis != nil else { return nil }
+        return Suggestion(projectId: project, projectRoomId: room,
+                          basis: basis, confidence: s.suggestionConfidence)
     }
 
     private static func buildVenue(_ v: VenueStamp) -> Venue {

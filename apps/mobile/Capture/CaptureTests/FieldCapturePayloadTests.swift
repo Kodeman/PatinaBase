@@ -67,7 +67,7 @@ struct FieldCapturePayloadTests {
         #expect(dict["title"] as? String == "Lounge chair")
         #expect(dict["notes"] as? String == "warmer bouclé")
         #expect(dict["category"] as? String == "seating")
-        #expect(dict["schemaVersion"] as? Int == 2)
+        #expect(dict["schemaVersion"] as? Int == FieldCapturePayload.currentSchemaVersion)
         // clientToken is the RPC arg, NOT a payload field
         #expect(dict["clientToken"] == nil)
 
@@ -144,8 +144,8 @@ struct FieldCapturePayloadTests {
         let dict = try json(FieldCapturePayload(specimen: s, device: Self.device))
 
         // Always present:
-        #expect(dict["schemaVersion"] as? Int == 2)
-        #expect(dict["device"] as? [String: Any] != nil)
+        #expect(dict["schemaVersion"] as? Int == FieldCapturePayload.currentSchemaVersion)
+        #expect(dict["device"] is [String: Any])
         #expect((dict["photos"] as? [Any])?.isEmpty == true)
 
         // Absent when there is nothing to say:
@@ -194,5 +194,60 @@ struct FieldCapturePayloadTests {
         #expect(m["height"] as? Double == 900)
         #expect(m["unit"] as? String == "mm")
         #expect(m["depth"] == nil) // no depth measurement was taken
+    }
+
+    // MARK: visit + suggestion — the wire keys Task 9's CHECK constraints read
+
+    @Test @MainActor func visitAndSuggestionRideTheWireWithExactKeys() throws {
+        let store = try CaptureStore.inMemory()
+        let s = store.newDraft()
+        s.captureSessionID = UUID(uuidString: "11111111-2222-4333-8444-555555555555")
+        s.visitKind = .site
+        s.visitKit = .walkThrough
+        s.visitLabel = "Maple St"
+        s.visitStartedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        s.noteSetting = .conversation
+        s.suggestedProjectID = "66666666-7777-4888-8999-aaaaaaaaaaaa"
+        s.suggestedProjectRoomID = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff"
+        s.suggestionBasis = .proximity
+        s.suggestionConfidence = 0.61
+
+        let dict = try json(FieldCapturePayload(specimen: s, device: Self.device))
+        let visit = try #require(dict["visit"] as? [String: Any])
+        #expect(visit["id"] as? String == "11111111-2222-4333-8444-555555555555")
+        #expect(visit["kind"] as? String == "site")
+        #expect(visit["kit"] as? String == "walk_through")
+        #expect(visit["label"] as? String == "Maple St")
+        #expect((visit["startedAt"] as? String)?.hasPrefix("2027-01-15") == true)
+
+        let suggestion = try #require(dict["suggestion"] as? [String: Any])
+        #expect(suggestion["projectId"] as? String == "66666666-7777-4888-8999-aaaaaaaaaaaa")
+        #expect(suggestion["projectRoomId"] as? String == "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff")
+        #expect(suggestion["basis"] as? String == "proximity")
+        #expect((suggestion["confidence"] as? Double).map { abs($0 - 0.61) < 0.0001 } == true)
+
+        let voice = try #require(dict["voice"] as? [String: Any])
+        #expect(voice["noteSetting"] as? String == "conversation")
+        // READ THE CONSTANT, never a literal: the number is Wave 3's found N + 1,
+        // and this assertion is that the builder puts the constant on the wire
+        // rather than a second, drifting copy of it.
+        #expect(dict["schemaVersion"] as? Int == FieldCapturePayload.currentSchemaVersion)
+    }
+
+    @Test func theSchemaVersionWasActuallyBumpedThisWave() {
+        // Wave 1 merged with FieldCapturePayload.currentSchemaVersion == 2; this
+        // wave set it to 3. The point is that the two numbers are DIFFERENT and
+        // that wave 3 moved it by exactly one.
+        let waveOneVersion = 2
+        #expect(FieldCapturePayload.currentSchemaVersion == waveOneVersion + 1)
+    }
+
+    @Test @MainActor func aCaptureWithNoVisitOmitsTheVisitEnvelopeEntirely() throws {
+        let store = try CaptureStore.inMemory()
+        let s = store.newDraft()
+
+        let dict = try json(FieldCapturePayload(specimen: s, device: Self.device))
+        #expect(dict["visit"] == nil)
+        #expect(dict["suggestion"] == nil)
     }
 }
