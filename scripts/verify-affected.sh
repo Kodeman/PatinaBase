@@ -74,10 +74,10 @@ if matches '^packages/'; then
   # docs/follow-ups/media-type-debt-2026-08.md.
   while IFS= read -r package_dir; do
     [[ -f "$package_dir/package.json" ]] || continue
-    package_name="$(node -e 'const p=require(process.argv[1]); process.stdout.write(p.name || "")' "$package_dir/package.json")"
+    package_name="$(node -e 'const p=require(require("path").resolve(process.argv[1])); process.stdout.write(p.name || "")' "$package_dir/package.json")"
     [[ -n "$package_name" ]] || continue
     for task in build type-check test; do
-      if node -e 'const p=require(process.argv[1]); process.exit(p.scripts && p.scripts[process.argv[2]] ? 0 : 1)' "$package_dir/package.json" "$task"; then
+      if node -e 'const p=require(require("path").resolve(process.argv[1])); process.exit(p.scripts && p.scripts[process.argv[2]] ? 0 : 1)' "$package_dir/package.json" "$task"; then
         run pnpm exec turbo run "$task" --filter="$package_name"
       fi
     done
