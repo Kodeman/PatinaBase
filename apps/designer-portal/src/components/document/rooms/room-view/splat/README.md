@@ -149,16 +149,67 @@ One more, small: the `WebGLRenderer` is built with `antialias: false`, per Spark
 guidance — MSAA does nothing for gaussians (the primitives are already soft) and costs
 real frame time. Mesh keeps antialiasing because its hard edges need it.
 
-Camera framing reuses `orbit/controls.ts`'s `frameRoom` exactly as `model-scene.ts`'s
-`frameModel` does — the radius band is a pure ratio of the plan diagonal, so a
-metre-scaled splat frames like a metre-scaled GLB with one piece of control math.
-`frameSplat` takes a `THREE.Box3` rather than an `Object3D` because a `SplatMesh` holds
-no three geometry for `Box3.setFromObject` to measure; the bounds come from the library
-(`SplatMesh.getBoundingBox()`).
-
 **Nothing was vendored into `public/three/` for Spark, and nothing needs to be.** Its
 Rust splat-decode WASM ships inlined as a `data:application/wasm;base64,…` URI inside
 the JS, so there is no file to serve and no decoder path to configure.
+
+## Orientation, and framing from the inside
+
+The first splat render was an inside-out blob, and it took two separate fixes.
+
+**Orientation.** A splat mesh does not arrive in three.js's Y-up frame. Spark's own
+quickstart applies `quaternion.set(1, 0, 0, 0)` — a 180°-about-X flip — because a
+typical COLMAP-trained splat is authored Y-down. Our .spz is not COLMAP-trained; it is
+nerfstudio-trained from ARKit poses, and the pipeline applies its own world-up change
+of basis (`ARKIT_TO_NERFSTUDIO`, `services/scan-modal/…/transforms.py:57-77`, a +90°
+rotation about X) BEFORE training, then trains with `--orientation-method none`
+(`splat_job.py:248-250`) so nothing further reorients the result. Composing Spark's
+180°-about-X with the inverse of that +90° (both share the X axis, so they commute)
+collapses to a single 90°-about-X rotation — `SPLAT_ORIENTATION` in `splat-scene.ts`,
+with the full derivation in that file's header comment.
+
+`splat-canvas.tsx` sets `splatMesh.quaternion` to this (or identity — see below) BEFORE
+calling `getBoundingBox()`, and separately rotates the measured box with
+`orientBounds()`, because the library's bounding box is mesh-LOCAL and does not reflect
+the object's own transform. Both matter: the quaternion is what makes the render look
+right, `orientBounds` is what makes the CAMERA agree with what the render now shows.
+
+**The dev fixture is the one exception, and it is declared, not inferred.**
+`scripts/make-splat-fixture.mjs` builds `/fixtures/splat/room-fixture.ply` Y-up by
+construction (floor at y=0, ceiling at y=height) — it never goes through the ARKit→
+nerfstudio pipeline, so it needs identity, not `SPLAT_ORIENTATION`. `splat-scene.ts`'s
+`defaultSplatOrientation(url)` keys this on the URL (`/fixtures/…` → identity,
+everything else → `SPLAT_ORIENTATION`) rather than guessing from the loaded geometry,
+and `SplatCanvasProps.orientation` is the explicit override if a caller ever needs one.
+The fixture was NOT regenerated for this — reconciling the Y-up fixture against the
+Z-up real path is exactly what the per-source orientation is for, so a green fixture
+render can never stand in for having verified the real, rotated path.
+
+**Interior framing.** Camera framing used to reuse `orbit/controls.ts`'s `frameRoom`
+verbatim — the same fit Plan, Orbit, and Mesh use to back a camera OFF a room and frame
+the whole box from outside it. That is wrong for Splat: Splat is the room as
+photographed, and a designer opening it is meant to feel like they are standing inside
+it, not viewing an exterior diagram. `frameSplatInterior` (`splat-scene.ts`) keeps
+Orbit's azimuth (0.82) and polar clamp band, but derives radius from the plan
+HALF-diagonal instead of Orbit's exterior fit — `min(0.35 × half-diagonal, 1.2 m)`,
+clamped to `[0.15 m, 0.9 × half-diagonal]` — flattens the default polar to ~π/2 (an
+eye-level look, not Orbit's downward exterior tilt), and targets 1.6 m above the
+splat's own floor (`cameras.py`'s Modal-side rig uses 1.5 m for a different shot; the
+two numbers answer different questions and were never required to match). An oversize
+plan (`hypot(size.x, size.z) > 40 m`) falls back to the same unit-room framing the
+degenerate/non-finite guard uses — a floater-polluted or non-metric splat is not a room
+to stand inside.
+
+## Wheel zoom is now scale-invariant
+
+`orbit/controls.ts`'s wheel handler used to step `radius` by a fixed WORLD-UNIT amount
+(`radius += deltaY × 0.03`), tuned for Orbit's feet-scale room (r ≈ 32) — imperceptible
+on Splat's metre-scale interior (r ≈ 1), oversaturated on anything smaller. It is now
+multiplicative — `radius *= exp(deltaY_px × 0.0015)` — so one mouse notch is always a
+~15% step and one trackpad tick a ~0.5% step, regardless of the room's absolute scale.
+`deltaMode` (Firefox reports "lines"; Chrome/Safari report pixels) is normalized to
+pixels first. This is shared control math — Plan, Orbit, Mesh, and Splat all ride the
+same `controls.ts` — so it is a feel change on all four, not a Splat-only tweak.
 
 ## The one thing the evaluation got wrong
 
