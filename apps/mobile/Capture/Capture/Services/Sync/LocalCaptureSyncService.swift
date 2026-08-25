@@ -299,7 +299,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
         remote: SupabaseCaptureGateway,
         userID: UUID
     ) async throws -> CommitReceipt {
-        let uploadedVoicePath = try await uploadMedia(
+        let uploadedVoicePaths = try await uploadMedia(
             for: specimen,
             owner: owner,
             remote: remote,
@@ -309,8 +309,9 @@ final class LocalCaptureSyncService: CaptureSyncService {
             specimen: specimen,
             device: Self.deviceInfo()
         )
-        if let uploadedVoicePath {
-            payload.voice?.audioPath = uploadedVoicePath
+        if !uploadedVoicePaths.isEmpty {
+            payload.voice?.audioPath = uploadedVoicePaths.first
+            payload.voice?.audioSegments = uploadedVoicePaths
         }
 
         let routing = CaptureRoutingContext(
@@ -362,7 +363,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
         owner: CaptureOwnerIdentity,
         remote: SupabaseCaptureGateway,
         userID: UUID
-    ) async throws -> String? {
+    ) async throws -> [String] {
         try store.validateRequiredMedia(for: specimen)
 
         let folder = CaptureMediaPath.folder(
@@ -376,12 +377,15 @@ final class LocalCaptureSyncService: CaptureSyncService {
                 ) ?? "").isEmpty
             }
             .sorted { $0.order < $1.order }
-        let voiceFilename = specimen.voiceAudioFilename.flatMap { filename in
-            filename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? nil
-                : filename
-        }
-        let total = photos.count + (voiceFilename == nil ? 0 : 1)
+        let voiceFilenames: [String] = {
+            let raw = (specimen.voiceAudioSegmentsRaw?.isEmpty == false)
+                ? specimen.voiceAudioSegmentsRaw!
+                : [specimen.voiceAudioFilename].compactMap { $0 }
+            return raw
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }()
+        let total = photos.count + voiceFilenames.count
         var uploaded = 0
 
         for photo in photos {
@@ -402,26 +406,58 @@ final class LocalCaptureSyncService: CaptureSyncService {
             bumpProgress(specimen, uploaded: uploaded, total: total)
         }
 
-        var voicePath: String?
-        if let filename = voiceFilename {
-            try requireActiveOwner(owner)
-            let url = store.mediaURL(for: filename)
-            guard let data = try? Data(contentsOf: url), !data.isEmpty else {
-                throw CaptureMediaAvailabilityError
-                    .missingLocalMedia([filename])
+        var voicePaths: [String] = []
+        var lostSegments = 0
+        for filename in voiceFilenames {
+            if let path = try await uploadVoiceSegment(
+                filename, for: specimen, owner: owner,
+                remote: remote, folder: folder
+            ) {
+                voicePaths.append(path)
+            } else {
+                lostSegments += 1
             }
-            let path = "\(folder)/\(filename)"
-            try await remote.upload(
-                data,
-                to: path,
-                contentType: Self.mimeType(for: filename)
-            )
-            voicePath = path
             uploaded += 1
             bumpProgress(specimen, uploaded: uploaded, total: total)
         }
+        if lostSegments > 0 {
+            analytics?.event("voice.audio_write_failed",
+                             ["reason": "missing_local", "count": String(lostSegments)])
+        }
         try? store.save()
-        return voicePath
+        return voicePaths
+    }
+
+    /// Uploads one voice segment and stamps its durable remote path. Returns nil
+    /// — a DROP, not a throw — when the local file cannot be read:
+    /// CaptureMediaAvailabilityError is not a LocalSyncError, so isDeferrable
+    /// does not apply, and throwing would permanently stick a note that today
+    /// commits transcript-only after a segment failed to flush on a full disk
+    /// or was lost across a reinstall.
+    private func uploadVoiceSegment(
+        _ filename: String,
+        for specimen: Specimen,
+        owner: CaptureOwnerIdentity,
+        remote: SupabaseCaptureGateway,
+        folder: String
+    ) async throws -> String? {
+        try requireActiveOwner(owner)
+        let url = store.mediaURL(for: filename)
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+            return nil
+        }
+        let path = "\(folder)/\(filename)"
+        try await remote.upload(data, to: path,
+                                contentType: Self.mimeType(for: filename))
+        // Stamp the durable path so missingRequiredMedia exempts this segment
+        // from now on, exactly as it exempts an uploaded photo. Upload is
+        // upsert-idempotent and a deferred commit re-runs the whole drain, so
+        // the stamp must not double-append on replay.
+        if specimen.voiceAudioRemotePathsRaw?.contains(path) != true {
+            specimen.voiceAudioRemotePathsRaw =
+                (specimen.voiceAudioRemotePathsRaw ?? []) + [path]
+        }
+        return path
     }
 
     private func requireActiveOwner(_ owner: CaptureOwnerIdentity) throws {
@@ -654,17 +690,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
     }
 
     private static func mimeType(for filename: String) -> String {
-        switch (filename as NSString).pathExtension.lowercased() {
-        case "heic", "heif": return "image/heic"
-        case "jpg", "jpeg":  return "image/jpeg"
-        case "png":          return "image/png"
-        case "webp":         return "image/webp"
-        case "m4a":          return "audio/x-m4a"
-        case "mp4":          return "audio/mp4"
-        case "aac":          return "audio/aac"
-        case "wav":          return "audio/wav"
-        default:             return "application/octet-stream"
-        }
+        CaptureMediaMime.forFilename(filename)
     }
 
     // ── snapshot plumbing ──────────────────────────────────────────────────────

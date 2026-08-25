@@ -235,7 +235,9 @@ public extension FieldCapturePayload {
         let transcript = s.voiceTranscript?.nonEmpty
         let partial = s.voicePartialTranscript?.nonEmpty
         let audioPath = s.voiceAudioFilename?.nonEmpty
-        let segments = (s.voiceAudioSegmentsRaw ?? []).filter { !$0.isEmpty }
+        let segments = (s.voiceAudioSegmentsRaw ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         let duration = s.voiceDurationSeconds
         guard transcript != nil || partial != nil || audioPath != nil
                 || !segments.isEmpty || duration != nil else { return nil }

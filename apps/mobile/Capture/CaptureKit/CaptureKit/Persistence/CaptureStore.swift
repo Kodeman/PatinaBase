@@ -522,7 +522,8 @@ public final class CaptureStore {
         // does not apply — one unreadable segment would HARD-fail a note that
         // today syncs transcript-only.
         let uploaded = Set((specimen.voiceAudioRemotePathsRaw ?? [])
-            .compactMap { $0.split(separator: "/").last.map(String.init) })
+            .compactMap { $0.split(separator: "/").last.map(String.init) }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
         var seen = Set<String>()
         let voiceNames = ([specimen.voiceAudioFilename]
                           + (specimen.voiceAudioSegmentsRaw ?? []).map { Optional($0) })

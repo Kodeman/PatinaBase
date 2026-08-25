@@ -84,7 +84,10 @@ public final class Specimen {
     /// in this app. `voiceAudioFilename` stays segment 0 for every reader that
     /// predates segmentation.
     public var voiceAudioSegmentsRaw: [String]?
-    /// Remote object paths for segments that have uploaded, in the same order.
+    /// Remote object paths for segments that have uploaded. Append-only and
+    /// order-independent: readers match a segment by the path's trailing
+    /// component, not by index, because `[String]?` cannot express a sparse
+    /// positional array when only some segments have uploaded.
     /// This is what lets missingRequiredMedia exempt an uploaded segment the
     /// way it already exempts an uploaded photo — without it a voice file is
     /// required-LOCAL forever and one unreadable segment blocks a whole note.
