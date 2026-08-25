@@ -137,9 +137,11 @@
         // review finding W-1 — a 10s proxy abort in front of stripe-webhook (sync DB writes + email sends) risks silent event loss inside Stripe's ~30s window.
         "COMPATIBILITY_FETCH_TIMEOUT_MS": "30000",
         "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
-        // Production stays off for the whole of this plan — the scan read path
-        // ships to staging only (DELIVERY-PLAN W2 "Does not").
-        "SCAN_ROUTES": "off",
+        // Scan read routes ACTIVATED on prod 2026-08-25 (combined scan-wave Step 9,
+        // Kody-GO'd). Read-only R2 token secrets are set on the worker; MEDIA_UPLOADS
+        // stays off (uploads deferred). Rollback = flip back to "off" + config:check
+        // + deploy (~5s, same mechanism as the catalog rung rollback).
+        "SCAN_ROUTES": "on",
         "SCAN_R2_ENDPOINT": "https://be3aaeed18a81b5d90ee2263b62219ea.r2.cloudflarestorage.com",
         "SCAN_R2_BUCKET": "patina-media-artifacts-us",
         // Production stays off for the whole of this plan — the upload
