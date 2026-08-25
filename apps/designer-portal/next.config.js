@@ -278,6 +278,16 @@ const nextConfig = {
         pathname: '/storage/**',
       },
       {
+        // Room-scan thumbnails and other Supabase Storage objects fetched
+        // directly by URL (not proxied through api.patina.cloud) — fixes
+        // today-broken thumbnails. Storage stays pinned to the direct
+        // *.supabase.co host regardless of the D-repoint edge-API flip (see
+        // packages/supabase/src/client.ts's pinStorageDirect()).
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/storage/v1/**',
+      },
+      {
         protocol: 'https',
         hostname: 'media.patina.cloud',
         pathname: '/**',
