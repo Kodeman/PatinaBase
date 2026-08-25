@@ -107,6 +107,7 @@ public enum CaptureSessionContextPolicy {
     ) -> CaptureSessionContext {
         guard let existing,
               existing.identity == identity,
+              existing.endedAt == nil,
               now.timeIntervalSince(existing.lastActivityAt) < inactivityWindow,
               now >= existing.lastActivityAt else {
             return CaptureSessionContext(
@@ -183,18 +184,50 @@ public final class CaptureSessionContextStore {
         return updated
     }
 
+    public func visitState(
+        identity: CaptureSessionIdentity,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> CaptureVisitState {
+        let stored = defaults.data(forKey: key).flatMap {
+            try? decoder.decode(CaptureSessionContext.self, from: $0)
+        }
+        guard let stored, stored.identity == identity else { return .none }
+        return CaptureSessionContextPolicy.visitState(for: stored, now: now, calendar: calendar)
+    }
+
+    @discardableResult
+    public func startVisit(
+        _ draft: CaptureVisitDraft,
+        identity: CaptureSessionIdentity,
+        now: Date = Date()
+    ) -> CaptureSessionContext {
+        let context = CaptureSessionContextPolicy.started(draft, identity: identity, now: now)
+        persist(context)
+        return context
+    }
+
+    /// Ends the OPEN visit rather than replacing it with a fresh one: the visit
+    /// keeps its `visitID` and gains an `endedAt`, so what just closed is still
+    /// readable and `visitState` reads `.none` from here on. The next capture
+    /// mints a kindless context through `resolve`.
     @discardableResult
     public func endVisit(
         identity: CaptureSessionIdentity,
         now: Date = Date()
     ) -> CaptureSessionContext {
-        let next = CaptureSessionContext(
-            identity: identity,
-            startedAt: now,
-            lastActivityAt: now
-        )
-        persist(next)
-        return next
+        let open = defaults.data(forKey: key).flatMap {
+            try? decoder.decode(CaptureSessionContext.self, from: $0)
+        }
+        guard let open, open.identity == identity, open.endedAt == nil else {
+            let fresh = CaptureSessionContext(identity: identity, startedAt: now,
+                                              lastActivityAt: now)
+            persist(fresh)
+            return fresh
+        }
+        let closed = CaptureSessionContextPolicy.ended(open, now: now)
+        persist(closed)
+        return closed
     }
 
     public func reset() {
