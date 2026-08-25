@@ -1,0 +1,118 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 00531 — restore EXECUTE on extensions.{uuid_generate_v5,digest,gen_random_uuid}
+-- for authenticated
+--
+-- Number drawn from the Field Companion reservation band (00530–00535, see
+-- docs/engineering/migration-number-reservations.md on branch
+-- feat/field-companion-w1). This hotfix has NO dependency on 00530 (it does
+-- not read, write, or reference any object 00530 introduces) and may apply
+-- to prod BEFORE 00530 lands.
+--
+-- Root cause: Strata revokes PUBLIC EXECUTE on `extensions.*` utility
+-- functions at the platform level. A SECURITY INVOKER function (or a
+-- security_invoker view) that calls one of those utility functions runs the
+-- call as the CALLING role (authenticated, via PostgREST/authenticator) —
+-- there is no owner-privilege escalation the way there is for SECURITY
+-- DEFINER. If `authenticated` was never explicitly granted EXECUTE on the
+-- extension function itself, the call throws `permission denied for
+-- function <fn>` (sql_state 42501) at the exact moment Postgres evaluates
+-- it — regardless of the caller's RLS/business-logic access to the
+-- INVOKER function or view around it. Schema-qualifying the call (writing
+-- `extensions.uuid_generate_v5(...)` instead of a bare name) does NOT fix
+-- this: schema-qualification only fixes function *resolution* under a
+-- search_path that omits `extensions` (the separate, already-fixed 00282
+-- incident) — it has no effect on the EXECUTE grant, which is checked
+-- against the resolved function regardless of how it was spelled in the
+-- calling body.
+--
+-- Confirmed read-only on Strata prod, 2026-08-25 (Phase 3 lane audit),
+-- via `execute_sql` (SELECT only):
+--
+--   select p.oid::regprocedure, p.proacl from pg_proc p
+--   join pg_namespace n on n.oid = p.pronamespace
+--   where n.nspname = 'extensions'
+--     and p.proname in ('uuid_generate_v5','digest','gen_random_uuid');
+--
+--     digest(bytea,text)         {postgres=X*/postgres,dashboard_user=X/postgres}
+--     digest(text,text)          {postgres=X*/postgres,dashboard_user=X/postgres}
+--     extensions.gen_random_uuid() {postgres=X*/postgres,dashboard_user=X/postgres}
+--     uuid_generate_v5(uuid,text) {postgres=X*/postgres,dashboard_user=X/postgres}
+--
+--   All four signatures found on prod carry EXECUTE for postgres and
+--   dashboard_user only — never authenticated, anon, or PUBLIC. Confirmed
+--   directly: has_function_privilege('authenticated', <each>, 'EXECUTE')
+--   returned false for all four; has_function_privilege('anon', ...,
+--   'EXECUTE') also false for all four. `gen_random_bytes` was audited and
+--   excluded from this fix — every caller found is SECURITY DEFINER (owner
+--   EXECUTE is implicit; the invoker-role gap this migration closes does
+--   not apply to it).
+--
+-- Audit (Phase 3 lane, 2026-08-25) of every INVOKER-path caller of these
+-- four functions, each confirmed `prosecdef = false` on prod:
+--
+--   select proname, prosecdef from pg_proc
+--   where proname in ('commit_field_capture','place_product_in_project',
+--     'guard_document_share_board_payload',
+--     'sanitize_project_review_item_snapshot');
+--
+--     commit_field_capture                 prosecdef=false  (extensions.digest(bytea,text) —
+--                                                             CONFIRMED broken on prod for real
+--                                                             callers since 00516; every commit
+--                                                             calls enqueue_capture_enrichment_for_
+--                                                             producer with a digest-derived
+--                                                             p_content_hash argument, evaluated
+--                                                             under the SECURITY INVOKER caller)
+--     place_product_in_project             prosecdef=false  (extensions.gen_random_uuid() — hit
+--                                                             only on the v_key IS NULL branch,
+--                                                             i.e. a caller that supplies neither
+--                                                             sourceMetadata.idempotencyKey nor
+--                                                             sourceMetadata.captureId; likely
+--                                                             broken for that call shape)
+--     guard_document_share_board_payload   prosecdef=false  (extensions.digest — a BEFORE
+--                                                             INSERT/UPDATE trigger guard fn on
+--                                                             document_shares, reached under
+--                                                             authenticated writes; latent —
+--                                                             fires only on the branch that
+--                                                             calls digest)
+--     sanitize_project_review_item_snapshot prosecdef=false (extensions.digest — a trigger/guard
+--                                                             fn under authenticated writes on
+--                                                             project_review_* tables; same
+--                                                             latent shape as above)
+--
+--   public.margin_items (introduced 00194, security_invoker = true —
+--   confirmed via `select reloptions from pg_class where relname=
+--   'margin_items'` returning {security_invoker=true}) is the original
+--   00531 case: its 'time' branch (rolling 7-day project_time_entries
+--   summary, unchanged through 00197/00200/00202/00206/00219/00282) calls
+--   extensions.uuid_generate_v5(...) to synthesize a per-day item_id,
+--   evaluated as the querying role (authenticated) because the view is
+--   security_invoker.
+--
+--   DEFINER-path callers of these same four extension functions were
+--   audited and are SAFE — they run as the function owner (implicit
+--   EXECUTE on every object the owner can already reach), so the missing
+--   authenticated/anon grant never surfaces there. This migration does
+--   nothing for them and grants nothing they didn't already have.
+--
+-- Fix: four targeted GRANTs, matching the existing narrow-grant pattern on
+-- this function family (see _send_proposal_with_dispatch's scoped REVOKE
+-- in 00390). NOT to anon, NOT to PUBLIC — each INVOKER caller's own access
+-- is already gated by its own RLS/ownership checks (field_captures RLS +
+-- the enqueue_capture_enrichment_for_producer ownership check for
+-- commit_field_capture; margin_items' base-table RLS via security_invoker;
+-- project/document ownership checks in the two guard/sanitize trigger
+-- functions; project_ffe_items validation in place_product_in_project's
+-- downstream v2 chain) — this migration only unblocks the extension-
+-- function call itself for the authenticated role that legitimately
+-- reaches it through one of those paths. No function body, view
+-- definition, or default privilege is touched by this migration.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+BEGIN;
+
+GRANT EXECUTE ON FUNCTION extensions.uuid_generate_v5(uuid, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION extensions.digest(bytea, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION extensions.digest(text, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION extensions.gen_random_uuid() TO authenticated;
+
+COMMIT;

@@ -11689,3 +11689,27 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.commit_field_capture(UUID, TEXT, JSONB, UUID, UUID, TEXT, UUID) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00531_restore_extension_execute_authenticated.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION extensions.uuid_generate_v5(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00531_restore_extension_execute_authenticated.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION extensions.digest(bytea, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00531_restore_extension_execute_authenticated.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION extensions.digest(text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00531_restore_extension_execute_authenticated.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION extensions.gen_random_uuid() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
