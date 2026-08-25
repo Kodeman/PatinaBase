@@ -103,10 +103,12 @@ struct ProjectCacheTests {
 
     private func snapshot(_ id: String, name: String,
                           visited: Date? = nil, refreshed: Date? = nil,
-                          filed: Int = 0) -> CaptureProjectSnapshot {
+                          filed: Int = 0,
+                          awaitingSync: Bool = false) -> CaptureProjectSnapshot {
         CaptureProjectSnapshot(id: id, name: name, specRooms: [], rooms: [],
                                lastRefreshedAt: refreshed, lastVisitedAt: visited,
-                               lastFiledCoordinate: nil, filedCaptureCount: filed)
+                               lastFiledCoordinate: nil, filedCaptureCount: filed,
+                               isAwaitingSync: awaitingSync)
     }
 
     @Test func orderingIsMostRecentlyVisitedFirst() {
@@ -153,5 +155,70 @@ struct ProjectCacheTests {
                    snapshot("b", name: "Harbor loft")]
         #expect(CaptureProjectCachePolicy.filter(all, query: "  maple ").map(\.id) == ["a"])
         #expect(CaptureProjectCachePolicy.filter(all, query: "").map(\.id) == ["a", "b"])
+    }
+
+    @Test func aNeverTouchedProjectIsNotEvictedByAge() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        // Reachable, not hypothetical: `CaptureProjectRef.init` sets neither stamp,
+        // so a project made at the door with no signal has both nil.
+        #expect(CaptureProjectCachePolicy.evictable([snapshot("new", name: "New")],
+                                                    now: now) == [])
+
+        // The cap still bounds them, so the cache does not grow without limit.
+        let cap = CaptureProjectCachePolicy.maxCachedProjects
+        let many = (0...cap).map { snapshot("p\($0)", name: String(format: "Project %02d", $0)) }
+        #expect(CaptureProjectCachePolicy.evictable(many, now: now) == ["p\(cap)"])
+    }
+
+    @Test func aProjectAwaitingSyncIsNeverEvictable() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let old = now.addingTimeInterval(-CaptureProjectCachePolicy.evictAfter - 1)
+
+        // Not by age.
+        #expect(CaptureProjectCachePolicy.evictable(
+            [snapshot("local", name: "Local", visited: old, refreshed: old, awaitingSync: true)],
+            now: now) == [])
+
+        // Nor by the cap: this phone holds the only copy of every one of them.
+        let cap = CaptureProjectCachePolicy.maxCachedProjects
+        let many = (0...cap).map {
+            snapshot("l\($0)", name: "Local \($0)",
+                     visited: now.addingTimeInterval(-Double($0)), awaitingSync: true)
+        }
+        #expect(CaptureProjectCachePolicy.evictable(many, now: now) == [])
+    }
+
+    @Test func aFreshRefreshOutweighsAStaleVisit() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let old = now.addingTimeInterval(-CaptureProjectCachePolicy.evictAfter - 1)
+        let evictable = CaptureProjectCachePolicy.evictable([
+            snapshot("keep", name: "Keep", visited: old, refreshed: now.addingTimeInterval(-3600)),
+            snapshot("drop", name: "Drop", visited: old, refreshed: old)
+        ], now: now)
+        #expect(evictable == ["drop"])
+    }
+
+    @Test func theCapEvictsPastMaxCachedProjectsEvenWhenJustVisited() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let cap = CaptureProjectCachePolicy.maxCachedProjects
+        let all = (0...cap).map {
+            snapshot("p\($0)", name: "Project \($0)", visited: now.addingTimeInterval(-Double($0)))
+        }
+        // R19: the cap is authoritative. Least-recently-touched goes over the side.
+        #expect(CaptureProjectCachePolicy.evictable(all, now: now) == ["p\(cap)"])
+    }
+
+    @Test func orderingFallsFromVisitedToRefreshedToNameToID() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let visited = now.addingTimeInterval(-60)
+        let ordered = CaptureProjectCachePolicy.ordered([
+            snapshot("d", name: "Same", visited: visited, refreshed: now),
+            snapshot("c", name: "Same", visited: visited, refreshed: now),
+            snapshot("b", name: "Alpha", visited: visited, refreshed: now),
+            snapshot("a", name: "Zulu", visited: visited, refreshed: now.addingTimeInterval(-1))
+        ], now: now)
+        // All four tie on key 1. Key 2 (refreshed) sinks "a" despite its name; key 3
+        // (name) lifts "Alpha"; key 4 (id) settles the two "Same" rows deterministically.
+        #expect(ordered.map(\.id) == ["b", "c", "d", "a"])
     }
 }

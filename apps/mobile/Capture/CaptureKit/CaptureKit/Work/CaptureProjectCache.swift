@@ -23,8 +23,9 @@ public struct CaptureProjectSnapshot: Identifiable, Hashable, Sendable {
     public let lastVisitedAt: Date?
     public let lastFiledCoordinate: CaptureCoordinate?
     public let filedCaptureCount: Int
-    /// True when `id` is a LOCAL uuid because the project has not synced yet.
-    /// Selectable, captionable, and not yet routable server-side.
+    /// True when `id` is a LOCAL uuid, not a `projects.id`. Selectable, captionable,
+    /// and not yet routable server-side — and never evictable, because this phone
+    /// holds the only copy.
     public let isAwaitingSync: Bool
 
     public init(id: String, name: String,
@@ -67,21 +68,47 @@ public enum CaptureProjectCachePolicy {
             let refreshedL = lhs.lastRefreshedAt ?? .distantPast
             let refreshedR = rhs.lastRefreshedAt ?? .distantPast
             if refreshedL != refreshedR { return refreshedL > refreshedR }
-            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            let byName = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+            if byName != .orderedSame { return byName == .orderedAscending }
+            // `sorted` is not stable and `evictable`'s cut is positional, so without
+            // a total order the tie decides which row gets DELETED.
+            return lhs.id < rhs.id
         }
     }
 
-    /// Which cached rows to delete. Never evicts a project visited inside `evictAfter`.
+    /// Which cached rows to delete — **candidates**, not a verdict: Task 3 subtracts
+    /// anything a `Specimen` or an S1/S2 flow still owns (R18) before it deletes.
+    /// Never evicts a project touched inside `evictAfter`, one never touched at all,
+    /// or one awaiting sync. Rows past `maxCachedProjects` ARE evicted even when just
+    /// visited (R19) — an unbounded cache on a phone is the worse failure.
     public static func evictable(_ snapshots: [CaptureProjectSnapshot],
                                  now: Date) -> [String] {
-        let expired = snapshots.filter { snapshot in
-            let touched = snapshot.lastVisitedAt ?? snapshot.lastRefreshedAt ?? .distantPast
+        let ranked = ordered(snapshots, now: now)
+        // A row awaiting sync lives only on this phone; no refresh can bring it back.
+        let candidates = ranked.filter { !$0.isAwaitingSync }
+        let expired = candidates.filter { snapshot in
+            // Never touched is not "touched in year 1". `CaptureProjectRef.init`
+            // leaves both stamps nil, so a project she makes at the door with no
+            // signal would otherwise be evictable on the very first sweep.
+            guard let touched = lastTouched(snapshot) else { return false }
             return now.timeIntervalSince(touched) > evictAfter
         }
-        let overflow = ordered(snapshots, now: now).dropFirst(maxCachedProjects)
+        let overflow = candidates.dropFirst(maxCachedProjects)
         var ids = Set(expired.map(\.id))
         ids.formUnion(overflow.map(\.id))
-        return ordered(snapshots, now: now).map(\.id).filter { ids.contains($0) }
+        return ranked.map(\.id).filter { ids.contains($0) }
+    }
+
+    /// The later of the two stamps; nil only when neither was ever set. A refresh
+    /// counts even when a visit also happened, so a project she last stood in two
+    /// months ago but that refreshed yesterday does not read as abandoned.
+    private static func lastTouched(_ snapshot: CaptureProjectSnapshot) -> Date? {
+        switch (snapshot.lastVisitedAt, snapshot.lastRefreshedAt) {
+        case let (visited?, refreshed?): return max(visited, refreshed)
+        case let (visited?, nil):        return visited
+        case let (nil, refreshed?):      return refreshed
+        case (nil, nil):                 return nil
+        }
     }
 
     /// §13's specified failure copy. Never "no projects", never a spinner.
