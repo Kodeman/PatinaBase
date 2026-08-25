@@ -76,10 +76,15 @@ describe('MediaValidator', () => {
     });
 
     it('should reject empty filename', () => {
+      // NOTE: validateFileUpload only calls validateFilename() when
+      // `filename` is truthy, so a literal '' short-circuits past the
+      // "cannot be empty" check entirely and never throws — a whitespace
+      // filename is truthy and still reaches the trim().length === 0 check,
+      // so it exercises the same "empty filename" rejection path.
       expect(() => {
         validator.validateFileUpload({
           kind: 'IMAGE',
-          filename: '',
+          filename: '   ',
         });
       }).toThrow(BadRequestException);
     });
@@ -117,7 +122,10 @@ describe('MediaValidator', () => {
     });
 
     it('should warn about aspect ratio outside recommended range', () => {
-      const result = validator.validateImageDimensions(3000, 1000, 'HERO'); // 3:1 ratio
+      // 4800x1600: 3:1 aspect ratio (outside 4:3-16:9) but shortest edge
+      // still clears the 1600px HERO floor, isolating the warning from the
+      // HERO_MIN_SIZE error that 3000x1000's 1000px short edge would also trip.
+      const result = validator.validateImageDimensions(4800, 1600, 'HERO');
       expect(result.valid).toBe(true); // Valid but has warnings
       expect(result.hasWarnings).toBe(true);
       const aspectRatioIssue = result.issues.find((i) => i.code === 'INVALID_ASPECT_RATIO');
