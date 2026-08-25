@@ -288,9 +288,6 @@ final class LocalCaptureSyncService: CaptureSyncService {
                 userID: uid
             )
         }
-        // The receipt is in hand, so the placement reached the server: let go of
-        // the bit, or the row would re-commit on every drain from here on.
-        if specimen.confirmPlacementReplay() { try? store.save() }
         if let productID = receipt.productId {
             try await performProjectPlacementIfNeeded(
                 for: specimen,
@@ -339,6 +336,11 @@ final class LocalCaptureSyncService: CaptureSyncService {
             shelf: specimen.venue?.shelf,
             organizationID: UUID(uuidString: owner.workspaceID)
         )
+        // FC-R6: the placement AS SENT, taken with the routing. She can re-place
+        // during the awaits below, and the receipt must not be read as covering
+        // a project it never carried.
+        let sentProjectID = specimen.venue?.projectId
+        let sentProjectRoomID = specimen.venue?.projectRoomId
         try requireActiveOwner(owner)
         specimen.applyTransferState(CaptureTransferState(
             phase: .awaitingConfirmation,
@@ -362,7 +364,12 @@ final class LocalCaptureSyncService: CaptureSyncService {
             routing: routing
         )
         try requireActiveOwner(owner)
-        return try applyCommitResult(result, to: specimen)
+        let receipt = try applyCommitResult(result, to: specimen)
+        if specimen.reconcilePlacementReplay(sentProjectID: sentProjectID,
+                                             sentProjectRoomID: sentProjectRoomID) {
+            try? store.save()
+        }
+        return receipt
     }
 
     /// FC-R6: `canReuseConfirmedReceipt` is `hasConfirmedCaptureReceipt` MINUS a

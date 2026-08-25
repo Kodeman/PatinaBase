@@ -22,8 +22,8 @@ struct WorkTodayBand: View {
             case .open(let label, let startedAt, _, _, _):
                 openRow(label: label, startedAt: startedAt)
                 Divider().background(CaptureColor.line)
-            case .stale(let label, let startedAt):
-                staleRow(label: label, startedAt: startedAt)
+            case .stale(_, let startedAt):
+                staleRow(startedAt: startedAt)
                 Divider().background(CaptureColor.line)
             }
 
@@ -101,16 +101,16 @@ struct WorkTodayBand: View {
         .padding(.vertical, 14)
     }
 
-    private func staleRow(label: String, startedAt: Date) -> some View {
+    /// The place is named ONCE: `visitSubtitle` is already "Still at Maple St?",
+    /// so repeating the bare label above it just says the same thing twice.
+    private func staleRow(startedAt: Date) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(label)
-                .font(CaptureType.bodyEmph)
-                .foregroundStyle(CaptureColor.ink)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(band.visitSubtitle ?? "Still here?")
-                .font(CaptureType.footnote)
-                .foregroundStyle(CaptureColor.inkSoft)
-                .fixedSize(horizontal: false, vertical: true)
+            if let subtitle = band.visitSubtitle {
+                Text(subtitle)
+                    .font(CaptureType.bodyEmph)
+                    .foregroundStyle(CaptureColor.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text("started \(RouteFormat.time(startedAt))")
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.inkSoft)

@@ -212,7 +212,7 @@ struct TodayBandTests {
     /// handed back the old receipt without re-sending. Both are asserted here.
     /// `LocalCaptureSyncService` itself lives in the app target, which this
     /// bundle cannot link — `canReuseConfirmedReceipt` and
-    /// `confirmPlacementReplay()` are the CaptureKit rules it reads and calls.
+    /// `reconcilePlacementReplay(…)` are the CaptureKit rules it reads and calls.
     @Test func aPlacedCommittedCaptureReentersTheDrainAndLeavesItOnce() throws {
         let store = try CaptureStore.inMemory()
         let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
@@ -234,12 +234,129 @@ struct TodayBandTests {
         // Gate 2 — and the short-circuit stands aside, so it really re-commits.
         #expect(!capture.canReuseConfirmedReceipt)
 
-        // The receipt lands: the bit is let go of, once.
-        #expect(capture.confirmPlacementReplay())
+        // The drain sends exactly what the record says, and the receipt lands:
+        // the bit is let go of, once.
+        #expect(capture.reconcilePlacementReplay(sentProjectID: "p1",
+                                                 sentProjectRoomID: "sr1"))
         try store.save()
         #expect(!capture.placementNeedsReplay)
         #expect(capture.canReuseConfirmedReceipt)
         #expect(!store.outbox(owner: owner).contains { $0.id == capture.id })
-        #expect(!capture.confirmPlacementReplay())
+        // A second receipt for the same placement changes nothing.
+        #expect(!capture.reconcilePlacementReplay(sentProjectID: "p1",
+                                                  sentProjectRoomID: "sr1"))
+    }
+
+    /// Finding 1. During a drain the row is `.uploading`, so `place(…)`'s
+    /// `status == .committed` test is false and it sets NO bit of its own. If the
+    /// receipt for the OLDER placement cleared the bit unconditionally, the newer
+    /// project would never reach the server and nothing would survive to force
+    /// another replay — the same silent divergence, one layer in.
+    @Test func aReplacementDuringAnInFlightDrainStillReachesTheServer() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let capture = store.newDraft(owner: owner)
+        capture.status = .committed
+        capture.remoteId = UUID().uuidString
+        capture.committedProductId = UUID().uuidString
+        capture.place(projectID: "p1", projectRoomID: "sr1", room: "Living")
+        try store.save()
+        #expect(capture.placementNeedsReplay)
+
+        // The drain picks it up: the routing snapshot is taken (p1 is what goes
+        // out) and beginAttempt moves the row off .committed.
+        let sentProjectID = capture.venue?.projectId
+        let sentProjectRoomID = capture.venue?.projectRoomId
+        capture.status = .uploading
+
+        // Mid-flight she corrects herself. No bit is set by this call.
+        capture.place(projectID: "p2", projectRoomID: "sr2", room: "Kitchen")
+        try store.save()
+
+        // The receipt for p1 lands. It must not be read as covering p2.
+        capture.status = .committed
+        capture.reconcilePlacementReplay(sentProjectID: sentProjectID,
+                                         sentProjectRoomID: sentProjectRoomID)
+        try store.save()
+
+        #expect(capture.placementNeedsReplay)
+        #expect(!capture.canReuseConfirmedReceipt)
+        #expect(store.outbox(owner: owner).contains { $0.id == capture.id })
+
+        // The next drain carries p2 — only then does the bit go.
+        #expect(capture.reconcilePlacementReplay(sentProjectID: "p2",
+                                                 sentProjectRoomID: "sr2"))
+        try store.save()
+        #expect(!capture.placementNeedsReplay)
+        #expect(!store.outbox(owner: owner).contains { $0.id == capture.id })
+    }
+
+    /// The same hole on a FIRST commit, where there was no bit to preserve. The
+    /// mismatch itself has to raise one — which is why this reconciles rather
+    /// than merely declining to clear.
+    @Test func aReplacementDuringAFirstCommitRaisesTheReplayBit() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let capture = store.newDraft(owner: owner)
+        capture.place(projectID: "p1", projectRoomID: nil, room: nil)  // .draft
+        try store.save()
+        #expect(!capture.placementNeedsReplay)
+
+        let sentProjectID = capture.venue?.projectId
+        capture.status = .uploading
+        capture.place(projectID: "p2", projectRoomID: nil, room: nil)
+        capture.status = .committed
+        capture.remoteId = UUID().uuidString
+        try store.save()
+
+        #expect(capture.reconcilePlacementReplay(sentProjectID: sentProjectID,
+                                                 sentProjectRoomID: nil))
+        try store.save()
+        #expect(capture.placementNeedsReplay)
+        #expect(store.outbox(owner: owner).contains { $0.id == capture.id })
+    }
+
+    // MARK: - Unplaced narrows on DESTINATION, never on sync
+
+    /// Spec Flow 6: an un-chipped market find filed to the Library shelf is DONE
+    /// — only a chipped one takes `place_product_in_project`. It is not waiting
+    /// on Today, and before this it sat in the tray forever with no way to clear.
+    @Test func aLibraryCaptureWithNoProjectIsNotUnplaced() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let library = store.newDraft(owner: owner)
+        library.destination = .library
+        let note = store.newDraft(owner: owner)
+        note.destination = .inbox
+        note.voiceTranscript = "the baseboard by the door is chewed up"
+        try store.save()
+
+        #expect(!library.isUnplaced)
+        #expect(note.isUnplaced)
+
+        let mine = store.unfiled(owner: owner)
+        #expect(!mine.contains { $0.id == library.id })
+        #expect(mine.contains { $0.id == note.id })
+    }
+
+    /// Destination and sync state are different axes and only one of them moves:
+    /// a COMMITTED inbox capture with no project is still unplaced.
+    @Test func destinationNarrowsUnplacedButSyncStateNeverDoes() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let committedInbox = store.newDraft(owner: owner)
+        committedInbox.destination = .inbox
+        committedInbox.status = .committed
+        committedInbox.remoteId = UUID().uuidString
+        let committedLibrary = store.newDraft(owner: owner)
+        committedLibrary.destination = .library
+        committedLibrary.status = .committed
+        committedLibrary.remoteId = UUID().uuidString
+        try store.save()
+
+        #expect(committedInbox.isUnplaced)
+        #expect(!committedLibrary.isUnplaced)
+        // An undecided draft still owes a decision, so it counts.
+        #expect(store.newDraft(owner: owner).isUnplaced)
     }
 }

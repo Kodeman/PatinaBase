@@ -36,7 +36,7 @@ struct WorkDashboardScreen: View {
                 WorkTodayBand(
                     band: model.todayBand,
                     onCamera: {
-                        analytics.event("work.switch_to_camera")
+                        analytics.event("work.switch_to_camera", ["source": "visit"])
                         coordinator.switchRealm(.camera)
                     },
                     onStartVisit: { coordinator.present(.visit) },
@@ -145,7 +145,7 @@ struct WorkDashboardScreen: View {
 
     private var cameraRealmButton: some View {
         Button {
-            analytics.event("work.switch_to_camera")
+            analytics.event("work.switch_to_camera", ["source": "header"])
             coordinator.switchRealm(.camera)
         } label: {
             Group {

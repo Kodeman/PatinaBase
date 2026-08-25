@@ -287,12 +287,31 @@ public extension Specimen {
         set { suggestionBasisRaw = newValue?.rawValue }
     }
 
+    /// Whether this capture's destination is one that OWES a project.
+    /// Spec Flow 6: an un-chipped market find filed to the Library shelf is
+    /// DONE — only a chipped one takes `place_product_in_project` — so a
+    /// `.library` capture is never waiting to be placed. `.undecided` is the
+    /// default a fresh draft carries and still owes a decision, so it counts.
+    /// Switched, not compared, so a fourth destination has to choose a side.
+    var destinationRequiresProject: Bool {
+        switch destination {
+        case .library: return false
+        case .inbox, .undecided: return true
+        }
+    }
+
     /// "Placed" is `venue.projectId is not null` — the same rule the server uses
-    /// (`project_id IS NOT NULL`). There is no new status value, ever, and SYNC
-    /// STATE IS IRRELEVANT: a capture that committed hours ago and still has no
-    /// project is unplaced, and FC-R6 says it waits on Today until she files it.
+    /// (`project_id IS NOT NULL`) — for a destination that owes a project at all.
+    /// There is no new status value, ever, and SYNC STATE IS IRRELEVANT: a
+    /// capture that committed hours ago and still has no project is unplaced, and
+    /// FC-R6 says it waits on Today until she files it. This narrows on
+    /// DESTINATION, never on sync — the two are different axes and only one moves.
+    ///
+    /// The SINGLE shared predicate: Today's count and the tray's list both read
+    /// it, so R98's "they agree" holds by construction rather than by discipline.
     var isUnplaced: Bool {
-        (venue?.projectId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty
+        guard destinationRequiresProject else { return false }
+        return (venue?.projectId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty
     }
 
     /// FC-R6: a capture that was placed AFTER it committed. The server learns the
@@ -308,12 +327,28 @@ public extension Specimen {
         hasConfirmedCaptureReceipt && !placementNeedsReplay
     }
 
-    /// The server has the placement now. Clears the replay bit so the row leaves
-    /// the drain — it replays once, not forever. Returns whether it changed.
+    /// A receipt just landed for the placement named in `sent`. If the record
+    /// still says what went out, the server is current and the replay bit is let
+    /// go of — it replays once, not forever. If she re-placed WHILE the RPC was
+    /// in flight, what went out is already stale, so the bit is raised instead
+    /// and the ordinary drain carries the newer project.
+    ///
+    /// Raising, not merely declining to clear, is what closes the hole: during a
+    /// drain the row is `.uploading`, so `place(…)` sets no bit of its own, and a
+    /// receipt for the OLDER placement would otherwise clear the bit and strand
+    /// the newer one — the same silent divergence one layer in.
+    /// Returns whether the bit changed.
     @discardableResult
-    func confirmPlacementReplay() -> Bool {
-        guard placementReplayPending == true else { return false }
-        placementReplayPending = nil
+    func reconcilePlacementReplay(sentProjectID: String?,
+                                  sentProjectRoomID: String?) -> Bool {
+        func trimmed(_ value: String?) -> String {
+            (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let stillCurrent = trimmed(sentProjectID) == trimmed(venue?.projectId)
+            && trimmed(sentProjectRoomID) == trimmed(venue?.projectRoomId)
+        let desired: Bool? = stillCurrent ? nil : true
+        guard placementReplayPending != desired else { return false }
+        placementReplayPending = desired
         return true
     }
 
