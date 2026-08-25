@@ -98,8 +98,14 @@ app.build_configurations.each do |c|
     'Patina Field uses the camera to photograph products and read their labels, barcodes, and dimensions.'
   s['INFOPLIST_KEY_NSMicrophoneUsageDescription'] =
     'Used to record a quick voice note about a piece.'
+  # NOT "on-device": SpeechVoiceNoteService sets requiresOnDeviceRecognition
+  # from recognizer.supportsOnDeviceRecognition, so on an iPhone that cannot,
+  # the audio goes to Apple. The string has to be true on both paths — and
+  # forcing on-device instead would silently cost those iPhones transcription
+  # and make the wave's own `on_device` telemetry a constant.
   s['INFOPLIST_KEY_NSSpeechRecognitionUsageDescription'] =
-    'Transcribes your voice notes on-device.'
+    'Turns your voice notes into text. That happens on this iPhone where it can; ' \
+    'otherwise the recording is transcribed by Apple.'
   s['INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription'] =
     'Saves captures to your photo library.'
   s['INFOPLIST_KEY_NSPhotoLibraryUsageDescription'] =

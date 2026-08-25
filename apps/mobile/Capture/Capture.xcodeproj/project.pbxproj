@@ -1450,50 +1450,6 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		158C8D750E0A7599ABD1CA3B536B2652 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 4B6826371A60DDDA411A77F01CC3E554 /* BuildSettings.xcconfig */;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = Capture/Capture.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = VP22LXHT7L;
-				ENABLE_TESTABILITY = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Capture/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Patina Field";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Patina Field uses the camera to photograph products and read their labels, barcodes, and dimensions.";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Unlock Patina Field with Face ID.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Stamps each capture with the venue where you found it.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Used to record a quick voice note about a piece.";
-				INFOPLIST_KEY_NSMotionUsageDescription = "Shows a level guide for square, steady captures.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Saves captures to your photo library.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Import existing photos into a capture when the camera is unavailable.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Transcribes your voice notes on-device.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = cloud.patina.field;
-				PRODUCT_NAME = Capture;
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
 		6865C14FEDE2B00E67F22852A0E07CF7 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1623,7 +1579,7 @@
 			};
 			name = Debug;
 		};
-		BFF33849B6768E053CC643D4F9284642 /* Debug */ = {
+		BAC7AF8A16BD5914D49E6716855B8173 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 4B6826371A60DDDA411A77F01CC3E554 /* BuildSettings.xcconfig */;
 			buildSettings = {
@@ -1646,7 +1602,7 @@
 				INFOPLIST_KEY_NSMotionUsageDescription = "Shows a level guide for square, steady captures.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Saves captures to your photo library.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Import existing photos into a capture when the camera is unavailable.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Transcribes your voice notes on-device.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Turns your voice notes into text. That happens on this iPhone where it can; otherwise the recording is transcribed by Apple.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -1776,6 +1732,50 @@
 			};
 			name = Debug;
 		};
+		F1823BED23296E1F5673275F2F6AB789 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4B6826371A60DDDA411A77F01CC3E554 /* BuildSettings.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = Capture/Capture.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = VP22LXHT7L;
+				ENABLE_TESTABILITY = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Capture/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Patina Field";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Patina Field uses the camera to photograph products and read their labels, barcodes, and dimensions.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Unlock Patina Field with Face ID.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Stamps each capture with the venue where you found it.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Used to record a quick voice note about a piece.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Shows a level guide for square, steady captures.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Saves captures to your photo library.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Import existing photos into a capture when the camera is unavailable.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Turns your voice notes into text. That happens on this iPhone where it can; otherwise the recording is transcribed by Apple.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = cloud.patina.field;
+				PRODUCT_NAME = Capture;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		F936CFFFE25B4E0DD1F254AEA3E7C505 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1879,8 +1879,8 @@
 		ED9AE998B2BB523FE42472A5CC5362A7 /* Build configuration list for PBXNativeTarget "Capture" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				158C8D750E0A7599ABD1CA3B536B2652 /* Release */,
-				BFF33849B6768E053CC643D4F9284642 /* Debug */,
+				F1823BED23296E1F5673275F2F6AB789 /* Release */,
+				BAC7AF8A16BD5914D49E6716855B8173 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

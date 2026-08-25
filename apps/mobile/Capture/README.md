@@ -311,8 +311,16 @@ interactively, so archive + export are as far as it goes without Kody.
 actually calls: `NSPrivacyAccessedAPICategoryUserDefaults` (reason `CA92.1`
 — own app / app-group data only, e.g. `UserDefaults(suiteName:
 AppConfiguration.appGroupID)` in `SupabaseSessionService`) and
-`NSPrivacyAccessedAPICategoryFileTimestamp` (reason `C617.1` —
-`contentModificationDateKey` reads in `SiteScanBundleHome`). `NSPrivacyTracking`
+`NSPrivacyAccessedAPICategoryFileTimestamp` (reason `3B52.1` —
+`contentModificationDateKey` reads in `SiteScanBundleHome`, and in
+`CaptureStore.receiptedMediaFiles()`, which orders the media-retention sweep
+oldest-first). It also declares what the app collects when a real PostHog key
+is configured: `NSPrivacyCollectedDataTypeUserID` (the Supabase user id passed
+to `identify`, linked, analytics + app functionality — feature flags are keyed
+on it) and `NSPrivacyCollectedDataTypeProductInteraction` (screen and event
+calls, linked because `identify` ties them to that id). Neither is used for
+tracking. This is the manifest, and is separate from the App Store nutrition
+labels above. `NSPrivacyTracking`
 is `false` with no tracking domains. Re-audit this file if new
 required-reason API usage (disk space, system boot time, active keyboards)
 is added — App Store rejects an archive whose actual API usage isn't
