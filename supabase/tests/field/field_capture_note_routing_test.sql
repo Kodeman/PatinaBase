@@ -8,8 +8,17 @@
 --                          note-shaped capture arrived with no project.
 -- 2. AUDIO SEGMENTS      → voice.audioSegments round-trips.
 -- 3. CAPTURE KIND        → payload captureKind lands, defaulting to specimen.
--- 4. IDEMPOTENCY         → a second commit with the same client_capture_id is
---                          a no-op that does not clear routing.
+-- 4. RE-COMMIT           → a second commit with the same client_capture_id is
+--                          a FULL CONTENT OVERWRITE that must not clear
+--                          routing. ⚠ It is NOT a no-op: status is 'inbox',
+--                          which is not in ('saved','dismissed'), so the
+--                          upsert fires and every content column is rewritten
+--                          from EXCLUDED — this very case resets capture_kind
+--                          to 'specimen' and voice_audio_segments to '[]',
+--                          undoing what cases 2 and 3 just proved. Routing
+--                          survives only because the destination branch
+--                          COALESCEs it. The true no-op branch (already
+--                          'saved' or 'dismissed') is NOT exercised here.
 -- 5. SAFE HARBOR         → a project the caller does not own does NOT abort the
 --                          RPC. 00235:85-88 documents the routing deferral as
 --                          DELIBERATE ("so a bad route can be safe-harbored
@@ -47,6 +56,17 @@
 --                          absent. A projection that fires on good input is as
 --                          wrong as one that never fires. Asserted inline on
 --                          the case-1 row, which is the well-formed one.
+-- 14. CLEAR IS TOTAL     → a non-boolean routing.clear ("yes", 1, null) must
+--                          neither abort nor clear. The read is a jsonb
+--                          comparison, not a ::boolean cast, which would raise
+--                          22P02 outside every handler.
+-- 15. STALE STORED       → a capture whose STORED project_id has gone stale
+--     ROUTING              (its room was re-parented) must still sync. The
+--                          unconditional BEFORE UPDATE guard re-validates it
+--                          on the upsert — before either destination branch
+--                          and outside the harbors they carry — so the upsert
+--                          needs its own harbor. The stale routing is detached
+--                          and recorded, and the row commits.
 -- 13. NO CLOBBER         → projection_errors and the safe harbor's conflict
 --                          are distinct TOP-LEVEL keys of raw_payload, written
 --                          by two different merges. A capture that is both
@@ -272,6 +292,95 @@ BEGIN
   ASSERT v_conflict IS NOT NULL,
     'FAIL 13d: the projection must not clobber raw_payload.conflict';
   RAISE NOTICE 'field_capture routing: case 13 passed (projection_errors + conflict compose).';
+
+  -- 14 — a NON-BOOLEAN routing.clear must not abort ---------------------------
+  -- The read is ((v_payload #> '{routing,clear}') = 'true'::jsonb), not a
+  -- ::boolean cast. A cast would raise 22P02 on each of these, before the
+  -- upsert and outside every handler — the same forever-retry failure as
+  -- cases 8-11, one step earlier. Each must commit and PRESERVE routing.
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c8', 'inbox', '{}'::jsonb,
+    'fc000000-0000-4000-8000-0000000000a1',
+    'fc000000-0000-4000-8000-0000000000d1');
+
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c8', 'inbox',
+    jsonb_build_object('routing', jsonb_build_object('clear', 'yes')));
+  SELECT status, project_id INTO v_status, v_project
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c8';
+  ASSERT v_status = 'inbox',
+    'FAIL 14a: routing.clear "yes" must not abort the RPC, got status ' || COALESCE(v_status, 'NULL');
+  ASSERT v_project = 'fc000000-0000-4000-8000-0000000000a1',
+    'FAIL 14b: a non-boolean routing.clear must NOT clear routing, got '
+    || COALESCE(v_project::text, 'NULL');
+
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c8', 'inbox',
+    jsonb_build_object('routing', jsonb_build_object('clear', 1)));
+  SELECT project_id INTO v_project
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c8';
+  ASSERT v_project = 'fc000000-0000-4000-8000-0000000000a1',
+    'FAIL 14c: routing.clear 1 must not abort and must not clear routing, got '
+    || COALESCE(v_project::text, 'NULL');
+
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c8', 'inbox',
+    '{"routing": {"clear": null}}'::jsonb);
+  SELECT project_id INTO v_project
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c8';
+  ASSERT v_project = 'fc000000-0000-4000-8000-0000000000a1',
+    'FAIL 14d: routing.clear null must not abort and must not clear routing, got '
+    || COALESCE(v_project::text, 'NULL');
+  RAISE NOTICE 'field_capture routing: case 14 passed (non-boolean routing.clear).';
+
+  -- 15 — STALE STORED ROUTING must not abort the upsert -----------------------
+  -- trg_field_captures_guard_update is unconditional (00233:258-260), so the
+  -- ON CONFLICT DO UPDATE re-validates the STORED project_id even though it
+  -- never writes it. Transferring the project away makes that stored value
+  -- illegal, and without the upsert's own harbor the RPC aborts BEFORE either
+  -- destination branch — outside the harbors both branches carry. That row
+  -- would then be un-syncable from the device forever.
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c9', 'inbox', '{}'::jsonb,
+    'fc000000-0000-4000-8000-0000000000a1',
+    'fc000000-0000-4000-8000-0000000000d1');
+  SELECT project_id INTO v_project
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c9';
+  ASSERT v_project = 'fc000000-0000-4000-8000-0000000000a1',
+    'FAIL 15a: fixture setup — the capture should be routed before the project moves';
+
+  -- The room is re-parented to the other project. The capture's stored
+  -- (project_id, project_room_id) pair is now illegal — the guard's
+  -- "room must belong to the routed project" branch (00233:231-236).
+  -- (Transferring the project itself is not usable as a fixture here:
+  --  guard_project_terminal_identity_integrity refuses a direct designer_id
+  --  change, "project lead may only change through reassign_project_lead".)
+  UPDATE project_rooms
+     SET project_id = 'fc000000-0000-4000-8000-0000000000a2'
+   WHERE id = 'fc000000-0000-4000-8000-0000000000d1';
+
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c9', 'inbox',
+    jsonb_build_object('title', 'still syncing'));
+  SELECT status, project_id, project_room_id, raw_payload -> 'conflict'
+    INTO v_status, v_project, v_room, v_conflict
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c9';
+  ASSERT v_status = 'inbox',
+    'FAIL 15b: a capture with STALE STORED routing must still sync, got status '
+    || COALESCE(v_status, 'NULL');
+  ASSERT v_project IS NULL AND v_room IS NULL,
+    'FAIL 15c: stale stored routing must be detached, got project ' || COALESCE(v_project::text, 'NULL');
+  ASSERT v_conflict IS NOT NULL,
+    'FAIL 15d: the detached routing must be recorded in raw_payload.conflict';
+  ASSERT v_conflict ->> 'detached_project_id' = 'fc000000-0000-4000-8000-0000000000a1',
+    'FAIL 15e: the conflict must name what was detached so she can re-route by hand, got '
+    || COALESCE(v_conflict::text, 'NULL');
+  RAISE NOTICE 'field_capture routing: case 15 passed (stale stored routing detached, not aborted).';
+
+  -- Restore the fixture so nothing after this depends on the re-parenting.
+  UPDATE project_rooms
+     SET project_id = 'fc000000-0000-4000-8000-0000000000a1'
+   WHERE id = 'fc000000-0000-4000-8000-0000000000d1';
 
   PERFORM set_config('request.jwt.claims', NULL, true);
   RAISE NOTICE 'All field_capture note-routing assertions passed.';

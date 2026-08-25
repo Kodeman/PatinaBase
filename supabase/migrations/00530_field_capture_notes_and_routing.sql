@@ -160,20 +160,52 @@ CREATE POLICY field_captures_org_inbox_select
 --              the RPC on BOTH destinations and making an offline device
 --              retry that capture forever. Dropped values are recorded in
 --              raw_payload -> 'projection_errors', never raised.
+--     EDIT 4 — the UPSERT itself carries a safe harbor. See the next note.
 --
--- ⚠ THE INBOX BRANCH NEEDS ITS OWN SAFE HARBOR. 00235:85-88 records the routing
---   deferral as DELIBERATE — "project_id / project_room_id are deferred to the
---   library branch so a bad route can be safe-harbored instead of hard-failing
---   the whole sync" — and the library branch is wrapped in
---   BEGIN … EXCEPTION WHEN OTHERS (00235:223-299). An unwrapped inbox UPDATE
---   turns that documented safe harbor into a hard abort:
+-- ⚠ TWO SAFE HARBORS ARE NEEDED, NOT ONE — AND THE UPSERT'S IS THE LOAD-BEARING
+--   ONE. 00235:85-88 records the routing deferral as DELIBERATE —
+--   "project_id / project_room_id are deferred to the library branch so a bad
+--   route can be safe-harbored instead of hard-failing the whole sync" — and
+--   the library branch is wrapped in BEGIN … EXCEPTION WHEN OTHERS. An
+--   unwrapped inbox UPDATE turns that documented harbor into a hard abort:
 --   field_captures_guard_routing RAISEs (00233:206/212/224/230/240) would kill
 --   the whole RPC, and on the device that surfaces as a plain Error, not a
 --   LocalSyncError, so runAttempt's catch falls to recordFailure
 --   (LocalCaptureSyncService.swift:219-235) → .retryableFailure, retried on
---   EVERY drain forever. Reachable whenever a stamped project/room goes stale
---   (project transferred, room deleted, room belonging to another project once
---   projectRoomID starts flowing).
+--   EVERY drain forever.
+--
+--   BUT A BRANCH-LEVEL HARBOR ALONE CANNOT CATCH THE COMMON CASE. Two
+--   distinct failures exist and they abort at different points:
+--
+--     (i)  the INCOMING route is bad (p_project_id belongs to someone else).
+--          The upsert never writes project_id, so this raises in the
+--          destination branch — the inbox/library harbors catch it.
+--     (ii) the STORED route has gone stale (the project was transferred to
+--          another designer, or the room was re-parented). This is the case a
+--          branch harbor CANNOT reach. trg_field_captures_guard_update is an
+--          unconditional BEFORE UPDATE FOR EACH ROW (00233:258-260): it
+--          re-validates NEW.project_id on EVERY update no matter which
+--          columns changed. The ON CONFLICT DO UPDATE below does not touch
+--          project_id, so NEW.project_id is the stale STORED value and the
+--          guard raises from the UPSERT — before either destination branch
+--          and outside every handler they contain.
+--
+--   "Room deleted" is NOT on that list: project_id and project_room_id are
+--   ON DELETE SET NULL (00233:92-93), so a deleted room self-clears and never
+--   raises.
+--
+--   00530 is the first code that ever writes project_id onto INBOX rows, so
+--   before it case (ii) had almost no population. After it, every routed note
+--   carries a stale-able project reference — and without EDIT 4 any capture
+--   whose project later becomes invalid for that designer would be
+--   PERMANENTLY UN-SYNCABLE from a device with no operator present. Hence:
+--     EDIT 4 wraps the upsert in a retry-once harbor. On failure it detaches
+--     the stale STORED routing (project_id / project_room_id / shelf → NULL),
+--     folds the conflict into the raw_payload the retry will store, and runs
+--     the upsert again — which now passes the guard. A second failure is not
+--     stale routing and is re-raised (see the residual note on EDIT 4 below).
+--     The inbox harbor's own UPDATE likewise NULLs the routing, so it cannot
+--     re-fire the very guard it is handling and raise from inside itself.
 --
 -- ⚠ Un-placing is a PAYLOAD KEY, not a new parameter. COALESCE cannot tell
 --   "not supplied" from "explicitly cleared". A defaulted 8th argument would
@@ -220,6 +252,10 @@ DECLARE
   v_audio_segments    JSONB;
   v_projection_errors JSONB := '[]'::jsonb;
   v_raw_payload       JSONB;
+  -- EDIT 4 (upsert safe harbor)
+  v_stale_project     UUID;
+  v_stale_room        UUID;
+  v_upserted          BOOLEAN;
 BEGIN
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'commit_field_capture: not authenticated';
@@ -323,122 +359,196 @@ BEGIN
   -- organization_id is applied now (validated by the guard); project_id /
   -- project_room_id are deferred to the destination branches so a bad route can
   -- be safe-harbored instead of hard-failing the whole sync.
-  INSERT INTO field_captures (
-    client_capture_id, designer_id, organization_id, destination, status,
-    capture_kind,
-    title, notes, category, subcategory, dimensions,
-    materials, colors, style_tags, material_tags, finish,
-    vendor_name, vendor_id, sku, price_trade_cents, price_retail_cents,
-    barcode_value, barcode_symbology, catalog_match_product_id,
-    voice_audio_path, voice_transcript, voice_partial_transcript, voice_duration_seconds,
-    voice_audio_segments, transcript_source, note_setting,
-    photos, primary_photo_path, thumbnail_url,
-    provenance, guesses,
-    captured_lat, captured_lng, captured_accuracy_m, venue_label, venue_place_id,
-    captured_at, captured_timezone,
-    raw_payload, device_model, os_version, app_version, capture_schema_version,
-    synced_at
-  )
-  VALUES (
-    p_client_capture_id, v_uid, p_organization_id, p_destination, 'synced',
-    v_capture_kind,
-    v_payload->>'title', v_payload->>'notes', v_payload->>'category', v_payload->>'subcategory',
-      v_payload->'measurements',
-    field_capture_jsonb_text_array(v_payload#>'{attributes,materials}'),
-    field_capture_jsonb_text_array(v_payload#>'{attributes,colors}'),
-    field_capture_jsonb_text_array(v_payload#>'{attributes,styleTags}'),
-    field_capture_jsonb_text_array(v_payload#>'{attributes,materialTags}'),
-    v_payload#>>'{attributes,finish}',
-    v_payload#>>'{tag,vendorName}',
-    NULLIF(v_payload#>>'{tag,vendorId}', '')::uuid,
-    v_payload#>>'{tag,sku}',
-    NULLIF(v_payload#>>'{tag,priceTradeCents}', '')::int,
-    NULLIF(v_payload#>>'{tag,priceRetailCents}', '')::int,
-    v_payload#>>'{barcode,value}',
-    v_payload#>>'{barcode,symbology}',
-    NULLIF(v_payload#>>'{barcode,catalogMatchProductId}', '')::uuid,
-    v_payload#>>'{voice,audioPath}',
-    v_payload#>>'{voice,transcript}',
-    v_payload#>>'{voice,partialTranscript}',
-    NULLIF(v_payload#>>'{voice,durationSeconds}', '')::numeric,
-    v_audio_segments,
-    v_transcript_source,
-    v_note_setting,
-    v_photos,
-    COALESCE(
-      (SELECT ph->>'path' FROM jsonb_array_elements(v_photos) ph
-        WHERE (ph->>'isPrimary')::boolean IS TRUE LIMIT 1),
-      (SELECT ph->>'path' FROM jsonb_array_elements(v_photos) ph LIMIT 1)
-    ),
-    v_payload->>'thumbnailUrl',
-    COALESCE(v_payload->'provenance', '{}'::jsonb),
-    COALESCE(v_payload->'guesses', '{}'::jsonb),
-    NULLIF(v_payload#>>'{venue,lat}', '')::double precision,
-    NULLIF(v_payload#>>'{venue,lng}', '')::double precision,
-    NULLIF(v_payload#>>'{venue,accuracyM}', '')::numeric,
-    v_payload#>>'{venue,label}',
-    v_payload#>>'{venue,placeId}',
-    v_captured_at,
-    v_payload#>>'{venue,timezone}',
-    v_raw_payload,
-    v_payload#>>'{device,model}',
-    v_payload#>>'{device,osVersion}',
-    v_payload#>>'{device,appVersion}',
-    COALESCE(NULLIF(v_payload->>'schemaVersion', '')::int, 1),
-    NOW()
-  )
-  ON CONFLICT (client_capture_id) DO UPDATE SET
-    destination              = EXCLUDED.destination,
-    organization_id          = EXCLUDED.organization_id,
-    capture_kind             = EXCLUDED.capture_kind,
-    title                    = EXCLUDED.title,
-    notes                    = EXCLUDED.notes,
-    category                 = EXCLUDED.category,
-    subcategory              = EXCLUDED.subcategory,
-    dimensions               = EXCLUDED.dimensions,
-    materials                = EXCLUDED.materials,
-    colors                   = EXCLUDED.colors,
-    style_tags               = EXCLUDED.style_tags,
-    material_tags            = EXCLUDED.material_tags,
-    finish                   = EXCLUDED.finish,
-    vendor_name              = EXCLUDED.vendor_name,
-    vendor_id                = EXCLUDED.vendor_id,
-    sku                      = EXCLUDED.sku,
-    price_trade_cents        = EXCLUDED.price_trade_cents,
-    price_retail_cents       = EXCLUDED.price_retail_cents,
-    barcode_value            = EXCLUDED.barcode_value,
-    barcode_symbology        = EXCLUDED.barcode_symbology,
-    catalog_match_product_id = EXCLUDED.catalog_match_product_id,
-    voice_audio_path         = EXCLUDED.voice_audio_path,
-    voice_transcript         = EXCLUDED.voice_transcript,
-    voice_partial_transcript = EXCLUDED.voice_partial_transcript,
-    voice_duration_seconds   = EXCLUDED.voice_duration_seconds,
-    voice_audio_segments     = EXCLUDED.voice_audio_segments,
-    transcript_source        = EXCLUDED.transcript_source,
-    note_setting             = EXCLUDED.note_setting,
-    photos                   = EXCLUDED.photos,
-    primary_photo_path       = EXCLUDED.primary_photo_path,
-    thumbnail_url            = EXCLUDED.thumbnail_url,
-    provenance               = EXCLUDED.provenance,
-    guesses                  = EXCLUDED.guesses,
-    captured_lat             = EXCLUDED.captured_lat,
-    captured_lng             = EXCLUDED.captured_lng,
-    captured_accuracy_m      = EXCLUDED.captured_accuracy_m,
-    venue_label              = EXCLUDED.venue_label,
-    venue_place_id           = EXCLUDED.venue_place_id,
-    captured_at              = EXCLUDED.captured_at,
-    captured_timezone        = EXCLUDED.captured_timezone,
-    raw_payload              = EXCLUDED.raw_payload,
-    device_model             = EXCLUDED.device_model,
-    os_version               = EXCLUDED.os_version,
-    app_version              = EXCLUDED.app_version,
-    capture_schema_version   = EXCLUDED.capture_schema_version,
-    synced_at                = EXCLUDED.synced_at
-  WHERE field_captures.status NOT IN ('saved', 'dismissed')
-  RETURNING * INTO v_capture;
+  -- ─── EDIT 4: the upsert's own safe harbor ────────────────────────────────
+  -- trg_field_captures_guard_update re-validates NEW.project_id on EVERY
+  -- update (00233:258-260, unconditional BEFORE UPDATE FOR EACH ROW). The
+  -- ON CONFLICT DO UPDATE below never touches project_id, so NEW.project_id
+  -- is whatever is STORED — and if that has gone stale (project transferred,
+  -- room re-parented) the guard raises HERE, before either destination branch
+  -- and outside every handler they contain. Left unhandled that is a plain
+  -- Error on the device, hence .retryableFailure, hence a capture that can
+  -- never sync again with nobody present to fix it.
+  --
+  -- So: attempt the upsert; on failure detach the stale STORED routing, fold
+  -- the conflict into the raw_payload the retry will store, and go round once
+  -- more. The retry's NEW.project_id is NULL, which the guard accepts.
+  --
+  -- ⚠ RESIDUAL, stated plainly: a second failure is re-raised. The remaining
+  --   guard branch that can do that is organization_id — p_organization_id
+  --   naming an org the designer is not an active member of (00233:239-247),
+  --   which detaching routing cannot fix. That path is unchanged from
+  --   00235/00516 and is NOT what this edit is about; widening the harbor to
+  --   null the org as well would change org-scoping semantics and is a
+  --   separate ruling.
+  FOR v_attempt IN 1..2 LOOP
+    BEGIN
+      INSERT INTO field_captures (
+        client_capture_id, designer_id, organization_id, destination, status,
+        capture_kind,
+        title, notes, category, subcategory, dimensions,
+        materials, colors, style_tags, material_tags, finish,
+        vendor_name, vendor_id, sku, price_trade_cents, price_retail_cents,
+        barcode_value, barcode_symbology, catalog_match_product_id,
+        voice_audio_path, voice_transcript, voice_partial_transcript, voice_duration_seconds,
+        voice_audio_segments, transcript_source, note_setting,
+        photos, primary_photo_path, thumbnail_url,
+        provenance, guesses,
+        captured_lat, captured_lng, captured_accuracy_m, venue_label, venue_place_id,
+        captured_at, captured_timezone,
+        raw_payload, device_model, os_version, app_version, capture_schema_version,
+        synced_at
+      )
+      VALUES (
+        p_client_capture_id, v_uid, p_organization_id, p_destination, 'synced',
+        v_capture_kind,
+        v_payload->>'title', v_payload->>'notes', v_payload->>'category', v_payload->>'subcategory',
+          v_payload->'measurements',
+        field_capture_jsonb_text_array(v_payload#>'{attributes,materials}'),
+        field_capture_jsonb_text_array(v_payload#>'{attributes,colors}'),
+        field_capture_jsonb_text_array(v_payload#>'{attributes,styleTags}'),
+        field_capture_jsonb_text_array(v_payload#>'{attributes,materialTags}'),
+        v_payload#>>'{attributes,finish}',
+        v_payload#>>'{tag,vendorName}',
+        NULLIF(v_payload#>>'{tag,vendorId}', '')::uuid,
+        v_payload#>>'{tag,sku}',
+        NULLIF(v_payload#>>'{tag,priceTradeCents}', '')::int,
+        NULLIF(v_payload#>>'{tag,priceRetailCents}', '')::int,
+        v_payload#>>'{barcode,value}',
+        v_payload#>>'{barcode,symbology}',
+        NULLIF(v_payload#>>'{barcode,catalogMatchProductId}', '')::uuid,
+        v_payload#>>'{voice,audioPath}',
+        v_payload#>>'{voice,transcript}',
+        v_payload#>>'{voice,partialTranscript}',
+        NULLIF(v_payload#>>'{voice,durationSeconds}', '')::numeric,
+        v_audio_segments,
+        v_transcript_source,
+        v_note_setting,
+        v_photos,
+        COALESCE(
+          (SELECT ph->>'path' FROM jsonb_array_elements(v_photos) ph
+            WHERE (ph->>'isPrimary')::boolean IS TRUE LIMIT 1),
+          (SELECT ph->>'path' FROM jsonb_array_elements(v_photos) ph LIMIT 1)
+        ),
+        v_payload->>'thumbnailUrl',
+        COALESCE(v_payload->'provenance', '{}'::jsonb),
+        COALESCE(v_payload->'guesses', '{}'::jsonb),
+        NULLIF(v_payload#>>'{venue,lat}', '')::double precision,
+        NULLIF(v_payload#>>'{venue,lng}', '')::double precision,
+        NULLIF(v_payload#>>'{venue,accuracyM}', '')::numeric,
+        v_payload#>>'{venue,label}',
+        v_payload#>>'{venue,placeId}',
+        v_captured_at,
+        v_payload#>>'{venue,timezone}',
+        v_raw_payload,
+        v_payload#>>'{device,model}',
+        v_payload#>>'{device,osVersion}',
+        v_payload#>>'{device,appVersion}',
+        COALESCE(NULLIF(v_payload->>'schemaVersion', '')::int, 1),
+        NOW()
+      )
+      ON CONFLICT (client_capture_id) DO UPDATE SET
+        destination              = EXCLUDED.destination,
+        organization_id          = EXCLUDED.organization_id,
+        capture_kind             = EXCLUDED.capture_kind,
+        title                    = EXCLUDED.title,
+        notes                    = EXCLUDED.notes,
+        category                 = EXCLUDED.category,
+        subcategory              = EXCLUDED.subcategory,
+        dimensions               = EXCLUDED.dimensions,
+        materials                = EXCLUDED.materials,
+        colors                   = EXCLUDED.colors,
+        style_tags               = EXCLUDED.style_tags,
+        material_tags            = EXCLUDED.material_tags,
+        finish                   = EXCLUDED.finish,
+        vendor_name              = EXCLUDED.vendor_name,
+        vendor_id                = EXCLUDED.vendor_id,
+        sku                      = EXCLUDED.sku,
+        price_trade_cents        = EXCLUDED.price_trade_cents,
+        price_retail_cents       = EXCLUDED.price_retail_cents,
+        barcode_value            = EXCLUDED.barcode_value,
+        barcode_symbology        = EXCLUDED.barcode_symbology,
+        catalog_match_product_id = EXCLUDED.catalog_match_product_id,
+        voice_audio_path         = EXCLUDED.voice_audio_path,
+        voice_transcript         = EXCLUDED.voice_transcript,
+        voice_partial_transcript = EXCLUDED.voice_partial_transcript,
+        voice_duration_seconds   = EXCLUDED.voice_duration_seconds,
+        voice_audio_segments     = EXCLUDED.voice_audio_segments,
+        transcript_source        = EXCLUDED.transcript_source,
+        note_setting             = EXCLUDED.note_setting,
+        photos                   = EXCLUDED.photos,
+        primary_photo_path       = EXCLUDED.primary_photo_path,
+        thumbnail_url            = EXCLUDED.thumbnail_url,
+        provenance               = EXCLUDED.provenance,
+        guesses                  = EXCLUDED.guesses,
+        captured_lat             = EXCLUDED.captured_lat,
+        captured_lng             = EXCLUDED.captured_lng,
+        captured_accuracy_m      = EXCLUDED.captured_accuracy_m,
+        venue_label              = EXCLUDED.venue_label,
+        venue_place_id           = EXCLUDED.venue_place_id,
+        captured_at              = EXCLUDED.captured_at,
+        captured_timezone        = EXCLUDED.captured_timezone,
+        raw_payload              = EXCLUDED.raw_payload,
+        device_model             = EXCLUDED.device_model,
+        os_version               = EXCLUDED.os_version,
+        app_version              = EXCLUDED.app_version,
+        capture_schema_version   = EXCLUDED.capture_schema_version,
+        synced_at                = EXCLUDED.synced_at
+      WHERE field_captures.status NOT IN ('saved', 'dismissed')
+      RETURNING * INTO v_capture;
+      -- An integer FOR loop sets FOUND itself at END LOOP, so the upsert's own
+      -- FOUND has to be captured here or the idempotent-no-op branch below
+      -- would never fire.
+      v_upserted := FOUND;
+      EXIT;
+    EXCEPTION WHEN OTHERS THEN
+      IF v_attempt = 2 THEN
+        RAISE;
+      END IF;
+
+      -- Only a row that ALREADY EXISTS can carry stale stored routing. If
+      -- there is none, the failure is something else entirely and detaching
+      -- nothing would just loop us into the same error — re-raise now.
+      SELECT project_id, project_room_id
+        INTO v_stale_project, v_stale_room
+        FROM field_captures
+       WHERE client_capture_id = p_client_capture_id;
+      IF NOT FOUND OR (v_stale_project IS NULL AND v_stale_room IS NULL) THEN
+        RAISE;
+      END IF;
+
+      -- The retry rewrites raw_payload from v_raw_payload (the SET list does
+      -- raw_payload = EXCLUDED.raw_payload), so the conflict has to ride in
+      -- on that value — writing it to the row here would be overwritten.
+      -- 'conflict' and 'projection_errors' are distinct top-level keys, so
+      -- this merge composes with EDIT 3's rather than replacing it.
+      v_raw_payload := CASE
+        WHEN jsonb_typeof(v_raw_payload) = 'object'
+          THEN v_raw_payload || jsonb_build_object('conflict', jsonb_build_object(
+                 'error', SQLERRM, 'sqlstate', SQLSTATE, 'at', NOW(),
+                 'stage', 'upsert',
+                 'attempted_project_id', p_project_id,
+                 'detached_project_id', v_stale_project,
+                 'detached_project_room_id', v_stale_room))
+        ELSE jsonb_build_object('conflict', jsonb_build_object(
+                 'error', SQLERRM, 'sqlstate', SQLSTATE, 'at', NOW(),
+                 'stage', 'upsert',
+                 'attempted_project_id', p_project_id,
+                 'detached_project_id', v_stale_project,
+                 'detached_project_room_id', v_stale_room))
+      END;
+
+      -- Detach the stale routing so the retry's guard pass succeeds. NULL
+      -- routing is always accepted by field_captures_guard_routing.
+      UPDATE field_captures
+         SET project_id      = NULL,
+             project_room_id = NULL,
+             shelf           = NULL
+       WHERE client_capture_id = p_client_capture_id;
+    END;
+  END LOOP;
 
   -- Conflict skipped (row already saved or dismissed): idempotent no-op.
-  IF NOT FOUND THEN
+  IF NOT v_upserted THEN
     SELECT * INTO v_capture FROM field_captures WHERE client_capture_id = p_client_capture_id;
     RETURN jsonb_build_object(
       'capture_id', v_capture.id,
@@ -491,11 +601,23 @@ BEGIN
       -- rolled back with this subtransaction, so routing is untouched and the
       -- update below passes the guard.
       UPDATE field_captures
-         SET status      = 'inbox',
+         SET status          = 'inbox',
+             -- The routing MUST be nulled here. This handler's own UPDATE
+             -- re-fires trg_field_captures_guard_update, and leaving the
+             -- offending project_id on the row would raise the very
+             -- exception being handled — from INSIDE the handler, where
+             -- nothing catches it. What is detached is recorded below so she
+             -- can re-route by hand.
+             project_id      = NULL,
+             project_room_id = NULL,
+             shelf           = NULL,
              raw_payload = COALESCE(raw_payload, '{}'::jsonb)
                            || jsonb_build_object('conflict', jsonb_build_object(
                                 'error', SQLERRM, 'sqlstate', SQLSTATE, 'at', NOW(),
-                                'attempted_project_id', p_project_id))
+                                'stage', 'inbox_route',
+                                'attempted_project_id', p_project_id,
+                                'detached_project_id', v_capture.project_id,
+                                'detached_project_room_id', v_capture.project_room_id))
        WHERE id = v_capture.id
       RETURNING * INTO v_capture;
     END;
@@ -593,13 +715,26 @@ END;
 $$;
 
 -- ─── ACL restatement ───────────────────────────────────────────────────────
--- Honestly: this changes nothing. CREATE OR REPLACE PRESERVES the existing
--- ACL, and commit_field_capture already carries REVOKE ALL … FROM PUBLIC /
--- GRANT EXECUTE … TO authenticated (00235:303-304, restated by 00516). The
--- block is belt-and-braces, keeping the canonical shape the ACL conformance
--- gate recognises. service_role is deliberately NOT in the revoke list: the
--- spec writes FROM PUBLIC, anon, and adding service_role would DROP a
--- privilege 00235 never revoked rather than restate one.
+-- CREATE OR REPLACE PRESERVES the existing ACL — Postgres applies default
+-- privileges only at CREATION — and commit_field_capture already carries
+-- REVOKE ALL … FROM PUBLIC / GRANT EXECUTE … TO authenticated (00235:303-304,
+-- restated by 00516). So the PUBLIC and authenticated halves are pure
+-- restatement and change nothing.
+--
+-- The `anon` half may well NOT be a no-op. This repo's recorded lesson — the
+-- mood-board exposure, and again the outbox RPCs — is that prod's default
+-- privileges auto-grant anon EXECUTE on new public functions, and a
+-- REVOKE … FROM PUBLIC does not remove an explicit grant to anon. So this
+-- line can be a real tightening on prod, which is the reason to keep it.
+--
+-- service_role is deliberately NOT in the revoke list: the spec writes
+-- FROM PUBLIC, anon, and adding service_role would DROP a privilege 00235
+-- never revoked rather than restate one.
+--
+-- ⚠ No automated checker enforces this shape. An earlier draft of this file
+--   credited an "ACL conformance gate"; a grep of scripts/ and
+--   .github/workflows/ finds no such thing. The block matches the canonical
+--   idiom for human readers, not to satisfy a gate.
 REVOKE ALL ON FUNCTION public.commit_field_capture(UUID, TEXT, JSONB, UUID, UUID, TEXT, UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.commit_field_capture(UUID, TEXT, JSONB, UUID, UUID, TEXT, UUID)
   TO authenticated;
