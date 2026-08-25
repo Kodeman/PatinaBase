@@ -184,7 +184,13 @@ struct VoiceNoteSheet: View {
                 Text("Type the note")
                     .font(CaptureType.eyebrow).textCase(.uppercase)
                     .foregroundStyle(CaptureColor.inkSoft)
-                Text("Voice capture isn't available here. Type the context and rep details.")
+                // Two doors lead here and only one of them is "no microphone":
+                // the recognition-error path (begin()'s catch) arrives with a
+                // real recording already in hand, and the single old line
+                // called that take a missing capability.
+                Text(hasAudio
+                     ? "The words didn't come through. Type them here — the recording stays with the note."
+                     : "Voice capture isn't available here. Type the context and rep details.")
                     .font(CaptureType.footnote)
                     .foregroundStyle(CaptureColor.inkSoft)
                 TextEditor(text: $transcript)
@@ -193,16 +199,32 @@ struct VoiceNoteSheet: View {
                     .frame(minHeight: 120)
                     .scrollContentBackground(.hidden)
             }
+            // The live recorder's honesty ladder, on the path that actually
+            // needs it: audio with no words is a note worth keeping, and
+            // without the three lines below an audio-only take on the
+            // recognition-error route could not be attached at all.
+            if hasAudio && typedTranscript.isEmpty {
+                Text("We couldn't make out the words — the audio is here.")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.inkSoft)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if hasAudio { playbackControl }
             RecognitionActionBar(
                 secondaryTitle: "Discard",
-                primaryTitle: "Attach note",
-                primaryEnabled: !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    && !isFinishing,
+                primaryTitle: typedTranscript.isEmpty && hasAudio
+                    ? "Keep the recording"
+                    : "Attach note",
+                primaryEnabled: (!typedTranscript.isEmpty || hasAudio) && !isFinishing,
                 secondaryRole: .destructive,
                 onSecondary: { discard() },
                 onPrimary: { attach() }
             )
         }
+    }
+
+    private var typedTranscript: String {
+        transcript.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Recording lifecycle
