@@ -223,6 +223,7 @@ public final class CaptureSessionContextStore {
     ) -> CaptureSessionContext {
         let context = CaptureSessionContextPolicy.started(draft, identity: identity, now: now)
         persist(context)
+        NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
         return context
     }
 
@@ -242,6 +243,7 @@ public final class CaptureSessionContextStore {
             let fresh = CaptureSessionContext(identity: identity, startedAt: now,
                                               lastActivityAt: now)
             persist(fresh)
+            NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
             return fresh
         }
         // A second "End visit" tap must not overwrite what the first one closed:
@@ -249,12 +251,20 @@ public final class CaptureSessionContextStore {
         guard open.endedAt == nil else { return open }
         let closed = CaptureSessionContextPolicy.ended(open, now: now)
         persist(closed)
+        NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
         return closed
     }
 
     public func reset() {
         defaults.removeObject(forKey: key)
     }
+
+    /// R119: a visit can begin or end from a surface that presents no sheet —
+    /// the Companion strip's "End visit" is inline — so a screen that names the
+    /// visit has nothing to hang a refresh on. Posted by `startVisit`/`endVisit`
+    /// only: the ordinary `current(…)` resolve persists on every draft and would
+    /// make this chatter.
+    public static let visitDidChange = Notification.Name("capture.visitDidChange")
 
     private func persist(_ context: CaptureSessionContext) {
         guard let data = try? encoder.encode(context) else { return }

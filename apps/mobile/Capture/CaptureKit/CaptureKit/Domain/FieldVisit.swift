@@ -67,3 +67,48 @@ public struct CaptureCoordinate: Codable, Hashable, Sendable {
         return earthRadius * 2 * atan2(sqrt(a), sqrt(max(0, 1 - a)))
     }
 }
+
+// MARK: - FC-R11: the consent gate
+
+public extension FieldNoteSetting {
+    /// FC-R11: a conversation note shows a one-line affirmation she taps. A
+    /// nudge, not legal advice — but it converts an invisible act into a
+    /// deliberate one.
+    var affirmation: String? {
+        self == .conversation ? "Everyone here knows this is being recorded" : nil
+    }
+}
+
+/// FC-R11's gate, in CaptureKit so BOTH surfaces that record — the C3 card and
+/// C6 — share one rule and one test. §15.2 item 2: she TAPS it. A recording that
+/// starts while the chip is untapped has not been affirmed, whatever it says.
+public enum FieldAffirmationPolicy {
+    public static func chipTitle(noteSetting: FieldNoteSetting?) -> String? {
+        noteSetting?.affirmation
+    }
+
+    public static func recordingIsBlocked(noteSetting: FieldNoteSetting?,
+                                          affirmed: Bool) -> Bool {
+        noteSetting == .conversation && !affirmed
+    }
+}
+
+/// Which gesture each voice surface uses. §7.4: a twenty-minute walk-through
+/// cannot be held, and a slipped finger must not end the note — so tap-to-start
+/// / tap-to-stop is the rule and the hold survives ONLY on the C3 card, where a
+/// ten-second remark makes a hold right.
+public enum FieldVoiceGesture: Equatable, Sendable {
+    case pressAndHold
+    case tapToStartTapToStop
+
+    public enum Surface: String, Sendable {
+        case quickConfirmCard   // C3
+        case voiceMode          // C6
+        case voiceSheet         // N4
+        case scanContext        // F2 / non-Pro context screen
+    }
+
+    public static func forSurface(_ surface: Surface) -> FieldVoiceGesture {
+        surface == .quickConfirmCard ? .pressAndHold : .tapToStartTapToStop
+    }
+}

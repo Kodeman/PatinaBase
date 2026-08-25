@@ -21,6 +21,17 @@ struct CaptureCardOverlay: View {
     let placementLine: String
     let placementIsUnplaced: Bool
     let onPlacement: () -> Void
+    /// The mic is not rendered at all when the flag is off (FC-R11's off-switch):
+    /// a control that cannot record must not be offered.
+    let micIsAvailable: Bool
+    let isRecording: Bool
+    let transcript: String
+    /// FC-R11: drives the affirmation GATE, not a caption.
+    let noteSetting: FieldNoteSetting?
+    let onMicPressChanged: (Bool) -> Void
+    /// One source of truth for the tap, owned by ViewfinderScreen so the SAME
+    /// value the chip sets is the one the model's second gate is handed.
+    @Binding var affirmed: Bool
 
     @State private var dragOffset: CGFloat = 0
 
@@ -90,6 +101,8 @@ struct CaptureCardOverlay: View {
                 Rectangle().fill(CaptureColor.line).frame(height: 1)
             }
 
+            micRow
+
             HStack(spacing: 12) {
                 Button(action: onAddDetail) {
                     Text("Add detail")
@@ -115,6 +128,55 @@ struct CaptureCardOverlay: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 14)
         .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
+    }
+
+    /// FC-R11 gates this row twice over: the chip must be tapped before a
+    /// conversation note can start (here), and `beginCardNote(affirmed:)`
+    /// refuses independently — a DragGesture on a disabled subview is one
+    /// layout change away from coming back.
+    @ViewBuilder private var micRow: some View {
+        if micIsAvailable {
+            VStack(alignment: .leading, spacing: 8) {
+                // FC-R11: the chip comes FIRST and gates the mic beneath it.
+                FieldAffirmationChip(noteSetting: noteSetting, affirmed: $affirmed)
+
+                HStack(spacing: 10) {
+                    Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
+                        .font(CaptureType.title2)
+                        .foregroundStyle(isRecording
+                                         ? CaptureColor.terracotta : CaptureColor.verdigris)
+                    Text(isRecording ? "Recording — release to keep it"
+                                     : "Hold to add a note")
+                        .font(CaptureType.callout)
+                        .foregroundStyle(CaptureColor.inkSoft)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in if !isRecording { onMicPressChanged(true) } }
+                        .onEnded { _ in onMicPressChanged(false) })
+                .disabled(isBlocked)
+                .opacity(isBlocked ? 0.45 : 1)
+                .accessibilityLabel(isBlocked
+                    ? "Confirm everyone knows before recording"
+                    : "Hold to add a note")
+                .accessibilityIdentifier("card.mic")
+
+                if !transcript.isEmpty {
+                    Text(transcript)
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.ink)
+                        .lineLimit(3)
+                }
+            }
+        }
+    }
+
+    private var isBlocked: Bool {
+        FieldAffirmationPolicy.recordingIsBlocked(noteSetting: noteSetting,
+                                                  affirmed: affirmed) && !isRecording
     }
 
     /// `source` is nil when nothing has filled the field — the read couldn't

@@ -434,4 +434,71 @@ struct VisitContextTests {
         #expect(FieldLaunchPolicy.destination(visitState: state,
                                               deepLinkedToCapture: false) == .today)
     }
+
+    // MARK: - C3's inline mic (task 20) — FC-R11 is a GATE, not a caption
+
+    @MainActor
+    @Test func aCardNoteInheritsTheVisitsConsentPosture() throws {
+        let store = try CaptureStore.inMemory()
+        let walkThrough = CaptureSessionContextPolicy.started(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St",
+                              projectID: "p1", projectName: "Maple St"),
+            identity: identity, now: now)
+        let tradeWalk = CaptureSessionContextPolicy.started(
+            CaptureVisitDraft(kind: .site, kit: .tradeWalk, label: "Maple St",
+                              projectID: "p1", projectName: "Maple St"),
+            identity: identity, now: now)
+
+        let a = store.newDraft(sessionID: walkThrough.visitID)
+        a.inherit(walkThrough)
+        #expect(a.noteSetting == .conversation)
+
+        let b = store.newDraft(sessionID: tradeWalk.visitID)
+        b.inherit(tradeWalk)
+        #expect(b.noteSetting == .solo)
+    }
+
+    @Test func theAffirmationLineOnlyAppearsOnAConversationNote() {
+        #expect(FieldNoteSetting.conversation.affirmation
+                == "Everyone here knows this is being recorded")
+        #expect(FieldNoteSetting.solo.affirmation == nil)
+        #expect(FieldAffirmationPolicy.chipTitle(noteSetting: .conversation)
+                == "Everyone here knows this is being recorded")
+        #expect(FieldAffirmationPolicy.chipTitle(noteSetting: .solo) == nil)
+        #expect(FieldAffirmationPolicy.chipTitle(noteSetting: nil) == nil)
+    }
+
+    @Test func aConversationNoteCannotStartUntilSheTapsTheAffirmation() {
+        // FC-R11 is a GATE, on C3 and on C6 alike — not a line of text.
+        #expect(FieldAffirmationPolicy.recordingIsBlocked(
+            noteSetting: .conversation, affirmed: false))
+        #expect(!FieldAffirmationPolicy.recordingIsBlocked(
+            noteSetting: .conversation, affirmed: true))
+        // A solo note is never gated, tapped or not.
+        #expect(!FieldAffirmationPolicy.recordingIsBlocked(
+            noteSetting: .solo, affirmed: false))
+        #expect(!FieldAffirmationPolicy.recordingIsBlocked(
+            noteSetting: nil, affirmed: false))
+    }
+
+    @MainActor
+    @Test func theWalkThroughKitIsWhatMakesTheCardGated() throws {
+        // The kit carries the default (FC-R11), so the C3 card inside a
+        // walk-through is gated without her choosing anything.
+        let store = try CaptureStore.inMemory()
+        let walkThrough = CaptureSessionContextPolicy.started(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
+            identity: identity, now: now)
+        let card = store.newDraft(sessionID: walkThrough.visitID)
+        card.inherit(walkThrough)
+        #expect(FieldAffirmationPolicy.recordingIsBlocked(
+            noteSetting: card.noteSetting, affirmed: false))
+    }
+
+    @Test func theHoldGestureBelongsToTheCardAndTheToggleToVoiceMode() {
+        #expect(FieldVoiceGesture.forSurface(.quickConfirmCard) == .pressAndHold)
+        #expect(FieldVoiceGesture.forSurface(.voiceMode) == .tapToStartTapToStop)
+        #expect(FieldVoiceGesture.forSurface(.voiceSheet) == .tapToStartTapToStop)
+        #expect(FieldVoiceGesture.forSurface(.scanContext) == .tapToStartTapToStop)
+    }
 }

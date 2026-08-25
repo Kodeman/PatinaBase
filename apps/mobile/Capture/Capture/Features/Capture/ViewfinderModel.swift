@@ -23,7 +23,15 @@ final class ViewfinderModel {
     private let companion: FieldCompanionController
     private let sessionContext: CaptureSessionContextStore
     private let smartGuess: any SmartGuessService
+    private let voice: any VoiceNoteService
+    private let featureFlags: CaptureFeatureFlags
     private var visitID: UUID?
+    /// R119: the Companion strip ends a visit INLINE, with no sheet, so the
+    /// `.onChange(of: coordinator.sheet)` hook never fires and the chip goes on
+    /// naming a visit that is over. The store says when a visit begins or ends.
+    /// `nonisolated(unsafe)`: written once in `init` on the main actor and read
+    /// only in `deinit`, which runs after the last reference is gone.
+    private nonisolated(unsafe) var visitObserver: NSObjectProtocol?
 
     // ── Mode + framing (C1/C2) ──
     var mode: CameraMode = .photo
@@ -108,7 +116,26 @@ final class ViewfinderModel {
         self.session = container.session
         self.companion = container.companion
         self.smartGuess = container.smartGuess
+        self.featureFlags = container.featureFlags
+        self.voice = SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
+                                            analytics: container.analytics,
+                                            surface: "c3")
         self.sessionContext = .shared
+        observeVisitChanges()
+    }
+
+    deinit {
+        if let visitObserver { NotificationCenter.default.removeObserver(visitObserver) }
+    }
+
+    private func observeVisitChanges() {
+        visitObserver = NotificationCenter.default.addObserver(
+            forName: CaptureSessionContextStore.visitDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.refreshVisit() }
+        }
     }
 
     // MARK: Lifecycle
@@ -136,6 +163,7 @@ final class ViewfinderModel {
     }
 
     func stop() {
+        endCardNote()                        // FC-R9: never a live mic behind a gone screen
         frameTask?.cancel(); frameTask = nil
         burstTask?.cancel(); burstTask = nil
         holdTriggerTask?.cancel(); holdTriggerTask = nil
@@ -342,6 +370,7 @@ final class ViewfinderModel {
 
     func saveFromCard() {
         guard let specimen = cardSpecimen else { return }
+        endCardNote()
         CaptureHaptics.success()
         let id = specimen.id
         cardSpecimen = nil
@@ -376,12 +405,14 @@ final class ViewfinderModel {
 
     func addDetailFromCard() {
         guard let specimen = cardSpecimen else { return }
+        endCardNote()
         let id = specimen.id
         cardSpecimen = nil
         coordinator.present(.specimenSheet(id))         // C5 full sheet
     }
 
     func dismissCard() {
+        endCardNote()
         cardSpecimen = nil
         CaptureHaptics.selection()
     }
@@ -394,6 +425,83 @@ final class ViewfinderModel {
         analytics.event("capture.place_tapped", ["surface": "c3"])
         UserDefaults.standard.set("card", forKey: "capture.routingSource")
         coordinator.present(.assignVenue(id))
+    }
+
+    // MARK: C3 inline mic (spec §7.5, wave 3)
+
+    private(set) var isRecordingCardNote = false
+    private(set) var cardTranscript = ""
+    private var cardVoiceTask: Task<Void, Never>?
+
+    var micIsAvailable: Bool { featureFlags.isEnabled("field-companion-voice") }
+
+    func beginCardNote(affirmed: Bool) {
+        guard micIsAvailable, !isRecordingCardNote, let specimen = cardSpecimen else { return }
+        // FC-R11 (Ruling 4): a conversation note does not start until she taps.
+        guard !FieldAffirmationPolicy.recordingIsBlocked(
+            noteSetting: specimen.noteSetting, affirmed: affirmed) else { return }
+        do {
+            let stream = try voice.startLiveTranscription()
+            isRecordingCardNote = true
+            cardTranscript = ""
+            analytics.event("voice.start", [
+                "surface": "c3",
+                "note_setting": (specimen.noteSetting ?? .solo).rawValue
+            ])
+            cardVoiceTask = Task { [weak self] in
+                do {
+                    for try await chunk in stream {
+                        guard !Task.isCancelled else { return }
+                        self?.cardTranscript = chunk.text
+                    }
+                } catch {}
+            }
+        } catch {
+            lastError = "The microphone didn't open. Your photo is safe."
+        }
+    }
+
+    func endCardNote() {
+        guard isRecordingCardNote else { return }
+        cardVoiceTask?.cancel()
+        isRecordingCardNote = false
+        let partial = cardTranscript
+        // FC-R9: `finish()` tears the audio session down, so it is awaited even
+        // when the card has already gone — resolving the subject BEFORE the
+        // await is what keeps a released hold from leaving the mic live.
+        let subject = cardSpecimen
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await self.voice.finish()
+            guard let specimen = subject else { return }
+            let transcript = result.transcript.isEmpty ? partial : result.transcript
+            let hasAudio = result.audioFilename != nil || !result.audioSegments.isEmpty
+            guard !transcript.isEmpty || hasAudio else {
+                self.analytics.event("voice.empty_transcript", ["had_audio": "false"])
+                self.lastError = "Nothing came through — try again when it's quieter."
+                return
+            }
+            if transcript.isEmpty {
+                self.analytics.event("voice.empty_transcript", ["had_audio": "true"])
+            }
+            specimen.voiceTranscript = transcript.isEmpty ? nil : transcript
+            specimen.voicePartialTranscript = partial.isEmpty ? nil : partial
+            specimen.voiceAudioFilename = result.audioFilename
+            specimen.voiceDurationSeconds = result.durationSeconds
+            specimen.voiceTranscriptSourceRaw = result.transcript.isEmpty
+                ? "device_partial" : "device"
+            specimen.voiceAudioSegmentsRaw = result.audioSegments.isEmpty
+                ? nil : result.audioSegments
+            specimen.touch()
+            try? self.store.save()
+            self.analytics.event("voice.finish", [
+                "surface": "c3",
+                "duration_s": String(Int(result.durationSeconds)),
+                "segments": String(result.audioSegments.count),
+                "transcript_chars": String(transcript.count),
+                "on_device": result.onDevice ? "true" : "false"
+            ])
+        }
     }
 
     // MARK: Plumbing

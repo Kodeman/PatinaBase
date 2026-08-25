@@ -17,6 +17,10 @@ import CaptureKitMocks   // #Preview only — MockCameraService for the low-ligh
 struct ViewfinderScreen: View {
     @State private var model: ViewfinderModel
     @State private var reachability = FieldReachability()
+    /// FC-R11 (Ruling 4). Held here rather than inside the card so the chip's
+    /// tap and the value handed to `beginCardNote(affirmed:)` are one fact; a
+    /// fresh card is a fresh note, so it resets with the card.
+    @State private var affirmed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let coordinator: CaptureCoordinator
 
@@ -65,7 +69,16 @@ struct ViewfinderScreen: View {
                     onDismiss: model.dismissCard,
                     placementLine: FieldPlacementLine.text(for: specimen),
                     placementIsUnplaced: FieldPlacementLine.isUnplaced(specimen),
-                    onPlacement: { coordinator.present(.visit) }
+                    onPlacement: { coordinator.present(.visit) },
+                    micIsAvailable: model.micIsAvailable,
+                    isRecording: model.isRecordingCardNote,
+                    transcript: model.cardTranscript,
+                    noteSetting: specimen.noteSetting,
+                    onMicPressChanged: { isDown in
+                        isDown ? model.beginCardNote(affirmed: affirmed)
+                               : model.endCardNote()
+                    },
+                    affirmed: $affirmed
                 )
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .zIndex(2)
@@ -77,6 +90,7 @@ struct ViewfinderScreen: View {
         // values instead of inverting under system dark mode.
         .environment(\.colorScheme, .light)
         .animation(cardAnimation, value: model.cardSpecimen?.id)
+        .onChange(of: model.cardSpecimen?.id) { _, _ in affirmed = false }
         .animation(cardAnimation, value: model.isHolding)
         .task {
             await model.start()
