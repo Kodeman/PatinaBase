@@ -441,20 +441,30 @@ final class ViewfinderModel {
         guard !FieldAffirmationPolicy.recordingIsBlocked(
             noteSetting: specimen.noteSetting, affirmed: affirmed) else { return }
         do {
+            // The recorder emits the ONE voice.start (it already carries
+            // surface "c3"); this is what stops that row asserting "solo" over
+            // a conversation note — FC-R11's only audit trail.
+            voice.setNoteSetting(specimen.noteSetting ?? .solo)
             let stream = try voice.startLiveTranscription()
             isRecordingCardNote = true
             cardTranscript = ""
-            analytics.event("voice.start", [
-                "surface": "c3",
-                "note_setting": (specimen.noteSetting ?? .solo).rawValue
-            ])
             cardVoiceTask = Task { [weak self] in
                 do {
                     for try await chunk in stream {
                         guard !Task.isCancelled else { return }
                         self?.cardTranscript = chunk.text
                     }
-                } catch {}
+                } catch {
+                    // A stream that dies on its own leaves the mic glyph and
+                    // "Recording — release to keep it" describing a note that
+                    // has already ended. Recording chrome must never overstate
+                    // what is happening (FC-R11). `endCardNote` is reached only
+                    // from here — a cancel from `endCardNote` itself clears the
+                    // flag first, so this cannot re-enter.
+                    guard let self, self.isRecordingCardNote else { return }
+                    self.endCardNote()
+                    self.lastError = "The note stopped early. What you said up to then is saved."
+                }
             }
         } catch {
             lastError = "The microphone didn't open. Your photo is safe."
@@ -494,13 +504,9 @@ final class ViewfinderModel {
                 ? nil : result.audioSegments
             specimen.touch()
             try? self.store.save()
-            self.analytics.event("voice.finish", [
-                "surface": "c3",
-                "duration_s": String(Int(result.durationSeconds)),
-                "segments": String(result.audioSegments.count),
-                "transcript_chars": String(transcript.count),
-                "on_device": result.onDevice ? "true" : "false"
-            ])
+            // No voice.finish here: `SpeechVoiceNoteService.emitFinish` is the
+            // one place it fires (Wave 1's P-1 ruling) and now carries the
+            // surface itself. A second row here double-counted every note.
         }
     }
 
