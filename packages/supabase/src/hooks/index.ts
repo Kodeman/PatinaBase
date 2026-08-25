@@ -1854,3 +1854,9 @@ export type {
   FilePlanPrintEntry,
   ClientPlanSheet,
 } from "./use-plan-room";
+export {
+  useCaptureMediaUrls,
+  captureMediaUrlsKey,
+  CAPTURE_MEDIA_BUCKET,
+  CAPTURE_MEDIA_TTL_SECONDS,
+} from "./use-capture-media";
