@@ -1,0 +1,20 @@
+//  BuildSettings.xcconfig
+//  Capture
+//
+//  Committed. Sourced into the Capture app target's build configurations
+//  (wired in scripts/generate_project.rb) so a value set here reaches
+//  Info.plist via INFOPLIST_KEY_* and is baked into every build INCLUDING an
+//  archive — unlike a value read only from ProcessInfo.environment at
+//  runtime, which an Xcode scheme's Run action injects but a device install,
+//  TestFlight, or CI archive never does (FC-R14).
+//
+//  POSTHOG_API_KEY defaults to empty here so a fresh checkout with no
+//  Secrets.xcconfig still builds — an empty INFOPLIST_KEY_POSTHOG_API_KEY is
+//  read by AppConfiguration.postHogAPIKey as "unset" (analytics stays a
+//  no-op), mirroring Secrets.swift's `nil`. The optional #include? below
+//  layers the real key on top when a gitignored Secrets.xcconfig exists
+//  next to this file.
+
+POSTHOG_API_KEY =
+
+#include? "Secrets.xcconfig"

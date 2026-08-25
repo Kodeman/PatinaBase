@@ -2,6 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Build-time PostHog key (FC-R14): $(POSTHOG_API_KEY) is an Xcode
+	     Info.plist build-setting substitution, resolved from
+	     Configuration/BuildSettings.xcconfig (optionally overridden by a
+	     gitignored Secrets.xcconfig) at build time — this is what makes the
+	     key survive an archive/TestFlight/CI build, unlike a value read only
+	     from the process environment at runtime. NOTE: an
+	     INFOPLIST_KEY_POSTHOG_API_KEY build setting does NOT work for a
+	     custom (non-Apple-recognized) key — Xcode's GENERATE_INFOPLIST_FILE
+	     only auto-emits INFOPLIST_KEY_* for its own known key set, which is
+	     why this key is declared directly here instead. -->
+	<key>POSTHOG_API_KEY</key>
+	<string>$(POSTHOG_API_KEY)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
