@@ -69,6 +69,8 @@ interface ScanArtifact {
   /** The resolved cover photo's SIGNED url (I79/I81) — null when the scan
    *  has no photos, or (defensively) when signing a resolved photo failed. */
   image_url: string | null;
+  /** Whose scan this is (Wave 1P, spec §11.2). The instrument says so. */
+  owner_kind: 'designer' | 'client';
 }
 
 /** The `room_scan_images` columns `resolveCoverPhoto` needs (I81) — embedded
@@ -81,28 +83,57 @@ type HeroCandidate = Pick<
   'image_url' | 'is_primary' | 'quality_score' | 'display_order'
 >;
 
+/** The client's ready scans AND the designer's own (spec §11.2, Wave 1P).
+ *  Before the union a designer could not open her own site scan from her own
+ *  project's document. Provenance rides each row so the instrument's label
+ *  still says whose scan it is.
+ *
+ *  `enabled` deliberately still gates on `clientProfileId` (Ruling 4-A): a
+ *  lead / proposal / relationship-only document must not start issuing a
+ *  room_scans read plus signing calls it never issued before. */
 function useClientScans(clientProfileId: string | null) {
   return useQuery<ScanArtifact[]>({
     queryKey: ['document-client-scans', clientProfileId],
     enabled: Boolean(clientProfileId),
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from('room_scans')
-        .select(
-          'id, name, created_at, images:room_scan_images(image_url, is_primary, quality_score, display_order)',
-        )
-        .eq('user_id', clientProfileId)
-        .order('created_at', { ascending: false })
-        .limit(5);
-      if (error) throw error;
+      const select =
+        'id, name, created_at, images:room_scan_images(image_url, is_primary, quality_score, display_order)';
 
-      const scans = (data ?? []) as Array<{
+      const { data: auth } = await supabase.auth.getUser();
+      const designerId: string | null = auth?.user?.id ?? null;
+
+      type ScanRow = {
         id: string;
         name: string | null;
         created_at: string;
         images: HeroCandidate[] | null;
-      }>;
+      };
+
+      const readScansFor = async (ownerId: string): Promise<ScanRow[]> => {
+        const { data, error } = await supabase
+          .from('room_scans')
+          .select(select)
+          .eq('user_id', ownerId)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        if (error) throw error;
+        return (data ?? []) as ScanRow[];
+      };
+
+      const [clientRows, designerRows] = await Promise.all([
+        clientProfileId ? readScansFor(clientProfileId) : Promise.resolve<ScanRow[]>([]),
+        designerId ? readScansFor(designerId) : Promise.resolve<ScanRow[]>([]),
+      ]);
+
+      const byId = new Map<string, ScanRow & { owner_kind: 'designer' | 'client' }>();
+      for (const row of clientRows) byId.set(row.id, { ...row, owner_kind: 'client' });
+      // The designer leg lands last, so a self-scan reads as hers.
+      for (const row of designerRows) byId.set(row.id, { ...row, owner_kind: 'designer' });
+
+      const scans = Array.from(byId.values()).sort((a, b) =>
+        b.created_at.localeCompare(a.created_at),
+      );
 
       // Resolve one cover photo per scan (I81's is_primary → quality →
       // display_order rule — NOT the old ad-hoc "first is_primary or first
@@ -145,6 +176,7 @@ function useClientScans(clientProfileId: string | null) {
           name: s.name,
           created_at: s.created_at,
           image_url,
+          owner_kind: s.owner_kind,
         };
       });
     },
@@ -232,10 +264,14 @@ export function LetterheadInstruments({
   // to before the flag existed.
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
 
-  const scan = useMemo(
-    () => (scans ?? []).find((s) => s.image_url) ?? null,
-    [scans],
-  );
+  // Ruling 4-B: the client's scan stays the door's first choice, so unioning
+  // the designer's own scans never silently retargets an existing document.
+  const scan = useMemo(() => {
+    const withImage = (scans ?? []).filter((s) => s.image_url);
+    return (
+      withImage.find((s) => s.owner_kind === 'client') ?? withImage[0] ?? null
+    );
+  }, [scans]);
   const family = familyLabel(clientName);
 
   // "View as the client" needs a mirror to open: the full project mirror when
@@ -294,7 +330,7 @@ export function LetterheadInstruments({
               )
             }
           >
-            The scan
+            {scan.owner_kind === 'designer' ? 'Your scan' : 'The scan'}
           </DocumentAction>
         )}
         {projectId && <SharingTierInstrument projectId={projectId} />}

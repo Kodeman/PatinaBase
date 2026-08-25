@@ -612,6 +612,7 @@ export type {
   RoomScanStyleSignals,
   RoomScanFilters,
 } from "./use-room-scans";
+export type { RoomScanOwnerKind, RoomScanWithProvenance } from "./use-room-scans";
 export {
   useRoomScanPhotos,
   useRoomScanCovers,
