@@ -1,6 +1,10 @@
 # Secrets (real anon key) — copy Secrets.example.swift → Secrets.swift
 Capture/App/Configuration/Secrets.swift
 
+# Build-time secret (PostHog key etc.) — copy Secrets.xcconfig.example →
+# Secrets.xcconfig. #include?d by the committed BuildSettings.xcconfig.
+Capture/App/Configuration/Secrets.xcconfig
+
 # Xcode user state / build
 *.xcuserdatad
 xcuserdata/

@@ -306,6 +306,7 @@ enum ResilienceScreens {
     }
 }
 
+#if DEBUG
 #Preview("R3 · denied") {
     photoImportPreview(.denied)
 }
@@ -324,3 +325,4 @@ private func photoImportPreview(_ context: PhotoImportContext) -> some View {
                             analytics: nil,
                             context: context)
 }
+#endif

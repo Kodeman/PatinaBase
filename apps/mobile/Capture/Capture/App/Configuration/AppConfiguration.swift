@@ -124,11 +124,25 @@ public enum AppConfiguration {
 
     // MARK: - PostHog (Phase 1b analytics)
 
-    /// PostHog project key. From `Secrets.swift` (gitignored), else the
-    /// `POSTHOG_API_KEY` env var, else empty (analytics stays a no-op). Mirrors
-    /// the existing Patina app's resolution.
+    /// PostHog project key. Resolution order:
+    /// 1. `POSTHOG_API_KEY` build setting (`Configuration/BuildSettings.xcconfig`,
+    ///    optionally overridden by a gitignored `Secrets.xcconfig`), reaching
+    ///    `Info.plist` via a literal `$(POSTHOG_API_KEY)` entry in `Info.plist`
+    ///    itself (NOT an `INFOPLIST_KEY_*` setting — those only auto-populate
+    ///    Xcode's own known Info.plist keys) — the ONLY path that survives an
+    ///    archive, a device install, TestFlight, or CI, because it is
+    ///    compiled into the binary's Info.plist rather than read from the
+    ///    environment at launch (FC-R14).
+    /// 2. `Secrets.swift` (gitignored) — dev convenience for a scheme Run.
+    /// 3. `POSTHOG_API_KEY` env var — only an Xcode scheme's Run action injects
+    ///    this; it is empty in a device install, TestFlight, or CI archive.
+    /// 4. Empty string — analytics stays a no-op.
     public static var postHogAPIKey: String {
-        Secrets.postHogAPIKey ?? ProcessInfo.processInfo.environment["POSTHOG_API_KEY"] ?? ""
+        if let fromInfoPlist = (Bundle.main.infoDictionary?["POSTHOG_API_KEY"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !fromInfoPlist.isEmpty {
+            return fromInfoPlist
+        }
+        return Secrets.postHogAPIKey ?? ProcessInfo.processInfo.environment["POSTHOG_API_KEY"] ?? ""
     }
 
     /// PostHog host, overridable via `POSTHOG_HOST` (defaults to US cloud).
