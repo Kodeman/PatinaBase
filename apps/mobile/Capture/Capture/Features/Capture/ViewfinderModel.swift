@@ -477,13 +477,7 @@ final class ViewfinderModel {
                   // She can route this record while the read is still running.
                   // Once it has left the device it must not be rewritten.
                   current.transferState.phase == .local else { return }
-            for suggestion in recordable {
-                current.setValue(suggestion.value, for: suggestion.key, source: suggestion.source)
-                // setValue refuses to overwrite what a tag, a scan, a measure or
-                // she already set. Never pin a confidence to a value we didn't write.
-                guard current.provenance(for: suggestion.key) == suggestion.source else { continue }
-                current.setConfidence(suggestion.confidence, for: suggestion.key)
-            }
+            current.recordSmartGuess(recordable)
             try? self.store.save()
         }
     }

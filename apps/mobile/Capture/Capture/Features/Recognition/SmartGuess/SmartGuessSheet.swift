@@ -171,17 +171,25 @@ struct SmartGuessSheet: View {
     }
 
     private func applyAsGuess(_ specimen: Specimen) {
+        // setValue refuses to overwrite what a tag, a scan, a measure or she
+        // already set. Never pin a confidence to a value we didn't write.
         if categoryRaw != SpecimenCategory.unknown.rawValue {
             specimen.setValue(categoryRaw, for: .category, source: .smartGuess)
-            specimen.setConfidence(confidence["Category"] ?? 0, for: .category)
+            if specimen.provenance(for: .category) == .smartGuess {
+                specimen.setConfidence(confidence["Category"] ?? 0, for: .category)
+            }
         }
         if !material.isEmpty {
             specimen.setValue(material, for: .material, source: .smartGuess)
-            specimen.setConfidence(confidence["Material"] ?? 0, for: .material)
+            if specimen.provenance(for: .material) == .smartGuess {
+                specimen.setConfidence(confidence["Material"] ?? 0, for: .material)
+            }
         }
         if !colour.isEmpty {
             specimen.setValue(colour, for: .colorway, source: .smartGuess)
-            specimen.setConfidence(confidence["Colour"] ?? 0, for: .colorway)
+            if specimen.provenance(for: .colorway) == .smartGuess {
+                specimen.setConfidence(confidence["Colour"] ?? 0, for: .colorway)
+            }
         }
         if !style.isEmpty, !specimen.styleTags.contains(style) {
             specimen.styleTags.append(style)

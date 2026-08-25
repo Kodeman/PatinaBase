@@ -160,6 +160,20 @@ public extension Specimen {
         guessConfidenceRaw[key.rawValue] = confidence
     }
 
+    /// Write a batch of smart-guess suggestions and confidence-gate them in one
+    /// pass — the shared source of truth for C1's post-shutter read and N5's
+    /// mirrored test loop. `setValue` refuses to overwrite what a tag, a scan,
+    /// a measure or she already set; never pin a confidence to a value we
+    /// didn't write.
+    @MainActor
+    func recordSmartGuess(_ suggestions: [FieldSuggestion]) {
+        for suggestion in suggestions {
+            setValue(suggestion.value, for: suggestion.key, source: suggestion.source)
+            guard provenance(for: suggestion.key) == suggestion.source else { continue }
+            setConfidence(suggestion.confidence, for: suggestion.key)
+        }
+    }
+
     func addMeasurement(axis: MeasurementAxis, millimeters: Double, source: MeasureSource) {
         let m = CaptureMeasurement(axisRaw: axis.rawValue, millimeters: millimeters, sourceRaw: source.rawValue)
         m.specimen = self
