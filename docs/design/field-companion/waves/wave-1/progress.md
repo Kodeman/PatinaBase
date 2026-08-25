@@ -2229,3 +2229,31 @@ stream is finished; exactly one `voice.finish reason:cap`, emitted from `endAtCa
 segment), and the orchestrator's ladder ruling (§15.4: recognizer unavailable → the note still
 records; the 20-minute cap copy on both surfaces). Six new assertions (37–42) added to
 `device-pass-spec.md`. **B4** (the `database.types.ts` whole-file reformat) is NOT this round's.
+
+## Merge RE-review fix round 3 (2026-08-25)
+
+Closed from `docs/design/field-companion/plans/wave-1-merge-rereview.md`: **N1** (blocker — `rotate()`
+no longer builds a recognition request or starts a task on a note that began with recognition off, so
+the §15.4 unavailable rung survives past the 50 s rotation boundary instead of ending the note with
+`voice.finish reason=error`; device-pass step **37b** added to prove it past 70 s), **N2** (the
+outgoing request's generation is retired by `carryForwardAndAdvance()` BEFORE `endAudio()`/`finish()`
+provoke its terminal callback, closing the window in which a rotation-time error read as live —
+boundary word-loss accepted per §8.2, "the audio is the record"), **N6** (F2's `startVoice()` now calls
+the same `requestAuthorization()` N4's sheet uses, so a cold install reaching F2 first has a door to
+the prompt; mic required, speech optional per the rung), **N7** and **N8** (docs — see below).
+
+Ruling: N3 (rotated request's error ending the note) = follow-up, not a Wave 1 blocker — needs a mid-note "recognition stopped" surface state; N4/N5 = follow-ups
+
+`docs/engineering/migration-number-reservations.md`: **00514 and 00515 ARE applied on prod (Strata) as
+of 2026-08-25 ~09:30Z, together with 00516** — the rows that said "NOT applied to staging or prod" are
+corrected, and the staging distinction is kept (**staging still owes 00514–00516**, so 00530's staging
+push stays gated). 00531's filename now matches the file on `hotfix/uuid-generate-v5-grant`:
+`supabase/migrations/00531_grant_uuid_generate_v5_authenticated.sql`.
+
+Still open, carried to wave 2: **N3** (a live request's recognition error should retire recognition,
+not the note), **N4** (`endAtCap` reads `latestTranscript` outside the identity guard), **N5**
+(`finish()`'s early return can miss the final segment in the cap-hop window), the
+`SpeechVoiceNoteService.swift` comment that still names `finish()` as a stream-finishing door, and the
+merge-ordering note on the regenerated `project.pbxproj`. **The device pass remains unrun** — no
+automated test in this repo links `SpeechVoiceNoteService`, so every finding in this round is proven by
+reading only.
