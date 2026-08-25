@@ -17,6 +17,16 @@ public final class VoiceSegmentPlayer: NSObject, AVAudioPlayerDelegate {
     private var queue: [URL] = []
 
     public func play(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        // The session is claimed ONCE per run, not per segment: inside advance()
+        // a session failure was indistinguishable from an unreadable file and
+        // was silently skipped as if the audio were missing.
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            return
+        }
         queue = urls
         isPlaying = true
         advance()
@@ -27,14 +37,16 @@ public final class VoiceSegmentPlayer: NSObject, AVAudioPlayerDelegate {
         player = nil
         queue = []
         isPlaying = false
+        // The recorder hands the session back at four sites; so does this, or
+        // her music stays ducked until something else happens to claim it.
+        try? AVAudioSession.sharedInstance()
+            .setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     private func advance() {
-        guard !queue.isEmpty else { isPlaying = false; return }
+        guard !queue.isEmpty else { stop(); return }
         let url = queue.removeFirst()
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback)
-            try AVAudioSession.sharedInstance().setActive(true)
             let next = try AVAudioPlayer(contentsOf: url)
             next.delegate = self
             player = next

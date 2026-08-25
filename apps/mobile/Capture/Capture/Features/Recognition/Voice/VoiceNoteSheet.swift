@@ -31,6 +31,9 @@ struct VoiceNoteSheet: View {
     /// so without this the primary re-enables in the gap and attach() labels a
     /// genuine recording as hand-typed with no filename.
     @State private var isFinishing = false
+    /// One gesture, one take. The cap clears isRecording mid-hold, so a gate on
+    /// isRecording would let a still-down finger begin a SECOND note.
+    @State private var gestureHeld = false
     @State private var player = VoiceSegmentPlayer()
 
     var body: some View {
@@ -46,6 +49,7 @@ struct VoiceNoteSheet: View {
             Spacer(minLength: 0)
         }
         .accessibilityIdentifier(CaptureScreenID.n4Voice.rawValue)
+        .onDisappear { player.stop() }
         .task {
             analytics.screen("N4.voice")
             guard analytics.isFeatureEnabled("field-companion-voice") else {
@@ -77,7 +81,7 @@ struct VoiceNoteSheet: View {
             micButton
             RecognitionActionBar(
                 secondaryTitle: "Discard",
-                primaryTitle: (result?.transcript.isEmpty ?? true) && hasAudio
+                primaryTitle: transcript.isEmpty && hasAudio
                     ? "Keep the recording"
                     : "Attach note",
                 primaryEnabled: (!transcript.isEmpty || hasAudio) && !isRecording && !isFinishing,
@@ -158,8 +162,8 @@ struct VoiceNoteSheet: View {
             .animation(.spring(duration: 0.2), value: isRecording)
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { _ in if !isRecording { begin() } }
-                    .onEnded { _ in end() }
+                    .onChanged { _ in if !gestureHeld { gestureHeld = true; begin() } }
+                    .onEnded { _ in gestureHeld = false; end() }
             )
             .accessibilityLabel("Hold to talk")
             .accessibilityAddTraits(.startsMediaSession)
@@ -198,6 +202,12 @@ struct VoiceNoteSheet: View {
 
     private func begin() {
         guard authorized != false else { manualFallback = true; return }
+        // Without these, the instant take 2 starts the sheet prints the ladder
+        // line and offers Play over a live recording - take 1's segments are
+        // still in `result` - and Play would seize the session the recorder
+        // holds as .record.
+        result = nil
+        player.stop()
         do {
             let stream = try voice.startLiveTranscription()
             isRecording = true
@@ -247,12 +257,18 @@ struct VoiceNoteSheet: View {
     }
 
     private func discard() {
+        player.stop()
         streamTask?.cancel()
         Task {
-            // finish() is what returns the segment list; without awaiting it the
-            // .m4a files stay on disk referenced by nothing, forever.
-            let abandoned = isRecording ? await voice.finish() : result
-            for name in abandoned?.audioSegments ?? [] {
+            // finish() is what returns the segment list, and it is idempotent:
+            // audioSegments accumulates and is reset only by the next
+            // startLiveTranscription(), so a second call hands back the same
+            // names. Discard therefore always ASKS instead of reading `result`,
+            // which is nil for the whole window between end() and its Task
+            // resuming - and cancel() above gives that Task the main actor
+            // first, so the still-recording branch could never see it either.
+            let abandoned = await voice.finish()
+            for name in abandoned.audioSegments {
                 try? FileManager.default.removeItem(at: store.mediaURL(for: name))
             }
             await MainActor.run { coordinator?.dismissSheet() }

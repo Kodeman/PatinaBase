@@ -67,6 +67,7 @@ struct V1SessionTrayScreen: View {
         }
         .accessibilityIdentifier(CaptureScreenID.v1SessionTray.rawValue)
         .onAppear(perform: reload)
+        .onDisappear { player.stop() }
     }
 
     private func venueSection(_ venue: String, _ specimens: [Specimen]) -> some View {
@@ -116,10 +117,24 @@ struct V1SessionTrayScreen: View {
             if let segments = specimen.voiceAudioSegmentsRaw, !segments.isEmpty {
                 playButton(specimen.id, segments)
             }
-            RouteStatusChip(kind: RouteFormat.status(for: specimen))
-            Image(systemName: "chevron.right")
-                .font(CaptureType.footnote)
-                .foregroundStyle(CaptureColor.line2)
+
+            // The play control has to sit OUTSIDE a navigation button to receive
+            // its own touches, which splits the row in two - and the chevron is
+            // the only thing on it that says "this row navigates", so the
+            // trailing block gets its own button rather than going inert.
+            Button {
+                coordinator.navigate(to: .specimen(specimen.id))
+            } label: {
+                HStack(spacing: 12) {
+                    RouteStatusChip(kind: RouteFormat.status(for: specimen))
+                    Image(systemName: "chevron.right")
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.line2)
+                }
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
