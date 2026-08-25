@@ -3,8 +3,8 @@
 //
 //  The concrete CameraService backed by a real AVCaptureSession + photo output,
 //  with CoreMotion level telemetry and a mean-luma low-light read off a video
-//  data output. Wired into AppContainer on device (AppContainer.swift:104-110);
-//  the simulator branch takes MockCameraService instead.
+//  data output. Wired into AppContainer.init()'s #if targetEnvironment(simulator)
+//  branch on device; the simulator branch takes MockCameraService instead.
 //
 //  Simulator note: AVCaptureDevice.default(...) returns nil on the simulator, so
 //  the session never starts and `capture()` throws `.unavailable`. Everything
