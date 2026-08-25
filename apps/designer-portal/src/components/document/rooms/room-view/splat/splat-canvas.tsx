@@ -56,6 +56,8 @@ import { clipPlanes } from '../model/model-scene';
 import {
   buildSplatScene,
   disposeSplatParts,
+  orientBounds,
+  defaultSplatOrientation,
   CREAM,
   type BuiltSplatScene,
 } from './splat-scene';
@@ -75,9 +77,19 @@ type CanvasStatus = 'loading' | 'ready' | 'error' | 'webgl-failed';
 export interface SplatCanvasProps {
   /** A fetchable splat URL — `.ply`, `.spz`, `.splat`, `.ksplat`, `.sog`. */
   splatUrl: string;
+  /**
+   * How the mesh must be rotated to land in three.js's Y-up frame — see
+   * `splat-scene.ts`'s ORIENTATION section. Optional escape hatch for a caller that
+   * knows better than `defaultSplatOrientation`'s URL-based guess (tests, a future
+   * per-source override); every real caller today omits it and gets the guess, which
+   * is identity for the committed `/fixtures/…` dev fixture and `SPLAT_ORIENTATION`
+   * for everything else (today's dev `?splatUrl=` overrides included, and the
+   * resolved R2 capability URL once the read path lands).
+   */
+  orientation?: THREE.Quaternion;
 }
 
-export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
+export default function SplatCanvas({ splatUrl, orientation }: SplatCanvasProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<CanvasStatus>('loading');
   /**
@@ -100,6 +112,12 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
     // mount, and taking it as a dependency would tear down and rebuild the whole
     // WebGL context the moment the flag resolved.
     const debugging = splatDebugEnabled(window.location.search);
+
+    // Same reasoning for `orientation`: every real caller omits the prop, so this
+    // resolves from `splatUrl` (already a dependency) via `defaultSplatOrientation`.
+    // Depending on the prop itself would tear down and rebuild the whole WebGL
+    // context on a caller that passes a fresh `Quaternion` literal each render.
+    const meshOrientation = orientation ?? defaultSplatOrientation(splatUrl);
 
     const fail = (stage: SplatFailureStage, err: unknown) => {
       const described = describeSplatFailure(stage, err);
@@ -220,9 +238,24 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
           return;
         }
 
-        built = buildSplatScene(parts, splatMesh!.getBoundingBox());
+        // Orient BEFORE measuring: `getBoundingBox()` returns mesh-LOCAL bounds (the
+        // library never sees the object's own transform), so setting the quaternion
+        // here has no effect on what it returns — the box still has to be rotated by
+        // hand (`orientBounds`) to describe what the mesh will actually look like once
+        // its quaternion is applied at render time. Both must happen: the quaternion
+        // for the visual, `orientBounds` for the framing that measures it.
+        splatMesh!.quaternion.copy(meshOrientation);
+        const localBox = splatMesh!.getBoundingBox();
+        const bounds = orientBounds(localBox, meshOrientation);
+
+        built = buildSplatScene(parts, bounds);
         const { scene, framing } = built;
-        const { near, far } = clipPlanes(framing);
+        const { near: rawNear, far } = clipPlanes(framing);
+        // Interior framing's `minRadius` (as low as 0.15 m) drives `clipPlanes`' raw
+        // `minRadius / 100` formula to ~0.0015 — a near plane that close z-fights
+        // against anything at typical room scale. 0.05 is close enough to never clip
+        // the camera itself at these radii, far enough to leave real depth precision.
+        const near = Math.max(rawNear, 0.05);
         const camera = new THREE.PerspectiveCamera(FOV_DEG, 16 / 9, near, far);
 
         renderFrame = async () => {
@@ -285,6 +318,11 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
       gl.forceContextLoss?.();
       canvas.remove();
     };
+    // `debug` and `orientation` are deliberately excluded — see their own comments
+    // above for why depending on either would tear down and rebuild the WebGL
+    // context for no correctness benefit (no real caller ever passes `orientation`,
+    // and `debug`'s raw window read already sidesteps needing it as a dependency).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [splatUrl]);
 
   const live = status === 'loading' || status === 'ready';

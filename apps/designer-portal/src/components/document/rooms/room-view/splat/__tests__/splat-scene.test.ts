@@ -17,7 +17,10 @@ import * as THREE from 'three';
 import {
   buildSplatScene,
   disposeSplatParts,
-  frameSplat,
+  frameSplatInterior,
+  orientBounds,
+  defaultSplatOrientation,
+  SPLAT_ORIENTATION,
   CREAM,
   type DisposableObject3D,
 } from '../splat-scene';
@@ -47,35 +50,43 @@ function roomBounds(
   );
 }
 
-describe('frameSplat', () => {
-  it('targets the splat’s own bounding-box centre at ~eye height', () => {
-    const framing = frameSplat(roomBounds());
+describe('frameSplatInterior', () => {
+  it('targets the splat’s own bounding-box centre, eye height 1.6 m above its floor', () => {
+    const framing = frameSplatInterior(roomBounds());
     expect(framing.target.x).toBeCloseTo(10, 6);
     expect(framing.target.z).toBeCloseTo(-6, 6);
-    expect(framing.target.y).toBeCloseTo(2.5 * 0.45, 6);
+    expect(framing.target.y).toBeCloseTo(1.6, 6); // box.min.y (0) + EYE_HEIGHT_M
   });
 
-  it('keeps Orbit’s angles and derives the radius band from the plan diagonal', () => {
-    const framing = frameSplat(roomBounds());
-    const diagonal = Math.hypot(4, 3); // 5
-
-    // The same constants Orbit's frameRoom applies, and the same ones frameModel
-    // lands on — this is the one shared piece of control math, not a third copy.
+  it('keeps Orbit’s azimuth and its polar clamp band, but flattens the default look', () => {
+    const framing = frameSplatInterior(roomBounds());
+    // The one shared piece of control math Orbit's frameRoom also uses — not a copy.
     expect(framing.azimuth).toBeCloseTo(0.82, 6);
-    expect(framing.polar).toBeCloseTo(1.08, 6);
-    expect(framing.radius).toBeCloseTo(1.35 * diagonal, 6);
-    expect(framing.minRadius).toBeCloseTo(0.6 * diagonal, 6);
-    expect(framing.maxRadius).toBeCloseTo(2.55 * diagonal, 6);
+    expect(framing.minPolar).toBeCloseTo(0.35, 6);
+    expect(framing.maxPolar).toBeCloseTo(1.45, 6);
+    // Flattened toward eye-level, not Orbit's exterior downward tilt (1.08 rad).
+    expect(framing.polar).toBeCloseTo(Math.PI / 2, 6);
   });
 
-  it('scales with the splat’s units — a metre walk and a foot walk both frame', () => {
-    const metres = frameSplat(roomBounds({ x: 4, y: 2.5, z: 3 }));
-    const feet = frameSplat(roomBounds({ x: 13.1, y: 8.2, z: 9.8 }));
-    expect(feet.radius / metres.radius).toBeCloseTo(13.1 / 4, 1);
+  it('derives an interior-scale radius from the HALF-diagonal, well inside the shell', () => {
+    const framing = frameSplatInterior(roomBounds()); // size 4×2.5×3, diagonal 5
+    const halfDiagonal = Math.hypot(4, 3) / 2; // 2.5
+    expect(framing.radius).toBeCloseTo(0.35 * halfDiagonal, 6); // 0.875 — under the 1.2 m cap
+    expect(framing.radius).toBeLessThan(halfDiagonal);
+    expect(framing.minRadius).toBeCloseTo(0.15, 6);
+    expect(framing.maxRadius).toBeCloseTo(0.9 * halfDiagonal, 6);
+    expect(framing.minRadius).toBeLessThan(framing.radius);
+    expect(framing.maxRadius).toBeLessThan(Math.hypot(4, 3)); // stays inside the room, not outside it
+  });
+
+  it('caps the radius at an absolute distance for a large room rather than backing off further', () => {
+    // half-diagonal 10 (hypot(16,12)=20) → 0.35×10 = 3.5, capped to 1.2.
+    const framing = frameSplatInterior(roomBounds({ x: 16, y: 2.5, z: 12 }));
+    expect(framing.radius).toBeCloseTo(1.2, 6);
   });
 
   it('falls back to a unit framing for an empty bounds rather than emitting NaNs', () => {
-    const framing = frameSplat(new THREE.Box3());
+    const framing = frameSplatInterior(new THREE.Box3());
     expect(Number.isFinite(framing.radius)).toBe(true);
     expect(Number.isFinite(framing.target.x)).toBe(true);
     expect(framing.radius).toBeGreaterThan(0);
@@ -86,9 +97,75 @@ describe('frameSplat', () => {
       new THREE.Vector3(-Infinity, -Infinity, -Infinity),
       new THREE.Vector3(Infinity, Infinity, Infinity),
     );
-    const framing = frameSplat(infinite);
+    const framing = frameSplatInterior(infinite);
     expect(Number.isFinite(framing.radius)).toBe(true);
     expect(Number.isFinite(framing.target.y)).toBe(true);
+  });
+
+  it('falls back for an oversize plan — a floater-polluted or non-metric splat, not a room', () => {
+    const huge = roomBounds({ x: 50, y: 2.5, z: 3 }); // hypot(50,3) ≈ 50.1 > 40
+    const framing = frameSplatInterior(huge);
+    const unitRoom = frameSplatInterior(new THREE.Box3()); // same fallback shape
+    expect(framing).toEqual(unitRoom);
+  });
+});
+
+describe('orientBounds', () => {
+  it('rotates a mesh-local box into the oriented frame (90° about X: y′=−z, z′=y)', () => {
+    const local = new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 2, 3));
+    const oriented = orientBounds(local, SPLAT_ORIENTATION);
+    const [minX, minY, minZ] = oriented.min.toArray();
+    const [maxX, maxY, maxZ] = oriented.max.toArray();
+    expect(minX).toBeCloseTo(0, 6);
+    expect(minY).toBeCloseTo(-3, 6);
+    expect(minZ).toBeCloseTo(0, 6);
+    expect(maxX).toBeCloseTo(1, 6);
+    expect(maxY).toBeCloseTo(0, 6);
+    expect(maxZ).toBeCloseTo(2, 6);
+  });
+
+  it('leaves the box unchanged under an identity orientation', () => {
+    const local = new THREE.Box3(new THREE.Vector3(-1, 0, -2), new THREE.Vector3(3, 2.5, 4));
+    const oriented = orientBounds(local, new THREE.Quaternion());
+    expect(oriented.min.toArray()).toEqual(local.min.toArray());
+    expect(oriented.max.toArray()).toEqual(local.max.toArray());
+  });
+
+  it('passes an empty box through rather than producing a bogus rotated one', () => {
+    expect(orientBounds(new THREE.Box3(), SPLAT_ORIENTATION).isEmpty()).toBe(true);
+  });
+});
+
+describe('SPLAT_ORIENTATION', () => {
+  it('is the 90°-about-X quaternion the derivation composes to', () => {
+    expect(SPLAT_ORIENTATION.x).toBeCloseTo(Math.SQRT1_2, 10);
+    expect(SPLAT_ORIENTATION.y).toBeCloseTo(0, 10);
+    expect(SPLAT_ORIENTATION.z).toBeCloseTo(0, 10);
+    expect(SPLAT_ORIENTATION.w).toBeCloseTo(Math.SQRT1_2, 10);
+  });
+});
+
+describe('defaultSplatOrientation', () => {
+  it('is identity for the committed dev fixture — built Y-up, no pipeline involved', () => {
+    const q = defaultSplatOrientation('/fixtures/splat/room-fixture.ply');
+    expect(q.equals(new THREE.Quaternion())).toBe(true);
+  });
+
+  it('is SPLAT_ORIENTATION for every other source — a real .spz off the pipeline', () => {
+    const capabilityUrl = defaultSplatOrientation('https://r2.example.com/splat.spz?sig=abc');
+    expect(capabilityUrl.equals(SPLAT_ORIENTATION)).toBe(true);
+
+    const devOverrideOfSomethingElse = defaultSplatOrientation('/room/xyz/walk.spz');
+    expect(devOverrideOfSomethingElse.equals(SPLAT_ORIENTATION)).toBe(true);
+  });
+
+  it('returns a fresh instance each call, never the shared singleton by reference', () => {
+    // A caller doing `splatMesh.quaternion.copy(orientation)` never mutates it, but
+    // `.clone()` here is what keeps that true even if that ever changes.
+    const a = defaultSplatOrientation('/other.spz');
+    const b = defaultSplatOrientation('/other.spz');
+    expect(a).not.toBe(b);
+    expect(a.equals(b)).toBe(true);
   });
 });
 
@@ -129,10 +206,12 @@ describe('buildSplatScene', () => {
   it('frames from the bounds it was handed, not from the scene graph', () => {
     // A SplatMesh holds no three geometry, so Box3.setFromObject would measure an
     // empty box. The bounds come from the library, and this is what proves they are
-    // what the framing uses.
+    // what the framing uses — via `frameSplatInterior`, same as calling it directly.
     const built = buildSplatScene(fakeParts(), roomBounds());
+    const halfDiagonal = Math.hypot(4, 3) / 2;
     expect(built.framing.target.x).toBeCloseTo(10, 6);
-    expect(built.framing.radius).toBeCloseTo(1.35 * 5, 6);
+    expect(built.framing.target.y).toBeCloseTo(1.6, 6);
+    expect(built.framing.radius).toBeCloseTo(0.35 * halfDiagonal, 6);
   });
 
   it('dispose() hands both parts back to the library, mesh first, then empties', () => {
