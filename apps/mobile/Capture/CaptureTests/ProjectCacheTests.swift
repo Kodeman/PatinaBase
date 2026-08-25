@@ -100,4 +100,58 @@ struct ProjectCacheTests {
 
         #expect(a.distanceMeters(to: a) == 0)
     }
+
+    private func snapshot(_ id: String, name: String,
+                          visited: Date? = nil, refreshed: Date? = nil,
+                          filed: Int = 0) -> CaptureProjectSnapshot {
+        CaptureProjectSnapshot(id: id, name: name, specRooms: [], rooms: [],
+                               lastRefreshedAt: refreshed, lastVisitedAt: visited,
+                               lastFiledCoordinate: nil, filedCaptureCount: filed)
+    }
+
+    @Test func orderingIsMostRecentlyVisitedFirst() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let ordered = CaptureProjectCachePolicy.ordered([
+            snapshot("a", name: "Alpha", refreshed: now),
+            snapshot("b", name: "Bravo", visited: now.addingTimeInterval(-3600)),
+            snapshot("c", name: "Charlie", visited: now.addingTimeInterval(-60))
+        ], now: now)
+        #expect(ordered.map(\.id) == ["c", "b", "a"])
+    }
+
+    @Test func offlineCaptionIsTheSpecifiedCopy() {
+        #expect(CaptureProjectCachePolicy.offlineCaption(cachedCount: 12)
+                == "12 projects on this phone. Others need signal.")
+        #expect(CaptureProjectCachePolicy.offlineCaption(cachedCount: 1)
+                == "1 project on this phone. Others need signal.")
+        #expect(CaptureProjectCachePolicy.offlineCaption(cachedCount: 0)
+                == "No projects on this phone yet. They arrive with signal.")
+    }
+
+    @Test func evictionSparesRecentlyVisitedProjects() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let old = now.addingTimeInterval(-CaptureProjectCachePolicy.evictAfter - 1)
+        let evictable = CaptureProjectCachePolicy.evictable([
+            snapshot("keep", name: "Keep", visited: now, refreshed: old),
+            snapshot("drop", name: "Drop", visited: old, refreshed: old)
+        ], now: now)
+        #expect(evictable == ["drop"])
+    }
+
+    @Test func stalenessIsSevenDays() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let fresh = snapshot("a", name: "A", refreshed: now.addingTimeInterval(-3600))
+        let stale = snapshot("b", name: "B",
+                             refreshed: now.addingTimeInterval(-CaptureProjectCachePolicy.staleAfter - 1))
+        #expect(!fresh.isStale(now: now))
+        #expect(stale.isStale(now: now))
+        #expect(snapshot("c", name: "C").isStale(now: now))
+    }
+
+    @Test func filterMatchesTrimmedCaseInsensitiveSubstrings() {
+        let all = [snapshot("a", name: "Maple St residence"),
+                   snapshot("b", name: "Harbor loft")]
+        #expect(CaptureProjectCachePolicy.filter(all, query: "  maple ").map(\.id) == ["a"])
+        #expect(CaptureProjectCachePolicy.filter(all, query: "").map(\.id) == ["a", "b"])
+    }
 }
