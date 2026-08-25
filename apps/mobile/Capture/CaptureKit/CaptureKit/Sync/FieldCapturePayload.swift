@@ -37,10 +37,13 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
     /// copied onto the minted product's `capture_provenance`.
     public var provenance: [String: String]?
     public var device: Device?
+    /// 'note' | 'context' | nil. Read by the W1 migration into
+    /// field_captures.capture_kind, which CHECKs ('specimen','note','context').
+    public var captureKind: String?
     public var schemaVersion: Int
 
     /// Bumped only alongside a 00235-side reader change.
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     // ── Nested envelopes (each key path is read individually by 00235) ────────
 
@@ -79,6 +82,12 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
         /// Relative filename from the builder; the app upgrades it to the full
         /// `<uid>/<clientToken>/<file>` capture-media object path at upload time.
         public var audioPath: String?
+        /// Ordered segment filenames; the app upgrades each to its full
+        /// `<uid>/<clientToken>/<file>` object path at upload time, exactly as
+        /// it already does for `audioPath`.
+        public var audioSegments: [String]?
+        /// 'device' | 'device_partial' — which reading produced `transcript`.
+        public var transcriptSource: String?
         public var transcript: String?
         public var partialTranscript: String?
         public var durationSeconds: Double?
@@ -158,6 +167,7 @@ public extension FieldCapturePayload {
         self.venue = s.venue.map(Self.buildVenue)
         self.provenance = s.provenanceRaw.isEmpty ? nil : s.provenanceRaw
         self.device = device
+        self.captureKind = s.captureKindRaw?.nonEmpty
         self.schemaVersion = Self.currentSchemaVersion
     }
 
@@ -225,10 +235,16 @@ public extension FieldCapturePayload {
         let transcript = s.voiceTranscript?.nonEmpty
         let partial = s.voicePartialTranscript?.nonEmpty
         let audioPath = s.voiceAudioFilename?.nonEmpty
+        let segments = (s.voiceAudioSegmentsRaw ?? []).filter { !$0.isEmpty }
         let duration = s.voiceDurationSeconds
-        guard transcript != nil || partial != nil || audioPath != nil || duration != nil else { return nil }
-        return Voice(audioPath: audioPath, transcript: transcript,
-                     partialTranscript: partial, durationSeconds: duration)
+        guard transcript != nil || partial != nil || audioPath != nil
+                || !segments.isEmpty || duration != nil else { return nil }
+        return Voice(audioPath: audioPath,
+                     audioSegments: segments.isEmpty ? nil : segments,
+                     transcriptSource: s.voiceTranscriptSourceRaw?.nonEmpty,
+                     transcript: transcript,
+                     partialTranscript: partial,
+                     durationSeconds: duration)
     }
 
     private static func buildVenue(_ v: VenueStamp) -> Venue {

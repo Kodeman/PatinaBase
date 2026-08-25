@@ -65,10 +65,24 @@ public struct TranscriptChunk: Sendable {
 }
 public struct VoiceNoteResult: Sendable {
     public let transcript: String
+    /// Segment 0. Every shipped reader (payload, store, sync) keeps using this.
     public let audioFilename: String?
+    /// Ordered audio segments. Later segments exist only when an interruption
+    /// split the note; empty when no audio was written at all.
+    public let audioSegments: [String]
+    /// Whether recognition actually ran on-device. Recorded, not merely set:
+    /// voice.finish reports it, and the shipped permission string promises it.
+    public let onDevice: Bool
     public let durationSeconds: Double
-    public init(transcript: String, audioFilename: String?, durationSeconds: Double) {
-        self.transcript = transcript; self.audioFilename = audioFilename
+    public init(transcript: String, audioFilename: String?,
+                audioSegments: [String] = [], onDevice: Bool = false,
+                durationSeconds: Double) {
+        self.transcript = transcript
+        self.audioFilename = audioFilename
+        self.audioSegments = audioSegments.isEmpty
+            ? (audioFilename.map { [$0] } ?? [])
+            : audioSegments
+        self.onDevice = onDevice
         self.durationSeconds = durationSeconds
     }
 }

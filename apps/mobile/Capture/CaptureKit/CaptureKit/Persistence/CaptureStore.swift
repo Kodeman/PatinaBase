@@ -515,10 +515,21 @@ public final class CaptureStore {
             ) ?? ""
             return remotePath.isEmpty ? photo.filename : nil
         }
-        if let voice = specimen.voiceAudioFilename?.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        ), !voice.isEmpty {
-            required.append(voice)
+        // Mirror the photo rule directly above: a segment that carries a durable
+        // remote path no longer depends on its local copy. Without this a voice
+        // file is required-LOCAL forever (uploadMedia never stamped one), and
+        // CaptureMediaAvailabilityError is not a LocalSyncError, so isDeferrable
+        // does not apply — one unreadable segment would HARD-fail a note that
+        // today syncs transcript-only.
+        let uploaded = Set((specimen.voiceAudioRemotePathsRaw ?? [])
+            .compactMap { $0.split(separator: "/").last.map(String.init) })
+        var seen = Set<String>()
+        let voiceNames = ([specimen.voiceAudioFilename]
+                          + (specimen.voiceAudioSegmentsRaw ?? []).map { Optional($0) })
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && !uploaded.contains($0) }
+        for name in voiceNames where seen.insert(name).inserted {
+            required.append(name)
         }
 
         return required.filter { filename in
