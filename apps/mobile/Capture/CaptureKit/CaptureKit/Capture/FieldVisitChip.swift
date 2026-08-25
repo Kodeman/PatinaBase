@@ -60,3 +60,32 @@ public enum FieldVisitChipBuilder {
         return value
     }
 }
+
+/// The C3 / C5 placement line (spec §7.5). One line, always true.
+///
+/// Wave 1 shipped this line pointed at S1; wave 3 repoints it at the door (V0)
+/// and keeps the copy honest. It reads `Specimen.isUnplaced` and never
+/// re-derives placement — `status` and `remoteId` are a different axis, and the
+/// line clears on PLACEMENT, never on sync.
+public enum FieldPlacementLine {
+    @MainActor
+    public static func text(for specimen: Specimen) -> String {
+        guard !isUnplaced(specimen) else { return "Not placed — tap to place" }
+        let project = trimmed(specimen.venue?.projectName)
+        let room = trimmed(specimen.venue?.room)
+        // Spec Flow 6: an un-chipped market find filed to the Library shelf is
+        // DONE. It is not adrift, so it is neither offered a placement nor given
+        // a project it has not got — it is told where it actually landed.
+        guard specimen.destinationRequiresProject || project != nil else { return "Library" }
+        return "\(project ?? "This project") · \(room ?? "Whole house")"
+    }
+
+    @MainActor
+    public static func isUnplaced(_ specimen: Specimen) -> Bool { specimen.isUnplaced }
+
+    private static func trimmed(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else { return nil }
+        return value
+    }
+}

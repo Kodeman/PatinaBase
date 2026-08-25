@@ -18,7 +18,9 @@ struct CaptureCardOverlay: View {
     let onSave: () -> Void
     let onAddDetail: () -> Void
     let onDismiss: () -> Void
-    let onPlace: () -> Void
+    let placementLine: String
+    let placementIsUnplaced: Bool
+    let onPlacement: () -> Void
 
     @State private var dragOffset: CGFloat = 0
 
@@ -65,21 +67,28 @@ struct CaptureCardOverlay: View {
                      value: specimen.materialNote ?? "—",
                      source: specimen.provenance(for: .material))
 
-            Button(action: onPlace) {
-                HStack(spacing: 6) {
-                    Text(placementLabel)
-                        .font(CaptureType.footnote)
-                        .foregroundStyle(specimen.venue?.projectId == nil
+            Button(action: onPlacement) {
+                HStack(spacing: 8) {
+                    Text(placementLine)
+                        .font(CaptureType.bodyEmph)
+                        .foregroundStyle(placementIsUnplaced
                                          ? CaptureColor.terracotta : CaptureColor.ink)
-                    Image(systemName: "chevron.down")
-                        .font(CaptureType.monoSmall)
-                        .foregroundStyle(CaptureColor.line2)
                     Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.inkSoft)
                 }
+                .padding(.vertical, 10)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .frame(minHeight: 44)
+            .accessibilityLabel("Placement: \(placementLine)")
+            .accessibilityHint("Opens the visit")
             .accessibilityIdentifier("card.placement")
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(CaptureColor.line).frame(height: 1)
+            }
 
             HStack(spacing: 12) {
                 Button(action: onAddDetail) {
@@ -129,13 +138,5 @@ struct CaptureCardOverlay: View {
 
     private var categoryLabel: String {
         specimen.category == .unknown ? "—" : specimen.category.rawValue.capitalized
-    }
-
-    private var placementLabel: String {
-        guard let venue = specimen.venue, let name = venue.projectName, !name.isEmpty else {
-            return "Not placed — tap to place"
-        }
-        guard let room = venue.room, !room.isEmpty else { return name }
-        return "\(name) · \(room)"
     }
 }

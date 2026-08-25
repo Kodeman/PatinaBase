@@ -63,7 +63,9 @@ struct ViewfinderScreen: View {
                     onSave: model.saveFromCard,
                     onAddDetail: model.addDetailFromCard,
                     onDismiss: model.dismissCard,
-                    onPlace: model.placeFromCard
+                    placementLine: FieldPlacementLine.text(for: specimen),
+                    placementIsUnplaced: FieldPlacementLine.isUnplaced(specimen),
+                    onPlacement: { coordinator.present(.visit) }
                 )
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .zIndex(2)

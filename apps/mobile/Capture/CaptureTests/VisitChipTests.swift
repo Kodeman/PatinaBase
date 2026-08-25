@@ -139,4 +139,79 @@ struct VisitChipTests {
             #expect(!"\(chip.primary) \(chip.secondary)".lowercased().contains("inbox"))
         }
     }
+
+    // MARK: - The C3 / C5 placement line (spec §7.5)
+
+    @MainActor
+    @Test func thePlacementLineNamesProjectAndRoomOrSaysItIsNotPlaced() throws {
+        let store = try CaptureStore.inMemory()
+
+        let placed = store.newDraft()
+        placed.venue = VenueStamp(projectId: "p1", projectName: "Maple St", room: "Living")
+        #expect(FieldPlacementLine.text(for: placed) == "Maple St · Living")
+        #expect(!FieldPlacementLine.isUnplaced(placed))
+
+        let wholeHouse = store.newDraft()
+        wholeHouse.venue = VenueStamp(projectId: "p1", projectName: "Maple St")
+        #expect(FieldPlacementLine.text(for: wholeHouse) == "Maple St · Whole house")
+
+        let unplaced = store.newDraft()
+        #expect(FieldPlacementLine.text(for: unplaced) == "Not placed — tap to place")
+        #expect(FieldPlacementLine.isUnplaced(unplaced))
+    }
+
+    /// Spec Flow 6: an un-chipped market find filed to the Library shelf is DONE.
+    /// Offering "tap to place" on a finished market find is the visible failure
+    /// of the destination clause, so the line must neither invite a placement nor
+    /// invent a project the capture has not got.
+    @MainActor
+    @Test func aLibraryCaptureWithNoProjectIsNeverOfferedAPlacement() throws {
+        let store = try CaptureStore.inMemory()
+
+        let marketFind = store.newDraft()
+        marketFind.destination = .library
+        #expect(!FieldPlacementLine.isUnplaced(marketFind))
+        let line = FieldPlacementLine.text(for: marketFind)
+        #expect(line == "Library")
+        #expect(!line.lowercased().contains("tap to place"))
+        #expect(!line.contains("This project"))
+
+        // Chipped at the market: it has a project, so the line names it.
+        let chipped = store.newDraft()
+        chipped.destination = .library
+        chipped.venue = VenueStamp(projectId: "p1", projectName: "Maple St", room: "Living")
+        #expect(FieldPlacementLine.text(for: chipped) == "Maple St · Living")
+    }
+
+    /// FC-R6: the line clears on PLACEMENT, never on sync. A capture that
+    /// committed hours ago and still has no project is still unplaced.
+    @MainActor
+    @Test func thePlacementLineIsBlindToSyncState() throws {
+        let store = try CaptureStore.inMemory()
+
+        let committed = store.newDraft()
+        committed.destination = .inbox
+        committed.status = .committed
+        committed.remoteId = UUID().uuidString
+        #expect(FieldPlacementLine.isUnplaced(committed))
+        #expect(FieldPlacementLine.text(for: committed) == "Not placed — tap to place")
+    }
+
+    /// FC-R3: "Inbox" has left Field's user-facing copy, and the line she reads
+    /// one-handed after the shutter is user-facing copy.
+    @MainActor
+    @Test func noPlacementLineCopyEverSaysInbox() throws {
+        let store = try CaptureStore.inMemory()
+
+        let inbox = store.newDraft()
+        inbox.destination = .inbox
+        let library = store.newDraft()
+        library.destination = .library
+        let placed = store.newDraft()
+        placed.venue = VenueStamp(projectId: "p1", projectName: "Maple St", room: "Living")
+
+        for specimen in [inbox, library, placed] {
+            #expect(!FieldPlacementLine.text(for: specimen).lowercased().contains("inbox"))
+        }
+    }
 }

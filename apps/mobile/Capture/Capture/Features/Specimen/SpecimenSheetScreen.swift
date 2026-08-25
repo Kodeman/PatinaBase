@@ -27,6 +27,7 @@ struct SpecimenSheetScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     SpecimenPhotoStrip(store: store, specimen: specimen)
+                    placement
                     fields
                     enrichmentActions
                     actions
@@ -47,6 +48,26 @@ struct SpecimenSheetScreen: View {
         .presentationDragIndicator(.visible)
         .onDisappear { try? store.save() }
         .accessibilityIdentifier(CaptureScreenID.c5SpecimenSheet.rawValue)
+    }
+
+    // MARK: Placement
+
+    /// The same line C3 shows, read-only here: C5 is where she corrects the
+    /// RECORD, so placement is reported rather than edited in place, and
+    /// *Change* takes her to the same door the card does.
+    private var placement: some View {
+        HStack(spacing: 8) {
+            Text(FieldPlacementLine.text(for: specimen))
+                .font(CaptureType.footnote)
+                .foregroundStyle(FieldPlacementLine.isUnplaced(specimen)
+                                 ? CaptureColor.terracotta : CaptureColor.inkSoft)
+            Spacer(minLength: 8)
+            Button("Change") { coordinator.present(.visit) }
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.verdigrisInk)
+                .frame(minHeight: 44)
+        }
+        .accessibilityIdentifier("c5.placement")
     }
 
     // MARK: Fields
