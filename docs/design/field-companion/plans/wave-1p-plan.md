@@ -30,7 +30,10 @@ Every task's requirements implicitly include this section. Copied from `AGENTS.m
 - **Gates** (all must pass before a task is called done):
   - `pnpm type-check`
   - `pnpm build --filter @patina/designer-portal`
-  - `pnpm lint --filter @patina/designer-portal`
+  - `pnpm lint --filter @patina/designer-portal` — ⚠ **this gate is RED at baseline and exits 1.** Measured on this branch before any wave code landed: **2 errors, 200 warnings**, both errors pre-existing and in unrelated test files:
+    - `apps/designer-portal/src/components/document/rooms/piece/__tests__/piece-room-save-gate.test.tsx:159` — `Definition for rule 'import/first' was not found`
+    - `.../use-commercial-documents.test.ts:930` — `react-hooks/rules-of-hooks` false positive on `mutationFnOf`
+    The gate is therefore **"no NEW errors beyond those two, and no new warnings"**, not "exit 0". Fixing them is out of this lane.
   - the jest/vitest suites each task names below.
   - ⚠ Turbo filters match the package `name` field. The designer portal's name is **`@patina/designer-portal`**. `pnpm build --filter designer-portal` fails with `No package found with name 'designer-portal' in workspace` (verified). Plan §1.4 writes the short form; use the scoped form.
   - ⚠ `apps/designer-portal/next.config` sets `typescript.ignoreBuildErrors: true` and `eslint.ignoreDuringBuilds: true` — **the build does NOT type-check or lint.** `pnpm type-check` and `pnpm lint --filter @patina/designer-portal` are the real gates; the build only proves it compiles and bundles.
