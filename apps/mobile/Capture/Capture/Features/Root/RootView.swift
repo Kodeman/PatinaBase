@@ -37,6 +37,12 @@ struct RootView: View {
     /// SwiftUI does not promise — so the launch table stands down entirely
     /// rather than landing a screenshot sweep on Today.
     @State private var launchDestinationDeferredToHarness = AppConfiguration.initialScreenRaw != nil
+    /// One launch, one destination. Both `requestOwnerReady()` and the
+    /// `.ready(_)` branch can reach `applyLaunchDestination()` for a single
+    /// launching→ready edge; the destination is the same either way, but a
+    /// second pass would re-pop the realm to root under her and count
+    /// `field.launch` twice. Cleared with the rest of the owner-bound state.
+    @State private var launchDestinationApplied = false
     /// Runs `field://login` deep-link sign-in (portal QR handoff). Owned by the
     /// composition root so the deep-link handler, this shell, and Q1 share one
     /// instance; configured in `.task` once `coordinator` can be bound.
@@ -302,19 +308,20 @@ struct RootView: View {
     /// FC-R1 made real: where Field opens. Every decision lives in
     /// `FieldLaunchPolicy`; this reads the visit and moves the coordinator.
     private func applyLaunchDestination() {
-        guard !launchDestinationDeferredToHarness else { return }
+        guard !launchDestinationDeferredToHarness, !launchDestinationApplied else { return }
+        launchDestinationApplied = true
         let identity = CaptureSessionIdentity(userID: container.session.userID,
                                               workspaceID: container.session.workspaceID)
         let state = CaptureSessionContextStore.shared.visitState(identity: identity)
         let destination = FieldLaunchPolicy.destination(
             visitState: state,
             deepLinkedToCapture: deepLinkedToCapture)
-        switch destination {
-        case .today:
-            coordinator.switchRealm(.work, reset: true)
-        case .viewfinder, .viewfinderUnplaced:
-            coordinator.switchRealm(.camera)
-        }
+        // Both branches reset. The launch table names a ROOT — C1 or Today — so
+        // whatever either realm was carrying is not where this launch lands.
+        coordinator.switchRealm(destination.realm, reset: true)
+        // Consumed. The entry that asked for the camera has been answered, and
+        // a flag that outlives its launch is an input to the next one.
+        deepLinkedToCapture = false
         container.analytics.event("field.launch", [
             "destination": String(describing: destination),
             "has_visit": state.isVisit ? "true" : "false"
@@ -381,6 +388,7 @@ struct RootView: View {
         ownerUIInvalidated = true
         readyRequested = false
         deepLinkedToCapture = false
+        launchDestinationApplied = false
         CaptureSessionContextStore.shared.reset()
         container.companion.send(.collapse(hint: nil, action: nil))
     }

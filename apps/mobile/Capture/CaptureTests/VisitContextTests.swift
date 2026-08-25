@@ -374,6 +374,14 @@ struct VisitContextTests {
                                               deepLinkedToCapture: true) == .viewfinderUnplaced)
         #expect(FieldLaunchPolicy.destination(visitState: active,
                                               deepLinkedToCapture: true) == .viewfinder)
+        // The one crossing the four rows do not name, pinned deliberately
+        // (R109). Spec §5.3 row 4 reads "using the open visit", and a STALE
+        // visit is open — but a stale visit is the one she is being asked to
+        // confirm, so the deep link lands her on C1 unplaced rather than
+        // stamping captures with a visit she has not vouched for. Flipping this
+        // is a product decision, not a tidy-up.
+        #expect(FieldLaunchPolicy.destination(visitState: stale,
+                                              deepLinkedToCapture: true) == .viewfinderUnplaced)
     }
 
     @Test func flippingFCR1BackToCameraFirstNeedsOneFlag() {
