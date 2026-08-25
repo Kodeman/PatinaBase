@@ -40,6 +40,22 @@
     // D-repoint wiring only — the browser Supabase-traffic repoint itself is
     // NOT active yet (that's SUPABASE_ORIGIN_RUNTIME, added at flip time).
     // This just gives the portal the edge-API host to point at once flipped.
+    //
+    // IMPORTANT: this is a wrangler-vars-only value — it is INVISIBLE to
+    // `next build` (NEXT_PUBLIC_* is inlined at build time by reading
+    // process.env / .env files, never wrangler.jsonc). The deploy
+    // invocation must ALSO `export NEXT_PUBLIC_EDGE_API_URL=https://api.patina.cloud`
+    // before running `infra/deploy-portal.sh designer production`, or the
+    // build inlines an empty value and the read path below stays dark
+    // despite this var being set here.
+    //
+    // Exporting it and deploying ACTIVATES the in-portal scan read path —
+    // packages/supabase/src/hooks/use-splat-url.ts and use-render-shots.ts
+    // gate on this exact var, so setting it makes those hooks go live
+    // against api.patina.cloud (SCAN_ROUTES on the prod edge worker). That
+    // activation is an INTENDED deliverable of this D-repoint deploy
+    // (Kody-ruled scope), not an accidental side effect — see PR #34's
+    // description.
     "NEXT_PUBLIC_EDGE_API_URL": "https://api.patina.cloud"
   },
   "services": [
@@ -68,6 +84,11 @@
         "ORDERS_SERVICE_URL": "https://patina-orders-worker-staging.kody-be3.workers.dev",
         "MEDIA_SERVICE_URL": "https://patina-media-svc-worker-staging.kody-be3.workers.dev",
         "PROJECTS_SERVICE_URL": "https://patina-projects-worker-staging.kody-be3.workers.dev",
+        // This is a wrangler-vars-only value — INVISIBLE to `next build` —
+        // so the staging deploy invocation must also `export
+        // NEXT_PUBLIC_EDGE_API_URL=...` for it to take effect (same
+        // mechanism as the prod vars block above; see its comment for the
+        // read-path-activation implications there).
         "NEXT_PUBLIC_EDGE_API_URL": "https://patina-edge-api-staging.kody-be3.workers.dev",
         // The R2 S3 endpoint the capability URLs are presigned against — must
         // match infra/edge-api-worker/wrangler.jsonc's SCAN_R2_ENDPOINT for the
