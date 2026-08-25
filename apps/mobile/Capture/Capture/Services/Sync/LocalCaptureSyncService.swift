@@ -299,7 +299,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
         remote: SupabaseCaptureGateway,
         userID: UUID
     ) async throws -> CommitReceipt {
-        let uploadedVoicePaths = try await uploadMedia(
+        let voiceUpload = try await uploadMedia(
             for: specimen,
             owner: owner,
             remote: remote,
@@ -309,9 +309,12 @@ final class LocalCaptureSyncService: CaptureSyncService {
             specimen: specimen,
             device: Self.deviceInfo()
         )
-        if !uploadedVoicePaths.isEmpty {
-            payload.voice?.audioPath = uploadedVoicePaths.first
-            payload.voice?.audioSegments = uploadedVoicePaths
+        if !voiceUpload.paths.isEmpty {
+            payload.voice?.audioPath = voiceUpload.paths.first
+            payload.voice?.audioSegments = voiceUpload.paths
+        }
+        if voiceUpload.lost > 0 {
+            payload.voice?.audioLost = true
         }
 
         let routing = CaptureRoutingContext(
@@ -363,8 +366,13 @@ final class LocalCaptureSyncService: CaptureSyncService {
         owner: CaptureOwnerIdentity,
         remote: SupabaseCaptureGateway,
         userID: UUID
-    ) async throws -> [String] {
-        try store.validateRequiredMedia(for: specimen)
+    ) async throws -> (paths: [String], lost: Int) {
+        // Photos only. Validating voice here would throw
+        // CaptureMediaAvailabilityError, which shouldReject classifies as
+        // `.rejected`, and drainOwned excludes a rejected specimen from the
+        // drain query — one lost segment would orphan the note from sync
+        // forever. The per-segment drop below is what handles voice instead.
+        try store.validateRequiredPhotos(for: specimen)
 
         let folder = CaptureMediaPath.folder(
             userID: userID,
@@ -425,7 +433,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
                              ["reason": "missing_local", "count": String(lostSegments)])
         }
         try? store.save()
-        return voicePaths
+        return (paths: voicePaths, lost: lostSegments)
     }
 
     /// Uploads one voice segment and stamps its durable remote path. Returns nil

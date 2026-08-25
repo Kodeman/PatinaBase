@@ -86,6 +86,14 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
         /// `<uid>/<clientToken>/<file>` object path at upload time, exactly as
         /// it already does for `audioPath`.
         public var audioSegments: [String]?
+        /// True only when a segment that WAS written could not be read at upload
+        /// time — full disk, reinstall, retention sweep. A dropped segment is
+        /// OMITTED from `audioSegments`, never a hole and never a null, so this
+        /// flag is the only signal that the ordered list is short. Omitted when
+        /// nothing was lost: a `false` on every well-formed note is noise.
+        /// Audio that never existed yields no filename at all and never lands
+        /// here — the recorder drops a segment it failed to start.
+        public var audioLost: Bool?
         /// 'device' | 'device_partial' — which reading produced `transcript`.
         public var transcriptSource: String?
         public var transcript: String?

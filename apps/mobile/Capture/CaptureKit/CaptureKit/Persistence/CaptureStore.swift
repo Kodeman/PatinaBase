@@ -508,32 +508,46 @@ public final class CaptureStore {
     /// Required local media that cannot be read as non-empty regular files.
     /// Photos with a durable remote path no longer depend on their local copy.
     public func missingRequiredMedia(for specimen: Specimen) -> [String] {
+        missingRequiredPhotos(for: specimen) + missingVoiceSegments(for: specimen)
+    }
+
+    /// The photo half alone. A capture whose photo is gone is meaningless, so
+    /// photos stay hard-required — but the voice half must NOT be, because
+    /// CaptureMediaAvailabilityError is classified `.rejected` by the sync
+    /// service and `drainOwned` excludes a rejected specimen from the drain
+    /// query. Validating voice up front would orphan a whole note from the
+    /// sync queue over one lost segment, with no operator present to retry it.
+    public func missingRequiredPhotos(for specimen: Specimen) -> [String] {
         let photos = specimen.photos.sorted { $0.order < $1.order }
-        var required = photos.compactMap { photo -> String? in
+        return unreadable(photos.compactMap { photo -> String? in
             let remotePath = photo.remotePath?.trimmingCharacters(
                 in: .whitespacesAndNewlines
             ) ?? ""
             return remotePath.isEmpty ? photo.filename : nil
-        }
-        // Mirror the photo rule directly above: a segment that carries a durable
-        // remote path no longer depends on its local copy. Without this a voice
-        // file is required-LOCAL forever (uploadMedia never stamped one), and
-        // CaptureMediaAvailabilityError is not a LocalSyncError, so isDeferrable
-        // does not apply — one unreadable segment would HARD-fail a note that
-        // today syncs transcript-only.
+        })
+    }
+
+    /// Voice segments that still depend on a local copy. Mirrors the photo rule:
+    /// a segment carrying a durable remote path is exempt, exactly as an
+    /// uploaded photo is. Reported, never used to gate an upload.
+    private func missingVoiceSegments(for specimen: Specimen) -> [String] {
         let uploaded = Set((specimen.voiceAudioRemotePathsRaw ?? [])
             .compactMap { $0.split(separator: "/").last.map(String.init) }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
         var seen = Set<String>()
+        var names: [String] = []
         let voiceNames = ([specimen.voiceAudioFilename]
                           + (specimen.voiceAudioSegmentsRaw ?? []).map { Optional($0) })
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && !uploaded.contains($0) }
         for name in voiceNames where seen.insert(name).inserted {
-            required.append(name)
+            names.append(name)
         }
+        return unreadable(names)
+    }
 
-        return required.filter { filename in
+    private func unreadable(_ filenames: [String]) -> [String] {
+        filenames.filter { filename in
             let fileURL = mediaURL(for: filename)
             let values = try? fileURL.resourceValues(
                 forKeys: [.isRegularFileKey, .fileSizeKey]
@@ -544,6 +558,15 @@ public final class CaptureStore {
 
     public func validateRequiredMedia(for specimen: Specimen) throws {
         let missing = missingRequiredMedia(for: specimen)
+        guard missing.isEmpty else {
+            throw CaptureMediaAvailabilityError.missingLocalMedia(missing)
+        }
+    }
+
+    /// Photos only — what `uploadMedia` gates on, so a voice segment whose local
+    /// file has gone missing reaches the per-segment DROP instead of throwing.
+    public func validateRequiredPhotos(for specimen: Specimen) throws {
+        let missing = missingRequiredPhotos(for: specimen)
         guard missing.isEmpty else {
             throw CaptureMediaAvailabilityError.missingLocalMedia(missing)
         }
