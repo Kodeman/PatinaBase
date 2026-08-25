@@ -460,19 +460,27 @@ final class ViewfinderModel {
     /// once and fills in when the read lands; `setValue` still refuses to let a
     /// guess clobber anything a tag, a scan, a measure or the designer set.
     private func applySmartGuess(to draft: Specimen) {
-        guard let photo = draft.primaryPhoto,
-              let data = try? Data(contentsOf: store.mediaURL(for: photo.filename)),
-              !data.isEmpty else { return }
-        let image = CaptureImage(data: data, width: photo.width, height: photo.height)
+        guard let photo = draft.primaryPhoto else { return }
+        let mediaURL = store.mediaURL(for: photo.filename)
+        let width = photo.width
+        let height = photo.height
         let draftID = draft.id
         Task { [weak self] in
             guard let self else { return }
+            guard let data = try? Data(contentsOf: mediaURL), !data.isEmpty else { return }
+            let image = CaptureImage(data: data, width: width, height: height)
             let guess = await self.smartGuess.guess(image: image, ocr: [], codes: [])
             let recordable = guess.fieldsWorthRecording
             guard !recordable.isEmpty,
-                  let current = self.currentSpecimen(id: draftID) else { return }
+                  let current = self.currentSpecimen(id: draftID),
+                  // She can route this record while the read is still running.
+                  // Once it has left the device it must not be rewritten.
+                  current.transferState.phase == .local else { return }
             for suggestion in recordable {
                 current.setValue(suggestion.value, for: suggestion.key, source: suggestion.source)
+                // setValue refuses to overwrite what a tag, a scan, a measure or
+                // she already set. Never pin a confidence to a value we didn't write.
+                guard current.provenance(for: suggestion.key) == suggestion.source else { continue }
                 current.setConfidence(suggestion.confidence, for: suggestion.key)
             }
             try? self.store.save()

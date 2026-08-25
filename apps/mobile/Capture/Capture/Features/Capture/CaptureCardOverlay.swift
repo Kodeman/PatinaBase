@@ -2,8 +2,10 @@
 //  Capture
 //
 //  C3 — the moment after the shutter. A paper card rises over the frozen frame
-//  already guessing category + material (each badged "guess" — never silently
-//  trusted). Save commits & routes (S3); Add detail opens the full sheet (C5);
+//  showing category and material as they stand: a field the read filled is badged
+//  with where the value came from and never silently trusted, and a field nothing
+//  filled shows "—" with no badge at all. Save commits & routes (S3);
+//  Add detail opens the full sheet (C5);
 //  swipe down keeps shooting. This is a transient overlay INSIDE the viewfinder,
 //  not a registered sheet (Team C owns CaptureSheet.smartGuessCard).
 
@@ -58,10 +60,10 @@ struct CaptureCardOverlay: View {
 
             guessRow(label: "Category",
                      value: categoryLabel,
-                     source: specimen.provenance(for: .category) ?? .smartGuess)
+                     source: specimen.provenance(for: .category))
             guessRow(label: "Material",
                      value: specimen.materialNote ?? "—",
-                     source: specimen.provenance(for: .material) ?? .smartGuess)
+                     source: specimen.provenance(for: .material))
 
             Button(action: onPlace) {
                 HStack(spacing: 6) {
@@ -106,14 +108,16 @@ struct CaptureCardOverlay: View {
         .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
     }
 
-    private func guessRow(label: String, value: String, source: ProvenanceSource) -> some View {
+    /// `source` is nil when nothing has filled the field — the read couldn't
+    /// place it and nobody typed one. Badge only what actually has a source.
+    private func guessRow(label: String, value: String, source: ProvenanceSource?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(label)
                     .font(CaptureType.eyebrow).textCase(.uppercase)
                     .foregroundStyle(CaptureColor.inkSoft)
                 Spacer()
-                ProvenanceBadge(source)
+                if let source { ProvenanceBadge(source) }
             }
             Text(value)
                 .font(CaptureType.title2)

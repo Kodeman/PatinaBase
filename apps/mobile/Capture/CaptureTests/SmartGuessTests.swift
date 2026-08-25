@@ -40,10 +40,14 @@ struct SmartGuessKeywordTests {
         #expect(SmartGuessKeywords.category(forVisionLabel: "chairlift") == .seating)
     }
 
-    @Test func everyKeywordInTheTableResolves() {
+    @Test func everyKeywordInTheTableResolvesToItsOwnCategory() {
+        // Matching is first-match-wins over an ordered table, so a keyword can
+        // be swallowed by an earlier entry it happens to contain — move "tile"
+        // above "textile" and "textile" starts reading as .tile. Asserting the
+        // category, not merely non-nil, is what pins the current ordering.
         for entry in SmartGuessKeywords.table {
-            #expect(SmartGuessKeywords.category(forVisionLabel: entry.keyword) != nil,
-                    "\(entry.keyword) does not resolve through its own table")
+            #expect(SmartGuessKeywords.category(forVisionLabel: entry.keyword) == entry.category,
+                    "\(entry.keyword) does not resolve to \(entry.category) through its own table")
         }
     }
 
@@ -69,6 +73,18 @@ struct SmartGuessKeywordTests {
 
 struct UnconfirmedGuessTests {
 
+    /// The viewfinder's recording loop, mirrored: filter the read, write what
+    /// survives, and pin a confidence only where the write actually took.
+    /// `ViewfinderModel` itself is app-side and unreachable under C1, so the
+    /// loop is reproduced here rather than called.
+    @MainActor private func record(_ guess: SmartGuess, onto specimen: Specimen) {
+        for suggestion in guess.fieldsWorthRecording {
+            specimen.setValue(suggestion.value, for: suggestion.key, source: suggestion.source)
+            guard specimen.provenance(for: suggestion.key) == suggestion.source else { continue }
+            specimen.setConfidence(suggestion.confidence, for: suggestion.key)
+        }
+    }
+
     @Test @MainActor func aCaptureWithNoGuessHasNothingToConfirm() throws {
         let store = try CaptureStore.inMemory()
         let s = store.newDraft()
@@ -76,17 +92,51 @@ struct UnconfirmedGuessTests {
     }
 
     @Test @MainActor func anUnplaceableLabelWritesNothingSoThereIsNothingToConfirm() throws {
-        // The wall-defect case (spec Flow 6). fieldsWorthRecording drops an
-        // unplaceable label, so nothing ever reaches setValue/setConfidence —
-        // provenance never carries smartGuess, and there is nothing to confirm.
-        let blank = SmartGuess(category: .unknown, categoryConfidence: 0, fields: [
+        // The wall-defect case (spec Flow 6), run end to end: the filter drops an
+        // unplaceable label, so nothing reaches setValue, so provenance never
+        // carries smartGuess and there is nothing to confirm. Fails if either
+        // half regresses — the filter or the accessors underneath it.
+        let store = try CaptureStore.inMemory()
+
+        let unplaceable = SmartGuess(category: .unknown, categoryConfidence: 0, fields: [
             FieldSuggestion(key: .category, value: SpecimenCategory.unknown.rawValue,
                             confidence: 0)
         ])
-        #expect(blank.fieldsWorthRecording.isEmpty)
+        let baseboard = store.newDraft()
+        record(unplaceable, onto: baseboard)
+        #expect(baseboard.hasUnconfirmedGuess == false)
+        #expect(baseboard.category == .unknown)
+        #expect(baseboard.guessConfidenceRaw.isEmpty)
 
+        // And the other direction: a label the table places does leave something
+        // to confirm, so the drop above is the filter working, not a dead path.
+        let placeable = SmartGuess(category: .seating, categoryConfidence: 0.81, fields: [
+            FieldSuggestion(key: .category, value: SpecimenCategory.seating.rawValue,
+                            confidence: 0.81)
+        ])
+        let armchair = store.newDraft()
+        record(placeable, onto: armchair)
+        #expect(armchair.hasUnconfirmedGuess)
+        #expect(armchair.category == .seating)
+        #expect(armchair.guessConfidenceRaw[FieldKey.category.rawValue] == 0.81)
+    }
+
+    @Test @MainActor func aReadNeverPinsAConfidenceToAValueItDidNotWrite() throws {
+        // setValue refuses to let a guess clobber a typed value. The confidence
+        // must be refused with it, or the record ships provenance "manual"
+        // alongside a guess confidence for a value the read never wrote.
         let store = try CaptureStore.inMemory()
         let s = store.newDraft()
+        s.setValue("Walnut", for: .material, source: .manual)
+
+        let read = SmartGuess(category: .seating, categoryConfidence: 0.81, fields: [
+            FieldSuggestion(key: .material, value: "Oak", confidence: 0.55)
+        ])
+        record(read, onto: s)
+
+        #expect(s.materialNote == "Walnut")
+        #expect(s.provenance(for: .material) == .manual)
+        #expect(s.guessConfidenceRaw[FieldKey.material.rawValue] == nil)
         #expect(s.hasUnconfirmedGuess == false)
     }
 
