@@ -2542,6 +2542,234 @@ git push origin feat/field-companion-w1p
 
 ---
 
+## Task 6b: Cover the receiving photo line at its call sites (plan defect, found in Task 6 review)
+
+**Why this exists.** Task 6's reviewer found the **third instance of the same gap** as Tasks 4b
+and 5b: `inspectionPhotoLine` is tested purely as a function, and neither call site is rendered by
+any test. `orders-ledger.test.tsx` stubs `ReceivingBookPage` as `<div>Receiving page</div>`, and no
+other suite renders the real component. A regression at either site — dropping
+`inspectionPhotoLine(...)` from an array, reading the wrong field, or a future edit reverting the
+`useDamageClaims` `.select()` embed — would be caught by nothing.
+
+The embed edit is the fragile one: it is a string inside a PostgREST select, invisible to the
+type system.
+
+Also fixes one code-comment inaccuracy the reviewer found: the new JSDoc cites
+*"(00445/00447)"* for `receiving_inspections.photo_asset_ids`, but the **column is created in
+`00150_receiving_and_damage_claims.sql:43`** (`UUID[] NOT NULL DEFAULT '{}'`); 00445/00447 only
+add RPCs with a `p_photo_asset_ids` parameter that write into the pre-existing column.
+
+**Files:**
+- Create: `apps/designer-portal/src/components/document/__tests__/receiving-photo-line-render.test.tsx`
+- Modify: `apps/designer-portal/src/components/document/orders-book-receiving.tsx` (the JSDoc citation only — one line, no behaviour change)
+
+**Interfaces:** Consumes `ReceivingBookPage`. Produces nothing.
+
+- [ ] **Step 1: Fix the migration citation**
+
+In `apps/designer-portal/src/components/document/orders-book-receiving.tsx`, in the
+`inspectionPhotoLine` JSDoc, replace:
+
+```
+ * `receiving_inspections.photo_asset_ids` (00445/00447) — media-service
+```
+
+with:
+
+```
+ * `receiving_inspections.photo_asset_ids` (created 00150:43; 00445/00447 add
+ * the RPCs that write it) — media-service
+```
+
+Change nothing else in that file.
+
+- [ ] **Step 2: Write the render test**
+
+`ReceivingBookPage` takes `{ onOpenDocument }` and calls `usePurchaseOrders`,
+`useReceivingInspections`, `useDamageClaims` (twice) and `useUpdateDamageClaim` from
+`@patina/supabase`, plus `useQueryClient` from `@tanstack/react-query`. The Settled fold is
+collapsed until its toggle is clicked.
+
+Create `apps/designer-portal/src/components/document/__tests__/receiving-photo-line-render.test.tsx`:
+
+```tsx
+/**
+ * The receiving photo line, at both call sites (Wave 1P, Task 6).
+ *
+ * The sibling suite tests `inspectionPhotoLine` as a pure function. This one renders
+ * ReceivingBookPage, so a regression at either call site — the open-claim row or the
+ * Settled fold — is actually caught, including a silent revert of the useDamageClaims
+ * embed that makes `photo_asset_ids` stop arriving.
+ */
+import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReceivingBookPage } from '../orders-book-receiving';
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+let orders: any[] = [];
+let inspections: any[] = [];
+let draftedClaims: any[] = [];
+let notifiedClaims: any[] = [];
+
+jest.mock('@patina/supabase', () => ({
+  usePurchaseOrders: () => ({ data: orders, isLoading: false }),
+  useReceivingInspections: () => ({ data: inspections, isLoading: false }),
+  useDamageClaims: ({ state }: { state: string }) => ({
+    data: state === 'drafted' ? draftedClaims : notifiedClaims,
+  }),
+  useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));
+
+jest.mock('@/components/portal/procurement/log-inspection-drawer', () => ({
+  LogInspectionDrawer: () => null,
+}));
+jest.mock('@/lib/document/ledger-summary', () => ({
+  receivingFrontMatter: () => [],
+}));
+
+function inspection(over: Record<string, unknown> = {}) {
+  return {
+    id: 'insp-1',
+    purchase_order_id: 'po-1',
+    inspected_at: '2026-08-20T00:00:00Z',
+    outcome: 'clean',
+    photo_asset_ids: [],
+    purchase_order: {
+      id: 'po-1',
+      vendor: { id: 'v-1', name: 'Ellsworth Mill' },
+      project: { id: 'proj-1', name: 'Maple St' },
+    },
+    ...over,
+  };
+}
+
+function claim(over: Record<string, unknown> = {}) {
+  return {
+    id: 'claim-1',
+    state: 'drafted',
+    description: 'Chip on the canopy.',
+    created_at: '2026-08-20T00:00:00Z',
+    vendor_notified_at: null,
+    inspection: {
+      id: 'insp-2',
+      purchase_order_id: 'po-2',
+      outcome: 'damaged',
+      photo_asset_ids: ['a', 'b', 'c'],
+      purchase_order: {
+        id: 'po-2',
+        vendor: { id: 'v-1', name: 'Ellsworth Mill' },
+        project: { id: 'proj-1', name: 'Maple St' },
+      },
+    },
+    ...over,
+  };
+}
+
+function renderPage() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <ReceivingBookPage onOpenDocument={jest.fn()} />
+    </QueryClientProvider>,
+  );
+}
+
+beforeEach(() => {
+  orders = [];
+  inspections = [];
+  draftedClaims = [];
+  notifiedClaims = [];
+});
+
+describe('the receiving photo line, rendered', () => {
+  it('shows the count on an open claim whose inspection carries photos', () => {
+    draftedClaims = [claim()];
+    renderPage();
+    expect(screen.getByText(/3 photos logged on the phone/)).toBeInTheDocument();
+  });
+
+  it('says nothing on an open claim whose inspection carries none', () => {
+    draftedClaims = [claim({ inspection: { ...claim().inspection, photo_asset_ids: [] } })];
+    renderPage();
+    expect(screen.queryByText(/logged on the phone/)).toBeNull();
+  });
+
+  it('shows the count in the Settled fold once it is opened', () => {
+    inspections = [inspection({ photo_asset_ids: ['x', 'y'] })];
+    renderPage();
+
+    // The fold is collapsed by default — nothing is asserted until it is opened.
+    expect(screen.queryByText(/logged on the phone/)).toBeNull();
+    fireEvent.click(screen.getByText(/Settled ·/));
+    expect(screen.getByText(/2 photos logged on the phone/)).toBeInTheDocument();
+  });
+
+  it('leaves a cleared inspection with no photos unannotated in the fold', () => {
+    inspections = [inspection({ photo_asset_ids: [] })];
+    renderPage();
+    fireEvent.click(screen.getByText(/Settled ·/));
+    expect(screen.queryByText(/logged on the phone/)).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 3: Run it**
+
+Run:
+```bash
+pnpm --filter @patina/designer-portal test -- src/components/document/__tests__/receiving-photo-line-render.test.tsx
+```
+Expected: PASS, 4 tests.
+
+If a case fails because the page renders chrome the mocks do not satisfy, fix the **test setup** —
+never the component. The `Settled ·` toggle text is built as
+`` `Settled · ${cleared.length} cleared · 30 days` ``, and `cleared` is the inspections whose
+`outcome === 'clean'`; if the toggle is not found, check that the fixture's outcome is `'clean'`.
+If a case fails because the line is genuinely absent, **STOP and report** — that is the regression
+this task exists to detect.
+
+- [ ] **Step 4: Confirm the suite is not vacuous**
+
+Temporarily delete `inspectionPhotoLine(claim.inspection?.photo_asset_ids),` from `OpenClaimRow`'s
+meta array, re-run, and confirm case 1 fails. Restore it, then temporarily delete
+`inspectionPhotoLine(i.photo_asset_ids)` from the Settled fold's array, re-run, and confirm case 3
+fails. **Then revert with
+`git checkout -- apps/designer-portal/src/components/document/orders-book-receiving.tsx`** — note
+this also reverts Step 1, so **re-apply the Step-1 citation fix afterwards** — and re-run to
+confirm 4/4 green. Report every result. Never commit a temporary edit.
+
+- [ ] **Step 5: Gate and commit**
+
+```bash
+pnpm --filter @patina/designer-portal test -- src/components/document/__tests__
+pnpm type-check
+```
+Expected: the document `__tests__` directory green (including `receiving-photo-line.test.ts`,
+`letterhead-scan-union.test.tsx` and the two letterhead/call-sheet suites); type-check 30/30.
+
+```bash
+git add apps/designer-portal/src/components/document/__tests__/receiving-photo-line-render.test.tsx apps/designer-portal/src/components/document/orders-book-receiving.tsx
+git commit -m "test(receiving): cover the photo line at both call sites
+
+Task 6's review found the third instance of this wave's recurring gap:
+inspectionPhotoLine was tested only as a pure function, and neither call
+site is rendered by any suite (orders-ledger.test.tsx stubs the whole
+page). The useDamageClaims embed edit is the fragile part — a string
+inside a PostgREST select, invisible to the type system.
+
+This renders ReceivingBookPage and pins both sites, including the
+collapsed Settled fold. Verified non-vacuous by removing each call in
+turn and watching the matching case fail.
+
+Also corrects the JSDoc's migration citation: photo_asset_ids is created
+in 00150:43; 00445/00447 only add the RPCs that write it." -- apps/designer-portal/src/components/document/__tests__/receiving-photo-line-render.test.tsx apps/designer-portal/src/components/document/orders-book-receiving.tsx
+```
+
+Do **not** push — the remote is unreachable (SSH proxy-auth failure); the orchestrator pushes
+everything once it recovers.
+
+---
+
 ## Wave acceptance (run after Task 6)
 
 Plan §1.4's acceptance, measured honestly.
