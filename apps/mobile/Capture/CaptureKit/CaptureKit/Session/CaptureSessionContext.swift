@@ -53,19 +53,48 @@ public struct CaptureSessionContext: Codable, Equatable, Sendable {
     public var lastActivityAt: Date
     public var routing: CaptureRoutingMemory
 
+    // ── The visit (wave 3). FC-R2: nil kind IS the "no visit" state. ──
+    public var kind: FieldVisitKind?
+    public var kit: FieldVisitKit?
+    /// The visit's human label — the project name on a site visit, the venue on
+    /// a sourcing run. Lands in `field_captures.visit_label`.
+    public var label: String?
+    /// FC-R5 SCAN lane only: a `public.rooms` id. NEVER stamped into
+    /// `field_captures.project_room_id` — that is `routing.projectRoomID`.
+    public var scanRoomID: String?
+    /// Sourcing only, capped at `maxProjectsInMind`.
+    public var projectsInMind: [String]
+    public var endedAt: Date?
+
     public init(
         visitID: UUID = UUID(),
         identity: CaptureSessionIdentity,
         startedAt: Date,
         lastActivityAt: Date,
-        routing: CaptureRoutingMemory = .empty
+        routing: CaptureRoutingMemory = .empty,
+        kind: FieldVisitKind? = nil,
+        kit: FieldVisitKit? = nil,
+        label: String? = nil,
+        scanRoomID: String? = nil,
+        projectsInMind: [String] = [],
+        endedAt: Date? = nil
     ) {
         self.visitID = visitID
         self.identity = identity
         self.startedAt = startedAt
         self.lastActivityAt = lastActivityAt
         self.routing = routing
+        self.kind = kind
+        self.kit = kit
+        self.label = label
+        self.scanRoomID = scanRoomID
+        self.projectsInMind = Array(projectsInMind.prefix(Self.maxProjectsInMind))
+        self.endedAt = endedAt
     }
+
+    public var isVisit: Bool { kind != nil && endedAt == nil }
+
+    public static let maxProjectsInMind = 4
 }
 
 public enum CaptureSessionContextPolicy {
