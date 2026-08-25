@@ -70,4 +70,58 @@ describe('MediaAdminTransactionContext', () => {
     expect(first.mediaAsset.count).toHaveBeenCalledTimes(2);
     expect(second.mediaAsset.count).toHaveBeenCalledTimes(1);
   });
+
+  describe('Nest bootstrap introspection safety', () => {
+    // Nest probes every provider before any request exists: awaiting the factory result
+    // reads `.then`, the lifecycle-hook scanner reads onModuleInit/onModuleDestroy/etc.,
+    // and @nestjs/event-emitter's EventSubscribersLoader walks Object.prototype method
+    // names (hasOwnProperty, toString, ...). None of these should throw outside a
+    // transaction — a naive proxy that always calls requireClient() killed the process
+    // at bootstrap, before app.listen(), which Cloudflare Containers reported as
+    // "crashed while checking for ports."
+
+    it('returns undefined for framework probes outside a transaction, without throwing', () => {
+      const context = new MediaAdminTransactionContext();
+      const prisma = createTransactionBoundPrisma(context);
+
+      expect(() => (prisma as unknown as { then?: unknown }).then).not.toThrow();
+      expect((prisma as unknown as { then?: unknown }).then).toBeUndefined();
+
+      expect(() => (prisma as unknown as { onModuleInit?: unknown }).onModuleInit).not.toThrow();
+      expect((prisma as unknown as { onModuleInit?: unknown }).onModuleInit).toBeUndefined();
+    });
+
+    it('behaves like a plain object for Object.prototype members outside a transaction', () => {
+      const context = new MediaAdminTransactionContext();
+      const prisma = createTransactionBoundPrisma(context);
+
+      expect(() =>
+        (prisma as unknown as { hasOwnProperty: (p: string) => boolean }).hasOwnProperty('x'),
+      ).not.toThrow();
+      expect(
+        (prisma as unknown as { hasOwnProperty: (p: string) => boolean }).hasOwnProperty('x'),
+      ).toBe(false);
+      expect(() => (prisma as unknown as { toString: () => string }).toString()).not.toThrow();
+    });
+
+    it('still throws when a genuine Prisma delegate is accessed outside a transaction', () => {
+      const context = new MediaAdminTransactionContext();
+      const prisma = createTransactionBoundPrisma(context);
+
+      expect(() => prisma.mediaAsset).toThrow('Media admin transaction is unavailable');
+    });
+
+    it('resolves a genuine delegate access to the bound transaction client inside a transaction', async () => {
+      const context = new MediaAdminTransactionContext();
+      const prisma = createTransactionBoundPrisma(context);
+      const transaction = {
+        mediaAsset: { findMany: jest.fn().mockResolvedValue([{ id: 'bound' }]) },
+      } as unknown as Prisma.TransactionClient;
+
+      await expect(context.run(transaction, () => prisma.mediaAsset.findMany())).resolves.toEqual([
+        { id: 'bound' },
+      ]);
+      expect(transaction.mediaAsset.findMany).toHaveBeenCalledTimes(1);
+    });
+  });
 });

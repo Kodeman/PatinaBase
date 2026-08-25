@@ -2,7 +2,7 @@
  * Custom Jest environment that extends jsdom but prevents canvas from loading
  */
 
-const JSDOMEnvironment = require('jest-environment-jsdom').TestEnvironment;
+const JSDOMEnvironment = require("jest-environment-jsdom").TestEnvironment;
 
 /**
  * Mock canvas module at the require level before jsdom initializes
@@ -29,14 +29,14 @@ class JSDOMEnvironmentNoCanvas extends JSDOMEnvironment {
     // already-constructed environment) left Date/Intl reporting the
     // ambient runner TZ; setting it here, before super(), is what
     // actually reaches the realm's Date/Intl.
-    process.env.TZ = 'America/Chicago';
+    process.env.TZ = "America/Chicago";
 
     // Intercept canvas loading before jsdom initializes
-    const Module = require('module');
+    const Module = require("module");
     const originalRequire = Module.prototype.require;
 
     Module.prototype.require = function (id) {
-      if (id === 'canvas') {
+      if (id === "canvas") {
         // Return a mock canvas implementation
         return {
           createCanvas: (width, height) => ({
@@ -68,13 +68,13 @@ class JSDOMEnvironmentNoCanvas extends JSDOMEnvironment {
               rect: () => {},
               clip: () => {},
             }),
-            toBuffer: () => Buffer.from(''),
-            toDataURL: () => 'data:image/png;base64,',
+            toBuffer: () => Buffer.from(""),
+            toDataURL: () => "data:image/png;base64,",
           }),
-          loadImage: () => Promise.resolve({ src: '', width: 0, height: 0 }),
+          loadImage: () => Promise.resolve({ src: "", width: 0, height: 0 }),
           Image: class MockImage {
             constructor() {
-              this.src = '';
+              this.src = "";
               this.width = 0;
               this.height = 0;
             }
