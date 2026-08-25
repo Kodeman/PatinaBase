@@ -406,6 +406,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
         }()
+        let stampedRemotePaths = stampedVoicePaths(for: specimen)
         let total = photos.count + voiceFilenames.count
         var uploaded = 0
 
@@ -428,16 +429,18 @@ final class LocalCaptureSyncService: CaptureSyncService {
         }
 
         var voicePaths: [String] = []
+        // Only ever an UNSTAMPED segment: one whose bytes this phone was still
+        // the only copy of and can no longer read. A receipted segment the
+        // retention sweep deleted is answered from its stamp, so `audioLost`
+        // still means what it says — written, and genuinely gone.
         var lostSegments = 0
         for filename in voiceFilenames {
-            if let path = try await uploadVoiceSegment(
-                filename, for: specimen, owner: owner,
-                remote: remote, folder: folder
-            ) {
-                voicePaths.append(path)
-            } else {
-                lostSegments += 1
+            var path = stampedRemotePaths[filename]
+            if path == nil {
+                path = try await uploadVoiceSegment(filename, for: specimen,
+                                                    owner: owner, remote: remote, folder: folder)
             }
+            if let path { voicePaths.append(path) } else { lostSegments += 1 }
             uploaded += 1
             bumpProgress(specimen, uploaded: uploaded, total: total)
         }
@@ -447,6 +450,25 @@ final class LocalCaptureSyncService: CaptureSyncService {
         }
         try? store.save()
         return (paths: voicePaths, lost: lostSegments)
+    }
+
+    /// Filename → durable remote path for every segment this specimen has ALREADY
+    /// put on the server. The voice half of the `remotePath` exemption the photo
+    /// filter in `uploadMedia` applies — with one difference: `audioSegments`
+    /// must come back as the ordered list of objects the server holds, so an
+    /// already-stamped segment is not dropped from the list, it is answered from
+    /// its stamp, in place. Without this a second commit re-read a local file
+    /// the receipt deleter had already removed, counted the segment lost, and
+    /// wrote `audioSegments = []` over audio sitting intact in Storage.
+    private func stampedVoicePaths(for specimen: Specimen) -> [String: String] {
+        var byFilename: [String: String] = [:]
+        for raw in specimen.voiceAudioRemotePathsRaw ?? [] {
+            let path = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let name = path.split(separator: "/").last.map(String.init),
+                  !name.isEmpty else { continue }
+            byFilename[name] = path
+        }
+        return byFilename
     }
 
     /// Uploads one voice segment and stamps its durable remote path. Returns nil
