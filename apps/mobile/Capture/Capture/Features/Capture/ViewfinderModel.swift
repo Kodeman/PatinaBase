@@ -322,6 +322,16 @@ final class ViewfinderModel {
         Task { @MainActor in
             do {
                 try await sync.route(id, to: specimen.destination)
+                // The program's headline metric: whether a capture actually
+                // landed on a project (S1's persisted routing survives on
+                // `specimen.venue` by reference — the same object S1 mutated)
+                // or is committing roving.
+                if let venue = specimen.venue, venue.projectId != nil {
+                    analytics.event("capture.placed", ["basis": "manual",
+                                                        "has_room": String(venue.projectRoomId != nil)])
+                } else {
+                    analytics.event("capture.unplaced", [:])
+                }
                 coordinator.present(specimen.destination == .library
                     ? .savedTerminal(id)
                     : .inboxTerminal(id))

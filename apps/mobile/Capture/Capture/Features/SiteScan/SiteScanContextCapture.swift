@@ -155,6 +155,12 @@ final class SiteScanContextModel {
             let message = transcript.isEmpty
                 ? "We couldn't make out the words — the audio is here."
                 : "Note saved to this room."
+            // The honesty repair's own metric: a real recording committing with no
+            // words. The guard above already ensures transcript.isEmpty implies
+            // hasAudio here — read hasAudio anyway rather than assume it.
+            if transcript.isEmpty {
+                self.analytics.event("voice.empty_transcript", ["had_audio": String(hasAudio)])
+            }
             let created = service.enqueueVoice(
                 transcript: transcript,
                 audioFilename: result.audioFilename,

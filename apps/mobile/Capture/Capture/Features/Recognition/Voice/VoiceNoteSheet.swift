@@ -277,6 +277,14 @@ struct VoiceNoteSheet: View {
         let recorded = result.flatMap {
             $0.transcript.isEmpty && $0.audioSegments.isEmpty ? nil : $0
         }
+        // The honesty repair's own metric: a real recording committing with no
+        // words. `recorded` is non-nil here only when transcript or audio is
+        // non-empty, so an empty transcript in this branch always has audio —
+        // read the count rather than assume it.
+        if let recorded, recorded.transcript.isEmpty {
+            analytics.event("voice.empty_transcript",
+                            ["had_audio": String(!recorded.audioSegments.isEmpty)])
+        }
         specimen.voiceTranscriptSourceRaw = recorded.map {
             $0.transcript.isEmpty ? "device_partial" : "device"
         } ?? "designer"

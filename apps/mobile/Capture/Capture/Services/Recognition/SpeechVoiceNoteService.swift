@@ -82,10 +82,16 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
 
     private var latestTranscript = ""
     private var startedAt: Date?
+    /// The moment recording actually stopped — set ONCE per note, by whichever
+    /// door reaches it first: the cap in rotate(), or finish() itself. Reading
+    /// Date() again at finish() time (instead of this) is exactly the Task 15
+    /// finding: a note released after the cap sat waiting on the sheet, and
+    /// finish() reported the wait as if it were audio.
+    private var stoppedAt: Date?
     private let mediaDirectory: URL?
     private let analytics: any CaptureAnalytics
-    /// Threaded at all three construction sites now so Task 17's unified finish
-    /// emission has it; nothing in this file reads it yet.
+    /// Threaded at all three construction sites so the unified finish emission
+    /// (emitFinish(reason:)) and voice.start can both read it.
     private let surface: String
     /// Minted PER NOTE in startLiveTranscription(), never at init: this service
     /// is constructed once per SCREEN (SiteScanContextCapture.swift,
@@ -168,8 +174,10 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
 
     @MainActor
     public func startLiveTranscription() throws -> AsyncThrowingStream<TranscriptChunk, Error> {
+        analytics.event("voice.start", ["surface": surface, "note_setting": "solo"])
         latestTranscript = ""
         startedAt = Date()
+        stoppedAt = nil
         // Every per-note field, because one instance records many notes.
         noteID = UUID()
         openSegmentBox.withLock { $0 = nil }
@@ -238,6 +246,10 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     @MainActor
     public func finish() async -> VoiceNoteResult {
         noteIsActive = false
+        // Fixes the over-report: a note the cap already ended has an EARLIER
+        // stoppedAt from rotate(), so this leaves it alone. Only a note that
+        // is stopping HERE, for the first time, gets `now`.
+        if stoppedAt == nil { stoppedAt = Date() }
         // Closes and flushes the open segment, and publishes its name only if it
         // took audio — so the result below can never name a file with none.
         stopEngineAndCloseSegment()
@@ -249,7 +261,8 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         removeObservers()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 
-        let duration = startedAt.map { Date().timeIntervalSince($0) } ?? 0
+        let duration = recordedDuration
+        emitFinish(reason: "manual")
         return VoiceNoteResult(
             transcript: latestTranscript,
             audioFilename: audioFilename,
@@ -257,6 +270,29 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             onDevice: onDeviceRecognition,
             durationSeconds: duration
         )
+    }
+
+    /// Single source for the note's length: what VoiceNoteResult reports and what
+    /// emitFinish() reports, so the two can never disagree. Falls back to Date()
+    /// only if called before either stop path has run (should not happen).
+    private var recordedDuration: TimeInterval {
+        guard let startedAt else { return 0 }
+        return (stoppedAt ?? Date()).timeIntervalSince(startedAt)
+    }
+
+    /// P-1 (conductor ruling): the ONE place voice.finish fires. finish() and
+    /// rotate()'s cap branch both call this, so a query for voice.finish never
+    /// sees two disjoint property shapes.
+    private func emitFinish(reason: String) {
+        analytics.event("voice.finish", [
+            "duration_s": String(Int(recordedDuration)),
+            "segments": String(audioSegments.count),
+            "transcript_chars": String(latestTranscript.count),
+            // The RESOLVED value stored in startLiveTranscription(), not the
+            // recognizer's capability re-read here — see the field's doc comment.
+            "on_device": String(onDeviceRecognition),
+            "reason": reason
+        ])
     }
 
     /// The ONE tap in the class. The start path, the interruption-resume path
@@ -450,11 +486,14 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             // post rotate() again, take this branch again — forever, emitting
             // voice.finish each time while the file grew past the cap.
             noteIsActive = false
+            // Captured HERE, at the cap, not left for a later finish() to read
+            // Date() against — that gap is the over-report finish() used to have.
+            stoppedAt = Date()
             segmentStartedAt = nil
             continuation.yield(TranscriptChunk(
                 text: latestTranscript, isFinal: true))
             continuation.finish()
-            analytics.event("voice.finish", ["reason": "cap"])
+            emitFinish(reason: "cap")
             // The UI half of ending a note belongs to the sheets; the mic is ours.
             DispatchQueue.main.async { [weak self, capped = noteID] in self?.endAtCap(capped) }
             return
