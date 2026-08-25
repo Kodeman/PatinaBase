@@ -1861,3 +1861,4 @@ export {
   CAPTURE_MEDIA_BUCKET,
   CAPTURE_MEDIA_TTL_SECONDS,
 } from "./use-capture-media";
+export { useCaptureVenueLabels } from "./use-capture-venues";

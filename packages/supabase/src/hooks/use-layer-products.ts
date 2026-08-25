@@ -52,6 +52,14 @@ export interface LayerProductRow {
   owner_user_id: string | null;
   studio_id: string | null;
   created_at: string;
+  /** Origin surface of this row (00232): web_extension | portal | field_capture |
+   *  manual | import. NULL for legacy/unattributed rows. */
+  capture_source: string | null;
+  /** When the piece was captured — the date the Field provenance chip shows. */
+  captured_at: string | null;
+  /** Back-reference to the field_captures row this piece was minted from
+   *  (00233), used to look up the capture's venue label. */
+  field_capture_id: string | null;
 }
 
 /**
@@ -83,7 +91,7 @@ export function useLayerProducts(opts: UseLayerProductsOptions) {
       let query = supabase
         .from("products")
         .select(
-          "id, name, brand, price_retail, price_trade, images, source_url, status, category, configuration_mode, configuration_summary, layer, owner_user_id, studio_id, created_at",
+          "id, name, brand, price_retail, price_trade, images, source_url, status, category, configuration_mode, configuration_summary, layer, owner_user_id, studio_id, created_at, capture_source, captured_at, field_capture_id",
         )
         .eq("layer", layer)
         .limit(limit);
