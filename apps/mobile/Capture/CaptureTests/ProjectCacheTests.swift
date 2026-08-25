@@ -47,4 +47,57 @@ struct ProjectCacheTests {
         // 0.0009° of latitude ≈ 100 m.
         #expect(abs(a.distanceMeters(to: b) - 100) < 5)
     }
+
+    @Test func anEmptyRoomListClearsItsBackingColumnAndStillReadsAsEmpty() {
+        let ref = CaptureProjectRef(remoteId: "p1", name: "Maple St")
+        ref.specRooms = [CaptureCachedRoom(id: "sr1", name: "Living")]
+        ref.rooms = [CaptureCachedRoom(id: "r1", name: "Living")]
+        #expect(ref.specRoomsData != nil)
+        #expect(ref.roomsData != nil)
+
+        ref.specRooms = []
+        ref.rooms = []
+
+        // Empty encodes to nil rather than to `[]`, so "never refreshed" and
+        // "refreshed, found nothing" are indistinguishable from the columns
+        // alone — lastRefreshedAt is the freshness signal, not the room lists.
+        #expect(ref.specRoomsData == nil)
+        #expect(ref.roomsData == nil)
+        #expect(ref.specRooms == [])
+        #expect(ref.rooms == [])
+    }
+
+    @Test func aNeverRefreshedRefReadsAsEmptyInBothLanes() {
+        let ref = CaptureProjectRef(remoteId: "p1", name: "Maple St")
+
+        #expect(ref.specRoomsData == nil)
+        #expect(ref.roomsData == nil)
+        #expect(ref.specRooms == [])
+        #expect(ref.rooms == [])
+        #expect(ref.lastRefreshedAt == nil)
+    }
+
+    @Test func anUnreadableRoomBlobDegradesToEmptyRatherThanTrapping() {
+        let ref = CaptureProjectRef(remoteId: "p1", name: "Maple St")
+        ref.specRoomsData = Data("not json".utf8)
+        ref.roomsData = Data("not json".utf8)
+
+        #expect(ref.specRooms == [])
+        #expect(ref.rooms == [])
+    }
+
+    @Test func coordinateDistanceScalesLongitudeByLatitude() {
+        let a = CaptureCoordinate(latitude: 43.0731, longitude: -89.4012)
+        let b = CaptureCoordinate(latitude: 43.0731, longitude: -89.4003)
+        // 0.0009° of longitude at 43.07°N ≈ 73 m: 100 m × cos(43.07°). Dropping
+        // the cos(latitude) term reads ≈100 m here; transposing dLat/dLon reads
+        // ≈100 m here and ≈73 m in the latitude case above. Both are caught.
+        #expect(abs(a.distanceMeters(to: b) - 73) < 5)
+    }
+
+    @Test func coordinateDistanceToItselfIsExactlyZero() {
+        let a = CaptureCoordinate(latitude: 43.0731, longitude: -89.4012)
+
+        #expect(a.distanceMeters(to: a) == 0)
+    }
 }
