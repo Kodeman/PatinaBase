@@ -94,7 +94,7 @@ struct ViewfinderScreen: View {
         // plain class over UserDefaults with nothing to observe, and making it
         // observable would mean editing a closed contract.
         .onChange(of: coordinator.sheet) { _, sheet in
-            if sheet == nil { model.refreshVisit() }
+            if sheet == nil { model.visitDoorClosed() }
         }
         .onDisappear { model.stop() }
         .statusBarHidden(true)

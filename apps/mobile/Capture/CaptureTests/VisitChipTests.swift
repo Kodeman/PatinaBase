@@ -158,6 +158,14 @@ struct VisitChipTests {
         let unplaced = store.newDraft()
         #expect(FieldPlacementLine.text(for: unplaced) == "Not placed — tap to place")
         #expect(FieldPlacementLine.isUnplaced(unplaced))
+
+        // Finding 3: the project ID is the placement fact; the NAME is what may
+        // be missing. Placed with no name still reads as placed, and keeps its
+        // room rather than falling back to "Whole house".
+        let noName = store.newDraft()
+        noName.venue = VenueStamp(projectId: "p1", room: "Living")
+        #expect(!FieldPlacementLine.isUnplaced(noName))
+        #expect(FieldPlacementLine.text(for: noName) == "This project · Living")
     }
 
     /// Spec Flow 6: an un-chipped market find filed to the Library shelf is DONE.
@@ -181,6 +189,14 @@ struct VisitChipTests {
         chipped.destination = .library
         chipped.venue = VenueStamp(projectId: "p1", projectName: "Maple St", room: "Living")
         #expect(FieldPlacementLine.text(for: chipped) == "Maple St · Living")
+
+        // Chipped, but the project NAME was never stamped. Placement is the ID
+        // everywhere else, so this is placed — it must not fall back to
+        // "Library" and lose the room she picked.
+        let unnamed = store.newDraft()
+        unnamed.destination = .library
+        unnamed.venue = VenueStamp(projectId: "p1", room: "Living")
+        #expect(FieldPlacementLine.text(for: unnamed) == "This project · Living")
     }
 
     /// FC-R6: the line clears on PLACEMENT, never on sync. A capture that
@@ -213,5 +229,75 @@ struct VisitChipTests {
         for specimen in [inbox, library, placed] {
             #expect(!FieldPlacementLine.text(for: specimen).lowercased().contains("inbox"))
         }
+    }
+
+    // MARK: - The door keeps the line's promise (Flow 2)
+
+    /// V0 commits a session context and touches no `Specimen`, so without this
+    /// the draft she left on the card would still read "Not placed — tap to
+    /// place" after she picked Maple St at the door.
+    @MainActor
+    @Test func anUnplacedDraftAdoptsTheVisitStartedAtTheDoor() throws {
+        let store = try CaptureStore.inMemory()
+
+        let draft = store.newDraft()
+        #expect(FieldPlacementLine.isUnplaced(draft))
+
+        #expect(FieldInHandPlacement.adopt(site(room: "Living"), into: draft))
+        #expect(!FieldPlacementLine.isUnplaced(draft))
+        #expect(FieldPlacementLine.text(for: draft) == "Maple St · Living")
+        // The visit stamp rides along, exactly as it does at the shutter.
+        #expect(draft.visitKind == .site)
+        #expect(draft.visitLabel == "Maple St")
+        // FC-R5: the capture lane only. The scan lane is not cross-assigned.
+        #expect(draft.venue?.projectId == "p1")
+    }
+
+    /// She may have set a narrower answer per-capture in S1. The visit must not
+    /// overwrite it.
+    @MainActor
+    @Test func aDraftThatAlreadyHasAProjectIsLeftAloneAtTheDoor() throws {
+        let store = try CaptureStore.inMemory()
+
+        let draft = store.newDraft()
+        draft.venue = VenueStamp(projectId: "p9", projectName: "Cedar Ct", room: "Kitchen")
+        #expect(!FieldInHandPlacement.adopt(site(room: "Living"), into: draft))
+        #expect(FieldPlacementLine.text(for: draft) == "Cedar Ct · Kitchen")
+        #expect(draft.visitKind == nil)
+    }
+
+    /// FC-R2: a kindless context is routing memory, not a visit — the same guard
+    /// the chip applies, so the chip and the card cannot disagree.
+    @MainActor
+    @Test func noVisitAtTheDoorPlacesNothing() throws {
+        let store = try CaptureStore.inMemory()
+
+        let draft = store.newDraft()
+        #expect(!FieldInHandPlacement.adopt(.none, into: draft))
+
+        let kindless = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            routing: CaptureRoutingMemory(destination: .inbox, projectID: "p1",
+                                          projectName: "Maple St", room: "Living")))
+        #expect(!FieldInHandPlacement.adopt(kindless, into: draft))
+        #expect(FieldPlacementLine.isUnplaced(draft))
+        #expect(FieldPlacementLine.text(for: draft) == "Not placed — tap to place")
+    }
+
+    /// A sourcing visit routes to the Library shelf and carries no project, so
+    /// the draft stops being unplaced by DESTINATION rather than by project —
+    /// and the line says where it landed.
+    @MainActor
+    @Test func aSourcingVisitAtTheDoorFilesTheDraftToTheLibrary() throws {
+        let store = try CaptureStore.inMemory()
+
+        let draft = store.newDraft()
+        let sourcing = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            routing: CaptureRoutingMemory(destination: .library),
+            kind: .sourcing, label: "High Point 214"))
+        #expect(FieldInHandPlacement.adopt(sourcing, into: draft))
+        #expect(!FieldPlacementLine.isUnplaced(draft))
+        #expect(FieldPlacementLine.text(for: draft) == "Library")
     }
 }

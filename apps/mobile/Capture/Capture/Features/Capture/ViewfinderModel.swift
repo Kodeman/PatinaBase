@@ -52,6 +52,18 @@ final class ViewfinderModel {
     var visitChip: FieldVisitChip = FieldVisitChipBuilder.chip(for: .none, isLocating: true)
     private(set) var visitState: CaptureVisitState = .none
 
+    /// The visit door closed. Refresh the chip, then let the capture still in
+    /// her hand keep the C3 line's promise: an unplaced draft adopts the visit
+    /// she just started at the door, so the card she returns to names where the
+    /// capture landed instead of still asking her to place it. FC-R6 is
+    /// untouched — an already-saved capture waits on Today.
+    func visitDoorClosed(now: Date = Date()) {
+        refreshVisit(now: now)
+        guard let draft = cardSpecimen,
+              FieldInHandPlacement.adopt(visitState, into: draft) else { return }
+        try? store.save()
+    }
+
     func refreshVisit(now: Date = Date()) {
         visitState = sessionContext.visitState(
             identity: CaptureSessionIdentity(userID: session.userID,
