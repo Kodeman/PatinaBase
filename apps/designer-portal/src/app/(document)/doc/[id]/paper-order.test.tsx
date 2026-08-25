@@ -28,6 +28,8 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomScans: () => ({ data: [] }),
+  useGeneratedRoomFilesByScan: () => ({ data: new Map() }),
   useProjectV2: () => ({ data: undefined, isLoading: false, isError: false }),
   useProjectPhases: () => ({ data: [] }),
   useProjectApprovals: () => ({ data: [] }),
