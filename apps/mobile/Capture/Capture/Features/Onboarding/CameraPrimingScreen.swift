@@ -76,7 +76,7 @@ struct CameraPrimingScreen: View {
 
     private var fauxModeSelector: some View {
         HStack(spacing: 22) {
-            ForEach(CameraMode.allCases, id: \.self) { mode in
+            ForEach(CameraMode.viewfinderSelectable, id: \.self) { mode in
                 Text(mode.rawValue.uppercased())
                     .font(CaptureType.eyebrow)
                     .foregroundStyle(

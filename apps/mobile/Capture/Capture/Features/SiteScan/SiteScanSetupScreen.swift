@@ -127,6 +127,10 @@ struct SiteScanSetupScreen: View {
         .task {
             container.analytics.screen(CaptureScreenID.f1ScanSetup.rawValue)
             await model.load()
+            if coordinator.siteScanContextRequested {
+                coordinator.siteScanContextRequested = false
+                showContextCapture = true
+            }
         }
         .refreshable { await model.load() }
         .accessibilityIdentifier(CaptureScreenID.f1ScanSetup.rawValue)

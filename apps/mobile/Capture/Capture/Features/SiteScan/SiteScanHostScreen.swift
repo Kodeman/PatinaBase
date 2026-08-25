@@ -64,6 +64,7 @@ final class SiteScanHostModel {
     private let projectRoomID: String?
     private let voiceService: any VoiceNoteService
     private let analytics: any CaptureAnalytics
+    private let flags: CaptureFeatureFlags
 
     @ObservationIgnored lazy var contextModel = SiteScanContextModel(
         store: store,
@@ -73,6 +74,7 @@ final class SiteScanHostModel {
         projectRoomID: projectRoomID,
         voice: voiceService,
         analytics: analytics,
+        flags: flags,
         scanSessionIdProvider: { [weak self] in (self?.session as? ContextCapturing)?.scanSessionId },
         frameProvider: { [weak self] in (self?.session as? ContextCapturing)?.captureContextFrame() })
 
@@ -85,7 +87,8 @@ final class SiteScanHostModel {
         projectID: String?,
         projectRoomID: String?,
         voice: any VoiceNoteService,
-        analytics: any CaptureAnalytics
+        analytics: any CaptureAnalytics,
+        flags: CaptureFeatureFlags
     ) {
         self.siteScan = siteScan
         self.name = name
@@ -96,6 +99,7 @@ final class SiteScanHostModel {
         self.projectRoomID = projectRoomID
         self.voiceService = voice
         self.analytics = analytics
+        self.flags = flags
     }
 
     func startScan() async {
@@ -216,7 +220,8 @@ struct SiteScanHostScreen: View {
             voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
                                           analytics: container.analytics,
                                           surface: "f2"),
-            analytics: container.analytics))
+            analytics: container.analytics,
+            flags: container.featureFlags))
     }
 
     var body: some View {

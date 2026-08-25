@@ -149,8 +149,8 @@ final class ViewfinderModel {
     }
 
     func cycleMode(_ direction: Int) async {
-        let all = CameraMode.allCases
-        guard let index = all.firstIndex(of: mode) else { return }
+        let all = CameraMode.viewfinderSelectable
+        let index = all.firstIndex(of: mode) ?? 0
         let next = all[(index + direction + all.count) % all.count]
         await select(next)
     }

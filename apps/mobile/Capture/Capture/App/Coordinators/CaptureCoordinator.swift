@@ -16,6 +16,10 @@ public final class CaptureCoordinator: CaptureCoordinating {
     /// When set (0=O1…3=O4), RootView shows that onboarding step over the app
     /// (phase-based flow + the `-CaptureScreen oN.*` verification harness).
     public var onboardingStep: Int?
+    /// The `-CaptureScreen F1.context` harness hop. `SiteScanContextScreen` is a
+    /// fullScreenCover owned by SiteScanSetupScreen, not a route, so the
+    /// harness asks for it here and the setup screen consumes the request once.
+    public var siteScanContextRequested = false
     /// Opaque request-scoped token from an HTTPS `/field/{token}` universal
     /// link. It is held only for the guest Edge session and never exchanged for
     /// a JWT or placed in a direct Supabase query.

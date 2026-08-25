@@ -35,7 +35,7 @@ struct ViewfinderPlaceholder: View {
                 Spacer()
 
                 HStack(spacing: 28) {
-                    ForEach(CameraMode.allCases, id: \.self) { mode in
+                    ForEach(CameraMode.viewfinderSelectable, id: \.self) { mode in
                         Text(mode.rawValue.uppercased())
                             .font(CaptureType.eyebrow)
                             .foregroundStyle(mode == .photo ? CaptureColor.paper : CaptureColor.paper.opacity(0.5))

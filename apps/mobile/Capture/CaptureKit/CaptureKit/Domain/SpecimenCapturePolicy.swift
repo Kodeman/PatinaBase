@@ -21,6 +21,10 @@ public enum SpecimenCapturePolicy {
         case .tag: return .tagOCR
         case .scan: return .codeScan
         case .measure: return .measure
+        // Unreachable from the shutter: `.voice` is off `viewfinderSelectable`.
+        // Wave 3 guards captureSingle() with SpecimenCapturePolicy.producesPhoto(_:)
+        // rather than changing this branch.
+        case .voice: return .quickConfirm
         }
     }
 }

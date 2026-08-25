@@ -80,6 +80,7 @@ public extension CaptureSheet {
         case .inboxTerminal: return "inboxTerminal"
         case .photoImport: return "photoImport"
         case .cullDeck: return "cullDeck"
+        case .visit: return "visit"
         case .receivingInspection: return "receivingInspection"
         case .qrApprove: return "qrApprove"
         }

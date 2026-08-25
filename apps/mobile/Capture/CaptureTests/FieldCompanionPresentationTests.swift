@@ -3,6 +3,7 @@
 //
 //  Pure contracts for Patina Field's deterministic Option B Companion.
 
+import Foundation
 import Testing
 @testable import CaptureKit
 
@@ -203,5 +204,39 @@ struct FieldCompanionPresentationTests {
 
         controller.send(.dismiss)
         #expect(controller.presentation == .collapsed(.init(hint: "Field notes")))
+    }
+
+    // MARK: - CaptureSyncAttributes.ContentState (foundation seam, wave 2)
+
+    @Test func syncContentStateCarriesVisitFactsAndDefaultsThemToNil() {
+        let bare = CaptureSyncAttributes.ContentState(queued: 3, uploading: 1, failed: 0)
+        #expect(bare.visitLabel == nil)
+        #expect(bare.elapsedSeconds == nil)
+        #expect(bare.captureCount == nil)
+
+        let full = CaptureSyncAttributes.ContentState(
+            queued: 0, uploading: 0, failed: 0,
+            lastSpecimenTitle: "Brass sconce",
+            visitLabel: "Maple St · Living",
+            elapsedSeconds: 1_412,
+            captureCount: 9)
+        #expect(full.lastSpecimenTitle == "Brass sconce")
+        #expect(full.visitLabel == "Maple St · Living")
+        #expect(full.elapsedSeconds == 1_412)
+        #expect(full.captureCount == 9)
+    }
+
+    @Test func anInFlightActivityPayloadStillDecodesAcrossTheShapeChange() throws {
+        // Spec §5.5: optionality is what makes an Activity started by the build
+        // before this one decode in the build after it.
+        let inFlight = #"{"queued":2,"uploading":1,"failed":0,"lastSpecimenTitle":"Oak bench"}"#
+        let state = try JSONDecoder().decode(
+            CaptureSyncAttributes.ContentState.self,
+            from: Data(inFlight.utf8))
+        #expect(state.queued == 2)
+        #expect(state.uploading == 1)
+        #expect(state.lastSpecimenTitle == "Oak bench")
+        #expect(state.visitLabel == nil)
+        #expect(state.captureCount == nil)
     }
 }

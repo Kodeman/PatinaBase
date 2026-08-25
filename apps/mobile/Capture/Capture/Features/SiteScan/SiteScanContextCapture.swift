@@ -24,6 +24,7 @@ final class SiteScanContextModel {
     private let projectRoomID: String?
     private let voice: any VoiceNoteService
     private let analytics: any CaptureAnalytics
+    private let flags: CaptureFeatureFlags
 
     var toast: String?
     var isRecordingVoice = false
@@ -42,7 +43,7 @@ final class SiteScanContextModel {
     /// Fail-closed (Field Companion W1): the voice-note affordance is absent
     /// unless the seam answers `true`.
     var voiceCaptureEnabled: Bool {
-        analytics.isFeatureEnabled("field-companion-voice")
+        flags.isEnabled("field-companion-voice")
     }
 
     init(
@@ -53,6 +54,7 @@ final class SiteScanContextModel {
         projectRoomID: String?,
         voice: any VoiceNoteService,
         analytics: any CaptureAnalytics,
+        flags: CaptureFeatureFlags,
         scanSessionIdProvider: @escaping () -> String?,
         frameProvider: @escaping () async -> ContextFrameSnapshot?
     ) {
@@ -63,6 +65,7 @@ final class SiteScanContextModel {
         self.projectRoomID = projectRoomID
         self.voice = voice
         self.analytics = analytics
+        self.flags = flags
         self.scanSessionIdProvider = scanSessionIdProvider
         self.frameProvider = frameProvider
     }
@@ -340,9 +343,9 @@ struct SiteScanContextScreen: View {
         }
         .statusBarHidden(true)
         .environment(\.colorScheme, .light)
-        .accessibilityIdentifier("screen.F1.context")
+        .accessibilityIdentifier(CaptureScreenID.f1Context.rawValue)
         .task {
-            container.analytics.screen("screen.F1.context")
+            container.analytics.screen(CaptureScreenID.f1Context.rawValue)
             await container.camera.start()
             if model == nil {
                 model = SiteScanContextModel(
@@ -359,6 +362,7 @@ struct SiteScanContextScreen: View {
                                                   analytics: container.analytics,
                                                   surface: "f2"),
                     analytics: container.analytics,
+                    flags: container.featureFlags,
                     scanSessionIdProvider: { nil },      // no scan session on a non-Pro device
                     frameProvider: { [container] in
                         guard let frame = try? await container.camera.capture() else { return nil }

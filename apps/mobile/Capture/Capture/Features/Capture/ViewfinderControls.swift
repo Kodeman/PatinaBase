@@ -180,7 +180,7 @@ struct ViewfinderControlCluster: View {
     }
 }
 
-// MARK: - Mode selector (C1, PHOTO · TAG · MEASURE · SCAN)
+// MARK: - Mode selector (C1, PHOTO · TAG · MEASURE · SCAN — `.voice` waits for C6)
 
 struct ViewfinderModeSelector: View {
     let mode: CameraMode
@@ -188,7 +188,7 @@ struct ViewfinderModeSelector: View {
 
     var body: some View {
         HStack(spacing: 22) {
-            ForEach(CameraMode.allCases, id: \.self) { item in
+            ForEach(CameraMode.viewfinderSelectable, id: \.self) { item in
                 Button { onSelect(item) } label: {
                     VStack(spacing: 5) {
                         Text(item.rawValue.uppercased())

@@ -82,7 +82,11 @@ enum CaptureDeepLink {
 
         switch id {
         case .c1Viewfinder, .c2Framing, .c3Specimen, .c4MultiShot,
-             .e1AppIcon, .e2SystemEntry, .r1LowLight:
+             .e1AppIcon, .e2SystemEntry, .r1LowLight,
+             // Reserved ids: V0/C6 are wave 3, V4 is wave 4. They have no
+             // destination yet, so the harness stays on C1 rather than
+             // screenshotting a screen that does not exist.
+             .v0Visit, .c6Voice, .v4VisitReview:
             break
         case .c5SpecimenSheet:  withSample { coordinator.present(.specimenSheet($0)) }
         case .n1TagOCR:         withSample { coordinator.present(.ocr($0)) }
@@ -112,7 +116,7 @@ enum CaptureDeepLink {
              .m1Inbox, .m2Thread,
              .g1Arriving, .g2Inspection, .g3Outcome,
              .q1QRScan, .q2QRApprove,
-             .f1ScanSetup, .f2SiteScan, .f3ScanReview, .f4ScanUpload:
+             .f1ScanSetup, .f1Context, .f2SiteScan, .f3ScanReview, .f4ScanUpload:
             routeWorkScreen(id, coordinator: coordinator)
         case .sr01SiteHub, .sr02Composer, .sr03ItemConfig, .sr04AssignSend,
              .sr05Tracker, .sr06ReviewInbox, .sr07MeasureReview, .sr08PhotoReview,
@@ -175,6 +179,9 @@ enum CaptureDeepLink {
         case .q1QRScan:         coordinator.navigate(to: .qrScan)
         case .q2QRApprove:      coordinator.present(.qrApprove(payload: WorkFixtures.qrPayload))
         case .f1ScanSetup:      coordinator.navigate(to: .siteScanSetup)
+        case .f1Context:
+            coordinator.siteScanContextRequested = true
+            coordinator.navigate(to: .siteScanSetup)
         case .f2SiteScan, .f3ScanReview, .f4ScanUpload:
             coordinator.navigate(to: .siteScan(projectID: WorkFixtures.projectID, projectRoomID: nil))
         default:
@@ -199,7 +206,7 @@ enum CaptureDeepLink {
              .m1Inbox, .m2Thread,
              .g1Arriving, .g2Inspection, .g3Outcome,
              .q1QRScan, .q2QRApprove,
-             .f1ScanSetup, .f2SiteScan, .f3ScanReview, .f4ScanUpload,
+             .f1ScanSetup, .f1Context, .f2SiteScan, .f3ScanReview, .f4ScanUpload,
              .sr01SiteHub, .sr02Composer, .sr03ItemConfig, .sr04AssignSend,
              .sr05Tracker, .sr06ReviewInbox, .sr07MeasureReview, .sr08PhotoReview,
              .sr09Approval, .sr10BinderRooms, .sr11BinderDetail, .sr12BinderHistory,

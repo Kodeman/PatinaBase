@@ -65,6 +65,7 @@ enum RecognitionScreens {
                                               analytics: container.analytics,
                                               surface: "n4"),
                 analytics: container.analytics,
+                flags: container.featureFlags,
                 coordinator: coordinator
             ))
         }
@@ -77,7 +78,7 @@ enum RecognitionScreens {
                 store: container.store,
                 session: container.session,
                 camera: container.camera,
-                smartGuess: HeuristicSmartGuessService(),
+                smartGuess: container.smartGuess,
                 analytics: container.analytics,
                 coordinator: coordinator
             ))

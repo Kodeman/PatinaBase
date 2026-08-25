@@ -7,9 +7,24 @@
 
 import Foundation
 
-/// The four ways the viewfinder can read a thing (C1 mode selector).
+/// The ways the viewfinder can read a thing (C1 mode selector), plus `voice`.
+/// `voice` is a RESERVED case: it exists so this frozen enum is edited exactly
+/// once, and it is deliberately kept out of `viewfinderSelectable` until wave 3
+/// builds C6 — a VOICE pill whose shutter takes a photo would be a new lie in
+/// the wave that removes the old ones.
 public enum CameraMode: String, Codable, CaseIterable, Sendable {
-    case photo, tag, measure, scan
+    case photo, tag, measure, scan, voice
+}
+
+public extension CameraMode {
+    /// The modes C1 actually offers, in display order — a literal, not a
+    /// predicate over `allCases`. A future non-selectable case can't silently
+    /// admit itself here the way a filter would; adding one is Wave 3's own
+    /// one-token edit, not a rule to re-derive. Wave 3 appends `.voice` when
+    /// C6 exists.
+    static var viewfinderSelectable: [CameraMode] {
+        [.photo, .tag, .measure, .scan]
+    }
 }
 
 /// Coarse category for a specimen — seeds smart-guess (N5) and library filters.

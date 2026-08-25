@@ -3,14 +3,15 @@
 //
 //  Composition root. Branches on `AppConfiguration.runsRealServices`:
 //   • All-mock mode (default sim, -CaptureUseMocks, UITest): mocks + in-memory
-//     store + InMemoryCaptureSyncService + no-op analytics — keeps the 51-screen
+//     store + InMemoryCaptureSyncService + no-op analytics — keeps the screen
 //     harness, run/shots scripts, and previews working unchanged.
 //
 //  Phase 2 designer/pro seams (projects/leads/decisions/messaging/receiving/
 //  portalAuth/siteScan): mock mode wires the CaptureKitMocks conformers; real
-//  mode calls each flow's own `<Flow>ServiceFactory.make(deps:)` — which the
-//  freeze leaves returning the mock until that wave's agent replaces it. This
-//  file is FROZEN for the waves.
+//  mode calls each flow's own `<Flow>ServiceFactory.make(deps:)`, and every one
+//  of the eight now returns a real Supabase concrete. Field Companion wave 2
+//  added `smartGuess` and `featureFlags` as the last two composition seams; the
+//  rest of this file stays foundation-owner-only.
 //   • Real mode (physical device, or sim with -CaptureForceReal): Supabase
 //     session, persistent store (with graceful fallback), the local sync outbox
 //     wired to real capture-media upload + the commit RPC, the offline-sync Live
@@ -33,6 +34,14 @@ public final class AppContainer {
     public let session: any SessionProviding
     public let location: any LocationService
     public let analytics: any CaptureAnalytics
+    /// N5's real reader — the same Vision-backed service on device and in the
+    /// simulator (VNClassifyImageRequest runs on the iphonesimulator SDK and
+    /// simply yields `.unknown` on an empty frame), so no surface anywhere gets
+    /// a guess nothing computed.
+    public let smartGuess: any SmartGuessService
+    /// Remote flags, fail-closed. `.allOff` in mock mode: the harness and the
+    /// previews must never light a gated surface.
+    public let featureFlags: CaptureFeatureFlags
     public let companion = FieldCompanionController(
         initialPresentation: .hidden(reason: .cameraActive),
         defaultHint: "Next steps"
@@ -73,6 +82,8 @@ public final class AppContainer {
 
             let analytics = PostHogCaptureAnalytics()
             self.analytics = analytics
+            self.smartGuess = HeuristicSmartGuessService()
+            self.featureFlags = CaptureFeatureFlags(analytics: analytics)
 
             let session = SupabaseSessionService(client: client, analytics: analytics)
             self.session = session
@@ -89,18 +100,13 @@ public final class AppContainer {
             // Phase 2 seams — each flow's own factory. The freeze leaves these
             // returning the mock conformer; a wave agent swaps in the real
             // service by editing ONLY its `<Flow>ServiceFactory` + its own files.
-            let workDeps = WorkServiceDependencies(client: client, session: session, store: store)
-            self.projects = ProjectsServiceFactory.make(deps: workDeps)
-            self.leads = LeadsServiceFactory.make(deps: workDeps)
-            self.decisions = DecisionsServiceFactory.make(deps: workDeps)
-            self.messaging = MessagesServiceFactory.make(deps: workDeps)
-            self.receiving = ReceivingServiceFactory.make(deps: workDeps)
-            self.portalAuth = QRApproveServiceFactory.make(deps: workDeps)
-            self.siteScan = SiteScanServiceFactory.make(deps: workDeps)
-            let siteRequests = SiteRequestServiceFactory.make(deps: workDeps)
-            self.siteRequests = siteRequests
-            self.guestSiteRequests = siteRequests
-            self.siteRequestOutboxDrainer = SiteRequestOutboxDrainer(store: store, remote: siteRequests)
+            let work = Self.makeWorkServices(deps: WorkServiceDependencies(
+                client: client, session: session, store: store))
+            self.projects = work.projects; self.leads = work.leads; self.decisions = work.decisions
+            self.messaging = work.messaging; self.receiving = work.receiving
+            self.portalAuth = work.portalAuth; self.siteScan = work.siteScan
+            self.siteRequests = work.siteRequests; self.guestSiteRequests = work.siteRequests
+            self.siteRequestOutboxDrainer = work.drainer
 
             #if targetEnvironment(simulator)
             self.camera = MockCameraService()
@@ -116,6 +122,8 @@ public final class AppContainer {
         } else {
             let analytics = MockCaptureAnalytics()
             self.analytics = analytics
+            self.smartGuess = HeuristicSmartGuessService()
+            self.featureFlags = .allOff
             self.session = MockSessionProviding()
             self.authorizer = StubWorkspaceAuthorizer()
             self.sync = InMemoryCaptureSyncService()
@@ -136,6 +144,38 @@ public final class AppContainer {
             self.guestSiteRequests = siteRequests
             self.siteRequestOutboxDrainer = SiteRequestOutboxDrainer(store: store, remote: siteRequests)
         }
+    }
+
+    /// Everything wave-agent factories build off `WorkServiceDependencies`,
+    /// bundled into one value so `init()` stays under `function_body_length`.
+    /// Real mode only — mock mode wires `CaptureKitMocks` conformers directly
+    /// and has no `WorkServiceDependencies` to build (no client to give it).
+    private struct WorkServices {
+        let projects: any ProjectsService
+        let leads: any LeadsService
+        let decisions: any DecisionsReadService
+        let messaging: any MessagingService
+        let receiving: any ReceivingService
+        let portalAuth: any PortalAuthApprovalService
+        let siteScan: any SiteScanService
+        /// The concrete: it answers both the designer and the guest protocol, and
+        /// both properties must hold the SAME instance.
+        let siteRequests: SupabaseSiteRequestService
+        let drainer: SiteRequestOutboxDrainer
+    }
+
+    private static func makeWorkServices(deps: WorkServiceDependencies) -> WorkServices {
+        let siteRequests = SiteRequestServiceFactory.make(deps: deps)
+        return WorkServices(
+            projects: ProjectsServiceFactory.make(deps: deps),
+            leads: LeadsServiceFactory.make(deps: deps),
+            decisions: DecisionsServiceFactory.make(deps: deps),
+            messaging: MessagesServiceFactory.make(deps: deps),
+            receiving: ReceivingServiceFactory.make(deps: deps),
+            portalAuth: QRApproveServiceFactory.make(deps: deps),
+            siteScan: SiteScanServiceFactory.make(deps: deps),
+            siteRequests: siteRequests,
+            drainer: SiteRequestOutboxDrainer(store: deps.store, remote: siteRequests))
     }
 
     private static func identifyRestoredSession(

@@ -22,6 +22,7 @@ struct VoiceNoteSheet: View {
     let session: any SessionProviding
     let voice: any VoiceNoteService
     let analytics: any CaptureAnalytics
+    let flags: CaptureFeatureFlags
     let coordinator: CaptureCoordinator?
 
     @State private var authorized: Bool?
@@ -67,7 +68,7 @@ struct VoiceNoteSheet: View {
         }
         .task {
             analytics.screen("N4.voice")
-            guard analytics.isFeatureEnabled("field-companion-voice") else {
+            guard flags.isEnabled("field-companion-voice") else {
                 manualFallback = true
                 return
             }
@@ -435,6 +436,7 @@ import CaptureKitMocks
         session: MockSessionProviding(),
         voice: MockVoiceNoteService(),
         analytics: MockCaptureAnalytics(),
+        flags: .allOff,
         coordinator: CaptureCoordinator()
     )
 }

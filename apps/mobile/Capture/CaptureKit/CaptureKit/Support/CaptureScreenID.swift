@@ -1,8 +1,11 @@
 //  CaptureScreenID.swift
 //  CaptureKit
 //
-//  Frozen per-screen accessibility identifiers (51 entries) — the deterministic
-//  handles XCUITest and MobAI use to drive and assert every screen.
+//  Frozen per-screen accessibility identifiers (75 entries) — the deterministic
+//  handles XCUITest, capture-shots.sh and MobAI use to drive and assert every
+//  screen. 72 of them reach a built screen today; v0Visit, c6Voice and
+//  v4VisitReview are reserved ids for the visit spine (waves 3–4) and are held
+//  out of the sweep until the screens behind them exist.
 
 import Foundation
 
@@ -74,6 +77,11 @@ public enum CaptureScreenID: String, CaseIterable, Sendable {
     case f2SiteScan           = "screen.F2.site-scan"
     case f3ScanReview         = "screen.F3.scan-review"
     case f4ScanUpload         = "screen.F4.scan-upload"
+    case f1Context            = "screen.F1.context"
+    // Flow 17 — the visit spine (Field Companion). Reserved: waves 3–4.
+    case v0Visit              = "screen.V0.visit"
+    case c6Voice              = "screen.C6.voice"
+    case v4VisitReview        = "screen.V4.visit-review"
     // Flow 16 — project-scoped Site Request loop (P1)
     case sr01SiteHub          = "screen.SR01.site-hub"
     case sr02Composer         = "screen.SR02.composer"
@@ -95,4 +103,13 @@ public enum CaptureScreenID: String, CaseIterable, Sendable {
     case sr18GuestReceipt     = "screen.SR18.guest-receipt"
     case sr19GuestDone        = "screen.SR19.guest-done"
     case sr20GuestReturned    = "screen.SR20.guest-returned"
+}
+
+public extension CaptureScreenID {
+    /// What `capture-shots.sh` and `-CaptureScreen <suffix>` pass, e.g.
+    /// `"F1.context"`. The launch flag resolves by suffix (RootView.swift:66),
+    /// so `CaptureScreenIDTests.everyScreenIDIsUnique` guards it.
+    var sweepSuffix: String {
+        String(rawValue.dropFirst("screen.".count))
+    }
 }
