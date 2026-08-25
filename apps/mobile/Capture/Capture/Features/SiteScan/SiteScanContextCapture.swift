@@ -34,6 +34,10 @@ final class SiteScanContextModel {
     /// recognizer could not take is not a note whose words we "couldn't make
     /// out" — that rung would claim an attempt that never happened.
     private var noteIsTranscribing = true
+    /// Latches the permission round-trip in startVoice(). isRecordingVoice is
+    /// only set once the stream is live, which is now an await later, so
+    /// without this a second tap on Note during the prompt starts a second one.
+    private var voiceAuthInFlight = false
 
     /// Fail-closed (Field Companion W1): the voice-note affordance is absent
     /// unless the seam answers `true`.
@@ -108,6 +112,33 @@ final class SiteScanContextModel {
             reportOwnerUnavailable()
             return
         }
+        // F2 had NO door to the permission prompt. N4's sheet was the only
+        // caller of requestAuthorization() in the app, so a fresh install whose
+        // designer reached this overlay first was never asked — speech stayed
+        // .notDetermined, the rung read "unavailable" and read it forever.
+        // Ask here too. The mic is the only permission a note requires; a
+        // speech denial costs the words, not the note (§15.4), which is exactly
+        // what requestAuthorization() returns.
+        guard !voiceAuthInFlight else { return }
+        voiceAuthInFlight = true
+        Task { [weak self] in
+            guard let self else { return }
+            let micGranted = await self.voice.requestAuthorization()
+            self.voiceAuthInFlight = false
+            // The prompt is modal and the scan runs behind it — she may have
+            // left the room, or backgrounded the app, before answering.
+            guard !Task.isCancelled,
+                  !self.isRecordingVoice,
+                  self.ownerScopeProvider() == scope else { return }
+            guard micGranted else {
+                self.toast = "Microphone unavailable"
+                return
+            }
+            self.beginVoice(scope: scope)
+        }
+    }
+
+    private func beginVoice(scope: CaptureLocalListScope) {
         do {
             let stream = try voice.startLiveTranscription()
             recordingScope = scope
