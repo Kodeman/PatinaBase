@@ -1,6 +1,6 @@
 # The Rendered Room v2 — PROD CUTOVER RUNBOOK
 
-> **Status:** execution runbook · **Date:** 2026-08-24 · **Wave:** prod cutover of the **rich-record PRODUCE + VIEW** path
+> **Status:** execution runbook · **Date:** 2026-08-24 · **Revised:** 2026-08-25 — folds cross-program ordering comments (Step 1 ownership split, G2 peer-GO leg, DB_FRESH reuse, idempotency notes) · **Wave:** prod cutover of the **rich-record PRODUCE + VIEW** path
 > **Companions:** `DELIVERY-PLAN.md`, `W1-EVIDENCE.md`, `W2-EVIDENCE.md`, `W3-W4-EVIDENCE.md`, `docs/ops/strata-staging.md`, `docs/engineering/patina-cloudflare-phase-1-runbook.md`, `infra/edge-api-worker/OPERATIONS.md`
 > **Authority:** Kody has green-lit the prod wave. This document is the ordered, rollback-gated chain to execute against, in gated lanes. It carries GO/NO-GO gates before every irreversible step. It is **planning + read-only verification** — nothing here has mutated prod or staging.
 
@@ -33,13 +33,14 @@
 None of these mutate prod; they are gates.
 
 - [ ] **Explicit ship authorization exists in-session.** Kody green-lit the prod wave; this authorizes the whole chain (Modal env → migrations → roles → secrets → Modal app → dispatch fn → box → read-route coordination → smoke) without per-step re-asking. The `SCAN_ROUTES`/`MEDIA_UPLOADS` **flag flips are separately gated** (they are a reviewed `wrangler.jsonc` edit, not a redeploy).
+- [ ] **New-paid-resource scope is precisely bounded.** The resources in this wave that require a Kody GO are exactly: the **2 R2 buckets** (`patina-media-artifacts-us`, `patina-media-originals-us`), the **2 R2 tokens** (the read token + the Modal read+write token), and the **prod Modal environment** (`patina-production`, incl. its budget cap). Nothing else in this chain is a new paid resource — the 13 migrations (Step 3) are append-only against the existing prod database, and Step 9's edge deploy reuses existing bindings (`DB_FRESH` Hyperdrive + already-committed `wrangler.jsonc` vars); neither adds billable infrastructure.
 - [ ] **A dedicated prod-cutover git worktree**, linked to Strata prod, isolated from the root checkout (`patina-parallel-work`). Verify `supabase/.temp/project-ref` prints `bkvcixdmuyejfzcijpdg` before any DB command. Never run a bare `db push` from a checkout whose link you have not just re-verified.
 - [ ] **The migration step is a COMBINED, multi-owner, version-ordered wave — not a solo scan push** (see Step 3). `supabase db push --include-all` applies ALL unapplied migrations across three programs in version order. The current unapplied set is **13**: this wave's scan **8** (`00489/490/491/492/498/499/500/501`), **Phase-2**'s `00494/00495` (media_registry — a *different* program), and **Phase-3**'s `00514/00515/00516` (capture-enrichment). This is confirmed by a read-only prod dry-run (Step 3, quoted verbatim). It requires **each owner confirming readiness** and a **single Kody GO for the bundle**.
 - [ ] **`wrangler` auth is live on this machine** (for R2 CLI verification + the eventual peer worker deploy). If unauthed, stop and ask.
 - [ ] **Modal CLI runs from `services/scan-modal/.venv`** (CPython 3.12 — system `python3` is 3.9 and cannot run Modal). The `~/.modal.toml` token applies globally.
 - [ ] **A prod scan identity + bundle to smoke against** — either the prod seed identity or a real prod scan whose owner you can authenticate as (needed for Step 10's capability-URL leg). Confirm the seed marker live before touching any row (`patina-prod-ops`).
 - [ ] **Kody's iOS device pass is NOT a blocker for this wave.** It gates only the deferred originals-upload cutover. The produce+view path does not touch iOS upload; do not wait on the device pass to run Steps 1–10.
-- [ ] **Peer-coordination handshake opened** for Step 9 — the `patina-edge-api` (prod) worker deploy is the **cloudflare-phases** program's surface, not this lane's. Confirm who flips `SCAN_ROUTES` on prod and when.
+- [ ] **Peer-coordination handshake opened** for Step 1(a) and Step 9 — R2 bucket creation and the `patina-edge-api` (prod) worker deploy are both the **cloudflare-phases** program's surface, not this lane's. Confirm who creates the buckets and when, and who flips `SCAN_ROUTES` on prod and when.
 
 ### Verified prod baseline (read-only probes, 2026-08-24)
 
@@ -85,14 +86,18 @@ Each step: **mechanism · pre-condition + verification probe (behavior, not vers
 
 ### Step 1 — Prod R2 bucket pair + read token
 
-**Ownership:** MINE (scan-specific), but the bucket creation and token mint are **Kody-gated Cloudflare-dashboard actions** this repo's tooling cannot perform. I prepare and verify; Kody clicks.
+**Ownership:** SPLIT — two owners, two halves.
+- **(a) R2 bucket creation** (`patina-media-artifacts-us` + `patina-media-originals-us`) is the **cloudflare-phases / Phase-2 program's surface** — created by **THEM** via `wrangler r2 bucket create` (CLI, programmatic — **not** a Kody dashboard click), under **their own direct** Kody GO. Not this lane's action.
+- **(b) The R2 token mint** (a read token for the peer's worker + a read+write token for our Modal) is a **Cloudflare-dashboard action**, driven by the Rendered Room session on Kody's browser with Kody's consent. This half stays **MINE** — I prepare and verify; Kody clicks.
 
 **Mechanism.**
-- Create the prod bucket pair (dashboard or `wrangler r2 bucket create`, account `be3aaeed18a81b5d90ee2263b62219ea`):
+- **(a) Bucket creation — cloudflare-phases / Phase-2, their command:**
   - `patina-media-artifacts-us` (derived artifacts — splat, renders, GLB)
   - `patina-media-originals-us` (originals target — provisioned now, stays dormant this wave since `MEDIA_UPLOADS=off`)
+  - `wrangler r2 bucket create`, account `be3aaeed18a81b5d90ee2263b62219ea` — CLI, programmatic, not a dashboard click.
   - **Note the naming:** prod has **no env token** (contrast staging's `patina-staging-media-*-us`). These exact names are already committed in `infra/edge-api-worker/wrangler.jsonc` `env.production.vars` (`SCAN_R2_BUCKET`, `SCAN_R2_ORIGINALS_BUCKET`).
-- Mint **one read token** — Object **Read-only**, scoped to `patina-media-artifacts-us` **only** (name it e.g. `patina-media-scan-reader`). Its access-key-id/secret feed **two** consumers on the **same** credential: the prod edge worker read path (Step 9) and, if a Modal read path is ever needed, the Modal `scan-r2` secret. The **write token stays unminted** this wave (uploads deferred).
+- **(b) Token mint — MINE, Cloudflare dashboard, Rendered Room session:**
+  - Mint **one read token** — Object **Read-only**, scoped to `patina-media-artifacts-us` **only** (name it e.g. `patina-media-scan-reader`). Its access-key-id/secret feed **two** consumers on the **same** credential: the prod edge worker read path (Step 9) and, if a Modal read path is ever needed, the Modal `scan-r2` secret. The **write token stays unminted** this wave (uploads deferred).
 
 **Pre-condition + verification probe.**
 - Pre: `wrangler` authed on the prod account.
@@ -211,7 +216,7 @@ supabase db push --include-all
   ```
 - Confirm `media_objects_select` policy is `TO authenticated` and delegates to `room_scans` (mirrors staging §3.1) — the mood-board class gate.
 
-**Rollback.** Migrations are **append-only → roll forward**, never a blind down. The band is **purely additive** — new tables (`media_objects`), new RPCs, new roles, new crons — with **zero destructive ALTERs of existing prod objects** (verified: no `svc_*` touch, no drops of live tables). So the blast radius on *existing* prod behavior is near-zero even though the step is irreversible. If a defect surfaces, the containment is: **`cron.unschedule('dispatch-scan-modal-sweep')`** (halts dispatch instantly — a reversible config action, not a schema change) plus a forward-fix migration. Do not attempt to drop `media_objects` etc. unless a migration proves them truly unreferenced.
+**Rollback.** Migrations are **append-only → roll forward**, never a blind down. The band is **purely additive** — new tables (`media_objects`), new RPCs, new roles, new crons — with **zero destructive ALTERs of existing prod objects** (verified: no `svc_*` touch, no drops of live tables). So the blast radius on *existing* prod behavior is near-zero even though the step is irreversible. If a defect surfaces, the containment is: **`cron.unschedule('dispatch-scan-modal-sweep')`** (halts dispatch instantly — a reversible config action, not a schema change) plus a forward-fix migration. Do not attempt to drop `media_objects` etc. unless a migration proves them truly unreferenced. **Partial-failure recoverability:** all 13 migrations are idempotent (`IF NOT EXISTS` / `CREATE OR REPLACE`) and additive, so if the single `db push --include-all` fails mid-push (a transient error), re-running it continues from where it stopped — no manual repair, no partial-state corruption.
 
 **Hard rails.**
 - **THE MULTI-OWNER DRY-RUN GATE (wave's #1 rail).** `supabase db push --dry-run --include-all` MUST plan **exactly the 13-migration set** in the table above — and every one of the three programs' owners MUST have confirmed their files are prod-ready — before the real push. If the plan differs from the quoted plan (a new file appeared, or an owner is not ready), **STOP.** Because `--include-all` cannot be scoped to one program, the push is all-or-nothing over the 13: it goes only on a **single Kody GO for the whole bundle** with all owners' sign-off, OR the not-ready files are removed via a **curated cutover branch** so the plan shrinks to the ready set. This wave marks its **scan 8 READY (reviewed + staging-proven)**; the **peer 5 (00494/00495 Phase-2, 00514/00515/00516 Phase-3) are pending their owners' GO** — this lane does not sign for them. This is a **GO/NO-GO coordination checkpoint**, not a proceed.
@@ -406,7 +411,9 @@ npx wrangler deploy --env production
 `config:check:provisioned` requires the two read secrets **only** where `SCAN_ROUTES=on`. `MEDIA_UPLOADS` stays `off` — and `validate-config` **asserts** the prod-off literal for uploads, so this edit cannot carry a write capability against a prod bucket by accident. The two read secrets must be present or the worker boots **503** `edge_api_configuration_invalid`.
 
 **Pre-condition + verification probe.**
-- Pre: Step 1 read token minted; Steps 3–8 so artifacts exist to read; peer program scheduled the deploy.
+- Pre: Step 1 read token minted; Step 3 applied; peer program scheduled the deploy.
+- **True dependency note:** Step 9's **hard** prerequisites are ONLY Step 1 (read token) + Step 3 (migrations create `media_objects`, read under caller RLS via `DB_FRESH`). It does **not** depend on Steps 4–8 (the produce side). Its placement after Step 8 is a deliberate **conservative** choice — artifacts exist before the read route opens, so Step 10's smoke has real bytes to fetch — not a hard dependency. Keep it there, but note it could parallelize with 4–8 if timing ever demands.
+- **DB_FRESH prereq (resolved):** the `DB_FRESH` Hyperdrive binding is already provisioned in prod (Phase 1 — `strata-prod-fresh`, id `f19990d0…`, `edge_rls_login`, caching disabled). `SCAN_ROUTES=on` **reuses** it — no new Hyperdrive, no additional Kody GO.
 - Verify (behavior) against `https://api.patina.cloud`:
   - `GET /v1/scan/room-files/<id>/artifacts/splat` with **no JWT** → **401** `{"error":"unauthorized"}` (route on, auth required — a **503** means the read-token secrets are missing; a **404** means `SCAN_ROUTES` did not flip).
   - `POST /v1/media/uploads` → **404** (uploads correctly still closed).
@@ -455,7 +462,7 @@ npx wrangler deploy --env production
 | Gate | Before | Kody confirms | Reversible? |
 |---|---|---|---|
 | **G1** | Step 2 budget cap | Hard budget cap SET on `patina-production` | yes (delete env) |
-| **G2 — the big one (multi-owner bundle)** | Step 3 migrations | `db push --dry-run --include-all` plans **exactly the 13** (scan 8 + Phase-2 00494/00495 + Phase-3 00514/00515/00516), **no 00512**, unchanged from the quoted plan; **all three owners confirm ready** (scan 8 = READY; peer 5 = their GO); worktree link = `bkvcixdmuyejfzcijpdg`; anon-EXECUTE revokes confirmed present. Single Kody GO over the whole bundle | **NO — append-only, irreversible** |
+| **G2 — the big one (multi-owner bundle)** | Step 3 migrations | `db push --dry-run --include-all` plans **exactly the 13** (scan 8 + Phase-2 00494/00495 + Phase-3 00514/00515/00516), **no 00512**, unchanged from the quoted plan; **all three owners confirm ready** (scan 8 = READY; peer 5 = their GO); worktree link = `bkvcixdmuyejfzcijpdg`; anon-EXECUTE revokes confirmed present. **Explicit sub-condition:** the cloudflare-phases owner confirms THEIR OWN direct in-session Kody GO for the Phase-2/3 five (00494/00495/00514/00515/00516) — a relayed GO does not satisfy this. So G2 = fresh dry-run (exactly 13, no 00512) + both owners ready + Rendered Room's direct Kody GO (**held**) + cloudflare-phases' direct Kody GO (**pending**) — not satisfiable until the peer relays their own direct confirm | **NO — append-only, irreversible** |
 | **G3** | Step 4 role mint | `scan_worker_login` password generated out-of-band, held only as a Modal Secret | yes (drop role) |
 | **G4** | Step 6 Modal app deploy | G1 cap confirmed set; spawn probe returns 401 not 422 | yes (stop app) |
 | **G5** | Step 8 box → prod | This is first real GPU spend; cap confirmed; box env = prod ref | yes (stop unit) |
@@ -475,8 +482,8 @@ npx wrangler deploy --env production
 
 - **MINE (I execute) — 6 steps:** 4 (roles/login), 5 (Modal secrets), 6 (Modal app), 7 (dispatch fn), 8 (box), 10 (smoke).
 - **SHARED multi-owner gate — 1 step:** Step 3 (the combined `00489→00516` migration push). I own + mark READY the scan 8; the peer 5 (Phase-2 00494/00495, Phase-3 00514/00515/00516) are their owners' GO. The push itself is one command over the whole bundle on a single Kody GO — executable by whoever runs the coordinated push, not a scan-only action.
-- **MINE-owned, Kody-gated dashboard sub-actions — 2:** Step 1 (R2 bucket create + read-token mint) and Step 2's **budget cap**. I prepare and verify; Kody clicks the dashboard.
-- **PEER coordination gate — 1 step:** Step 9 (`patina-edge-api` prod deploy + `SCAN_ROUTES=on`) is the cloudflare-phases program's surface; I hand them the env (names above) and verify, they deploy.
+- **MINE-owned, Kody-gated dashboard sub-action — 1:** Step 1(b) — the R2 token mint (read token for the peer's worker + read+write token for our Modal) — and Step 2's **budget cap**. I prepare and verify; Kody clicks the dashboard.
+- **PEER coordination gate — 2 steps:** Step 1(a) — R2 bucket creation (`patina-media-artifacts-us` + `patina-media-originals-us`) is the cloudflare-phases / Phase-2 program's surface, created by them via `wrangler r2 bucket create` under their own direct Kody GO — and Step 9 (`patina-edge-api` prod deploy + `SCAN_ROUTES=on`) is the cloudflare-phases program's surface; I hand them the env (names above) and verify, they deploy.
 
 ---
 
