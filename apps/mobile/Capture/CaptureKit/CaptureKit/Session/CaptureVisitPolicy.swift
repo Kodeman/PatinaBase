@@ -9,10 +9,13 @@
 import Foundation
 
 public enum CaptureVisitState: Equatable, Sendable {
+    /// Shadows `Optional.none`: if this type is ever held as a
+    /// `CaptureVisitState?`, `state == .none` becomes ambiguous and every such
+    /// comparison has to spell out `CaptureVisitState.none`.
     case none
     case active(CaptureSessionContext)
-    /// Open, but untouched for longer than `staleConfirmWindow`. She is asked
-    /// whether she is still there, and answers Resume or End visit.
+    /// Open, but untouched for longer than `staleConfirmWindow`. The UI asks
+    /// "Still at Maple St?" — Resume / End visit. R3-1's headline mitigation.
     case stale(CaptureSessionContext)
 
     public var context: CaptureSessionContext? {
@@ -78,6 +81,12 @@ public extension CaptureSessionContextPolicy {
         // WRONG visit stamping today's twenty captures is the systematic error;
         // a dropped one costs her one tap on the door.
         guard now >= context.lastActivityAt else { return .none }
+        // Both windows are keyed on IDLE TIME since `lastActivityAt`, not on
+        // elapsed time since `startedAt`. That is a choice: an install day that
+        // runs 07:00-20:00 with a capture every hour is one real visit and must
+        // not be guillotined at hour twelve. It does mean a visit she keeps
+        // touching cannot age out by the 12-hour rule at all — the calendar-day
+        // rule below is what bounds the damage, and it cannot be touched away.
         let idle = now.timeIntervalSince(context.lastActivityAt)
         guard idle <= autoEndWindow else { return .none }
         guard calendar.isDate(context.startedAt, inSameDayAs: now) else { return .none }

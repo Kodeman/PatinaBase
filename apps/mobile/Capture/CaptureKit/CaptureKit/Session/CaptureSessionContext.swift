@@ -103,7 +103,8 @@ public enum CaptureSessionContextPolicy {
     public static func resolve(
         existing: CaptureSessionContext?,
         identity: CaptureSessionIdentity,
-        now: Date
+        now: Date,
+        calendar: Calendar = .current
     ) -> CaptureSessionContext {
         guard let existing,
               existing.identity == identity,
@@ -114,6 +115,22 @@ public enum CaptureSessionContextPolicy {
                 identity: identity,
                 startedAt: now,
                 lastActivityAt: now
+            )
+        }
+        // The visit's own rules outrank this 4-hour routing window, and `resolve`
+        // WRITES: `current` persists what it returns, so resuming a visit the
+        // rules have killed would both hand out its `visitID` (ViewfinderModel
+        // mints every draft's `sessionID` from it, so yesterday's visit would
+        // collect today's captures) and refresh its `lastActivityAt`, pushing the
+        // 12-hour auto-end out of reach forever. Routing memory has always been
+        // day-agnostic and survives; the visit fields and the grouping id do not.
+        if existing.kind != nil,
+           visitState(for: existing, now: now, calendar: calendar) == .none {
+            return CaptureSessionContext(
+                identity: identity,
+                startedAt: now,
+                lastActivityAt: now,
+                routing: existing.routing
             )
         }
         var resumed = existing
@@ -154,7 +171,8 @@ public final class CaptureSessionContextStore {
 
     public func current(
         identity: CaptureSessionIdentity,
-        now: Date = Date()
+        now: Date = Date(),
+        calendar: Calendar = .current
     ) -> CaptureSessionContext {
         let existing = defaults.data(forKey: key).flatMap {
             try? decoder.decode(CaptureSessionContext.self, from: $0)
@@ -162,7 +180,8 @@ public final class CaptureSessionContextStore {
         let resolved = CaptureSessionContextPolicy.resolve(
             existing: existing,
             identity: identity,
-            now: now
+            now: now,
+            calendar: calendar
         )
         persist(resolved)
         return resolved
@@ -219,12 +238,15 @@ public final class CaptureSessionContextStore {
         let open = defaults.data(forKey: key).flatMap {
             try? decoder.decode(CaptureSessionContext.self, from: $0)
         }
-        guard let open, open.identity == identity, open.endedAt == nil else {
+        guard let open, open.identity == identity else {
             let fresh = CaptureSessionContext(identity: identity, startedAt: now,
                                               lastActivityAt: now)
             persist(fresh)
             return fresh
         }
+        // A second "End visit" tap must not overwrite what the first one closed:
+        // the already-ended record IS the readable one.
+        guard open.endedAt == nil else { return open }
         let closed = CaptureSessionContextPolicy.ended(open, now: now)
         persist(closed)
         return closed
