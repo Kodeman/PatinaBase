@@ -5721,6 +5721,10 @@ export type Database = {
           status: string
           style_tags: string[] | null
           subcategory: string | null
+          suggested_project_id: string | null
+          suggested_project_room_id: string | null
+          suggestion_basis: string | null
+          suggestion_confidence: number | null
           synced_at: string | null
           thumbnail_url: string | null
           title: string | null
@@ -5733,6 +5737,12 @@ export type Database = {
           vendor_name: string | null
           venue_label: string | null
           venue_place_id: string | null
+          visit_ended_at: string | null
+          visit_id: string | null
+          visit_kind: string | null
+          visit_kit: string | null
+          visit_label: string | null
+          visit_started_at: string | null
           voice_audio_path: string | null
           voice_audio_purged_at: string | null
           voice_audio_segments: Json
@@ -5787,6 +5797,10 @@ export type Database = {
           status?: string
           style_tags?: string[] | null
           subcategory?: string | null
+          suggested_project_id?: string | null
+          suggested_project_room_id?: string | null
+          suggestion_basis?: string | null
+          suggestion_confidence?: number | null
           synced_at?: string | null
           thumbnail_url?: string | null
           title?: string | null
@@ -5799,6 +5813,12 @@ export type Database = {
           vendor_name?: string | null
           venue_label?: string | null
           venue_place_id?: string | null
+          visit_ended_at?: string | null
+          visit_id?: string | null
+          visit_kind?: string | null
+          visit_kit?: string | null
+          visit_label?: string | null
+          visit_started_at?: string | null
           voice_audio_path?: string | null
           voice_audio_purged_at?: string | null
           voice_audio_segments?: Json
@@ -5853,6 +5873,10 @@ export type Database = {
           status?: string
           style_tags?: string[] | null
           subcategory?: string | null
+          suggested_project_id?: string | null
+          suggested_project_room_id?: string | null
+          suggestion_basis?: string | null
+          suggestion_confidence?: number | null
           synced_at?: string | null
           thumbnail_url?: string | null
           title?: string | null
@@ -5865,6 +5889,12 @@ export type Database = {
           vendor_name?: string | null
           venue_label?: string | null
           venue_place_id?: string | null
+          visit_ended_at?: string | null
+          visit_id?: string | null
+          visit_kind?: string | null
+          visit_kit?: string | null
+          visit_label?: string | null
+          visit_started_at?: string | null
           voice_audio_path?: string | null
           voice_audio_purged_at?: string | null
           voice_audio_segments?: Json
@@ -6002,6 +6032,27 @@ export type Database = {
           {
             foreignKeyName: "field_captures_project_room_id_fkey"
             columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_captures_suggested_project_id_fkey"
+            columns: ["suggested_project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "field_captures_suggested_project_id_fkey"
+            columns: ["suggested_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_captures_suggested_project_room_id_fkey"
+            columns: ["suggested_project_room_id"]
             isOneToOne: false
             referencedRelation: "project_rooms"
             referencedColumns: ["id"]

@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- field_captures visit + suggestion projection tests
--- (Field Companion wave 3 · migration 005NN_field_capture_visit_and_suggestion)
+-- (Field Companion wave 3 · migration 00532_field_capture_visit_and_suggestion)
 --
 -- Covers:
 --   1. A commit carrying a visit envelope fills visit_id / kind / kit / label /
@@ -34,6 +34,13 @@
 --      (22003), non-uuid visit id (22P02) — each asserting that the commit
 --      SUCCEEDS, the offending column is NULL, the rest of the envelope still
 --      projects, and the drop is recorded in raw_payload->'visit_projection_errors'.
+--  13. The unresolved-suggestion drops are RECORDED, not silent, under the
+--      23503 the FK would have raised: an id that resolves to nothing (13a),
+--      another designer's project (13b), an unresolvable projectRoomId (13c).
+--      Plus the TG_OP gate (13d) — a payload-less UPDATE neither resurrects a
+--      cleared suggestion nor disturbs the visit, while an UPDATE that DOES
+--      change raw_payload re-projects.
+--      (Authored by Task 9's fix round; kept in place, unrenumbered.)
 --
 -- How to run (standalone):
 --   scripts/run-sql-tests.sh -f field_capture_visit
