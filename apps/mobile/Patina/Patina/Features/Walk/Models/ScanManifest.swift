@@ -436,14 +436,29 @@ public nonisolated struct ScanManifest: Codable, Equatable, Sendable {
         case bundleManifest         // manifest.json — UPLOADED but never listed (it IS the list)
         case photosManifest         // photos/photos_metadata.ndjson (pointer to existing NDJSON)
 
-        // NOT YET BROUGHT ACROSS from Field's artifact vocabulary:
-        // `scorecard`, `anchors`, `keyframeIndex`, `keyframeSummary`,
-        // `keyframesArchive` (see FieldManifestAssembler.candidates). Adding
-        // them is a *coupled* change, not an additive one: this enum is
-        // switched exhaustively and without a `default` in three places —
-        // ScanBundleWriter.defaultFileName(for:), ArtifactUploader
-        // .scanColumn(for:) and .storagePathComponents(for:) — each needing a
-        // real storage-folder / room_scans-column decision per kind.
+        // Dense-frame keyframe lane (Rendered Room v2). Brought across from
+        // Field's vocabulary so the CLIENT captures + uploads the same dense RGB
+        // keyframe stream the splat pipeline trains on (services/scan-modal
+        // `parse_keyframe_index`; services/scan-pipeline `keys.py`).
+        //   • keyframesArchive → keyframes.tar, column `scan_bundle_url`, folder
+        //     `bundle` (keys.KIND_TO_URL_COLUMN / KIND_TO_FOLDER). This is the
+        //     SAME slot Field uses; the client never produces `bundleArchive` in
+        //     the primary path, so the two kinds cannot collide on that column.
+        //   • keyframeIndex / keyframeSummary → UPLOADED but COLUMN-LESS: the
+        //     worker resolves them by prefix-swap into the `keyframes/` folder,
+        //     so they carry a folder but no `room_scans` column (see
+        //     ArtifactUploader.Route).
+        // Coupled change: this enum is switched exhaustively (no `default`) in
+        // ScanBundleWriter.defaultFileName(for:), ArtifactUploader.routing(for:),
+        // and ScanUploadShadowLeg.uploadKind(for:) — each gains an arm below.
+        case keyframesArchive       // keyframes.tar — dense RGB keyframe stream
+        case keyframeIndex          // keyframes/keyframe_index.ndjson — column-less upload
+        case keyframeSummary        // keyframes/keyframe_summary.json — column-less upload
+
+        // NOT YET BROUGHT ACROSS from Field's artifact vocabulary: `scorecard`,
+        // `anchors` (see FieldManifestAssembler.candidates). Adding them is a
+        // *coupled* change, not an additive one: the exhaustive switches named
+        // above each need a real storage-folder / room_scans-column decision.
         // Consequence today: the instrument *layer* round-trips, but a Field
         // manifest that LISTS one of those kinds in `artifacts[]` fails to
         // decode here. Pinned by

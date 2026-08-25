@@ -288,9 +288,11 @@ public final class RoomCaptureService: NSObject {
         frameSinks.add(coach)
         roomUpdateSinks.add(coach)
 
-        let keyframes = KeyframeTelemetryRecorder()
-        keyframeRecorder = keyframes
-        frameSinks.add(keyframes)
+        // The keyframe recorder is created AFTER the scan bundle exists, so its
+        // encode lane can write into `<bundle>/keyframes/` — see below. Reset
+        // here so a bundle-init failure cannot leave a prior scan's recorder in
+        // place.
+        keyframeRecorder = nil
 
         let probe = CaptureStreamProbe()
         streamProbe = probe
@@ -339,6 +341,16 @@ public final class RoomCaptureService: NSObject {
             } else {
                 self.depthRecorder = nil
             }
+
+            // Keyframe recorder — the dense-frame lane (Rendered Room v2). Runs
+            // the same sharpness-gated decision sequence as before AND now
+            // encodes each fired keyframe (full-res HEIC + pose/intrinsics) into
+            // `<bundle>/keyframes/`, tarred to `keyframes.tar` at freeze. A nil
+            // writer inside falls back to decision-only, so keyframe recording is
+            // best-effort and never aborts a scan.
+            let keyframes = KeyframeTelemetryRecorder(bundleURL: writer.bundleURL)
+            self.keyframeRecorder = keyframes
+            self.frameSinks.add(keyframes)
 
             PatinaLog.scan.debug("[RoomCaptureService] v2 scan bundle initialized at \(writer.bundleURL.path)")
         } catch {
@@ -793,6 +805,7 @@ extension RoomCaptureService: RoomCaptureSessionDelegate {
                 analyzer: analyzer,
                 meshAnchors: Array(meshAnchors.values),
                 depthRecorder: depthRecorder,
+                keyframeRecorder: keyframeRecorder,
                 posedPhotoService: posedPhotoService,
                 qualityMetrics: qualityMetrics
             )

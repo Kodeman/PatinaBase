@@ -125,6 +125,10 @@ public struct ScanUploadShadowLeg: Sendable {
         case .coverageHeatmap:  return .coverageHeatmap
         case .bundleManifest:   return .bundleManifest
         case .bundleArchive:    return .bundleArchive
+        // Dense-frame keyframe lane — the interface names all three (00500).
+        case .keyframesArchive: return .keyframesArchive
+        case .keyframeIndex:    return .keyframeIndex
+        case .keyframeSummary:  return .keyframeSummary
         // `hero_frame_url` on both sides — the same slot under two names.
         case .heroThumbnail:    return .heroFrame
         case .depthIndex,

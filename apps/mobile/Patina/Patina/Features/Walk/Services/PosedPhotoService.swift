@@ -311,7 +311,10 @@ public final class PosedPhotoService: NSObject {
 
     // MARK: - Encoding
 
-    private nonisolated static func encodeHEIC(cgImage: CGImage, quality: CGFloat) -> Data? {
+    /// HEIC-encode a CGImage. Internal (not private) so the keyframe lane
+    /// (`KeyframeBundleWriter`) reuses the exact same encoder the posed-photo
+    /// lane uses, rather than a second copy that could drift.
+    nonisolated static func encodeHEIC(cgImage: CGImage, quality: CGFloat) -> Data? {
         let mutable = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(
             mutable,
@@ -325,7 +328,9 @@ public final class PosedPhotoService: NSObject {
         return mutable as Data
     }
 
-    private nonisolated static func encodeJPEG(cgImage: CGImage, quality: CGFloat) -> Data? {
+    /// Internal (see `encodeHEIC`) — the keyframe lane reuses the same JPEG
+    /// fallback so a HEIC-encode failure degrades identically in both lanes.
+    nonisolated static func encodeJPEG(cgImage: CGImage, quality: CGFloat) -> Data? {
         let mutable = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(
             mutable,
