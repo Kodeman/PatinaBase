@@ -501,4 +501,44 @@ struct VisitContextTests {
         #expect(FieldVoiceGesture.forSurface(.voiceSheet) == .tapToStartTapToStop)
         #expect(FieldVoiceGesture.forSurface(.scanContext) == .tapToStartTapToStop)
     }
+
+    @Test func insideAVisitTheDestinationIsAlreadyAnswered() {
+        let site = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now, kind: .site))
+        let sourcing = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now, kind: .sourcing))
+
+        #expect(FieldDestinationPolicy.destination(for: site) == .inbox)
+        #expect(FieldDestinationPolicy.destination(for: sourcing) == .library)
+        #expect(FieldDestinationPolicy.destination(for: .none) == .undecided)
+    }
+
+    @Test func onlyASourcingVisitMayRecommendLibrary() {
+        let sourcing = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now, kind: .sourcing))
+        let site = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now, kind: .site))
+
+        // A confidently classified photo of a damaged baseboard, on a site visit,
+        // must NEVER recommend "mint a product".
+        #expect(FieldDestinationPolicy.recommendation(
+            for: site, hasUnconfirmedGuess: false) == .inbox)
+        #expect(FieldDestinationPolicy.recommendation(
+            for: .none, hasUnconfirmedGuess: false) == .inbox)
+        #expect(FieldDestinationPolicy.recommendation(
+            for: sourcing, hasUnconfirmedGuess: false) == .library)
+        // Even on a market run, an unconfirmed guess still parks it.
+        #expect(FieldDestinationPolicy.recommendation(
+            for: sourcing, hasUnconfirmedGuess: true) == .inbox)
+    }
+
+    /// A STALE sourcing visit is still an open visit — she has not answered
+    /// "where" twice, so the door's answer stands until she ends it.
+    @Test func aStaleVisitStillAnswersTheDestination() {
+        let stale = CaptureVisitState.stale(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now, kind: .sourcing))
+        #expect(FieldDestinationPolicy.destination(for: stale) == .library)
+        #expect(FieldDestinationPolicy.recommendation(
+            for: stale, hasUnconfirmedGuess: false) == .library)
+    }
 }

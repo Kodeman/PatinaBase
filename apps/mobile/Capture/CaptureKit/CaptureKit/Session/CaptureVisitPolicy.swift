@@ -121,3 +121,28 @@ public extension CaptureSessionContextPolicy {
         return closed
     }
 }
+
+/// Spec §7.7 — S3 is RETIRED from the default path, not deleted. It stays the
+/// only caller of `sync.route()`, still reachable from V3 and from
+/// `saveFromCard`'s catch: the deliberate recoverable-choice seam.
+public enum FieldDestinationPolicy {
+    /// Inside a visit the destination is ANSWERED, so S3 does not fire.
+    /// A sourcing visit routes to Library; a site visit routes to inbox.
+    public static func destination(for state: CaptureVisitState) -> CaptureDestination {
+        switch state.context?.kind {
+        case .sourcing: return .library
+        case .site:     return .inbox
+        case nil:       return .undecided
+        }
+    }
+
+    /// Wave 2 held S3's recommendation at `.inbox` regardless of confidence,
+    /// because removing the hardcoded guess flipped the default toward Library —
+    /// including for a photo of a damaged baseboard. Wave 3 lifts that hold for
+    /// EXACTLY one case: an open sourcing visit.
+    public static func recommendation(for state: CaptureVisitState,
+                                      hasUnconfirmedGuess: Bool) -> CaptureDestination {
+        guard state.context?.kind == .sourcing, !hasUnconfirmedGuess else { return .inbox }
+        return .library
+    }
+}

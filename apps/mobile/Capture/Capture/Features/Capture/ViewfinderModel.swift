@@ -374,25 +374,28 @@ final class ViewfinderModel {
         CaptureHaptics.success()
         let id = specimen.id
         cardSpecimen = nil
-        guard specimen.destination != .undecided else {
-            specimen.status = .ready
+        if specimen.destination == .undecided {
+            let resolved = FieldDestinationPolicy.destination(for: visitState)
+            if resolved == .undecided {
+                // No visit: S3 still owns the choice.
+                specimen.status = .ready
+                try? store.save()
+                coordinator.present(.destination(id))
+                return
+            }
+            specimen.destination = resolved
             try? store.save()
-            coordinator.present(.destination(id))
-            return
         }
         Task { @MainActor in
             do {
+                // The program's headline metric, read BEFORE the route: placement
+                // and sync are different axes (FC-R6), so whether this capture
+                // landed on a project does not wait on the server to answer.
+                analytics.event(specimen.isUnplaced ? "capture.unplaced" : "capture.placed", [
+                    "basis": visitState.isVisit ? "visit" : "manual",
+                    "has_room": (specimen.venue?.room?.isEmpty == false) ? "true" : "false"
+                ])
                 try await sync.route(id, to: specimen.destination)
-                // The program's headline metric: whether a capture actually
-                // landed on a project (S1's persisted routing survives on
-                // `specimen.venue` by reference — the same object S1 mutated)
-                // or is committing roving.
-                if let venue = specimen.venue, venue.projectId != nil {
-                    analytics.event("capture.placed", ["basis": "manual",
-                                                        "has_room": String(venue.projectRoomId != nil)])
-                } else {
-                    analytics.event("capture.unplaced", [:])
-                }
                 coordinator.present(specimen.destination == .library
                     ? .savedTerminal(id)
                     : .inboxTerminal(id))
