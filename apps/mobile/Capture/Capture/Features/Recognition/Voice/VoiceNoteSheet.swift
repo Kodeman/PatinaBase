@@ -43,6 +43,10 @@ struct VoiceNoteSheet: View {
         .accessibilityIdentifier(CaptureScreenID.n4Voice.rawValue)
         .task {
             analytics.screen("N4.voice")
+            guard analytics.isFeatureEnabled("field-companion-voice") else {
+                manualFallback = true
+                return
+            }
             if authorized == nil {
                 let ok = await voice.requestAuthorization()
                 authorized = ok

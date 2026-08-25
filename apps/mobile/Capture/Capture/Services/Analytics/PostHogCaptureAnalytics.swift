@@ -58,4 +58,9 @@ final class PostHogCaptureAnalytics: CaptureAnalytics {
         guard enabled else { return }
         PostHogSDK.shared.identify(userID, userProperties: properties)
     }
+
+    func isFeatureEnabled(_ key: String) -> Bool {
+        guard enabled, !key.isEmpty else { return false }
+        return PostHogSDK.shared.isFeatureEnabled(key)
+    }
 }

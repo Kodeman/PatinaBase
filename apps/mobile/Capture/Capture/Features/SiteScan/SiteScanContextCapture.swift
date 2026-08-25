@@ -25,12 +25,19 @@ final class SiteScanContextModel {
     private let projectID: String?
     private let projectRoomID: String?
     private let voice: any VoiceNoteService
+    private let analytics: any CaptureAnalytics
 
     var toast: String?
     var isRecordingVoice = false
     private var partialTranscript = ""
     private var voiceTask: Task<Void, Never>?
     private var recordingScope: CaptureLocalListScope?
+
+    /// Fail-closed (Field Companion W1): the voice-note affordance is absent
+    /// unless the seam answers `true`.
+    var voiceCaptureEnabled: Bool {
+        analytics.isFeatureEnabled("field-companion-voice")
+    }
 
     init(
         store: CaptureStore,
@@ -39,6 +46,7 @@ final class SiteScanContextModel {
         projectID: String?,
         projectRoomID: String?,
         voice: any VoiceNoteService,
+        analytics: any CaptureAnalytics,
         scanSessionIdProvider: @escaping () -> String?,
         frameProvider: @escaping () async -> ContextFrameSnapshot?
     ) {
@@ -48,6 +56,7 @@ final class SiteScanContextModel {
         self.projectID = projectID
         self.projectRoomID = projectRoomID
         self.voice = voice
+        self.analytics = analytics
         self.scanSessionIdProvider = scanSessionIdProvider
         self.frameProvider = frameProvider
     }
@@ -87,6 +96,7 @@ final class SiteScanContextModel {
     }
 
     func toggleVoice() {
+        guard voiceCaptureEnabled else { return }
         if isRecordingVoice { stopVoice() } else { startVoice() }
     }
 
@@ -173,8 +183,10 @@ struct SiteScanContextControls: View {
             }
             HStack(spacing: 14) {
                 pill("camera.fill", "Photo") { Task { await model.capturePhoto() } }
-                pill(model.isRecordingVoice ? "stop.circle.fill" : "mic.fill",
-                     model.isRecordingVoice ? "Stop" : "Note") { model.toggleVoice() }
+                if model.voiceCaptureEnabled {
+                    pill(model.isRecordingVoice ? "stop.circle.fill" : "mic.fill",
+                         model.isRecordingVoice ? "Stop" : "Note") { model.toggleVoice() }
+                }
             }
         }
         .accessibilityElement(children: .contain)
@@ -235,6 +247,7 @@ struct SiteScanContextScreen: View {
                     },
                     projectID: projectID, projectRoomID: projectRoomID,
                     voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory()),
+                    analytics: container.analytics,
                     scanSessionIdProvider: { nil },      // no scan session on a non-Pro device
                     frameProvider: { [container] in
                         guard let frame = try? await container.camera.capture() else { return nil }
