@@ -7,7 +7,10 @@
 //  drops the take AND deletes its audio segments from the media directory. If
 //  the recogniser is unavailable (no mic permission, or the simulator), the
 //  sheet falls to a typed-note entry — the raw audio is always kept alongside
-//  the text when there is one.
+//  the text when there is one. §15.4: when the RECOGNIZER is what is
+//  unavailable the note still records, the transcript pane carries the honest
+//  line instead of a promise of words, and the take falls to the typed editor
+//  when it ends. A note the cap ended says so rather than stopping silently.
 
 import SwiftUI
 import UIKit
@@ -36,6 +39,11 @@ struct VoiceNoteSheet: View {
     /// isRecording would let a still-down finger begin a SECOND note.
     @State private var gestureHeld = false
     @State private var player = VoiceSegmentPlayer()
+    /// §15.4: the note is recording but nothing will transcribe it. Distinct
+    /// from manualFallback, which also covers "no microphone at all".
+    @State private var transcriptionUnavailable = false
+    /// The cap ended the take. Never a silent stop.
+    @State private var capNotice = false
 
     var body: some View {
         RecognitionSheetLayout {
@@ -78,12 +86,13 @@ struct VoiceNoteSheet: View {
             recordingStatus
             waveform
             transcriptCard
-            if hasAudio && transcript.isEmpty {
-                Text("We couldn't make out the words — the audio is here.")
-                    .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.inkSoft)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            // The unavailable-recognizer rung already reads in the transcript
+            // pane; saying we could not make out the words on top of it would
+            // claim an attempt that never happened.
+            if hasAudio && transcript.isEmpty && !transcriptionUnavailable {
+                ladderLine("We couldn't make out the words — the audio is here.")
             }
+            if capNotice { ladderLine(VoiceNoteCopy.capReached) }
             if hasAudio { playbackControl }
             micButton
             RecognitionActionBar(
@@ -100,6 +109,23 @@ struct VoiceNoteSheet: View {
     }
 
     private var hasAudio: Bool { !(result?.audioSegments.isEmpty ?? true) }
+
+    /// One rung of §15.4's ladder, styled once so the four sites cannot drift.
+    private func ladderLine(_ text: String) -> some View {
+        Text(text)
+            .font(CaptureType.footnote)
+            .foregroundStyle(CaptureColor.inkSoft)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// §15.4 — what the transcript pane says when nothing is transcribing it.
+    /// "Your words appear here as you speak…" would be a promise the recorder
+    /// cannot keep on that rung.
+    private var transcriptPlaceholder: String {
+        transcriptionUnavailable
+            ? VoiceNoteCopy.recognitionUnavailable
+            : "Your words appear here as you speak…"
+    }
 
     private var playbackControl: some View {
         Button {
@@ -151,7 +177,7 @@ struct VoiceNoteSheet: View {
 
     private var transcriptCard: some View {
         RecognitionCard {
-            Text(transcript.isEmpty ? "Your words appear here as you speak…" : "“\(transcript)”")
+            Text(transcript.isEmpty ? transcriptPlaceholder : "“\(transcript)”")
                 .font(CaptureType.body)
                 .foregroundStyle(transcript.isEmpty ? CaptureColor.inkSoft : CaptureColor.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -188,9 +214,7 @@ struct VoiceNoteSheet: View {
                 // the recognition-error path (begin()'s catch) arrives with a
                 // real recording already in hand, and the single old line
                 // called that take a missing capability.
-                Text(hasAudio
-                     ? "The words didn't come through. Type them here — the recording stays with the note."
-                     : "Voice capture isn't available here. Type the context and rep details.")
+                Text(manualEntryLine)
                     .font(CaptureType.footnote)
                     .foregroundStyle(CaptureColor.inkSoft)
                 TextEditor(text: $transcript)
@@ -203,12 +227,10 @@ struct VoiceNoteSheet: View {
             // needs it: audio with no words is a note worth keeping, and
             // without the three lines below an audio-only take on the
             // recognition-error route could not be attached at all.
-            if hasAudio && typedTranscript.isEmpty {
-                Text("We couldn't make out the words — the audio is here.")
-                    .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.inkSoft)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if hasAudio && typedTranscript.isEmpty && !transcriptionUnavailable {
+                ladderLine("We couldn't make out the words — the audio is here.")
             }
+            if capNotice { ladderLine(VoiceNoteCopy.capReached) }
             if hasAudio { playbackControl }
             RecognitionActionBar(
                 secondaryTitle: "Discard",
@@ -227,6 +249,17 @@ struct VoiceNoteSheet: View {
         transcript.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// THREE doors lead to this editor and they mean different things: the
+    /// recognizer was unavailable while the note recorded anyway (§15.4), the
+    /// recognition-error path which arrives holding a real recording, and an
+    /// actual absence of voice capture.
+    private var manualEntryLine: String {
+        if transcriptionUnavailable { return VoiceNoteCopy.recognitionUnavailable }
+        return hasAudio
+            ? "The words didn't come through. Type them here — the recording stays with the note."
+            : "Voice capture isn't available here. Type the context and rep details."
+    }
+
     // MARK: - Recording lifecycle
 
     private func begin() {
@@ -241,8 +274,15 @@ struct VoiceNoteSheet: View {
         // holds as .record.
         result = nil
         player.stop()
+        // Cleared BEFORE the start, so a throw on this take cannot leave the
+        // previous take's ladder rung showing on the manual sheet.
+        transcriptionUnavailable = false
+        capNotice = false
         do {
             let stream = try voice.startLiveTranscription()
+            // The note IS recording; only the words are not coming. Asked after
+            // the start, because that is when the recorder resolves it.
+            transcriptionUnavailable = !voice.isTranscribing
             isRecording = true
             startedAt = Date()
             transcript = ""
@@ -291,6 +331,11 @@ struct VoiceNoteSheet: View {
             let r = await voice.finish()
             result = r
             if !r.transcript.isEmpty { transcript = r.transcript }
+            capNotice = r.endedAtCap
+            // §15.4: nothing transcribed this take, so the take is done and the
+            // typed editor is where she finishes it — with the recording
+            // attached, playable, and preserved by VoiceAttachPolicy.
+            if transcriptionUnavailable { manualFallback = true }
             isFinishing = false
         }
     }

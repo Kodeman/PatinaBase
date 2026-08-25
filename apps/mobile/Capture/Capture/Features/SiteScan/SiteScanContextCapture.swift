@@ -30,6 +30,10 @@ final class SiteScanContextModel {
     private var partialTranscript = ""
     private var voiceTask: Task<Void, Never>?
     private var recordingScope: CaptureLocalListScope?
+    /// §15.4: whether the live note is being transcribed at all. A note the
+    /// recognizer could not take is not a note whose words we "couldn't make
+    /// out" — that rung would claim an attempt that never happened.
+    private var noteIsTranscribing = true
 
     /// Fail-closed (Field Companion W1): the voice-note affordance is absent
     /// unless the seam answers `true`.
@@ -109,6 +113,11 @@ final class SiteScanContextModel {
             recordingScope = scope
             isRecordingVoice = true
             partialTranscript = ""
+            // §15.4: the recognizer is unavailable or denied and the note is
+            // recording anyway. Said at the START, so she is not left watching
+            // a silent pill wondering whether anything is happening.
+            noteIsTranscribing = voice.isTranscribing
+            if !noteIsTranscribing { toast = VoiceNoteCopy.recognitionUnavailable }
             voiceTask = Task { [weak self] in
                 do {
                     for try await chunk in stream {
@@ -178,9 +187,19 @@ final class SiteScanContextModel {
             // Held in a local and assigned ONCE at the end: the shipped code set the
             // success toast unconditionally two lines later, so an honest failure
             // message set earlier never rendered at all.
-            let message = transcript.isEmpty
-                ? "We couldn't make out the words — the audio is here."
-                : "Note saved to this room."
+            // The cap outranks the others: §15.4 forbids a silent stop, and a
+            // capped note is by construction one that recorded for twenty
+            // minutes, so "nothing was kept" cannot apply to it.
+            let message: String
+            if result.endedAtCap {
+                message = VoiceNoteCopy.capReached
+            } else if !transcript.isEmpty {
+                message = "Note saved to this room."
+            } else if self.noteIsTranscribing {
+                message = "We couldn't make out the words — the audio is here."
+            } else {
+                message = VoiceNoteCopy.recognitionUnavailable
+            }
             // The honesty repair's own metric: a real recording committing with no
             // words. The guard above already ensures transcript.isEmpty implies
             // hasAudio here — read hasAudio anyway rather than assume it.

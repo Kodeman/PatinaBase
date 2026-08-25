@@ -12,6 +12,12 @@
 //  file cannot be opened the note still records and transcribes to the end —
 //  rotation runs off the segment clock, not off the file — and ships
 //  transcript-only.
+//  Recognition is a BONUS ON TOP of the recording, never a precondition
+//  (§15.4): an unavailable or unauthorized recognizer costs the words, not the
+//  note, so the session, the engine and the first segment are opened either
+//  way and isTranscribing tells the surface which it got. isAvailable goes
+//  false exactly where the audio matters most — a locale that needs the server,
+//  on a site with no signal.
 //  A segment's filename is published ONLY once a buffer has actually been
 //  written to it, so a name never stands for audio that does not exist; a
 //  never-written segment is deleted and reported as no segment at all. (A name
@@ -146,6 +152,14 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// a single byte, so the render thread cannot read it torn.
     private var noteIsActive = false
     private var onDeviceRecognition = false
+    /// Whether the CURRENT note is being transcribed. Set once per note in
+    /// startLiveTranscription() and read by the surfaces through
+    /// isTranscribing — main actor at both ends, so no lock.
+    private var transcribing = false
+    /// The cap ended this note rather than the designer. Reported on
+    /// VoiceNoteResult because the cap finishes the stream NORMALLY and is
+    /// otherwise indistinguishable from a clean stop.
+    private var endedAtCap = false
     private var interruptionObserver: NSObjectProtocol?
     private var configChangeObserver: NSObjectProtocol?
     /// Held so the interruption-resume path can reinstall THE SAME tap, which
@@ -201,13 +215,17 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
+    /// Speech authorization is ASKED FOR but does not gate the note: §15.4's
+    /// rung is that a denied or restricted recognizer still records. The
+    /// microphone is the only permission a voice note actually requires, and
+    /// returning false on a speech denial is what used to send the sheet
+    /// straight to a typed editor with nothing recording behind it.
     public func requestAuthorization() async -> Bool {
-        let speechOK = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+        _ = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
             SFSpeechRecognizer.requestAuthorization { status in
                 cont.resume(returning: status == .authorized)
             }
         }
-        guard speechOK else { return false }
         return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
             AVAudioApplication.requestRecordPermission { granted in
                 cont.resume(returning: granted)
@@ -215,9 +233,21 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         }
     }
 
+    /// authorizationStatus() covers denied AND restricted; isAvailable covers a
+    /// recognizer whose locale needs a server the phone cannot reach.
+    private var recognitionIsAvailable: Bool {
+        SFSpeechRecognizer.authorizationStatus() == .authorized
+            && recognizer?.isAvailable == true
+    }
+
+    @MainActor public var isTranscribing: Bool { transcribing }
+
     @MainActor
     public func startLiveTranscription() throws -> AsyncThrowingStream<TranscriptChunk, Error> {
-        analytics.event("voice.start", ["surface": surface, "note_setting": "solo"])
+        let available = recognitionIsAvailable
+        analytics.event("voice.start", ["surface": surface,
+                                        "note_setting": "solo",
+                                        "transcribing": String(available)])
         latestTranscript = ""
         startedAt = Date()
         stoppedAt = nil
@@ -232,49 +262,42 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         noteIsActive = false
         rotationInFlight = false
         reopenInFlight = false
+        endedAtCap = false
         tapFormat = nil
+        transcribing = available
 
-        guard let recognizer, recognizer.isAvailable else {
-            throw VoiceNoteError.recognizerUnavailable
-        }
-
+        // §15.4. The recognizer guard used to throw HERE — before the session,
+        // before the engine, before openSegment — so an unavailable recognizer
+        // recorded nothing at all, on the one door where the audio matters
+        // most. The audio is the record (R114.1): the session comes first and
+        // recognition is attached only if it can actually run.
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: .duckOthers)
         try session.setActive(true, options: .notifyOthersOnDeactivation)
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
+        let request = available ? SFSpeechAudioBufferRecognitionRequest() : nil
+        request?.shouldReportPartialResults = true
         self.request = request
 
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
-        onDeviceRecognition = recognizer.supportsOnDeviceRecognition
-        request.requiresOnDeviceRecognition = onDeviceRecognition
+        onDeviceRecognition = available && (recognizer?.supportsOnDeviceRecognition ?? false)
+        request?.requiresOnDeviceRecognition = onDeviceRecognition
         noteIsActive = true
         openSegment(format: format)
         observeAudioSessionAndEngine()
 
         return AsyncThrowingStream { continuation in
             self.continuation = continuation
-            self.task = recognizer.recognitionTask(with: request) { [weak self] result, error in
-                if let result {
-                    let text = result.bestTranscription.formattedString
-                    self?.latestTranscript = text
-                    continuation.yield(TranscriptChunk(text: text, isFinal: result.isFinal))
-                    if result.isFinal { continuation.finish() }
-                }
-                if let error {
-                    continuation.finish(throwing: error)
-                    // The OTHER door to an abandoned note (recognition erroring
-                    // out, as opposed to the engine-start failure below). Tears
-                    // the note down itself and emits its own reason:"error"
-                    // voice.finish. VoiceNoteSheet.begin()'s catch also calls
-                    // voice.finish() afterward — safe, because finish() guards
-                    // on noteIsActive and finds nothing left to do by then.
-                    let service = self
-                    DispatchQueue.main.async { service?.endAbandonedNote() }
-                }
+            if let recognizer, let request {
+                self.task = self.startRecognition(recognizer: recognizer,
+                                                  request: request,
+                                                  continuation: continuation)
             }
+            // No else: nothing is yielded on the ladder rung. A chunk here
+            // would BE the transcript — the sheets assign chunk.text straight
+            // to it — so the honest line is a surface state (isTranscribing),
+            // never text that could be attached as her words.
 
             self.installTap(on: inputNode, format: format)
 
@@ -306,7 +329,8 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
                 audioFilename: audioFilename,
                 audioSegments: audioSegments,
                 onDevice: onDeviceRecognition,
-                durationSeconds: recordedDuration
+                durationSeconds: recordedDuration,
+                endedAtCap: endedAtCap
             )
         }
         // Fixes the over-report: a note the cap already ended has an EARLIER
@@ -331,7 +355,8 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             audioFilename: audioFilename,
             audioSegments: audioSegments,
             onDevice: onDeviceRecognition,
-            durationSeconds: duration
+            durationSeconds: duration,
+            endedAtCap: endedAtCap
         )
     }
 
@@ -356,6 +381,35 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             "on_device": String(onDeviceRecognition),
             "reason": reason
         ])
+    }
+
+    /// The recognition task for a note's FIRST request. Lifted out of
+    /// startLiveTranscription() so the ladder branch above stays legible; the
+    /// body is unchanged.
+    private func startRecognition(
+        recognizer: SFSpeechRecognizer,
+        request: SFSpeechAudioBufferRecognitionRequest,
+        continuation: AsyncThrowingStream<TranscriptChunk, Error>.Continuation
+    ) -> SFSpeechRecognitionTask {
+        recognizer.recognitionTask(with: request) { [weak self] result, error in
+            if let result {
+                let text = result.bestTranscription.formattedString
+                self?.latestTranscript = text
+                continuation.yield(TranscriptChunk(text: text, isFinal: result.isFinal))
+                if result.isFinal { continuation.finish() }
+            }
+            if let error {
+                continuation.finish(throwing: error)
+                // The OTHER door to an abandoned note (recognition erroring
+                // out, as opposed to the engine-start failure). Tears the note
+                // down itself and emits its own reason:"error" voice.finish.
+                // VoiceNoteSheet.begin()'s catch also calls voice.finish()
+                // afterward — safe, because finish() guards on noteIsActive and
+                // finds nothing left to do by then.
+                let service = self
+                DispatchQueue.main.async { service?.endAbandonedNote() }
+            }
+        }
     }
 
     /// The ONE tap in the class. The start path, the interruption-resume path
@@ -557,6 +611,11 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             // Date() against — that gap is the over-report finish() used to have.
             stoppedAt = Date()
             segmentStartedAt = nil
+            // Carried on VoiceNoteResult so both surfaces can say the note hit
+            // the cap. The cap finishes the stream NORMALLY, so without this
+            // flag a capped note is indistinguishable from a clean stop and
+            // §15.4's "never a silent stop" cannot be honoured.
+            endedAtCap = true
             // NOTHING is published to the consumer from here. The stream is
             // finished inside endAtCap(), AFTER the final segment is closed and
             // its name appended — see that method. The UI half of ending a note
@@ -712,6 +771,4 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             analytics.event("voice.audio_write_failed", ["reason": reason])
         }
     }
-
-    public enum VoiceNoteError: Error { case recognizerUnavailable }
 }

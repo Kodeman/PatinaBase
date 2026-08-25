@@ -74,9 +74,14 @@ public struct VoiceNoteResult: Sendable {
     /// voice.finish reports it, and the shipped permission string promises it.
     public let onDevice: Bool
     public let durationSeconds: Double
+    /// The 20-minute / 24-segment cap ended this note, not the designer. The
+    /// surfaces read it to say so: §15.4 forbids a silent stop, and the cap is
+    /// otherwise indistinguishable from a normal end because it finishes the
+    /// stream NORMALLY.
+    public let endedAtCap: Bool
     public init(transcript: String, audioFilename: String?,
                 audioSegments: [String] = [], onDevice: Bool = false,
-                durationSeconds: Double) {
+                durationSeconds: Double, endedAtCap: Bool = false) {
         self.transcript = transcript
         self.audioFilename = audioFilename
         self.audioSegments = audioSegments.isEmpty
@@ -84,12 +89,23 @@ public struct VoiceNoteResult: Sendable {
             : audioSegments
         self.onDevice = onDevice
         self.durationSeconds = durationSeconds
+        self.endedAtCap = endedAtCap
     }
 }
 public protocol VoiceNoteService: Sendable {
     func requestAuthorization() async -> Bool
     @MainActor func startLiveTranscription() throws -> AsyncThrowingStream<TranscriptChunk, Error>
     @MainActor func finish() async -> VoiceNoteResult
+    /// Whether the note that just started is also being TRANSCRIBED. False
+    /// when the recognizer is unavailable or unauthorized: §15.4 — the note
+    /// still records, and the surface says the honest line instead of a
+    /// placeholder promising words that are never coming.
+    @MainActor var isTranscribing: Bool { get }
+}
+
+public extension VoiceNoteService {
+    /// A conformer that always transcribes need say nothing.
+    @MainActor var isTranscribing: Bool { true }
 }
 
 // ── N5 Smart field guess (STUB now; Core ML later) ──
