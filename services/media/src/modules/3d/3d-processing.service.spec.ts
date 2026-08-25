@@ -2,11 +2,26 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { ThreeDProcessingService, ThreeDValidation } from './3d-processing.service';
 import { OCIStorageService } from '../storage/oci-storage.service';
+import { Model3DService } from './model-3d.service';
+
+// model-3d.service.ts imports `NodeIO` from `@gltf-transform/core` at the
+// top level and constructs one eagerly in its constructor — the same
+// ESM-parsing crash documented in model-3d.service.spec.ts. Mock it here too
+// so it never loads; ThreeDProcessingService's two public methods are pure
+// delegation to it, so a stub covering `validate3DModel`/`process3DAsset` is
+// all this spec needs.
+jest.mock('./model-3d.service', () => ({
+  Model3DService: jest.fn().mockImplementation(() => ({
+    validate3DModel: jest.fn(),
+    process3DAsset: jest.fn(),
+  })),
+}));
 
 describe('ThreeDProcessingService', () => {
   let service: ThreeDProcessingService;
   let config: jest.Mocked<ConfigService>;
   let ociStorage: jest.Mocked<OCIStorageService>;
+  let model3DService: jest.Mocked<Model3DService>;
 
   beforeEach(async () => {
     const mockConfig = {
@@ -20,7 +35,9 @@ describe('ThreeDProcessingService', () => {
 
     const mockOCIStorage = {
       generate3DKey: jest.fn((assetId, format) => `processed/3d/${assetId}/model.${format}`),
-      generatePreviewKey: jest.fn((assetId, kind, variant) => `previews/3d/${assetId}/${variant}.jpg`),
+      generatePreviewKey: jest.fn(
+        (assetId, kind, variant) => `previews/3d/${assetId}/${variant}.jpg`,
+      ),
       putObject: jest.fn(),
     };
 
@@ -29,273 +46,106 @@ describe('ThreeDProcessingService', () => {
         ThreeDProcessingService,
         { provide: ConfigService, useValue: mockConfig },
         { provide: OCIStorageService, useValue: mockOCIStorage },
+        Model3DService,
       ],
     }).compile();
 
     service = module.get<ThreeDProcessingService>(ThreeDProcessingService);
     config = module.get(ConfigService) as jest.Mocked<ConfigService>;
     ociStorage = module.get(OCIStorageService) as jest.Mocked<OCIStorageService>;
+    model3DService = module.get(Model3DService) as jest.Mocked<Model3DService>;
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
+  // NOTE ON DISPOSITION: ThreeDProcessingService is now a thin delegating
+  // shim — per its own doc comment, "Legacy 3D Processing Service ...
+  // delegates to Model3DService" — and validate3DModel()/process3DModel()
+  // do exactly that (call model3DService.validate3DModel /
+  // .process3DAsset and either return the result or catch+fall back). The
+  // detailed per-field validation cases that used to live here (triangle
+  // count, node count, texture count/size, PBR conversion, animations,
+  // axis, aspect-ratio-style warnings) all tested a private parseModel()
+  // implementation that no longer exists on this class — that logic now
+  // lives in ModelParserService + ModelValidatorService, reached through
+  // Model3DService.validate3DModel(). Those cases are deleted here rather
+  // than ported 1:1, since porting them would just re-assert the OLD
+  // shim's own dead code; the two tests below instead cover what this
+  // class actually still does (delegate, and the error fallback shape).
+  // model-3d.service.spec.ts covers Model3DService's own wiring of
+  // ModelParserService -> ModelValidatorService, but neither that spec nor
+  // any other file in this module currently exercises ModelValidatorService's
+  // threshold/warning logic with real inputs — flagged in the task report
+  // as a coverage gap, not fixed here (out of scope for a suite repair).
   describe('validate3DModel', () => {
-    it('should validate model within limits', async () => {
+    it('should delegate to Model3DService and return its result', async () => {
       const buffer = Buffer.from('valid 3d model');
       const format = 'glb';
-
-      // Mock the parseModel method to return valid stats
-      jest.spyOn(service as any, 'parseModel').mockResolvedValue({
-        triangleCount: 150000,
-        nodeCount: 45,
-        materialCount: 5,
-        textureCount: 6,
-        hasAnimations: false,
-        upAxis: 'Y',
-        textures: [
-          { name: 'baseColor', width: 2048, height: 2048 },
-          { name: 'normal', width: 2048, height: 2048 },
-        ],
-        materials: [{ name: 'material_0', type: 'PBR_METALLIC_ROUGHNESS' }],
-      });
-
-      const result = await service.validate3DModel(buffer, format);
-
-      expect(result.valid).toBe(true);
-      expect(result.issues).toHaveLength(0);
-      expect(result.stats.triCount).toBe(150000);
-      expect(result.stats.nodeCount).toBe(45);
-    });
-
-    it('should reject model with too many triangles', async () => {
-      const buffer = Buffer.from('high poly model');
-      const format = 'glb';
-
-      jest.spyOn(service as any, 'parseModel').mockResolvedValue({
-        triangleCount: 600000, // Exceeds 500k limit
-        nodeCount: 30,
-        materialCount: 3,
-        textureCount: 4,
-        hasAnimations: false,
-        upAxis: 'Y',
-        textures: [],
-        materials: [],
-      });
+      const validation: ThreeDValidation = {
+        valid: true,
+        issues: [],
+        stats: {
+          totalVertices: 1000,
+          totalTriangles: 150000,
+          totalNodes: 45,
+          totalMeshes: 2,
+          totalMaterials: 5,
+          totalTextures: 6,
+          totalAnimations: 0,
+          fileSizeBytes: buffer.length,
+          complexityScore: 25,
+        },
+        recommendations: [],
+      };
+      (model3DService.validate3DModel as jest.Mock).mockResolvedValue(validation);
 
       const result = await service.validate3DModel(buffer, format);
 
-      expect(result.valid).toBe(false);
-      expect(result.issues).toContain(expect.stringContaining('Triangle count'));
+      expect(model3DService.validate3DModel).toHaveBeenCalledWith(buffer, format);
+      expect(result).toBe(validation);
     });
 
-    it('should reject model with too many nodes', async () => {
-      const buffer = Buffer.from('complex hierarchy');
-      const format = 'glb';
-
-      jest.spyOn(service as any, 'parseModel').mockResolvedValue({
-        triangleCount: 100000,
-        nodeCount: 600, // Exceeds 500 limit
-        materialCount: 3,
-        textureCount: 4,
-        hasAnimations: false,
-        upAxis: 'Y',
-        textures: [],
-        materials: [],
-      });
-
-      const result = await service.validate3DModel(buffer, format);
-
-      expect(result.valid).toBe(false);
-      expect(result.issues).toContain(expect.stringContaining('Node count'));
-    });
-
-    it('should reject model with too many textures', async () => {
-      const buffer = Buffer.from('many textures');
-      const format = 'glb';
-
-      jest.spyOn(service as any, 'parseModel').mockResolvedValue({
-        triangleCount: 100000,
-        nodeCount: 30,
-        materialCount: 5,
-        textureCount: 10, // Exceeds 8 limit
-        hasAnimations: false,
-        upAxis: 'Y',
-        textures: [],
-        materials: [],
-      });
-
-      const result = await service.validate3DModel(buffer, format);
-
-      expect(result.valid).toBe(false);
-      expect(result.issues).toContain(expect.stringContaining('Texture count'));
-    });
-
-    it('should warn about oversized textures', async () => {
-      const buffer = Buffer.from('large textures');
-      const format = 'glb';
-
-      jest.spyOn(service as any, 'parseModel').mockResolvedValue({
-        triangleCount: 100000,
-        nodeCount: 30,
-        materialCount: 3,
-        textureCount: 2,
-        hasAnimations: false,
-        upAxis: 'Y',
-        textures: [
-          { name: 'baseColor', width: 8192, height: 8192 }, // Too large
-        ],
-        materials: [],
-      });
-
-      const result = await service.validate3DModel(buffer, format);
-
-      expect(result.warnings).toContain(expect.stringContaining('exceeds maximum size'));
-    });
-
-    it('should warn about undersized textures', async () => {
-      const buffer = Buffer.from('small textures');
-      const format = 'glb';
-
-      jest.spyOn(service as any, 'parseModel').mockResolvedValue({
-        triangleCount: 100000,
-        nodeCount: 30,
-        materialCount: 3,
-        textureCount: 2,
-        hasAnimations: false,
-        upAxis: 'Y',
-        textures: [
-          { name: 'baseColor', width: 512, height: 512 }, // Below recommended
-        ],
-        materials: [],
-      });
-
-      const result = await service.validate3DModel(buffer, format);
-
-      expect(result.warnings).toContain(expect.stringContaining('below recommended minimum'));
-    });
-
-    it('should warn about non-PBR materials', async () => {
-      const buffer = Buffer.from('phong materials');
-      const format = 'glb';
-
-      jest.spyOn(service as any, 'parseModel').mockResolvedValue({
-        triangleCount: 100000,
-        nodeCount: 30,
-        materialCount: 2,
-        textureCount: 3,
-        hasAnimations: false,
-        upAxis: 'Y',
-        textures: [],
-        materials: [
-          { name: 'phong_material', type: 'PHONG' },
-        ],
-      });
-
-      const result = await service.validate3DModel(buffer, format);
-
-      expect(result.warnings).toContain(expect.stringContaining('will be converted to PBR'));
-    });
-
-    it('should warn about animations', async () => {
-      const buffer = Buffer.from('animated model');
-      const format = 'glb';
-
-      jest.spyOn(service as any, 'parseModel').mockResolvedValue({
-        triangleCount: 100000,
-        nodeCount: 30,
-        materialCount: 3,
-        textureCount: 4,
-        hasAnimations: true,
-        upAxis: 'Y',
-        textures: [],
-        materials: [],
-      });
-
-      const result = await service.validate3DModel(buffer, format);
-
-      expect(result.warnings).toContain(expect.stringContaining('animations'));
-    });
-
-    it('should warn about non-Y-up axis', async () => {
-      const buffer = Buffer.from('z-up model');
-      const format = 'glb';
-
-      jest.spyOn(service as any, 'parseModel').mockResolvedValue({
-        triangleCount: 100000,
-        nodeCount: 30,
-        materialCount: 3,
-        textureCount: 4,
-        hasAnimations: false,
-        upAxis: 'Z',
-        textures: [],
-        materials: [],
-      });
-
-      const result = await service.validate3DModel(buffer, format);
-
-      expect(result.warnings).toContain(expect.stringContaining('will be converted to Y-up'));
-    });
-
-    it('should handle parsing errors gracefully', async () => {
+    it('should catch Model3DService errors and return a VALIDATION_FAILED fallback', async () => {
       const buffer = Buffer.from('invalid model');
       const format = 'glb';
-
-      jest.spyOn(service as any, 'parseModel').mockRejectedValue(new Error('Parse failed'));
+      (model3DService.validate3DModel as jest.Mock).mockRejectedValue(new Error('Parse failed'));
 
       const result = await service.validate3DModel(buffer, format);
 
       expect(result.valid).toBe(false);
-      expect(result.issues).toContain(expect.stringContaining('Failed to parse model'));
+      expect(result.issues[0]).toMatchObject({
+        code: 'VALIDATION_FAILED',
+        message: expect.stringContaining('Parse failed'),
+      });
+      expect(result.stats.fileSizeBytes).toBe(buffer.length);
     });
   });
 
   describe('process3DModel', () => {
-    it('should process valid 3D model', async () => {
+    it('should delegate to Model3DService.process3DAsset and return its result', async () => {
       const assetId = 'asset-3d-123';
       const sourceBuffer = Buffer.from('3d model data');
       const format = 'glb';
-
-      // Mock all processing steps
-      jest.spyOn(service as any, 'normalizeModel').mockResolvedValue({});
-      jest.spyOn(service as any, 'optimizeGeometry').mockResolvedValue({
-        triangleCount: 120000,
-        nodeCount: 40,
-        materialCount: 5,
-        textureCount: 6,
-        qcIssues: [],
-      });
-      jest.spyOn(service as any, 'optimizeMaterialsAndTextures').mockResolvedValue({});
-      jest.spyOn(service as any, 'generateLODs').mockResolvedValue([
-        { lod: 0, triCount: 120000, key: 'lod0.glb' },
-        { lod: 1, triCount: 60000, key: 'lod1.glb' },
-        { lod: 2, triCount: 30000, key: 'lod2.glb' },
-      ]);
-      jest.spyOn(service as any, 'exportGLB').mockResolvedValue(Buffer.from('glb data'));
-      jest.spyOn(service as any, 'exportUSDZ').mockResolvedValue(Buffer.from('usdz data'));
-      jest.spyOn(service as any, 'generateSnapshots').mockResolvedValue({
-        front: 'previews/3d/asset-3d-123/front.jpg',
-        iso: 'previews/3d/asset-3d-123/iso.jpg',
-        top: 'previews/3d/asset-3d-123/top.jpg',
-      });
-      jest.spyOn(service as any, 'calculateDimensions').mockResolvedValue({
-        widthM: 1.5,
-        heightM: 0.8,
-        depthM: 0.6,
-        volumeM3: 0.72,
-      });
-      jest.spyOn(service as any, 'validateARReadiness').mockResolvedValue(true);
+      const metadata = {
+        glbKey: 'processed/3d/asset-3d-123/model.glb',
+        usdzKey: 'processed/3d/asset-3d-123/model.usdz',
+        triCount: 120000,
+        arReady: true,
+        lods: [
+          { lod: 0, triCount: 120000, key: 'lod0.glb' },
+          { lod: 1, triCount: 60000, key: 'lod1.glb' },
+          { lod: 2, triCount: 30000, key: 'lod2.glb' },
+        ],
+        snapshots: { front: 'front.jpg', iso: 'iso.jpg', top: 'top.jpg' },
+      };
+      (model3DService.process3DAsset as jest.Mock).mockResolvedValue(metadata);
 
       const result = await service.process3DModel(assetId, sourceBuffer, format);
 
-      expect(result.glbKey).toContain('model.glb');
-      expect(result.usdzKey).toContain('model.usdz');
-      expect(result.triCount).toBe(120000);
-      expect(result.arReady).toBe(true);
-      expect(result.lods).toHaveLength(3);
-      expect(result.snapshots).toBeDefined();
-      expect(ociStorage.putObject).toHaveBeenCalledTimes(2); // GLB + USDZ
+      expect(model3DService.process3DAsset).toHaveBeenCalledWith(assetId, sourceBuffer, format);
+      expect(result).toBe(metadata);
     });
   });
 
