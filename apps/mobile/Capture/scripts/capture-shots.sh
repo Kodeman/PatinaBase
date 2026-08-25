@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# capture-shots.sh — sweep every screen in the 71-screen matrix and save a PNG
+# capture-shots.sh — sweep every built screen in the matrix and save a PNG
 # of each, using only the simulator + simctl (no MCP needed). The CLI "visual
 # regression" counterpart to driving the app interactively via blitz-iphone.
 #
@@ -8,7 +8,7 @@
 # (gitignored); override with CAPTURE_SHOTS_DIR.
 #
 # Usage:
-#   scripts/capture-shots.sh                      # all 71 screens
+#   scripts/capture-shots.sh                      # all 72 built screens
 #   scripts/capture-shots.sh C5 N1 S3             # only the given screens (prefix match)
 #   CAPTURE_SIM="iPhone 17 Pro" scripts/capture-shots.sh
 set -euo pipefail
@@ -37,13 +37,18 @@ ALL_SCREENS=(
   M1.inbox M2.thread
   G1.arriving G2.inspection G3.outcome
   Q1.qr-scan Q2.qr-approve
-  F1.scan-setup F2.site-scan F3.scan-review F4.scan-upload
+  F1.scan-setup F1.context F2.site-scan F3.scan-review F4.scan-upload
   SR01.site-hub SR02.composer SR03.item-config SR04.assign-send
   SR05.tracker SR06.review-inbox SR07.measure-review SR08.photo-review
   SR09.approval SR10.binder-rooms SR11.binder-detail SR12.binder-history
   SR13.guest-landing SR14.guest-checklist SR15.guest-measure SR16.guest-photo
   SR17.guest-queue SR18.guest-receipt SR19.guest-done SR20.guest-returned
 )
+
+# Not swept: V0.visit, C6.voice and V4.visit-review. Their CaptureScreenID cases
+# exist (the enum is a frozen seam edited once, wave 2) but the screens behind
+# them are waves 3–4. Sweeping them would produce a PNG of C1 filed under
+# another screen's name, which is worse than a gap.
 
 # Optional filter: keep screens whose suffix starts with any given prefix (e.g. "C5", "N").
 SCREENS=()
