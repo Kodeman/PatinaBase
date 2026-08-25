@@ -221,4 +221,263 @@ struct ProjectCacheTests {
         // (name) lifts "Alpha"; key 4 (id) settles the two "Same" rows deterministically.
         #expect(ordered.map(\.id) == ["b", "c", "d", "a"])
     }
+
+    // ── The cache itself (package 3-3) ──
+
+    private final class StubProjectsService: ProjectsService, @unchecked Sendable {
+        var list: [FieldProject] = []
+        var detail: [String: FieldProjectDetail] = [:]
+        var listShouldThrow = false
+        struct Boom: Error {}
+
+        func listProjects() async throws -> [FieldProject] {
+            if listShouldThrow { throw Boom() }
+            return list
+        }
+        func projectDetail(id: String) async throws -> FieldProjectDetail {
+            guard let d = detail[id] else { throw Boom() }
+            return d
+        }
+    }
+
+    @Test func refreshStoresProjectsScopedToTheOwner() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let service = StubProjectsService()
+        service.list = [FieldProject(id: "p1", name: "Maple St", status: "active")]
+        let cache = CaptureProjectCache(store: store, projects: service)
+
+        #expect(await cache.refreshList(owner: owner))
+        let mine = cache.snapshots(owner: owner)
+        #expect(mine.map(\.id) == ["p1"])
+
+        let other = CaptureOwnerIdentity(userID: "u2", workspaceID: "w2")!
+        #expect(cache.snapshots(owner: other).isEmpty)
+    }
+
+    @Test func refreshFailureKeepsTheCacheAndReportsFalse() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let service = StubProjectsService()
+        service.list = [FieldProject(id: "p1", name: "Maple St", status: "active")]
+        let cache = CaptureProjectCache(store: store, projects: service)
+        _ = await cache.refreshList(owner: owner)
+
+        service.listShouldThrow = true
+        #expect(await cache.refreshList(owner: owner) == false)
+        #expect(cache.snapshots(owner: owner).map(\.name) == ["Maple St"])
+    }
+
+    @Test func detailRefreshStoresBothRoomLanesSeparately() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let service = StubProjectsService()
+        let project = FieldProject(id: "p1", name: "Maple St", status: "active")
+        service.list = [project]
+        service.detail["p1"] = FieldProjectDetail(
+            project: project,
+            specRooms: [FieldProjectRoom(id: "sr1", name: "Living")],
+            rooms: [FieldProjectRoom(id: "r1", name: "Living"),
+                    FieldProjectRoom(id: "r2", name: "Dining")])
+        let cache = CaptureProjectCache(store: store, projects: service)
+        _ = await cache.refreshList(owner: owner)
+        #expect(await cache.refreshDetail(projectID: "p1", owner: owner))
+
+        let snap = try #require(cache.snapshots(owner: owner).first)
+        #expect(snap.specRooms.map(\.id) == ["sr1"])
+        #expect(snap.rooms.map(\.id) == ["r1", "r2"])
+    }
+
+    @Test func theTwoRoomLanesSurviveASameShapedRefreshWithoutCrossing() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let service = StubProjectsService()
+        let project = FieldProject(id: "p1", name: "Maple St", status: "active")
+        service.list = [project]
+        // Same count, same names, DIFFERENT ids. FC-R5's two lanes are both
+        // `[FieldProjectRoom]`, so a transposed assignment compiles clean; a
+        // fixture where the lanes merely differ in length would let a swap hide.
+        service.detail["p1"] = FieldProjectDetail(
+            project: project,
+            specRooms: [FieldProjectRoom(id: "project-room-1", name: "Living"),
+                        FieldProjectRoom(id: "project-room-2", name: "Kitchen")],
+            rooms: [FieldProjectRoom(id: "room-1", name: "Living"),
+                    FieldProjectRoom(id: "room-2", name: "Kitchen")])
+        let cache = CaptureProjectCache(store: store, projects: service)
+        _ = await cache.refreshList(owner: owner)
+        #expect(await cache.refreshDetail(projectID: "p1", owner: owner))
+
+        let snap = try #require(cache.snapshots(owner: owner).first)
+        #expect(snap.specRooms.map(\.id) == ["project-room-1", "project-room-2"])
+        #expect(snap.rooms.map(\.id) == ["room-1", "room-2"])
+        // The names are identical on both lanes, which is exactly why the merge
+        // is by trimmed name and the identity is never borrowed across it.
+        #expect(snap.specRooms.map(\.name) == snap.rooms.map(\.name))
+    }
+
+    @Test func filingLearnsARunningCentroid() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let service = StubProjectsService()
+        service.list = [FieldProject(id: "p1", name: "Maple St", status: "active")]
+        let cache = CaptureProjectCache(store: store, projects: service)
+        _ = await cache.refreshList(owner: owner)
+
+        cache.recordFiling(projectID: "p1",
+                           at: CaptureCoordinate(latitude: 43.00, longitude: -89.00),
+                           owner: owner)
+        cache.recordFiling(projectID: "p1",
+                           at: CaptureCoordinate(latitude: 43.02, longitude: -89.02),
+                           owner: owner)
+
+        let snap = try #require(cache.snapshots(owner: owner).first)
+        #expect(snap.filedCaptureCount == 2)
+        let centroid = try #require(snap.lastFiledCoordinate)
+        #expect(abs(centroid.latitude - 43.01) < 0.0001)
+        #expect(abs(centroid.longitude - (-89.01)) < 0.0001)
+    }
+
+    @Test func aProjectCreatedOfflineIsStillOnTheDoor() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        // Exactly what S2CreateProjectScreen writes when the create call fails:
+        // a ref with a name, an owner and NO remoteId.
+        let local = CaptureProjectRef(remoteId: nil, name: "Kippley residence", owner: owner)
+        store.context.insert(local)
+        try store.save()
+
+        let service = StubProjectsService()
+        service.listShouldThrow = true
+        let cache = CaptureProjectCache(store: store, projects: service)
+
+        let snaps = cache.snapshots(owner: owner)
+        let mine = try #require(snaps.first { $0.name == "Kippley residence" })
+        #expect(mine.id == local.id.uuidString)
+        #expect(mine.isAwaitingSync)
+    }
+
+    @Test func evictionNeverDeletesARowTheCacheDidNotCreate() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let ancient = now.addingTimeInterval(-CaptureProjectCachePolicy.evictAfter - 1)
+
+        // (a) S2's row: created locally, never refreshed by the cache.
+        let s2Row = CaptureProjectRef(remoteId: "p-local", name: "Kippley", owner: owner)
+        s2Row.lastVisitedAt = ancient
+        // (b) A cache row that IS old enough to evict, but a capture points at it.
+        let referenced = CaptureProjectRef(remoteId: "p-referenced", name: "Harbor", owner: owner)
+        referenced.lastRefreshedAt = ancient
+        // (c) A cache row nothing references — the only legitimate eviction.
+        let orphan = CaptureProjectRef(remoteId: "p-orphan", name: "Old job", owner: owner)
+        orphan.lastRefreshedAt = ancient
+        for ref in [s2Row, referenced, orphan] { store.context.insert(ref) }
+
+        let capture = store.newDraft(owner: owner)
+        capture.venue = VenueStamp(projectId: "p-referenced", projectName: "Harbor")
+        try store.save()
+
+        let service = StubProjectsService()
+        service.list = [FieldProject(id: "p1", name: "Maple St", status: "active")]
+        let cache = CaptureProjectCache(store: store, projects: service)
+        _ = await cache.refreshList(owner: owner, now: now)
+
+        let survivors = Set(cache.snapshots(owner: owner, now: now).map(\.id))
+        #expect(survivors.contains("p-local"))       // S2 owns it; the cache must not
+        #expect(survivors.contains("p-referenced"))  // a capture names it
+        #expect(!survivors.contains("p-orphan"))     // this one, and only this one
+    }
+
+    @Test func evictionSparesAProjectWhoseOnlyReferentIsAnUnplacedCapture() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let ancient = now.addingTimeInterval(-CaptureProjectCachePolicy.evictAfter - 1)
+
+        let candidate = CaptureProjectRef(remoteId: "p-unplaced", name: "Kippley", owner: owner)
+        candidate.lastRefreshedAt = ancient
+        // Nothing has been filed yet — which is the whole point. A guard built on
+        // filedCaptureCount reads this project as unreferenced and deletes the row
+        // the one capture still waiting on Today depends on.
+        candidate.filedCaptureCount = 0
+        store.context.insert(candidate)
+
+        let capture = store.newDraft(owner: owner)
+        capture.venue = VenueStamp(projectId: "p-unplaced", projectName: "Kippley")
+        #expect(capture.placementProjectId == nil)
+        try store.save()
+
+        let service = StubProjectsService()
+        let cache = CaptureProjectCache(store: store, projects: service)
+        _ = await cache.refreshList(owner: owner, now: now)
+
+        #expect(cache.snapshots(owner: owner, now: now).map(\.id) == ["p-unplaced"])
+    }
+
+    @Test func evictionSparesAProjectACaptureIsPlacedInto() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let ancient = now.addingTimeInterval(-CaptureProjectCachePolicy.evictAfter - 1)
+
+        // Placement is the SECOND way a capture names a project, and it carries no
+        // venue stamp of its own — a guard that reads only `venue` misses it.
+        let placed = CaptureProjectRef(remoteId: "p-placed", name: "Harbor", owner: owner)
+        placed.lastRefreshedAt = ancient
+        let orphan = CaptureProjectRef(remoteId: "p-orphan", name: "Old job", owner: owner)
+        orphan.lastRefreshedAt = ancient
+        for ref in [placed, orphan] { store.context.insert(ref) }
+
+        let capture = store.newDraft(owner: owner)
+        capture.placementProjectId = "p-placed"
+        #expect(capture.venue == nil)
+        try store.save()
+
+        let service = StubProjectsService()
+        let cache = CaptureProjectCache(store: store, projects: service)
+        _ = await cache.refreshList(owner: owner, now: now)
+
+        #expect(cache.snapshots(owner: owner, now: now).map(\.id) == ["p-placed"])
+    }
+
+    @Test func recordVisitLiftsAProjectToTheTopOfTheDoor() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let service = StubProjectsService()
+        service.list = [FieldProject(id: "p1", name: "Alpha", status: "active"),
+                        FieldProject(id: "p2", name: "Zulu", status: "active")]
+        let cache = CaptureProjectCache(store: store, projects: service)
+        _ = await cache.refreshList(owner: owner, now: now)
+        #expect(cache.snapshots(owner: owner, now: now).map(\.id) == ["p1", "p2"])
+
+        cache.recordVisit(projectID: "p2", owner: owner, now: now)
+
+        #expect(cache.snapshots(owner: owner, now: now).map(\.id) == ["p2", "p1"])
+    }
+
+    @Test func filingAndVisitingAProjectCreatedOfflineUseItsLocalID() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let local = CaptureProjectRef(remoteId: nil, name: "Kippley residence", owner: owner)
+        store.context.insert(local)
+        try store.save()
+
+        let service = StubProjectsService()
+        service.listShouldThrow = true
+        let cache = CaptureProjectCache(store: store, projects: service)
+
+        cache.recordVisit(projectID: local.id.uuidString, owner: owner, now: now)
+        cache.recordFiling(projectID: local.id.uuidString,
+                           at: CaptureCoordinate(latitude: 43.07, longitude: -89.4),
+                           owner: owner, now: now)
+
+        let snap = try #require(cache.snapshots(owner: owner, now: now).first)
+        #expect(snap.filedCaptureCount == 1)
+        #expect(snap.lastVisitedAt == now)
+        #expect(snap.lastFiledCoordinate == CaptureCoordinate(latitude: 43.07, longitude: -89.4))
+        // Still awaiting sync: filing against it does not invent a `projects.id`.
+        #expect(snap.isAwaitingSync)
+    }
 }
