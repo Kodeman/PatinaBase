@@ -213,14 +213,23 @@ struct VoiceNoteSheet: View {
         specimen.voiceTranscript = text
         specimen.voiceAudioFilename = result?.audioFilename
         specimen.voiceAudioSegmentsRaw = result?.audioSegments
-        // attach() is shared with the manual-entry fallback: with no recorder
-        // result the text was typed, and 'designer' is the schema's word for it
-        // (00530). Labelling it device_partial would claim speech and imply audio.
-        specimen.voiceTranscriptSourceRaw = result.map {
+        // attach() is shared with the manual-entry fallback, and a result that
+        // carries NEITHER a transcript NOR a segment is not a recording: an
+        // engine-start failure finishes the stream synchronously, before
+        // startLiveTranscription() even returns, so the sheet's error path hands
+        // back an empty result and the text above was typed. That is 'designer'
+        // (00530) — labelling it device_partial would claim speech and imply
+        // audio, and reporting a duration would time a note nobody spoke.
+        // EITHER signal means a real recording, so a note with audio but no
+        // words still attaches as device_partial and keeps its segments.
+        let recorded = result.flatMap {
+            $0.transcript.isEmpty && $0.audioSegments.isEmpty ? nil : $0
+        }
+        specimen.voiceTranscriptSourceRaw = recorded.map {
             $0.transcript.isEmpty ? "device_partial" : "device"
         } ?? "designer"
         specimen.captureKindRaw = "note"
-        specimen.voiceDurationSeconds = result?.durationSeconds
+        specimen.voiceDurationSeconds = recorded?.durationSeconds
         specimen.setValue(text, for: .note, source: .voice)
         try? store.save()
         analytics.event("N4.attach", ["chars": String(text.count)])
