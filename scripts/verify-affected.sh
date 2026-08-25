@@ -33,20 +33,28 @@ matches() { printf '%s\n' "$changed_files" | grep -Eq "$1"; }
 
 run pnpm lint:skills
 
+# App portal checks route type-check/build through turbo so `^build` builds each
+# portal's workspace dependencies first (e.g. @patina/api-routes, @patina/types'
+# dist-only `media` subpath) and the portal consumes built dists rather than
+# design-system source. A raw `pnpm --filter <portal> type-check` skips that graph
+# and fails with TS2307 for those deps — the apps-side half of the media-type-debt
+# gap (docs/follow-ups/media-type-debt-2026-08.md); the packages/ block below fixes
+# the packages-side half. Tests stay raw so the built dists (from the turbo step
+# above them) are reused and jest's --runInBand passthrough is preserved.
 if matches '^apps/designer-portal/'; then
-  run pnpm --filter @patina/designer-portal type-check
+  run pnpm exec turbo run type-check --filter=@patina/designer-portal
   run pnpm --filter @patina/designer-portal test -- --runInBand
 fi
 if matches '^apps/admin-portal/'; then
-  run pnpm --filter @patina/admin-portal build
+  run pnpm exec turbo run build --filter=@patina/admin-portal
   run pnpm --filter @patina/admin-portal test -- --runInBand
 fi
 if matches '^apps/client-portal/'; then
-  run pnpm --filter @patina/client-portal type-check
+  run pnpm exec turbo run type-check --filter=@patina/client-portal
   run pnpm --filter @patina/client-portal test -- --runInBand
 fi
 if matches '^apps/manufacturer-portal/'; then
-  run pnpm --filter @patina/manufacturer-portal type-check
+  run pnpm exec turbo run type-check --filter=@patina/manufacturer-portal
 fi
 
 for service in orders media projects; do
@@ -74,10 +82,10 @@ if matches '^packages/'; then
   # docs/follow-ups/media-type-debt-2026-08.md.
   while IFS= read -r package_dir; do
     [[ -f "$package_dir/package.json" ]] || continue
-    package_name="$(node -e 'const p=require(process.argv[1]); process.stdout.write(p.name || "")' "$package_dir/package.json")"
+    package_name="$(node -e 'const p=require(require("path").resolve(process.argv[1])); process.stdout.write(p.name || "")' "$package_dir/package.json")"
     [[ -n "$package_name" ]] || continue
     for task in build type-check test; do
-      if node -e 'const p=require(process.argv[1]); process.exit(p.scripts && p.scripts[process.argv[2]] ? 0 : 1)' "$package_dir/package.json" "$task"; then
+      if node -e 'const p=require(require("path").resolve(process.argv[1])); process.exit(p.scripts && p.scripts[process.argv[2]] ? 0 : 1)' "$package_dir/package.json" "$task"; then
         run pnpm exec turbo run "$task" --filter="$package_name"
       fi
     done

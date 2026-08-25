@@ -8,11 +8,14 @@ import {
   useLayerProducts,
   useLayerCounts,
   useCaptureFromUrl,
+  useCommitProposalCapture,
   useCaptureProduct,
+  resolveVendor,
   type ProposalCapture,
   type LayerProductLayer,
   type LayerProductRow,
 } from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import type {
   ProductConfigurationComDetails,
   ProductConfigurationComponentSelection,
@@ -765,17 +768,33 @@ function capturePriceCents(c: ProposalCapture): number | null {
 
 /**
  * Add-from-URL (A3, capture mode). Reads a pasted product page server-side
- * behind the SSRF-guarded `capture-from-url` edge function, drops a personal
- * draft via `captureProduct`, then picks it — mirroring the CapturesTab's own
- * promote-then-pick flow. Inline error only (R83: no toast).
+ * behind the SSRF-guarded `capture-from-url` edge function, then drops a
+ * personal DRAFT product (resolving/creating the vendor from the page's
+ * detected brand, exactly as the pre-C-A2 `captureProduct` path did) and
+ * picks it immediately, mirroring the CapturesTab's own promote-then-pick
+ * flow. Inline error only (R83: no toast).
+ *
+ * Gated behind the `capture-producer-idempotency` PostHog flag (Phase 3 /
+ * C-A2 rollout requirement — the ratified plan keeps the old capture path
+ * live behind a flag for one release):
+ *   - flag ON:  commits a `proposal_captures` row + draft product via the
+ *     idempotent `commit_proposal_capture` RPC (migration 00516).
+ *   - flag OFF (default until PostHog resolves — fail-closed): the old bare
+ *     `captureProduct` insert, which leaves no capture row and no
+ *     idempotency key behind, but is the proven pre-C-A2 behavior.
+ * Both branches resolve/create the vendor from `extracted.brand` and land
+ * the product as a draft — those are NOT flag-dependent; only the
+ * commit-path mechanics differ.
  */
 function AddFromUrl({ onPick }: { onPick: (pick: TabPick) => void }) {
   const { user } = useAuth();
   const captureFromUrl = useCaptureFromUrl();
+  const commitProposalCapture = useCommitProposalCapture();
   const captureProduct = useCaptureProduct();
+  const idempotentCommitFlag = useFeatureFlag('capture-producer-idempotency');
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const busy = captureFromUrl.isPending || captureProduct.isPending;
+  const busy = captureFromUrl.isPending || commitProposalCapture.isPending || captureProduct.isPending;
 
   const handleAdd = async () => {
     const trimmed = url.trim();
@@ -787,10 +806,62 @@ function AddFromUrl({ onPick }: { onPick: (pick: TabPick) => void }) {
     }
     try {
       const extracted = await captureFromUrl.mutateAsync({ url: trimmed, mode: 'capture' });
+      const sourceUrl = extracted.sourceUrl ?? trimmed;
+
+      if (idempotentCommitFlag.value) {
+        // New path (C-A2, migration 00516): resolve the vendor client-side —
+        // commit_proposal_capture takes a resolved vendorId, not a brand
+        // name to resolve itself — then commit through the idempotent RPC.
+        const vendor = await resolveVendor({ url: sourceUrl, name: extracted.brand ?? undefined });
+        // Minted once per submission — a retry of THIS handleAdd call (not
+        // exposed today, but future-proofed) should reuse the same id rather
+        // than risk a duplicate capture/product.
+        const clientCaptureId = crypto.randomUUID();
+        const result = await commitProposalCapture.mutateAsync({
+          clientCaptureId,
+          payload: {
+            name: extracted.name ?? undefined,
+            description: extracted.description ?? undefined,
+            sourceUrl,
+            images: extracted.images ?? undefined,
+            priceRetailCents: extracted.priceRetailCents ?? undefined,
+            vendorId: vendor.id,
+            captureSource: 'portal',
+            productStatus: 'draft',
+            thumbnailUrl: extracted.images?.[0] ?? undefined,
+            rawPayload: {
+              name: extracted.name ?? null,
+              description: extracted.description ?? null,
+              price_retail_cents: extracted.priceRetailCents ?? null,
+              vendor: extracted.brand ? { name: extracted.brand } : null,
+            },
+          },
+        });
+        setUrl('');
+        onPick({
+          productId: result.productId,
+          name: extracted.name?.trim() || trimmed,
+          imageUrl: extracted.images?.[0] ?? null,
+          priceCents: extracted.priceRetailCents ?? null,
+          priceTradeCents: null, // URL captures carry no trade cost
+          // Mirrors the old captureProduct pick: display the raw detected
+          // brand (not the resolved vendor's row name, which falls back to
+          // "Unknown vendor" when no brand was detected).
+          vendorName: extracted.brand ?? null,
+          layer: 'personal',
+          captureId: result.captureId,
+        });
+        return;
+      }
+
+      // Old path (pre-C-A2): bare products insert, no proposal_captures row,
+      // no idempotency key. captureProduct resolves/creates the vendor
+      // internally from detectedVendorName and defaults status to 'draft'
+      // (no status column set on the insert — see capture-product.ts).
       const result = await captureProduct.mutateAsync({
         name: extracted.name ?? undefined,
         images: extracted.images ?? undefined,
-        sourceUrl: extracted.sourceUrl ?? trimmed,
+        sourceUrl,
         priceRetailCents: extracted.priceRetailCents ?? undefined,
         description: extracted.description ?? undefined,
         detectedVendorName: extracted.brand ?? undefined,

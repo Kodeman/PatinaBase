@@ -12,7 +12,7 @@ import {
   buildProductInsertPayload,
   buildVendorInsertPayload,
   buildVendorCertifications,
-  buildCapturePayload,
+  buildCommitProposalCaptureArgs,
   buildDecisionInsertPayload,
   buildDecisionOptionInsertPayload,
   type BuildCapturePayloadInput,
@@ -232,31 +232,57 @@ export async function saveToLibrary(
   return { productId: product.id, placementOutcome };
 }
 
-/** "Send to inbox" — products(status='draft') + styles + proposal_captures. */
+/**
+ * "Send to inbox" — a single idempotent commit_proposal_capture RPC call
+ * (Phase 3 / C-A2, migration 00516) replacing the old 3-insert sequence
+ * (products -> product_styles -> proposal_captures). client_capture_id is
+ * minted fresh here since this is a direct save with no offline-queue retry
+ * path (a failure throws to the caller; the queue-drain path in
+ * background.ts is the one that persists and reuses an id across retries).
+ *
+ * NOT behind the `capture-producer-idempotency` PostHog flag that gates the
+ * designer-portal's AddFromUrl path: the extension has no established
+ * feature-flag runtime for this — background.ts's MV3 service-worker
+ * context has no `window`/`localStorage`, which posthog-js (this app's only
+ * PostHog client) requires, so background.ts's queue-drain literally cannot
+ * evaluate a flag. To keep both extension producers on one behavior, this
+ * direct-save path also ships new-path-only rather than gating just one of
+ * the two. Approved as part of the C-A2 fix-up (see commit).
+ */
 export async function saveToInbox(
   draft: DraftSlice,
   routing: RoutingSlice,
   user: User
 ): Promise<string> {
-  const { data: product, error } = await supabase
-    .from('products')
-    .insert(productRow(draft, user.id, 'draft'))
-    .select('id')
-    .single();
+  const clientCaptureId = crypto.randomUUID();
+  const product = productRow(draft, user.id, 'draft');
+  const { rawPayload, thumbnailUrl } = captureInput(draft, routing, user.id, '');
+
+  // Generated RPC types intentionally lag the in-progress capture-producer
+  // migration (00516) — same pattern as the create_client_decision call
+  // below.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc(
+    'commit_proposal_capture',
+    buildCommitProposalCaptureArgs({
+      clientCaptureId,
+      product,
+      productStatus: 'draft',
+      styleIds: draft.styleIds,
+      proposalId: routing.proposalId,
+      scopeRoomId: routing.scopeRoomId,
+      ffeCategorySlug: routing.ffeCategorySlug,
+      rawPayload,
+      thumbnailUrl,
+    })
+  );
   if (error) throw error;
-  if (!product) throw new Error('Failed to create product');
+  const productId = data?.product_id as string | undefined;
+  if (!productId) throw new Error('Failed to create product');
 
-  if (draft.styleIds.length) {
-    await supabase.from('product_styles').insert(styleInserts(product.id, draft.styleIds, user.id));
-  }
-  const { error: capErr } = await supabase
-    .from('proposal_captures')
-    .insert(buildCapturePayload(captureInput(draft, routing, user.id, product.id)));
-  if (capErr) throw capErr;
-
-  recordRecent(draft, product.id, 'inbox');
+  recordRecent(draft, productId, 'inbox');
   captureAnalytics(draft, 'new');
-  return product.id;
+  return productId;
 }
 
 /** "Send as decision option" — product + one atomic decision lifecycle RPC. */

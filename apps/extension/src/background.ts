@@ -221,42 +221,41 @@ async function syncQueue(): Promise<void> {
           : null;
         const target: CaptureSaveTarget = item.saveTarget ?? 'project';
 
-        // Drafts only need a stub when targeting an inbox without a real
-        // product page. Otherwise treat the row as a fully published product.
-        const productStatus = target === 'inbox' && !captureData.url ? 'draft' : 'published';
-
-        const { data: product, error } = await supabase.from('products').insert({
-          name: captureData.title || 'Untitled Product',
-          description: captureData.description || null,
-          source_url: captureData.url,
-          images: captureData.images || [],
-          price_retail: priceRetail,
-          captured_by: session.user.id,
-          captured_at: new Date().toISOString(),
-          status: productStatus,
-          // Three-layer catalog (migration 00152). Queue-drained captures
-          // land in the personal library, owned by the signed-in user.
-          // Mirrors the sync-save path in `payloads.ts`.
-          layer: 'personal',
-          owner_user_id: session.user.id,
-        }).select('id').single();
-
-        if (error) throw error;
-
-        // Add style assignments if specified — same for all targets.
-        if (item.styleIds && item.styleIds.length > 0 && product) {
-          const styleInserts = item.styleIds.map((styleId, index) => ({
-            product_id: product.id,
-            style_id: styleId,
-            confidence: 1.0,
-            is_primary: index === 0,
-            source: 'manual',
-            assigned_by: session.user.id,
-          }));
-          await supabase.from('product_styles').insert(styleInserts);
-        }
-
         if (target === 'project') {
+          // Drafts only need a stub when targeting an inbox without a real
+          // product page. Otherwise treat the row as a fully published product.
+          const productStatus = !captureData.url ? 'draft' : 'published';
+
+          const { data: product, error } = await supabase.from('products').insert({
+            name: captureData.title || 'Untitled Product',
+            description: captureData.description || null,
+            source_url: captureData.url,
+            images: captureData.images || [],
+            price_retail: priceRetail,
+            captured_by: session.user.id,
+            captured_at: new Date().toISOString(),
+            status: productStatus,
+            // Three-layer catalog (migration 00152). Queue-drained captures
+            // land in the personal library, owned by the signed-in user.
+            // Mirrors the sync-save path in `payloads.ts`.
+            layer: 'personal',
+            owner_user_id: session.user.id,
+          }).select('id').single();
+
+          if (error) throw error;
+
+          if (item.styleIds && item.styleIds.length > 0 && product) {
+            const styleInserts = item.styleIds.map((styleId, index) => ({
+              product_id: product.id,
+              style_id: styleId,
+              confidence: 1.0,
+              is_primary: index === 0,
+              source: 'manual',
+              assigned_by: session.user.id,
+            }));
+            await supabase.from('product_styles').insert(styleInserts);
+          }
+
           if (item.projectId && product) {
             await placeProductInProject(
               product.id,
@@ -265,28 +264,56 @@ async function syncQueue(): Promise<void> {
               { duplicateMode: 'create' },
             );
           }
-        } else if (product && (target === 'proposal' || target === 'inbox')) {
-          // Wave 2 — write a proposal_captures row with the right targeting.
-          const allTargeted =
-            !!item.proposalId && !!item.scopeRoomId && !!item.ffeCategorySlug;
-          const captureStatus = target === 'proposal' && allTargeted ? 'assigned' : 'inbox';
+        } else {
+          // target === 'proposal' | 'inbox' — Phase 3 (C-A2, migration
+          // 00516): a single idempotent commit_proposal_capture RPC call
+          // replaces the old products -> product_styles -> proposal_captures
+          // insert sequence. Keyed on THIS queue item's own `id` (minted
+          // once in addToQueue, persisted in chrome.storage, and reused on
+          // every retry of the same item) — a resend after a transient
+          // failure upserts the same row instead of duplicating it.
+          //
+          // Only 'proposal' honors proposal/room/category targeting for the
+          // 'assigned' status transition, matching the pre-00516 behavior
+          // (`captureStatus = target === 'proposal' && allTargeted ? …`) —
+          // an 'inbox' target always holds regardless of what targeting
+          // fields happen to be set on the queue item.
+          //
+          // NOT behind the `capture-producer-idempotency` PostHog flag that
+          // gates the designer-portal's AddFromUrl path: this queue drain
+          // runs in the MV3 background service worker, which has no
+          // `window`/`localStorage` — posthog-js (this extension's only
+          // PostHog client, see lib/analytics.ts) cannot initialize there,
+          // so there is no flag runtime to evaluate. Ships new-path-only
+          // (matches effects.ts's saveToInbox, same rationale).
+          const productStatus = target === 'inbox' && !captureData.url ? 'draft' : 'published';
+          const targeted = target === 'proposal';
 
-          await supabase.from('proposal_captures').insert({
-            designer_id: session.user.id,
-            product_id: product.id,
-            proposal_id: item.proposalId ?? null,
-            scope_room_id: item.scopeRoomId ?? null,
-            ffe_category_slug: item.ffeCategorySlug ?? null,
-            source_url: captureData.url,
-            raw_payload: {
-              name: captureData.title ?? null,
-              description: captureData.description ?? null,
-              price_retail_cents: priceRetail,
-              note: item.note ?? null,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: rpcError } = await (supabase as any).rpc('commit_proposal_capture', {
+            p_client_capture_id: item.id,
+            p_payload: {
+              name: captureData.title || 'Untitled Product',
+              description: captureData.description || null,
+              sourceUrl: captureData.url,
+              images: captureData.images || [],
+              priceRetailCents: priceRetail,
+              captureSource: 'web_extension',
+              productStatus,
+              thumbnailUrl: captureData.images?.[0] ?? null,
+              rawPayload: {
+                name: captureData.title ?? null,
+                description: captureData.description ?? null,
+                price_retail_cents: priceRetail,
+                note: item.note ?? null,
+              },
             },
-            thumbnail_url: captureData.images?.[0] ?? null,
-            status: captureStatus,
+            p_style_ids: item.styleIds ?? [],
+            p_proposal_id: targeted ? (item.proposalId ?? null) : null,
+            p_scope_room_id: targeted ? (item.scopeRoomId ?? null) : null,
+            p_ffe_category_slug: targeted ? (item.ffeCategorySlug ?? null) : null,
           });
+          if (rpcError) throw rpcError;
         }
         // Success — don't add to remaining
       }

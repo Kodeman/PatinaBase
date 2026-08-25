@@ -1109,6 +1109,8 @@ export {
   useAssignCapture,
   useConsumeCapture,
   useDismissCapture,
+  // Phase 3 / C-A2 (migration 00516)
+  useCommitProposalCapture,
 } from "./use-proposal-captures";
 export type {
   ProposalCapture,
@@ -1117,6 +1119,9 @@ export type {
   ConsumeCaptureInput,
   ConsumeCaptureResult,
   DismissCaptureInput,
+  CommitProposalCapturePayload,
+  CommitProposalCaptureInput,
+  CommitProposalCaptureResult,
 } from "./use-proposal-captures";
 export {
   // Project Team & Permissions (00084)
