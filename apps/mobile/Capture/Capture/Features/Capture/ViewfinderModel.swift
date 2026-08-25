@@ -186,8 +186,15 @@ final class ViewfinderModel {
     /// sessionCount, which counts specimens in the current visit (:47, :133-137).
     /// A designer with 12 already-synced captures and nothing queued must not
     /// be told "12 queued".
+    ///
+    /// Mirrors LocalCaptureSyncService.scopedOutbox: the unscoped, device-wide
+    /// outbox is a safe fallback only in mock/local mode. With real sync active,
+    /// an unresolved owner (e.g. mid session-hydration) fails CLOSED — never
+    /// surface another owner's queued captures on a shared phone.
     var outboxDepth: Int {
-        guard let owner = activeOwner else { return store.outbox().count }
+        guard let owner = activeOwner else {
+            return AppConfiguration.runsRealServices ? 0 : store.outbox().count
+        }
         return store.outbox(owner: owner).count
     }
 

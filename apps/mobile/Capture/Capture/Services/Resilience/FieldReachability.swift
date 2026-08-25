@@ -16,11 +16,19 @@ public final class FieldReachability {
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "cloud.patina.field.reachability")
     private var onRestore: (() -> Void)?
+    private var started = false
 
     public init() {}
 
+    /// `NWPathMonitor.start(queue:)` may be called only once per instance —
+    /// SwiftUI's `.task` re-fires on every reappearance (e.g. swipe to the
+    /// session tray and back), not just first mount, so `start` itself must be
+    /// safely re-callable. The callback is refreshed on every call; only the
+    /// underlying monitor start is guarded.
     public func start(onRestore: @escaping () -> Void) {
         self.onRestore = onRestore
+        guard !started else { return }
+        started = true
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 guard let self else { return }
