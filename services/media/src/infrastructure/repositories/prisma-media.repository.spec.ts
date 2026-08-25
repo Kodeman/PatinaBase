@@ -147,7 +147,12 @@ describe('PrismaMediaRepository', () => {
         tags: ['modern', 'furniture'],
       });
 
-      expect(mockPrismaClient.$transaction).toHaveBeenCalledWith([
+      // $transaction receives already-invoked PrismaPromises (the return
+      // values of findMany()/count() below), not the query args themselves —
+      // since $transaction is mocked directly above, those return values are
+      // just undefined. Assert on the calls that actually carry the where
+      // clause instead.
+      expect(mockPrismaClient.mediaAsset.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             kind: 'IMAGE',
@@ -156,8 +161,7 @@ describe('PrismaMediaRepository', () => {
             tags: { hasSome: ['modern', 'furniture'] },
           }),
         }),
-        expect.any(Object),
-      ]);
+      );
     });
 
     it('should apply size filters', async () => {
@@ -168,7 +172,8 @@ describe('PrismaMediaRepository', () => {
         maxSize: 5000,
       });
 
-      expect(mockPrismaClient.$transaction).toHaveBeenCalledWith([
+      // See note above: assert on findMany's own call args, not $transaction's.
+      expect(mockPrismaClient.mediaAsset.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
             sizeBytes: {
@@ -177,8 +182,7 @@ describe('PrismaMediaRepository', () => {
             },
           },
         }),
-        expect.any(Object),
-      ]);
+      );
     });
 
     it('should apply search filter', async () => {
@@ -188,7 +192,8 @@ describe('PrismaMediaRepository', () => {
         search: 'furniture',
       });
 
-      expect(mockPrismaClient.$transaction).toHaveBeenCalledWith([
+      // See note above: assert on findMany's own call args, not $transaction's.
+      expect(mockPrismaClient.mediaAsset.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
             OR: [
@@ -197,8 +202,7 @@ describe('PrismaMediaRepository', () => {
             ],
           },
         }),
-        expect.any(Object),
-      ]);
+      );
     });
 
     it('should limit results to max 100 per page', async () => {
@@ -206,12 +210,12 @@ describe('PrismaMediaRepository', () => {
 
       await repository.findAll({ limit: 200 });
 
-      expect(mockPrismaClient.$transaction).toHaveBeenCalledWith([
+      // See note above: assert on findMany's own call args, not $transaction's.
+      expect(mockPrismaClient.mediaAsset.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           take: 100, // Should be capped at 100
         }),
-        expect.any(Object),
-      ]);
+      );
     });
   });
 

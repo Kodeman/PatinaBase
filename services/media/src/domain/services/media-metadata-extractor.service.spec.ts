@@ -116,7 +116,10 @@ describe('MediaMetadataExtractorService', () => {
     });
 
     it('should cap at maximum time', () => {
-      const time = service.estimateProcessingTime(100 * 1024 * 1024, 10000, 10000);
+      // 100MB @ 10000x10000 only sums to ~20.3s uncapped (100 + 10240 + 10000ms) —
+      // short of the 30s ceiling. Use inputs whose uncapped sum clearly exceeds
+      // it so the Math.min(...) cap is actually exercised.
+      const time = service.estimateProcessingTime(200 * 1024 * 1024, 50000, 50000);
       expect(time).toBe(30000); // Capped at 30 seconds
     });
 

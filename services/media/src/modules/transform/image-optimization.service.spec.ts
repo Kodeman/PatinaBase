@@ -124,7 +124,12 @@ describe('ImageOptimizationService', () => {
       });
 
       const metadata = await sharp(result.buffer).metadata();
-      expect(metadata.format).toBe('avif');
+      // sharp/libvips (installed: sharp 0.33.5, libvips 8.15.3, libheif
+      // 1.18.2) report both HEIC and AVIF output through the same HEIF
+      // container loader, so `metadata().format` comes back 'heif' for
+      // AVIF-encoded buffers too — this is real, version-stable library
+      // behavior, not a test double standing in for it.
+      expect(metadata.format).toBe('heif');
     });
   });
 

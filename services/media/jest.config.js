@@ -10,4 +10,5 @@ module.exports = {
   displayName: 'media-service',
   coverageDirectory: '<rootDir>/coverage',
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
+  setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
 };
