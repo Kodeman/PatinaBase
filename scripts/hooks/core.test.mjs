@@ -45,9 +45,7 @@ test("Claude permissions explicitly deny SSH to the retired host", async () => {
   const settings = JSON.parse(
     await readFile(path.join(repoRoot, ".claude/settings.json"), "utf8"),
   );
-  assert.ok(
-    settings.permissions.deny.includes("Bash(ssh *192.168.1.14*)"),
-  );
+  assert.ok(settings.permissions.deny.includes("Bash(ssh *192.168.1.14*)"));
 
   const findings = await evaluateCommand("ssh example.com", {
     root: repoRoot,
@@ -115,7 +113,7 @@ test("path classifier uses real service builds and fans shared packages to consu
   );
   assert.ok(
     servicePlan.checks.some((check) =>
-      check.command.includes("@patina/orders build"),
+      check.command.includes("turbo run build --filter=@patina/orders"),
     ),
   );
   assert.equal(
