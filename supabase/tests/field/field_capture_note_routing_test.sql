@@ -31,6 +31,27 @@
 --                          ⚠ The count is 5 TODAY (00233:155/159/163/168/175).
 --                          FC-R8 ruling per-studio would add a sixth; this
 --                          assertion is meant to fail loudly if it does.
+-- 8-11. DEFENSIVE        → a malformed captureKind / transcriptSource /
+--       PROJECTION         noteSetting / audioSegments must NOT raise. Each of
+--                          those values would violate one of the migration's
+--                          named CHECK constraints (or the jsonb type of
+--                          voice_audio_segments), and the raise would come
+--                          from the UPSERT — before both destination branches
+--                          and therefore OUTSIDE every safe harbor. The RPC
+--                          would fail on BOTH destinations and an offline
+--                          device would retry that capture forever. The row
+--                          must still commit, the offending column must carry
+--                          its default, and the dropped value must be recorded
+--                          in raw_payload -> 'projection_errors'.
+-- 12. NO FALSE FIRE      → a well-formed payload leaves projection_errors
+--                          absent. A projection that fires on good input is as
+--                          wrong as one that never fires. Asserted inline on
+--                          the case-1 row, which is the well-formed one.
+-- 13. NO CLOBBER         → projection_errors and the safe harbor's conflict
+--                          are distinct TOP-LEVEL keys of raw_payload, written
+--                          by two different merges. A capture that is both
+--                          malformed AND badly routed must end up carrying
+--                          BOTH.
 --
 -- How to run:
 --   scripts/run-sql-tests.sh -f field_capture_note_routing
@@ -77,6 +98,9 @@ DECLARE
   v_status    TEXT;
   v_conflict  JSONB;
   v_count     INTEGER;
+  v_projerr   JSONB;
+  v_source    TEXT;
+  v_setting   TEXT;
 BEGIN
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', 'fc000000-0000-4000-8000-000000000001', 'role', 'authenticated')::text, true);
@@ -95,8 +119,9 @@ BEGIN
     'fc000000-0000-4000-8000-0000000000a1',
     'fc000000-0000-4000-8000-0000000000d1');
 
-  SELECT project_id, project_room_id, voice_audio_segments, capture_kind, status
-    INTO v_project, v_room, v_segments, v_kind, v_status
+  SELECT project_id, project_room_id, voice_audio_segments, capture_kind, status,
+         raw_payload -> 'projection_errors'
+    INTO v_project, v_room, v_segments, v_kind, v_status, v_projerr
     FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c1';
 
   ASSERT v_project = 'fc000000-0000-4000-8000-0000000000a1',
@@ -107,7 +132,9 @@ BEGIN
   ASSERT jsonb_array_length(v_segments) = 2,
     'FAIL 2: voice_audio_segments should carry 2 entries, got ' || COALESCE(v_segments::text, 'NULL');
   ASSERT v_kind = 'note', 'FAIL 3: capture_kind should be note, got ' || v_kind;
-  RAISE NOTICE 'field_capture routing: cases 1-3 passed.';
+  ASSERT v_projerr IS NULL OR jsonb_array_length(v_projerr) = 0,
+    'FAIL 12: a WELL-FORMED payload must record no projection error, got ' || v_projerr::text;
+  RAISE NOTICE 'field_capture routing: cases 1-3 + 12 passed.';
 
   -- 4 ---------------------------------------------------------------------
   v_res := public.commit_field_capture(
@@ -151,6 +178,100 @@ BEGIN
     'FAIL 7: all five field_captures policies must be TO authenticated, got ' || v_count
     || ' (if FC-R8 ruled per-studio and added a sixth, update this count deliberately)';
   RAISE NOTICE 'field_capture routing: case 7 passed.';
+
+  -- 8-11 — DEFENSIVE PROJECTION: malformed values must not raise -------------
+  -- Each value below would violate a named CHECK constraint (or the jsonb type
+  -- of voice_audio_segments) if written through unprojected, and the raise
+  -- would come from the UPSERT — outside every safe harbor, failing the RPC on
+  -- BOTH destinations and making an offline device retry forever.
+
+  -- 8 — captureKind not on the whitelist
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c3', 'inbox',
+    jsonb_build_object('captureKind', 'foo'));
+  SELECT status, capture_kind, raw_payload -> 'projection_errors'
+    INTO v_status, v_kind, v_projerr
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c3';
+  ASSERT v_status = 'inbox',
+    'FAIL 8a: a malformed captureKind must still commit, got status ' || COALESCE(v_status, 'NULL');
+  ASSERT v_kind = 'specimen',
+    'FAIL 8b: a malformed captureKind must fall back to specimen, got ' || COALESCE(v_kind, 'NULL');
+  ASSERT v_projerr @> '[{"key": "captureKind"}]'::jsonb,
+    'FAIL 8c: the dropped captureKind must be recorded in raw_payload.projection_errors, got '
+    || COALESCE(v_projerr::text, 'NULL');
+  RAISE NOTICE 'field_capture routing: case 8 passed (captureKind projected).';
+
+  -- 9 — transcriptSource not on the whitelist
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c4', 'inbox',
+    jsonb_build_object('voice', jsonb_build_object('transcriptSource', 'x')));
+  SELECT status, transcript_source, raw_payload -> 'projection_errors'
+    INTO v_status, v_source, v_projerr
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c4';
+  ASSERT v_status = 'inbox',
+    'FAIL 9a: a malformed transcriptSource must still commit, got status ' || COALESCE(v_status, 'NULL');
+  ASSERT v_source IS NULL,
+    'FAIL 9b: a malformed transcriptSource must land NULL, got ' || COALESCE(v_source, 'NULL');
+  ASSERT v_projerr @> '[{"key": "voice.transcriptSource"}]'::jsonb,
+    'FAIL 9c: the dropped transcriptSource must be recorded in raw_payload.projection_errors, got '
+    || COALESCE(v_projerr::text, 'NULL');
+  RAISE NOTICE 'field_capture routing: case 9 passed (transcriptSource projected).';
+
+  -- 10 — noteSetting not on the whitelist
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c5', 'inbox',
+    jsonb_build_object('voice', jsonb_build_object('noteSetting', 'both')));
+  SELECT status, note_setting, raw_payload -> 'projection_errors'
+    INTO v_status, v_setting, v_projerr
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c5';
+  ASSERT v_status = 'inbox',
+    'FAIL 10a: a malformed noteSetting must still commit, got status ' || COALESCE(v_status, 'NULL');
+  ASSERT v_setting IS NULL,
+    'FAIL 10b: a malformed noteSetting must land NULL, got ' || COALESCE(v_setting, 'NULL');
+  ASSERT v_projerr @> '[{"key": "voice.noteSetting"}]'::jsonb,
+    'FAIL 10c: the dropped noteSetting must be recorded in raw_payload.projection_errors, got '
+    || COALESCE(v_projerr::text, 'NULL');
+  RAISE NOTICE 'field_capture routing: case 10 passed (noteSetting projected).';
+
+  -- 11 — audioSegments that is not a jsonb array
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c6', 'inbox',
+    jsonb_build_object('voice', jsonb_build_object('audioSegments', 'not-an-array')));
+  SELECT status, voice_audio_segments, raw_payload -> 'projection_errors'
+    INTO v_status, v_segments, v_projerr
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c6';
+  ASSERT v_status = 'inbox',
+    'FAIL 11a: a non-array audioSegments must still commit, got status ' || COALESCE(v_status, 'NULL');
+  ASSERT v_segments = '[]'::jsonb,
+    'FAIL 11b: a non-array audioSegments must fall back to [], got ' || COALESCE(v_segments::text, 'NULL');
+  ASSERT v_projerr @> '[{"key": "voice.audioSegments"}]'::jsonb,
+    'FAIL 11c: the dropped audioSegments must be recorded in raw_payload.projection_errors, got '
+    || COALESCE(v_projerr::text, 'NULL');
+  RAISE NOTICE 'field_capture routing: case 11 passed (audioSegments projected).';
+
+  -- 13 — projection_errors and conflict must COMPOSE, not clobber ------------
+  -- Malformed captureKind (projection writes raw_payload.projection_errors on
+  -- the upsert) AND a project owned by someone else (the inbox safe harbor
+  -- writes raw_payload.conflict afterwards). A top-level jsonb || merges keys,
+  -- so both must survive.
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c7', 'inbox',
+    jsonb_build_object('captureKind', 'foo'),
+    'fc000000-0000-4000-8000-0000000000a2');
+  SELECT status, capture_kind, raw_payload -> 'projection_errors', raw_payload -> 'conflict'
+    INTO v_status, v_kind, v_projerr, v_conflict
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c7';
+  ASSERT v_status = 'inbox',
+    'FAIL 13a: a malformed AND badly-routed capture must still park at inbox, got '
+    || COALESCE(v_status, 'NULL');
+  ASSERT v_kind = 'specimen',
+    'FAIL 13b: capture_kind should be the projected default, got ' || COALESCE(v_kind, 'NULL');
+  ASSERT v_projerr @> '[{"key": "captureKind"}]'::jsonb,
+    'FAIL 13c: the safe harbor must not clobber raw_payload.projection_errors, got '
+    || COALESCE(v_projerr::text, 'NULL');
+  ASSERT v_conflict IS NOT NULL,
+    'FAIL 13d: the projection must not clobber raw_payload.conflict';
+  RAISE NOTICE 'field_capture routing: case 13 passed (projection_errors + conflict compose).';
 
   PERFORM set_config('request.jwt.claims', NULL, true);
   RAISE NOTICE 'All field_capture note-routing assertions passed.';

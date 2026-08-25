@@ -147,12 +147,19 @@ CREATE POLICY field_captures_org_inbox_select
 --
 -- ⚠ AUTHORED FROM 00516'S BODY, NOT 00235'S (FC-R18). Same signature, same
 --   SECURITY INVOKER, same search_path, same upsert, same library branch, same
---   enqueue call. Exactly two edits:
+--   enqueue call. Three edits:
 --     EDIT 1 — the inbox branch now persists project_id / project_room_id /
 --              shelf, wrapped in its OWN EXCEPTION WHEN OTHERS safe harbor.
 --     EDIT 2 — five payload reads: the routing-clear flag plus four new
 --              columns in the INSERT column list, the VALUES list, and the
 --              ON CONFLICT DO UPDATE SET list.
+--     EDIT 3 — those four reads are PROJECTED DEFENSIVELY so a malformed
+--              payload value can never trip section (a)'s CHECK constraints.
+--              A raise there would be outside every safe harbor (it comes
+--              from the upsert, before both destination branches), failing
+--              the RPC on BOTH destinations and making an offline device
+--              retry that capture forever. Dropped values are recorded in
+--              raw_payload -> 'projection_errors', never raised.
 --
 -- ⚠ THE INBOX BRANCH NEEDS ITS OWN SAFE HARBOR. 00235:85-88 records the routing
 --   deferral as DELIBERATE — "project_id / project_room_id are deferred to the
@@ -206,6 +213,13 @@ DECLARE
   v_captured_at   TIMESTAMPTZ;
   v_name          TEXT;
   v_clear_routing BOOLEAN;   -- EDIT 2
+  -- EDIT 3 (defensive projection)
+  v_capture_kind      TEXT;
+  v_transcript_source TEXT;
+  v_note_setting      TEXT;
+  v_audio_segments    JSONB;
+  v_projection_errors JSONB := '[]'::jsonb;
+  v_raw_payload       JSONB;
 BEGIN
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'commit_field_capture: not authenticated';
@@ -230,6 +244,81 @@ BEGIN
   -- of every CASE below and so keeps the stored routing.
   v_clear_routing := ((v_payload #> '{routing,clear}') = 'true'::jsonb);
 
+  -- ─── EDIT 3: DEFENSIVE PROJECTION OF THE FOUR NEW PAYLOAD READS ──────────
+  -- Same failure class as the routing.clear cast above, and the reason this
+  -- block exists: a payload value that violates one of section (a)'s named
+  -- CHECK constraints — captureKind 'foo', transcriptSource 'x', noteSetting
+  -- 'both' — or an audioSegments value that is not a jsonb array raises
+  -- INSIDE this function but OUTSIDE every safe harbor (the raise comes from
+  -- the upsert itself, which precedes both destination branches). The RPC
+  -- then fails on BOTH destinations, and an offline-retrying device never
+  -- syncs that capture at all: it retries forever. So the reads are projected
+  -- to a legal value here and CANNOT trip a constraint.
+  --
+  -- The whitelists below are the allowed-value lists of the named CHECK
+  -- constraints declared in section (a) of this same file —
+  -- field_captures_capture_kind_ck, field_captures_transcript_source_ck,
+  -- field_captures_note_setting_ck. They are quoted from those constraints,
+  -- not invented; widening one means widening both, in this one file.
+  -- The constraints STAY as belt-and-braces: a second line of defence this
+  -- function can no longer reach.
+  --
+  -- Nothing is swallowed silently. Every dropped value is appended to
+  -- raw_payload -> 'projection_errors', a jsonb ARRAY of {key, reason}
+  -- objects. Never a RAISE.
+  v_capture_kind := NULLIF(v_payload #>> '{captureKind}', '');
+  IF v_capture_kind IS NULL THEN
+    v_capture_kind := 'specimen';
+  ELSIF v_capture_kind NOT IN ('specimen', 'note', 'context') THEN
+    v_projection_errors := v_projection_errors || jsonb_build_object(
+      'key', 'captureKind', 'reason', 'not in (specimen,note,context)');
+    v_capture_kind := 'specimen';
+  END IF;
+
+  v_transcript_source := NULLIF(v_payload #>> '{voice,transcriptSource}', '');
+  IF v_transcript_source IS NOT NULL
+     AND v_transcript_source NOT IN ('device', 'device_partial', 'server', 'designer') THEN
+    v_projection_errors := v_projection_errors || jsonb_build_object(
+      'key', 'voice.transcriptSource',
+      'reason', 'not in (device,device_partial,server,designer)');
+    v_transcript_source := NULL;
+  END IF;
+
+  v_note_setting := NULLIF(v_payload #>> '{voice,noteSetting}', '');
+  IF v_note_setting IS NOT NULL
+     AND v_note_setting NOT IN ('solo', 'conversation') THEN
+    v_projection_errors := v_projection_errors || jsonb_build_object(
+      'key', 'voice.noteSetting', 'reason', 'not in (solo,conversation)');
+    v_note_setting := NULL;
+  END IF;
+
+  -- voice_audio_segments is jsonb NOT NULL DEFAULT '[]'. A string, number or
+  -- object would be stored happily by the column type but is a lie to every
+  -- reader, and a JSON null would violate NOT NULL. Take it only if it really
+  -- is an array.
+  v_audio_segments := v_payload #> '{voice,audioSegments}';
+  IF v_audio_segments IS NULL OR jsonb_typeof(v_audio_segments) = 'null' THEN
+    v_audio_segments := '[]'::jsonb;
+  ELSIF jsonb_typeof(v_audio_segments) <> 'array' THEN
+    v_projection_errors := v_projection_errors || jsonb_build_object(
+      'key', 'voice.audioSegments',
+      'reason', 'not a jsonb array (got ' || jsonb_typeof(v_audio_segments) || ')');
+    v_audio_segments := '[]'::jsonb;
+  END IF;
+
+  -- raw_payload carries the projection errors alongside the payload. A
+  -- top-level jsonb || merges KEYS, so this composes with the safe harbors'
+  -- `raw_payload || {conflict: …}` in either order: 'projection_errors' and
+  -- 'conflict' are distinct top-level keys and neither merge can clobber the
+  -- other. The final CASE arm keeps the record even for the (unreachable)
+  -- case of a non-object payload, where || would not merge.
+  v_raw_payload := CASE
+    WHEN jsonb_array_length(v_projection_errors) = 0 THEN v_payload
+    WHEN jsonb_typeof(v_payload) = 'object'
+      THEN v_payload || jsonb_build_object('projection_errors', v_projection_errors)
+    ELSE jsonb_build_object('projection_errors', v_projection_errors)
+  END;
+
   -- ─── Upsert the capture row (no project routing here — see below) ─────────
   -- organization_id is applied now (validated by the guard); project_id /
   -- project_room_id are deferred to the destination branches so a bad route can
@@ -252,7 +341,7 @@ BEGIN
   )
   VALUES (
     p_client_capture_id, v_uid, p_organization_id, p_destination, 'synced',
-    COALESCE(NULLIF(v_payload #>> '{captureKind}', ''), 'specimen'),
+    v_capture_kind,
     v_payload->>'title', v_payload->>'notes', v_payload->>'category', v_payload->>'subcategory',
       v_payload->'measurements',
     field_capture_jsonb_text_array(v_payload#>'{attributes,materials}'),
@@ -272,9 +361,9 @@ BEGIN
     v_payload#>>'{voice,transcript}',
     v_payload#>>'{voice,partialTranscript}',
     NULLIF(v_payload#>>'{voice,durationSeconds}', '')::numeric,
-    COALESCE(v_payload #> '{voice,audioSegments}', '[]'::jsonb),
-    v_payload #>> '{voice,transcriptSource}',
-    v_payload #>> '{voice,noteSetting}',
+    v_audio_segments,
+    v_transcript_source,
+    v_note_setting,
     v_photos,
     COALESCE(
       (SELECT ph->>'path' FROM jsonb_array_elements(v_photos) ph
@@ -291,7 +380,7 @@ BEGIN
     v_payload#>>'{venue,placeId}',
     v_captured_at,
     v_payload#>>'{venue,timezone}',
-    v_payload,
+    v_raw_payload,
     v_payload#>>'{device,model}',
     v_payload#>>'{device,osVersion}',
     v_payload#>>'{device,appVersion}',
@@ -516,6 +605,6 @@ GRANT EXECUTE ON FUNCTION public.commit_field_capture(UUID, TEXT, JSONB, UUID, U
   TO authenticated;
 
 COMMENT ON FUNCTION public.commit_field_capture(UUID, TEXT, JSONB, UUID, UUID, TEXT, UUID) IS
-  'Idempotent upsert of a field capture; destination=library mints a draft personal-library product, destination=inbox holds it. BOTH destination branches persist project_id/project_room_id/shelf, and both carry an EXCEPTION WHEN OTHERS safe harbor that parks a refused route at status=inbox with the conflict stashed in raw_payload. A {routing:{clear:true}} payload key un-places a capture. Enqueues a capture_enrichment run (via enqueue_capture_enrichment_for_producer, 00516) in the same transaction on every real insert/update.';
+  'Idempotent upsert of a field capture; destination=library mints a draft personal-library product, destination=inbox holds it. BOTH destination branches persist project_id/project_room_id/shelf, and both carry an EXCEPTION WHEN OTHERS safe harbor that parks a refused route at status=inbox with the conflict stashed in raw_payload. A {routing:{clear:true}} payload key un-places a capture. The four note/audio payload reads are projected to legal values so a malformed value cannot trip a CHECK constraint from outside a safe harbor; anything dropped is recorded in raw_payload.projection_errors rather than raised. Enqueues a capture_enrichment run (via enqueue_capture_enrichment_for_producer, 00516) in the same transaction on every real insert/update.';
 
 COMMIT;
