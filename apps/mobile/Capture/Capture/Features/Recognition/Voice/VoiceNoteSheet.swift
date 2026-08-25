@@ -27,6 +27,11 @@ struct VoiceNoteSheet: View {
     @State private var startedAt: Date?
     @State private var result: VoiceNoteResult?
     @State private var streamTask: Task<Void, Never>?
+    /// end() clears isRecording synchronously but assigns `result` from a Task,
+    /// so without this the primary re-enables in the gap and attach() labels a
+    /// genuine recording as hand-typed with no filename.
+    @State private var isFinishing = false
+    @State private var player = VoiceSegmentPlayer()
 
     var body: some View {
         RecognitionSheetLayout {
@@ -62,16 +67,43 @@ struct VoiceNoteSheet: View {
             recordingStatus
             waveform
             transcriptCard
+            if hasAudio && transcript.isEmpty {
+                Text("We couldn't make out the words — the audio is here.")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.inkSoft)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if hasAudio { playbackControl }
             micButton
             RecognitionActionBar(
                 secondaryTitle: "Discard",
-                primaryTitle: "Attach note",
-                primaryEnabled: !transcript.isEmpty && !isRecording,
+                primaryTitle: (result?.transcript.isEmpty ?? true) && hasAudio
+                    ? "Keep the recording"
+                    : "Attach note",
+                primaryEnabled: (!transcript.isEmpty || hasAudio) && !isRecording && !isFinishing,
                 secondaryRole: .destructive,
                 onSecondary: { discard() },
                 onPrimary: { attach() }
             )
         }
+    }
+
+    private var hasAudio: Bool { !(result?.audioSegments.isEmpty ?? true) }
+
+    private var playbackControl: some View {
+        Button {
+            if player.isPlaying {
+                player.stop()
+            } else {
+                player.play((result?.audioSegments ?? []).map { store.mediaURL(for: $0) })
+            }
+        } label: {
+            Label(player.isPlaying ? "Stop" : "Play it back",
+                  systemImage: player.isPlaying ? "stop.fill" : "play.fill")
+                .font(CaptureType.callout)
+                .foregroundStyle(CaptureColor.verdigris)
+        }
+        .buttonStyle(.plain)
     }
 
     private var recordingStatus: some View {
@@ -153,7 +185,8 @@ struct VoiceNoteSheet: View {
             RecognitionActionBar(
                 secondaryTitle: "Discard",
                 primaryTitle: "Attach note",
-                primaryEnabled: !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                primaryEnabled: !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    && !isFinishing,
                 secondaryRole: .destructive,
                 onSecondary: { discard() },
                 onPrimary: { attach() }
@@ -174,14 +207,24 @@ struct VoiceNoteSheet: View {
             streamTask = Task { @MainActor in
                 do {
                     for try await chunk in stream { transcript = chunk.text }
+                    // The recording cap ends the note by finishing the stream
+                    // NORMALLY, so the catch below never runs and the sheet
+                    // would keep reading RECORDING over a dead mic. On the
+                    // release path end() has already cleared isRecording and
+                    // this second call guards itself out.
+                    end()
                 } catch {
                     manualFallback = true
                     isRecording = false
+                    isFinishing = true
                     // The recorder tore its own note down, but the segments it
                     // published need a referrer or a real recording sits in the
                     // media dir unreferenced and the note ships labelled as typed.
                     // finish() is idempotent against that teardown.
-                    Task { result = await voice.finish() }
+                    Task {
+                        result = await voice.finish()
+                        isFinishing = false
+                    }
                 }
             }
         } catch {
@@ -193,18 +236,27 @@ struct VoiceNoteSheet: View {
     private func end() {
         guard isRecording else { return }
         isRecording = false
+        isFinishing = true
         streamTask?.cancel()
         Task {
             let r = await voice.finish()
             result = r
             if !r.transcript.isEmpty { transcript = r.transcript }
+            isFinishing = false
         }
     }
 
     private func discard() {
         streamTask?.cancel()
-        if isRecording { Task { _ = await voice.finish() } }
-        coordinator?.dismissSheet()
+        Task {
+            // finish() is what returns the segment list; without awaiting it the
+            // .m4a files stay on disk referenced by nothing, forever.
+            let abandoned = isRecording ? await voice.finish() : result
+            for name in abandoned?.audioSegments ?? [] {
+                try? FileManager.default.removeItem(at: store.mediaURL(for: name))
+            }
+            await MainActor.run { coordinator?.dismissSheet() }
+        }
     }
 
     private func attach() {

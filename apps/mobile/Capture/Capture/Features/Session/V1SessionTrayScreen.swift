@@ -17,6 +17,8 @@ struct V1SessionTrayScreen: View {
     let coordinator: CaptureCoordinator
 
     @State private var items: [Specimen] = []
+    @State private var player = VoiceSegmentPlayer()
+    @State private var playingSpecimenID: UUID?
     private let sessionContext = CaptureSessionContextStore.shared
 
     private var groups: [(venue: String, items: [Specimen])] {
@@ -93,10 +95,10 @@ struct V1SessionTrayScreen: View {
     }
 
     private func row(_ specimen: Specimen) -> some View {
-        Button {
-            coordinator.navigate(to: .specimen(specimen.id))
-        } label: {
-            HStack(spacing: 12) {
+        HStack(spacing: 12) {
+            Button {
+                coordinator.navigate(to: .specimen(specimen.id))
+            } label: {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(specimen.title ?? "Untitled capture")
                         .font(CaptureType.bodyEmph)
@@ -105,16 +107,41 @@ struct V1SessionTrayScreen: View {
                         .font(CaptureType.monoSmall)
                         .foregroundStyle(CaptureColor.inkSoft)
                 }
-                Spacer()
-                RouteStatusChip(kind: RouteFormat.status(for: specimen))
-                Image(systemName: "chevron.right")
-                    .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.line2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            if let segments = specimen.voiceAudioSegmentsRaw, !segments.isEmpty {
+                playButton(specimen.id, segments)
+            }
+            RouteStatusChip(kind: RouteFormat.status(for: specimen))
+            Image(systemName: "chevron.right")
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.line2)
+        }
+    }
+
+    private func playButton(_ specimenID: UUID, _ segments: [String]) -> some View {
+        let playing = player.isPlaying && playingSpecimenID == specimenID
+        return Button {
+            player.stop()
+            if playing {
+                playingSpecimenID = nil
+            } else {
+                playingSpecimenID = specimenID
+                player.play(segments.map { store.mediaURL(for: $0) })
+            }
+        } label: {
+            Image(systemName: playing ? "stop.fill" : "play.fill")
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.verdigris)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(CaptureColor.paper2))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(playing ? "Stop the voice note" : "Play the voice note")
     }
 
     private var footer: some View {
