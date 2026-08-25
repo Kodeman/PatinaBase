@@ -298,7 +298,9 @@ describe('MetadataExtractionService', () => {
 
       expect(result.valid).toBe(false);
       // Production message is "Aspect ratio ..." (capital A); match case-insensitively.
-      expect(result.issues.some(issue => issue.toLowerCase().includes('aspect ratio'))).toBe(true);
+      expect(result.issues.some((issue) => issue.toLowerCase().includes('aspect ratio'))).toBe(
+        true,
+      );
     });
 
     it('should reject very narrow aspect ratio', () => {
@@ -307,7 +309,9 @@ describe('MetadataExtractionService', () => {
 
       expect(result.valid).toBe(false);
       // Production message is "Aspect ratio ..." (capital A); match case-insensitively.
-      expect(result.issues.some(issue => issue.toLowerCase().includes('aspect ratio'))).toBe(true);
+      expect(result.issues.some((issue) => issue.toLowerCase().includes('aspect ratio'))).toBe(
+        true,
+      );
     });
   });
 
