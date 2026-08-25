@@ -6,8 +6,10 @@
  * exercise it: a per-leg mock keyed on the `.eq('user_id', …)` argument, so the client leg and
  * the designer leg can return different rows.
  *
- * Pins Ruling 4-B (the door prefers the CLIENT's scan) and the dedupe precedence
- * (the designer's stamp wins a shared id, so a self-scan reads as hers).
+ * Pins Ruling 4-B (the door prefers the CLIENT's scan), the dedupe precedence
+ * (the designer's stamp wins a shared id, so a self-scan reads as hers), and the
+ * project scoping of the designer leg (`room_scans.project_id`, 00265) — the
+ * door must never open a room that belongs to another project, or to none.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -23,6 +25,9 @@ interface ScanRow {
   name: string;
   created_at: string;
   status: string;
+  /** `room_scans.project_id` (00265) — nullable; an unlinked scan belongs to
+   *  no document. */
+  project_id: string | null;
   images: unknown[];
 }
 
@@ -38,6 +43,9 @@ interface ScanQueryBuilder {
 const scansByUser: Record<string, ScanRow[]> = {};
 /** The `user_id`s whose leg also filtered `.eq('status', 'ready')` (Ruling 7-B). */
 const readyFilteredUsers: string[] = [];
+/** The `user_id`s whose leg also filtered `.eq('project_id', …)` — the door
+ *  must never offer a room that belongs to another project. */
+const projectFilteredUsers: string[] = [];
 /** The signed-in designer, or null for a signed-out read. */
 let designerId: string | null = 'designer-uid';
 
@@ -47,6 +55,7 @@ jest.mock('@patina/supabase', () => ({
     from: () => {
       let userId = '';
       let readyOnly = false;
+      let projectId: string | null = null;
       const builder: ScanQueryBuilder = {
         select: () => builder,
         eq: (column: string, value: string) => {
@@ -55,13 +64,19 @@ jest.mock('@patina/supabase', () => ({
             readyOnly = true;
             readyFilteredUsers.push(userId);
           }
+          if (column === 'project_id') {
+            projectId = value;
+            projectFilteredUsers.push(userId);
+          }
           return builder;
         },
         order: () => builder,
         limit: () =>
           Promise.resolve({
             data: (scansByUser[userId] ?? []).filter(
-              (r) => !readyOnly || r.status === 'ready',
+              (r) =>
+                (!readyOnly || r.status === 'ready') &&
+                (projectId === null || r.project_id === projectId),
             ),
             error: null,
           }),
@@ -97,8 +112,13 @@ jest.mock('../mobile/mobile-shell', () => ({ useMobilePrimaryAction: jest.fn() }
 jest.mock('../client-mirror', () => ({ ClientMirror: () => null }));
 jest.mock('../proposal-preview', () => ({ ProposalPreview: () => null }));
 
-function scan(id: string, createdAt: string, status = 'ready'): ScanRow {
-  return { id, name: id, created_at: createdAt, status, images: [] };
+function scan(
+  id: string,
+  createdAt: string,
+  status = 'ready',
+  projectId: string | null = 'proj-1',
+): ScanRow {
+  return { id, name: id, created_at: createdAt, status, project_id: projectId, images: [] };
 }
 
 /** The QueryClient of the most recent render, so a case can wait on the read. */
@@ -121,9 +141,20 @@ function renderInstruments() {
   );
 }
 
+/** Wait on the read itself, so "no door" is a settled fact, not a race. */
+async function settled() {
+  await waitFor(() =>
+    expect(
+      lastQueryClient?.getQueryState(['document-client-scans', 'client-1', 'proj-1'])
+        ?.status,
+    ).toBe('success'),
+  );
+}
+
 beforeEach(() => {
   for (const key of Object.keys(scansByUser)) delete scansByUser[key];
   readyFilteredUsers.length = 0;
+  projectFilteredUsers.length = 0;
   lastQueryClient = null;
   designerId = 'designer-uid';
   mockPush.mockClear();
@@ -184,19 +215,46 @@ describe('LetterheadInstruments — the designer-scan union (Wave 1P)', () => {
     ];
 
     renderInstruments();
-
-    // Wait on the read itself, so "no door" is a settled fact, not a race.
-    await waitFor(() =>
-      expect(
-        lastQueryClient?.getQueryState(['document-client-scans', 'client-1'])
-          ?.status,
-      ).toBe('success'),
-    );
+    await settled();
 
     // Ruling 7-B: ready-only on the designer leg, untouched on the client leg.
     expect(readyFilteredUsers).toEqual(['designer-uid']);
 
     // Nothing ready on either side — the door has nothing to open.
+    expect(screen.queryByText('Your scan')).toBeNull();
+    expect(screen.queryByText('The scan')).toBeNull();
+  });
+
+  it("never offers the designer's scan from ANOTHER project", async () => {
+    // The whole P1 finding: unscoped, this door opened a room in a different
+    // client's house. `room_scans.project_id` (00265) is the scope.
+    scansByUser['client-1'] = [];
+    scansByUser['designer-uid'] = [
+      scan('another-house', '2026-08-01T00:00:00Z', 'ready', 'proj-2'),
+    ];
+
+    renderInstruments();
+    await settled();
+
+    // The project filter rides the designer leg only — the client leg keeps its
+    // pre-union behaviour byte-for-byte.
+    expect(projectFilteredUsers).toEqual(['designer-uid']);
+
+    expect(screen.queryByText('Your scan')).toBeNull();
+    expect(screen.queryByText('The scan')).toBeNull();
+  });
+
+  it("never offers a designer scan that is linked to no project at all", async () => {
+    // project_id is nullable: a scan she took before any project existed
+    // belongs to no document, so it must not answer for this one.
+    scansByUser['client-1'] = [];
+    scansByUser['designer-uid'] = [
+      scan('unlinked', '2026-08-01T00:00:00Z', 'ready', null),
+    ];
+
+    renderInstruments();
+    await settled();
+
     expect(screen.queryByText('Your scan')).toBeNull();
     expect(screen.queryByText('The scan')).toBeNull();
   });

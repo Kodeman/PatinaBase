@@ -130,11 +130,16 @@ export function DiscoverySection({
   designerId,
   clientProfileId,
   clientName,
+  projectId = null,
 }: {
   engagementId: string; // the designer_clients.id (Shape D)
   designerId: string;
   clientProfileId: string | null;
   clientName: string;
+  /** This document's project, when it has one — the scope the designer leg of
+   *  the scan picker is filtered to. Null on a pre-project engagement, which
+   *  means the picker offers the client's scans only. */
+  projectId?: string | null;
 }) {
   const router = useRouter();
   const { data: read } = useDiscovery(engagementId);
@@ -143,7 +148,11 @@ export function DiscoverySection({
   const { data: styles } = useStyles() as {
     data: { id: string; name: string }[] | undefined;
   };
-  const { data: scans } = useClientRoomScans(clientProfileId ?? '') as {
+  // `clientProfileId` is the client's auth uid — what `useClientRoomScans`
+  // now resolves against directly (`room_scans.user_id`). It used to be read
+  // as a `designer_clients.id`, which no caller ever passes, so the client leg
+  // never returned a row on production.
+  const { data: scans } = useClientRoomScans(clientProfileId ?? '', projectId) as {
     data:
       | {
           id: string;

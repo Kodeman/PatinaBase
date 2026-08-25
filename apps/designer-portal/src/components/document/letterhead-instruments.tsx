@@ -83,7 +83,8 @@ type HeroCandidate = Pick<
   'image_url' | 'is_primary' | 'quality_score' | 'display_order'
 >;
 
-/** The client's ready scans AND the designer's own (spec §11.2, Wave 1P).
+/** The client's ready scans AND the designer's own scans on THIS project
+ *  (spec §11.2, Wave 1P).
  *  Before the union a designer could not open her own site scan from her own
  *  project's document. Provenance rides each row so the instrument's label
  *  still says whose scan it is.
@@ -91,9 +92,9 @@ type HeroCandidate = Pick<
  *  `enabled` deliberately still gates on `clientProfileId` (Ruling 4-A): a
  *  lead / proposal / relationship-only document must not start issuing a
  *  room_scans read plus signing calls it never issued before. */
-function useClientScans(clientProfileId: string | null) {
+function useClientScans(clientProfileId: string | null, projectId: string | null) {
   return useQuery<ScanArtifact[]>({
-    queryKey: ['document-client-scans', clientProfileId],
+    queryKey: ['document-client-scans', clientProfileId, projectId],
     enabled: Boolean(clientProfileId),
     queryFn: async () => {
       const supabase = getSupabase();
@@ -117,9 +118,11 @@ function useClientScans(clientProfileId: string | null) {
       const readScansFor = async (
         ownerId: string,
         readyOnly: boolean,
+        scopedProjectId?: string,
       ): Promise<ScanRow[]> => {
         let query = supabase.from('room_scans').select(select).eq('user_id', ownerId);
         if (readyOnly) query = query.eq('status', 'ready');
+        if (scopedProjectId) query = query.eq('project_id', scopedProjectId);
         const { data, error } = await query
           .order('created_at', { ascending: false })
           .limit(5);
@@ -127,11 +130,18 @@ function useClientScans(clientProfileId: string | null) {
         return (data ?? []) as ScanRow[];
       };
 
+      // The designer leg is scoped to THIS project (room_scans.project_id,
+      // 00265). The column is nullable and an unlinked scan does not qualify —
+      // otherwise the door on document C could open a room scanned in client
+      // B's house. No project (a lead / proposal / relationship document) means
+      // no designer leg, so those documents keep their pre-union behaviour.
       const [clientRows, designerRows] = await Promise.all([
         clientProfileId
           ? readScansFor(clientProfileId, false)
           : Promise.resolve<ScanRow[]>([]),
-        designerId ? readScansFor(designerId, true) : Promise.resolve<ScanRow[]>([]),
+        designerId && projectId
+          ? readScansFor(designerId, true, projectId)
+          : Promise.resolve<ScanRow[]>([]),
       ]);
 
       const byId = new Map<string, ScanRow & { owner_kind: 'designer' | 'client' }>();
@@ -265,7 +275,7 @@ export function LetterheadInstruments({
   const [composing, setComposing] = useState(false);
   const [noteBody, setNoteBody] = useState('');
   const sendNote = useSendDocumentNote(projectId, clientProfileId);
-  const { data: scans } = useClientScans(clientProfileId);
+  const { data: scans } = useClientScans(clientProfileId, projectId);
   // Call Sheet instrument — flag-gated at this consumer (never in the
   // registry, per registry.tsx's canon). When off, CallSheetInstrument never
   // mounts, so this row of the letterhead instruments stays byte-identical

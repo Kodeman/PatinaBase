@@ -1267,6 +1267,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 designerId={row.designer_id}
                 clientProfileId={row.client_profile_id}
                 clientName={row.client_name}
+                projectId={row.project_id ?? null}
               />
             )}
             {(spreadSection === 'direction' || spreadSection === 'proposal') &&
