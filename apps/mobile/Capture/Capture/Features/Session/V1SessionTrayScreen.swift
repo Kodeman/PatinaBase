@@ -96,7 +96,8 @@ struct V1SessionTrayScreen: View {
     }
 
     private func row(_ specimen: Specimen) -> some View {
-        HStack(spacing: 12) {
+        let playable = playableSegments(specimen)
+        return HStack(spacing: 12) {
             Button {
                 coordinator.navigate(to: .specimen(specimen.id))
             } label: {
@@ -114,8 +115,8 @@ struct V1SessionTrayScreen: View {
             }
             .buttonStyle(.plain)
 
-            if let segments = specimen.voiceAudioSegmentsRaw, !segments.isEmpty {
-                playButton(specimen.id, segments)
+            if !playable.isEmpty {
+                playButton(specimen.id, playable)
             }
 
             // The play control has to sit OUTSIDE a navigation button to receive
@@ -139,7 +140,26 @@ struct V1SessionTrayScreen: View {
         }
     }
 
-    private func playButton(_ specimenID: UUID, _ segments: [String]) -> some View {
+    /// The segments of this note whose bytes are still on THIS phone.
+    /// `voiceAudioSegmentsRaw` outlives them: once a capture is receipted the
+    /// sync service deletes the local files and leaves the array standing, and
+    /// VoiceSegmentPlayer skips an unreadable file in silence — so a control
+    /// gated on the array alone offered Play and then played nothing, with no
+    /// message. Playing the remote object instead is wave 4 (portal playback);
+    /// until then the control is simply absent once the audio has left.
+    private func playableSegments(_ specimen: Specimen) -> [URL] {
+        (specimen.voiceAudioSegmentsRaw ?? []).compactMap { name in
+            let url = store.mediaURL(for: name)
+            let values = try? url.resourceValues(
+                forKeys: [.isRegularFileKey, .fileSizeKey]
+            )
+            guard values?.isRegularFile == true,
+                  (values?.fileSize ?? 0) > 0 else { return nil }
+            return url
+        }
+    }
+
+    private func playButton(_ specimenID: UUID, _ segments: [URL]) -> some View {
         let playing = player.isPlaying && playingSpecimenID == specimenID
         return Button {
             player.stop()
@@ -147,7 +167,7 @@ struct V1SessionTrayScreen: View {
                 playingSpecimenID = nil
             } else {
                 playingSpecimenID = specimenID
-                player.play(segments.map { store.mediaURL(for: $0) })
+                player.play(segments)
             }
         } label: {
             Image(systemName: playing ? "stop.fill" : "play.fill")
