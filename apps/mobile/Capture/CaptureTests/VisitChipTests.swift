@@ -240,15 +240,22 @@ struct VisitChipTests {
     @Test func anUnplacedDraftAdoptsTheVisitStartedAtTheDoor() throws {
         let store = try CaptureStore.inMemory()
 
-        let draft = store.newDraft()
+        let visit = site(room: "Living")
+        let priorSessionID = UUID()
+        let draft = store.newDraft(sessionID: priorSessionID)
         #expect(FieldPlacementLine.isUnplaced(draft))
 
-        #expect(FieldInHandPlacement.adopt(site(room: "Living"), into: draft))
+        #expect(FieldInHandPlacement.adopt(visit, into: draft))
         #expect(!FieldPlacementLine.isUnplaced(draft))
         #expect(FieldPlacementLine.text(for: draft) == "Maple St · Living")
         // The visit stamp rides along, exactly as it does at the shutter.
         #expect(draft.visitKind == .site)
         #expect(draft.visitLabel == "Maple St")
+        // Invariant V: the capture belongs to the visit she just named, so the
+        // session id cannot stay behind while the project moves. V4 and the
+        // Visits block group by it.
+        #expect(draft.captureSessionID == visit.context?.visitID)
+        #expect(draft.captureSessionID != priorSessionID)
         // FC-R5: the capture lane only. The scan lane is not cross-assigned.
         #expect(draft.venue?.projectId == "p1")
     }
@@ -259,11 +266,14 @@ struct VisitChipTests {
     @Test func aDraftThatAlreadyHasAProjectIsLeftAloneAtTheDoor() throws {
         let store = try CaptureStore.inMemory()
 
-        let draft = store.newDraft()
+        let priorSessionID = UUID()
+        let draft = store.newDraft(sessionID: priorSessionID)
         draft.venue = VenueStamp(projectId: "p9", projectName: "Cedar Ct", room: "Kitchen")
         #expect(!FieldInHandPlacement.adopt(site(room: "Living"), into: draft))
         #expect(FieldPlacementLine.text(for: draft) == "Cedar Ct · Kitchen")
         #expect(draft.visitKind == nil)
+        // The guard declined, so the session id is untouched too.
+        #expect(draft.captureSessionID == priorSessionID)
     }
 
     /// FC-R2: a kindless context is routing memory, not a visit — the same guard

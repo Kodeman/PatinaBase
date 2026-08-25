@@ -105,10 +105,14 @@ public enum FieldPlacementLine {
 /// FC-R6 is untouched: this is the UNSAVED draft only. An already-committed
 /// unplaced capture still waits on Today until she files it from the tray.
 public enum FieldInHandPlacement {
-    /// Adopts the visit's routing onto a draft that has none, exactly as
-    /// `makeDraft()` does at the shutter — routing, destination, then the visit
+    /// Adopts the visit onto a draft that has none, exactly as `makeDraft()`
+    /// does at the shutter — session id, routing, destination, then the visit
     /// stamp — so a capture taken a second before the door opened is
     /// indistinguishable from one taken a second after.
+    ///
+    /// The session id travels with the rest: a draft left carrying the OLD id
+    /// while displaying the NEW visit's project is the split Invariant V forbids,
+    /// and V4 and the Visits block group by the visit a capture was taken in.
     ///
     /// A draft that already carries a project is left alone: she may have set it
     /// per-capture in S1, and the visit must not overwrite a narrower answer.
@@ -120,6 +124,7 @@ public enum FieldInHandPlacement {
         // guard the chip applies, so the chip and the card cannot disagree about
         // whether there is a visit to inherit.
         guard draft.isUnplaced, let context = state.context, context.kind != nil else { return false }
+        draft.captureSessionID = context.visitID
         draft.venue = context.routing.stamped(onto: draft.venue ?? VenueStamp())
         draft.destination = context.routing.destination
         draft.inherit(context)
