@@ -196,7 +196,11 @@ describe("D-B2: runtime-resolved Supabase origin", () => {
 
     createMiddlewareClient(
       {
-        cookies: { get: () => undefined, getAll: () => [], set: () => undefined },
+        cookies: {
+          get: () => undefined,
+          getAll: () => [],
+          set: () => undefined,
+        },
         headers: { get: () => null },
       },
       { cookies: { set: () => undefined } },
@@ -212,7 +216,11 @@ describe("D-B2: runtime-resolved Supabase origin", () => {
 
     createMiddlewareClient(
       {
-        cookies: { get: () => undefined, getAll: () => [], set: () => undefined },
+        cookies: {
+          get: () => undefined,
+          getAll: () => [],
+          set: () => undefined,
+        },
         headers: { get: () => null },
       },
       { cookies: { set: () => undefined } },
@@ -313,6 +321,47 @@ describe("D-F2: storage pinned to the direct origin (storage-direct ruling)", ()
   });
 
   it("un-flipped: leaves storage exactly as constructed (pin is inert when the origin hasn't been repointed)", async () => {
+    const { createBrowserClient } = await importFreshClientModule();
+
+    const client = createBrowserClient() as unknown as { storage: unknown };
+
+    expect(mockCreateBrowserClient).toHaveBeenCalledTimes(1);
+    expect(mockCreateBrowserClient.mock.calls[0][0]).toBe(PROD_URL);
+
+    const originalReturnValue = mockCreateBrowserClient.mock.results[0]
+      .value as { storage: unknown };
+    expect(client.storage).toBe(originalReturnValue.storage);
+  });
+
+  // The two cases above only exercise the SSR-fallback (no-`window`) branch
+  // of createBrowserClient() — production traffic always goes through the
+  // browser/singleton branch (`typeof window !== "undefined"`), which is a
+  // DIFFERENT code path (see the window shim pattern in the D-B1
+  // "(browser/singleton branch)" case above). Duplicate both cases with
+  // `globalThis.window` set so the actual production path is covered too.
+  it("flipped (browser/singleton branch): repoints storage to the build-time (direct) Supabase host, not the runtime origin", async () => {
+    // @ts-expect-error -- minimal window shim to hit the browser branch
+    globalThis.window = { location: { hostname: "app.patina.cloud" } };
+    globalThis.__PATINA_SUPABASE_ORIGIN = RUNTIME_ORIGIN;
+    const { createBrowserClient } = await importFreshClientModule();
+
+    const client = createBrowserClient() as unknown as {
+      storage: { url?: string };
+    };
+
+    // The underlying @supabase/ssr constructor still receives the runtime
+    // (repointed) origin for everything else (auth, postgrest, realtime) —
+    // only .storage gets pinned back to the direct host.
+    expect(mockCreateBrowserClient).toHaveBeenCalledTimes(1);
+    expect(mockCreateBrowserClient.mock.calls[0][0]).toBe(RUNTIME_ORIGIN);
+
+    expect(client.storage).toBeInstanceOf(StorageClient);
+    expect(client.storage.url).toBe(`${PROD_URL}/storage/v1`);
+  });
+
+  it("un-flipped (browser/singleton branch): leaves storage exactly as constructed (pin is inert when the origin hasn't been repointed)", async () => {
+    // @ts-expect-error -- minimal window shim to hit the browser branch
+    globalThis.window = { location: { hostname: "app.patina.cloud" } };
     const { createBrowserClient } = await importFreshClientModule();
 
     const client = createBrowserClient() as unknown as { storage: unknown };

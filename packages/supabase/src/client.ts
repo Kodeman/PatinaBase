@@ -79,8 +79,32 @@ function getSupabaseUrl(): string {
  * field shapes staying identical to the copy `@supabase/supabase-js` bundles
  * internally — see the version-lock comment on the dependency in
  * package.json. Do not bump one without the other.
+ *
+ * Caveats:
+ * - `new URL("storage/v1", buildTimeUrl)` assumes `buildTimeUrl` is a bare
+ *   origin (no path). That's how `supabase-js` itself derives `storageUrl`
+ *   internally, and it's true of every `NEXT_PUBLIC_SUPABASE_URL` value in
+ *   every env today (always `https://<ref>.supabase.co`) — if that value
+ *   ever carries a path, this join and the client's own internal one would
+ *   diverge.
+ * - This is deliberately wired into `createBrowserClient()` only — the ONE
+ *   factory whose singleton actually gets read with a runtime-repointed
+ *   origin in the browser. `createClient()`'s server branch, `createAdminClient()`,
+ *   and `createEphemeralAuthClient()` never see `SUPABASE_ORIGIN_RUNTIME`
+ *   today (`globalThis.__PATINA_SUPABASE_ORIGIN` is emitted client-side
+ *   only). If a future change ever sets that global server-side too, those
+ *   other factories would need the same pin.
+ * - Does not forward a 4th (`StorageClientOptions`) arg to `new
+ *   StorageClient(...)`: `SupabaseClient` accepts `options.storage` at
+ *   construction but only uses it inline to build its OWN internal
+ *   `this.storage` — it isn't retained as a readable instance field, so
+ *   there is nothing on `client` for this function to read back and
+ *   forward. Patina doesn't pass `options.storage` anywhere today, so this
+ *   is inert either way; if that changes, the value would need to be
+ *   threaded through explicitly (e.g. a module-level const shared by both
+ *   call sites), not recovered from the constructed client.
  */
-function pinStorageDirect(client: SupabaseClient<Database>): void {
+export function pinStorageDirect(client: SupabaseClient<Database>): void {
   const buildTimeUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   if (getSupabaseUrl() === buildTimeUrl) return; // inert when un-flipped
   const i = client as unknown as {
@@ -162,7 +186,10 @@ export function createBrowserClient(): SupabaseClient<Database> {
   const cookieOptions = buildAuthCookieOptions();
   if (typeof window !== "undefined") {
     if (!globalThis.__supabaseBrowserClient) {
-      globalThis.__supabaseBrowserClient = createSSRBrowserClient<Database>(
+      // Pin BEFORE publishing to the global singleton — if pinStorageDirect
+      // ever throws, an un-pinned client must never be cached and handed
+      // back on every subsequent call.
+      const client = createSSRBrowserClient<Database>(
         getSupabaseUrl(),
         supabaseAnonKey,
         {
@@ -170,7 +197,8 @@ export function createBrowserClient(): SupabaseClient<Database> {
           auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
         },
       ) as unknown as SupabaseClient<Database>;
-      pinStorageDirect(globalThis.__supabaseBrowserClient);
+      pinStorageDirect(client);
+      globalThis.__supabaseBrowserClient = client;
     }
     return globalThis.__supabaseBrowserClient;
   }
