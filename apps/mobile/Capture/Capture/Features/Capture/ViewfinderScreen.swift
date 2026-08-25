@@ -16,6 +16,7 @@ import CaptureKitMocks   // #Preview only — MockCameraService for the low-ligh
 
 struct ViewfinderScreen: View {
     @State private var model: ViewfinderModel
+    @State private var reachability = FieldReachability()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(container: AppContainer, coordinator: CaptureCoordinator) {
@@ -38,6 +39,10 @@ struct ViewfinderScreen: View {
 
             VStack(spacing: 0) {
                 topBar
+                if !reachability.isOnline {
+                    OfflineQueueBanner(queuedCount: model.outboxDepth)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
                 Spacer()
                 bottomControls
             }
@@ -69,7 +74,14 @@ struct ViewfinderScreen: View {
         .environment(\.colorScheme, .light)
         .animation(cardAnimation, value: model.cardSpecimen?.id)
         .animation(cardAnimation, value: model.isHolding)
-        .task { await model.start() }
+        .task {
+            await model.start()
+            reachability.start {
+                Task { @MainActor in
+                    await model.drainOnReconnect()
+                }
+            }
+        }
         .onDisappear { model.stop() }
         .statusBarHidden(true)
         .accessibilityIdentifier(CaptureScreenID.c1Viewfinder.rawValue)

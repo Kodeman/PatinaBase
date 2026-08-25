@@ -174,6 +174,30 @@ final class ViewfinderModel {
         coordinator.navigate(to: .session)
     }
 
+    // MARK: Offline banner + reconnect drain (C1)
+
+    private var activeOwner: CaptureOwnerIdentity? {
+        CaptureOwnerIdentity(userID: session.userID, workspaceID: session.workspaceID)
+    }
+
+    /// The banner's copy is "No signal · saving on device" with queuedCount
+    /// presented as QUEUED, so it must be the outbox depth — the same source
+    /// LocalCaptureSyncService feeds to CaptureSyncAttributes.queued — not
+    /// sessionCount, which counts specimens in the current visit (:47, :133-137).
+    /// A designer with 12 already-synced captures and nothing queued must not
+    /// be told "12 queued".
+    var outboxDepth: Int {
+        guard let owner = activeOwner else { return store.outbox().count }
+        return store.outbox(owner: owner).count
+    }
+
+    /// Regained connectivity never auto-drained before this; a day's captures
+    /// could sit in the outbox until she happened to open the tray.
+    func drainOnReconnect() async {
+        analytics.event("sync.reconnect_drain")
+        await sync.drain()
+    }
+
     // MARK: Work (W1 — designer/pro dashboard)
 
     func openWork() {
