@@ -255,25 +255,28 @@ export ASC_PRIVATE_KEY_PATH=<path to .p8>
 
 `AppConfiguration.postHogAPIKey` reads `Info.plist`'s `POSTHOG_API_KEY`
 first — a **build-time** value, sourced from
-`Capture/App/Configuration/BuildSettings.xcconfig` (committed) and its
-optional `#include? "Secrets.xcconfig"`. This is the only resolution path
-that survives an archive: the `POSTHOG_API_KEY` **environment variable**
-fallback (still checked, lower priority) is only ever injected by an Xcode
-scheme's **Run** action — never a device install, TestFlight, or CI archive
-— so a key set only that way makes the telemetry gate pass on one Mac and
-ships silently blind in every real build.
+`Capture/App/Configuration/BuildSettings.xcconfig`. That file **commits
+the real PostHog project key** (the same public value the portals commit
+in `apps/*/wrangler.jsonc` — PostHog project keys are public client tokens
+by design), so a device build or TestFlight archive cut straight from the
+repo ships with analytics enabled with no setup step. This is the only
+resolution path that survives an archive: `Secrets.swift` and the
+`POSTHOG_API_KEY` environment variable (still checked, lower priority) are
+only ever injected by an Xcode scheme's **Run** action — never a device
+install, TestFlight, or CI archive.
 
-To set a real key for local archiving:
+`Secrets.xcconfig` (gitignored, same directory) is optional — copy
+`Secrets.xcconfig.example` only to override the committed key locally,
+e.g. to point a build at a different PostHog project:
 
 ```bash
 cp Capture/App/Configuration/Secrets.xcconfig.example \
    Capture/App/Configuration/Secrets.xcconfig
-# edit POSTHOG_API_KEY = phc_...   (gitignored; never commit the real value)
+# edit POSTHOG_API_KEY = phc_...   (gitignored; overrides the committed key)
 ```
 
-Without `Secrets.xcconfig`, `POSTHOG_API_KEY` resolves to an empty string in
-`BuildSettings.xcconfig`'s default and analytics stays a no-op —
-fail-closed, not a build failure.
+Without `Secrets.xcconfig`, `POSTHOG_API_KEY` resolves to the committed key
+in `BuildSettings.xcconfig` and analytics is enabled.
 
 ### App Store Connect app record — BLOCKED on Kody
 

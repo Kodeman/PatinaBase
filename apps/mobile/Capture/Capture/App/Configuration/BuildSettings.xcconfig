@@ -13,13 +13,16 @@
 //  auto-emits INFOPLIST_KEY_* for Xcode's own known Info.plist keys, so that
 //  route silently drops a custom key like this one.
 //
-//  POSTHOG_API_KEY defaults to empty here so a fresh checkout with no
-//  Secrets.xcconfig still builds — an empty Info.plist POSTHOG_API_KEY is
-//  read by AppConfiguration.postHogAPIKey as "unset" (analytics stays a
-//  no-op), mirroring Secrets.swift's `nil`. The optional #include? below
-//  layers the real key on top when a gitignored Secrets.xcconfig exists
-//  next to this file.
+//  POSTHOG_API_KEY below is committed on purpose: PostHog project keys are
+//  public client tokens by design, and a fresh checkout built or archived
+//  straight from the repo should ship with analytics enabled. The optional
+//  #include? below still layers a gitignored Secrets.xcconfig on top —
+//  xcconfig assignment order means the later value wins, so a local
+//  override there (e.g. pointing at a different PostHog project) beats
+//  the committed value below.
 
-POSTHOG_API_KEY =
+// Public PostHog project key — same value the portals commit in
+// wrangler.jsonc; Secrets.xcconfig may override.
+POSTHOG_API_KEY = phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG
 
 #include? "Secrets.xcconfig"
