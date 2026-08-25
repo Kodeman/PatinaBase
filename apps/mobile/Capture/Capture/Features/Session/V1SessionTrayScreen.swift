@@ -122,14 +122,24 @@ struct V1SessionTrayScreen: View {
             RouteActionButton("Review each", systemImage: "rectangle.stack", kind: .secondary) {
                 coordinator.present(.cullDeck)
             }
-            RouteActionButton("Route all \(items.count)", systemImage: "arrow.up.forward", kind: .primary) {
-                if let first = items.first { coordinator.present(.assignVenue(first.id)) }
+            // "Route all N" presented the picker for exactly ONE record. Until the
+            // visit spine lands, say what the button actually does: it places the
+            // next unplaced capture, one at a time.
+            RouteActionButton(placeButtonTitle, systemImage: "arrow.up.forward", kind: .primary) {
+                if let next = items.first(where: { $0.venue?.projectId == nil }) ?? items.first {
+                    coordinator.present(.assignVenue(next.id))
+                }
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
         .padding(.bottom, 8)
         .background(.ultraThinMaterial)
+    }
+
+    private var placeButtonTitle: String {
+        let unplaced = items.filter { $0.venue?.projectId == nil }.count
+        return unplaced > 0 ? "Place \(unplaced)" : "Review placement"
     }
 
     private var emptyState: some View {
