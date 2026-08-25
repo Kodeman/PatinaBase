@@ -4,8 +4,11 @@
  * A pure-math + thin-DOM port of the prototype's orbit interaction (room-view-prototype.html
  * L574–599). Deliberately three.js-free: framing and placement are plain arithmetic over
  * `{x,y,z}` so they unit-test in jsdom, and `orbit-canvas.tsx` maps the result onto a
- * `THREE.PerspectiveCamera`. Pointer drag → azimuth/polar (polar clamped); wheel → radius
- * (clamped, `preventDefault` so the page doesn't scroll). `detach()` removes every listener.
+ * `THREE.PerspectiveCamera`. Pointer drag → azimuth/polar (polar clamped); wheel → radius,
+ * MULTIPLICATIVELY (`radius *= exp(deltaY · rate)`, clamped, `preventDefault` so the page
+ * doesn't scroll) — scale-invariant, so the same notch feels the same fraction of the
+ * room whether it measures in feet (Plan/Orbit/Mesh) or metres (Splat). `detach()`
+ * removes every listener.
  *
  * The prototype hardcodes azim 0.82 / polar 1.08 / radius 32 for its one 19×14 room.
  * `frameRoom` keeps the two angles and DERIVES the radius (and its clamp bounds) from the
@@ -31,11 +34,14 @@ export interface CameraFraming {
   maxPolar: number;
 }
 
-// Prototype constants (verbatim), + the derived-radius factors.
-const DEFAULT_AZIMUTH = 0.82;
+// Prototype constants (verbatim), + the derived-radius factors. Exported because
+// `splat/splat-scene.ts`'s `frameSplatInterior` keeps the same azimuth and polar band
+// while replacing the radius derivation with an interior-scaled one — a shared number,
+// not a second copy of it.
+export const DEFAULT_AZIMUTH = 0.82;
 const DEFAULT_POLAR = 1.08;
-const MIN_POLAR = 0.35;
-const MAX_POLAR = 1.45;
+export const MIN_POLAR = 0.35;
+export const MAX_POLAR = 1.45;
 const TARGET_EYE_FT = 2.2;
 
 /** radius ÷ plan-diagonal that reproduces the prototype's 32 for a 19×14 room. */
@@ -45,10 +51,41 @@ const RADIUS_FIT = 1.35;
 const RADIUS_MIN_FACTOR = 0.6;
 const RADIUS_MAX_FACTOR = 2.55;
 
-// Drag / wheel sensitivities (verbatim from the prototype).
+// Drag sensitivities (verbatim from the prototype).
 const AZIMUTH_SENS = 0.006;
 const POLAR_SENS = 0.004;
-const WHEEL_SENS = 0.03;
+
+/**
+ * Wheel zoom is MULTIPLICATIVE, not additive: `radius *= exp(deltaY_px · RATE)`. The
+ * old `radius += deltaY · WHEEL_SENS` stepped a fixed WORLD-UNIT amount, tuned for
+ * Orbit's feet-scale room (r≈32) — imperceptible on Splat's metre-scale interior
+ * (r≈1) and oversaturated on anything smaller still. Scaling the step by the CURRENT
+ * radius is scale-invariant: the same notch feels the same fraction of the room
+ * regardless of whether the room measures in feet or metres.
+ *
+ * One mouse notch (deltaY ≈ 100 px) → `exp(100 · 0.0015)` ≈ ×1.16, a ~15% step.
+ * One trackpad tick (deltaY ≈ 3 px) → `exp(3 · 0.0015)` ≈ ×1.0045, a ~0.5% step —
+ * fine enough that a trackpad scroll reads as continuous rather than jumpy.
+ *
+ * Shared by Plan, Orbit, Mesh, and Splat (all four ride this one `controls.ts`), so
+ * this is a feel change on all of them, not a Splat-only tweak — see the PR notes for
+ * the before/after on Orbit's feet-scale room.
+ */
+const WHEEL_ZOOM_RATE = 0.0015;
+
+/**
+ * Firefox reports wheel deltas in "lines" (`deltaMode === 1`); Chrome and Safari
+ * always report pixels (`deltaMode === 0`). 16 is the standard line-height browsers
+ * use for this conversion, bringing a Firefox line delta onto the same scale a pixel
+ * delta already is. `DOM_DELTA_PAGE` (`deltaMode === 2`) is unhandled — no browser
+ * emits it for a wheel/trackpad gesture in practice.
+ */
+const WHEEL_LINE_TO_PIXELS = 16;
+
+/** Normalize a wheel event's `deltaY` to pixel scale regardless of `deltaMode`. */
+export function normalizedWheelDelta(e: Pick<WheelEvent, 'deltaY' | 'deltaMode'>): number {
+  return e.deltaMode === 1 ? e.deltaY * WHEEL_LINE_TO_PIXELS : e.deltaY;
+}
 
 /** Clamp `v` into [lo, hi]. */
 export function clamp(v: number, lo: number, hi: number): number {
@@ -142,7 +179,8 @@ export function createOrbitController(
   };
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
-    radius = clamp(radius + e.deltaY * WHEEL_SENS, framing.minRadius, framing.maxRadius);
+    const delta = normalizedWheelDelta(e);
+    radius = clamp(radius * Math.exp(delta * WHEEL_ZOOM_RATE), framing.minRadius, framing.maxRadius);
     recompute();
   };
 
