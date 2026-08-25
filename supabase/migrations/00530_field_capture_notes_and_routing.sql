@@ -705,8 +705,11 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     -- Safe harbor: the product insert (and any routing) inside this block was
     -- rolled back. Park the capture in the inbox and stash the conflict so
-    -- the designer can re-route it by hand. project_id is still NULL here, so
-    -- this update passes the routing guard.
+    -- the designer can re-route it by hand. This UPDATE does not touch
+    -- project_id/project_room_id/organization_id/designer_id — the upsert
+    -- above already validated that stored tuple through the same guard
+    -- trigger, so re-firing it here against those unchanged, already-good
+    -- values cannot fail.
     -- ⚠ 00516's carried handler, with ONE change: the conflict is APPENDED to
     --   the array rather than written as a bare object. Its routing behaviour
     --   is deliberately untouched (ruled: leave it — EDIT 4 has already
@@ -771,6 +774,6 @@ GRANT EXECUTE ON FUNCTION public.commit_field_capture(UUID, TEXT, JSONB, UUID, U
   TO authenticated;
 
 COMMENT ON FUNCTION public.commit_field_capture(UUID, TEXT, JSONB, UUID, UUID, TEXT, UUID) IS
-  'Idempotent upsert of a field capture; destination=library mints a draft personal-library product, destination=inbox holds it. BOTH destination branches persist project_id/project_room_id/shelf, and both carry an EXCEPTION WHEN OTHERS safe harbor that parks a refused route at status=inbox, detaching the offending routing and appending a record of it to raw_payload.conflict (an append-only ARRAY of {stage, error, sqlstate, at, attempted_*, detached_*} entries, since more than one harbor can fire in a single call). The upsert carries its own retry-once harbor for routing that went stale after it was stored. A {routing:{clear:true}} payload key un-places a capture. The four note/audio payload reads are projected to legal values so a malformed value cannot trip a CHECK constraint from outside a safe harbor; anything dropped is recorded in raw_payload.projection_errors rather than raised. Enqueues a capture_enrichment run (via enqueue_capture_enrichment_for_producer, 00516) in the same transaction on every real insert/update.';
+  'Idempotent upsert of a field capture; destination=library mints a draft personal-library product, destination=inbox holds it. BOTH destination branches persist project_id/project_room_id/shelf, and both carry an EXCEPTION WHEN OTHERS safe harbor that parks a refused route at status=inbox and appends a record of it to raw_payload.conflict (an append-only ARRAY of {stage, error, sqlstate, at, attempted_*, detached_*} entries, since more than one harbor can fire in a single call). Only the inbox branch harbor also detaches the offending routing (nulling project_id/project_room_id/shelf); the library branch harbor, whose body is carried from 00516 unchanged, parks the row and records the conflict without detaching. The upsert carries its own retry-once harbor for routing that went stale after it was stored. A {routing:{clear:true}} payload key un-places a capture. The four note/audio payload reads are projected to legal values so a malformed value cannot trip a CHECK constraint from outside a safe harbor; anything dropped is recorded in raw_payload.projection_errors rather than raised. Enqueues a capture_enrichment run (via enqueue_capture_enrichment_for_producer, 00516) in the same transaction on every real insert/update.';
 
 COMMIT;
