@@ -36,7 +36,11 @@
     "NEXT_PUBLIC_ENABLED_OAUTH_PROVIDERS": "apple",
     "ORDERS_SERVICE_URL": "https://patina-orders-worker.kody-be3.workers.dev",
     "MEDIA_SERVICE_URL": "https://patina-media-svc-worker.kody-be3.workers.dev",
-    "PROJECTS_SERVICE_URL": "https://patina-projects-worker.kody-be3.workers.dev"
+    "PROJECTS_SERVICE_URL": "https://patina-projects-worker.kody-be3.workers.dev",
+    // D-repoint wiring only — the browser Supabase-traffic repoint itself is
+    // NOT active yet (that's SUPABASE_ORIGIN_RUNTIME, added at flip time).
+    // This just gives the portal the edge-API host to point at once flipped.
+    "NEXT_PUBLIC_EDGE_API_URL": "https://api.patina.cloud"
   },
   "services": [
     { "binding": "SVC_PROJECTS", "service": "patina-projects-worker" },

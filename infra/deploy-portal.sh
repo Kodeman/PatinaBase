@@ -217,19 +217,34 @@ fi
 # CLOSED rather than ship a cross-project client. SUPABASE_ORIGIN_RUNTIME is
 # unset everywhere today (this wave changes no value), so this check is inert
 # until a future repoint sets it.
+#
+# D-repoint carve-out: the ONE sanctioned divergence is the deliberate
+# browser-traffic repoint to the edge API, api.patina.cloud — Storage is kept
+# pinned to the direct host by packages/supabase/src/client.ts's
+# pinStorageDirect() (see that file), so this is not the same failure mode as
+# an accidental divergence. Anything else still fails CLOSED.
 # ---------------------------------------------------------------------------
+ALLOWED_RUNTIME_ORIGIN="https://api.patina.cloud"
 PREFLIGHT_ORIGIN_RUNTIME="$(resolve_next_public_var SUPABASE_ORIGIN_RUNTIME)"
-if [ -n "$PREFLIGHT_ORIGIN_RUNTIME" ] && [ "$PREFLIGHT_ORIGIN_RUNTIME" != "$PREFLIGHT_URL" ]; then
+if [ -n "$PREFLIGHT_ORIGIN_RUNTIME" ] \
+  && [ "$PREFLIGHT_ORIGIN_RUNTIME" != "$PREFLIGHT_URL" ] \
+  && [ "$PREFLIGHT_ORIGIN_RUNTIME" != "$ALLOWED_RUNTIME_ORIGIN" ]; then
   echo "ERROR: refusing to build ${PORTAL} portal — SUPABASE_ORIGIN_RUNTIME=" >&2
   echo "       ${PREFLIGHT_ORIGIN_RUNTIME} diverges from the build-time" >&2
   echo "       NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL} this bundle is" >&2
-  echo "       compiled against. packages/supabase/src/client.ts resolves the" >&2
-  echo "       runtime origin FIRST, so this build's client would silently" >&2
-  echo "       target a different Supabase project than its anon key/storage" >&2
-  echo "       key were compiled for. Align SUPABASE_ORIGIN_RUNTIME with" >&2
-  echo "       NEXT_PUBLIC_SUPABASE_URL, or unset it to inherit the" >&2
+  echo "       compiled against, and it isn't the sanctioned repoint target" >&2
+  echo "       (${ALLOWED_RUNTIME_ORIGIN}). packages/supabase/src/client.ts" >&2
+  echo "       resolves the runtime origin FIRST, so this build's client" >&2
+  echo "       would silently target a different Supabase project than its" >&2
+  echo "       anon key/storage key were compiled for. Align" >&2
+  echo "       SUPABASE_ORIGIN_RUNTIME with NEXT_PUBLIC_SUPABASE_URL or with" >&2
+  echo "       ${ALLOWED_RUNTIME_ORIGIN}, or unset it to inherit the" >&2
   echo "       build-time value, before deploying." >&2
   exit 1
+fi
+
+if [ -n "$PREFLIGHT_ORIGIN_RUNTIME" ] && [ "$PREFLIGHT_ORIGIN_RUNTIME" = "$ALLOWED_RUNTIME_ORIGIN" ]; then
+  echo "==> [0/3] Preflight OK: RUNTIME REPOINT ACTIVE → ${ALLOWED_RUNTIME_ORIGIN} (storage pinned direct)"
 fi
 
 echo "==> [0/3] Preflight OK: NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL}"
