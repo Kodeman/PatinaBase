@@ -1,0 +1,160 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- commit_field_capture inbox-branch routing + the note/audio lane
+-- (the W1 routing migration — 005NN_field_capture_notes_and_routing.sql)
+--
+-- 1. INBOX ROUTING       → project_id / project_room_id persist on the inbox
+--                          path. Before this migration only the library branch
+--                          wrote them (00235:205-217 vs :255-264), so every
+--                          note-shaped capture arrived with no project.
+-- 2. AUDIO SEGMENTS      → voice.audioSegments round-trips.
+-- 3. CAPTURE KIND        → payload captureKind lands, defaulting to specimen.
+-- 4. IDEMPOTENCY         → a second commit with the same client_capture_id is
+--                          a no-op that does not clear routing.
+-- 5. SAFE HARBOR         → a project the caller does not own does NOT abort the
+--                          RPC. 00235:85-88 documents the routing deferral as
+--                          DELIBERATE ("so a bad route can be safe-harbored
+--                          instead of hard-failing the whole sync") and wraps
+--                          the library branch in EXCEPTION WHEN OTHERS. The
+--                          inbox branch now carries the same harbor: the row
+--                          parks at status='inbox' with routing untouched and
+--                          the conflict stashed in raw_payload. An unwrapped
+--                          RAISE would surface on the device as a plain Error,
+--                          not a LocalSyncError, so runAttempt's catch would
+--                          reach recordFailure → .retryableFailure and retry
+--                          on EVERY drain forever.
+-- 6. ROUTING CLEAR       → payload {routing:{clear:true}} un-places a capture.
+--                          COALESCE alone cannot tell "not supplied" from
+--                          "explicitly cleared", and a defaulted 8th argument
+--                          would create a SECOND OVERLOAD that makes every
+--                          existing 7-argument call ambiguous.
+-- 7. POLICY SHAPE        → all five field_captures policies are TO authenticated.
+--                          ⚠ The count is 5 TODAY (00233:155/159/163/168/175).
+--                          FC-R8 ruling per-studio would add a sixth; this
+--                          assertion is meant to fail loudly if it does.
+--
+-- How to run:
+--   scripts/run-sql-tests.sh -f field_capture_note_routing
+-- and, for the wave report, the FULL suite as well — it exits 0 with the 22
+-- documented known failures in supabase/tests/KNOWN_FAILURES.md, so a new
+-- unexpected failure is a real regression.
+--
+-- ⚠ The runner connects as `postgres` (superuser, run-sql-tests.sh:92), so the
+-- auth.uid()-shaped cases below exercise the RPC's LOGIC with RLS BYPASSED.
+-- apply_field_effect_test.sql:25-27 documents the same caveat. Nothing here
+-- proves RLS; do not report it as such.
+--
+-- Transaction-wrapped + ROLLBACK. commit_field_capture is SECURITY INVOKER and
+-- reads auth.uid(), so every call sets request.jwt.claims first.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+BEGIN;
+
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES ('fc000000-0000-4000-8000-000000000001', 'fc-designer@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+       ('fc000000-0000-4000-8000-000000000002', 'fc-other@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO profiles (id, email, full_name, created_at, updated_at)
+VALUES ('fc000000-0000-4000-8000-000000000001', 'fc-designer@test.invalid', 'FC Designer', NOW(), NOW()),
+       ('fc000000-0000-4000-8000-000000000002', 'fc-other@test.invalid',    'FC Other',    NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO projects (id, name, designer_id, created_by)
+VALUES ('fc000000-0000-4000-8000-0000000000a1', 'FC Maple St', 'fc000000-0000-4000-8000-000000000001', 'fc000000-0000-4000-8000-000000000001'),
+       ('fc000000-0000-4000-8000-0000000000a2', 'FC Not Mine', 'fc000000-0000-4000-8000-000000000002', 'fc000000-0000-4000-8000-000000000002');
+
+-- ⚠ 'd1', not 'r1': `r` is not a hex digit and the uuid cast fails before the
+--   first assertion runs.
+INSERT INTO project_rooms (id, project_id, name)
+VALUES ('fc000000-0000-4000-8000-0000000000d1', 'fc000000-0000-4000-8000-0000000000a1', 'Living');
+
+DO $$
+DECLARE
+  v_res       JSONB;
+  v_project   UUID;
+  v_room      UUID;
+  v_segments  JSONB;
+  v_kind      TEXT;
+  v_status    TEXT;
+  v_conflict  JSONB;
+  v_count     INTEGER;
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', 'fc000000-0000-4000-8000-000000000001', 'role', 'authenticated')::text, true);
+
+  -- 1 + 2 + 3 -------------------------------------------------------------
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c1',
+    'inbox',
+    jsonb_build_object(
+      'captureKind', 'note',
+      'voice', jsonb_build_object(
+        'audioPath',        'fc/ct/voice-a-000.m4a',
+        'audioSegments',    jsonb_build_array('fc/ct/voice-a-000.m4a', 'fc/ct/voice-a-001.m4a'),
+        'transcriptSource', 'device',
+        'transcript',       'the alcove reads about forty-two and three quarters')),
+    'fc000000-0000-4000-8000-0000000000a1',
+    'fc000000-0000-4000-8000-0000000000d1');
+
+  SELECT project_id, project_room_id, voice_audio_segments, capture_kind, status
+    INTO v_project, v_room, v_segments, v_kind, v_status
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c1';
+
+  ASSERT v_project = 'fc000000-0000-4000-8000-0000000000a1',
+    'FAIL 1a: inbox branch must persist project_id, got ' || COALESCE(v_project::text, 'NULL');
+  ASSERT v_room = 'fc000000-0000-4000-8000-0000000000d1',
+    'FAIL 1b: inbox branch must persist project_room_id, got ' || COALESCE(v_room::text, 'NULL');
+  ASSERT v_status = 'inbox', 'FAIL 1c: status should be inbox, got ' || v_status;
+  ASSERT jsonb_array_length(v_segments) = 2,
+    'FAIL 2: voice_audio_segments should carry 2 entries, got ' || COALESCE(v_segments::text, 'NULL');
+  ASSERT v_kind = 'note', 'FAIL 3: capture_kind should be note, got ' || v_kind;
+  RAISE NOTICE 'field_capture routing: cases 1-3 passed.';
+
+  -- 4 ---------------------------------------------------------------------
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c1', 'inbox', '{}'::jsonb);
+  SELECT project_id INTO v_project
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c1';
+  ASSERT v_project = 'fc000000-0000-4000-8000-0000000000a1',
+    'FAIL 4: a re-commit with no routing must not clear the stored routing';
+  RAISE NOTICE 'field_capture routing: case 4 passed.';
+
+  -- 5 — SAFE HARBOR, not a raise -------------------------------------------
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c2', 'inbox', '{}'::jsonb,
+    'fc000000-0000-4000-8000-0000000000a2');
+  SELECT status, project_id, raw_payload -> 'conflict'
+    INTO v_status, v_project, v_conflict
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c2';
+  ASSERT v_status = 'inbox',
+    'FAIL 5a: a bad route must safe-harbor to inbox, not abort the RPC; got ' || COALESCE(v_status, 'NULL');
+  ASSERT v_project IS NULL,
+    'FAIL 5b: a refused route must leave project_id NULL, got ' || COALESCE(v_project::text, 'NULL');
+  ASSERT v_conflict IS NOT NULL,
+    'FAIL 5c: the refused route must be stashed in raw_payload.conflict so she can re-route by hand';
+  RAISE NOTICE 'field_capture routing: case 5 passed (safe harbor).';
+
+  -- 6 — explicit un-placing ------------------------------------------------
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000c1', 'inbox',
+    jsonb_build_object('routing', jsonb_build_object('clear', true)));
+  SELECT project_id, project_room_id INTO v_project, v_room
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000c1';
+  ASSERT v_project IS NULL AND v_room IS NULL,
+    'FAIL 6: {routing:{clear:true}} must un-place a capture from the device';
+  RAISE NOTICE 'field_capture routing: case 6 passed.';
+
+  -- 7 ---------------------------------------------------------------------
+  SELECT count(*) INTO v_count FROM pg_policies
+   WHERE schemaname = 'public' AND tablename = 'field_captures'
+     AND roles = '{authenticated}';
+  ASSERT v_count = 5,
+    'FAIL 7: all five field_captures policies must be TO authenticated, got ' || v_count
+    || ' (if FC-R8 ruled per-studio and added a sixth, update this count deliberately)';
+  RAISE NOTICE 'field_capture routing: case 7 passed.';
+
+  PERFORM set_config('request.jwt.claims', NULL, true);
+  RAISE NOTICE 'All field_capture note-routing assertions passed.';
+END
+$$;
+
+ROLLBACK;
