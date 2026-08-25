@@ -31,7 +31,8 @@ const isoOffsetDays = (days: number) =>
   new Date(Date.now() + days * 86_400_000).toISOString();
 
 /**
- * `receiving_inspections.photo_asset_ids` (00445/00447) — media-service
+ * `receiving_inspections.photo_asset_ids` (created 00150:43; 00445/00447 add
+ * the RPCs that write it) — media-service
  * MediaAsset UUIDs written by iOS (`SupabaseReceivingService.swift:115`), into
  * rows no web surface has ever acknowledged. Wave 1P makes their EXISTENCE
  * visible; the bytes stay unreachable until the media service exposes a route
