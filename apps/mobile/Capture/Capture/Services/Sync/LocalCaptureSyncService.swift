@@ -183,6 +183,10 @@ final class LocalCaptureSyncService: CaptureSyncService {
         let failed = failedCount()
         liveActivity?.end(.init(queued: 0, uploading: 0, failed: failed))
         analytics?.event("sync.drain.done", ["failed": "\(failed)"])
+        // A successful drain is a natural point to reclaim space: every
+        // receipt this pass landed is already stamped, so the size-capped
+        // sweep (FC-R19) can only find files that are safe to remove.
+        store.sweepMediaRetention()
         emitFromOutbox()
     }
 
@@ -648,6 +652,19 @@ final class LocalCaptureSyncService: CaptureSyncService {
             retryCount: s.retryCount,
             receiptID: captureID.uuidString))
         if let productID = result.productID { s.committedProductId = productID.uuidString }
+
+        // The receipt is the proof the server has the bytes. Until this
+        // landed, every segment stayed on the phone forever — uploadMedia
+        // never cleared a local file after a successful commit. Only a
+        // filename that is actually stamped in voiceAudioRemotePathsRaw
+        // (Task 9's writer) is receipted; a segment that was lost during
+        // upload never got a stamp, so it is left on disk rather than
+        // guessed at.
+        let receiptedSegments = Set((s.voiceAudioRemotePathsRaw ?? [])
+            .compactMap { $0.split(separator: "/").last.map(String.init) })
+        for name in (s.voiceAudioSegmentsRaw ?? []) where receiptedSegments.contains(name) {
+            try? FileManager.default.removeItem(at: store.mediaURL(for: name))
+        }
 
         // Server truth: only status=="saved" is a library landing. The only
         // other accepted receipt-backed result is the inbox safe harbor.
