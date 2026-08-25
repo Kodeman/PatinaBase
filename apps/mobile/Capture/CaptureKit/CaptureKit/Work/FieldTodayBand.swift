@@ -46,11 +46,18 @@ public struct FieldTodayBand: Equatable, Sendable {
         case .stale(let label, _):
             return "Still at \(label)?"
         case .open(_, _, let captures, let notes, let scans):
+            // Never the word "queued" (mechanism vocabulary). Spec §7.1's
+            // Syncing state still owes her the true thing in her words: what
+            // hasn't left the phone is what she needs to know before she
+            // drives away, so it is re-voiced as "still on this phone" and
+            // appended only when there is any (never "0 still on this
+            // phone", never a stray separator). `captures` is always
+            // appended, so `parts` is never empty.
             var parts: [String] = []
             parts.append(captures == 1 ? "1 capture" : "\(captures) captures")
             if scans > 0 { parts.append(scans == 1 ? "1 scan" : "\(scans) scans") }
             if notes > 0 { parts.append(notes == 1 ? "1 note" : "\(notes) notes") }
-            if queuedCount > 0 { parts.append("\(queuedCount) queued") }
+            if queuedCount > 0 { parts.append("\(queuedCount) still on this phone") }
             return parts.joined(separator: " · ")
         }
     }

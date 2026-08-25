@@ -52,6 +52,45 @@ struct TodayBandTests {
         #expect(scans == 1)
     }
 
+    // Finding 2 (Wave 3 review, fix round 1) + the round-2 correction on
+    // Finding 1: the composed `.open` subtitle was never pinned, and §7.1's
+    // Syncing state ("n queued", re-voiced here) lives in exactly the string
+    // that correction edited. Pin both states as a pair: fragment order
+    // (captures · scans · notes) is covered by both.
+    @Test func anOpenVisitSubtitleAppendsWhatsStillOnThePhoneWhenThereIsAnyDepth() throws {
+        let store = try CaptureStore.inMemory()
+        let photo = store.newDraft()
+        photo.photos.append(CapturePhoto(filename: "a.heic"))
+        let note = store.newDraft()
+        note.voiceTranscript = "the alcove on the north wall"
+
+        let band = FieldTodayBandBuilder.build(
+            visitState: .active(openVisit(startedAt: now.addingTimeInterval(-3600),
+                                          lastActivityAt: now)),
+            visitCaptures: [photo, note], unplaced: [],
+            pendingScanUploads: 1, queued: 5, isOffline: false, now: now)
+
+        #expect(band.visitSubtitle == "1 capture · 1 scan · 1 note · 5 still on this phone")
+        #expect(!(band.visitSubtitle ?? "").lowercased().contains("queued"))
+    }
+
+    @Test func anOpenVisitSubtitleAppendsNothingAndNoStraySeparatorAtZeroDepth() throws {
+        let store = try CaptureStore.inMemory()
+        let photo = store.newDraft()
+        photo.photos.append(CapturePhoto(filename: "a.heic"))
+        let note = store.newDraft()
+        note.voiceTranscript = "the alcove on the north wall"
+
+        let band = FieldTodayBandBuilder.build(
+            visitState: .active(openVisit(startedAt: now.addingTimeInterval(-3600),
+                                          lastActivityAt: now)),
+            visitCaptures: [photo, note], unplaced: [],
+            pendingScanUploads: 1, queued: 0, isOffline: false, now: now)
+
+        #expect(band.visitSubtitle == "1 capture · 1 scan · 1 note")
+        #expect(!(band.visitSubtitle ?? "").hasSuffix("·"))
+    }
+
     @Test func aStaleVisitAsksWhetherSheIsStillThere() {
         let last = now.addingTimeInterval(-(CaptureSessionContextPolicy.staleConfirmWindow + 60))
         let band = FieldTodayBandBuilder.build(
