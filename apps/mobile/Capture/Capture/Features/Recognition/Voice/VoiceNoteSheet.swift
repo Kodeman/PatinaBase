@@ -207,6 +207,10 @@ struct VoiceNoteSheet: View {
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         specimen.voiceTranscript = text
         specimen.voiceAudioFilename = result?.audioFilename
+        specimen.voiceAudioSegmentsRaw = result?.audioSegments
+        specimen.voiceTranscriptSourceRaw = (result?.transcript.isEmpty == false)
+            ? "device" : "device_partial"
+        specimen.captureKindRaw = "note"
         specimen.voiceDurationSeconds = result?.durationSeconds
         specimen.setValue(text, for: .note, source: .voice)
         try? store.save()

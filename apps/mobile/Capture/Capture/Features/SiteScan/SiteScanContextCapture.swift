@@ -143,6 +143,8 @@ final class SiteScanContextModel {
             let created = service.enqueueVoice(
                 transcript: transcript,
                 audioFilename: result.audioFilename,
+                audioSegments: result.audioSegments,
+                transcriptSource: transcript.isEmpty ? "device_partial" : "device",
                 durationSeconds: result.durationSeconds,
                 provenance: self.provenance(pose: nil))
             await self.sync.enqueue(created.id)
@@ -246,7 +248,9 @@ struct SiteScanContextScreen: View {
                             workspaceID: container.session.workspaceID)
                     },
                     projectID: projectID, projectRoomID: projectRoomID,
-                    voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory()),
+                    voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
+                                                  analytics: container.analytics,
+                                                  surface: "f2"),
                     analytics: container.analytics,
                     scanSessionIdProvider: { nil },      // no scan session on a non-Pro device
                     frameProvider: { [container] in

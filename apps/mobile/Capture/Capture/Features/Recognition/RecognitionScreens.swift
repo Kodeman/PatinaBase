@@ -61,7 +61,9 @@ enum RecognitionScreens {
                 specimenID: id,
                 store: container.store,
                 session: container.session,
-                voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory()),
+                voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
+                                              analytics: container.analytics,
+                                              surface: "n4"),
                 analytics: container.analytics,
                 coordinator: coordinator
             ))

@@ -213,7 +213,9 @@ struct SiteScanHostScreen: View {
             },
             projectID: projectID,
             projectRoomID: projectRoomID,
-            voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory()),
+            voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
+                                          analytics: container.analytics,
+                                          surface: "f2"),
             analytics: container.analytics))
     }
 
