@@ -102,9 +102,9 @@ which keeps its number.
 
 | Number | File                                     | Landed state                                                    |
 | ------ | ---------------------------------------- | ---------------------------------------------------------------- |
-| 00514  | `00514_capture_enrichment_ledger.sql`    | branch `feat/capture-enrichment-ledger`; local replay only, NOT applied to staging or prod |
-| 00515  | `00515_capture_enrichment_rpcs.sql`      | branch `feat/capture-enrichment-ledger`; local replay only, NOT applied to staging or prod |
-| 00516  | `00516_capture_producer_idempotency.sql` | **MERGED to `main` (`db2128934`, 2026-08-24)**; NOT applied to staging or prod. **`CREATE OR REPLACE FUNCTION commit_field_capture` from its 00235 body plus a `PERFORM public.enqueue_capture_enrichment_for_producer(...)` call** — the SECURITY DEFINER, ownership-checking wrapper 00516 itself creates. ⚠ **Corrected 2026-08-24:** this row previously read "plus an `enqueue_capture_enrichment(...)` call, and `GRANT EXECUTE ON enqueue_capture_enrichment TO authenticated`". That grant is exactly the cross-tenant hole 00516's own adversarial review removed; the shipped 00516 REVOKEs `authenticated` from the primitive and asserts the posture in a `DO` block. Also adds `proposal_captures.client_capture_id`. ⚠ Shared object — see the Field Companion band below |
+| 00514  | `00514_capture_enrichment_ledger.sql`    | branch `feat/capture-enrichment-ledger`; local replay only, NOT applied to staging or prod (unlike 00516 below, which prod now holds) |
+| 00515  | `00515_capture_enrichment_rpcs.sql`      | branch `feat/capture-enrichment-ledger`; local replay only, NOT applied to staging or prod (unlike 00516 below, which prod now holds) |
+| 00516  | `00516_capture_producer_idempotency.sql` | **MERGED to `main` (`db2128934`, 2026-08-24)**; **APPLIED TO PROD 2026-08-25 (~09:30Z) by the Phase 3 lane** — corrected 2026-08-25, this row previously read "NOT applied to staging or prod". Staging state unchanged by that apply. **`CREATE OR REPLACE FUNCTION commit_field_capture` from its 00235 body plus a `PERFORM public.enqueue_capture_enrichment_for_producer(...)` call** — the SECURITY DEFINER, ownership-checking wrapper 00516 itself creates. ⚠ **Corrected 2026-08-24:** this row previously read "plus an `enqueue_capture_enrichment(...)` call, and `GRANT EXECUTE ON enqueue_capture_enrichment TO authenticated`". That grant is exactly the cross-tenant hole 00516's own adversarial review removed; the shipped 00516 REVOKEs `authenticated` from the primitive and asserts the posture in a `DO` block. Also adds `proposal_captures.client_capture_id`. ⚠ Shared object — see the Field Companion band below |
 
 00514 adds `public.capture_enrichment_runs` (the orthogonal execution ledger
 for AI capture enrichment — target type/id, content revision, status,
@@ -150,10 +150,12 @@ reconciler, any additional RPCs the Cloudflare Queue consumer needs).
 
 | Number | File | Landed state |
 | ------ | ---- | ------------ |
-| 00530  | `00530_field_capture_notes_and_routing.sql` | **DRAWN 2026-08-24** on branch `feat/field-companion-w1`; census re-run at landing (head `00521`, `0053*` clear on every ref). Local replay only — NOT applied to staging or prod, and it **cannot be pushed before 00516 is** (lineage 00235 → 00516 → 00530) |
+| 00530  | `00530_field_capture_notes_and_routing.sql` | **DRAWN 2026-08-24** on branch `feat/field-companion-w1`; census re-run at landing (head `00521`, `0053*` clear on every ref). Local replay only — NOT applied to staging or prod. Its hard prerequisite is **satisfied on prod**: 00516 was applied there 2026-08-25 (~09:30Z) by the Phase 3 lane (lineage 00235 → 00516 → 00530). Staging still owes 00516, so a staging push of 00530 remains blocked until it lands there |
+| 00531  | `00531_uuid_generate_v5_grant.sql` (uuid_generate_v5 grant hotfix) | **DRAWN from this band 2026-08-25** on branch `hotfix/uuid-generate-v5-grant`. Recorded here so the Field Companion waves draw from `00532–00535` and no lane re-uses `00531` |
 
-`00530` is minted; `00531–00535` remain reserved symbolically so the two
-neighbouring lanes can plan around them. Every address is claimed at the
+`00530` is minted and `00531` is drawn (the `uuid_generate_v5` grant hotfix,
+branch `hotfix/uuid-generate-v5-grant`); `00532–00535` remain reserved
+symbolically so the two neighbouring lanes can plan around them. Every address is claimed at the
 landing of the file that needs it, after re-checking this file and
 `supabase migration list`.
 
@@ -175,7 +177,10 @@ migration lands second **silently reverts the other** — no error, no failed
 migration. Per ruling FC-R18 the wave-1 replacement is authored from
 **00516's** body, with 00516 a hard prerequisite named in the migration
 header. Lineage: **00235 → 00516 → 00530**. 00516 merged to `main` at
-`db2128934` on 2026-08-24, so 00530 was authored from that merged body.
+`db2128934` on 2026-08-24, so 00530 was authored from that merged body — and
+00516 was **applied to prod on 2026-08-25 (~09:30Z)** by the Phase 3 lane, so
+the prerequisite is met there. Staging has not had it, so 00530's staging push
+is still gated on that.
 
 ### Drawn from 00494–00497
 
