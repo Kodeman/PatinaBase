@@ -299,6 +299,24 @@ public extension Specimen {
     /// project on the next drain; until then the tray shows `placed · syncing`.
     var placementNeedsReplay: Bool { placementReplayPending == true }
 
+    /// The sync path may short-circuit on a receipt it already holds ONLY while
+    /// nothing new has to reach the server. A capture placed after it committed
+    /// has something new, so it must re-run `commit_field_capture` instead —
+    /// idempotent on `client_capture_id`, and 00530's inbox branch is what
+    /// persists the project.
+    var canReuseConfirmedReceipt: Bool {
+        hasConfirmedCaptureReceipt && !placementNeedsReplay
+    }
+
+    /// The server has the placement now. Clears the replay bit so the row leaves
+    /// the drain — it replays once, not forever. Returns whether it changed.
+    @discardableResult
+    func confirmPlacementReplay() -> Bool {
+        guard placementReplayPending == true else { return false }
+        placementReplayPending = nil
+        return true
+    }
+
     /// Place this capture — write the FACT. Never touches `suggested_*`.
     /// A capture that has not committed yet needs nothing more: its routing rides
     /// the FIRST commit, exactly as a capture taken inside a visit does. One that

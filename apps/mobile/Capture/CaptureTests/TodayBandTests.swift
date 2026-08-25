@@ -143,4 +143,103 @@ struct TodayBandTests {
         #expect(band.queuedCount == 3)
         #expect(!(band.offlineLine ?? "").lowercased().contains("inbox"))
     }
+
+    // MARK: - unfiled (FC-R6)
+
+    @Test func unfiledIsEverythingWithNoProjectOnIt() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+
+        let placed = store.newDraft(owner: owner)
+        placed.venue = VenueStamp(projectId: "p1", projectName: "Maple St")
+        let unplaced = store.newDraft(owner: owner)
+        let someoneElses = store.newDraft(
+            owner: CaptureOwnerIdentity(userID: "u2", workspaceID: "w2")!)
+        try store.save()
+
+        let mine = store.unfiled(owner: owner)
+        #expect(mine.contains { $0.id == unplaced.id })
+        #expect(!mine.contains { $0.id == placed.id })
+        #expect(!mine.contains { $0.id == someoneElses.id })
+    }
+
+    @Test func aBlankProjectStringStillCountsAsUnplaced() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let blank = store.newDraft(owner: owner)
+        blank.venue = VenueStamp(projectId: "   ")
+        try store.save()
+        #expect(store.unfiled(owner: owner).contains { $0.id == blank.id })
+    }
+
+    @Test func syncingDoesNotFileACaptureAndPlacementDoes() throws {
+        // FC-R6, the whole ruling in one test: the tray empties on PLACEMENT.
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let capture = store.newDraft(owner: owner)
+        capture.status = .committed          // the NORMAL end of a successful drain
+        capture.remoteId = UUID().uuidString
+        try store.save()
+
+        #expect(store.unfiled(owner: owner).contains { $0.id == capture.id })
+
+        capture.place(projectID: "p1", projectRoomID: "sr1", room: "Living")
+        try store.save()
+
+        #expect(!store.unfiled(owner: owner).contains { $0.id == capture.id })
+        #expect(capture.venue?.projectId == "p1")
+        #expect(capture.venue?.projectRoomId == "sr1")
+        // Committed already, so the server has to be told again.
+        #expect(capture.placementNeedsReplay)
+    }
+
+    @Test func placingACaptureThatNeverCommittedNeedsNoReplay() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let capture = store.newDraft(owner: owner)      // status .draft
+        capture.place(projectID: "p1", projectRoomID: nil, room: nil)
+        try store.save()
+        #expect(!capture.placementNeedsReplay)          // it rides the FIRST commit
+        #expect(!store.unfiled(owner: owner).contains { $0.id == capture.id })
+    }
+
+    // MARK: - The placement replay, end to end (FC-R6, server side)
+
+    /// The carried defect this task closes. Two separate gates stranded a placed
+    /// committed capture: `CaptureStore.outbox()` never re-admitted it (its
+    /// `needsProjectPlacement` escape is the FF&E lane, which `place(…)` does not
+    /// write), and the sync path's confirmed-receipt short-circuit would have
+    /// handed back the old receipt without re-sending. Both are asserted here.
+    /// `LocalCaptureSyncService` itself lives in the app target, which this
+    /// bundle cannot link — `canReuseConfirmedReceipt` and
+    /// `confirmPlacementReplay()` are the CaptureKit rules it reads and calls.
+    @Test func aPlacedCommittedCaptureReentersTheDrainAndLeavesItOnce() throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let capture = store.newDraft(owner: owner)
+        capture.status = .committed
+        capture.remoteId = UUID().uuidString
+        capture.committedProductId = UUID().uuidString
+        try store.save()
+
+        // Committed, receipted, unplaced: settled as far as sync is concerned.
+        #expect(!store.outbox(owner: owner).contains { $0.id == capture.id })
+        #expect(capture.canReuseConfirmedReceipt)
+
+        capture.place(projectID: "p1", projectRoomID: "sr1", room: "Living")
+        try store.save()
+
+        // Gate 1 — the drain admits it again.
+        #expect(store.outbox(owner: owner).contains { $0.id == capture.id })
+        // Gate 2 — and the short-circuit stands aside, so it really re-commits.
+        #expect(!capture.canReuseConfirmedReceipt)
+
+        // The receipt lands: the bit is let go of, once.
+        #expect(capture.confirmPlacementReplay())
+        try store.save()
+        #expect(!capture.placementNeedsReplay)
+        #expect(capture.canReuseConfirmedReceipt)
+        #expect(!store.outbox(owner: owner).contains { $0.id == capture.id })
+        #expect(!capture.confirmPlacementReplay())
+    }
 }

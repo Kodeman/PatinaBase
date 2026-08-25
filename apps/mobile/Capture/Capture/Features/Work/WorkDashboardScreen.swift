@@ -33,6 +33,28 @@ struct WorkDashboardScreen: View {
                 if !model.loadIssues.isEmpty {
                     loadIssues
                 }
+                WorkTodayBand(
+                    band: model.todayBand,
+                    onCamera: {
+                        analytics.event("work.switch_to_camera")
+                        coordinator.switchRealm(.camera)
+                    },
+                    onStartVisit: { coordinator.present(.visit) },
+                    onResume: {
+                        analytics.event("visit.stale_prompt", ["answer": "resume"])
+                        _ = CaptureSessionContextStore.shared.remember(
+                            model.visitState.context?.routing ?? .empty, identity: identity)
+                        model.refreshVisit()
+                    },
+                    onEndVisit: {
+                        analytics.event("visit.stale_prompt", ["answer": "end"])
+                        _ = CaptureSessionContextStore.shared.endVisit(identity: identity)
+                        model.refreshVisit()
+                    },
+                    onOpenUnplaced: {
+                        coordinator.switchRealm(.camera)
+                        coordinator.navigate(to: .session)
+                    })
                 attentionSection(
                     title: "Needs you",
                     identifier: "work.section.needs-you",
@@ -61,7 +83,7 @@ struct WorkDashboardScreen: View {
             .padding(.bottom, 40)
         }
         .background(CaptureColor.paper)
-        .navigationTitle("Work")
+        .navigationTitle("Today")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             analytics.event("work.refresh")
@@ -80,6 +102,10 @@ struct WorkDashboardScreen: View {
             value: contentRevision
         )
         .accessibilityIdentifier(CaptureScreenID.w1Work.rawValue)
+    }
+
+    private var identity: CaptureSessionIdentity {
+        CaptureSessionIdentity(userID: session.userID, workspaceID: session.workspaceID)
     }
 
     // MARK: - Realm header

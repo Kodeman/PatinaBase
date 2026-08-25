@@ -288,6 +288,9 @@ final class LocalCaptureSyncService: CaptureSyncService {
                 userID: uid
             )
         }
+        // The receipt is in hand, so the placement reached the server: let go of
+        // the bit, or the row would re-commit on every drain from here on.
+        if specimen.confirmPlacementReplay() { try? store.save() }
         if let productID = receipt.productId {
             try await performProjectPlacementIfNeeded(
                 for: specimen,
@@ -362,8 +365,11 @@ final class LocalCaptureSyncService: CaptureSyncService {
         return try applyCommitResult(result, to: specimen)
     }
 
+    /// FC-R6: `canReuseConfirmedReceipt` is `hasConfirmedCaptureReceipt` MINUS a
+    /// pending placement replay — a capture placed after it committed re-runs
+    /// `commit_field_capture` so the server learns its project.
     private func confirmedReceipt(for specimen: Specimen) -> CommitReceipt? {
-        guard specimen.hasConfirmedCaptureReceipt,
+        guard specimen.canReuseConfirmedReceipt,
               let remoteID = specimen.remoteId,
               let productID = specimen.committedProductId else { return nil }
         return CommitReceipt(
