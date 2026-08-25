@@ -97,16 +97,32 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// never observe a file mid-write or a count that disagrees with the bytes.
     private let openSegmentBox = OSAllocatedUnfairLock<OpenSegment?>(uncheckedState: nil)
 
+    /// The note's words AND the identity of the request allowed to write them,
+    /// under one lock because admitting a callback and folding its text must be
+    /// one step: a check that is not atomic with the write it guards admits the
+    /// very callback it was meant to reject.
     /// Written on the SPEECH CALLBACK thread and read on rotationQueue
     /// (rotate() carries it across the recognizer swap) and on MainActor
     /// (finish(), emitFinish()). No timing coincidence is needed: rotate()
     /// reads while the old task is still delivering partials every
     /// ~100-300 ms, so every 50 s rotation raced a String's COW buffer
     /// reference before this lock.
-    private let transcriptBox = OSAllocatedUnfairLock<String>(uncheckedState: "")
+    private struct TranscriptState {
+        /// Words FINALISED by requests that have rotated away. Every request's
+        /// text is joined onto this, never onto another request's live partial.
+        var carried = ""
+        /// carried + the live request's partial — what the note reads as now.
+        var latest = ""
+        /// Which request may write. Minted per note and re-minted at every
+        /// rotation, so a callback arriving after its own request was retired
+        /// no longer matches and is dropped instead of overwriting the live
+        /// request's words with a join against a carry two rotations old.
+        var generation: UInt64 = 0
+    }
+    private let transcriptBox = OSAllocatedUnfairLock<TranscriptState>(
+        uncheckedState: TranscriptState())
     private var latestTranscript: String {
-        get { transcriptBox.withLockUnchecked { $0 } }
-        set { transcriptBox.withLock { $0 = newValue } }
+        transcriptBox.withLockUnchecked { $0.latest }
     }
     private var startedAt: Date?
     /// The moment recording actually stopped — set ONCE per note, by whichever
@@ -248,7 +264,7 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         analytics.event("voice.start", ["surface": surface,
                                         "note_setting": "solo",
                                         "transcribing": String(available)])
-        latestTranscript = ""
+        let generation = beginTranscriptGeneration()
         startedAt = Date()
         stoppedAt = nil
         // Every per-note field, because one instance records many notes.
@@ -290,9 +306,8 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         return AsyncThrowingStream { continuation in
             self.continuation = continuation
             if let recognizer, let request {
-                self.task = self.startRecognition(recognizer: recognizer,
-                                                  request: request,
-                                                  continuation: continuation)
+                self.task = self.startRecognition(recognizer: recognizer, request: request,
+                                                  generation: generation, continuation: continuation)
             }
             // No else: nothing is yielded on the ladder rung. A chunk here
             // would BE the transcript — the sheets assign chunk.text straight
@@ -384,31 +399,102 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     }
 
     /// The recognition task for a note's FIRST request. Lifted out of
-    /// startLiveTranscription() so the ladder branch above stays legible; the
-    /// body is unchanged.
+    /// startLiveTranscription() so the ladder branch above stays legible. It
+    /// gets the SAME callback every rotated request gets, so rotation N+1
+    /// behaves exactly like rotation 1 and no single request can end the note.
     private func startRecognition(
         recognizer: SFSpeechRecognizer,
         request: SFSpeechAudioBufferRecognitionRequest,
+        generation: UInt64,
         continuation: AsyncThrowingStream<TranscriptChunk, Error>.Continuation
     ) -> SFSpeechRecognitionTask {
-        recognizer.recognitionTask(with: request) { [weak self] result, error in
-            if let result {
-                let text = result.bestTranscription.formattedString
-                self?.latestTranscript = text
-                continuation.yield(TranscriptChunk(text: text, isFinal: result.isFinal))
-                if result.isFinal { continuation.finish() }
+        recognizer.recognitionTask(
+            with: request,
+            resultHandler: recognitionHandler(generation: generation, continuation: continuation))
+    }
+
+    /// The callback EVERY request gets — the note's first and every rotation's.
+    ///
+    /// A result's `isFinal` finalises THAT REQUEST ONLY: its words move into
+    /// the carry so the next request joins onto words rather than onto a live
+    /// partial. It must NEVER finish the note's stream. rotate() ends each
+    /// request with endAudio(), which is precisely what makes Speech deliver a
+    /// final result — so the `if result.isFinal { continuation.finish() }` this
+    /// replaces ended the whole note at the FIRST ~50 s rotation: a 3-minute
+    /// note stopped transcribing after the first minute and a capped note could
+    /// never be reached. The stream is finished by finish(), endAtCap() and
+    /// endAbandonedNote() alone.
+    ///
+    /// `generation` is the identity of the request this closure was built for.
+    /// A rotated-away request can still deliver, and its join is against a carry
+    /// that has since moved on; admitting it would clobber the live request's
+    /// words. foldResult() drops it, and an error from it is not this note's.
+    private func recognitionHandler(
+        generation: UInt64,
+        continuation: AsyncThrowingStream<TranscriptChunk, Error>.Continuation
+    ) -> (SFSpeechRecognitionResult?, Error?) -> Void {
+        { [weak self] result, error in
+            guard let self else { return }
+            if let result,
+               let text = self.foldResult(result.bestTranscription.formattedString,
+                                          isFinal: result.isFinal,
+                                          generation: generation) {
+                // isFinal is the REQUEST's, never the note's: a consumer reading
+                // a rotation as the end of the note is the bug one layer up.
+                continuation.yield(TranscriptChunk(text: text, isFinal: false))
             }
-            if let error {
-                continuation.finish(throwing: error)
-                // The OTHER door to an abandoned note (recognition erroring
-                // out, as opposed to the engine-start failure). Tears the note
-                // down itself and emits its own reason:"error" voice.finish.
-                // VoiceNoteSheet.begin()'s catch also calls voice.finish()
-                // afterward — safe, because finish() guards on noteIsActive and
-                // finds nothing left to do by then.
-                let service = self
-                DispatchQueue.main.async { service?.endAbandonedNote() }
-            }
+            guard let error, self.isLiveGeneration(generation) else { return }
+            continuation.finish(throwing: error)
+            // The OTHER door to an abandoned note (recognition erroring out, as
+            // opposed to the engine-start failure). Tears the note down itself
+            // and emits its own reason:"error" voice.finish.
+            // VoiceNoteSheet.begin()'s catch also calls voice.finish()
+            // afterward — safe, because finish() guards on noteIsActive and
+            // finds nothing left to do by then.
+            DispatchQueue.main.async { [weak self] in self?.endAbandonedNote() }
+        }
+    }
+
+    /// Fold ONE request's result into the note's words and return what to
+    /// publish — nil when the callback belongs to a request already retired.
+    /// Speech delivers nothing further for a request once it has given that
+    /// request's final result, which is what makes `carried = joined` here and
+    /// `carried = latest` at the rotation the same value rather than a doubling.
+    private func foldResult(_ text: String, isFinal: Bool, generation: UInt64) -> String? {
+        transcriptBox.withLockUnchecked { state in
+            guard state.generation == generation else { return nil }
+            let joined = [state.carried, text].filter { !$0.isEmpty }.joined(separator: " ")
+            state.latest = joined
+            if isFinal { state.carried = joined }
+            return joined
+        }
+    }
+
+    private func isLiveGeneration(_ generation: UInt64) -> Bool {
+        transcriptBox.withLockUnchecked { $0.generation == generation }
+    }
+
+    /// Reset the note's words and mint the identity its FIRST request carries.
+    /// Never a reset to zero: the previous note's last generation must not
+    /// match this note's, or a callback still in flight from it would be
+    /// admitted into the new note's transcript.
+    private func beginTranscriptGeneration() -> UInt64 {
+        transcriptBox.withLockUnchecked { state in
+            state.carried = ""
+            state.latest = ""
+            state.generation &+= 1
+            return state.generation
+        }
+    }
+
+    /// Close the live request's words into the carry and mint the next
+    /// request's identity in ONE atomic step, so a partial landing between the
+    /// read and the mint can neither be carried twice nor lost.
+    private func carryForwardAndAdvance() -> UInt64 {
+        transcriptBox.withLockUnchecked { state in
+            state.carried = state.latest
+            state.generation &+= 1
+            return state.generation
         }
     }
 
@@ -630,25 +716,27 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         // partials at this instant, so a carry taken BEFORE endAudio() reports
         // a transcript the old request then advances past — those words never
         // reach the joined value below and are lost from the note. endAudio()
-        // first stops the old request taking audio; the read that follows is a
-        // single atomic take of transcriptBox, so it can neither observe a torn
-        // String nor race the callback thread's store.
+        // first stops the old request taking audio; carryForwardAndAdvance()
+        // then takes the carry and retires the old request's identity in one
+        // atomic step, so it can neither observe a torn String nor race the
+        // callback thread's store — and the final result that endAudio() itself
+        // provokes arrives against a generation that no longer matches, folds
+        // nowhere, and cannot rewrite the carry it was already counted into.
+        // NOTE the stream is NOT finished here or in any callback: the note
+        // outlives its requests, and only finish()/endAtCap()/endAbandonedNote()
+        // may end it.
         request?.endAudio()
         task?.finish()
-        let carried = latestTranscript
         let next = SFSpeechAudioBufferRecognitionRequest()
         next.shouldReportPartialResults = true
         next.requiresOnDeviceRecognition = onDeviceRecognition
         request = next
         segmentStartedAt = Date()
         analytics.event("voice.segment_rotated", ["index": String(audioSegments.count)])
-        task = recognizer.recognitionTask(with: next) { [weak self] result, _ in
-            guard let self, let result else { return }
-            let joined = [carried, result.bestTranscription.formattedString]
-                .filter { !$0.isEmpty }.joined(separator: " ")
-            self.latestTranscript = joined
-            continuation.yield(TranscriptChunk(text: joined, isFinal: false))
-        }
+        let generation = carryForwardAndAdvance()
+        task = recognizer.recognitionTask(
+            with: next,
+            resultHandler: recognitionHandler(generation: generation, continuation: continuation))
     }
 
     /// The capped note's audio gets the SAME teardown a normal finish() gives
