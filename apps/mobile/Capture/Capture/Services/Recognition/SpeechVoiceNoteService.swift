@@ -170,7 +170,11 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     private var onDeviceRecognition = false
     /// Whether the CURRENT note is being transcribed. Set once per note in
     /// startLiveTranscription() and read by the surfaces through
-    /// isTranscribing — main actor at both ends, so no lock.
+    /// isTranscribing — main actor at both ends, so no lock. Also read by
+    /// rotate() on rotationQueue to skip the recognizer swap; that read is a
+    /// single byte, written once before the note starts and never again while
+    /// it runs, so it cannot be read torn — the same argument noteIsActive
+    /// makes above.
     private var transcribing = false
     /// The cap ended this note rather than the designer. Reported on
     /// VoiceNoteResult because the cap finishes the stream NORMALLY and is
@@ -709,6 +713,23 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             DispatchQueue.main.async { [weak self, capped = noteID] in
                 self?.endAtCap(capped, continuation: continuation)
             }
+            return
+        }
+
+        // §15.4 AT THE ROTATION BOUNDARY. This note started with recognition
+        // off — denied, restricted, or a locale whose recognizer needs a server
+        // this site cannot reach — so there is no request to end and no task to
+        // replace. Building them here anyway pointed a brand-new task at the
+        // same unavailable recognizer; its error arrived against the LIVE
+        // generation, took the error door and ended the note at 50 seconds. The
+        // rung held for one segment and then stopped holding, on the exact door
+        // it was built for. Nothing else changes: the cap branch above already
+        // ran, so maxNoteSeconds is still enforced, and the engine, the tap and
+        // the file are untouched — the note records on to the cap or to her
+        // finger. segmentStartedAt is re-armed so the next tap buffer does not
+        // see shouldRotate and post rotate() again ~21 ms from now, forever.
+        guard transcribing else {
+            segmentStartedAt = Date()
             return
         }
 

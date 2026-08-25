@@ -199,6 +199,22 @@ Its mere presence on a normal note means the recorder is broken — a silent roo
       `voiceAudioSegmentsRaw` with the segment and `voiceTranscriptSourceRaw = "device_partial"`.
     Pre-fix this door recorded **nothing at all** — `startLiveTranscription()` threw before the audio
     session was configured.
+37b. **The unavailable rung survives a rotation boundary (N4).** Same denial as 37. Hold the mic and
+    keep speaking for **at least 70 s** — past `VoiceRecordingPolicy.segmentRotationSeconds` (50 s),
+    which is the first instant `rotate()` runs. Assert:
+    - the note **does not end at ~50 s** — the elapsed counter keeps running, the orange mic dot stays
+      lit, and the sheet does not fall to the typed editor until the finger lifts;
+    - **no `voice.finish` event at all** before release, and in particular none with `reason=error`;
+    - **no `voice.segment_rotated`** — nothing rotated, because there was no recognition request to
+      swap (the audio file is untouched by rotation);
+    - on release, exactly **one** `voice.finish`, and it carries `reason=manual`;
+    - the recording is a **single continuous** `voice-<uuid>-000.m4a` covering the whole 70 s+ and is
+      audible end to end — `rotate()` rotates the recognizer, never the file, so a note with no route
+      change or interruption has exactly one segment however long it runs.
+    Pre-fix, `rotate()` built a fresh recognition request and started a task on the unavailable
+    recognizer regardless; its error came back on the live generation and `endAbandonedNote()` ended
+    the note with `voice.finish reason=error` at the first rotation. Step 37 speaks for only 20 s and
+    cannot catch this — **this step is the one that proves the rung actually holds.**
 38. **Recognizer unavailable → the note still records (F2).** Same denial, from the in-scan overlay:
     tapping **Note** must start recording and toast *"We'll write this up when it lands."* immediately —
     **not** *"Microphone unavailable"*, which is now reserved for a genuine session/engine failure.
