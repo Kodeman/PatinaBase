@@ -55,7 +55,8 @@ struct ViewfinderScreen: View {
                     saveTitle: model.quickSaveTitle,
                     onSave: model.saveFromCard,
                     onAddDetail: model.addDetailFromCard,
-                    onDismiss: model.dismissCard
+                    onDismiss: model.dismissCard,
+                    onPlace: model.placeFromCard
                 )
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .zIndex(2)

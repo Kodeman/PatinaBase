@@ -53,6 +53,11 @@ private struct S1Content: View {
     let analytics: any CaptureAnalytics
 
     @AppStorage("capture.routingSpecimenId") private var routingSpecimenId = ""
+    // One-shot handle set by ViewfinderModel.placeFromCard() and consumed (then
+    // cleared) in loadLocalContext() — the only signal that tells S1 it is
+    // being presented from the C3 card rather than the deep-link harness, S2,
+    // or the session tray, none of which write this key.
+    @AppStorage("capture.routingSource") private var routingSource = ""
     private let sessionContext = CaptureSessionContextStore.shared
 
     @State private var projects: [RoutingProjectOption] = []
@@ -67,6 +72,7 @@ private struct S1Content: View {
     @State private var shelf = ""
     @State private var venueName = ""
     @State private var isStamping = false
+    @State private var cameFromCard = false
 
     var body: some View {
         ScrollView {
@@ -75,7 +81,11 @@ private struct S1Content: View {
                     eyebrow: "Route",
                     title: "Route this capture",
                     subtitle: "It already knows where it was found. Add where it belongs.",
-                    onClose: { coordinator.dismissSheet() }
+                    onClose: {
+                        // ✕ used to drop the project she had just picked, silently.
+                        persistRouting()
+                        coordinator.dismissSheet()
+                    }
                 )
 
                 venueChip
@@ -106,6 +116,13 @@ private struct S1Content: View {
                     kind: .primary
                 ) {
                     advance()
+                }
+
+                if cameFromCard {
+                    RouteActionButton("Done", systemImage: "checkmark", kind: .primary) {
+                        persistRouting()
+                        coordinator.dismissSheet()
+                    }
                 }
             }
             .padding(20)
@@ -244,6 +261,11 @@ private struct S1Content: View {
 
     private func loadLocalContext() {
         routingSpecimenId = specimen.id.uuidString
+        // Consume-and-clear: only placeFromCard() ever writes "card" here, so a
+        // stale value could otherwise leak the Done primary into a later S1
+        // presentation from the deep-link harness, S2, or the session tray.
+        cameFromCard = routingSource == "card"
+        routingSource = ""
 
         let localProjects: [CaptureProjectRef]
         if AppConfiguration.runsRealServices {

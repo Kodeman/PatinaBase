@@ -313,6 +313,16 @@ final class ViewfinderModel {
         CaptureHaptics.selection()
     }
 
+    /// The C3 card's one tap to the only project picker in the app. S1 is
+    /// reachable from three places today and none of them is the capture path,
+    /// so a capture taken from the shutter could never inherit a project.
+    func placeFromCard() {
+        guard let id = cardSpecimen?.id else { return }
+        analytics.event("capture.place_tapped", ["surface": "c3"])
+        UserDefaults.standard.set("card", forKey: "capture.routingSource")
+        coordinator.present(.assignVenue(id))
+    }
+
     // MARK: Plumbing
 
     private func makeDraft() -> Specimen? {
