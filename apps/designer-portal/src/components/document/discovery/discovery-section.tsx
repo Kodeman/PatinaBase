@@ -257,14 +257,20 @@ export function DiscoverySection({
     value: s.id,
     label: s.name,
   }));
-  const scanOptions: Option[] = (scans ?? []).map((s) => ({
-    value: s.id,
-    // Wave 1P (spec §11.2): the designer's own scans now appear here too, so
-    // the row has to keep saying whose scan it is.
-    label: `${s.name || `Scan ${s.created_at?.slice(0, 10) ?? ''}`.trim()} · ${
-      s.owner_kind === 'designer' ? 'yours' : 'from your client'
-    }`,
-  }));
+  // Wave 1P (spec §11.2): the designer's own scans now appear here too. The
+  // provenance suffix appears ONLY when the union actually contributed one —
+  // a picker showing only the client's scans stays byte-identical to before
+  // this wave, which is what the unflagged posture rests on (FC-R10).
+  const scanRows = scans ?? [];
+  const hasOwnScan = scanRows.some((s) => s.owner_kind === 'designer');
+  const scanOptions: Option[] = scanRows.map((s) => {
+    const name = s.name || `Scan ${s.created_at?.slice(0, 10) ?? ''}`.trim();
+    if (!hasOwnScan) return { value: s.id, label: name };
+    return {
+      value: s.id,
+      label: `${name} · ${s.owner_kind === 'designer' ? 'yours' : 'from your client'}`,
+    };
+  });
 
   const toggle = (b: BlockKey) =>
     setOpen((prev) => {

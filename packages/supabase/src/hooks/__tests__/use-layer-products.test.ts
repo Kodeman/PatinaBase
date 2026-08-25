@@ -102,4 +102,15 @@ describe("useLayerProducts configuration summaries", () => {
     expect(supabaseClient.from).toHaveBeenCalledWith("products");
     expect(supabaseClient.from).toHaveBeenCalledTimes(1);
   });
+
+  it("selects the Field provenance columns the Library chip reads (Wave 1P)", async () => {
+    await queryFnFor({ layer: "personal" })();
+
+    const select = productsBuilder.chain.find(
+      (call) => call.method === "select",
+    );
+    expect(select?.args[0]).toContain("capture_source");
+    expect(select?.args[0]).toContain("captured_at");
+    expect(select?.args[0]).toContain("field_capture_id");
+  });
 });

@@ -110,11 +110,17 @@ function useClientScans(clientProfileId: string | null) {
         images: HeroCandidate[] | null;
       };
 
-      const readScansFor = async (ownerId: string): Promise<ScanRow[]> => {
-        const { data, error } = await supabase
-          .from('room_scans')
-          .select(select)
-          .eq('user_id', ownerId)
+      // The client leg keeps its pre-union behaviour byte-for-byte — no status
+      // filter — so no scan that showed yesterday disappears today. The NEW
+      // designer leg follows the same ready-only rule the Discovery picker uses
+      // (useClientRoomScans), so one concept cannot mean two things (Ruling 7-B).
+      const readScansFor = async (
+        ownerId: string,
+        readyOnly: boolean,
+      ): Promise<ScanRow[]> => {
+        let query = supabase.from('room_scans').select(select).eq('user_id', ownerId);
+        if (readyOnly) query = query.eq('status', 'ready');
+        const { data, error } = await query
           .order('created_at', { ascending: false })
           .limit(5);
         if (error) throw error;
@@ -122,8 +128,10 @@ function useClientScans(clientProfileId: string | null) {
       };
 
       const [clientRows, designerRows] = await Promise.all([
-        clientProfileId ? readScansFor(clientProfileId) : Promise.resolve<ScanRow[]>([]),
-        designerId ? readScansFor(designerId) : Promise.resolve<ScanRow[]>([]),
+        clientProfileId
+          ? readScansFor(clientProfileId, false)
+          : Promise.resolve<ScanRow[]>([]),
+        designerId ? readScansFor(designerId, true) : Promise.resolve<ScanRow[]>([]),
       ]);
 
       const byId = new Map<string, ScanRow & { owner_kind: 'designer' | 'client' }>();
@@ -137,8 +145,8 @@ function useClientScans(clientProfileId: string | null) {
 
       // Resolve one cover photo per scan (I81's is_primary → quality →
       // display_order rule — NOT the old ad-hoc "first is_primary or first
-      // row" pick), then batch-sign every distinct storage path across all
-      // up-to-5 scans in ONE call instead of up to 5 round-trips (I79).
+      // row" pick), then batch-sign every distinct storage path across all scans
+      // (up to 5 per side) in ONE call instead of up to 5 round-trips (I79).
       const heroes = scans.map((s) => resolveCoverPhoto(s.images ?? []));
       const heroPaths = heroes.map((h) =>
         h ? publicUrlToPath(h.image_url) : null,

@@ -144,6 +144,7 @@ import {
   useDeliveryCalendar,
   useTodayProcurementCounts,
   useCreateReceivingInspection,
+  useDamageClaims,
   useUpdateDamageClaim,
   useUpdatePurchaseOrderETA,
   // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
@@ -2914,5 +2915,24 @@ describe('useAssignProductToFfeSlot fail-closed boundary', () => {
       projectId: 'proj-1',
     })).rejects.toThrow('place_product_in_project_v2');
     expect(supabaseClient.from).not.toHaveBeenCalledWith('project_ffe_items');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useDamageClaims
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useDamageClaims — the embedded inspection', () => {
+  it('selects photo_asset_ids so the receiving photo line has something to count', async () => {
+    setTableDefault('damage_claims', { data: [], error: null });
+
+    const config = useDamageClaims({ state: 'drafted' }) as unknown as {
+      queryFn: () => Promise<unknown>;
+    };
+    await config.queryFn();
+
+    const builder = builders.damage_claims;
+    const select = builder.__chain.find((call) => call.method === 'select');
+    expect(select?.args[0]).toContain('photo_asset_ids');
   });
 });

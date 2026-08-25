@@ -9,7 +9,7 @@
  * Pins Ruling 4-B (the door prefers the CLIENT's scan) and the dedupe precedence
  * (the designer's stamp wins a shared id, so a self-scan reads as hers).
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LetterheadInstruments } from '../letterhead-instruments';
 
@@ -22,26 +22,52 @@ interface ScanRow {
   id: string;
   name: string;
   created_at: string;
+  status: string;
   images: unknown[];
+}
+
+/** A chainable stand-in for the PostgREST filter builder. */
+interface ScanQueryBuilder {
+  select: () => ScanQueryBuilder;
+  eq: (column: string, value: string) => ScanQueryBuilder;
+  order: () => ScanQueryBuilder;
+  limit: () => Promise<{ data: ScanRow[]; error: null }>;
 }
 
 /** Rows per `room_scans.user_id`, so the two legs can differ. */
 const scansByUser: Record<string, ScanRow[]> = {};
+/** The `user_id`s whose leg also filtered `.eq('status', 'ready')` (Ruling 7-B). */
+const readyFilteredUsers: string[] = [];
 /** The signed-in designer, or null for a signed-out read. */
 let designerId: string | null = 'designer-uid';
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({
-    from: () => ({
-      select: () => ({
-        eq: (_column: string, userId: string) => ({
-          order: () => ({
-            limit: () =>
-              Promise.resolve({ data: scansByUser[userId] ?? [], error: null }),
+    // One builder per `from()` call, so the two legs record their own filters.
+    from: () => {
+      let userId = '';
+      let readyOnly = false;
+      const builder: ScanQueryBuilder = {
+        select: () => builder,
+        eq: (column: string, value: string) => {
+          if (column === 'user_id') userId = value;
+          if (column === 'status') {
+            readyOnly = true;
+            readyFilteredUsers.push(userId);
+          }
+          return builder;
+        },
+        order: () => builder,
+        limit: () =>
+          Promise.resolve({
+            data: (scansByUser[userId] ?? []).filter(
+              (r) => !readyOnly || r.status === 'ready',
+            ),
+            error: null,
           }),
-        }),
-      }),
-    }),
+      };
+      return builder;
+    },
     storage: {
       from: () => ({
         createSignedUrls: () => Promise.resolve({ data: [], error: null }),
@@ -71,14 +97,18 @@ jest.mock('../mobile/mobile-shell', () => ({ useMobilePrimaryAction: jest.fn() }
 jest.mock('../client-mirror', () => ({ ClientMirror: () => null }));
 jest.mock('../proposal-preview', () => ({ ProposalPreview: () => null }));
 
-function scan(id: string, createdAt: string): ScanRow {
-  return { id, name: id, created_at: createdAt, images: [] };
+function scan(id: string, createdAt: string, status = 'ready'): ScanRow {
+  return { id, name: id, created_at: createdAt, status, images: [] };
 }
+
+/** The QueryClient of the most recent render, so a case can wait on the read. */
+let lastQueryClient: QueryClient | null = null;
 
 function renderInstruments() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  lastQueryClient = qc;
   return render(
     <QueryClientProvider client={qc}>
       <LetterheadInstruments
@@ -93,6 +123,8 @@ function renderInstruments() {
 
 beforeEach(() => {
   for (const key of Object.keys(scansByUser)) delete scansByUser[key];
+  readyFilteredUsers.length = 0;
+  lastQueryClient = null;
   designerId = 'designer-uid';
   mockPush.mockClear();
 });
@@ -143,5 +175,29 @@ describe('LetterheadInstruments — the designer-scan union (Wave 1P)', () => {
 
     expect(await screen.findByText('The scan')).toBeInTheDocument();
     expect(screen.queryByText('Your scan')).toBeNull();
+  });
+
+  it("ignores the designer's not-yet-ready scan, as the Discovery picker does", async () => {
+    scansByUser['client-1'] = [];
+    scansByUser['designer-uid'] = [
+      scan('still-uploading', '2026-08-01T00:00:00Z', 'processing'),
+    ];
+
+    renderInstruments();
+
+    // Wait on the read itself, so "no door" is a settled fact, not a race.
+    await waitFor(() =>
+      expect(
+        lastQueryClient?.getQueryState(['document-client-scans', 'client-1'])
+          ?.status,
+      ).toBe('success'),
+    );
+
+    // Ruling 7-B: ready-only on the designer leg, untouched on the client leg.
+    expect(readyFilteredUsers).toEqual(['designer-uid']);
+
+    // Nothing ready on either side — the door has nothing to open.
+    expect(screen.queryByText('Your scan')).toBeNull();
+    expect(screen.queryByText('The scan')).toBeNull();
   });
 });

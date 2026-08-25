@@ -3,8 +3,8 @@
  *
  * The sibling suite tests `inspectionPhotoLine` as a pure function. This one renders
  * ReceivingBookPage, so a regression at either call site — the open-claim row or the
- * Settled fold — is actually caught, including a silent revert of the useDamageClaims
- * embed that makes `photo_asset_ids` stop arriving.
+ * Settled fold — is actually caught. (The useDamageClaims select string itself is pinned
+ * in packages/supabase's use-procurement suite, not here — this file mocks that hook.)
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
