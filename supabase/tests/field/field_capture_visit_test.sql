@@ -523,6 +523,124 @@ BEGIN
   ASSERT v_count = 1,
     'FAIL 12g: a malformed payload must not fail the commit on the library path either';
 
+  -- ═════════════════════════════════════════════════════════════════════════
+  -- GROUP 13 — ADDED BY TASK 9 (fix round 1), NOT AUTHORED BY TASK 10.
+  -- Covers the two behaviours the round-1 review added to the migration:
+  --   (a) an unresolved suggestion id is RECORDED as 23503, not dropped silently
+  --   (b) the TG_OP gate — an UPDATE that does not move raw_payload does not
+  --       re-project, so a deliberately cleared column stays cleared
+  -- Task 10 may fold these into its own numbering; they are grouped here so it
+  -- can see exactly what it did not write.
+  -- ═════════════════════════════════════════════════════════════════════════
+
+  -- 13a · A well-formed projectId that resolves to NOTHING is recorded.
+  PERFORM pg_temp.assume_user(v_designer);
+  PERFORM commit_field_capture(
+    'fc300000-0000-4000-8000-0000000000f2'::uuid, 'inbox',
+    jsonb_build_object(
+      'schemaVersion', v_schema, 'photos', '[]'::jsonb,
+      'suggestion', jsonb_build_object(
+        'projectId', 'fc300000-0000-4000-8000-00000000dead'::text,
+        'basis', 'visit', 'confidence', 0.5)),
+    NULL, NULL, NULL, NULL);
+  PERFORM pg_temp.reset_role();
+  SELECT * INTO v_row FROM field_captures
+   WHERE client_capture_id = 'fc300000-0000-4000-8000-0000000000f2'::uuid;
+  ASSERT v_row.id IS NOT NULL, 'FAIL 13a: an unresolved projectId must not fail the commit';
+  ASSERT v_row.suggested_project_id IS NULL, 'FAIL 13a: the unresolved projectId must be dropped';
+  ASSERT v_row.suggestion_basis = 'visit', 'FAIL 13a: the rest of the suggestion must still project';
+  SELECT array_agg(e->>'key') INTO v_keys
+    FROM jsonb_array_elements(v_row.raw_payload->'visit_projection_errors') e;
+  ASSERT v_keys @> ARRAY['suggestion.projectId'],
+    'FAIL 13a: the unresolved projectId drop must be RECORDED, not silent';
+  ASSERT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_row.raw_payload->'visit_projection_errors') e
+     WHERE e->>'key' = 'suggestion.projectId' AND e->>'sqlstate' = '23503'),
+    'FAIL 13a: the recorded sqlstate must be 23503 (the FK code it would have raised)';
+
+  -- 13b · The RLS-visibility arm: a project that EXISTS but belongs to another
+  -- designer is recorded the same way. This is the drop most easily mistaken
+  -- for an RLS bug, which is exactly why it must leave a trace.
+  PERFORM pg_temp.assume_user(v_designer);
+  PERFORM commit_field_capture(
+    'fc300000-0000-4000-8000-0000000000f3'::uuid, 'inbox',
+    jsonb_build_object(
+      'schemaVersion', v_schema, 'photos', '[]'::jsonb,
+      'suggestion', jsonb_build_object('projectId', v_theirs::text, 'basis', 'scan')),
+    NULL, NULL, NULL, NULL);
+  PERFORM pg_temp.reset_role();
+  SELECT * INTO v_row FROM field_captures
+   WHERE client_capture_id = 'fc300000-0000-4000-8000-0000000000f3'::uuid;
+  ASSERT v_row.suggested_project_id IS NULL,
+    'FAIL 13b: another designer''s project must not be admitted as a suggestion';
+  ASSERT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_row.raw_payload->'visit_projection_errors') e
+     WHERE e->>'key' = 'suggestion.projectId' AND e->>'sqlstate' = '23503'),
+    'FAIL 13b: the cross-designer drop must be recorded as 23503';
+
+  -- 13c · The same for projectRoomId.
+  PERFORM pg_temp.assume_user(v_designer);
+  PERFORM commit_field_capture(
+    'fc300000-0000-4000-8000-0000000000f4'::uuid, 'inbox',
+    jsonb_build_object(
+      'schemaVersion', v_schema, 'photos', '[]'::jsonb,
+      'suggestion', jsonb_build_object(
+        'projectId', v_project::text,
+        'projectRoomId', 'fc300000-0000-4000-8000-00000000beef'::text,
+        'basis', 'proximity')),
+    NULL, NULL, NULL, NULL);
+  PERFORM pg_temp.reset_role();
+  SELECT * INTO v_row FROM field_captures
+   WHERE client_capture_id = 'fc300000-0000-4000-8000-0000000000f4'::uuid;
+  ASSERT v_row.suggested_project_id = v_project,
+    'FAIL 13c: the resolvable projectId must still be admitted';
+  ASSERT v_row.suggested_project_room_id IS NULL,
+    'FAIL 13c: the unresolved projectRoomId must be dropped';
+  ASSERT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_row.raw_payload->'visit_projection_errors') e
+     WHERE e->>'key' = 'suggestion.projectRoomId' AND e->>'sqlstate' = '23503'),
+    'FAIL 13c: the unresolved projectRoomId drop must be recorded as 23503';
+
+  -- 13d · THE TG_OP GATE. A correction that clears a wrongly-suggested project
+  -- must SURVIVE the next unrelated UPDATE. Before the gate, the projection
+  -- re-derived the column from the stored payload and resurrected it.
+  PERFORM pg_temp.assume_user(v_designer);
+  PERFORM commit_field_capture(
+    'fc300000-0000-4000-8000-0000000000f5'::uuid, 'inbox',
+    jsonb_build_object(
+      'schemaVersion', v_schema, 'photos', '[]'::jsonb,
+      'visit', jsonb_build_object('id', v_visit::text, 'kind', 'site',
+                                  'label', 'Thursday walk'),
+      'suggestion', jsonb_build_object('projectId', v_project::text,
+                                       'basis', 'visit', 'confidence', 0.9)),
+    NULL, NULL, NULL, NULL);
+  PERFORM pg_temp.reset_role();
+  SELECT * INTO v_row FROM field_captures
+   WHERE client_capture_id = 'fc300000-0000-4000-8000-0000000000f5'::uuid;
+  ASSERT v_row.suggested_project_id = v_project,
+    'FAIL 13d: precondition — the suggestion must have projected';
+
+  -- The correction: clear the wrong suggestion.
+  UPDATE field_captures SET suggested_project_id = NULL WHERE id = v_row.id;
+  -- An unrelated UPDATE that carries NO new payload (the route/dismiss shape).
+  UPDATE field_captures SET upload_progress = 100 WHERE id = v_row.id;
+
+  SELECT * INTO v_row FROM field_captures WHERE id = v_row.id;
+  ASSERT v_row.suggested_project_id IS NULL,
+    'FAIL 13d: a cleared suggestion must NOT be resurrected by a payload-less UPDATE';
+  ASSERT v_row.visit_id = v_visit AND v_row.visit_label = 'Thursday walk',
+    'FAIL 13d: the untouched visit columns must still be intact after both UPDATEs';
+
+  -- And an UPDATE that DOES move raw_payload still projects.
+  UPDATE field_captures
+     SET raw_payload = raw_payload || jsonb_build_object(
+           'visit', jsonb_build_object('id', v_visit::text, 'kind', 'site',
+                                       'label', 'Friday walk'))
+   WHERE id = v_row.id;
+  SELECT * INTO v_row FROM field_captures WHERE id = v_row.id;
+  ASSERT v_row.visit_label = 'Friday walk',
+    'FAIL 13d: an UPDATE that DOES change raw_payload must still re-project';
+
   RAISE NOTICE 'All field_captures visit/suggestion assertions passed.';
 END
 $$;

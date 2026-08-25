@@ -31,7 +31,11 @@
 -- The trigger NEVER clears a value. Each column takes the payload's value when
 -- the key is present AND parses, and keeps its existing value otherwise — so
 -- the `route_field_capture` / `dismiss_field_capture` UPDATE paths, which carry
--- no new payload, leave the visit intact.
+-- no new payload, leave the visit intact. Those paths do not even enter the
+-- projection: an UPDATE whose `raw_payload` is unchanged returns immediately.
+-- That matters in the other direction too — without it, a column cleared on
+-- purpose would be reasserted from the stored payload by the next unrelated
+-- UPDATE.
 --
 -- ── THE PROJECTION NEVER RAISES ────────────────────────────────────────────
 -- Ruling (2026-08-24): a malformed or unknown-vocabulary payload key must not
@@ -132,6 +136,14 @@ CREATE INDEX IF NOT EXISTS idx_field_captures_visit
 -- by letting the CHECK bite. There is no code path from a payload value to a
 -- RAISE. (Each sub-block is a subtransaction; at one row per device commit the
 -- cost is irrelevant, and the alternative is a permanently wedged outbox.)
+--
+-- ⚠ BULK BACKFILL AUTHORS: those subtransactions are allocated on the SUCCESS
+--   path too, up to six per row. Past ~64 subxids a backend's subxid cache
+--   overflows and performance degrades sharply, so a bulk
+--   `UPDATE field_captures SET …` should ALTER TABLE … DISABLE TRIGGER
+--   trg_field_captures_visit_projection first and re-enable it after. The
+--   TG_OP gate at the top of the body removes this exposure for any UPDATE
+--   that does not move raw_payload; the INSERT path still pays it.
 CREATE OR REPLACE FUNCTION public.field_captures_project_visit_columns()
   RETURNS TRIGGER
   LANGUAGE plpgsql
@@ -145,6 +157,21 @@ DECLARE
   v_ts      timestamptz;
   v_num     numeric;
 BEGIN
+  -- ── Nothing to project when the payload did not move ─────────────────────
+  -- Five RPCs update field_captures without sending a new payload
+  -- (route_field_capture 00235:309, dismiss_field_capture :348,
+  -- merge_capture_artifact_sha256 :382, mark_capture_upload_complete :397, plus
+  -- the updated_at touch). Without this gate each of them re-derives values that
+  -- cannot have changed — and, worse, RESURRECTS a deliberately cleared column:
+  -- an `UPDATE … SET suggested_project_id = NULL` that corrects a wrong
+  -- suggestion would be undone by the next unrelated UPDATE. Gating on the
+  -- payload makes the projection a function of the payload alone, which is what
+  -- "projection" is supposed to mean. It also keeps the subtransaction cost
+  -- below entirely off the UPDATE path.
+  IF TG_OP = 'UPDATE' AND NEW.raw_payload IS NOT DISTINCT FROM OLD.raw_payload THEN
+    RETURN NEW;
+  END IF;
+
   -- ── visit.id ─────────────────────────────────────────────────────────────
   v_text := NULLIF(v_payload#>>'{visit,id}', '');
   IF v_text IS NOT NULL THEN
@@ -221,6 +248,16 @@ BEGIN
       v_uuid := v_text::uuid;
       IF EXISTS (SELECT 1 FROM projects p WHERE p.id = v_uuid) THEN
         NEW.suggested_project_id := v_uuid;
+      ELSE
+        -- Well formed, but it does not resolve FOR THIS CALLER: the project is
+        -- gone, or RLS hides it. This is the most likely drop in production
+        -- (see the stale-suggestion note above) and the one most easily
+        -- mistaken for an RLS bug, so it is recorded rather than silent —
+        -- visit_projection_errors is the only server-side trace a "my
+        -- suggestion vanished" report can be answered from. 23503 is the FK
+        -- violation the assignment would otherwise have raised.
+        v_errors := v_errors || jsonb_build_object(
+          'key', 'suggestion.projectId', 'sqlstate', '23503', 'at', NOW());
       END IF;
     EXCEPTION WHEN OTHERS THEN
       v_errors := v_errors || jsonb_build_object(
@@ -235,6 +272,9 @@ BEGIN
       v_uuid := v_text::uuid;
       IF EXISTS (SELECT 1 FROM project_rooms r WHERE r.id = v_uuid) THEN
         NEW.suggested_project_room_id := v_uuid;
+      ELSE
+        v_errors := v_errors || jsonb_build_object(
+          'key', 'suggestion.projectRoomId', 'sqlstate', '23503', 'at', NOW());
       END IF;
     EXCEPTION WHEN OTHERS THEN
       v_errors := v_errors || jsonb_build_object(
