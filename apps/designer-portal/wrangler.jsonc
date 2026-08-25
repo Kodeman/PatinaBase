@@ -56,7 +56,15 @@
     // activation is an INTENDED deliverable of this D-repoint deploy
     // (Kody-ruled scope), not an accidental side effect — see PR #34's
     // description.
-    "NEXT_PUBLIC_EDGE_API_URL": "https://api.patina.cloud"
+    "NEXT_PUBLIC_EDGE_API_URL": "https://api.patina.cloud",
+    // THE FLIP (D-B4 designer, activated 2026-08-25, Kody-GO'd): runtime-resolved
+    // browser Supabase origin. The head script in layout.tsx reads this at request
+    // time and sets globalThis.__PATINA_SUPABASE_ORIGIN, repointing all BROWSER
+    // Supabase traffic (REST/auth/functions/realtime) through the edge worker.
+    // STORAGE stays on the direct host via pinStorageDirect (packages/supabase).
+    // ROLLBACK: delete this var + `npx wrangler deploy` of the same bundle
+    // (drilled 2026-08-25: 36s wall including propagation + verification).
+    "SUPABASE_ORIGIN_RUNTIME": "https://api.patina.cloud"
   },
   "services": [
     { "binding": "SVC_PROJECTS", "service": "patina-projects-worker" },
