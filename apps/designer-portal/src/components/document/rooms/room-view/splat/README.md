@@ -157,16 +157,35 @@ the JS, so there is no file to serve and no decoder path to configure.
 
 The first splat render was an inside-out blob, and it took two separate fixes.
 
-**Orientation.** A splat mesh does not arrive in three.js's Y-up frame. Spark's own
-quickstart applies `quaternion.set(1, 0, 0, 0)` — a 180°-about-X flip — because a
-typical COLMAP-trained splat is authored Y-down. Our .spz is not COLMAP-trained; it is
-nerfstudio-trained from ARKit poses, and the pipeline applies its own world-up change
-of basis (`ARKIT_TO_NERFSTUDIO`, `services/scan-modal/…/transforms.py:57-77`, a +90°
-rotation about X) BEFORE training, then trains with `--orientation-method none`
-(`splat_job.py:248-250`) so nothing further reorients the result. Composing Spark's
-180°-about-X with the inverse of that +90° (both share the X axis, so they commute)
-collapses to a single 90°-about-X rotation — `SPLAT_ORIENTATION` in `splat-scene.ts`,
-with the full derivation in that file's header comment.
+**Orientation.** A splat mesh does not arrive in three.js's Y-up frame — but there is
+exactly ONE transform to undo, not two. An earlier version of this fix also composed
+in a claimed "Spark 180°-about-X flip," reasoning from the library's quickstart
+snippet (`quaternion.set(1, 0, 0, 0)`) as if it were a renderer convention Spark
+applies to every splat. It is not: `@sparkjsdev/spark@2.1.0`'s own source shows
+`SplatTransformer` (what actually places a `SplatMesh` for render) consuming the
+mesh's `matrixWorld` VERBATIM — the quickstart's flip is a per-asset correction for
+that one COLMAP-trained demo splat's own Y-down authoring frame, not something Spark
+does internally. Composing it in inverted the sign of the one real correction.
+
+The one real correction: our .spz is nerfstudio-trained from ARKit poses, and the
+pipeline applies its own world-up change of basis (`ARKIT_TO_NERFSTUDIO`,
+`services/scan-modal/…/transforms.py:102-110`, a +90° rotation about X) BEFORE
+training, then trains with `--orientation-method none` (`splat_job.py:248-250`) so
+nothing further reorients the result. Undoing that +90° to land in three.js's Y-up
+frame is its inverse — **−90° about X** — and that inverse alone is
+`SPLAT_ORIENTATION` in `splat-scene.ts`, with the full derivation in that file's
+header comment.
+
+This was settled empirically, not just derived: a robust per-axis measurement
+(percentile span, 300k samples) of the real prod .spz artifact (sha256 `88dbefcd…`,
+29,397,094 bytes, 1,324,278 gaussians, SPZ v3, fracBits 12) found local-frame Z's
+p2–p98 span at 3.27 m — matching the room's known 3.30 m wall height almost exactly —
+with 90% of the mass inside a 2.41 m window and the strongest density peak (16.5% of
+the bin mass) at the LOW end of that window, the floor plane. X and Y spanned 7.57 m
+and 6.55 m against the room's 7.67 m plan length. That confirms nerfstudio Z-up with z
+increasing from floor to ceiling, exactly as `transforms.py` implies — the opposite of
+what the old `+90°-about-X` sign assumed, and why it rendered the ceiling BELOW the
+floor.
 
 `splat-canvas.tsx` sets `splatMesh.quaternion` to this (or identity — see below) BEFORE
 calling `getBoundingBox()`, and separately rotates the measured box with
@@ -179,26 +198,32 @@ right, `orientBounds` is what makes the CAMERA agree with what the render now sh
 construction (floor at y=0, ceiling at y=height) — it never goes through the ARKit→
 nerfstudio pipeline, so it needs identity, not `SPLAT_ORIENTATION`. `splat-scene.ts`'s
 `defaultSplatOrientation(url)` keys this on the URL (`/fixtures/…` → identity,
-everything else → `SPLAT_ORIENTATION`) rather than guessing from the loaded geometry,
-and `SplatCanvasProps.orientation` is the explicit override if a caller ever needs one.
-The fixture was NOT regenerated for this — reconciling the Y-up fixture against the
-Z-up real path is exactly what the per-source orientation is for, so a green fixture
-render can never stand in for having verified the real, rotated path.
+everything else → `SPLAT_ORIENTATION`) rather than guessing from the loaded geometry —
+`SplatCanvas` always resolves through it internally; there is no per-caller override
+prop, since no real caller has ever needed one. The fixture was NOT regenerated for
+this — reconciling the Y-up fixture against the Z-up real path is exactly what the
+per-source orientation is for, so a green fixture render can never stand in for having
+verified the real, rotated path.
 
 **Interior framing.** Camera framing used to reuse `orbit/controls.ts`'s `frameRoom`
-verbatim — the same fit Plan, Orbit, and Mesh use to back a camera OFF a room and frame
-the whole box from outside it. That is wrong for Splat: Splat is the room as
-photographed, and a designer opening it is meant to feel like they are standing inside
-it, not viewing an exterior diagram. `frameSplatInterior` (`splat-scene.ts`) keeps
-Orbit's azimuth (0.82) and polar clamp band, but derives radius from the plan
-HALF-diagonal instead of Orbit's exterior fit — `min(0.35 × half-diagonal, 1.2 m)`,
-clamped to `[0.15 m, 0.9 × half-diagonal]` — flattens the default polar to ~π/2 (an
-eye-level look, not Orbit's downward exterior tilt), and targets 1.6 m above the
-splat's own floor (`cameras.py`'s Modal-side rig uses 1.5 m for a different shot; the
-two numbers answer different questions and were never required to match). An oversize
-plan (`hypot(size.x, size.z) > 40 m`) falls back to the same unit-room framing the
-degenerate/non-finite guard uses — a floater-polluted or non-metric splat is not a room
-to stand inside.
+verbatim — the same fit Orbit and Mesh use to back a camera OFF a room and frame the
+whole box from outside it (Plan is a separate SVG surface with no camera at all). That
+is wrong for Splat: Splat is the room as photographed, and a designer opening it is
+meant to feel like they are standing inside it, not viewing an exterior diagram.
+`frameSplatInterior` (`splat-scene.ts`) keeps Orbit's azimuth (0.82) and polar clamp
+band, but derives radius from the plan HALF-diagonal instead of Orbit's exterior fit —
+`min(0.35 × half-diagonal, 1.2 m)`, clamped to `[0.15 m, 0.9 × half-diagonal]` —
+returns the default polar as `MAX_POLAR` itself (1.45 rad, an eye-level look, not
+Orbit's downward exterior tilt) rather than a bare π/2 that the shared orbit-control
+clamp would silently correct downstream — the returned `CameraFraming` is internally
+consistent, not a value the caller has to already know gets clamped — and targets
+1.6 m above the splat's own floor, itself clamped into `[box.min.y, box.max.y]` so a
+stray sub-floor floater or a low/partial scan can never put the eye underground or
+above the ceiling the scan actually captured (`cameras.py`'s Modal-side rig uses
+1.5 m for a different shot; the two numbers answer different questions and were never
+required to match). An oversize plan (`hypot(size.x, size.z) > 40 m`) falls back to
+the same unit-room framing the degenerate/non-finite guard uses — a floater-polluted
+or non-metric splat is not a room to stand inside.
 
 ## Wheel zoom is now scale-invariant
 
@@ -208,8 +233,20 @@ on Splat's metre-scale interior (r ≈ 1), oversaturated on anything smaller. It
 multiplicative — `radius *= exp(deltaY_px × 0.0015)` — so one mouse notch is always a
 ~15% step and one trackpad tick a ~0.5% step, regardless of the room's absolute scale.
 `deltaMode` (Firefox reports "lines"; Chrome/Safari report pixels) is normalized to
-pixels first. This is shared control math — Plan, Orbit, Mesh, and Splat all ride the
-same `controls.ts` — so it is a feel change on all four, not a Splat-only tweak.
+pixels first. This is shared control math — Orbit, Mesh, and Splat all ride the same
+`controls.ts` — so it is a feel change on all three, not a Splat-only tweak. Plan does
+not ride `controls.ts` at all: it is plain SVG with no wheel handler.
+
+## Near clip plane
+
+`splat-canvas.tsx` clamps the camera's `near` to `≥ 0.05`. The reasoning changed on
+review: `clipPlanes` (`model-scene.ts`) already floors `near` at `0.01` regardless of
+`minRadius`, so interior framing's low `minRadius` (as low as 0.15 m) never actually
+drives the raw value to the formula's own ~0.0015 — the value reaching
+`splat-canvas.tsx` was already `0.01`. The raise to `0.05` still stands (`0.01`
+z-fights against a splat at typical room scale), but the earlier note describing the
+raw value as ~0.0015 was wrong about what `clipPlanes` returns, not about whether the
+raise was needed.
 
 ## The one thing the evaluation got wrong
 

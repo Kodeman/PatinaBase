@@ -9535,3 +9535,90 @@ own header already scopes it to same-origin relative paths.
 controls UI (D1); shadows of any kind (D4).
 
 *Entries add: I144 · last id = I144*
+
+### I145 · Splat interior camera — I144's orientation sign was INVERTED, corrected + hardened on adversarial review — 2026-08-25
+
+Not a Document-workstream change, recorded here per this file's convention — same
+scope as I144 (branch `fix/splat-interior-camera`, PR #37, worktree
+`.codex/worktrees/agent-splatcam`). This entry does not edit I144; it corrects it.
+
+**The finding.** Adversarial review of I144 proved `SPLAT_ORIENTATION`'s sign backward,
+and an empirical measurement of the REAL prod .spz settled it with certainty rather
+than argument: sha256-verified artifact `88dbefcd…` (29,397,094 bytes, 1,324,278
+gaussians, SPZ v3, fracBits 12); robust per-axis center statistics (300k samples) — X
+p2–p98 span 7.57 m (≈ the room's 7.67 m plan length), Y 6.55 m, **Z 3.27 m ≈ the
+3.30 m wall height exactly, 90% of the mass in a 2.41 m window, strongest density peak
+(16.5% of bin mass) at the LOW end of that window — the floor plane.** That confirms
+the data is nerfstudio Z-up exactly as `transforms.py` implies, with z increasing from
+floor to ceiling. I144's derivation also composed in a Spark-internal "180°-about-X
+flip" that does not exist: `@sparkjsdev/spark@2.1.0`'s own source shows
+`SplatTransformer` consuming a mesh's `matrixWorld` verbatim — the quickstart's flip
+is a per-asset correction for one COLMAP demo splat's own authoring frame, not a
+renderer convention. Composing a nonexistent 180° flip with the real −90°-about-X
+correction (the inverse of `ARKIT_TO_NERFSTUDIO`) landed on `+90°-about-X` instead —
+the ceiling rendered BELOW the floor.
+
+**The fix.** `SPLAT_ORIENTATION` is now `new THREE.Quaternion(-Math.SQRT1_2, 0, 0,
+Math.SQRT1_2)` — `−90°` about X, undoing `ARKIT_TO_NERFSTUDIO`'s `+90°` alone, nothing
+else composed in. `splat-scene.ts`'s header comment is rewritten to derive this
+directly and cite the empirical measurement; `splat/README.md`'s Orientation section
+matches. A new `orientation × framing — physics invariant` suite in
+`splat-scene.test.ts` proves the correction: for a floor-at-z=0 local box,
+`orientBounds(...).min.y ≈ 0` and `.max.y ≈ h` (ceiling above floor), and
+`frameSplatInterior(oriented).target.y ≈ 1.6` (eye above the real floor, not
+underground). Reverting `SPLAT_ORIENTATION` to I144's `+90°` value makes every
+assertion in that suite fail — proved once, by running the new tests against the old
+sign before applying the fix, then again after.
+
+**Merge conditions closed alongside the sign flip.**
+
+- **Vertical/floater guard.** `frameSplatInterior`'s eye height is now `clamp(box.min.y
+  + EYE_HEIGHT_M, box.min.y, box.max.y)`, not a bare sum — a stray floater far below
+  the true floor, or a low/partial scan with under 1.6 m of headroom, can no longer
+  put the eye outside the box the scan itself spans (underground in the first case,
+  above the ceiling in the second). Two new tests cover both shapes.
+- **Polar consistency.** `INTERIOR_POLAR` is now `MAX_POLAR` (1.45 rad) directly,
+  not a bare `Math.PI / 2` that `createOrbitController`'s shared clamp band would
+  silently correct downstream. The `CameraFraming` `frameSplatInterior` returns is now
+  internally consistent: its own `polar` field already equals its own `maxPolar`
+  field, rather than a value outside the range the same object claims as its bounds.
+  The existing polar test was updated to assert `MAX_POLAR` instead of `π/2`.
+- **`orientation` prop dropped, `eslint-disable` removed with it.**
+  `SplatCanvasProps.orientation` — an escape hatch no real caller ever used — is
+  removed; `SplatCanvas` now resolves `defaultSplatOrientation(splatUrl)` internally
+  only. Its removal also let the effect's blanket `eslint-disable-next-line
+  react-hooks/exhaustive-deps` go: with `orientation` gone, the only prior
+  justification for it was `debug`, and `debug` (the hook value) was never actually
+  read inside the effect body to begin with — only in the JSX below it — so the rule
+  has nothing left to flag. `eslint` on the file now reports "Unused eslint-disable
+  directive" with the comment still in place; deleting it is what item 6 calls for.
+  Tests that need a specific orientation call `orientBounds` /
+  `defaultSplatOrientation` directly rather than through the prop.
+- **Two prior corrections in I144's own account, fixed here rather than in place
+  (I144 is append-only):**
+  - *Shared-controls surface count.* I144 said wheel zoom is "shared by Plan, Orbit,
+    Mesh, and Splat" — four surfaces. It is three: Plan is plain SVG with no wheel
+    handler and never rides `orbit/controls.ts` at all. `controls.ts`'s header and its
+    `WHEEL_ZOOM_RATE` comment, and `splat/README.md`'s wheel-zoom section, now say
+    Orbit/Mesh/Splat.
+  - *Near-plane raw value.* I144 said the interior `minRadius` "drove the raw
+    `clipPlanes` formula to ~0.0015." `clipPlanes` (`model-scene.ts:55`) already floors
+    `near` at `0.01` regardless of `minRadius`, so the value actually reaching
+    `splat-canvas.tsx` was `0.01`, not `~0.0015`. The raise to `≥ 0.05` stands (`0.01`
+    still z-fights at typical room scale) — only the stated reason changes.
+    `splat-canvas.tsx`'s comment and `splat/README.md` gain a corrected account.
+
+**Tests.** `splat/__tests__/splat-scene.test.ts`: `orientBounds`'s worked example
+updated to the corrected sign (ceiling now lands at oriented `y′ = 3`, not `y′ = 0`,
+for a local box with height 3); `SPLAT_ORIENTATION`'s own-component test updated to
+`x ≈ −√½`; the polar test updated to assert `MAX_POLAR`; four new tests — the two
+physics-invariant tests described above, and two floater/low-scan guard tests. No
+other suite needed touching: `splat-canvas.test.tsx` never exercised the dropped
+`orientation` prop, and `orbit/__tests__/controls.test.ts`'s wheel-zoom suite was
+unaffected by the surface-count correction (it was prose, not an assertion).
+
+**Out of scope, same boundary as I144.** No change to `splat-stage.tsx`,
+`dev-splat-url.ts`, or `room-view.tsx`; no new chrome or controls UI (D1); no shadows
+(D4); no fixture regeneration; no merge, no deploy.
+
+*Entries add: I145 · last id = I145*

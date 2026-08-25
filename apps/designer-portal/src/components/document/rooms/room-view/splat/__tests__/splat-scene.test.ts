@@ -24,6 +24,7 @@ import {
   CREAM,
   type DisposableObject3D,
 } from '../splat-scene';
+import { MAX_POLAR } from '../../orbit/controls';
 
 type Tagged = THREE.Object3D & { userData: Record<string, unknown> };
 
@@ -58,14 +59,17 @@ describe('frameSplatInterior', () => {
     expect(framing.target.y).toBeCloseTo(1.6, 6); // box.min.y (0) + EYE_HEIGHT_M
   });
 
-  it('keeps Orbit’s azimuth and its polar clamp band, but flattens the default look', () => {
+  it('keeps Orbit’s azimuth and its polar clamp band, and returns the polar ALREADY clamped', () => {
     const framing = frameSplatInterior(roomBounds());
     // The one shared piece of control math Orbit's frameRoom also uses — not a copy.
     expect(framing.azimuth).toBeCloseTo(0.82, 6);
     expect(framing.minPolar).toBeCloseTo(0.35, 6);
     expect(framing.maxPolar).toBeCloseTo(1.45, 6);
-    // Flattened toward eye-level, not Orbit's exterior downward tilt (1.08 rad).
-    expect(framing.polar).toBeCloseTo(Math.PI / 2, 6);
+    // INTERIOR_POLAR is MAX_POLAR itself, not π/2 clamped down to it downstream by
+    // `createOrbitController` — the returned `CameraFraming` is internally
+    // consistent: `polar` already sits inside `[minPolar, maxPolar]`.
+    expect(framing.polar).toBeCloseTo(MAX_POLAR, 6);
+    expect(framing.polar).toBe(framing.maxPolar);
   });
 
   it('derives an interior-scale radius from the HALF-diagonal, well inside the shell', () => {
@@ -108,20 +112,48 @@ describe('frameSplatInterior', () => {
     const unitRoom = frameSplatInterior(new THREE.Box3()); // same fallback shape
     expect(framing).toEqual(unitRoom);
   });
+
+  it('keeps the eye target inside the box when a stray floater drags box.min.y 4 m below the real floor', () => {
+    // A stray floater point 4 m below the true floor pulls box.min.y down to −4 —
+    // exactly the shape a bad train or a mis-tracked keyframe produces. The eye must
+    // never resolve to a y outside what the (however polluted) box itself spans.
+    const floaterPolluted = new THREE.Box3(
+      new THREE.Vector3(8, -4, -7.5),
+      new THREE.Vector3(12, 2.5, -4.5),
+    );
+    const framing = frameSplatInterior(floaterPolluted);
+    expect(framing.target.y).toBeGreaterThanOrEqual(floaterPolluted.min.y);
+    expect(framing.target.y).toBeLessThanOrEqual(floaterPolluted.max.y);
+  });
+
+  it('clamps the eye target into the box when a low/partial scan has no headroom above the guess', () => {
+    // A partial scan barely 0.8 m tall — box.min.y + 1.6 (2.2 total) would land
+    // ABOVE the box's own ceiling. The target must not float above what was scanned.
+    const low = roomBounds({ x: 4, y: 0.8, z: 3 });
+    const framing = frameSplatInterior(low);
+    expect(framing.target.y).toBeLessThanOrEqual(low.max.y);
+    expect(framing.target.y).toBeCloseTo(low.max.y, 6);
+  });
 });
 
 describe('orientBounds', () => {
-  it('rotates a mesh-local box into the oriented frame (90° about X: y′=−z, z′=y)', () => {
+  it('rotates a mesh-local box into the oriented frame (−90° about X: y′=z, z′=−y) — a Z-up ceiling point lands ABOVE the floor', () => {
+    // Local frame is nerfstudio Z-up: z is height. Ceiling sits at local z=3 (the
+    // box's max), floor at local z=0 (the box's min) — SPLAT_ORIENTATION must land
+    // the ceiling at a HIGHER y′ than the floor, not lower (that inversion was the
+    // proven bug: the empirical robust-percentile measurement of the real prod .spz
+    // put 90% of the mass in a 2.41 m window with the density peak — the floor plane
+    // — at the BOTTOM of that window, meaning the data's own z increases upward).
     const local = new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 2, 3));
     const oriented = orientBounds(local, SPLAT_ORIENTATION);
     const [minX, minY, minZ] = oriented.min.toArray();
     const [maxX, maxY, maxZ] = oriented.max.toArray();
     expect(minX).toBeCloseTo(0, 6);
-    expect(minY).toBeCloseTo(-3, 6);
-    expect(minZ).toBeCloseTo(0, 6);
+    expect(minY).toBeCloseTo(0, 6);
+    expect(minZ).toBeCloseTo(-2, 6);
     expect(maxX).toBeCloseTo(1, 6);
-    expect(maxY).toBeCloseTo(0, 6);
-    expect(maxZ).toBeCloseTo(2, 6);
+    expect(maxY).toBeCloseTo(3, 6);
+    expect(maxZ).toBeCloseTo(0, 6);
   });
 
   it('leaves the box unchanged under an identity orientation', () => {
@@ -137,11 +169,46 @@ describe('orientBounds', () => {
 });
 
 describe('SPLAT_ORIENTATION', () => {
-  it('is the 90°-about-X quaternion the derivation composes to', () => {
-    expect(SPLAT_ORIENTATION.x).toBeCloseTo(Math.SQRT1_2, 10);
+  it('is the −90°-about-X quaternion the derivation composes to', () => {
+    expect(SPLAT_ORIENTATION.x).toBeCloseTo(-Math.SQRT1_2, 10);
     expect(SPLAT_ORIENTATION.y).toBeCloseTo(0, 10);
     expect(SPLAT_ORIENTATION.z).toBeCloseTo(0, 10);
     expect(SPLAT_ORIENTATION.w).toBeCloseTo(Math.SQRT1_2, 10);
+  });
+});
+
+/**
+ * The physics invariant — the thing an adversarial review and an empirical prod .spz
+ * measurement both settled: a floor-at-z=0, Z-up local box must end up with its
+ * FLOOR at the bottom of the oriented frame and its CEILING above it, and the
+ * interior camera's eye must land inside that span, not underground. This suite is
+ * what PROVED the old `+90°-about-X` sign wrong before the fix landed — reverting
+ * `SPLAT_ORIENTATION` to `(Math.SQRT1_2, 0, 0, Math.SQRT1_2)` makes every assertion
+ * here fail (ceiling lands at y′=−h, below the floor; the eye height guard then also
+ * fails since `box.min.y` is no longer the floor).
+ */
+describe('orientation × framing — physics invariant', () => {
+  it('a Z-up floor-at-0 box orients so min.y ≈ 0 (floor) and max.y ≈ h (ceiling)', () => {
+    const h = 3;
+    // Local nerfstudio frame: x/y are plan axes, z is height, floor at z=0.
+    const local = new THREE.Box3(
+      new THREE.Vector3(-2, -1, 0),
+      new THREE.Vector3(2, 1, h),
+    );
+    const oriented = orientBounds(local, SPLAT_ORIENTATION);
+    expect(oriented.min.y).toBeCloseTo(0, 6);
+    expect(oriented.max.y).toBeCloseTo(h, 6);
+  });
+
+  it('frameSplatInterior on that oriented box seats the eye 1.6 m above the real floor', () => {
+    const h = 3;
+    const local = new THREE.Box3(
+      new THREE.Vector3(-2, -1, 0),
+      new THREE.Vector3(2, 1, h),
+    );
+    const oriented = orientBounds(local, SPLAT_ORIENTATION);
+    const framing = frameSplatInterior(oriented);
+    expect(framing.target.y).toBeCloseTo(1.6, 6);
   });
 });
 

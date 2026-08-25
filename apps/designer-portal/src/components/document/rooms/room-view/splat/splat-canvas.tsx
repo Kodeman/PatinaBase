@@ -77,19 +77,9 @@ type CanvasStatus = 'loading' | 'ready' | 'error' | 'webgl-failed';
 export interface SplatCanvasProps {
   /** A fetchable splat URL — `.ply`, `.spz`, `.splat`, `.ksplat`, `.sog`. */
   splatUrl: string;
-  /**
-   * How the mesh must be rotated to land in three.js's Y-up frame — see
-   * `splat-scene.ts`'s ORIENTATION section. Optional escape hatch for a caller that
-   * knows better than `defaultSplatOrientation`'s URL-based guess (tests, a future
-   * per-source override); every real caller today omits it and gets the guess, which
-   * is identity for the committed `/fixtures/…` dev fixture and `SPLAT_ORIENTATION`
-   * for everything else (today's dev `?splatUrl=` overrides included, and the
-   * resolved R2 capability URL once the read path lands).
-   */
-  orientation?: THREE.Quaternion;
 }
 
-export default function SplatCanvas({ splatUrl, orientation }: SplatCanvasProps) {
+export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<CanvasStatus>('loading');
   /**
@@ -113,11 +103,10 @@ export default function SplatCanvas({ splatUrl, orientation }: SplatCanvasProps)
     // WebGL context the moment the flag resolved.
     const debugging = splatDebugEnabled(window.location.search);
 
-    // Same reasoning for `orientation`: every real caller omits the prop, so this
-    // resolves from `splatUrl` (already a dependency) via `defaultSplatOrientation`.
-    // Depending on the prop itself would tear down and rebuild the whole WebGL
-    // context on a caller that passes a fresh `Quaternion` literal each render.
-    const meshOrientation = orientation ?? defaultSplatOrientation(splatUrl);
+    // Resolved from `splatUrl` (already a dependency) via `defaultSplatOrientation` —
+    // no caller ever needs to override this, so it stays an internal derivation
+    // rather than a second prop for `splatUrl` to keep in sync with.
+    const meshOrientation = defaultSplatOrientation(splatUrl);
 
     const fail = (stage: SplatFailureStage, err: unknown) => {
       const described = describeSplatFailure(stage, err);
@@ -251,10 +240,13 @@ export default function SplatCanvas({ splatUrl, orientation }: SplatCanvasProps)
         built = buildSplatScene(parts, bounds);
         const { scene, framing } = built;
         const { near: rawNear, far } = clipPlanes(framing);
-        // Interior framing's `minRadius` (as low as 0.15 m) drives `clipPlanes`' raw
-        // `minRadius / 100` formula to ~0.0015 — a near plane that close z-fights
-        // against anything at typical room scale. 0.05 is close enough to never clip
-        // the camera itself at these radii, far enough to leave real depth precision.
+        // `clipPlanes` (`model-scene.ts`) already floors `near` at 0.01 regardless of
+        // `minRadius` — that floor, not the raw `minRadius / 100` formula, is what
+        // interior framing's low `minRadius` (as low as 0.15 m) actually produces
+        // here, so `rawNear` is 0.01, not the formula's own ~0.0015. 0.01 still
+        // z-fights against a splat at typical room scale; 0.05 is close enough to
+        // never clip the camera itself at these radii, far enough to leave real
+        // depth precision.
         const near = Math.max(rawNear, 0.05);
         const camera = new THREE.PerspectiveCamera(FOV_DEG, 16 / 9, near, far);
 
@@ -318,11 +310,9 @@ export default function SplatCanvas({ splatUrl, orientation }: SplatCanvasProps)
       gl.forceContextLoss?.();
       canvas.remove();
     };
-    // `debug` and `orientation` are deliberately excluded — see their own comments
-    // above for why depending on either would tear down and rebuild the WebGL
-    // context for no correctness benefit (no real caller ever passes `orientation`,
-    // and `debug`'s raw window read already sidesteps needing it as a dependency).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Nothing else in this effect's closure is reactive: `debug` (the hook value)
+    // is read only in the JSX below, never here — `debugging` above is `window`'s
+    // raw, non-reactive read, made once per mount deliberately (see its own comment).
   }, [splatUrl]);
 
   const live = status === 'loading' || status === 'ready';

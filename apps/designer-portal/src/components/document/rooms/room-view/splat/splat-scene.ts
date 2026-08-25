@@ -35,40 +35,47 @@ export { CREAM };
 /**
  * ── ORIENTATION ────────────────────────────────────────────────────────────────────
  *
- * A splat mesh does NOT arrive in three.js's Y-up frame, and two separate facts
- * compose to explain why:
+ * A splat mesh does NOT arrive in three.js's Y-up frame, and there is exactly ONE
+ * transform to undo — not two. An earlier version of this file also composed in a
+ * claimed "Spark 180°-about-X flip", reasoning from the library's quickstart snippet
+ * (`butterfly.quaternion.set(1, 0, 0, 0)`) as if it were a renderer convention. It is
+ * not: per `@sparkjsdev/spark@2.1.0`'s own source, `SplatTransformer` (what actually
+ * places a `SplatMesh` for render) consumes the mesh's `matrixWorld` VERBATIM — no
+ * internal reorientation of any kind. The quickstart's flip is a PER-ASSET correction
+ * for that one COLMAP-trained demo splat's own Y-down authoring frame, not something
+ * Spark applies to every splat it renders. Composing it in here inverted the sign of
+ * the one real correction below.
  *
- * 1. Spark assumes a typical COLMAP-trained splat's Y-DOWN authoring frame. Its own
- *    quickstart corrects for it on every mesh it shows:
- *    `butterfly.quaternion.set(1, 0, 0, 0)` (`@sparkjsdev/spark` README, quickstart) —
- *    three.js `Quaternion.set(x, y, z, w)`, so `(1,0,0,0)` is a 180°-about-X flip.
+ * The one real correction: our own .spz is nerfstudio-trained from ARKit poses, and
+ * the pipeline that gets it there applies its own world-up change of basis BEFORE
+ * training: `ARKIT_TO_NERFSTUDIO` (`services/scan-modal/src/scan_modal/core/
+ * transforms.py:102-110`) rotates ARKit's Y-up world into nerfstudio's Z-up
+ * convention (gravity is real and known, so this is an exact rotation, not an
+ * estimate). `splat_job.py:248-250` trains with `--orientation-method none`, so
+ * nothing further reorients the result — the trained gaussians sit exactly in that
+ * transform's Z-up target frame. `ARKIT_TO_NERFSTUDIO`'s matrix (X unchanged,
+ * Y_nerf = −Z_arkit, Z_nerf = Y_arkit) is a rotation of +90° about X, so undoing it to
+ * land back in three.js's Y-up frame is its inverse: −90° about X.
  *
- * 2. Our own .spz is NOT COLMAP-trained — it is nerfstudio-trained from ARKit poses,
- *    and the pipeline that gets it there applies its own world-up change of basis
- *    BEFORE training: `ARKIT_TO_NERFSTUDIO`
- *    (`services/scan-modal/src/scan_modal/core/transforms.py:57-77`) rotates ARKit's
- *    Y-up world into nerfstudio's Z-up convention (gravity is real and known, so this
- *    is an exact rotation, not an estimate). `splat_job.py:248-250` trains with
- *    `--orientation-method none`, so nothing further reorients the result — the
- *    trained gaussians sit exactly in that transform's Z-up target frame.
- *    `ARKIT_TO_NERFSTUDIO`'s matrix (X unchanged, Y_nerf = −Z_arkit, Z_nerf = Y_arkit)
- *    is a rotation of +90° about X.
+ * `SPLAT_ORIENTATION` is that inverse and NOTHING else composed with it:
  *
- * An UNROTATED mesh therefore puts the room's height on the wrong axis — the box this
- * file used to measure came out with height where depth belongs, which is the
- * inside-out blob this file used to render. The fix composes both corrections:
- * Spark's 180°-about-X flip, applied to the inverse of `ARKIT_TO_NERFSTUDIO`'s
- * +90°-about-X (i.e. −90° about X). Both rotations share the X axis, so they commute
- * and the whole composition collapses to ONE rotation:
+ *     THREE.Quaternion(x, y, z, w) for −90° about X
+ *       = (sin(−45°), 0, 0, cos(−45°)) = (−√½, 0, 0, √½)
  *
- *     180° + (−90°) = 90° about X
- *
- * — numerically identical to `ARKIT_TO_NERFSTUDIO` itself. That is a coincidence of
- * this pipeline's two corrections sharing an axis, not a shortcut where one constant
- * could stand in for the other's meaning.
+ * EMPIRICALLY SETTLED, not just derived: a robust per-axis measurement (percentile
+ * span, 300k samples) of the real prod .spz artifact (sha256 `88dbefcd…`,
+ * 29,397,094 bytes, 1,324,278 gaussians, SPZ v3, fracBits 12) — decoded centers, no
+ * rendering involved — found local-frame Z's p2–p98 span at 3.27 m, matching the
+ * room's known 3.30 m wall height almost exactly, with 90% of the mass inside a
+ * 2.41 m window and the single strongest density peak (16.5% of the bin mass) sitting
+ * at the LOW end of that window — the floor plane. X and Y spanned 7.57 m and 6.55 m,
+ * consistent with the room's 7.67 m plan length. That is nerfstudio Z-up exactly as
+ * `transforms.py` implies, with z increasing from floor to ceiling — the opposite of
+ * what the old `+90°-about-X` sign assumed, and the reason it rendered the ceiling
+ * BELOW the floor (an inside-out blob) rather than above it.
  */
 export const SPLAT_ORIENTATION: THREE.Quaternion = new THREE.Quaternion(
-  Math.SQRT1_2,
+  -Math.SQRT1_2,
   0,
   0,
   Math.SQRT1_2,
@@ -126,13 +133,17 @@ const INTERIOR_MIN_RADIUS_M = 0.15;
 const INTERIOR_MAX_RADIUS_FIT = 0.9;
 
 /** Flattened polar — an eye-level look, not Orbit's exterior downward tilt (1.08 rad
- *  looks down into the room from above; standing inside it, level is correct). Note
- *  this still passes through `createOrbitController`'s own `clamp(…, minPolar,
- *  maxPolar)` against the SAME `MAX_POLAR` (1.45 rad) Orbit uses, which is slightly
- *  less than π/2 (1.5708) — the initial look ends up ~1.45 rad, "flattened to ~π/2"
- *  rather than exactly π/2. Not narrowed further: the clamp band is shared control
- *  math, not a Splat-specific one. */
-const INTERIOR_POLAR = Math.PI / 2;
+ *  looks down into the room from above; standing inside it, level is correct). An
+ *  exact π/2 (1.5708) would be nice-sounding but is not what the room ever shows: it
+ *  sits outside `createOrbitController`'s own `[minPolar, maxPolar]` clamp (the SAME
+ *  band Orbit uses, `MAX_POLAR` = 1.45 rad — not narrowed for Splat, shared control
+ *  math rather than a second copy of it), so a literal π/2 here would return a
+ *  `CameraFraming` whose own `polar` field lies outside its own `maxPolar` field —
+ *  internally inconsistent, even though the CONTROLLER downstream would silently
+ *  clamp it back to 1.45 on first use. Returning `MAX_POLAR` directly keeps the two
+ *  in agreement: the polar this function reports is the polar the room actually
+ *  opens on. */
+const INTERIOR_POLAR = MAX_POLAR;
 
 /** `hypot(size.x, size.z)` beyond this reads as a floater-polluted or non-metric
  *  splat (a stray point cloud spanning a building, garbage bounds from a bad train)
@@ -177,6 +188,14 @@ export interface BuiltSplatScene {
  * already correctly oriented). A degenerate, non-finite, or implausibly large box
  * (`OVERSIZE_PLAN_M`) falls back to a unit room rather than placing a camera from
  * bounds that cannot be trusted.
+ *
+ * The eye height is clamped into the box's own vertical span (`[box.min.y,
+ * box.max.y]`) rather than trusted as a bare `box.min.y + EYE_HEIGHT_M`. Two failure
+ * shapes motivate it, both real for a splat trained off a walk rather than measured:
+ * a stray floater far below the true floor drags `box.min.y` down with it, and a
+ * low or partial scan can leave less than `EYE_HEIGHT_M` of headroom between floor
+ * and ceiling. Either way, the eye must resolve to somewhere the box itself spans —
+ * never above the ceiling the scan actually captured, never below its floor.
  */
 export function frameSplatInterior(box: THREE.Box3): CameraFraming {
   if (box.isEmpty() || !boxIsFinite(box)) return frameRoom(1, 1);
@@ -193,11 +212,12 @@ export function frameSplatInterior(box: THREE.Box3): CameraFraming {
     INTERIOR_MIN_RADIUS_M,
     maxRadius,
   );
+  const eyeY = clamp(box.min.y + EYE_HEIGHT_M, box.min.y, box.max.y);
 
   return {
     target: {
       x: centre.x,
-      y: box.min.y + EYE_HEIGHT_M,
+      y: eyeY,
       z: centre.z,
     },
     azimuth: DEFAULT_AZIMUTH,

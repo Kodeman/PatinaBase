@@ -7,8 +7,10 @@
  * `THREE.PerspectiveCamera`. Pointer drag → azimuth/polar (polar clamped); wheel → radius,
  * MULTIPLICATIVELY (`radius *= exp(deltaY · rate)`, clamped, `preventDefault` so the page
  * doesn't scroll) — scale-invariant, so the same notch feels the same fraction of the
- * room whether it measures in feet (Plan/Orbit/Mesh) or metres (Splat). `detach()`
- * removes every listener.
+ * room whether it measures in feet (Orbit/Mesh) or metres (Splat). Plan does not ride
+ * this file at all — it is plain SVG with no wheel handler, so only three of the four
+ * projections (Orbit, Mesh, Splat) share this control math. `detach()` removes every
+ * listener.
  *
  * The prototype hardcodes azim 0.82 / polar 1.08 / radius 32 for its one 19×14 room.
  * `frameRoom` keeps the two angles and DERIVES the radius (and its clamp bounds) from the
@@ -67,9 +69,10 @@ const POLAR_SENS = 0.004;
  * One trackpad tick (deltaY ≈ 3 px) → `exp(3 · 0.0015)` ≈ ×1.0045, a ~0.5% step —
  * fine enough that a trackpad scroll reads as continuous rather than jumpy.
  *
- * Shared by Plan, Orbit, Mesh, and Splat (all four ride this one `controls.ts`), so
- * this is a feel change on all of them, not a Splat-only tweak — see the PR notes for
- * the before/after on Orbit's feet-scale room.
+ * Shared by Orbit, Mesh, and Splat (all three ride this one `controls.ts`) — Plan is
+ * plain SVG with no wheel handler and does not ride it at all — so this is a feel
+ * change on all three, not a Splat-only tweak — see the PR notes for the before/after
+ * on Orbit's feet-scale room.
  */
 const WHEEL_ZOOM_RATE = 0.0015;
 
