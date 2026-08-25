@@ -94,7 +94,10 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
         /// Audio that never existed yields no filename at all and never lands
         /// here — the recorder drops a segment it failed to start.
         public var audioLost: Bool?
-        /// 'device' | 'device_partial' — which reading produced `transcript`.
+        /// 'device' | 'device_partial' | 'designer' | 'server' — which reading
+        /// produced `transcript`. The app writes the first three; 'designer' is
+        /// manual entry, which claims no speech and implies no audio. 'server'
+        /// is the server's own transcription. 00530:55 admits all four.
         public var transcriptSource: String?
         public var transcript: String?
         public var partialTranscript: String?

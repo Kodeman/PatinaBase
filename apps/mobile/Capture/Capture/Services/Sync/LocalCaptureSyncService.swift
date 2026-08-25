@@ -315,6 +315,15 @@ final class LocalCaptureSyncService: CaptureSyncService {
         }
         if voiceUpload.lost > 0 {
             payload.voice?.audioLost = true
+            if voiceUpload.paths.isEmpty {
+                // Every segment was lost. audioSegments is always the ordered
+                // list of segments that exist server-side, so here it is empty
+                // — never the builder's bare local filenames, which would name
+                // objects nothing ever uploaded. Empty + audioLost separates
+                // "had audio, all of it is gone" from "had no audio" (no key).
+                payload.voice?.audioPath = nil
+                payload.voice?.audioSegments = []
+            }
         }
 
         let routing = CaptureRoutingContext(

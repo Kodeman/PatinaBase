@@ -92,7 +92,10 @@ public final class Specimen {
     /// way it already exempts an uploaded photo — without it a voice file is
     /// required-LOCAL forever and one unreadable segment blocks a whole note.
     public var voiceAudioRemotePathsRaw: [String]?
-    /// 'device' | 'device_partial' — which reading produced voiceTranscript.
+    /// 'device' | 'device_partial' | 'designer' | 'server' — which reading
+    /// produced voiceTranscript. The app writes the first three; 'designer' is
+    /// manual entry, which claims no speech and implies no audio. 'server' is
+    /// the server's own transcription. 00530:55 admits all four.
     public var voiceTranscriptSourceRaw: String?
     /// 'note' | 'context' | nil. Wave 1's producer for the server's
     /// capture_kind CHECK; nil means the server default 'specimen' applies.
