@@ -6,8 +6,6 @@
 //  non-Pro path (photo from the regular camera, no pose). Each capture rides the
 //  EXISTING outbox → Capture Inbox via `ContextCaptureService` with the spatial
 //  address in provenance.
-//
-//  ⚠️ All user-facing strings are ESCALATE-class PLACEHOLDERS (flagged in the report).
 
 import SwiftUI
 import AVFoundation
@@ -117,14 +115,40 @@ final class SiteScanContextModel {
                         guard !Task.isCancelled else { return }
                         self?.partialTranscript = chunk.text
                     }
-                } catch {}
+                    // The 20-minute cap ends the note by finishing the stream
+                    // NORMALLY. stopVoice() is otherwise reachable only from
+                    // toggleVoice(), so without this the pill kept reading
+                    // "Stop" over a dead mic and up to twenty minutes of
+                    // recorded audio was never enqueued at all. The tap path
+                    // has already cleared isRecordingVoice, so this is a no-op
+                    // there.
+                    self?.stopVoice(reason: .capped)
+                } catch {
+                    // Recognition tore the note down. The audio it wrote is on
+                    // disk and is the record — end the note so it is enqueued
+                    // with whatever partial text there is, rather than dropped
+                    // in silence.
+                    self?.stopVoice(reason: .failed)
+                }
             }
         } catch {
             toast = "Microphone unavailable"
         }
     }
 
-    private func stopVoice() {
+    /// Why the note is ending. Only the nothing-was-captured copy differs; the
+    /// keep-the-audio path is identical, because on every one of these doors the
+    /// audio is still the record.
+    private enum VoiceEndReason {
+        case tapped, capped, failed
+    }
+
+    /// Ends a live note and enqueues it. Idempotent: the cap and the
+    /// recognition-error door can both arrive after the pill was already
+    /// tapped, and a second run would call finish() again — which returns the
+    /// same segments — and enqueue the take twice.
+    private func stopVoice(reason: VoiceEndReason = .tapped) {
+        guard isRecordingVoice else { return }
         voiceTask?.cancel()
         isRecordingVoice = false
         let creationScope = recordingScope
@@ -146,7 +170,9 @@ final class SiteScanContextModel {
             // the two disagree about what "has text" means.
             let hasAudio = !result.audioSegments.isEmpty
             guard !transcript.isEmpty || hasAudio else {
-                self.toast = "Nothing was recorded — try holding the mic a moment longer."
+                self.toast = reason == .failed
+                    ? "Voice capture stopped before anything was kept — try the note again."
+                    : "Nothing was recorded — try holding the mic a moment longer."
                 return
             }
             // Held in a local and assigned ONCE at the end: the shipped code set the
@@ -173,6 +199,13 @@ final class SiteScanContextModel {
                   self.ownerScopeProvider() == creationScope else { return }
             self.toast = message
         }
+    }
+
+    /// Leaving F2 mid-note. `deinit` closes the open segment but nothing
+    /// enqueues it, so the recording sat in the media directory with no capture
+    /// referring to it — audio orphaned, no capture, no toast.
+    func endVoiceIfNeeded() {
+        stopVoice()
     }
 
     private func service(for scope: CaptureLocalListScope) -> ContextCaptureService? {
@@ -213,6 +246,9 @@ struct SiteScanContextControls: View {
             }
         }
         .accessibilityElement(children: .contain)
+        // Both F2 hosts render these controls, so this is the one place that
+        // catches every way off the surface mid-note.
+        .onDisappear { model.endVoiceIfNeeded() }
     }
 
     private func pill(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
@@ -296,13 +332,13 @@ struct SiteScanContextScreen: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("This iPhone can't measure a room.")               // ESCALATE placeholder
+            Text("This iPhone can't measure a room.")
                 .font(CaptureType.eyebrow).textCase(.uppercase)
                 .foregroundStyle(CaptureColor.paper3)
-            Text("Photos & notes for this room.")    // ESCALATE placeholder
+            Text("Photos & notes for this room.")
                 .font(CaptureType.title2)
                 .foregroundStyle(CaptureColor.paper)
-            Text("These reach the studio as soon as you have signal — they're notes, not a scan.")  // ESCALATE
+            Text("These reach the studio as soon as you have signal — they're notes, not a scan.")
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.paper2)
         }
