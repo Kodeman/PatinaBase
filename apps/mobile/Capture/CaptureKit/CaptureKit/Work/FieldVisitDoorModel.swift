@@ -40,11 +40,8 @@ public final class FieldVisitDoorModel {
             kit = open.kit
             selectedProjectID = open.routing.projectID
             venueName = open.kind == .sourcing ? (open.label ?? "") : ""
-            // R36 again, on the way IN: `CaptureSessionContext` truncates in its
-            // memberwise init, but a DECODED context assigns stored properties
-            // directly and bypasses that, so the type is not a validation
-            // boundary in either direction. The door is where an over-cap array
-            // first becomes visible, so the door is where it gets trimmed.
+            // R36 on the way IN — same reason as `toggleProjectInMind` below:
+            // a DECODED context bypasses the memberwise truncation.
             projectsInMind = Array(open.projectsInMind.prefix(CaptureSessionContext.maxProjectsInMind))
             if open.routing.projectRoomID != nil || open.scanRoomID != nil {
                 restoringRoomLanes = (open.routing.projectRoomID, open.scanRoomID)
@@ -121,8 +118,18 @@ public final class FieldVisitDoorModel {
     /// from one id, which is the exact cross-assignment the merge exists to
     /// prevent. No match (renamed room, re-cached project) leaves it nil rather
     /// than inventing an option.
+    ///
+    /// The lanes are CONSUMED only when there is a real room to match against —
+    /// index 0 is always Whole house, so `count > 1` is the test. A project
+    /// cached list-only, or one whose detail fetch just failed, would otherwise
+    /// discard them permanently on a doomed match, and no later refresh could
+    /// recover the room: the primary button stays live and "Change" writes both
+    /// lanes nil. That is the silent degrade this restore exists to close.
+    /// A room she has already chosen herself is never overwritten by a retry.
     private func restoreSelectedRoom() {
-        guard let lanes = restoringRoomLanes else { return }
+        guard let lanes = restoringRoomLanes,
+              selectedRoom == nil,
+              roomOptions.count > 1 else { return }
         restoringRoomLanes = nil
         selectedRoom = roomOptions.first {
             $0.projectRoomID == lanes.projectRoomID && $0.scanRoomID == lanes.scanRoomID

@@ -308,10 +308,33 @@ struct VisitDoorTests {
         let draft = try #require(model.draft())
         #expect(draft.projectRoomID == nil)
         #expect(draft.scanRoomID == nil)
+
+        // The mirror, on the scan lane: the case a `public.rooms`-side
+        // reconstruction repair would get wrong.
+        let stale = opened(CaptureVisitDraft(
+            kind: .site, kit: .install, label: "Maple St residence",
+            projectID: "p1", projectName: "Maple St residence",
+            projectRoomID: nil, scanRoomID: "r-gone", room: "Cellar"))
+        let mirror = FieldVisitDoorModel(cache: cache, owner: owner, existing: .active(stale))
+        await mirror.load()
+
+        #expect(mirror.selectedRoom == nil)
+        #expect(mirror.roomOptions.count == 3)
+        let mirrorDraft = try #require(mirror.draft())
+        #expect(mirrorDraft.projectRoomID == nil)
+        #expect(mirrorDraft.scanRoomID == nil)
     }
 
     @Test func changingTheProjectDropsTheRoomTheOpenVisitStored() async throws {
         let service = seededService()
+        // p2 carries a room on the same lane and id the open visit stored. Real
+        // `project_rooms` ids never collide across projects — the fixture forces
+        // it so the pending lanes have something to WRONGLY match, which is the
+        // only way `select`'s clear can be gated at all.
+        service.detail["p2"] = FieldProjectDetail(
+            project: FieldProject(id: "p2", name: "Harbor loft", status: "active"),
+            specRooms: [FieldProjectRoom(id: "sr2", name: "Galley")],
+            rooms: [])                               // spec lane only — matches BOTH stored lanes
         let cache = try makeCache(service)
         let open = opened(CaptureVisitDraft(
             kind: .site, kit: .install, label: "Maple St residence",
@@ -321,9 +344,72 @@ struct VisitDoorTests {
         let model = FieldVisitDoorModel(cache: cache, owner: owner, existing: .active(open))
         await model.select(projectID: "p2")
 
-        #expect(model.selectedRoom == nil)
+        #expect(model.roomOptions.count == 2)        // Whole house, Galley — a live target
+        #expect(model.selectedRoom == nil)           // and the stale lanes did not take it
         await model.select(projectID: "p1")
         #expect(model.selectedRoom == nil)           // never resurrected later
+    }
+
+    /// A doomed match must not CONSUME the stored lanes. She opens the door with
+    /// no signal, so the detail fetch fails and there is nothing to match; the
+    /// room has to survive until a refresh can actually find it.
+    @Test func aFailedDetailFetchKeepsTheStoredRoomPendingUntilItCanBeMatched() async throws {
+        let service = seededService()
+        let cache = try makeCache(service)
+        let warm = FieldVisitDoorModel(cache: cache, owner: owner)
+        await warm.load()                            // list cached, rooms never fetched
+
+        let open = opened(CaptureVisitDraft(
+            kind: .site, kit: .install, label: "Maple St residence",
+            projectID: "p1", projectName: "Maple St residence",
+            projectRoomID: "sr2", scanRoomID: nil, room: "Dining"))
+
+        service.offline = true
+        let model = FieldVisitDoorModel(cache: cache, owner: owner, existing: .active(open))
+        await model.load()
+
+        #expect(model.isOffline)
+        #expect(model.roomOptions.count == 1)        // Whole house alone — nothing to match
+        #expect(model.selectedRoom == nil)
+
+        service.offline = false
+        await model.select(projectID: "p1")
+
+        let restored = try #require(model.selectedRoom)
+        #expect(restored.name == "Dining")
+        #expect(restored.projectRoomID == "sr2")
+        #expect(restored.scanRoomID == nil)
+        let draft = try #require(model.draft())
+        #expect(draft.projectRoomID == "sr2")
+        #expect(draft.room == "Dining")
+    }
+
+    /// The other half of the same guard: a room she picked herself is hers. A
+    /// retry that finally resolves the rooms must not overwrite it.
+    @Test func aRetryNeverOverwritesTheRoomSheChoseHerself() async throws {
+        let service = seededService()
+        let cache = try makeCache(service)
+        let warm = FieldVisitDoorModel(cache: cache, owner: owner)
+        await warm.load()
+
+        let open = opened(CaptureVisitDraft(
+            kind: .site, kit: .install, label: "Maple St residence",
+            projectID: "p1", projectName: "Maple St residence",
+            projectRoomID: "sr2", scanRoomID: nil, room: "Dining"))
+
+        service.offline = true
+        let model = FieldVisitDoorModel(cache: cache, owner: owner, existing: .active(open))
+        await model.load()
+        model.selectedRoom = .wholeHouse             // the one option she was offered
+
+        service.offline = false
+        await model.select(projectID: "p1")
+
+        #expect(model.selectedRoom?.isWholeHouse == true)
+        let draft = try #require(model.draft())
+        #expect(draft.projectRoomID == nil)
+        #expect(draft.scanRoomID == nil)
+        #expect(draft.room == nil)
     }
 
     /// R71a: `CaptureSessionContext` truncates in its memberwise init, but a
