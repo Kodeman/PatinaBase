@@ -355,4 +355,75 @@ struct VisitContextTests {
         #expect(specimen.isUnplaced)
         #expect(specimen.hasConfirmedCaptureReceipt)
     }
+
+    // MARK: - The launch table (task 16, spec §5.3 / FC-R1)
+
+    @Test func theLaunchTableIsExactlyTheFourRowsInTheSpec() {
+        let active = CaptureVisitState.active(
+            visit(startedAt: now, lastActivityAt: now))
+        let stale = CaptureVisitState.stale(
+            visit(startedAt: now, lastActivityAt: now.addingTimeInterval(-3600)))
+
+        #expect(FieldLaunchPolicy.destination(visitState: active,
+                                              deepLinkedToCapture: false) == .viewfinder)
+        #expect(FieldLaunchPolicy.destination(visitState: stale,
+                                              deepLinkedToCapture: false) == .today)
+        #expect(FieldLaunchPolicy.destination(visitState: .none,
+                                              deepLinkedToCapture: false) == .today)
+        #expect(FieldLaunchPolicy.destination(visitState: .none,
+                                              deepLinkedToCapture: true) == .viewfinderUnplaced)
+        #expect(FieldLaunchPolicy.destination(visitState: active,
+                                              deepLinkedToCapture: true) == .viewfinder)
+    }
+
+    @Test func flippingFCR1BackToCameraFirstNeedsOneFlag() {
+        // PASSED, never mutated. `theLaunchTableIsExactlyTheFourRowsInTheSpec`
+        // reads the same policy from the same non-@MainActor suite, and Swift
+        // Testing runs tests in parallel by default.
+        #expect(FieldLaunchPolicy.destination(visitState: .none,
+                                              deepLinkedToCapture: false,
+                                              todayIsHome: false) == .viewfinderUnplaced)
+        #expect(FieldLaunchPolicy.destination(
+            visitState: .stale(visit(startedAt: now,
+                                     lastActivityAt: now.addingTimeInterval(-3600))),
+            deepLinkedToCapture: false,
+            todayIsHome: false) == .viewfinderUnplaced)
+        // And the shipped default is still Today (FC-R1(a)).
+        #expect(FieldLaunchPolicy.todayIsHome)
+        #expect(FieldLaunchPolicy.destination(visitState: .none,
+                                              deepLinkedToCapture: false) == .today)
+    }
+
+    @Test func destinationsCarryTheirRealm() {
+        #expect(FieldLaunchDestination.today.realm == .work)
+        #expect(FieldLaunchDestination.viewfinder.realm == .camera)
+        #expect(FieldLaunchDestination.viewfinderUnplaced.realm == .camera)
+    }
+
+    /// An OPEN visit wins over Today whichever door she came through, and it is
+    /// the live visit that wins: `.active` outranks both `todayIsHome` and the
+    /// deep link, while a visit the day rule or the 12-hour rule already killed
+    /// reads `.none` here and lands her on Today.
+    @Test func anActiveVisitOutranksTodayFromEveryDoor() {
+        let live = visit(startedAt: now, lastActivityAt: now)
+        #expect(FieldLaunchPolicy.destination(visitState: .active(live),
+                                              deepLinkedToCapture: false,
+                                              todayIsHome: true) == .viewfinder)
+        #expect(FieldLaunchPolicy.destination(visitState: .active(live),
+                                              deepLinkedToCapture: true,
+                                              todayIsHome: false) == .viewfinder)
+
+        // Yesterday's visit is not an open visit. `now` is 02:00 Chicago, so a
+        // visit three hours old started on the previous calendar day: still
+        // inside the 12-hour window, and killed by the calendar-day rule alone.
+        // Without that rule its 3-hour idle would read `.stale` and still land
+        // on Today — so the assertion on the state is what makes this row real.
+        let yesterday = visit(startedAt: now.addingTimeInterval(-3 * 3600),
+                              lastActivityAt: now.addingTimeInterval(-3 * 3600))
+        let state = CaptureSessionContextPolicy.visitState(
+            for: yesterday, now: now, calendar: calendar)
+        #expect(state == .none)
+        #expect(FieldLaunchPolicy.destination(visitState: state,
+                                              deepLinkedToCapture: false) == .today)
+    }
 }

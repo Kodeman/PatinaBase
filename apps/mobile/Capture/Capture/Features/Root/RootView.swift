@@ -27,6 +27,16 @@ struct RootView: View {
     @State private var reconciliationToken: UUID?
     @State private var ownerUIInvalidated = false
     @State private var readyRequested = false
+    /// Row 4 of §5.3's launch table. A `field://capture` entry asks for C1
+    /// whether or not a visit is open; `CaptureDeepLink` crosses to the camera
+    /// realm itself, and this records the intent so the launch table agrees
+    /// with it rather than racing it back to Today.
+    @State private var deepLinkedToCapture = false
+    /// `-CaptureScreen <id>` drives a named screen on launch. That harness picks
+    /// its own realm inside `.task`, and the two `.task`s resume in an order
+    /// SwiftUI does not promise — so the launch table stands down entirely
+    /// rather than landing a screenshot sweep on Today.
+    @State private var launchDestinationDeferredToHarness = AppConfiguration.initialScreenRaw != nil
     /// Runs `field://login` deep-link sign-in (portal QR handoff). Owned by the
     /// composition root so the deep-link handler, this shell, and Q1 share one
     /// instance; configured in `.task` once `coordinator` can be bound.
@@ -80,6 +90,10 @@ struct RootView: View {
             applyCompanionPlacement()
         }
         .onOpenURL { url in
+            if url.scheme == AppConfiguration.urlScheme,
+               url.host == "capture" || url.host == nil {
+                deepLinkedToCapture = true
+            }
             CaptureDeepLink.handle(
                 url,
                 coordinator: coordinator,
@@ -282,6 +296,29 @@ struct RootView: View {
               ownerTracker.currentOwner == owner else { return }
         readyRequested = false
         coordinator.phase = .ready
+        applyLaunchDestination()
+    }
+
+    /// FC-R1 made real: where Field opens. Every decision lives in
+    /// `FieldLaunchPolicy`; this reads the visit and moves the coordinator.
+    private func applyLaunchDestination() {
+        guard !launchDestinationDeferredToHarness else { return }
+        let identity = CaptureSessionIdentity(userID: container.session.userID,
+                                              workspaceID: container.session.workspaceID)
+        let state = CaptureSessionContextStore.shared.visitState(identity: identity)
+        let destination = FieldLaunchPolicy.destination(
+            visitState: state,
+            deepLinkedToCapture: deepLinkedToCapture)
+        switch destination {
+        case .today:
+            coordinator.switchRealm(.work, reset: true)
+        case .viewfinder, .viewfinderUnplaced:
+            coordinator.switchRealm(.camera)
+        }
+        container.analytics.event("field.launch", [
+            "destination": String(describing: destination),
+            "has_visit": state.isVisit ? "true" : "false"
+        ])
     }
 
     private func observeOwnerState(_ state: CaptureSessionOwnerState) async {
@@ -319,6 +356,7 @@ struct RootView: View {
             if shouldEnterReady || readyRequested {
                 readyRequested = false
                 coordinator.phase = .ready
+                applyLaunchDestination()
             }
 
             // Reconciliation is deliberately downstream of readiness. Background
@@ -342,6 +380,7 @@ struct RootView: View {
         reconciliationToken = nil
         ownerUIInvalidated = true
         readyRequested = false
+        deepLinkedToCapture = false
         CaptureSessionContextStore.shared.reset()
         container.companion.send(.collapse(hint: nil, action: nil))
     }
