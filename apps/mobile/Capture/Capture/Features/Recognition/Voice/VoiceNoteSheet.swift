@@ -4,9 +4,10 @@
 //  N4 · Voice note — live transcribe. Hold to talk and the note transcribes on
 //  device in real time ("oak base, the warmer bouclé — rep is Dana"). "Attach
 //  note" saves transcript + audio to the specimen (source .voice); "Discard"
-//  drops the take. If the recogniser is unavailable (no mic permission, or the
-//  simulator), the sheet falls to a typed-note entry — the raw audio is always
-//  kept alongside the text when there is one.
+//  drops the take AND deletes its audio segments from the media directory. If
+//  the recogniser is unavailable (no mic permission, or the simulator), the
+//  sheet falls to a typed-note entry — the raw audio is always kept alongside
+//  the text when there is one.
 
 import SwiftUI
 import UIKit
@@ -237,10 +238,15 @@ struct VoiceNoteSheet: View {
                     manualFallback = true
                     isRecording = false
                     isFinishing = true
-                    // The recorder tore its own note down, but the segments it
-                    // published need a referrer or a real recording sits in the
-                    // media dir unreferenced and the note ships labelled as typed.
-                    // finish() is idempotent against that teardown.
+                    // The recorder tore its own note down: endAbandonedNote()
+                    // cleared noteIsActive and has ALREADY emitted voice.finish
+                    // reason:"error". The segments it published still need a
+                    // referrer, or a real recording sits in the media dir
+                    // unreferenced and the note ships labelled as typed - so
+                    // finish() is still called, and takes its `guard wasActive`
+                    // early return: no second emission, no second deactivation
+                    // of the shared session, and the accumulated segment names
+                    // come back regardless.
                     Task {
                         result = await voice.finish()
                         isFinishing = false
@@ -271,10 +277,14 @@ struct VoiceNoteSheet: View {
         player.stop()
         streamTask?.cancel()
         Task {
-            // finish() is what returns the segment list, and it is idempotent:
-            // audioSegments accumulates and is reset only by the next
-            // startLiveTranscription(), so a second call hands back the same
-            // names. Discard therefore always ASKS instead of reading `result`,
+            // finish() is what returns the segment list, and it is safe to
+            // call SPECULATIVELY: its `guard wasActive` early return means a
+            // note the cap already ended, or one that never started, is not
+            // torn down twice, does not re-emit voice.finish under a second
+            // falsely-labelled reason, and does not deactivate the shared
+            // session again - while still handing back audioSegments, which is
+            // reset only by the next startLiveTranscription().
+            // Discard therefore always ASKS instead of reading `result`,
             // which is nil for the whole window between end() and its Task
             // resuming - and cancel() above gives that Task the main actor
             // first, so the still-recording branch could never see it either.
