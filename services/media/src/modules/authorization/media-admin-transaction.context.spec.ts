@@ -95,8 +95,12 @@ describe('MediaAdminTransactionContext', () => {
       const context = new MediaAdminTransactionContext();
       const prisma = createTransactionBoundPrisma(context);
 
-      expect(() => (prisma as unknown as { hasOwnProperty: (p: string) => boolean }).hasOwnProperty('x')).not.toThrow();
-      expect((prisma as unknown as { hasOwnProperty: (p: string) => boolean }).hasOwnProperty('x')).toBe(false);
+      expect(() =>
+        (prisma as unknown as { hasOwnProperty: (p: string) => boolean }).hasOwnProperty('x'),
+      ).not.toThrow();
+      expect(
+        (prisma as unknown as { hasOwnProperty: (p: string) => boolean }).hasOwnProperty('x'),
+      ).toBe(false);
       expect(() => (prisma as unknown as { toString: () => string }).toString()).not.toThrow();
     });
 
@@ -114,9 +118,9 @@ describe('MediaAdminTransactionContext', () => {
         mediaAsset: { findMany: jest.fn().mockResolvedValue([{ id: 'bound' }]) },
       } as unknown as Prisma.TransactionClient;
 
-      await expect(
-        context.run(transaction, () => prisma.mediaAsset.findMany()),
-      ).resolves.toEqual([{ id: 'bound' }]);
+      await expect(context.run(transaction, () => prisma.mediaAsset.findMany())).resolves.toEqual([
+        { id: 'bound' },
+      ]);
       expect(transaction.mediaAsset.findMany).toHaveBeenCalledTimes(1);
     });
   });
