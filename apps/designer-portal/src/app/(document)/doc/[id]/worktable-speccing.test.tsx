@@ -96,6 +96,8 @@ function line(id: string, name: string, scopeRoomId: string | null, position: nu
 }
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomScans: () => ({ data: [] }),
+  useGeneratedRoomFilesByScan: () => ({ data: new Map() }),
   /* the page's own reads */
   useProjectV2: () => ({ data: undefined, isLoading: false, isError: false }),
   useProjectPhases: () => ({ data: [] }),

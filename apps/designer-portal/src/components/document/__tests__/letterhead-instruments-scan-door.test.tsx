@@ -99,3 +99,10 @@ describe('LetterheadInstruments — "The scan" door', () => {
     expect(mockPush).toHaveBeenCalledWith('/room/scan-1?from=document');
   });
 });
+
+describe('LetterheadInstruments — "The scan" door provenance (Wave 1P)', () => {
+  it('labels the door "The scan" while the client leg supplies it', async () => {
+    renderInstruments(null);
+    expect(await screen.findByText('The scan')).toBeInTheDocument();
+  });
+});

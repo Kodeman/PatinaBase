@@ -130,11 +130,16 @@ export function DiscoverySection({
   designerId,
   clientProfileId,
   clientName,
+  projectId = null,
 }: {
   engagementId: string; // the designer_clients.id (Shape D)
   designerId: string;
   clientProfileId: string | null;
   clientName: string;
+  /** This document's project, when it has one — the scope the designer leg of
+   *  the scan picker is filtered to. Null on a pre-project engagement, which
+   *  means the picker offers the client's scans only. */
+  projectId?: string | null;
 }) {
   const router = useRouter();
   const { data: read } = useDiscovery(engagementId);
@@ -143,9 +148,18 @@ export function DiscoverySection({
   const { data: styles } = useStyles() as {
     data: { id: string; name: string }[] | undefined;
   };
-  const { data: scans } = useClientRoomScans(clientProfileId ?? '') as {
+  // `clientProfileId` is the client's auth uid — what `useClientRoomScans`
+  // now resolves against directly (`room_scans.user_id`). It used to be read
+  // as a `designer_clients.id`, which no caller ever passes, so the client leg
+  // never returned a row on production.
+  const { data: scans } = useClientRoomScans(clientProfileId ?? '', projectId) as {
     data:
-      | { id: string; name?: string | null; created_at?: string }[]
+      | {
+          id: string;
+          name?: string | null;
+          created_at?: string;
+          owner_kind?: 'designer' | 'client';
+        }[]
       | undefined;
   };
 
@@ -252,10 +266,20 @@ export function DiscoverySection({
     value: s.id,
     label: s.name,
   }));
-  const scanOptions: Option[] = (scans ?? []).map((s) => ({
-    value: s.id,
-    label: s.name || `Scan ${s.created_at?.slice(0, 10) ?? ''}`.trim(),
-  }));
+  // Wave 1P (spec §11.2): the designer's own scans now appear here too. The
+  // provenance suffix appears ONLY when the union actually contributed one —
+  // a picker showing only the client's scans stays byte-identical to before
+  // this wave, which is what the unflagged posture rests on (FC-R10).
+  const scanRows = scans ?? [];
+  const hasOwnScan = scanRows.some((s) => s.owner_kind === 'designer');
+  const scanOptions: Option[] = scanRows.map((s) => {
+    const name = s.name || `Scan ${s.created_at?.slice(0, 10) ?? ''}`.trim();
+    if (!hasOwnScan) return { value: s.id, label: name };
+    return {
+      value: s.id,
+      label: `${name} · ${s.owner_kind === 'designer' ? 'yours' : 'from your client'}`,
+    };
+  });
 
   const toggle = (b: BlockKey) =>
     setOpen((prev) => {

@@ -31,6 +31,24 @@ const isoOffsetDays = (days: number) =>
   new Date(Date.now() + days * 86_400_000).toISOString();
 
 /**
+ * `receiving_inspections.photo_asset_ids` (created 00150:43; 00445/00447 add
+ * the RPCs that write it) — media-service
+ * MediaAsset UUIDs written by iOS (`SupabaseReceivingService.swift:115`), into
+ * rows no web surface has ever acknowledged. Wave 1P makes their EXISTENCE
+ * visible; the bytes stay unreachable until the media service exposes a route
+ * that returns a readable URL (today `GET /v1/media/:id/download` returns the
+ * raw storage key, `media.service.ts:197`). See the Wave 1P plan, Ruling 6-B.
+ */
+export function inspectionPhotoLine(photoAssetIds: unknown): string | null {
+  if (!Array.isArray(photoAssetIds)) return null;
+  const n = photoAssetIds.filter(
+    (id) => typeof id === 'string' && id.trim().length > 0,
+  ).length;
+  if (n === 0) return null;
+  return `${n} photo${n === 1 ? '' : 's'} logged on the phone`;
+}
+
+/**
  * PRC-10 (R84): one figure of the receiving KPI strip — the proposal-watch
  * figures-strip grammar (divided columns, mono label over heading numeral),
  * inked for the laid paper sheet (R96).
@@ -133,6 +151,7 @@ function OpenClaimRow({
                 ? `vendor notified ${fmtDay(claim.vendor_notified_at)}`
                 : null,
               claim.inspection?.outcome ?? null,
+              inspectionPhotoLine(claim.inspection?.photo_asset_ids),
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -458,7 +477,9 @@ export function ReceivingBookPage({
                         {i.purchase_order?.project?.name ?? 'Project'}
                       </span>
                       <span className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-sage)]">
-                        clean · {fmtDay(i.inspected_at)}
+                        {['clean', fmtDay(i.inspected_at), inspectionPhotoLine(i.photo_asset_ids)]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </span>
                     </li>
                   ))}

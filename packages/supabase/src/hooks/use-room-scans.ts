@@ -178,45 +178,96 @@ export function useRoomScan(scanId: string) {
   });
 }
 
-/**
- * Fetch room scans for a specific client (for designers)
- * Uses the designer_clients relationship to get client's scans
- */
-export function useClientRoomScans(clientId: string) {
-  return useQuery({
-    queryKey: ['client-room-scans', clientId],
-    queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
+/** Whose scan a row is, resolved at read time — never a stored column. */
+export type RoomScanOwnerKind = 'designer' | 'client';
 
-      // Get the client's profile ID from the designer_client relationship
-      const { data: designerClient, error: dcError } = await supabase
-        .from('designer_clients')
-        .select('client_id')
-        .eq('id', clientId)
-        .maybeSingle();
+export interface RoomScanWithProvenance extends RoomScan {
+  /** 'designer' = the signed-in designer's own scan; 'client' = the client's. */
+  owner_kind: RoomScanOwnerKind;
+}
 
-      if (dcError) throw dcError;
-      if (!designerClient) return [];
-
-      // Get room scans for this client
-      const { data, error } = await supabase
-        .from('room_scans')
-        .select(`
+const CLIENT_SCAN_SELECT = `
           *,
           project:projects!project_id(
             id,
             name
           )
-        `)
-        .eq('user_id', designerClient.client_id)
-        .eq('status', 'ready')
-        .order('created_at', { ascending: false });
+        `;
 
-      if (error) throw error;
-      return (data ?? []) as RoomScan[];
+/**
+ * Ready room scans a designer can attach to this client's document: the
+ * client's own scans UNIONED with the designer's own for THIS project
+ * (spec §11.2, Wave 1P).
+ *
+ * `clientProfileId` is the client's **auth uid** — `room_scans.user_id`
+ * directly. It used to be resolved through `designer_clients.id`, but every
+ * caller passes the profile uid (`document_state.client_profile_id`, 00191/
+ * 00192 = `projects.client_id` | `proposals.client_id` | `leads.homeowner_id`),
+ * so the lookup could never hit and the client leg was dead on production.
+ * 00020's "Designers can view authorized room scans" admits this read on the
+ * `designer_clients.client_id = room_scans.user_id` leg, so no junction hop
+ * is needed.
+ *
+ * The designer leg is scoped to `project_id` (00265). That column is nullable
+ * and unlinked scans do NOT qualify: a document must never offer a scan taken
+ * in another client's house. No project (a pre-project engagement) means no
+ * designer leg at all.
+ *
+ * Every row carries `owner_kind` so the surfaces above keep saying whose scan
+ * it is — a client-provenance instrument must not quietly start meaning
+ * "anyone's" (FC-R10).
+ */
+export function useClientRoomScans(
+  clientProfileId: string,
+  projectId?: string | null,
+) {
+  return useQuery({
+    queryKey: ['client-room-scans', clientProfileId, projectId ?? null],
+    queryFn: async (): Promise<RoomScanWithProvenance[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data: auth } = await supabase.auth.getUser();
+      const designerId: string | null = auth?.user?.id ?? null;
+
+      const readScansFor = async (
+        ownerId: string,
+        scopedProjectId?: string,
+      ): Promise<RoomScan[]> => {
+        let builder = supabase
+          .from('room_scans')
+          .select(CLIENT_SCAN_SELECT)
+          .eq('user_id', ownerId)
+          .eq('status', 'ready');
+        if (scopedProjectId) builder = builder.eq('project_id', scopedProjectId);
+        const { data, error } = await builder.order('created_at', {
+          ascending: false,
+        });
+        if (error) throw error;
+        return (data ?? []) as RoomScan[];
+      };
+
+      // Both legs in flight together — this sits on the document's render path.
+      const [clientRows, designerRows] = await Promise.all([
+        clientProfileId
+          ? readScansFor(clientProfileId)
+          : Promise.resolve<RoomScan[]>([]),
+        designerId && projectId
+          ? readScansFor(designerId, projectId)
+          : Promise.resolve<RoomScan[]>([]),
+      ]);
+
+      // The designer's own reading wins when she IS the client on this
+      // relationship, so a self-scan is listed once and reads as hers.
+      const byId = new Map<string, RoomScanWithProvenance>();
+      for (const row of clientRows) byId.set(row.id, { ...row, owner_kind: 'client' });
+      for (const row of designerRows) byId.set(row.id, { ...row, owner_kind: 'designer' });
+
+      return Array.from(byId.values()).sort((a, b) =>
+        b.created_at.localeCompare(a.created_at),
+      );
     },
-    enabled: !!clientId,
+    enabled: !!clientProfileId,
   });
 }
 

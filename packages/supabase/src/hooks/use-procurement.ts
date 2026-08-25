@@ -987,6 +987,8 @@ export interface DamageClaim {
     id: string;
     purchase_order_id: string;
     outcome: ReceivingInspectionOutcome;
+    /** Wave 1P — media-service asset ids iOS logged against the inspection. */
+    photo_asset_ids?: string[];
     purchase_order?: {
       id: string;
       vendor?: { id: string; name: string };
@@ -1176,7 +1178,7 @@ export function useDamageClaims(filters?: DamageClaimFilters) {
           `
           *,
           inspection:receiving_inspections!damage_claims_receiving_inspection_id_fkey(
-            id, purchase_order_id, outcome,
+            id, purchase_order_id, outcome, photo_asset_ids,
             purchase_order:purchase_orders!receiving_inspections_purchase_order_id_fkey(
               id,
               vendor:vendors!purchase_orders_vendor_id_fkey(id, name),

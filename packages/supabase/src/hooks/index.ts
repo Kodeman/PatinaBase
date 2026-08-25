@@ -612,6 +612,7 @@ export type {
   RoomScanStyleSignals,
   RoomScanFilters,
 } from "./use-room-scans";
+export type { RoomScanOwnerKind, RoomScanWithProvenance } from "./use-room-scans";
 export {
   useRoomScanPhotos,
   useRoomScanCovers,
@@ -1854,3 +1855,10 @@ export type {
   FilePlanPrintEntry,
   ClientPlanSheet,
 } from "./use-plan-room";
+export {
+  useCaptureMediaUrls,
+  captureMediaUrlsKey,
+  CAPTURE_MEDIA_BUCKET,
+  CAPTURE_MEDIA_TTL_SECONDS,
+} from "./use-capture-media";
+export { useCaptureVenueLabels } from "./use-capture-venues";

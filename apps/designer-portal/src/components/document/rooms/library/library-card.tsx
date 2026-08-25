@@ -39,6 +39,12 @@ export interface LibraryItem {
   price_retail?: number | null;
   configuration_mode?: ConfigurationMode | null;
   configuration_summary?: unknown;
+  /** 00232 — where this piece came from. 'field_capture' earns the chip. */
+  capture_source?: string | null;
+  captured_at?: string | null;
+  /** `field_captures.venue_label` for this piece's originating capture (00233),
+   *  resolved by the shelf via `useCaptureVenueLabels`. */
+  venue_label?: string | null;
 }
 
 interface StyleArchetype {
@@ -84,6 +90,7 @@ export function LibraryCard({
     "unknown maker";
   const configuration = readLibraryConfigurationSummary(item);
   const configurationLabels = capabilityLabels(configuration);
+  const fieldProvenance = fieldProvenanceLabel(item);
 
   return (
     <article className="group relative overflow-hidden rounded-[8px] border border-[var(--doc-ink-border)] bg-white transition-colors duration-200 hover:border-[var(--color-clay)] motion-reduce:transition-none">
@@ -146,6 +153,11 @@ export function LibraryCard({
         <div className="mt-0.5 text-[12px] text-[var(--color-charcoal)]">
           {sub}
         </div>
+        {fieldProvenance && (
+          <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--text-body)]">
+            {fieldProvenance}
+          </div>
+        )}
 
         <ul
           aria-label="Configuration capabilities"
@@ -455,6 +467,25 @@ function InlineValidate({
       )}
     </div>
   );
+}
+
+/** The Field provenance chip's text (spec §6 Flow 6, plan 4-12).
+ *  "Field · High Point, Mar 2026" when the capture carried a venue,
+ *  "Field · Mar 2026" when it did not, "Field" when even the date is missing. */
+export function fieldProvenanceLabel(
+  item: Pick<LibraryItem, 'capture_source' | 'captured_at' | 'venue_label'>,
+): string | null {
+  if (item.capture_source !== 'field_capture') return null;
+
+  const place = item.venue_label?.trim() || null;
+  const when = item.captured_at ? new Date(item.captured_at) : null;
+  const month =
+    when && !Number.isNaN(when.getTime())
+      ? when.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      : null;
+
+  const tail = [place, month].filter(Boolean).join(', ');
+  return tail ? `Field · ${tail}` : 'Field';
 }
 
 function hostOf(url: string): string | null {

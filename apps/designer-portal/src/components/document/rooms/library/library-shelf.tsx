@@ -7,7 +7,12 @@
  * the marketplace. The header is Playfair-italic (typography-first, never tabs).
  */
 
-import { useLayerProducts, type LayerProductLayer } from "@patina/supabase";
+import { useMemo } from "react";
+import {
+  useLayerProducts,
+  useCaptureVenueLabels,
+  type LayerProductLayer,
+} from "@patina/supabase";
 import { StrataSweep } from "@/components/ui/strata-sweep";
 import { LibraryCard } from "./library-card";
 import {
@@ -44,6 +49,12 @@ export function LibraryShelf({
   capability?: LibraryCapabilityFilter;
 }) {
   const { data, isLoading, isError } = useLayerProducts({ layer });
+  // Wave 1P (spec §6 Flow 6) — the place name behind the Field chip.
+  const captureIds = useMemo(
+    () => (data ?? []).map((p) => p.field_capture_id),
+    [data],
+  );
+  const { data: venueByCapture } = useCaptureVenueLabels(captureIds);
   const items = data ?? [];
   const visibleItems = items.filter((item) =>
     matchesCapabilityFilter(
@@ -122,6 +133,11 @@ export function LibraryShelf({
                   price_retail: it.price_retail,
                   configuration_mode: configured.configuration_mode,
                   configuration_summary: configured.configuration_summary,
+                  capture_source: it.capture_source,
+                  captured_at: it.captured_at,
+                  venue_label: it.field_capture_id
+                    ? (venueByCapture?.[it.field_capture_id] ?? null)
+                    : null,
                 }}
                 needsTeaching={teachingIds.has(it.id)}
                 needsValidation={validationIds?.has(it.id) ?? false}

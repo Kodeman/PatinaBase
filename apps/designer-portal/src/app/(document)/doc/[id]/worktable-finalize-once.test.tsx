@@ -54,6 +54,8 @@ const ITEMS = [
 ];
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoomScans: () => ({ data: [] }),
+  useGeneratedRoomFilesByScan: () => ({ data: new Map() }),
   /* the page's own reads */
   useProjectV2: () => ({ data: undefined, isLoading: false, isError: false }),
   useProjectPhases: () => ({ data: [] }),
