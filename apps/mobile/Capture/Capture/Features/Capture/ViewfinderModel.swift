@@ -337,12 +337,7 @@ final class ViewfinderModel {
         draft.venue = venueStamp
         draft.category = .unknown
         draft.destination = context.routing.destination
-        var venue = draft.venue ?? VenueStamp()
-        venue.projectId = context.routing.projectID
-        venue.projectName = context.routing.projectName
-        venue.room = context.routing.room
-        venue.shelf = context.routing.shelf
-        draft.venue = venue
+        draft.venue = context.routing.stamped(onto: draft.venue ?? VenueStamp())
         return draft
     }
 

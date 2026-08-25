@@ -183,3 +183,19 @@ private extension String {
         isEmpty ? nil : self
     }
 }
+
+public extension CaptureRoutingMemory {
+    /// The single place visit routing crosses onto a capture. Added because
+    /// ViewfinderModel.makeDraft() copied four of the five fields and dropped
+    /// projectRoomID, so a capture inherited the project and lost the room.
+    /// GPS and the human venue label are capture facts and are never touched.
+    func stamped(onto venue: VenueStamp) -> VenueStamp {
+        var stamped = venue
+        stamped.projectId = projectID
+        stamped.projectName = projectName
+        stamped.projectRoomId = projectRoomID
+        stamped.room = room
+        stamped.shelf = shelf
+        return stamped
+    }
+}
