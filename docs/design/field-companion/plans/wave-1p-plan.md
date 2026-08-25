@@ -2329,6 +2329,219 @@ git push origin feat/field-companion-w1p
 
 ---
 
+## Task 5b: Cover the Library shelf's pass-through (plan defect, found in Task 5 review)
+
+**Why this exists.** Task 5's reviewer found the same class of gap as Task 4b, in the one place
+Task 5 was written to protect. `library-card-provenance.test.tsx` renders `LibraryCard` directly
+with a **hand-built `item` object**; `grep -rl "LibraryShelf"` over the test tree returns nothing
+— no test in the repo renders `LibraryShelf` at all. So the Step-9 pass-through, which the
+commit message calls *"the whole point of this task"*, has no regression protection: **revert the
+shelf wiring entirely and the suite still passes 100%.**
+
+The shipped wiring was verified correct by direct read. This task makes it verifiable. **No
+production code changes.**
+
+**Files:**
+- Create: `apps/designer-portal/src/components/document/rooms/library/__tests__/library-shelf-provenance.test.tsx`
+
+**Interfaces:** Consumes `LibraryShelf`. Produces nothing.
+
+- [ ] **Step 1: Write the test**
+
+`LibraryShelf`'s props, read from `library-shelf.tsx:25-50`: `{ layer, name, meta?, id,
+labelledBy, teachingIds, validationIds?, onDeep, onPromote?, onNominate?, capability? }`.
+
+```tsx
+/**
+ * The Library shelf's Field-provenance pass-through (Wave 1P, Task 5 Step 9).
+ *
+ * `library-shelf.tsx` builds the card's `item` prop FIELD BY FIELD, so widening
+ * LayerProductRow and LibraryItem delivers nothing on its own — the shelf has to pass
+ * capture_source / captured_at / venue_label through explicitly. The sibling suite
+ * (library-card-provenance.test.tsx) renders LibraryCard with a hand-built item and
+ * cannot see that wiring at all.
+ *
+ * This suite renders the SHELF, so the chip has to survive the real prop hand-off.
+ */
+import { render, screen } from '@testing-library/react';
+import { LibraryShelf } from '../library-shelf';
+
+interface Row {
+  id: string;
+  name: string;
+  brand: string | null;
+  images: string[] | null;
+  source_url: string | null;
+  category: string | null;
+  layer: 'personal' | 'studio' | 'catalog';
+  price_retail: number | null;
+  configuration_mode: string | null;
+  configuration_summary: unknown;
+  capture_source: string | null;
+  captured_at: string | null;
+  field_capture_id: string | null;
+}
+
+let rows: Row[] = [];
+let venueByCapture: Record<string, string> = {};
+let capturedIdsArg: unknown = null;
+
+jest.mock('@patina/supabase', () => ({
+  useLayerProducts: () => ({ data: rows, isLoading: false, isError: false }),
+  useCaptureVenueLabels: (ids: unknown) => {
+    capturedIdsArg = ids;
+    return { data: venueByCapture };
+  },
+}));
+
+jest.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+function row(over: Partial<Row> = {}): Row {
+  return {
+    id: 'p-1',
+    name: 'Bouclé lounge',
+    brand: null,
+    images: null,
+    source_url: null,
+    category: 'seating',
+    layer: 'personal',
+    price_retail: null,
+    configuration_mode: null,
+    configuration_summary: null,
+    capture_source: null,
+    captured_at: null,
+    field_capture_id: null,
+    ...over,
+  };
+}
+
+function renderShelf() {
+  return render(
+    <LibraryShelf
+      layer="personal"
+      name="My Library"
+      id="shelf-personal"
+      labelledBy="shelf-personal-heading"
+      teachingIds={new Set<string>()}
+      onDeep={jest.fn()}
+    />,
+  );
+}
+
+beforeEach(() => {
+  rows = [];
+  venueByCapture = {};
+  capturedIdsArg = null;
+});
+
+describe('LibraryShelf — the Field provenance pass-through', () => {
+  it('carries capture_source, captured_at AND the resolved venue through to the card', () => {
+    rows = [
+      row({
+        capture_source: 'field_capture',
+        captured_at: '2026-03-14T09:00:00Z',
+        field_capture_id: 'cap-1',
+      }),
+    ];
+    venueByCapture = { 'cap-1': 'High Point' };
+
+    renderShelf();
+
+    expect(screen.getByText('Field · High Point, Mar 2026')).toBeInTheDocument();
+  });
+
+  it('degrades to the month alone when the venue query has not resolved that capture', () => {
+    rows = [
+      row({
+        capture_source: 'field_capture',
+        captured_at: '2026-03-14T09:00:00Z',
+        field_capture_id: 'cap-1',
+      }),
+    ];
+    venueByCapture = {};
+
+    renderShelf();
+
+    expect(screen.getByText('Field · Mar 2026')).toBeInTheDocument();
+  });
+
+  it('asks the venue hook for exactly the capture ids on the shelf', () => {
+    rows = [
+      row({ id: 'p-1', capture_source: 'field_capture', field_capture_id: 'cap-1' }),
+      row({ id: 'p-2', capture_source: 'web_extension', field_capture_id: null }),
+    ];
+
+    renderShelf();
+
+    expect(capturedIdsArg).toEqual(['cap-1', null]);
+  });
+
+  it('shows no chip for a piece that did not come from Field', () => {
+    rows = [
+      row({
+        capture_source: 'web_extension',
+        captured_at: '2026-03-14T09:00:00Z',
+        field_capture_id: null,
+      }),
+    ];
+
+    renderShelf();
+
+    expect(screen.queryByText(/^Field/)).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 2: Run it**
+
+Run:
+```bash
+pnpm --filter @patina/designer-portal test -- src/components/document/rooms/library/__tests__/library-shelf-provenance.test.tsx
+```
+Expected: PASS, 4 tests. This characterises shipped, manually verified code.
+
+If a case fails because the shelf renders extra chrome the mock does not satisfy (a `StrataSweep`
+loading state, a capability filter, an empty-state branch), fix the **test setup** — never the
+component. If it fails because the chip is genuinely absent, **STOP and report**: that would mean
+the Step-9 wiring is broken, which is exactly what this task was written to detect.
+
+- [ ] **Step 3: Confirm the suite is not vacuous**
+
+Temporarily delete the three pass-through lines from `library-shelf.tsx`'s `item={{ … }}` literal
+(`capture_source`, `captured_at`, `venue_label`), re-run, and confirm cases 1, 2 and 4's chip
+assertions now fail. **Then revert with
+`git checkout -- apps/designer-portal/src/components/document/rooms/library/library-shelf.tsx`**
+and re-run to confirm 4/4 green. Report both results. Never commit the temporary edit.
+
+- [ ] **Step 4: Run the full library directory and gate**
+
+```bash
+pnpm --filter @patina/designer-portal test -- src/components/document/rooms/library
+pnpm type-check
+```
+Expected: 7 suites now (6 pre-existing + the new one), all green; type-check 30/30.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add apps/designer-portal/src/components/document/rooms/library/__tests__/library-shelf-provenance.test.tsx
+git commit -m "test(library): cover the shelf's Field-provenance pass-through
+
+Task 5's review found the chip's only render tests build the card's item
+prop by hand and render LibraryCard directly — nothing in the repo
+renders LibraryShelf, so the field-by-field pass-through the task exists
+to deliver could be reverted with every test still green.
+
+This renders the shelf, so the chip has to survive the real prop
+hand-off. Verified non-vacuous by deleting the three pass-through lines
+and watching the chip assertions fail. No production code changed." -- apps/designer-portal/src/components/document/rooms/library/__tests__/library-shelf-provenance.test.tsx
+git push origin feat/field-companion-w1p
+```
+
+---
+
 ## Wave acceptance (run after Task 6)
 
 Plan §1.4's acceptance, measured honestly.
