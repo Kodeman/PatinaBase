@@ -139,6 +139,25 @@ public final class Specimen {
     public var placementLastError: String?
     public var placementRetryCount: Int?
 
+    // ── The visit (Field Companion wave 3). All additive optionals. ──
+    // captureSessionID already carries the visitID; these carry what
+    // field_captures' visit/suggestion columns need.
+    public var visitKindRaw: String?
+    public var visitKitRaw: String?
+    public var visitLabel: String?
+    public var visitStartedAt: Date?
+    public var visitEndedAt: Date?
+    public var noteSettingRaw: String?
+    // The SUGGESTION is always distinct from the fact. Nothing reads these as truth.
+    public var suggestedProjectID: String?
+    public var suggestedProjectRoomID: String?
+    public var suggestionBasisRaw: String?
+    /// Orders the tray. NEVER RENDERED (Principle 4).
+    public var suggestionConfidence: Double?
+    /// FC-R6: placed AFTER the capture committed, so the routing the server
+    /// already stored is stale until the outbox re-runs `commit_field_capture`.
+    public var placementReplayPending: Bool?
+
     public init(
         id: UUID = UUID(),
         clientToken: UUID = UUID(),

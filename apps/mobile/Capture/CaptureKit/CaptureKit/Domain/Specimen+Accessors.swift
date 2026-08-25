@@ -266,3 +266,62 @@ public extension Specimen {
         touch()
     }
 }
+
+// MARK: - The visit (Field Companion wave 3)
+
+public extension Specimen {
+    var visitKind: FieldVisitKind? {
+        get { visitKindRaw.flatMap(FieldVisitKind.init(rawValue:)) }
+        set { visitKindRaw = newValue?.rawValue }
+    }
+    var visitKit: FieldVisitKit? {
+        get { visitKitRaw.flatMap(FieldVisitKit.init(rawValue:)) }
+        set { visitKitRaw = newValue?.rawValue }
+    }
+    var noteSetting: FieldNoteSetting? {
+        get { noteSettingRaw.flatMap(FieldNoteSetting.init(rawValue:)) }
+        set { noteSettingRaw = newValue?.rawValue }
+    }
+    var suggestionBasis: FieldSuggestionBasis? {
+        get { suggestionBasisRaw.flatMap(FieldSuggestionBasis.init(rawValue:)) }
+        set { suggestionBasisRaw = newValue?.rawValue }
+    }
+
+    /// "Placed" is `venue.projectId is not null` — the same rule the server uses
+    /// (`project_id IS NOT NULL`). There is no new status value, ever, and SYNC
+    /// STATE IS IRRELEVANT: a capture that committed hours ago and still has no
+    /// project is unplaced, and FC-R6 says it waits on Today until she files it.
+    var isUnplaced: Bool {
+        (venue?.projectId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty
+    }
+
+    /// FC-R6: a capture that was placed AFTER it committed. The server learns the
+    /// project on the next drain; until then the tray shows `placed · syncing`.
+    var placementNeedsReplay: Bool { placementReplayPending == true }
+
+    /// Place this capture — write the FACT. Never touches `suggested_*`.
+    /// A capture that has not committed yet needs nothing more: its routing rides
+    /// the FIRST commit, exactly as a capture taken inside a visit does. One that
+    /// HAS committed needs the outbox to re-run `commit_field_capture`, so it is
+    /// flagged for replay here and the ordinary drain does the rest.
+    func place(projectID: String?, projectRoomID: String?, room: String?) {
+        var stamp = venue ?? VenueStamp()
+        stamp.projectId = projectID
+        stamp.projectRoomId = projectRoomID
+        if let room { stamp.room = room }
+        venue = stamp
+        if status == .committed { placementReplayPending = true }
+        touch()
+    }
+
+    func inherit(_ context: CaptureSessionContext) {
+        visitKind = context.kind
+        visitKit = context.kit
+        visitLabel = context.label
+        visitStartedAt = context.kind == nil ? nil : context.startedAt
+        visitEndedAt = context.endedAt
+        if noteSettingRaw == nil, let kind = context.kind {
+            noteSetting = CaptureVisitDraft(kind: kind, kit: context.kit).defaultNoteSetting
+        }
+    }
+}

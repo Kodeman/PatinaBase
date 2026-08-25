@@ -284,4 +284,45 @@ struct VisitContextTests {
         let other = CaptureSessionIdentity(userID: "u2", workspaceID: "w1")
         #expect(store.visitState(identity: other, now: now, calendar: calendar) == .none)
     }
+
+    // MARK: - The capture inherits the visit (task 7)
+
+    @MainActor
+    @Test func aDraftInheritsTheVisitOnBothLanes() throws {
+        let store = try CaptureStore.inMemory()
+        let draft = CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St",
+                                      projectID: "p1", projectName: "Maple St",
+                                      projectRoomID: "sr1", scanRoomID: "r1", room: "Living")
+        let context = CaptureSessionContextPolicy.started(draft, identity: identity, now: now)
+
+        let specimen = store.newDraft(sessionID: context.visitID)
+        specimen.venue = context.routing.stamped(onto: specimen.venue ?? VenueStamp())
+        specimen.inherit(context)
+        try store.save()
+
+        #expect(specimen.captureSessionID == context.visitID)
+        #expect(specimen.venue?.projectId == "p1")
+        #expect(specimen.venue?.projectRoomId == "sr1")   // project_rooms lane only
+        #expect(specimen.venue?.room == "Living")
+        #expect(specimen.visitKind == .site)
+        #expect(specimen.visitKit == .walkThrough)
+        #expect(specimen.visitLabel == "Maple St")
+        #expect(specimen.visitStartedAt == now)
+        #expect(specimen.noteSetting == .conversation)
+        #expect(!specimen.isUnplaced)
+    }
+
+    @MainActor
+    @Test func aCaptureWithNoVisitIsUnplacedAndCarriesNoVisitFacts() throws {
+        let store = try CaptureStore.inMemory()
+        let context = CaptureSessionContext(identity: identity, startedAt: now, lastActivityAt: now)
+        let specimen = store.newDraft(sessionID: context.visitID)
+        specimen.inherit(context)
+        try store.save()
+
+        #expect(specimen.isUnplaced)
+        #expect(specimen.visitKind == nil)
+        #expect(specimen.visitLabel == nil)
+        #expect(specimen.venue?.projectId == nil)
+    }
 }

@@ -387,10 +387,10 @@ final class ViewfinderModel {
             return nil
         }
 
-        draft.venue = venueStamp
+        draft.venue = context.routing.stamped(onto: venueStamp ?? VenueStamp())
         draft.category = .unknown
         draft.destination = context.routing.destination
-        draft.venue = context.routing.stamped(onto: draft.venue ?? VenueStamp())
+        draft.inherit(context)
         return draft
     }
 
