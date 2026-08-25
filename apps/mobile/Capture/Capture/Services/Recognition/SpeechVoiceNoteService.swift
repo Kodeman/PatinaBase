@@ -557,12 +557,13 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             // Date() against — that gap is the over-report finish() used to have.
             stoppedAt = Date()
             segmentStartedAt = nil
-            continuation.yield(TranscriptChunk(
-                text: latestTranscript, isFinal: true))
-            continuation.finish()
-            emitFinish(reason: "cap")
-            // The UI half of ending a note belongs to the sheets; the mic is ours.
-            DispatchQueue.main.async { [weak self, capped = noteID] in self?.endAtCap(capped) }
+            // NOTHING is published to the consumer from here. The stream is
+            // finished inside endAtCap(), AFTER the final segment is closed and
+            // its name appended — see that method. The UI half of ending a note
+            // belongs to the sheets; the mic, the file and the stream are ours.
+            DispatchQueue.main.async { [weak self, capped = noteID] in
+                self?.endAtCap(capped, continuation: continuation)
+            }
             return
         }
 
@@ -595,18 +596,41 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// it: engine stopped, tap removed, segment closed and flushed, name
     /// published if it took audio. request/task are ended and cleared here so
     /// the finish() a consumer may still call cannot end them twice.
-    private func endAtCap(_ cappedNoteID: UUID) {
-        // The consumer's finish() and this hop race for the same runloop turn,
-        // and either order is safe — but a NEW note may also have started in it,
-        // and deactivating its session would kill a recording that just began.
-        guard cappedNoteID == noteID else { return }
-        stopEngineAndCloseSegment()
-        request?.endAudio()
-        task?.finish()
-        request = nil
-        task = nil
-        removeObservers()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    /// ORDER IS LOAD-BEARING, and it was not before: the consumer reacts to the
+    /// finished stream by calling finish(), which sees the noteIsActive rotate()
+    /// already cleared, takes its early return, and hands back audioSegments AS
+    /// THEY STAND AT THAT INSTANT. Finishing the stream first therefore lets
+    /// finish() win the main-queue race against this hop and return a result
+    /// that never names the last segment — up to 50 s of audio referenced by
+    /// nothing, never uploaded, and unreachable by the retention sweep, which
+    /// only ever considers receipted files. So: close, publish, THEN finish.
+    private func endAtCap(_ cappedNoteID: UUID,
+                          continuation: AsyncThrowingStream<TranscriptChunk, Error>.Continuation) {
+        // A NEW note may have started in the hop, and deactivating its session
+        // would kill a recording that just began — so the audio teardown and
+        // the single voice.finish are this note's only while it is still this
+        // note. (Neither surface can actually get there now that the stream is
+        // finished below rather than in rotate(): F2 re-arms only in stopVoice,
+        // and N4's gesture latch holds until the finger lifts.)
+        if cappedNoteID == noteID {
+            stopEngineAndCloseSegment()
+            request?.endAudio()
+            task?.finish()
+            request = nil
+            task = nil
+            removeObservers()
+            try? AVAudioSession.sharedInstance().setActive(false,
+                                                           options: .notifyOthersOnDeactivation)
+            // Read after the close, so `segments` counts the segment just
+            // published. This is the one and only voice.finish reason:"cap" —
+            // rotate() no longer emits, and the finish() a consumer may still
+            // call guards itself out on noteIsActive.
+            emitFinish(reason: "cap")
+        }
+        // The stream belongs to the capped note whatever else has started: a
+        // consumer left awaiting it would sit forever on a dead mic.
+        continuation.yield(TranscriptChunk(text: latestTranscript, isFinal: true))
+        continuation.finish()
     }
 
     /// Nothing in the app observed audio interruptions before this.
