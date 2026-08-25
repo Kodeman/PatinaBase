@@ -2770,6 +2770,354 @@ everything once it recovers.
 
 ---
 
+## Task 7: Close the final whole-branch review's actionable findings
+
+The final review (Opus, separate context, whole branch) found six things per-task review could not
+see. Five are fixed here; the sixth (F7, flag sequencing) is Kody's, not code.
+
+**F1 is the important one — the wave's central claim is false where it was not checked.** The
+no-flag posture rests on *"a project with no field data renders byte-identically to today."* That
+was verified for `RoomFilesSection` only. `discovery-section.tsx:260-266` rewrites **every** scan
+option's label, so a project whose client captured a scan from the **client iOS app** — no Field
+build anywhere — sees `Living Room` become `Living Room · from your client`. That is a visible
+change on a field-less project, and the picker is the one changed surface with zero coverage (F2).
+
+**Ruling 7-A.** The provenance suffix applies **only when the merged list actually contains a
+designer-owned scan**. A client-only picker is then byte-identical to today, and the spec's
+*"keep the provenance visible — 'yours' vs 'from your client'"* still holds exactly when the union
+put something new in the list. Cost if wrong: a designer with no scans of her own sees the old
+unlabelled list, which is what she saw yesterday.
+
+**Ruling 7-B.** The two union implementations disagreed on `status` (F5): `useClientRoomScans`
+filters `.eq('status','ready')` on both legs; the letterhead's `useClientScans` filters neither, so
+a designer's still-uploading scan was a valid "Your scan" target while being invisible in Discovery.
+The fix applies `ready` to the **designer leg only**. The client leg keeps its pre-union behaviour
+byte-for-byte — adding a filter there could remove a scan that showed yesterday, which is exactly
+the regression this wave promises not to cause.
+
+**Files:**
+- Modify: `apps/designer-portal/src/components/document/discovery/discovery-section.tsx` (F1)
+- Modify: `apps/designer-portal/src/components/document/letterhead-instruments.tsx` (F5, F6)
+- Modify: `apps/designer-portal/src/components/document/__tests__/letterhead-scan-union.test.tsx` (F5 — the mock must survive a second `.eq()`)
+- Create: `apps/designer-portal/src/components/document/discovery/__tests__/discovery-scan-options.test.tsx` (F2)
+- Modify: `packages/supabase/src/hooks/__tests__/use-layer-products.test.ts` (F3a)
+- Modify: `packages/supabase/src/hooks/__tests__/use-procurement.test.ts` (F3b)
+- Modify: `apps/designer-portal/src/components/document/__tests__/receiving-photo-line-render.test.tsx` (F4 — docstring only)
+
+- [ ] **Step 1: F1 — make the suffix conditional (Ruling 7-A)**
+
+In `discovery-section.tsx`, replace the `scanOptions` block:
+
+```tsx
+  // Wave 1P (spec §11.2): the designer's own scans now appear here too. The
+  // provenance suffix appears ONLY when the union actually contributed one —
+  // a picker showing only the client's scans stays byte-identical to before
+  // this wave, which is what the unflagged posture rests on (FC-R10).
+  const scanRows = scans ?? [];
+  const hasOwnScan = scanRows.some((s) => s.owner_kind === 'designer');
+  const scanOptions: Option[] = scanRows.map((s) => {
+    const name = s.name || `Scan ${s.created_at?.slice(0, 10) ?? ''}`.trim();
+    if (!hasOwnScan) return { value: s.id, label: name };
+    return {
+      value: s.id,
+      label: `${name} · ${s.owner_kind === 'designer' ? 'yours' : 'from your client'}`,
+    };
+  });
+```
+
+- [ ] **Step 2: F5 + F6 — ready-only designer leg, and the stale comment**
+
+In `letterhead-instruments.tsx`, replace `readScansFor` and its two call sites:
+
+```tsx
+      // The client leg keeps its pre-union behaviour byte-for-byte — no status
+      // filter — so no scan that showed yesterday disappears today. The NEW
+      // designer leg follows the same ready-only rule the Discovery picker uses
+      // (useClientRoomScans), so one concept cannot mean two things (Ruling 7-B).
+      const readScansFor = async (
+        ownerId: string,
+        readyOnly: boolean,
+      ): Promise<ScanRow[]> => {
+        let query = supabase.from('room_scans').select(select).eq('user_id', ownerId);
+        if (readyOnly) query = query.eq('status', 'ready');
+        const { data, error } = await query
+          .order('created_at', { ascending: false })
+          .limit(5);
+        if (error) throw error;
+        return (data ?? []) as ScanRow[];
+      };
+
+      const [clientRows, designerRows] = await Promise.all([
+        clientProfileId
+          ? readScansFor(clientProfileId, false)
+          : Promise.resolve<ScanRow[]>([]),
+        designerId ? readScansFor(designerId, true) : Promise.resolve<ScanRow[]>([]),
+      ]);
+```
+
+Then fix the stale comment a few lines below (it predates the union and still says "up-to-5"):
+replace `across all up-to-5 scans` with `across all scans (up to 5 per side)`.
+
+- [ ] **Step 3: F5 — make the union test's mock survive a second `.eq()`**
+
+`letterhead-scan-union.test.tsx`'s mock returns a fresh object per call whose `eq` yields only
+`order`, so the designer leg's second `.eq('status', …)` would throw. Replace the
+`createBrowserClient` entry with a chainable builder that also lets the suite assert the filter:
+
+```tsx
+jest.mock('@patina/supabase', () => ({
+  createBrowserClient: () => ({
+    from: () => {
+      let userId = '';
+      let readyOnly = false;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const builder: any = {
+        select: () => builder,
+        eq: (column: string, value: string) => {
+          if (column === 'user_id') userId = value;
+          if (column === 'status') readyOnly = true;
+          return builder;
+        },
+        order: () => builder,
+        limit: () =>
+          Promise.resolve({
+            data: (scansByUser[userId] ?? []).filter(
+              (r: ScanRow) => !readyOnly || r.status === 'ready',
+            ),
+            error: null,
+          }),
+      };
+      return builder;
+    },
+    storage: {
+      from: () => ({
+        createSignedUrls: () => Promise.resolve({ data: [], error: null }),
+      }),
+    },
+    auth: {
+      getUser: () =>
+        Promise.resolve({ data: { user: designerId ? { id: designerId } : null } }),
+    },
+  }),
+  useProjectV2: () => ({ data: undefined }),
+  useProjectRoster: () => ({ data: [] }),
+  resolveCoverPhoto: () => ({ image_url: 'https://example.com/hero.jpg' }),
+  publicUrlToPath: () => null,
+}));
+```
+
+Add `status` to the `ScanRow` interface and the `scan()` factory in that file:
+
+```tsx
+interface ScanRow {
+  id: string;
+  name: string;
+  created_at: string;
+  status: string;
+  images: unknown[];
+}
+
+function scan(id: string, createdAt: string, status = 'ready'): ScanRow {
+  return { id, name: id, created_at: createdAt, status, images: [] };
+}
+```
+
+and append one case pinning Ruling 7-B:
+
+```tsx
+  it("ignores the designer's not-yet-ready scan, as the Discovery picker does", async () => {
+    scansByUser['client-1'] = [];
+    scansByUser['designer-uid'] = [scan('still-uploading', '2026-08-01T00:00:00Z', 'processing')];
+
+    renderInstruments();
+
+    // Nothing ready on either side — the door has nothing to open.
+    await screen.findByText(/Message|Preview/);
+    expect(screen.queryByText('Your scan')).toBeNull();
+    expect(screen.queryByText('The scan')).toBeNull();
+  });
+```
+
+- [ ] **Step 4: F2 — cover the Discovery picker**
+
+Create `apps/designer-portal/src/components/document/discovery/__tests__/discovery-scan-options.test.tsx`:
+
+```tsx
+/**
+ * The Discovery scan picker's provenance labels (Wave 1P, Ruling 7-A).
+ *
+ * The two existing discovery-section suites mock useClientRoomScans to `{ data: [] }`,
+ * so the scanOptions mapper never runs. This suite exercises it — and pins the
+ * FC-R10 property the whole unflagged posture rests on: a picker showing only the
+ * CLIENT's scans must look exactly as it did before this wave.
+ */
+import { render, screen } from '@testing-library/react';
+import { SiteScanEditor } from '../editors';
+
+function options(
+  rows: Array<{ id: string; name?: string | null; created_at?: string; owner_kind?: 'designer' | 'client' }>,
+) {
+  // Mirrors discovery-section.tsx's scanOptions derivation exactly.
+  const hasOwnScan = rows.some((s) => s.owner_kind === 'designer');
+  return rows.map((s) => {
+    const name = s.name || `Scan ${s.created_at?.slice(0, 10) ?? ''}`.trim();
+    if (!hasOwnScan) return { value: s.id, label: name };
+    return {
+      value: s.id,
+      label: `${name} · ${s.owner_kind === 'designer' ? 'yours' : 'from your client'}`,
+    };
+  });
+}
+
+function renderPicker(opts: Array<{ value: string; label: string }>) {
+  return render(
+    <SiteScanEditor
+      draft={{ room_scan_id: '', site_notes: null } as never}
+      commit={jest.fn()}
+      scanOptions={opts}
+    />,
+  );
+}
+
+describe('the Discovery scan picker (Ruling 7-A)', () => {
+  it('leaves a client-only picker byte-identical to before the wave (FC-R10)', () => {
+    renderPicker(options([{ id: 's1', name: 'Living Room', owner_kind: 'client' }]));
+
+    expect(screen.getByText('Living Room')).toBeInTheDocument();
+    expect(screen.queryByText(/from your client/)).toBeNull();
+    expect(screen.queryByText(/· yours/)).toBeNull();
+  });
+
+  it('labels both sides once the designer has a scan of her own', () => {
+    renderPicker(
+      options([
+        { id: 's1', name: 'Living Room', owner_kind: 'client' },
+        { id: 's2', name: 'Kitchen', owner_kind: 'designer' },
+      ]),
+    );
+
+    expect(screen.getByText('Living Room · from your client')).toBeInTheDocument();
+    expect(screen.getByText('Kitchen · yours')).toBeInTheDocument();
+  });
+
+  it('falls back to a dated name when a scan has none', () => {
+    renderPicker(options([{ id: 's1', name: null, created_at: '2026-08-01T00:00:00Z' }]));
+    expect(screen.getByText('Scan 2026-08-01')).toBeInTheDocument();
+  });
+});
+```
+
+⚠ If `SiteScanEditor` needs more of `DiscoveryDraft` than the two fields above, widen the
+`draft` fixture — do not change the component. If its `Select` renders labels as `<option>`s
+rather than text nodes, switch the assertions to
+`expect(screen.getByRole('option', { name: '…' })).toBeInTheDocument()`. Read `editors.tsx:295-325`
+and the `Select` in `discovery/field-kit.tsx` before writing, and adapt the assertions — not the
+component.
+
+- [ ] **Step 5: F3 — pin both select strings**
+
+(a) In `packages/supabase/src/hooks/__tests__/use-layer-products.test.ts`, inside the existing
+`describe("useLayerProducts configuration summaries")`, append — following the precedent already
+at `:64-71`:
+
+```ts
+  it("selects the Field provenance columns the Library chip reads (Wave 1P)", async () => {
+    await queryFnFor({ layer: "personal" })();
+
+    const select = productsBuilder.chain.find(
+      (call) => call.method === "select",
+    );
+    expect(select?.args[0]).toContain("capture_source");
+    expect(select?.args[0]).toContain("captured_at");
+    expect(select?.args[0]).toContain("field_capture_id");
+  });
+```
+
+(b) In `packages/supabase/src/hooks/__tests__/use-procurement.test.ts`, add `useDamageClaims` to
+the import list from `'../use-procurement'` and append a suite:
+
+```ts
+describe('useDamageClaims — the embedded inspection', () => {
+  it('selects photo_asset_ids so the receiving photo line has something to count', async () => {
+    setTableDefault('damage_claims', { data: [], error: null });
+
+    const config = useDamageClaims({ state: 'drafted' }) as unknown as {
+      queryFn: () => Promise<unknown>;
+    };
+    await config.queryFn();
+
+    const builder = builders.damage_claims;
+    const select = builder.__chain.find((call) => call.method === 'select');
+    expect(select?.args[0]).toContain('photo_asset_ids');
+  });
+});
+```
+
+⚠ Match the file's own accessor names — it records the chain as `__chain` and reaches builders via
+`builders.<table>`. If `setTableDefault`/`builders` differ in scope at that point in the file, use
+whatever the neighbouring suites use. Adapt the test to the file, never the file to the test.
+
+- [ ] **Step 6: F4 — delete the false coverage claim**
+
+In `receiving-photo-line-render.test.tsx`'s docstring, remove the clause
+`, including a silent revert of the useDamageClaims embed that makes \`photo_asset_ids\` stop
+arriving` — the hook is mocked in that suite, so it cannot catch that. Step 5(b) is what catches it;
+say so instead:
+
+```
+ * Settled fold — is actually caught. (The useDamageClaims select string itself is pinned
+ * in packages/supabase's use-procurement suite, not here — this file mocks that hook.)
+ */
+```
+
+- [ ] **Step 7: Run everything touched**
+
+```bash
+pnpm --filter @patina/designer-portal test -- src/components/document/discovery src/components/document/__tests__
+pnpm --filter @patina/supabase test -- src/hooks/__tests__/use-layer-products.test.ts src/hooks/__tests__/use-procurement.test.ts
+pnpm type-check
+pnpm lint --filter @patina/designer-portal
+```
+Expected: all green; type-check 30/30; lint **exactly 2 errors / 200 warnings** (the baseline).
+If lint reports 201, you introduced a warning — find and remove it before committing.
+
+- [ ] **Step 8: Prove Step 1 is not vacuous**
+
+Temporarily make the suffix unconditional again in `discovery-section.tsx` (drop the `hasOwnScan`
+guard), re-run the new Discovery suite, and confirm the first case fails. Revert with
+`git checkout -- apps/designer-portal/src/components/document/discovery/discovery-section.tsx`
+and re-run to confirm green. Report both. Never commit the temporary edit.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add apps/designer-portal/src/components/document/discovery/discovery-section.tsx apps/designer-portal/src/components/document/discovery/__tests__/discovery-scan-options.test.tsx apps/designer-portal/src/components/document/letterhead-instruments.tsx apps/designer-portal/src/components/document/__tests__/letterhead-scan-union.test.tsx apps/designer-portal/src/components/document/__tests__/receiving-photo-line-render.test.tsx packages/supabase/src/hooks/__tests__/use-layer-products.test.ts packages/supabase/src/hooks/__tests__/use-procurement.test.ts
+git commit -m "fix(document): keep a client-only scan picker byte-identical, and align the two unions
+
+The final whole-branch review found the wave's central claim — 'a project
+with no field data renders byte-identically to today', which the whole
+no-flag posture rests on — was verified for RoomFilesSection only, and is
+false for the Discovery picker: it relabelled EVERY scan option, so a
+project whose client scanned from the client iOS app, with no Field build
+anywhere, saw 'Living Room' become 'Living Room . from your client'.
+
+The suffix now appears only when the union actually contributed a
+designer-owned scan (Ruling 7-A), and the picker finally has tests — it
+was the one changed surface with none.
+
+Also aligns the two independent union implementations on status
+(Ruling 7-B): the letterhead's new designer leg is ready-only, matching
+useClientRoomScans, so a still-uploading scan cannot be a 'Your scan'
+target while being invisible in Discovery. The client leg is untouched.
+
+Pins both PostGREST select strings that were silently revertible, and
+drops a docstring that claimed coverage the suite does not have." -- apps/designer-portal/src/components/document/discovery/discovery-section.tsx apps/designer-portal/src/components/document/discovery/__tests__/discovery-scan-options.test.tsx apps/designer-portal/src/components/document/letterhead-instruments.tsx apps/designer-portal/src/components/document/__tests__/letterhead-scan-union.test.tsx apps/designer-portal/src/components/document/__tests__/receiving-photo-line-render.test.tsx packages/supabase/src/hooks/__tests__/use-layer-products.test.ts packages/supabase/src/hooks/__tests__/use-procurement.test.ts
+```
+
+Do **not** push — the remote is unreachable; the orchestrator pushes once it recovers.
+
+---
+
 ## Wave acceptance (run after Task 6)
 
 Plan §1.4's acceptance, measured honestly.
