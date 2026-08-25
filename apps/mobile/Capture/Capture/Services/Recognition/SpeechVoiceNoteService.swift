@@ -11,9 +11,13 @@
 //  continuous, and an interruption or a route change opens segment N+1. If the
 //  file cannot be opened the note still records and transcribes to the end —
 //  rotation runs off the segment clock, not off the file — and ships
-//  transcript-only; a segment that took no audio is dropped in finish() rather
-//  than shipped as a zero-length record. One instance serves many notes, so
-//  every per-note field is reset in startLiveTranscription().
+//  transcript-only.
+//  A segment's filename is published ONLY once a buffer has actually been
+//  written to it, so a name never stands for audio that does not exist; a
+//  never-written segment is deleted and reported as no segment at all. (A name
+//  that IS published and later goes missing is a true loss and Task 9's.)
+//  One instance serves many notes, so every per-note field is reset in
+//  startLiveTranscription().
 
 import Foundation
 import AVFoundation
@@ -23,6 +27,20 @@ import CaptureKit
 import CaptureKitMocks
 
 public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable {
+    /// The open segment, its name, and the frames actually written to it. Held
+    /// as one unit under one lock because the render thread and the close paths
+    /// must agree on all three at once: publishing the name is conditional on
+    /// the count, and the count is only ever advanced by a write that returned.
+    private final class OpenSegment {
+        let name: String
+        let file: AVAudioFile
+        var framesWritten: AVAudioFramePosition = 0
+        init(name: String, file: AVAudioFile) {
+            self.name = name
+            self.file = file
+        }
+    }
+
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private let audioEngine = AVAudioEngine()
 
@@ -42,6 +60,10 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         get { taskBox.withLockUnchecked { $0 } }
         set { taskBox.withLock { $0 = newValue } }
     }
+    /// The write and the frame count happen under this lock together, so a close
+    /// on another thread either sees a completed write or waits for it — and can
+    /// never observe a file mid-write or a count that disagrees with the bytes.
+    private let openSegmentBox = OSAllocatedUnfairLock<OpenSegment?>(uncheckedState: nil)
 
     private var latestTranscript = ""
     private var startedAt: Date?
@@ -55,8 +77,10 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// SiteScanHostScreen.swift) and toggleVoice() starts arbitrarily many
     /// notes on it. A let-at-init noteID made note 2 inherit note 1's audio.
     private var noteID = UUID()
-    private var audioFile: AVAudioFile?
-    private var audioFilename: String?          // segment 0, for every legacy reader
+    /// Segment 0, for every legacy reader. Set when the first segment that took
+    /// audio closes — never at open.
+    private var audioFilename: String?
+    /// Names of segments that took audio, in the order they closed.
     private var audioSegments: [String] = []
     private var segmentStartedAt: Date?
     private var noteStartedAt: Date?
@@ -117,7 +141,7 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         startedAt = Date()
         // Every per-note field, because one instance records many notes.
         noteID = UUID()
-        audioFile = nil
+        openSegmentBox.withLock { $0 = nil }
         audioFilename = nil
         audioSegments = []
         segmentStartedAt = nil
@@ -180,6 +204,8 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     @MainActor
     public func finish() async -> VoiceNoteResult {
         noteIsActive = false
+        // Closes and flushes the open segment, and publishes its name only if it
+        // took audio — so the result below can never name a file with none.
         stopEngineAndCloseSegment()
         request?.endAudio()
         task?.finish()
@@ -206,10 +232,22 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             guard let self else { return }
             // RENDER THREAD. Two jobs only: feed recognition, write bytes.
             self.request?.append(buffer)
-            if let file = self.audioFile,
-               buffer.format.channelCount == file.processingFormat.channelCount,
-               buffer.format.sampleRate == file.processingFormat.sampleRate {
-                try? file.write(from: buffer)
+            self.openSegmentBox.withLock { segment in
+                // The format guard is not defensive decoration:
+                // AVAudioFile.write(from:) asserts the channel counts match and
+                // raises NSInvalidArgumentException, which is not a Swift Error —
+                // try? does not catch it and the process traps. A route change
+                // (AirPods in or out) is enough to trigger it.
+                guard let segment,
+                      buffer.format.channelCount == segment.file.processingFormat.channelCount,
+                      buffer.format.sampleRate == segment.file.processingFormat.sampleRate
+                else { return }
+                do {
+                    try segment.file.write(from: buffer)
+                    // Only a write that RETURNED counts. This is what makes the
+                    // filename real; nothing else publishes it.
+                    segment.framesWritten += AVAudioFramePosition(buffer.frameLength)
+                } catch {}
             }
             // Everything else is POSTED off the render thread.
             guard let recognizer = self.recognizer,
@@ -222,6 +260,7 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// regardless, so rotation still fires and the transcript runs to the cap
     /// instead of truncating at SFSpeechRecognizer's ~60 s. Never block a
     /// capture (R108.5).
+    /// The name is NOT published here — see closeCurrentSegment().
     /// The channel count comes from the TAP's format — hardcoding 1 against a
     /// two-channel USB or Bluetooth input is the write-crash in installTap.
     private func openSegment(format: AVAudioFormat) {
@@ -232,42 +271,47 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
                                                         index: audioSegments.count)
         let url = mediaDirectory.appendingPathComponent(name)
         do {
-            audioFile = try AVAudioFile(forWriting: url, settings: [
+            let file = try AVAudioFile(forWriting: url, settings: [
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVSampleRateKey: format.sampleRate,
                 AVNumberOfChannelsKey: format.channelCount,
                 AVEncoderBitRateKey: 32_000
             ])
-            audioSegments.append(name)
-            if audioFilename == nil { audioFilename = name }
+            openSegmentBox.withLock { $0 = OpenSegment(name: name, file: file) }
         } catch {
-            audioFile = nil
+            openSegmentBox.withLock { $0 = nil }
             analytics.event("voice.audio_write_failed", ["reason": "open"])
         }
     }
 
-    /// Closes the open segment, and DROPS it if no audio ever reached it.
-    /// A file that was opened and never written is listed by
-    /// CaptureStore.missingRequiredMedia as required-local; being zero-length it
-    /// fails that check with a CaptureMediaAvailabilityError, which is not a
-    /// LocalSyncError and so is not deferrable — one empty segment would hard-fail
-    /// a note that would otherwise have synced transcript-only.
-    /// Callers must remove the tap first: this reads the file's frame count.
+    /// Closes the open segment and decides whether it ever existed as a record.
+    /// A name is published ONLY when a write returned, because a name for audio
+    /// that was never written is worse than no name: CaptureStore lists it as
+    /// required-local, finds it zero-length, and raises a
+    /// CaptureMediaAvailabilityError — which is not a LocalSyncError, so the note
+    /// is rejected rather than deferred and drops out of the drain entirely. One
+    /// phantom name would permanently orphan a real note.
+    /// Callers must stop the engine or remove the tap first.
     private func closeCurrentSegment() {
-        let frames: AVAudioFramePosition
-        if let file = audioFile { frames = file.length } else { return }
-        audioFile = nil     // releasing it finalises the container on disk
-        guard let name = audioSegments.last, let mediaDirectory else { return }
-        let url = mediaDirectory.appendingPathComponent(name)
-        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-        // Keep the segment on ANY evidence of audio. Two independent signals
-        // because dropping a real recording is far worse than shipping an empty
-        // one: 1 KiB is a quarter-second at 32 kbps and far above a bare
-        // container header.
-        guard frames == 0, size <= 1024 else { return }
-        audioSegments.removeLast()
-        if audioFilename == name { audioFilename = audioSegments.first }
-        try? FileManager.default.removeItem(at: url)
+        // Taking the segment out of the box drops the last reference to the
+        // AVAudioFile inside the lock, so the .m4a container is finalised and
+        // flushed to disk before this returns.
+        let closed: (name: String, frames: AVAudioFramePosition)? =
+            openSegmentBox.withLock { segment in
+                guard let current = segment else { return nil }
+                segment = nil
+                return (current.name, current.framesWritten)
+            }
+        guard let closed else { return }
+        guard closed.frames > 0 else {
+            if let mediaDirectory {
+                try? FileManager.default.removeItem(
+                    at: mediaDirectory.appendingPathComponent(closed.name))
+            }
+            return
+        }
+        audioSegments.append(closed.name)
+        if audioFilename == nil { audioFilename = closed.name }
     }
 
     private func stopEngineAndCloseSegment() {
@@ -336,7 +380,7 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             continuation.finish()
             analytics.event("voice.finish", ["reason": "cap"])
             // The UI half of ending a note belongs to the sheets; the mic is ours.
-            DispatchQueue.main.async { [weak self] in self?.endAtCap() }
+            DispatchQueue.main.async { [weak self, capped = noteID] in self?.endAtCap(capped) }
             return
         }
 
@@ -358,10 +402,20 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         }
     }
 
-    private func endAtCap() {
+    /// The capped note's audio gets the SAME teardown a normal finish() gives
+    /// it: engine stopped, tap removed, segment closed and flushed, name
+    /// published if it took audio. request/task are ended and cleared here so
+    /// the finish() a consumer may still call cannot end them twice.
+    private func endAtCap(_ cappedNoteID: UUID) {
+        // The consumer's finish() and this hop race for the same runloop turn,
+        // and either order is safe — but a NEW note may also have started in it,
+        // and deactivating its session would kill a recording that just began.
+        guard cappedNoteID == noteID else { return }
         stopEngineAndCloseSegment()
         request?.endAudio()
         task?.finish()
+        request = nil
+        task = nil
         removeObservers()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
