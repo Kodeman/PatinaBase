@@ -10,7 +10,6 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReceivingBookPage } from '../orders-book-receiving';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 let orders: any[] = [];
 let inspections: any[] = [];
 let draftedClaims: any[] = [];
