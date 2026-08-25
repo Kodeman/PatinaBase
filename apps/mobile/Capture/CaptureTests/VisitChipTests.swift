@@ -51,10 +51,59 @@ struct VisitChipTests {
         #expect(chip.isUnplaced)
     }
 
-    @Test func locatingKeepsTodaysString() {
+    /// The chip's subject is the visit, which is known synchronously. A
+    /// transitional string must never name a lookup whose result the chip
+    /// discards: "Locating venue…" settling to "Not placed" reads as a failure.
+    /// Same words throughout; only the terracotta alarm waits.
+    @Test func locatingNeverPromisesAVenueTheChipWillNotShow() {
         let chip = FieldVisitChipBuilder.chip(for: .none, isLocating: true)
-        #expect(chip.primary == "Locating venue…")
-        #expect(chip.secondary == "")
+        #expect(chip.primary == "Not placed")
+        #expect(chip.secondary == "Tap to place")
+        #expect(!chip.isUnplaced)
+        #expect(!chip.primary.lowercased().contains("locating"))
+        #expect(!chip.secondary.lowercased().contains("venue"))
+    }
+
+    @Test func aSourcingRunWithNoVenueNameStillReadsAsSourcing() {
+        let state = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            routing: CaptureRoutingMemory(destination: .library),
+            kind: .sourcing, label: nil))
+        let chip = FieldVisitChipBuilder.chip(for: state, isLocating: false)
+        #expect(chip.primary == "Sourcing")
+        #expect(chip.secondary == "Library")
+        #expect(!chip.isUnplaced)
+    }
+
+    @Test func aSiteVisitWithNothingToNameItFallsBackToThisVisit() {
+        let state = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            routing: CaptureRoutingMemory(destination: .inbox),
+            kind: .site, label: nil))
+        let chip = FieldVisitChipBuilder.chip(for: state, isLocating: false)
+        #expect(chip.primary == "This visit")
+        #expect(chip.secondary == "Whole house")
+        #expect(!chip.isUnplaced)
+    }
+
+    /// A name that is only whitespace is no name: it must fall through to the
+    /// next candidate rather than render as a blank line at arm's length.
+    @Test func whitespaceOnlyNamesCountAsAbsent() {
+        let siteState = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            routing: CaptureRoutingMemory(destination: .inbox, projectID: "p1",
+                                          projectName: "   ", room: " \n "),
+            kind: .site, label: "Maple St"))
+        let siteChip = FieldVisitChipBuilder.chip(for: siteState, isLocating: false)
+        #expect(siteChip.primary == "Maple St")
+        #expect(siteChip.secondary == "Whole house")
+
+        let sourcingState = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            routing: CaptureRoutingMemory(destination: .library),
+            kind: .sourcing, label: "  "))
+        #expect(FieldVisitChipBuilder.chip(for: sourcingState,
+                                           isLocating: false).primary == "Sourcing")
     }
 
     @Test func aStaleVisitStillNamesItselfRatherThanGoingBlank() {

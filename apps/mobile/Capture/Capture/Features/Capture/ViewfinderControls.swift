@@ -49,8 +49,15 @@ struct ViewfinderVisitChip: View {
                 if !chip.secondary.isEmpty {
                     Text(chip.secondary)
                         .font(CaptureType.monoSmall)
+                        // `paper` at 75%, not `inkSoft`: this chrome sits on an
+                        // arbitrary camera scene under a pinned light colorScheme,
+                        // where inkSoft's aged-oak brown is close to unreadable at
+                        // 12 pt in a bright interior. Every other viewfinder pill
+                        // is `paper`; the ROOM line is the last one that can afford
+                        // to be the outlier.
                         .foregroundStyle(chip.isUnplaced
-                                         ? CaptureColor.terracotta : CaptureColor.inkSoft)
+                                         ? CaptureColor.terracotta
+                                         : CaptureColor.paper.opacity(0.75))
                         .lineLimit(1)
                 }
             }

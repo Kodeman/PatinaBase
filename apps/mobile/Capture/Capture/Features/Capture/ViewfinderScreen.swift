@@ -84,6 +84,16 @@ struct ViewfinderScreen: View {
                 }
             }
         }
+        // V0 is a `.sheet` presented OVER C1 (RootView), so this screen never
+        // disappears while the door is open: `.task` does not re-run and the
+        // model would keep rendering the answer she gave BEFORE she answered it.
+        // The sheet closing is the signal. Reading the store on change rather
+        // than observing it is deliberate — CaptureSessionContextStore is a
+        // plain class over UserDefaults with nothing to observe, and making it
+        // observable would mean editing a closed contract.
+        .onChange(of: coordinator.sheet) { _, sheet in
+            if sheet == nil { model.refreshVisit() }
+        }
         .onDisappear { model.stop() }
         .statusBarHidden(true)
         .accessibilityIdentifier(CaptureScreenID.c1Viewfinder.rawValue)

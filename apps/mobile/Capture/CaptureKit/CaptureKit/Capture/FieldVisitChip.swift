@@ -42,10 +42,16 @@ public enum FieldVisitChipBuilder {
         }
         // FC-R2: no visit IS a null kind. A kindless context is plain routing
         // memory, so it must never render as a placed visit.
-        if isLocating {
-            return FieldVisitChip(primary: "Locating venue…", secondary: "", isUnplaced: false)
-        }
-        return FieldVisitChip(primary: "Not placed", secondary: "Tap to place", isUnplaced: true)
+        //
+        // The chip's subject is the VISIT, and the visit is read synchronously —
+        // there is nothing here to wait for. So `isLocating` never changes a word:
+        // it only withholds the terracotta alarm while the venue lookup is still
+        // out. A transitional string must not name a lookup whose result this chip
+        // discards — "Locating venue…" settling to "Not placed" reads as the
+        // lookup having failed her, when nothing failed at all.
+        return FieldVisitChip(primary: "Not placed",
+                              secondary: "Tap to place",
+                              isUnplaced: !isLocating)
     }
 
     private static func trimmed(_ value: String?) -> String? {
