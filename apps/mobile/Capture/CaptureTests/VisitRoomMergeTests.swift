@@ -20,12 +20,12 @@ struct VisitRoomMergeTests {
         #expect(merged[0].name == "Living")
     }
 
-    @Test func aRoomInOnlyOneListLeavesTheOtherLaneNil() {
+    @Test func aRoomInOnlyOneListLeavesTheOtherLaneNil() throws {
         let merged = FieldVisitRoomMerge.merge(
             specRooms: [CaptureCachedRoom(id: "sr1", name: "Dining")],
             rooms: [CaptureCachedRoom(id: "r9", name: "Garage")])
-        let dining = try! #require(merged.first { $0.name == "Dining" })
-        let garage = try! #require(merged.first { $0.name == "Garage" })
+        let dining = try #require(merged.first { $0.name == "Dining" })
+        let garage = try #require(merged.first { $0.name == "Garage" })
         #expect(dining.projectRoomID == "sr1")
         #expect(dining.scanRoomID == nil)
         #expect(garage.projectRoomID == nil)
@@ -102,6 +102,8 @@ struct VisitRoomMergeTests {
 
     // Two rows for one room name is a server-side duplicate, not two rooms she
     // can tell apart at the door: one picker entry, one id per lane, last seen.
+    // The spelling she reads is the FIRST one — a later duplicate may not
+    // re-case a room name under her.
     @Test func duplicateNamesWithinOneListCollapseToTheLastIDSeen() {
         let merged = FieldVisitRoomMerge.merge(
             specRooms: [CaptureCachedRoom(id: "spec-1", name: "Bath"),
@@ -109,7 +111,7 @@ struct VisitRoomMergeTests {
             rooms: [CaptureCachedRoom(id: "scan-1", name: "Bath"),
                     CaptureCachedRoom(id: "scan-2", name: "BATH")])
         #expect(merged.count == 1)
-        #expect(merged[0].name == "bath")
+        #expect(merged[0].name == "Bath")
         #expect(merged[0].projectRoomID == "spec-2")
         #expect(merged[0].scanRoomID == "scan-2")
     }

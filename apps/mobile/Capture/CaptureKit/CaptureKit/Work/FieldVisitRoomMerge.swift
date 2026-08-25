@@ -53,7 +53,8 @@ public enum FieldVisitRoomMerge {
             let key = normalized(room.name)
             guard !key.isEmpty else { continue }
             if byKey[key] == nil { order.append(key) }
-            let display = room.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let display = byKey[key]?.name
+                ?? room.name.trimmingCharacters(in: .whitespacesAndNewlines)
             byKey[key] = FieldVisitRoomOption(name: display,
                                               projectRoomID: room.id,
                                               scanRoomID: byKey[key]?.scanRoomID)
