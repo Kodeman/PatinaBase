@@ -136,7 +136,10 @@
         "LEGACY_FETCH_TIMEOUT_MS": "3000",
         // review finding W-1 — a 10s proxy abort in front of stripe-webhook (sync DB writes + email sends) risks silent event loss inside Stripe's ~30s window.
         "COMPATIBILITY_FETCH_TIMEOUT_MS": "30000",
-        "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "5000",
+        // Raised 5000→10000 for the D-repoint window (2026-08-25): designer-portal
+        // realtime WS rides this proxy after the origin flip; 10s gives reconnect-storm
+        // headroom (D-B0 audit recommendation). Validator allows up to 30000.
+        "WEBSOCKET_HANDSHAKE_TIMEOUT_MS": "10000",
         // Scan read routes ACTIVATED on prod 2026-08-25 (combined scan-wave Step 9,
         // Kody-GO'd). Read-only R2 token secrets are set on the worker; MEDIA_UPLOADS
         // stays off (uploads deferred). Rollback = flip back to "off" + config:check
