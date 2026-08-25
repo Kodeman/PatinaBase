@@ -165,6 +165,43 @@ public final class ScanBundleWriter {
         return artifact
     }
 
+    /// Register a file that is ALREADY on disk under the bundle, without
+    /// rewriting or moving it. Stats the existing file for its size and records
+    /// it in the manifest. Used by the keyframe lane, whose HEIC archive and
+    /// NDJSON/JSON sidecars are produced in place by `KeyframeBundleWriter` /
+    /// `TarArchive` during freeze — re-reading a 30 MB tar into `Data` just to
+    /// `writeArtifact` it back to the same path would be wasteful.
+    ///
+    /// `computeHash` defaults false because `finalize(hashArtifacts: true)`
+    /// re-hashes every artifact off disk at seal, which is where the real
+    /// checksum `checksumAlgorithm` claims is computed — the same reason the
+    /// depth/USDZ/mesh producers pass it false too.
+    @discardableResult
+    public func registerExistingArtifact(
+        kind: ScanManifest.ArtifactKind,
+        relativePath: String,
+        mimeType: String,
+        computeHash: Bool = false
+    ) throws -> ScanManifest.Artifact {
+        let fileURL = bundleURL.appendingPathComponent(relativePath)
+        let attrs = try fileManager.attributesOfItem(atPath: fileURL.path)
+        let size = (attrs[.size] as? NSNumber)?.intValue ?? 0
+        var hash: String?
+        if computeHash, let data = try? Data(contentsOf: fileURL) {
+            hash = sha256Hex(data)
+        }
+        let artifact = ScanManifest.Artifact(
+            kind: kind,
+            relativePath: relativePath,
+            sizeBytes: size,
+            sha256: hash,
+            mimeType: mimeType
+        )
+        upsertArtifact(artifact)
+        try writeManifest()
+        return artifact
+    }
+
     public func artifactURL(for artifact: ScanManifest.Artifact) -> URL {
         bundleURL.appendingPathComponent(artifact.relativePath)
     }
@@ -406,6 +443,11 @@ public final class ScanBundleWriter {
         // uploader adds it from `ArtifactUploader.uploadPlan(for:in:)`.
         case .bundleManifest: return "manifest.json"
         case .photosManifest: return "photos/photos_metadata.ndjson"
+        // Dense-frame keyframe lane — written by KeyframeBundleWriter into
+        // `keyframes/`, tarred to `keyframes.tar` at freeze.
+        case .keyframesArchive: return "keyframes.tar"
+        case .keyframeIndex: return "keyframes/keyframe_index.ndjson"
+        case .keyframeSummary: return "keyframes/keyframe_summary.json"
         }
     }
 

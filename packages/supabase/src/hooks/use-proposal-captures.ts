@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import type { Json } from '../database.types';
 import {
   invalidateProposalClientQueries,
   PROPOSAL_CLIENT_MUTATION_KEY,
@@ -163,6 +164,102 @@ export function useConsumeCapture() {
       queryClient.invalidateQueries({ queryKey: ['proposal', variables.proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', variables.proposalId] });
       await invalidateProposalClientQueries(queryClient, variables.proposalId);
+    },
+  });
+}
+
+/**
+ * Payload envelope for `commit_proposal_capture` (migration 00516,
+ * Phase 3 / C-A2). Mirrors the extension's `buildCommitProposalCaptureArgs`
+ * (apps/extension/src/lib/payloads.ts) — see that RPC's docstring in 00516
+ * for the exact field-by-field mapping onto the `products` insert.
+ */
+export interface CommitProposalCapturePayload {
+  name?: string | null;
+  description?: string | null;
+  sourceUrl: string;
+  images?: string[];
+  priceRetailCents?: number | null;
+  materials?: string[];
+  colors?: string[];
+  finish?: string | null;
+  availableColors?: string[];
+  /** Stored verbatim as products.dimensions JSONB — { width, height, depth,
+   *  unit, ... } (see BuildProductPayloadInput in the extension's payloads.ts). */
+  dimensions?: Record<string, unknown> | null;
+  vendorId?: string | null;
+  retailerId?: string | null;
+  captureSource?: 'web_extension' | 'portal' | 'manual' | 'import';
+  captureProvenance?: Record<string, unknown>;
+  productStatus?: 'draft' | 'published';
+  thumbnailUrl?: string | null;
+  /** Stored verbatim as proposal_captures.raw_payload — the small
+   *  display-oriented snapshot callers already compute. */
+  rawPayload?: Record<string, unknown>;
+}
+
+export interface CommitProposalCaptureInput {
+  /** Client-generated idempotency key — mint once per logical capture and
+   *  reuse on every retry (never a fresh id per attempt). */
+  clientCaptureId: string;
+  payload: CommitProposalCapturePayload;
+  styleIds?: string[];
+  proposalId?: string | null;
+  scopeRoomId?: string | null;
+  ffeCategorySlug?: string | null;
+}
+
+export interface CommitProposalCaptureResult {
+  captureId: string;
+  productId: string;
+  status: ProposalCapture['status'];
+  created: boolean;
+  enrichmentRunId: string | null;
+}
+
+/**
+ * Idempotent upsert of a proposal_captures inbox row + its draft product
+ * (+ styles), keyed on `clientCaptureId`. Wraps `commit_proposal_capture`
+ * (migration 00516) — the single-RPC replacement for the old
+ * products -> product_styles -> proposal_captures insert sequence.
+ * Retrying with the SAME clientCaptureId is always safe: it returns the
+ * same capture/product ids and never double-commits.
+ */
+export function useCommitProposalCapture() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CommitProposalCaptureInput): Promise<CommitProposalCaptureResult> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc('commit_proposal_capture', {
+        p_client_capture_id: input.clientCaptureId,
+        p_payload: input.payload as unknown as Json,
+        p_style_ids: input.styleIds ?? undefined,
+        p_proposal_id: input.proposalId ?? undefined,
+        p_scope_room_id: input.scopeRoomId ?? undefined,
+        p_ffe_category_slug: input.ffeCategorySlug ?? undefined,
+      });
+      if (error) throw error;
+
+      const result = data as unknown as {
+        capture_id: string;
+        product_id: string;
+        status: ProposalCapture['status'];
+        created: boolean;
+        enrichment_run_id: string | null;
+      };
+      return {
+        captureId: result.capture_id,
+        productId: result.product_id,
+        status: result.status,
+        created: result.created,
+        enrichmentRunId: result.enrichment_run_id ?? null,
+      };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['proposal-captures'] });
+      queryClient.invalidateQueries({ queryKey: ['layer-products', 'personal'] });
+      queryClient.invalidateQueries({ queryKey: ['layer-counts'] });
     },
   });
 }

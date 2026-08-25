@@ -32,6 +32,10 @@ final class RoomCaptureBundleAdapter {
         let analyzer: RoomCaptureAnalyzer
         let meshAnchors: [ARMeshAnchor]
         let depthRecorder: DepthFrameRecorder?
+        /// The dense-frame keyframe recorder (Rendered Room v2). Freeze flushes
+        /// it, tars `keyframes/` → `keyframes.tar`, and registers the archive +
+        /// index + summary. Nil (or decision-only) leaves the bundle unchanged.
+        let keyframeRecorder: KeyframeTelemetryRecorder?
         let posedPhotoService: PosedPhotoService?
         /// Latest quality metrics (for the environment snapshot's motionQuality).
         let qualityMetrics: QualityMonitor.QualityMetrics?
@@ -241,6 +245,58 @@ final class RoomCaptureBundleAdapter {
                     PatinaLog.scan.error("[RoomCaptureService] depth archive register failed: \(error.localizedDescription)")
                 }
                 try? FileManager.default.removeItem(at: zipURL)
+            }
+        }
+
+        // 8.5 Keyframes (dense-frame lane, Rendered Room v2). Flush the recorder
+        //     (drains pending HEIC encodes, closes `keyframe_index.ndjson`,
+        //     writes `keyframe_summary.json`), then tar the fired HEICs into
+        //     `keyframes.tar` and register the three artifacts:
+        //       • keyframesArchive → scan_bundle_url  (the RGB stream the splat
+        //         pipeline trains on; parse_keyframe_index reads the index)
+        //       • keyframeIndex / keyframeSummary → column-less uploads the
+        //         worker resolves by prefix-swap into the `keyframes/` folder.
+        //     Only the .heic members go in the tar; the index + summary upload
+        //     as their own objects, exactly as Field and the prod fixture do.
+        if let keyframeRecorder = context.keyframeRecorder, keyframeRecorder.isRecordingBundle {
+            keyframeRecorder.finish()
+            let heics = keyframeRecorder.heicFiles()
+            if !heics.isEmpty {
+                do {
+                    let tarURL = writer.bundleURL.appendingPathComponent(KeyframeBundleWriter.archiveRelativePath)
+                    let entries = TarArchive.bundleEntries(
+                        directory: KeyframeBundleWriter.directoryName,
+                        files: heics
+                    )
+                    let members = try TarArchive.write(entries: entries, to: tarURL)
+                    if members > 0 {
+                        _ = try writer.registerExistingArtifact(
+                            kind: .keyframesArchive,
+                            relativePath: KeyframeBundleWriter.archiveRelativePath,
+                            mimeType: "application/x-tar"
+                        )
+                        _ = try writer.registerExistingArtifact(
+                            kind: .keyframeIndex,
+                            relativePath: KeyframeBundleWriter.indexRelativePath,
+                            mimeType: "application/x-ndjson"
+                        )
+                        // Summary is best-effort (see KeyframeBundleWriter); only
+                        // register it if it actually landed, so a listed artifact
+                        // never points at a missing file.
+                        let summaryURL = writer.bundleURL.appendingPathComponent(
+                            KeyframeBundleWriter.summaryRelativePath
+                        )
+                        if FileManager.default.fileExists(atPath: summaryURL.path) {
+                            _ = try writer.registerExistingArtifact(
+                                kind: .keyframeSummary,
+                                relativePath: KeyframeBundleWriter.summaryRelativePath,
+                                mimeType: "application/json"
+                            )
+                        }
+                    }
+                } catch {
+                    PatinaLog.scan.error("[RoomCaptureService] keyframe archive register failed: \(error.localizedDescription)")
+                }
             }
         }
 

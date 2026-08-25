@@ -50,6 +50,15 @@ struct ArtifactRoutingTests {
         .depthIndex, .photoThumbnails, .annotations
     ]
 
+    /// The column-less-but-UPLOADED kinds (dense-frame keyframe lane). The
+    /// scan-pipeline worker resolves them by prefix-swap into their folder
+    /// (`keys.py` KIND_TO_FOLDER), so they upload and are listed but PATCH no
+    /// dedicated `room_scans` column. `.keyframesArchive` is NOT here — it owns
+    /// `scan_bundle_url`.
+    private static let columnlessUploaded: Set<ScanManifest.ArtifactKind> = [
+        .keyframeIndex, .keyframeSummary
+    ]
+
     private func artifact(_ kind: ScanManifest.ArtifactKind) -> ScanManifest.Artifact {
         ScanManifest.Artifact(
             kind: kind,
@@ -59,18 +68,47 @@ struct ArtifactRoutingTests {
         )
     }
 
-    /// THE invariant. A column holds the object key of an uploaded object, so
-    /// a column without an upload is a permanently-NULL column and an upload
-    /// without a column is an orphan object nothing can find.
-    @Test func everyKindEitherUploadsAndHasAColumnOrDoesNeither() {
+    /// THE invariant, refined for the column-less lane. A column holds the
+    /// object key of an uploaded object, so a column without an upload is a
+    /// permanently-NULL column — DISALLOWED. But an upload without a column is
+    /// NOT always an orphan: the prefix-swap kinds
+    /// (keyframeIndex/keyframeSummary) are found by folder, so a column ALWAYS
+    /// implies an upload, while an upload need not imply a column.
+    @Test func aColumnAlwaysImpliesAnUpload() {
         for kind in ScanManifest.ArtifactKind.allCases {
             let column = ArtifactUploader.scanColumn(for: kind)
             let storage = ArtifactUploader.storagePathComponents(for: artifact(kind))
-            #expect(
-                (column == nil) == (storage == nil),
-                "\(kind.rawValue): column=\(column ?? "nil") storage=\(storage?.folder ?? "nil")"
-            )
+            if column != nil {
+                #expect(storage != nil, "\(kind.rawValue): has a column but never uploads")
+            }
         }
+    }
+
+    /// The column-less kinds upload (and are listed) but carry no column, by
+    /// design — the worker resolves them by prefix-swap into their folder.
+    @Test func columnlessKindsUploadAndAreListedWithoutAColumn() {
+        for kind in Self.columnlessUploaded {
+            #expect(ArtifactUploader.scanColumn(for: kind) == nil,
+                    "\(kind.rawValue) must not PATCH a column")
+            #expect(ArtifactUploader.storagePathComponents(for: artifact(kind)) != nil,
+                    "\(kind.rawValue) must upload")
+            #expect(ArtifactUploader.isManifestListed(kind),
+                    "\(kind.rawValue) must be listed")
+        }
+    }
+
+    /// The dense-frame archive rides the same `scan_bundle_url` / `bundle` slot
+    /// Field uses, so the merged worker (`keys.py`) resolves it unchanged.
+    @Test func keyframesArchiveRoutesToScanBundleUrl() {
+        #expect(ArtifactUploader.scanColumn(for: .keyframesArchive) == "scan_bundle_url")
+        let a = ScanManifest.Artifact(
+            kind: .keyframesArchive,
+            relativePath: "keyframes.tar",
+            sizeBytes: 1,
+            mimeType: "application/x-tar"
+        )
+        #expect(ArtifactUploader.storagePathComponents(for: a)?.folder == "bundle")
+        #expect(ArtifactUploader.storagePathComponents(for: a)?.filename == "keyframes.tar")
     }
 
     @Test func exactlyTheThreeSidecarsAreHeldBackFromStorage() {
@@ -89,7 +127,9 @@ struct ArtifactRoutingTests {
         where ArtifactUploader.isManifestListed(kind) {
             #expect(ArtifactUploader.storagePathComponents(for: artifact(kind)) != nil,
                     "\(kind.rawValue) may be listed but is never uploaded")
-            #expect(ArtifactUploader.scanColumn(for: kind) != nil, "\(kind.rawValue)")
+            // A column is NOT required: the prefix-swap kinds
+            // (keyframeIndex/keyframeSummary) are listed and uploaded but
+            // column-less — the worker finds them by folder, not by column.
         }
     }
 

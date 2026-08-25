@@ -126,6 +126,23 @@ discriminated outcome — `claimed` / `ignore_duplicate` / `ignore_stale` /
 suggestions/status; never mutates `proposal_captures`; may prefill an
 allowlisted, currently-empty TEXT column on `field_captures` but never
 overwrites a non-empty one — the never-overwrite rule enforced in SQL).
+00516 (C-A2) wires `enqueue_capture_enrichment` into the two capture
+producers: extends `commit_field_capture` (00235, CREATE OR REPLACE, body
+otherwise unchanged) with one added enqueue call, adds the SECURITY DEFINER,
+ownership-checking wrapper `enqueue_capture_enrichment_for_producer` and
+grants EXECUTE on **that** to `authenticated` (needed because
+commit_field_capture is SECURITY INVOKER — a nested DEFINER call does not
+inherit the callee's owner privileges). ⚠ **Corrected 2026-08-24 during the
+Field Companion merge:** this paragraph previously said 00516 widens
+`enqueue_capture_enrichment`'s own grant to `authenticated`. That grant is
+exactly the cross-tenant hole 00516's adversarial review removed — the
+shipped 00516 REVOKEs `authenticated` from the primitive. Also adds `proposal_captures.client_capture_id`
+(nullable UUID, unique index) for backfill-free rollout onto the existing
+table, and adds a new `commit_proposal_capture` SECURITY DEFINER RPC
+(products + product_styles + proposal_captures in one transaction, upsert-
+on-conflict, enqueues enrichment) as the single write path for the Chrome
+extension and the designer-portal URL-paste flow.
+
 00517–00520 remain free for the rest of Phase 3 (pg_cron outbox
 reconciler, any additional RPCs the Cloudflare Queue consumer needs).
 

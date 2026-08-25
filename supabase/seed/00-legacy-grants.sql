@@ -11635,3 +11635,27 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.record_capture_enrichment_result(uuid, jsonb, jsonb, text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00516_capture_producer_idempotency.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION commit_field_capture(UUID, TEXT, JSONB, UUID, UUID, TEXT, UUID) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00516_capture_producer_idempotency.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION commit_field_capture(UUID, TEXT, JSONB, UUID, UUID, TEXT, UUID) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00516_capture_producer_idempotency.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.commit_proposal_capture(UUID, JSONB, UUID[], UUID, UUID, TEXT) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00516_capture_producer_idempotency.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.commit_proposal_capture(UUID, JSONB, UUID[], UUID, UUID, TEXT) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

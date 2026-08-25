@@ -196,6 +196,74 @@ export function buildCapturePayload(input: BuildCapturePayloadInput) {
   };
 }
 
+// ─── commit_proposal_capture RPC args (Phase 3 / C-A2, migration 00516) ────
+//
+// Replaces the old 3-insert sequence (products -> product_styles ->
+// proposal_captures — still visible in git history / background.ts's
+// pre-00516 queue-drain shape) with a single idempotent RPC call keyed on
+// client_capture_id. Builds the RPC's camelCase JSONB payload envelope
+// (documented on commit_proposal_capture in 00516) from the SAME inputs the
+// old path used: a `buildProductInsertPayload` row (snake_case, DB-column
+// shaped) plus the small raw_payload display snapshot `captureInput`
+// already computes. clientCaptureId MUST be minted once at capture time and
+// reused on every retry of the same logical capture — callers own that
+// (the extension's offline queue item id already serves this purpose; the
+// direct-save path mints a fresh one since it has no retry queue).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface BuildCommitProposalCaptureArgsInput {
+  clientCaptureId: string;
+  product: ReturnType<typeof buildProductInsertPayload>;
+  productStatus: 'draft' | 'published';
+  styleIds: UUID[];
+  proposalId: string | null;
+  scopeRoomId: string | null;
+  ffeCategorySlug: string | null;
+  rawPayload: Record<string, unknown>;
+  thumbnailUrl: string | null;
+}
+
+export interface CommitProposalCaptureRpcArgs {
+  p_client_capture_id: string;
+  p_payload: Record<string, unknown>;
+  p_style_ids: UUID[];
+  p_proposal_id: string | null;
+  p_scope_room_id: string | null;
+  p_ffe_category_slug: string | null;
+}
+
+export function buildCommitProposalCaptureArgs(
+  input: BuildCommitProposalCaptureArgsInput
+): CommitProposalCaptureRpcArgs {
+  const { product } = input;
+  return {
+    p_client_capture_id: input.clientCaptureId,
+    p_payload: {
+      name: product.name,
+      description: product.description,
+      sourceUrl: product.source_url,
+      images: product.images,
+      priceRetailCents: product.price_retail,
+      materials: product.materials,
+      colors: product.colors,
+      finish: product.finish,
+      availableColors: product.available_colors,
+      dimensions: product.dimensions,
+      vendorId: product.vendor_id,
+      retailerId: product.retailer_id,
+      captureSource: product.capture_source,
+      captureProvenance: product.capture_provenance,
+      productStatus: input.productStatus,
+      thumbnailUrl: input.thumbnailUrl,
+      rawPayload: input.rawPayload,
+    },
+    p_style_ids: input.styleIds,
+    p_proposal_id: input.proposalId,
+    p_scope_room_id: input.scopeRoomId,
+    p_ffe_category_slug: input.ffeCategorySlug,
+  };
+}
+
 // ─── Decision + Decision Option Insert (PT-D-2-T5-1) ────────────────────────
 //
 // "Send as decision option" turns a captured product into a client decision.

@@ -17137,6 +17137,7 @@ export type Database = {
       proposal_captures: {
         Row: {
           captured_at: string;
+          client_capture_id: string | null;
           consumed_at: string | null;
           consumed_proposal_item_id: string | null;
           designer_id: string;
@@ -17152,6 +17153,7 @@ export type Database = {
         };
         Insert: {
           captured_at?: string;
+          client_capture_id?: string | null;
           consumed_at?: string | null;
           consumed_proposal_item_id?: string | null;
           designer_id: string;
@@ -17167,6 +17169,7 @@ export type Database = {
         };
         Update: {
           captured_at?: string;
+          client_capture_id?: string | null;
           consumed_at?: string | null;
           consumed_proposal_item_id?: string | null;
           designer_id?: string;
@@ -29579,6 +29582,17 @@ export type Database = {
         Args: { p_batch_id: string; p_decisions?: Json };
         Returns: Json;
       };
+      commit_proposal_capture: {
+        Args: {
+          p_client_capture_id: string;
+          p_ffe_category_slug?: string;
+          p_payload: Json;
+          p_proposal_id?: string;
+          p_scope_room_id?: string;
+          p_style_ids?: string[];
+        };
+        Returns: Json;
+      };
       commit_schedule_edit: {
         Args: { p_edits: Json; p_project_id: string; p_reason?: string };
         Returns: number;
@@ -30318,6 +30332,17 @@ export type Database = {
         };
       };
       enqueue_capture_enrichment: {
+        Args: {
+          p_content_hash?: string;
+          p_content_revision: number;
+          p_pipeline_version?: string;
+          p_provenance?: Json;
+          p_target_id: string;
+          p_target_type: string;
+        };
+        Returns: string;
+      };
+      enqueue_capture_enrichment_for_producer: {
         Args: {
           p_content_hash?: string;
           p_content_revision: number;

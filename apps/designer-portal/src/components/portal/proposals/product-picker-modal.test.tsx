@@ -213,7 +213,7 @@ jest.mock('@patina/supabase', () => ({
   useProposalCaptures: () => ({ data: [], isLoading: false, isError: false }),
   useCreateDraftProduct: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useCaptureFromUrl: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useCaptureProduct: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useCommitProposalCapture: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useProduct: () => ({ data: mockProduct, isLoading: false, error: null }),
   useProductConfigurationDefinition: () => ({
     data: mockDefinition,

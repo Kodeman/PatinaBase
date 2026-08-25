@@ -325,13 +325,28 @@ final class ArtifactUploader {
     /// makes "a listed kind is always uploaded" true by construction rather
     /// than by review — there is no way to spell a listed kind with no folder.
     nonisolated struct Route {
-        let column: String
+        /// The `room_scans` URL column that records this kind's object key, or
+        /// `nil` for an UPLOADED-BUT-COLUMN-LESS kind. Most kinds carry one, and
+        /// for them "a column without an upload is a permanently-NULL column, an
+        /// upload without a column is an orphan" — the pairing below.
+        ///
+        /// The exception: `.keyframeIndex` / `.keyframeSummary` are uploaded to
+        /// the `keyframes/` folder but have no dedicated column, because the
+        /// scan-pipeline worker resolves them by PREFIX-SWAP off a
+        /// column-backed sibling (`keys.py` KIND_TO_FOLDER; the same mechanism
+        /// depthIndex would use if it were uploaded separately). For those the
+        /// object is not an orphan — the server finds it by folder — so `nil`
+        /// here means "upload, list, but do not PATCH a column", not "skip".
+        /// The orchestrator already honours this: `launchArtifactUpload` guards
+        /// the column PATCH on `if let column = scanColumn(for:)`, and a non-nil
+        /// upload result still marks the artifact `.uploaded`.
+        let column: String?
         let folder: String
         /// May this kind appear in `manifest.artifacts[]`? False only for
         /// `.bundleManifest` — see `routing(for:)`.
         let listed: Bool
 
-        init(_ column: String, _ folder: String, listed: Bool = true) {
+        init(_ column: String?, _ folder: String, listed: Bool = true) {
             self.column = column
             self.folder = folder
             self.listed = listed
@@ -382,6 +397,17 @@ final class ArtifactUploader {
         case .heroThumbnail:    return Route("hero_frame_url", "thumbnails")
         case .photosManifest:   return Route("photos_manifest_url", "photos_manifest")
         case .coverageHeatmap:  return Route("coverage_heatmap_url", "coverage")
+
+        // Dense-frame keyframe lane. `keyframesArchive` rides the SAME
+        // `scan_bundle_url` slot Field uses (`keys.KIND_TO_URL_COLUMN`), folder
+        // `bundle`; `.bundleArchive` also names that slot but is never produced
+        // in the client's primary path, so they cannot collide at runtime.
+        case .keyframesArchive: return Route("scan_bundle_url", "bundle")
+        // Column-less uploads: the worker resolves the index + summary by
+        // prefix-swap into `keyframes/` (`keys.KIND_TO_FOLDER`), so they upload
+        // and are listed but PATCH no column. See `Route.column`.
+        case .keyframeIndex:    return Route(nil, "keyframes")
+        case .keyframeSummary:  return Route(nil, "keyframes")
 
         // Uploaded, but NEVER listed — the manifest IS the artifact list, and a
         // list cannot contain itself. The validator requires a 64-hex `sha256`

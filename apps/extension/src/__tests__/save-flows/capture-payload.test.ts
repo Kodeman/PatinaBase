@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildCapturePayload,
+  buildCommitProposalCaptureArgs,
+  buildProductInsertPayload,
   deriveCaptureStatus,
 } from '../../lib/payloads';
 
@@ -132,5 +134,175 @@ describe('buildCapturePayload', () => {
       thumbnailUrl: null,
     });
     expect(payload.product_id).toBeNull();
+  });
+});
+
+// ─── commit_proposal_capture RPC args (Phase 3 / C-A2, migration 00516) ────
+
+const MINIMAL_EXTRACTED_DATA = {
+  productName: 'Coastal armchair',
+  description: null,
+  price: null,
+  dimensions: {
+    width: 32,
+    height: 34,
+    depth: 30,
+    seatHeight: 18,
+    seatDepth: null,
+    seatWidth: null,
+    armHeight: null,
+    backHeight: null,
+    legHeight: null,
+    clearance: null,
+    unit: 'in' as const,
+    raw: '32"W x 34"H x 30"D',
+  },
+  materials: [],
+  colors: null,
+  finish: null,
+  availableColors: null,
+  availableFinishes: null,
+  images: [],
+  manufacturer: null,
+  url: 'https://example.com/armchair',
+  extractedAt: new Date().toISOString(),
+  confidence: 'high' as const,
+};
+
+describe('buildCommitProposalCaptureArgs', () => {
+  it('carries the client-generated idempotency key as p_client_capture_id', () => {
+    const product = buildProductInsertPayload({
+      productName: 'Coastal armchair',
+      extractedData: MINIMAL_EXTRACTED_DATA,
+      price: '',
+      images: [],
+      vendorId: null,
+      retailerId: null,
+      userId: 'u1',
+    });
+
+    const args = buildCommitProposalCaptureArgs({
+      clientCaptureId: 'cc-123',
+      product,
+      productStatus: 'draft',
+      styleIds: [],
+      proposalId: null,
+      scopeRoomId: null,
+      ffeCategorySlug: null,
+      rawPayload: { name: 'Coastal armchair' },
+      thumbnailUrl: null,
+    });
+
+    expect(args.p_client_capture_id).toBe('cc-123');
+  });
+
+  it('maps the product row into the camelCase payload envelope commit_proposal_capture expects', () => {
+    const product = buildProductInsertPayload({
+      productName: 'Teak bench',
+      extractedData: {
+        ...MINIMAL_EXTRACTED_DATA,
+        productName: 'Teak bench',
+        url: 'https://example.com/bench',
+      },
+      price: '199.00',
+      images: ['https://cdn.example.com/bench.jpg'],
+      vendorId: 'v1',
+      retailerId: 'r1',
+      userId: 'u1',
+    });
+
+    const args = buildCommitProposalCaptureArgs({
+      clientCaptureId: 'cc-456',
+      product,
+      productStatus: 'draft',
+      styleIds: ['s1'],
+      proposalId: 'p1',
+      scopeRoomId: 'r1',
+      ffeCategorySlug: 'seating',
+      rawPayload: { name: 'Teak bench' },
+      thumbnailUrl: 'https://cdn.example.com/bench.jpg',
+    });
+
+    expect(args.p_payload).toMatchObject({
+      name: 'Teak bench',
+      sourceUrl: 'https://example.com/bench',
+      priceRetailCents: 19900,
+      vendorId: 'v1',
+      retailerId: 'r1',
+      thumbnailUrl: 'https://cdn.example.com/bench.jpg',
+      rawPayload: { name: 'Teak bench' },
+    });
+    expect(args.p_style_ids).toEqual(['s1']);
+    expect(args.p_proposal_id).toBe('p1');
+    expect(args.p_scope_room_id).toBe('r1');
+    expect(args.p_ffe_category_slug).toBe('seating');
+  });
+
+  it('carries dimensions through to the RPC payload (regression: 00516 products INSERT + this envelope both dropped it)', () => {
+    const product = buildProductInsertPayload({
+      productName: 'Coastal armchair',
+      extractedData: MINIMAL_EXTRACTED_DATA,
+      price: '',
+      images: [],
+      vendorId: null,
+      retailerId: null,
+      userId: 'u1',
+    });
+
+    // Sanity: buildProductInsertPayload itself must have produced a real
+    // dimensions object from MINIMAL_EXTRACTED_DATA — otherwise this test
+    // would pass vacuously even if buildCommitProposalCaptureArgs dropped it.
+    expect(product.dimensions).toMatchObject({ width: 32, height: 34, depth: 30, unit: 'in' });
+
+    const args = buildCommitProposalCaptureArgs({
+      clientCaptureId: 'cc-dims-1',
+      product,
+      productStatus: 'draft',
+      styleIds: [],
+      proposalId: null,
+      scopeRoomId: null,
+      ffeCategorySlug: null,
+      rawPayload: {},
+      thumbnailUrl: null,
+    });
+
+    expect(args.p_payload.dimensions).toEqual(product.dimensions);
+    expect(args.p_payload.dimensions).toMatchObject({
+      width: 32,
+      height: 34,
+      depth: 30,
+      seatHeight: 18,
+      unit: 'in',
+    });
+  });
+
+  it('never leaks a bare snake_case products row shape into p_payload', () => {
+    const product = buildProductInsertPayload({
+      productName: 'Rattan mirror',
+      extractedData: { ...MINIMAL_EXTRACTED_DATA, url: 'https://example.com/mirror' },
+      price: '',
+      images: [],
+      vendorId: null,
+      retailerId: null,
+      userId: 'u1',
+    });
+
+    const args = buildCommitProposalCaptureArgs({
+      clientCaptureId: 'cc-789',
+      product,
+      productStatus: 'draft',
+      styleIds: [],
+      proposalId: null,
+      scopeRoomId: null,
+      ffeCategorySlug: null,
+      rawPayload: {},
+      thumbnailUrl: null,
+    });
+
+    // snake_case DB column names must not appear as top-level p_payload keys —
+    // the RPC's envelope is documented (00516) as camelCase.
+    expect(args.p_payload).not.toHaveProperty('source_url');
+    expect(args.p_payload).not.toHaveProperty('price_retail');
+    expect(args.p_payload).not.toHaveProperty('owner_user_id');
   });
 });
