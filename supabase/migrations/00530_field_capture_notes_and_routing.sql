@@ -147,7 +147,7 @@ CREATE POLICY field_captures_org_inbox_select
 --
 -- ⚠ AUTHORED FROM 00516'S BODY, NOT 00235'S (FC-R18). Same signature, same
 --   SECURITY INVOKER, same search_path, same upsert, same library branch, same
---   enqueue call. Three edits:
+--   enqueue call. FOUR edits:
 --     EDIT 1 — the inbox branch now persists project_id / project_room_id /
 --              shelf, wrapped in its OWN EXCEPTION WHEN OTHERS safe harbor.
 --     EDIT 2 — five payload reads: the routing-clear flag plus four new
@@ -255,6 +255,8 @@ DECLARE
   -- EDIT 4 (upsert safe harbor)
   v_stale_project     UUID;
   v_stale_room        UUID;
+  v_stale_shelf       TEXT;
+  v_conflict          JSONB;
   v_upserted          BOOLEAN;
 BEGIN
   IF v_uid IS NULL THEN
@@ -508,8 +510,8 @@ BEGIN
       -- Only a row that ALREADY EXISTS can carry stale stored routing. If
       -- there is none, the failure is something else entirely and detaching
       -- nothing would just loop us into the same error — re-raise now.
-      SELECT project_id, project_room_id
-        INTO v_stale_project, v_stale_room
+      SELECT project_id, project_room_id, shelf
+        INTO v_stale_project, v_stale_room, v_stale_shelf
         FROM field_captures
        WHERE client_capture_id = p_client_capture_id;
       IF NOT FOUND OR (v_stale_project IS NULL AND v_stale_room IS NULL) THEN
@@ -521,20 +523,28 @@ BEGIN
       -- on that value — writing it to the row here would be overwritten.
       -- 'conflict' and 'projection_errors' are distinct top-level keys, so
       -- this merge composes with EDIT 3's rather than replacing it.
+      -- raw_payload.conflict is an APPEND-ONLY ARRAY, not a single object.
+      -- Two harbors can fire in ONE call — this one for stale STORED routing,
+      -- then the inbox harbor for a bad INCOMING route — and a single-object
+      -- key would have the second write silently replace the first, losing
+      -- the only trace of what the row used to be filed under. The CASE also
+      -- absorbs the legacy single-object shape 00235/00516 wrote.
+      v_conflict := jsonb_build_object(
+        'error', SQLERRM, 'sqlstate', SQLSTATE, 'at', NOW(),
+        'stage', 'upsert',
+        'attempted_project_id', p_project_id,
+        'detached_project_id', v_stale_project,
+        'detached_project_room_id', v_stale_room,
+        'detached_shelf', v_stale_shelf);
       v_raw_payload := CASE
         WHEN jsonb_typeof(v_raw_payload) = 'object'
-          THEN v_raw_payload || jsonb_build_object('conflict', jsonb_build_object(
-                 'error', SQLERRM, 'sqlstate', SQLSTATE, 'at', NOW(),
-                 'stage', 'upsert',
-                 'attempted_project_id', p_project_id,
-                 'detached_project_id', v_stale_project,
-                 'detached_project_room_id', v_stale_room))
-        ELSE jsonb_build_object('conflict', jsonb_build_object(
-                 'error', SQLERRM, 'sqlstate', SQLSTATE, 'at', NOW(),
-                 'stage', 'upsert',
-                 'attempted_project_id', p_project_id,
-                 'detached_project_id', v_stale_project,
-                 'detached_project_room_id', v_stale_room))
+          THEN v_raw_payload || jsonb_build_object('conflict',
+                 CASE jsonb_typeof(v_raw_payload -> 'conflict')
+                   WHEN 'array'  THEN v_raw_payload -> 'conflict'
+                   WHEN 'object' THEN jsonb_build_array(v_raw_payload -> 'conflict')
+                   ELSE '[]'::jsonb
+                 END || v_conflict)
+        ELSE jsonb_build_object('conflict', jsonb_build_array(v_conflict))
       END;
 
       -- Detach the stale routing so the retry's guard pass succeeds. NULL
@@ -594,12 +604,13 @@ BEGIN
        WHERE id = v_capture.id
       RETURNING * INTO v_capture;
     EXCEPTION WHEN OTHERS THEN
-      -- Byte-for-byte the shape of 00235:278-291. 00235:85-88 records the
-      -- routing deferral as deliberate precisely so a bad route can be
-      -- safe-harbored instead of hard-failing the whole sync; the inbox
-      -- branch must not turn that into an abort. The failed UPDATE above was
-      -- rolled back with this subtransaction, so routing is untouched and the
-      -- update below passes the guard.
+      -- Modelled on 00235:278-291. 00235:85-88 records the routing deferral
+      -- as deliberate precisely so a bad route can be safe-harbored instead
+      -- of hard-failing the whole sync; the inbox branch must not turn that
+      -- into an abort. The failed UPDATE above was rolled back with this
+      -- subtransaction — but that only undoes what it wrote, so the row still
+      -- carries whatever routing was STORED, which is why the update below
+      -- must null it explicitly rather than relying on the rollback.
       UPDATE field_captures
          SET status          = 'inbox',
              -- The routing MUST be nulled here. This handler's own UPDATE
@@ -612,12 +623,19 @@ BEGIN
              project_room_id = NULL,
              shelf           = NULL,
              raw_payload = COALESCE(raw_payload, '{}'::jsonb)
-                           || jsonb_build_object('conflict', jsonb_build_object(
-                                'error', SQLERRM, 'sqlstate', SQLSTATE, 'at', NOW(),
-                                'stage', 'inbox_route',
-                                'attempted_project_id', p_project_id,
-                                'detached_project_id', v_capture.project_id,
-                                'detached_project_room_id', v_capture.project_room_id))
+                           || jsonb_build_object('conflict',
+                                CASE jsonb_typeof(raw_payload -> 'conflict')
+                                  WHEN 'array'  THEN raw_payload -> 'conflict'
+                                  WHEN 'object' THEN jsonb_build_array(raw_payload -> 'conflict')
+                                  ELSE '[]'::jsonb
+                                END
+                                || jsonb_build_object(
+                                     'error', SQLERRM, 'sqlstate', SQLSTATE, 'at', NOW(),
+                                     'stage', 'inbox_route',
+                                     'attempted_project_id', p_project_id,
+                                     'detached_project_id', v_capture.project_id,
+                                     'detached_project_room_id', v_capture.project_room_id,
+                                     'detached_shelf', v_capture.shelf))
        WHERE id = v_capture.id
       RETURNING * INTO v_capture;
     END;
@@ -689,17 +707,30 @@ BEGIN
     -- rolled back. Park the capture in the inbox and stash the conflict so
     -- the designer can re-route it by hand. project_id is still NULL here, so
     -- this update passes the routing guard.
+    -- ⚠ 00516's carried handler, with ONE change: the conflict is APPENDED to
+    --   the array rather than written as a bare object. Its routing behaviour
+    --   is deliberately untouched (ruled: leave it — EDIT 4 has already
+    --   normalised stored routing by the time this runs). But EDIT 4's harbor
+    --   can fire earlier in the SAME call, and a bare-object write here would
+    --   replace that record instead of adding to it, which is the very
+    --   clobber this round exists to close.
     UPDATE field_captures
        SET status      = 'inbox',
            raw_payload = COALESCE(raw_payload, '{}'::jsonb)
                          || jsonb_build_object(
                               'conflict',
-                              jsonb_build_object(
-                                'error', SQLERRM,
-                                'sqlstate', SQLSTATE,
-                                'at', NOW(),
-                                'attempted_project_id', p_project_id
-                              )
+                              CASE jsonb_typeof(raw_payload -> 'conflict')
+                                WHEN 'array'  THEN raw_payload -> 'conflict'
+                                WHEN 'object' THEN jsonb_build_array(raw_payload -> 'conflict')
+                                ELSE '[]'::jsonb
+                              END
+                              || jsonb_build_object(
+                                   'error', SQLERRM,
+                                   'sqlstate', SQLSTATE,
+                                   'at', NOW(),
+                                   'stage', 'library_route',
+                                   'attempted_project_id', p_project_id
+                                 )
                             )
      WHERE id = v_capture.id
     RETURNING * INTO v_capture;
@@ -740,6 +771,6 @@ GRANT EXECUTE ON FUNCTION public.commit_field_capture(UUID, TEXT, JSONB, UUID, U
   TO authenticated;
 
 COMMENT ON FUNCTION public.commit_field_capture(UUID, TEXT, JSONB, UUID, UUID, TEXT, UUID) IS
-  'Idempotent upsert of a field capture; destination=library mints a draft personal-library product, destination=inbox holds it. BOTH destination branches persist project_id/project_room_id/shelf, and both carry an EXCEPTION WHEN OTHERS safe harbor that parks a refused route at status=inbox with the conflict stashed in raw_payload. A {routing:{clear:true}} payload key un-places a capture. The four note/audio payload reads are projected to legal values so a malformed value cannot trip a CHECK constraint from outside a safe harbor; anything dropped is recorded in raw_payload.projection_errors rather than raised. Enqueues a capture_enrichment run (via enqueue_capture_enrichment_for_producer, 00516) in the same transaction on every real insert/update.';
+  'Idempotent upsert of a field capture; destination=library mints a draft personal-library product, destination=inbox holds it. BOTH destination branches persist project_id/project_room_id/shelf, and both carry an EXCEPTION WHEN OTHERS safe harbor that parks a refused route at status=inbox, detaching the offending routing and appending a record of it to raw_payload.conflict (an append-only ARRAY of {stage, error, sqlstate, at, attempted_*, detached_*} entries, since more than one harbor can fire in a single call). The upsert carries its own retry-once harbor for routing that went stale after it was stored. A {routing:{clear:true}} payload key un-places a capture. The four note/audio payload reads are projected to legal values so a malformed value cannot trip a CHECK constraint from outside a safe harbor; anything dropped is recorded in raw_payload.projection_errors rather than raised. Enqueues a capture_enrichment run (via enqueue_capture_enrichment_for_producer, 00516) in the same transaction on every real insert/update.';
 
 COMMIT;

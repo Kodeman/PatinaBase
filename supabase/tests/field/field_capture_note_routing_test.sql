@@ -25,8 +25,14 @@
 --                          instead of hard-failing the whole sync") and wraps
 --                          the library branch in EXCEPTION WHEN OTHERS. The
 --                          inbox branch now carries the same harbor: the row
---                          parks at status='inbox' with routing untouched and
---                          the conflict stashed in raw_payload. An unwrapped
+--                          parks at status='inbox' and the handler DETACHES
+--                          the routing (project_id/project_room_id/shelf ->
+--                          NULL) — it must, or its own UPDATE re-fires the
+--                          guard it is handling — recording what it detached
+--                          in raw_payload.conflict. ⚠ This case's fixture has
+--                          NULL stored routing, so 5b would also pass on a
+--                          handler that detached nothing; case 15 is what
+--                          actually exercises detachment. An unwrapped
 --                          RAISE would surface on the device as a plain Error,
 --                          not a LocalSyncError, so runAttempt's catch would
 --                          reach recordFailure → .retryableFailure and retry
@@ -36,7 +42,14 @@
 --                          "explicitly cleared", and a defaulted 8th argument
 --                          would create a SECOND OVERLOAD that makes every
 --                          existing 7-argument call ambiguous.
--- 7. POLICY SHAPE        → all five field_captures policies are TO authenticated.
+-- 7. POLICY SHAPE        → all five field_captures policies are TO
+--                          authenticated AND carry their shipped predicates.
+--                          Section (b) of the migration DROPs and re-CREATEs
+--                          every one of them, so a typo in a USING clause is
+--                          precisely the regression this case exists to catch
+--                          — a count alone would stay green through a silently
+--                          widened predicate. Each qual/with_check is compared
+--                          (whitespace-normalised) against 00233:155-188.
 --                          ⚠ The count is 5 TODAY (00233:155/159/163/168/175).
 --                          FC-R8 ruling per-studio would add a sixth; this
 --                          assertion is meant to fail loudly if it does.
@@ -56,6 +69,11 @@
 --                          absent. A projection that fires on good input is as
 --                          wrong as one that never fires. Asserted inline on
 --                          the case-1 row, which is the well-formed one.
+-- 13. NO CLOBBER         → projection_errors and the safe harbor's conflict
+--                          are distinct TOP-LEVEL keys of raw_payload, written
+--                          by two different merges. A capture that is both
+--                          malformed AND badly routed must end up carrying
+--                          BOTH.
 -- 14. CLEAR IS TOTAL     → a non-boolean routing.clear ("yes", 1, null) must
 --                          neither abort nor clear. The read is a jsonb
 --                          comparison, not a ::boolean cast, which would raise
@@ -67,11 +85,21 @@
 --                          and outside the harbors they carry — so the upsert
 --                          needs its own harbor. The stale routing is detached
 --                          and recorded, and the row commits.
--- 13. NO CLOBBER         → projection_errors and the safe harbor's conflict
---                          are distinct TOP-LEVEL keys of raw_payload, written
---                          by two different merges. A capture that is both
---                          malformed AND badly routed must end up carrying
---                          BOTH.
+-- 16. CONFLICT APPENDS   → two harbors can fire in ONE call (stale STORED
+--                          routing at the upsert, then a bad INCOMING route in
+--                          the inbox branch). raw_payload.conflict is an
+--                          append-only ARRAY, so the second write must not
+--                          replace the first — otherwise the only trace of
+--                          what the row used to be filed under is lost.
+-- 17. SPARSE SEGMENTS    → voice.audioSegments can legitimately arrive
+--                          NON-CONTIGUOUS by filename (e.g. -000, -002): a
+--                          local file lost to a full disk is OMITTED, never
+--                          left as a hole or a null, so the array is always
+--                          the ordered list of segments that actually exist.
+--                          00530 stores it AS-IS — no contiguity check, no
+--                          reordering, no renumbering — and the defensive
+--                          projection (cases 8-11) must not mistake a
+--                          legitimately sparse array for a corrupt one.
 --
 -- How to run:
 --   scripts/run-sql-tests.sh -f field_capture_note_routing
@@ -121,6 +149,11 @@ DECLARE
   v_projerr   JSONB;
   v_source    TEXT;
   v_setting   TEXT;
+  v_pol       RECORD;
+  v_roles     TEXT;
+  v_cmd       TEXT;
+  v_qual      TEXT;
+  v_check     TEXT;
 BEGIN
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', 'fc000000-0000-4000-8000-000000000001', 'role', 'authenticated')::text, true);
@@ -190,14 +223,55 @@ BEGIN
     'FAIL 6: {routing:{clear:true}} must un-place a capture from the device';
   RAISE NOTICE 'field_capture routing: case 6 passed.';
 
-  -- 7 ---------------------------------------------------------------------
+  -- 7 — POLICY SHAPE: role AND predicate ------------------------------------
+  -- Section (b) of the migration DROPs and re-CREATEs all five policies, so a
+  -- typo in a USING clause is the regression this case exists to catch. A
+  -- count assertion alone stays green through a silently widened predicate,
+  -- so each qual / with_check is compared against the shipped 00233:155-188
+  -- text, whitespace-normalised (pg_policies renders parenthesised, so the
+  -- expected strings below are Postgres's canonical rendering, not the
+  -- migration's source formatting).
+  FOR v_pol IN
+    SELECT *
+      FROM (VALUES
+        ('field_captures_org_inbox_select', 'SELECT',
+         '((status = ''inbox''::text) AND (organization_id IS NOT NULL) AND (organization_id IN ( SELECT om.organization_id FROM organization_members om WHERE ((om.user_id = auth.uid()) AND (om.status = ''active''::member_status)))))',
+         '<null>'),
+        ('field_captures_owner_delete', 'DELETE', '(designer_id = auth.uid())',  '<null>'),
+        ('field_captures_owner_insert', 'INSERT', '<null>',                      '(designer_id = auth.uid())'),
+        ('field_captures_owner_select', 'SELECT', '(designer_id = auth.uid())',  '<null>'),
+        ('field_captures_owner_update', 'UPDATE', '(designer_id = auth.uid())',  '(designer_id = auth.uid())')
+      ) AS t(name, cmd, qual, with_check)
+  LOOP
+    SELECT array_to_string(p.roles, ','),
+           p.cmd,
+           COALESCE(btrim(regexp_replace(p.qual,       '\s+', ' ', 'g')), '<null>'),
+           COALESCE(btrim(regexp_replace(p.with_check, '\s+', ' ', 'g')), '<null>')
+      INTO v_roles, v_cmd, v_qual, v_check
+      FROM pg_policies p
+     WHERE p.schemaname = 'public' AND p.tablename = 'field_captures'
+       AND p.policyname = v_pol.name;
+
+    ASSERT FOUND, 'FAIL 7a: policy ' || v_pol.name || ' is missing';
+    ASSERT v_roles = 'authenticated',
+      'FAIL 7b: policy ' || v_pol.name || ' must be TO authenticated, got ' || COALESCE(v_roles, 'NULL');
+    ASSERT v_cmd = v_pol.cmd,
+      'FAIL 7c: policy ' || v_pol.name || ' must be FOR ' || v_pol.cmd || ', got ' || COALESCE(v_cmd, 'NULL');
+    ASSERT v_qual = v_pol.qual,
+      'FAIL 7d: policy ' || v_pol.name || ' USING predicate changed.' || chr(10)
+      || '  expected: ' || v_pol.qual || chr(10) || '  got:      ' || COALESCE(v_qual, 'NULL');
+    ASSERT v_check = v_pol.with_check,
+      'FAIL 7e: policy ' || v_pol.name || ' WITH CHECK predicate changed.' || chr(10)
+      || '  expected: ' || v_pol.with_check || chr(10) || '  got:      ' || COALESCE(v_check, 'NULL');
+  END LOOP;
+
+  -- And no SIXTH policy has appeared alongside them.
   SELECT count(*) INTO v_count FROM pg_policies
-   WHERE schemaname = 'public' AND tablename = 'field_captures'
-     AND roles = '{authenticated}';
+   WHERE schemaname = 'public' AND tablename = 'field_captures';
   ASSERT v_count = 5,
-    'FAIL 7: all five field_captures policies must be TO authenticated, got ' || v_count
-    || ' (if FC-R8 ruled per-studio and added a sixth, update this count deliberately)';
-  RAISE NOTICE 'field_capture routing: case 7 passed.';
+    'FAIL 7f: field_captures should carry exactly five policies, got ' || v_count
+    || ' (if FC-R8 ruled per-studio and added a sixth, update this case deliberately)';
+  RAISE NOTICE 'field_capture routing: case 7 passed (5 policies, roles + predicates).';
 
   -- 8-11 — DEFENSIVE PROJECTION: malformed values must not raise -------------
   -- Each value below would violate a named CHECK constraint (or the jsonb type
@@ -372,8 +446,14 @@ BEGIN
     'FAIL 15c: stale stored routing must be detached, got project ' || COALESCE(v_project::text, 'NULL');
   ASSERT v_conflict IS NOT NULL,
     'FAIL 15d: the detached routing must be recorded in raw_payload.conflict';
-  ASSERT v_conflict ->> 'detached_project_id' = 'fc000000-0000-4000-8000-0000000000a1',
-    'FAIL 15e: the conflict must name what was detached so she can re-route by hand, got '
+  ASSERT jsonb_typeof(v_conflict) = 'array',
+    'FAIL 15e: raw_payload.conflict is an append-only array, got '
+    || COALESCE(jsonb_typeof(v_conflict), 'NULL');
+  ASSERT v_conflict @> '[{"detached_project_id": "fc000000-0000-4000-8000-0000000000a1"}]'::jsonb,
+    'FAIL 15f: the conflict must name what was detached so she can re-route by hand, got '
+    || COALESCE(v_conflict::text, 'NULL');
+  ASSERT v_conflict @> '[{"stage": "upsert"}]'::jsonb,
+    'FAIL 15g: the record must say the UPSERT harbor caught it, not a branch harbor, got '
     || COALESCE(v_conflict::text, 'NULL');
   RAISE NOTICE 'field_capture routing: case 15 passed (stale stored routing detached, not aborted).';
 
@@ -381,6 +461,85 @@ BEGIN
   UPDATE project_rooms
      SET project_id = 'fc000000-0000-4000-8000-0000000000a1'
    WHERE id = 'fc000000-0000-4000-8000-0000000000d1';
+
+  -- 16 — TWO HARBORS, ONE CALL: conflict must APPEND, not clobber -------------
+  -- raw_payload.conflict is written by more than one harbor and they are
+  -- reachable together: stale STORED routing fires EDIT 4's upsert harbor,
+  -- and a bad INCOMING route then fires the inbox harbor. A single-object key
+  -- would have the second write replace the first, losing the only trace of
+  -- what the row used to be filed under. It is an append-only ARRAY.
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000ca', 'inbox', '{}'::jsonb,
+    'fc000000-0000-4000-8000-0000000000a1',
+    'fc000000-0000-4000-8000-0000000000d1');
+
+  UPDATE project_rooms
+     SET project_id = 'fc000000-0000-4000-8000-0000000000a2'
+   WHERE id = 'fc000000-0000-4000-8000-0000000000d1';
+
+  -- Stale STORED routing AND a bad INCOMING route, in one call.
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000ca', 'inbox', '{}'::jsonb,
+    'fc000000-0000-4000-8000-0000000000a2');
+  SELECT status, project_id, raw_payload -> 'conflict'
+    INTO v_status, v_project, v_conflict
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000ca';
+  ASSERT v_status = 'inbox',
+    'FAIL 16a: both harbors firing must still leave the capture synced, got status '
+    || COALESCE(v_status, 'NULL');
+  ASSERT v_project IS NULL,
+    'FAIL 16b: neither route was legal, so project_id must be NULL, got '
+    || COALESCE(v_project::text, 'NULL');
+  ASSERT jsonb_typeof(v_conflict) = 'array',
+    'FAIL 16c: raw_payload.conflict must be an append-only array, got '
+    || COALESCE(jsonb_typeof(v_conflict), 'NULL');
+  ASSERT jsonb_array_length(v_conflict) = 2,
+    'FAIL 16d: both harbors must be recorded, got ' || COALESCE(v_conflict::text, 'NULL');
+  ASSERT v_conflict @> '[{"stage": "upsert"}]'::jsonb,
+    'FAIL 16e: the upsert harbor''s record must survive the inbox harbor''s write, got '
+    || COALESCE(v_conflict::text, 'NULL');
+  ASSERT v_conflict @> '[{"stage": "inbox_route"}]'::jsonb,
+    'FAIL 16f: the inbox harbor must append its own record, got '
+    || COALESCE(v_conflict::text, 'NULL');
+  ASSERT v_conflict @> '[{"detached_project_id": "fc000000-0000-4000-8000-0000000000a1"}]'::jsonb,
+    'FAIL 16g: the trace of what the row used to be filed under must survive, got '
+    || COALESCE(v_conflict::text, 'NULL');
+  RAISE NOTICE 'field_capture routing: case 16 passed (conflict appends, never clobbers).';
+
+  UPDATE project_rooms
+     SET project_id = 'fc000000-0000-4000-8000-0000000000a1'
+   WHERE id = 'fc000000-0000-4000-8000-0000000000d1';
+
+  -- 17 — NON-CONTIGUOUS audioSegments must round-trip AS-IS -------------------
+  -- A missing local file (lost to a full disk) is OMITTED from the array —
+  -- never a hole, never a null — so the array can legitimately arrive
+  -- non-contiguous by filename. This is a LEGAL payload, not a malformed one:
+  -- it must commit cleanly, round-trip exactly, and must NOT trip the
+  -- defensive projection from case 11 (which exists for a value that fails
+  -- jsonb_typeof(...) = 'array', not for an array that is merely short).
+  v_res := public.commit_field_capture(
+    'fc000000-0000-4000-8000-0000000000cb', 'inbox',
+    jsonb_build_object(
+      'voice', jsonb_build_object(
+        'audioSegments', jsonb_build_array(
+          'fc/ct/voice-a-000.m4a',
+          'fc/ct/voice-a-002.m4a'))));
+  SELECT status, voice_audio_segments, raw_payload -> 'projection_errors'
+    INTO v_status, v_segments, v_projerr
+    FROM field_captures WHERE client_capture_id = 'fc000000-0000-4000-8000-0000000000cb';
+  ASSERT v_status = 'inbox',
+    'FAIL 17a: a non-contiguous audioSegments array must still commit, got status '
+    || COALESCE(v_status, 'NULL');
+  ASSERT v_segments = jsonb_build_array('fc/ct/voice-a-000.m4a', 'fc/ct/voice-a-002.m4a'),
+    'FAIL 17b: voice_audio_segments must round-trip the array exactly — same two elements, same order — got '
+    || COALESCE(v_segments::text, 'NULL');
+  ASSERT jsonb_array_length(v_segments) = 2,
+    'FAIL 17c: voice_audio_segments must still carry exactly 2 entries, got '
+    || COALESCE(v_segments::text, 'NULL');
+  ASSERT v_projerr IS NULL OR jsonb_array_length(v_projerr) = 0,
+    'FAIL 17d: a legally sparse audioSegments array must NOT be mistaken for a corrupt one, got '
+    || COALESCE(v_projerr::text, 'NULL');
+  RAISE NOTICE 'field_capture routing: case 17 passed (non-contiguous audioSegments round-trips).';
 
   PERFORM set_config('request.jwt.claims', NULL, true);
   RAISE NOTICE 'All field_capture note-routing assertions passed.';
