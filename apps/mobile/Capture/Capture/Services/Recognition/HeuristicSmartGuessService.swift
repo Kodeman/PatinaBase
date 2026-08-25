@@ -48,37 +48,12 @@ public struct HeuristicSmartGuessService: SmartGuessService {
             .sorted { $0.confidence > $1.confidence }
 
         for obs in observations {
-            if let category = Self.categoryForKeyword(obs.identifier) {
+            if let category = SmartGuessKeywords.category(forVisionLabel: obs.identifier) {
                 return (category, Double(obs.confidence))
             }
         }
         return (.unknown, 0)
     }
-
-    static func categoryForKeyword(_ identifier: String) -> SpecimenCategory? {
-        let id = identifier.lowercased()
-        for (keyword, category) in keywordTable where id.contains(keyword) {
-            return category
-        }
-        return nil
-    }
-
-    private static let keywordTable: [(String, SpecimenCategory)] = [
-        ("armchair", .seating), ("chair", .seating), ("sofa", .seating), ("couch", .seating),
-        ("stool", .seating), ("bench", .seating), ("seat", .seating),
-        ("table", .table), ("desk", .table), ("nightstand", .table),
-        ("lamp", .lighting), ("light", .lighting), ("chandelier", .lighting), ("sconce", .lighting),
-        ("cabinet", .storage), ("shelf", .storage), ("bookcase", .storage), ("dresser", .storage),
-        ("wardrobe", .storage), ("credenza", .storage),
-        ("rug", .rug), ("carpet", .rug),
-        ("curtain", .textile), ("fabric", .textile), ("textile", .textile), ("pillow", .textile),
-        ("cushion", .textile), ("drapery", .textile),
-        ("vase", .decor), ("bowl", .decor), ("sculpture", .decor), ("mirror", .decor),
-        ("painting", .art), ("artwork", .art), ("print", .art),
-        ("faucet", .plumbing), ("sink", .plumbing), ("tap", .plumbing),
-        ("tile", .tile),
-        ("knob", .hardware), ("handle", .hardware), ("hinge", .hardware)
-    ]
 
     // MARK: - OCR-driven hints
 

@@ -22,6 +22,7 @@ final class ViewfinderModel {
     private let session: any SessionProviding
     private let companion: FieldCompanionController
     private let sessionContext: CaptureSessionContextStore
+    private let smartGuess: any SmartGuessService
     private var visitID: UUID?
 
     // ── Mode + framing (C1/C2) ──
@@ -77,6 +78,7 @@ final class ViewfinderModel {
         self.sync = container.sync
         self.session = container.session
         self.companion = container.companion
+        self.smartGuess = container.smartGuess
         self.sessionContext = .shared
     }
 
@@ -453,17 +455,27 @@ final class ViewfinderModel {
         try? store.save()
     }
 
-    /// The viewfinder's v0.1 smart guess (N5). The real vision model lives
-    /// app-side; here we seed category + material as clearly-badged guesses that
-    /// never clobber a confirmed value (setValue enforces N5).
+    /// Read the frame we just took and record what it says — the real reader,
+    /// not a placeholder. It runs off the shutter path so the C3 card appears at
+    /// once and fills in when the read lands; `setValue` still refuses to let a
+    /// guess clobber anything a tag, a scan, a measure or the designer set.
     private func applySmartGuess(to draft: Specimen) {
-        if draft.provenance(for: .category) == nil || draft.category == .unknown {
-            draft.setValue(SpecimenCategory.seating.rawValue, for: .category, source: .smartGuess)
-            draft.setConfidence(0.72, for: .category)
-        }
-        if draft.provenance(for: .material) == nil {
-            draft.setValue("Oak / bouclé", for: .material, source: .smartGuess)
-            draft.setConfidence(0.6, for: .material)
+        guard let photo = draft.primaryPhoto,
+              let data = try? Data(contentsOf: store.mediaURL(for: photo.filename)),
+              !data.isEmpty else { return }
+        let image = CaptureImage(data: data, width: photo.width, height: photo.height)
+        let draftID = draft.id
+        Task { [weak self] in
+            guard let self else { return }
+            let guess = await self.smartGuess.guess(image: image, ocr: [], codes: [])
+            let recordable = guess.fieldsWorthRecording
+            guard !recordable.isEmpty,
+                  let current = self.currentSpecimen(id: draftID) else { return }
+            for suggestion in recordable {
+                current.setValue(suggestion.value, for: suggestion.key, source: suggestion.source)
+                current.setConfidence(suggestion.confidence, for: suggestion.key)
+            }
+            try? self.store.save()
         }
     }
 

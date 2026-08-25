@@ -126,6 +126,25 @@ public struct SmartGuess: Sendable {
         self.category = category; self.categoryConfidence = categoryConfidence; self.fields = fields
     }
 }
+
+public extension SmartGuess {
+    /// The suggestions worth writing onto a record. Drops `.unknown` (which
+    /// means "could not tell", not "is unknown") and anything the reader had no
+    /// confidence in at all — so a capture never carries a guess nothing
+    /// computed. Confidence orders and pre-selects; per ruling 2026-08-24 it
+    /// never gates what gets recorded or what counts as confirmed (FC-R12:
+    /// nothing auto-applies at any confidence).
+    var fieldsWorthRecording: [FieldSuggestion] {
+        fields.filter { suggestion in
+            guard suggestion.confidence > 0 else { return false }
+            guard !suggestion.value.isEmpty else { return false }
+            if suggestion.key == .category,
+               suggestion.value == SpecimenCategory.unknown.rawValue { return false }
+            return true
+        }
+    }
+}
+
 public protocol SmartGuessService: Sendable {
     func guess(image: CaptureImage, ocr: [OCRObservation], codes: [ScannedCode]) async -> SmartGuess
 }

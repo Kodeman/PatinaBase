@@ -1,8 +1,9 @@
 //  S3DestinationScreen.swift
 //  Capture
 //
-//  S3 · Destination. Makes the catch-vs-keep decision explicit, recommending from
-//  the record's completeness (any unconfirmed guess → Inbox by default, F-12).
+//  S3 · Destination. Makes the catch-vs-keep decision explicit. The recommendation
+//  is held at Inbox until wave 3's visit kinds can tell a sourcing day from a
+//  site walk (spec Flow 6, F-12).
 //  On success it hands off to the S4 (saved) or S5 (inbox) terminal.
 //  NOT the only caller of sync.route(): ViewfinderModel.saveFromCard() also
 //  commits a capture directly from the C3 card when a destination was already
@@ -59,7 +60,14 @@ private struct S3Content: View {
         if specimen.destination == .library || specimen.destination == .inbox {
             return specimen.destination
         }
-        return specimen.hasUnconfirmedGuess ? .inbox : .library
+        // Held at Inbox on purpose (spec Flow 6), regardless of confidence — no
+        // confidence floor ships in wave 2. The hardcoded guess used to make
+        // hasUnconfirmedGuess always true; with a real reader, a photo the
+        // reader cannot place at all now records nothing, which reads as
+        // confirmed and would recommend Library — mint a product — for a photo
+        // of a damaged baseboard. Wave 3 gates Library on a sourcing visit, and
+        // this line goes away with it.
+        return .inbox
     }
 
     var body: some View {
