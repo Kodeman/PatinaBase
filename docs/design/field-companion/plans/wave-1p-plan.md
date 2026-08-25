@@ -2086,6 +2086,249 @@ git push origin feat/field-companion-w1p
 
 ---
 
+## Task 4b: Cover the letterhead's own union (plan defect, found in Task 4 review)
+
+**Why this exists.** Task 4's reviewer found that `letterhead-instruments.tsx` carries a
+*second*, independently written implementation of the same merge / dedupe / sort logic as
+`useClientRoomScans` — and it has **zero coverage of that logic**. Every test touching the file
+mocks `auth.getUser()` to return `{ user: null }`, so `designerId` is always `null` and the
+designer leg always short-circuits to `Promise.resolve([])`. The test Task 4 Step 7 added only
+exercises the client leg. In the reviewer's words: *"If this file's union were silently reverted,
+broken, or had its overwrite order flipped, every currently-passing test would still pass."*
+
+The logic was manually verified correct. This task makes that verifiable. **This is a defect in
+the plan (Step 7 was too weak), not in Task 4's implementation** — no production code changes.
+
+**Files:**
+- Create: `apps/designer-portal/src/components/document/__tests__/letterhead-scan-union.test.tsx`
+
+A NEW file rather than an edit to `letterhead-instruments-scan-door.test.tsx`: that suite's
+`@patina/supabase` mock returns one fixed row regardless of `.eq()` arguments, which is exactly
+what makes it blind here. This suite needs a per-leg mock, and the existing suite's four passing
+cases should not be disturbed.
+
+**Interfaces:** Consumes `LetterheadInstruments`. Produces nothing.
+
+- [ ] **Step 1: Write the test**
+
+```tsx
+/**
+ * `useClientScans` (letterhead-instruments.tsx) — the designer-scan union, Wave 1P.
+ *
+ * The sibling suite (letterhead-instruments-scan-door.test.tsx) mocks auth.getUser() to
+ * `{ user: null }` in every case, so the designer leg there never runs. This suite exists to
+ * exercise it: a per-leg mock keyed on the `.eq('user_id', …)` argument, so the client leg and
+ * the designer leg can return different rows.
+ *
+ * Pins Ruling 4-B (the door prefers the CLIENT's scan) and the dedupe precedence
+ * (the designer's stamp wins a shared id, so a self-scan reads as hers).
+ */
+import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { LetterheadInstruments } from '../letterhead-instruments';
+
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
+interface ScanRow {
+  id: string;
+  name: string;
+  created_at: string;
+  images: unknown[];
+}
+
+/** Rows per `room_scans.user_id`, so the two legs can differ. */
+const scansByUser: Record<string, ScanRow[]> = {};
+/** The signed-in designer, or null for a signed-out read. */
+let designerId: string | null = 'designer-uid';
+
+jest.mock('@patina/supabase', () => ({
+  createBrowserClient: () => ({
+    from: () => ({
+      select: () => ({
+        eq: (_column: string, userId: string) => ({
+          order: () => ({
+            limit: () =>
+              Promise.resolve({ data: scansByUser[userId] ?? [], error: null }),
+          }),
+        }),
+      }),
+    }),
+    storage: {
+      from: () => ({
+        createSignedUrls: () => Promise.resolve({ data: [], error: null }),
+      }),
+    },
+    auth: () => undefined,
+    useProjectV2: () => ({ data: undefined }),
+  }),
+  useProjectV2: () => ({ data: undefined }),
+  useProjectRoster: () => ({ data: [] }),
+  // Every scan resolves a hero with a ready-to-use URL, so the door's
+  // `withImage` filter keeps them all and nothing needs signing.
+  resolveCoverPhoto: () => ({ image_url: 'https://example.com/hero.jpg' }),
+  publicUrlToPath: () => null,
+}));
+
+jest.mock('@/hooks/use-margin-items', () => ({ invalidateMarginSurfaces: jest.fn() }));
+jest.mock('@/hooks/use-project-lifecycle', () => ({
+  useSaveProjectVitals: () => ({ mutate: jest.fn(), isPending: false }),
+}));
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
+}));
+jest.mock('../mobile/mobile-shell', () => ({ useMobilePrimaryAction: jest.fn() }));
+jest.mock('../client-mirror', () => ({ ClientMirror: () => null }));
+jest.mock('../proposal-preview', () => ({ ProposalPreview: () => null }));
+
+function scan(id: string, createdAt: string): ScanRow {
+  return { id, name: id, created_at: createdAt, images: [] };
+}
+
+function renderInstruments() {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={qc}>
+      <LetterheadInstruments
+        projectId="proj-1"
+        clientProfileId="client-1"
+        clientName="The Ellsworths"
+        engagementId={null}
+      />
+    </QueryClientProvider>,
+  );
+}
+
+beforeEach(() => {
+  for (const key of Object.keys(scansByUser)) delete scansByUser[key];
+  designerId = 'designer-uid';
+  mockPush.mockClear();
+});
+
+describe('LetterheadInstruments — the designer-scan union (Wave 1P)', () => {
+  it("opens the CLIENT's scan even when the designer has a newer one (Ruling 4-B)", async () => {
+    scansByUser['client-1'] = [scan('client-scan', '2026-01-01T00:00:00Z')];
+    scansByUser['designer-uid'] = [scan('my-newer-scan', '2026-08-01T00:00:00Z')];
+
+    renderInstruments();
+
+    const door = await screen.findByText('The scan');
+    fireEvent.click(door);
+    expect(mockPush).toHaveBeenCalledWith('/room/client-scan?from=document');
+  });
+
+  it("surfaces the designer's OWN scan, labelled 'Your scan', when the client has none", async () => {
+    // The whole point of spec §11.2: before the union this door did not exist here at all.
+    scansByUser['client-1'] = [];
+    scansByUser['designer-uid'] = [scan('my-scan', '2026-08-01T00:00:00Z')];
+
+    renderInstruments();
+
+    const door = await screen.findByText('Your scan');
+    fireEvent.click(door);
+    expect(mockPush).toHaveBeenCalledWith('/room/my-scan?from=document');
+    expect(screen.queryByText('The scan')).toBeNull();
+  });
+
+  it("reads a self-scan as hers when the designer IS the client (dedupe precedence)", async () => {
+    const shared = scan('shared-scan', '2026-05-01T00:00:00Z');
+    scansByUser['client-1'] = [shared];
+    scansByUser['designer-uid'] = [shared];
+
+    renderInstruments();
+
+    // The designer leg lands last, so its stamp wins the shared id.
+    expect(await screen.findByText('Your scan')).toBeInTheDocument();
+    expect(screen.queryByText('The scan')).toBeNull();
+  });
+
+  it('falls back to the client leg alone when nobody is signed in', async () => {
+    designerId = null;
+    scansByUser['client-1'] = [scan('client-scan', '2026-01-01T00:00:00Z')];
+    scansByUser['designer-uid'] = [scan('never-read', '2026-08-01T00:00:00Z')];
+
+    renderInstruments();
+
+    expect(await screen.findByText('The scan')).toBeInTheDocument();
+    expect(screen.queryByText('Your scan')).toBeNull();
+  });
+});
+```
+
+⚠ The `auth` entry in the mock above is a placeholder — `useClientScans` calls
+`supabase.auth.getUser()`. Replace it with:
+
+```tsx
+    auth: {
+      getUser: () =>
+        Promise.resolve({ data: { user: designerId ? { id: designerId } : null } }),
+    },
+```
+
+and delete the stray `useProjectV2` key nested inside `createBrowserClient`'s return. Write the
+mock with that correction applied; the block above is otherwise literal.
+
+- [ ] **Step 2: Run it**
+
+Run:
+```bash
+pnpm --filter @patina/designer-portal test -- src/components/document/__tests__/letterhead-scan-union.test.tsx
+```
+Expected: PASS, 4 tests. These characterise code that already exists and was manually verified —
+a first-run pass is the expected outcome.
+
+**If any case FAILS, stop and report it.** A failure here means Task 4's letterhead union is
+genuinely wrong in a way review missed, which is exactly what this task was written to detect.
+Do not adjust the assertions to match the behaviour.
+
+- [ ] **Step 3: Confirm the suite is not vacuous**
+
+Temporarily edit `letterhead-instruments.tsx`'s picker (`:266-271`) to drop the client
+preference — `const scan = useMemo(() => (scans ?? []).find((s) => s.image_url) ?? null, [scans])`
+— re-run the suite, and confirm the first case now FAILS. **Then revert the edit with
+`git checkout -- apps/designer-portal/src/components/document/letterhead-instruments.tsx`** and
+re-run to confirm 4/4 green again. Report both results. Do not commit the temporary edit.
+
+- [ ] **Step 4: Run the sibling suites**
+
+Run:
+```bash
+pnpm --filter @patina/designer-portal test -- src/components/document/__tests__/letterhead-instruments-scan-door.test.tsx src/components/document/__tests__/call-sheet-doorways.test.tsx src/components/document/__tests__/letterhead-scan-union.test.tsx
+```
+Expected: 3 suites pass; the two pre-existing ones keep their counts (21 tests between them).
+
+- [ ] **Step 5: Gate and commit**
+
+Run:
+```bash
+pnpm type-check
+```
+Expected: 30 successful, 30 total.
+
+```bash
+git add apps/designer-portal/src/components/document/__tests__/letterhead-scan-union.test.tsx
+git commit -m "test(document): cover the letterhead's own designer-scan union
+
+Task 4's review found that letterhead-instruments.tsx carries a second,
+independently written copy of the merge/dedupe/sort logic with no
+coverage of it: every existing test mocks auth.getUser() to a null user,
+so the designer leg never runs and the union could be reverted with
+every test still green.
+
+A per-leg mock keyed on the .eq('user_id', ...) argument, pinning
+Ruling 4-B (the door prefers the client's scan), the 'Your scan' label,
+the dedupe precedence on a shared id, and the signed-out fallback.
+Verified non-vacuous by removing the client preference and watching the
+first case fail. No production code changed." -- apps/designer-portal/src/components/document/__tests__/letterhead-scan-union.test.tsx
+git push origin feat/field-companion-w1p
+```
+
+---
+
 ## Wave acceptance (run after Task 6)
 
 Plan §1.4's acceptance, measured honestly.
