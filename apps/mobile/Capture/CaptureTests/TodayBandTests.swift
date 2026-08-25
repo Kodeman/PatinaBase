@@ -359,4 +359,27 @@ struct TodayBandTests {
         // An undecided draft still owes a decision, so it counts.
         #expect(store.newDraft(owner: owner).isUnplaced)
     }
+
+    // MARK: - Companion hint (Invariant V)
+
+    @Test func theCompanionHintNamesTheVisitAndOffersOneAction() {
+        let band = FieldTodayBandBuilder.build(
+            visitState: .active(openVisit(startedAt: now.addingTimeInterval(-600),
+                                          lastActivityAt: now)),
+            visitCaptures: [], unplaced: [],
+            pendingScanUploads: 0, queued: 0, isOffline: false, now: now)
+        let hint = FieldTodayBand.companionHint(for: band)
+        #expect(hint?.text == "Maple St · Living")
+        #expect(hint?.action.id == "visit.end")
+        #expect(hint?.action.label == "End visit")
+    }
+
+    @Test func withNoVisitTheCompanionOffersTheDoor() {
+        let band = FieldTodayBandBuilder.build(
+            visitState: .none, visitCaptures: [], unplaced: [],
+            pendingScanUploads: 0, queued: 0, isOffline: false, now: now)
+        let hint = FieldTodayBand.companionHint(for: band)
+        #expect(hint?.action.id == "visit.open")
+        #expect(hint?.action.label == "Start a visit")
+    }
 }

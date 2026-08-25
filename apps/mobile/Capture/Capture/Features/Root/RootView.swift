@@ -242,6 +242,14 @@ struct RootView: View {
             coordinator.switchRealm(.work)
         case "realm.camera":
             coordinator.switchRealm(.camera)
+        case "visit.open":
+            coordinator.present(.visit)
+        case "visit.end":
+            // A visit started later mints a NEW visitID by design; this does not
+            // re-attribute anything already captured under the closed one.
+            _ = CaptureSessionContextStore.shared.endVisit(
+                identity: CaptureSessionIdentity(userID: container.session.userID,
+                                                 workspaceID: container.session.workspaceID))
         default:
             break
         }

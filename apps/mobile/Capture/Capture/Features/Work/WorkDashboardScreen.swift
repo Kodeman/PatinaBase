@@ -196,6 +196,11 @@ struct WorkDashboardScreen: View {
     }
 
     private func updateCompanionHint() {
+        if let visitHint = FieldTodayBand.companionHint(for: model.todayBand),
+           model.todayBand.visit != .none {
+            companion.send(.collapse(hint: visitHint.text, action: visitHint.action))
+            return
+        }
         let hint: String
         let needsYouCount = model.attention.needsYou.count
         if needsYouCount == 1 {

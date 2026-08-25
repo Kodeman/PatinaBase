@@ -111,3 +111,30 @@ public enum FieldTodayBandBuilder {
                               isOffline: isOffline)
     }
 }
+
+public extension FieldTodayBand {
+    struct CompanionHint: Equatable, Sendable {
+        public let text: String
+        public let action: FieldCompanionAction
+    }
+
+    /// Invariant V on every non-camera screen: the visit label plus ONE action.
+    static func companionHint(for band: FieldTodayBand) -> CompanionHint? {
+        switch band.visit {
+        case .none:
+            return CompanionHint(
+                text: "No visit open",
+                action: FieldCompanionAction(id: "visit.open", label: "Start a visit"))
+        case .open(let label, _, _, _, _):
+            return CompanionHint(
+                text: label,
+                action: FieldCompanionAction(id: "visit.end", label: "End visit",
+                                             role: .secondary))
+        case .stale(let label, _):
+            return CompanionHint(
+                text: "Still at \(label)?",
+                action: FieldCompanionAction(id: "visit.end", label: "End visit",
+                                             role: .secondary))
+        }
+    }
+}
