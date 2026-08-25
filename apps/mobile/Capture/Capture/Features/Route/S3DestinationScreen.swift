@@ -3,8 +3,12 @@
 //
 //  S3 · Destination. Makes the catch-vs-keep decision explicit, recommending from
 //  the record's completeness (any unconfirmed guess → Inbox by default, F-12).
-//  This is the single place that calls sync.route(); on success it hands off to
-//  the S4 (saved) or S5 (inbox) terminal.
+//  On success it hands off to the S4 (saved) or S5 (inbox) terminal.
+//  NOT the only caller of sync.route(): ViewfinderModel.saveFromCard() also
+//  commits a capture directly from the C3 card when a destination was already
+//  chosen. Both routes emit capture.placed / capture.unplaced with the same
+//  shape — this is the "Where should this go?" route, reached on the first
+//  capture of a session or any deliberate revisit.
 
 import SwiftUI
 import CaptureKit
@@ -25,7 +29,8 @@ struct S3DestinationScreen: View {
             if let specimen {
                 S3Content(
                     specimen: specimen, store: store, sync: sync,
-                    session: session, coordinator: coordinator)
+                    session: session, coordinator: coordinator,
+                    analytics: analytics)
             } else {
                 RouteMissingSpecimen()
             }
@@ -44,6 +49,7 @@ private struct S3Content: View {
     let sync: any CaptureSyncService
     let session: any SessionProviding
     let coordinator: CaptureCoordinator
+    let analytics: any CaptureAnalytics
     private let sessionContext = CaptureSessionContextStore.shared
 
     @State private var routing: CaptureDestination?
@@ -147,6 +153,16 @@ private struct S3Content: View {
             do {
                 try await sync.route(specimen.id, to: destination)
                 remember(destination)
+                // The program's headline metric — S3 is the OTHER commit route
+                // (ViewfinderModel.saveFromCard() is the first): whether this
+                // capture actually landed on a project, via S1's persisted
+                // routing on `specimen.venue`, or is committing roving.
+                if let venue = specimen.venue, venue.projectId != nil {
+                    analytics.event("capture.placed", ["basis": "manual",
+                                                        "has_room": String(venue.projectRoomId != nil)])
+                } else {
+                    analytics.event("capture.unplaced", [:])
+                }
                 routing = nil
                 coordinator.present(destination == .library
                                     ? .savedTerminal(specimen.id)

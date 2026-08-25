@@ -222,10 +222,12 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
                 }
                 if let error {
                     continuation.finish(throwing: error)
-                    // The OTHER door to an abandoned note: VoiceNoteSheet.begin()'s
-                    // catch flips to manual entry without calling finish(), and its
-                    // end()/discard() are both gated on isRecording, so no later
-                    // user action can reach finish() either.
+                    // The OTHER door to an abandoned note (recognition erroring
+                    // out, as opposed to the engine-start failure below). Tears
+                    // the note down itself and emits its own reason:"error"
+                    // voice.finish. VoiceNoteSheet.begin()'s catch also calls
+                    // voice.finish() afterward — safe, because finish() guards
+                    // on noteIsActive and finds nothing left to do by then.
                     let service = self
                     DispatchQueue.main.async { service?.endAbandonedNote() }
                 }
@@ -245,7 +247,25 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
 
     @MainActor
     public func finish() async -> VoiceNoteResult {
+        // finish() must be safe to call SPECULATIVELY: Discard now always
+        // awaits it (Task 15), and VoiceNoteSheet's own error catch does too.
+        // A note the cap already ended, or one that was never started, has
+        // nothing left to stop — and must not re-emit voice.finish under a
+        // second, falsely-labelled reason, deactivate the shared audio
+        // session a second time (the reason deinit below guards it, R114 —
+        // ARKit/RoomPlan run in this app too), or touch a tap that may never
+        // have been installed.
+        let wasActive = noteIsActive
         noteIsActive = false
+        guard wasActive else {
+            return VoiceNoteResult(
+                transcript: latestTranscript,
+                audioFilename: audioFilename,
+                audioSegments: audioSegments,
+                onDevice: onDeviceRecognition,
+                durationSeconds: recordedDuration
+            )
+        }
         // Fixes the over-report: a note the cap already ended has an EARLIER
         // stoppedAt from rotate(), so this leaves it alone. Only a note that
         // is stopping HERE, for the first time, gets `now`.
@@ -403,15 +423,18 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         if audioFilename == nil { audioFilename = closed.name }
     }
 
-    /// Tear down a note no consumer will call finish() on. Two doors reach it —
-    /// the engine failing to start, and recognition erroring out — and both leave
-    /// the sheet on manual entry with finish() unreachable. Without this the mic
-    /// stays live, the file keeps growing, other apps stay ducked, and both
+    /// Tear down a note on an ERROR door — the engine failing to start, or
+    /// recognition erroring out — and emit its own voice.finish under
+    /// reason:"error", distinguishable from a clean user stop. Without this the
+    /// mic stays live, the file keeps growing, other apps stay ducked, and both
     /// observers stay armed to reopen segments behind a manual-entry sheet.
-    /// Idempotent: a later finish() finds nothing left to do.
+    /// Idempotent: guarded on noteIsActive, so a consumer's own later finish()
+    /// call (VoiceNoteSheet's catch calls it too) finds nothing left to do and
+    /// does not double-emit under reason:"manual".
     private func endAbandonedNote() {
         guard noteIsActive else { return }
         noteIsActive = false
+        if stoppedAt == nil { stoppedAt = Date() }
         removeObservers()
         stopEngineAndCloseSegment()
         // On the engine-start door the task was created and never fed: without
@@ -422,6 +445,7 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         request = nil
         task = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        emitFinish(reason: "error")
     }
 
     private func stopEngineAndCloseSegment() {
