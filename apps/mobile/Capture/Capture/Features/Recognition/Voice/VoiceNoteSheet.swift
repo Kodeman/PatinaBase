@@ -49,7 +49,13 @@ struct VoiceNoteSheet: View {
             Spacer(minLength: 0)
         }
         .accessibilityIdentifier(CaptureScreenID.n4Voice.rawValue)
-        .onDisappear { player.stop() }
+        .onDisappear {
+            player.stop()
+            // SwiftUI does not call onEnded for a CANCELLED drag - a system edge
+            // swipe or the sheet's interactive-dismiss pan stealing the touch -
+            // and a latch left set means no later press can begin() at all.
+            gestureHeld = false
+        }
         .task {
             analytics.screen("N4.voice")
             guard analytics.isFeatureEnabled("field-companion-voice") else {
@@ -201,7 +207,11 @@ struct VoiceNoteSheet: View {
     // MARK: - Recording lifecycle
 
     private func begin() {
-        guard authorized != false else { manualFallback = true; return }
+        guard authorized != false else {
+            manualFallback = true
+            gestureHeld = false
+            return
+        }
         // Without these, the instant take 2 starts the sheet prints the ladder
         // line and offers Play over a live recording - take 1's segments are
         // still in `result` - and Play would seize the session the recorder
@@ -240,6 +250,7 @@ struct VoiceNoteSheet: View {
         } catch {
             manualFallback = true
             isRecording = false
+            gestureHeld = false
         }
     }
 

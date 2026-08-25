@@ -33,6 +33,11 @@ public final class VoiceSegmentPlayer: NSObject, AVAudioPlayerDelegate {
     }
 
     public func stop() {
+        // Five callers reach here on paths where nothing ever sounded - every
+        // take start among them - and an unguarded setActive(false) there
+        // un-ducks her music microseconds before the recorder re-ducks it, or
+        // aims a deactivation at a live .record session.
+        guard player != nil || isPlaying else { return }
         player?.stop()
         player = nil
         queue = []

@@ -135,6 +135,7 @@ struct V1SessionTrayScreen: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Open capture")
         }
     }
 
