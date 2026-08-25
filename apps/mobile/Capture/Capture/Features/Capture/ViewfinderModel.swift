@@ -41,8 +41,25 @@ final class ViewfinderModel {
     private(set) var cameraAuthorization: CameraAuthorization = .notDetermined
 
     // ── Venue (S1 stamp, auto) ──
-    var venueLabel: String?
     private var venueStamp: VenueStamp?
+    /// True once the location lookup has come BACK — success or nothing found.
+    /// `venueStamp != nil` cannot stand in for it: a lookup that finds no
+    /// placemark would otherwise leave the chip reading "Locating venue…" for
+    /// the rest of the session.
+    private var venueSettled = false
+
+    // ── The visit (Invariant V) ──
+    var visitChip: FieldVisitChip = FieldVisitChipBuilder.chip(for: .none, isLocating: true)
+    private(set) var visitState: CaptureVisitState = .none
+
+    func refreshVisit(now: Date = Date()) {
+        visitState = sessionContext.visitState(
+            identity: CaptureSessionIdentity(userID: session.userID,
+                                             workspaceID: session.workspaceID),
+            now: now)
+        visitChip = FieldVisitChipBuilder.chip(for: visitState,
+                                               isLocating: !venueSettled && !visitState.isVisit)
+    }
 
     // ── Session tray (V1) ──
     var sessionCount: Int = 0
@@ -87,6 +104,7 @@ final class ViewfinderModel {
     func start() async {
         analytics.screen(CaptureScreenID.c1Viewfinder.rawValue)
         visitID = currentSessionContext().visitID
+        refreshVisit()
         refreshSessionCount()
         mode = camera.currentMode
         isLowLight = camera.isLowLight
@@ -124,9 +142,9 @@ final class ViewfinderModel {
     }
 
     private func stampVenue() async {
-        guard let venue = await location.currentVenue() else { return }
-        venueStamp = venue
-        venueLabel = venue.placemarkName ?? venue.room ?? "Stamped here"
+        venueStamp = await location.currentVenue()
+        venueSettled = true
+        refreshVisit()
     }
 
     private func refreshSessionCount() {

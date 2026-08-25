@@ -3,7 +3,7 @@
 //
 //  C1 — the app's home. A live camera (a dark "scene" gradient when there are no
 //  frames, e.g. the simulator's MockCameraService) under five thumb-reach
-//  regions: the auto-stamped venue chip, the C2 framing guides, the mode
+//  regions: the visit chip, the C2 framing guides, the mode
 //  selector, the shutter, and the session-tray handle. Low light (R1) surfaces a
 //  torch + hint + Night chip without ever blocking the shutter. The shutter tap
 //  freezes the frame into a C3 card; a hold rolls a C4 multi-shot into one
@@ -18,9 +18,11 @@ struct ViewfinderScreen: View {
     @State private var model: ViewfinderModel
     @State private var reachability = FieldReachability()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let coordinator: CaptureCoordinator
 
     init(container: AppContainer, coordinator: CaptureCoordinator) {
         _model = State(wrappedValue: ViewfinderModel(container: container, coordinator: coordinator))
+        self.coordinator = coordinator
     }
 
     var body: some View {
@@ -113,13 +115,15 @@ struct ViewfinderScreen: View {
         }
     }
 
-    // MARK: Top bar — venue (left) + night/torch status (right)
+    // MARK: Top bar — the visit (left) + night/torch status (right)
 
     private var topBar: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 8) {
                 ViewfinderWorkButton(action: model.openWork)
-                ViewfinderVenueChip(label: model.venueLabel)
+                ViewfinderVisitChip(chip: model.visitChip) {
+                    coordinator.present(.visit)
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 8) {
