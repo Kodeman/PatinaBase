@@ -3,8 +3,8 @@
 //
 //  The Vision-label → SpecimenCategory mapping, lifted out of the app target so
 //  it runs under capture-gate.sh (CaptureTests links CaptureKit alone). The
-//  Vision request that produces the labels stays app-side and is device-verified;
-//  this table is pure and is the part that quietly rots.
+//  Vision request that produces the labels stays app-side and is owed a device
+//  pass; this table is pure and is the part that quietly rots.
 
 import Foundation
 

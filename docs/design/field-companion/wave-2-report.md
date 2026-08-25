@@ -1,6 +1,9 @@
 # Field Companion · Wave 2 report — "Nothing the app says about a capture is a lie"
 
-**Branch:** `feat/field-companion-w2` · **push owed — awaiting orchestrator** · **merge-base with main:** `6d91eb1b6875a31e8a516c256d7c3901a396f430` · **branch head:** `f41150e37f4e9bff0dc80c025e9b13ce5060cb27`
+**Branch:** `feat/field-companion-w2` · **push owed — awaiting orchestrator** · **merge-base with main:** `6d91eb1b6875a31e8a516c256d7c3901a396f430` · **branch head:** `65606a31551363e890c52952876864835bac15f8`
+
+> The head above advances by one commit — this fix pass — the moment it lands. The orchestrator
+> should merge on the branch tip at merge time, not on any sha pinned in this prose.
 
 **Gates:** build ✔ · tests ✔ (350 tests in 51 suites) · lint ✔ · `GATE EXIT=0` · separate `swiftlint lint --quiet --strict` → `lint exit=0`
 
@@ -86,7 +89,7 @@ them here — was not needed and was not taken.
 
 ## What landed
 
-Six commits across five tasks, plus the merge. No commit touches an iOS file outside the wave's
+Nine commits across five tasks, plus the merge. No commit touches an iOS file outside the wave's
 declared seams.
 
 | Task | Commits | Outcome |
@@ -175,14 +178,23 @@ scans an ordered table with substring `contains`, so the first entry that matche
 
 This is pre-existing — but Wave 2 is what makes it fire. Before this wave the path was
 unreachable; now it runs on every capture. It is contained by **FC-R12**: nothing auto-applies,
-she confirms every read, so a wrong read costs a tap, not a wrong record. The new test
-`everyKeywordInTheTableResolvesToItsOwnCategory` pins the current ordering, so the shadowing
-cannot silently spread further without a red test.
+she confirms every read, so a wrong read costs a tap, not a wrong record.
+
+**The keyword-table guard is narrower than it sounds.** The new test
+`everyKeywordInTheTableResolvesToItsOwnCategory` pins the table against itself — it catches a
+reordering or a newly shadowed *entry*. It does **not** cover the label space where the defect
+actually bites: `"table lamp"`, `"desk lamp"` and `"tapestry"` are not table entries, so no test
+covers them. The shadowing can still spread silently through labels the table itself never
+expresses.
 
 Worth noting the shape of the fix when someone takes it: reordering the table trades one shadow
 for another. The real fix is longest-match-wins, or an explicit priority column.
 
 ### 2. `Specimen.recordSmartGuess(_:)` extraction
+
+**This is the highest-value owed item in this wave.** Its failure mode is "test green, ship
+broken," and the remedy is ~8 lines of pure CaptureKit. It should be a **Wave 3 task-0 item**, not
+merely a carried-forward bullet.
 
 `SmartGuessTests`' `record(_:onto:)` helper duplicates `ViewfinderModel.applySmartGuess`'s
 recording loop line for line, because C1 forces the test out of the app target. The two were
@@ -267,6 +279,32 @@ session with Kody, not an engineering step, and the spec says so.
   in wave 3. Rewriting the README's premise before the app matches it would be a new false claim —
   which is the one thing this wave is about not doing.
 
+### 12. `.dimensions` is a live instance of the F-1 defect class, not merely a latent hole
+
+`Specimen+Accessors.swift`'s `setValue` `break`s on `.dimensions` without writing a value
+(`:153` — dimensions live in `measurements`; use `addMeasurement`), but it stamps
+`provenanceRaw` and calls `touch()` outside the switch. So a `.dimensions` suggestion would stamp
+guess provenance for a value nobody wrote: the F-1 read-back guard would *pass* (provenance really
+is `.smartGuess`), and `hasUnconfirmedGuess` would flip true anyway. Unreachable today because
+`fieldsWorthRecording` only emits `.category`, `.material` and `.colorway` suggestions. A one-line
+fix is available in `fieldsWorthRecording` (exclude `.dimensions` from what it emits, or handle it
+inside `setValue`).
+
+### 13. N5's smart-guess sheet still badges fields it never guessed
+
+`SmartGuessSheet.swift:71,:103` render `ProvenanceBadge(.smartGuess)` unconditionally, including a
+Category row reading "Unknown." This is the identical defect already fixed on
+`CaptureCardOverlay` — reintroduced on the one screen dedicated to smart guesses. Pre-existing, and
+reachable today only through the verification harness (`CaptureDeepLink.swift:96` is N5's sole
+presenter), so **not a merge blocker** — but it needs to be on Wave 3's list before N5 gets a
+production entry point.
+
+### 14. `everyScreenIDIsUnique` does not guard shared trailing components
+
+It guards suffix-of-full-rawValue collisions. `screen.C6.voice` and `screen.N4.voice` share a final
+dot-component and are not caught by it. One added assertion — no two ids share a final
+dot-component — would catch this before Wave 3 trips on it (see item 8, above).
+
 ---
 
 ## Deferred minors and parked findings
@@ -281,7 +319,9 @@ All 31-plus conductor rulings, each with its cost-if-wrong, are in `waves/wave-2
 
 ## Handoff
 
-- **Branch:** `feat/field-companion-w2`, head `f41150e37f4e9bff0dc80c025e9b13ce5060cb27`
+- **Branch:** `feat/field-companion-w2`, head `65606a31551363e890c52952876864835bac15f8` — this head
+  advances by one commit — this fix pass — the moment it lands; take the branch tip at merge time
+  rather than the sha pinned here
 - **merge-base with main:** `6d91eb1b6875a31e8a516c256d7c3901a396f430` — main is an ancestor of the
   branch, so the merge is a fast-forward or a trivial one
 - **Push is owed to the orchestrator.** `git push` fails from the agent shell on the sandbox proxy.

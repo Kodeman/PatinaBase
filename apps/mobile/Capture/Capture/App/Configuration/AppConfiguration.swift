@@ -94,7 +94,7 @@ public enum AppConfiguration {
     /// All-mock (returns `false`): `-CaptureUseMocks` / `--uitesting`,
     /// `-CaptureUITest`, **or** running on the simulator without
     /// `-CaptureForceReal`. This keeps the screen harness, capture-run.sh,
-    /// capture-run.sh, capture-shots.sh, and previews working by default.
+    /// capture-shots.sh, and previews working by default.
     ///
     /// Real (returns `true`): a physical device by default, or the simulator
     /// with `-CaptureForceReal`.

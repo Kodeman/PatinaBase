@@ -1,12 +1,14 @@
 //  CameraModeSeamTests.swift
 //  CaptureTests
 //
-//  CameraMode is CaseIterable and three views render `ForEach(CameraMode.allCases)`
-//  (ViewfinderControls.swift:191, ViewfinderPlaceholder.swift:38,
-//  CameraPrimingScreen.swift:79). Adding `.voice` to allCases would therefore put
-//  a fifth VOICE pill in the C1 selector whose shutter takes a photo — which is
-//  precisely the class of lie this wave exists to remove. The case lands now
-//  because the enum is a frozen seam edited once; the pill waits for C6 (wave 3).
+//  CameraMode is CaseIterable. Before this wave, three views rendered
+//  `ForEach(CameraMode.allCases)` (ViewfinderControls.swift:191,
+//  ViewfinderPlaceholder.swift:38, CameraPrimingScreen.swift:79 — pre-wave state);
+//  they now read `ForEach(CameraMode.viewfinderSelectable)` instead. If `.voice`
+//  were added back to the selector, it would put a fifth VOICE pill in the C1
+//  selector whose shutter takes a photo — precisely the class of lie this wave
+//  exists to remove. The case lands now because the enum is a frozen seam edited
+//  once; the pill waits for C6 (wave 3).
 
 import Foundation
 import Testing

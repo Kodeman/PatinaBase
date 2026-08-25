@@ -456,9 +456,10 @@ final class ViewfinderModel {
     }
 
     /// Read the frame we just took and record what it says — the real reader,
-    /// not a placeholder. It runs off the shutter path so the C3 card appears at
-    /// once and fills in when the read lands; `setValue` still refuses to let a
-    /// guess clobber anything a tag, a scan, a measure or the designer set.
+    /// not a placeholder. The read is deferred off the synchronous shutter call
+    /// so the shutter does not block on it, and the fields land when it
+    /// completes; `setValue` still refuses to let a guess clobber anything a tag,
+    /// a scan, a measure or the designer set.
     private func applySmartGuess(to draft: Specimen) {
         guard let photo = draft.primaryPhoto else { return }
         let mediaURL = store.mediaURL(for: photo.filename)

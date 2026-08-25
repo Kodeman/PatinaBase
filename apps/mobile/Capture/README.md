@@ -11,7 +11,7 @@ read-only pending decisions, a messages inbox, on-site PO receiving,
 Face-ID-gated QR portal-login approval, and a pro LiDAR site-scan flow that
 attaches a scan to a project. The 8 Work flows (19 screens) sit alongside
 the original 8 capture flows (33 screens) — one `CaptureScreenID` enum, one
-harness, one set of dev-loop scripts drives all 75.
+harness, one set of dev-loop scripts drives all 72 built screens.
 
 ## Screens
 

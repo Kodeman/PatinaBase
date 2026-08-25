@@ -5,7 +5,7 @@
 //  CaptureKit so capture-gate.sh can see them (C1 — CaptureTests links
 //  CaptureKit alone, and HeuristicSmartGuessService is app-side):
 //
-//  1. The Vision-label → category table. The Vision call itself is
+//  1. The Vision-label → category table. The Vision call itself is not yet
 //     device-verified; the mapping is pure and belongs under the gate.
 //  2. What counts as an UNCONFIRMED guess. Until now every capture carried a
 //     hardcoded seating@0.72, so hasUnconfirmedGuess was always true and S3

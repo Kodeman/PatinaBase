@@ -146,10 +146,8 @@ public final class AppContainer {
         }
     }
 
-    /// Everything wave-agent factories build off `WorkServiceDependencies`,
-    /// bundled into one value so `init()` stays under `function_body_length`.
-    /// Real mode only — mock mode wires `CaptureKitMocks` conformers directly
-    /// and has no `WorkServiceDependencies` to build (no client to give it).
+    /// Every protocol-typed Work dependency the app wires in real mode, bundled
+    /// into one value.
     private struct WorkServices {
         let projects: any ProjectsService
         let leads: any LeadsService
@@ -158,12 +156,16 @@ public final class AppContainer {
         let receiving: any ReceivingService
         let portalAuth: any PortalAuthApprovalService
         let siteScan: any SiteScanService
-        /// The concrete: it answers both the designer and the guest protocol, and
-        /// both properties must hold the SAME instance.
+        /// The concrete conforms to both the designer and guest protocol, so one
+        /// `SupabaseSiteRequestService` construction serves both properties.
         let siteRequests: SupabaseSiteRequestService
         let drainer: SiteRequestOutboxDrainer
     }
 
+    /// Everything wave-agent factories build off `WorkServiceDependencies`,
+    /// bundled into `WorkServices` so `init()` stays under `function_body_length`.
+    /// Real mode only — mock mode wires `CaptureKitMocks` conformers directly
+    /// and has no `WorkServiceDependencies` to build (no client to give it).
     private static func makeWorkServices(deps: WorkServiceDependencies) -> WorkServices {
         let siteRequests = SiteRequestServiceFactory.make(deps: deps)
         return WorkServices(
