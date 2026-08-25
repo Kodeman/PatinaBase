@@ -1,0 +1,89 @@
+
+<!-- ══════════════════════════ 02 · THE ASK ══════════════════════════ -->
+<section id="ask" class="dk-sec" data-index-title="The ask, and the method" aria-labelledby="ask-h">
+  <hr class="dk-rule-break" />
+  <p class="dk-eyebrow" data-eyebrow>The ask, and the method</p>
+  <h2 id="ask-h">What was asked, and how we read the paper</h2>
+
+  <p class="dk-lede">
+    Review the designer portal's document interface &mdash; layout, navigation, flow &mdash; with a
+    UX&nbsp;/&nbsp;UI team and an interior-design practitioner team both at the table, and come back
+    with two directions that make it always obvious what to do next and how to reach the items a
+    designer needs.
+  </p>
+
+  <p>
+    The surface under review is <strong>The Document</strong>: <span class="dk-chip">/desk</span> and
+    <span class="dk-chip">/doc/[id]</span> &mdash; one paper per engagement, a fixed seven-section
+    spine from brief through care &mdash; plus the Studio Drawer, &#8984;K, the <span class="dk-chip">g</span>
+    chords, the rooms block, the five shelves and the Drafting Room, across three width tiers: a
+    bottom bar under 1180, a compact icon rail from 1180 to 1439, and the full spine with margin rail
+    and shelved blocks at 1440 and above. It carries an append-only decision ledger through
+    <strong>I143</strong> and eight design decks in forty-five days. Two of the most severe findings ever
+    recorded against it have never been ruled on: <strong>T4</strong>, no fleet view &mdash; &ldquo;show
+    me everything in install&rdquo; has no path &mdash; and <strong>T2</strong>, install is a label on
+    project mode, not a mode. And the <span class="dk-chip">worktable</span> stage-adaptive
+    composition, ruled &ldquo;the destination&rdquo; on 2026&middot;08&middot;15, is merged behind a
+    fail-closed flag and had never been rendered for a human before this week.
+  </p>
+
+  <h3>The method, in one paragraph</h3>
+  <p>
+    We booted the portal against a local database, lifted five documents up the state ladder by RPC
+    so every stage had a real paper to photograph, and took <strong>86 verified screenshots</strong>
+    at 1440, 1280 and 390 across both flag states &mdash; including the first render of the Worktable's
+    four tables anyone has looked at. Then <strong>nine seats</strong> walked the same sixteen-task
+    script over that evidence in one sitting, as one week of work: five UX&nbsp;/&nbsp;UI lenses
+    (information architecture, interaction and next-action clarity, hierarchy across the width tiers,
+    content and lexicon, reach &mdash; keyboard, mobile, accessibility) and four practitioners (a solo
+    principal with six live jobs, the principal of a three-person studio, a junior in her first week,
+    and an FF&amp;E-and-procurement-heavy designer). A Chrome probe drove the live surface for the
+    things a screenshot cannot answer &mdash; the Esc chain, the seven chords, scroll-spy, fold
+    persistence, focus return. The nine seats returned <strong>203 raw findings</strong>, which merged
+    to <strong>101</strong>, which then met <strong>three refuters</strong> in separate contexts &mdash;
+    one checking the code, one checking the decision ledger, one re-driving the browser. A finding
+    survived only if none of the three killed it. <strong>92 survived; 9 were killed.</strong> Only
+    the 92 are quoted below.
+  </p>
+
+  <div class="dk-callout">
+    <p class="dk-eyebrow">Why the nine that died matter</p>
+    <p>
+      Eight were killed by the code &mdash; a seat reported an absence that turned out to be present,
+      just not where they looked. The Orders ledger <em>does</em> print each PO's send and
+      acknowledgement lifecycle in its provenance line. The FF&amp;E line unfold on the paper
+      <em>is</em> PO detail, movement and receiving, with a claim lifecycle and an inspection drawer
+      mounted in place. A date move <em>does</em> draw a full ripple preview &mdash; a dashed ghost
+      layer with moved boundaries and dated labels. <span class="dk-chip">Close the book</span> and
+      <span class="dk-chip">Begin the Direction</span> are both genuinely disabled while their
+      blockers stand. One more was killed by re-driving the browser. This is the shape of the whole
+      problem: <strong>the capability is usually built, and unfound.</strong> Nothing in this deck
+      cites a killed finding as a fact.
+    </p>
+  </div>
+
+  <h3>Where this evidence stops</h3>
+  <ul>
+    <li><strong>Local seeds, not production.</strong> Every screenshot came from a local Supabase with
+      the repo's own seed data and three transient rich seeds re-applied by hand. No production walk
+      was taken, and none is claimed.</li>
+    <li><strong>Synthetic data.</strong> The specimen documents are fixtures. Where the seed had no
+      project carrying both rooms and an active project section, the room-lens probe could not run at
+      all &mdash; that gap is reported as a gap, not filled in from source.</li>
+    <li><strong>No human designer in the loop.</strong> The four practitioner seats are grounded in
+      Patina's own Leah sessions and prior audits, but they are readings of the evidence, not a
+      re-walk with a working designer. Every obviousness score below is a seat's rating of a
+      screenshot, and should be read ordinally.</li>
+    <li><strong>A dev server, not a build.</strong> Load timings were recorded and are not cited as
+      performance evidence. Redis was not running (<span class="dk-chip">127.0.0.1:6379</span> refused),
+      so any Redis-backed path in the orders and projects services was unexercised; nothing on this
+      surface depends on one.</li>
+    <li><strong>The shots carry the dev server's own furniture.</strong> A small dark circular mark at the
+      bottom-left of some screenshots is the Next.js dev-tools indicator, not a product control &mdash; a
+      seat filed it as an unexplained badge overlapping page content, and the code refuter killed the
+      finding for exactly that reason. Read past it.</li>
+    <li><strong>Out of scope by instruction:</strong> the internals of Library, People and Room View,
+      the client portal, iOS, and any schema change. Nothing was built into the product; the decision
+      ledger was not appended to.</li>
+  </ul>
+</section>

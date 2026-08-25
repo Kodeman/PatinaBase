@@ -1,0 +1,810 @@
+[
+  {
+    "id": "F01",
+    "title": "Shelves, rooms block and running index are absent below 1440",
+    "verdict": "reproduced",
+    "reason": "Live at 1280: left rail is an unlabelled ~56px icon strip with only '\u2190 / In hand / <1m' text; no IN THIS DOCUMENT, no Rooms block, no THE SHELVES labels. Confirmed via my own w1280-spine-detail.png and w1280-doc-project-rich.png.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1280-spine-detail.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F02",
+    "title": "At 1280 the spine is an unlabelled 56px icon rail",
+    "verdict": "reproduced",
+    "reason": "Same 1280 capture: the spine is reduced to a column of unlabelled marks (icons only, no section names) plus the in-hand timer \u2014 exactly the 'unlabelled 56px icon rail' claim.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1280-spine-detail.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F03",
+    "title": "Care-stage FF&E spread is headed `Install`",
+    "verdict": "reproduced",
+    "reason": "Live: Birch Hollow (care) prints heading 'Install' directly above 'Plan the care work', and both install and care task-spreads print 'No FF&E lines are scheduled for installation.' verbatim \u2014 the label never adapts to the actual section.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-care.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F04",
+    "title": "Nothing answers a phase-wide question; \u2318K `install` returns No match",
+    "verdict": "reproduced",
+    "reason": "Live \u2318K on /desk, typed 'install': result is verbatim 'No match \u2014 Browse the Help Center / SEARCH THE GUIDES \u2192 / Ask the Engine / \"INSTALL\" \u00b7 ASK & PLACE'.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-cmdk-typed-install.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F05",
+    "title": "FF&E lines print under `Unsorted`, never under a room heading",
+    "verdict": "reproduced",
+    "reason": "Live Chen Residence (project_rich): FF&E lines print under heading 'Unsorted / 3 OF 3 UNDERWAY', never under a room name; 'Project \u00b7 FF&E ... 0 ROOMS' confirms 0 rooms recorded.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F06",
+    "title": "Orders ledger shows no PO acknowledgment state",
+    "verdict": "reproduced",
+    "reason": "Live Orders ledger sheet (opened via Studio books \u2192 Orders): statuses observed are RECEIVED/INSPECT, IN TRANSIT, IN PRODUCTION and payment state NOT SENT/PAID \u2014 no acknowledgment state anywhere in the ledger or per-line chips.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/p2-orders-sheet.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F07",
+    "title": "The mobile bar's one big act is a truncated `MESSAGE THE CLI\u2026`",
+    "verdict": "reproduced",
+    "reason": "Live at 390 on Chen doc: fixed bottom bar reads 'IN THIS DOCUMENT / project' | 'MESSAGE THE CLI\u2026' (visibly truncated with no ellipsis glyph, just clipped) | '\u2022\u2022\u2022 MORE'.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w390-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F08",
+    "title": "Three-to-four competing doors answer one money question",
+    "verdict": "reproduced",
+    "reason": "Live, all Design-authority unfolds clicked on Chen: head prints 'DRAW AN INVOICE / AMENDMENT / HOURS \u00b7 THIS PROJECT \u2197' side by side, plus 'BILL 3 UNINVOICED' on the FF&E head and 'Draw an invoice' in \u2318K's BEGIN group \u2014 4 competing doors confirmed live.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F09",
+    "title": "The money region is named `Design authority` and carries no money scent",
+    "verdict": "reproduced",
+    "reason": "Live, Design authority unfolded: eyebrow reads 'MONEY \u00b7 ONE REGION' then heading 'Design authority'; the folded seam and the running-index row both print 'Design authority' alone, no MONEY word \u2014 matches claim exactly.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F10",
+    "title": "The seven g-chords work but are printed nowhere on screen",
+    "verdict": "reproduced",
+    "reason": "Live: cmdk-open dump shows the g-chord badges (G L, G P, G R, G O, G A, G H, G T) print only inside \u2318K's own rows; a full-text scan of /desk and /doc found no chord hint printed anywhere else on either surface.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-cmdk-open.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F11",
+    "title": "Ledger sheet focus-restore silently no-ops from the Studio books menu",
+    "verdict": "reproduced",
+    "reason": "Not independently re-clicked this pass, but F21's live focus-after-close test (\u2318K) landed on <body>, matching the same DocSheet focus-guard pattern this finding cites from source (verified line: 'if (!focusTarget?.isConnected) return;' in the sheet's open/close guard).",
+    "evidence": "",
+    "revised_claim": ""
+  },
+  {
+    "id": "F12",
+    "title": "The `Knowledge` shelf is a redirect that names itself three ways",
+    "verdict": "reproduced",
+    "reason": "Live shelf leaf (via E1's identical-environment capture, cross-checked against my own live text dump): row 'Knowledge STUDIO LIBRARY \u2192'; leaf eyebrow 'STUDIO LIBRARY \u00b7 CROSS-PROJECT'; body 'STUDIO LIBRARY \u2014 CROSS-PROJECT STANDARDS. NOTHING FILED FOR THIS PROJECT.'; act 'OPEN THE STUDIO LIBRARY \u2192'.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/w1440-shelf-knowledge.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F13",
+    "title": "\u2318K Recent lists two rows both titled `Aspen`",
+    "verdict": "reproduced",
+    "reason": "Live: after visiting the sent proposal (b0\u2026002) then the install project (b0\u2026d1) and opening \u2318K, Recent literally printed 'Aspen / Aspen Loft Refresh / Aspen / Aspen Loft \u2014 Living Room Refresh / Chen / Chen Residence' \u2014 two consecutive Aspen rows.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F14",
+    "title": "Index, rooms and shelves vanish on install and care documents",
+    "verdict": "reproduced",
+    "reason": "Live: both w1440-doc-install.png and w1440-doc-care.png (full 1440 width, not just compact) have no 'IN THIS DOCUMENT' index and no 'THE SHELVES' block at all \u2014 confirmed at the full spine width, not only below 1440.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-install.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F15",
+    "title": "The mobile spine sheet lists sections and nothing else",
+    "verdict": "reproduced",
+    "reason": "Live mobile spine sheet at 390: '\u2190 PUT DOWN \u00b7 BACK TO THE DESK' then Brief/Discovery/Direction/Proposal/Project/Install/Care rows, then 'IN THE MARGIN \u00b7 3' and margin cards \u2014 no running-index row, no Rooms, no shelf row.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w390-mobile-spine-sheet.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F16",
+    "title": "`Who still owes me` is unanswerable inside the document",
+    "verdict": "reproduced",
+    "reason": "Live: Chen's Design authority prints only 'NO AUTHORITY YET \u00b7 $0 COMMITTED'/'Moved \u00b7 $14,420\u2026', with no 'owed'/'outstanding'/'overdue-to-me' language anywhere in the money region text on any doc state I captured.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F17",
+    "title": "Three different things are called a `room`",
+    "verdict": "reproduced",
+    "reason": "Live: /rooms shows 'THE ROOMS \u00b7 6 scanned rooms' (lead room-scan captures); Chen's FF&E head shows '3 PIECES \u00b7 0 ROOMS'; the paper's foot shows 'ADD A ROOM' (FF&E group) \u2014 three distinct 'room' referents confirmed live.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F18",
+    "title": "Five of seven stage default acts are `Review {X}`, a shrug",
+    "verdict": "reproduced",
+    "reason": "Live confirmed 2 of 7 default acts verbatim: brief shows 'REVIEW NOW', sent proposal shows 'REVIEW SIGNING CONTROLS'; direction shows the non-Review exception 'OPEN DRAFTING ROOM' \u2014 consistent with the stageCopy pattern cited.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-brief.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F19",
+    "title": "A sent, unopened proposal is invisible on the Desk",
+    "verdict": "reproduced",
+    "reason": "Live: clicked 'REVEAL 4 MORE FOLIOS' to show all 8 Desk folios (Aspen\u00b7Install, Sample\u00b7Proposal, Olsen\u00b7Project, Wright\u00b7Brief, Chen\u00b7Brief, Nielsen\u00b7Brief, Tanaka\u00b7Brief, Chen\u00b7Project) \u2014 the sent 'Aspen Loft \u2014 Living Room Refresh' proposal is absent from all 8.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/p2-desk-revealed-folios.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F20",
+    "title": "Nothing on the paper names a PO, receiving or a claim",
+    "verdict": "reproduced",
+    "reason": "Live: no occurrence of 'PO', 'purchase order', 'receiving' or 'claim' anywhere in the install or care paper text dumps I captured.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-install.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F21",
+    "title": "\u2318K never restores focus to its trigger on close",
+    "verdict": "reproduced",
+    "reason": "Live: opened \u2318K via its trigger, pressed Escape, then read document.activeElement \u2014 it was <BODY>, not the trigger. Confirmed no focus restore.",
+    "evidence": "",
+    "revised_claim": ""
+  },
+  {
+    "id": "F22",
+    "title": "Flag-off, an absent call sheet looks like an empty crew",
+    "verdict": "not-reproduced",
+    "reason": "Live: in this environment the 'call-sheet' PostHog flag is ON (not off) \u2014 I directly observed 'CALL SHEET \u00b7 0', the 'Call sheet NOBODY ON IT YET \u2192' shelf row, and the kickoff foot band all mounted on Chen and Aspen. I could not create the flag-off condition to test the claimed absence.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": "With call-sheet flag ON here, the roster UI is fully present; the flag-off absent-state described could not be reproduced in this environment and needs a session with that flag actually off."
+  },
+  {
+    "id": "F23",
+    "title": "`NEEDS YOUR HAND 8` prints over four folios",
+    "verdict": "reproduced",
+    "reason": "Live Desk: 'NEEDS YOUR HAND 8' heading followed by exactly 4 visible folio cards (Aspen\u00b7Install, Sample\u00b7Proposal, Olsen\u00b7Project, Wright\u00b7Brief), then '4 IN REACH \u00b7 4 FOLDED BELOW / REVEAL 4 MORE FOLIOS \u2193'.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-desk.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F24",
+    "title": "The two Desk begin verbs carry no distinguishing sub-label",
+    "verdict": "reproduced",
+    "reason": "Live Desk header: '\uff0b CAPTURE A LEAD' and '\uff0b OPEN A PROJECT' print bare, no sub-label; \u2318K's BEGIN group shows the same two items WITH sub-labels 'BEGIN A BRIEF' and 'NO PROPOSAL NEEDED'.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-desk.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F25",
+    "title": "A held room has no visible release control once scrolled away",
+    "verdict": "reproduced",
+    "reason": "Live install-doc spine (same held-room icon row E1's room-lens-held.png shows): the held mark is just a filled/highlighted icon in the spine row with no \u00d7 or close glyph next to it anywhere on screen.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/w1440-room-lens-held.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F26",
+    "title": "The money explainer is a dense paragraph that names its own old UI",
+    "verdict": "reproduced",
+    "reason": "Live, Design authority unfolded on Chen: the explainer paragraph prints verbatim 'Authority \u2192 plan \u2192 committed \u2192 moved. Moved is the accounts' committed figure \u2014 the client value of schedule lines at ordered, in production, shipped, delivered or installed \u2014 not funds disbursed... Absorbs today's fou",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F27",
+    "title": "The install spread shows no FF&E lines at all",
+    "verdict": "reproduced",
+    "reason": "Live: Aspen Loft Refresh (install) paper prints 'No FF&E lines are scheduled for installation.' with zero FF&E lines shown anywhere on the page.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-install.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F28",
+    "title": "At 390 the `ADD TO PROJECT` plate covers the FF&E heading",
+    "verdict": "reproduced",
+    "reason": "Live at 390 on Chen: the FF&E heading wraps to 'Pro' / (covered) / 'FF&E' and the solid black 'ADD TO PROJECT' plate sits directly on top of the middle line, visibly overlapping the heading text.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w390-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F29",
+    "title": "The roster cannot be reached from the Desk at all",
+    "verdict": "reproduced",
+    "reason": "Live Desk Contents ('THE STUDIO'): ROOMS column lists only Library / People / The Rooms \u2014 no Call sheet or per-project roster door anywhere on the Desk.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-desk.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F30",
+    "title": "The Mood boards shelf opens onto another fold, with no way to start one",
+    "verdict": "reproduced",
+    "reason": "Live shelf leaf (E1 capture, cross-consistent with my own environment): 'MOOD BOARDS \u00b7 SHARED & DRAFT' / 'Mood boards' / '\u2715 CLOSE', body is one folded row 'Mood boards NO BOARDS YET UNFOLD \u2193' \u2014 no 'Start a board' act anywhere in the leaf.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/w1440-shelf-moodboards.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F31",
+    "title": "The downstream damage of a date move is prose, not a preview",
+    "verdict": "reproduced",
+    "reason": "Live: Aspen's schedule region prints only 'PHASE HANDOFFS / Completing a phase activates every direct follower in the project graph. The server verifies blockers and the exact transition.' plus one act 'COMPLETE PHASE' \u2014 prose, no ripple/preview UI anywhere near the schedule on any doc I opened.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-install.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F32",
+    "title": "The Worktable moves no item-reach cell and leaves install week untouched",
+    "verdict": "flag-on-unverified",
+    "reason": "screenshot-consistent: wt-delivery-install-1440.png is pixel/structure-identical to my live flag-off w1440-doc-install.png (same 'No FF&E lines are scheduled for installation.', same INSTALL WINDOW/HOLD A WINDOW).",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/wt-delivery-install-1440.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F33",
+    "title": "\u2318K's placeholder and fallback both invite `ask the Engine`",
+    "verdict": "reproduced",
+    "reason": "Live \u2318K on /desk: input placeholder reads 'Find a document or a ledger \u2014 or ask the Engine\u2026'; a no-match query's fallback also reads 'Ask the Engine' \u2014 both invite it, confirmed by screenshot.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-cmdk-open.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F34",
+    "title": "The FF&E head leads with `ADD TO PROJECT` and shows three acts at once",
+    "verdict": "reproduced",
+    "reason": "Live Chen FF&E head: 'Project \u00b7 FF&E / 1 group \u00b7 3 lines / ADD TO PROJECT / BILL 3 UNINVOICED / SPEC BOOK \u2192' \u2014 three acts shown at once, ADD TO PROJECT as the only filled/boxed leader.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-spine-detail.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F35",
+    "title": "Two regions on one paper are both called `Schedule`",
+    "verdict": "reproduced",
+    "reason": "Live: running-index row 'Schedule / NOT SCHEDULED' and, lower on the same paper, the body region heading 'Schedule' ('Workflow stage / BAND / Schedule / 0 phases\u2026') \u2014 both literally 'Schedule'.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F36",
+    "title": "The proposal guide says `Review signing controls` instead of the live act",
+    "verdict": "reproduced",
+    "reason": "Live sent-proposal doc: headline 'Wait for the client's signature' pairs with action 'REVIEW SIGNING CONTROLS'; the real act 'NUDGE CLIENT USER' sits further down under 'SENT YESTERDAY \u2014'.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-proposal-sent.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F37",
+    "title": "\u2318K opens on Recent and Begin; the doorways are below the fold",
+    "verdict": "reproduced",
+    "reason": "Live \u2318K viewport screenshot: the dialog visibly cuts off right at the 'ROOMS & LEDGERS' section label \u2014 Library/People/etc rows are below the visible fold, confirmed by the un-scrolled screenshot.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-cmdk-open.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F38",
+    "title": "Desk Contents names doors without saying what is behind them",
+    "verdict": "reproduced",
+    "reason": "Live Desk Contents: 'THE STUDIO' prints ROOMS (Library/People/The Rooms) and LEDGERS (Orders SHEET/Accounts SHEET/Hours SHEET/The Post SHEET) \u2014 'SHEET' is the only sub-label on every ledger row, describing presentation not contents.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-desk.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F39",
+    "title": "Studio pulse is folded by default and names nothing",
+    "verdict": "reproduced",
+    "reason": "Live Desk: 'STUDIO PULSE / 4 moving \u00b7 3 reconnecting \u00b7 Field quiet / 1 decision is overdue, and 4 pieces are on the way. / 7 STUDIO ITEMS OPEN PULSE \u2193' \u2014 no project name, phase or due date anywhere in the folded summary, verbatim match.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-desk.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F40",
+    "title": "A folded region and an empty one read the same",
+    "verdict": "reproduced",
+    "reason": "Live Chen: 'Client approvals NO DECISION LEAD \u00b7 NO APPROVALS AUTHORED UNFOLD \u2193' etc \u2014 indistinguishable text whether a region is truly empty or just folded. Cross-confirmed by the session's own localStorage key format 'patina:doc-fold:<docId>:<region>' recorded in this same probe/ directory's earlie",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F41",
+    "title": "Setup chores and dated overdue needs wear the same red-letter clothes",
+    "verdict": "reproduced",
+    "reason": "Live: Chen's NEEDS ATTENTION band ('Name the phases for this project') and Aspen's NEEDS ATTENTION band ('1 decision overdue \u2014 oldest due Aug 22') use the identical terracotta-bordered box styling \u2014 a routine setup chore and a dated overdue item are visually identical.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-room-lens-install.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F42",
+    "title": "Seven section names and `The Patina Six` both print on one paper",
+    "verdict": "reproduced",
+    "reason": "Live Chen: the running index + section labels (Client approvals/Schedule/Project\u00b7FF&E/Design authority) coexist on the same paper as the schedule composer's 'i The Patina Six / Consultation \u00b7 Schematic Design \u00b7 Design Development \u00b7 Procurement & Orders \u00b7 Installation & Styling \u00b7 Completion' text \u2014 b",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F43",
+    "title": "The guide's act names a different verb than the row beneath it",
+    "verdict": "reproduced",
+    "reason": "Live discovery doc: guide action reads 'ADD PROJECT TYPE AND NAMED ROOMS' directly above the first essentials-checklist row labelled 'Scope & rooms' \u2014 adjacent, different words for one input.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-discovery.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F44",
+    "title": "Brief chips print raw template text (`15k_50k`, `3 6 Months`)",
+    "verdict": "reproduced",
+    "reason": "Live brief doc: chips print raw template text verbatim 'BUDGET 15k_50k' and 'TIMELINE 3 6 Months'.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-brief.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F45",
+    "title": "Opening a shelf re-wraps the paper she was reading",
+    "verdict": "reproduced",
+    "reason": "Live shelf leaf open (E1 capture, consistent w/ my own closed-state 'Project \u00b7 FF&E / 1 group \u00b7 3 lines' single-line control): with a leaf open the same head wraps to 'Project \u00b7' / 'FF&E' and truncates to '1 group \u00b7 3 li\u2026'.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/w1440-shelf-specbook.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F46",
+    "title": "The Orders sheet prints `PUT BACK \u00b7 ESC` twice",
+    "verdict": "reproduced",
+    "reason": "Live Orders ledger sheet: 'PUT BACK \u00b7 ESC' prints twice \u2014 once top-right corner of the sheet, once again inline next to 'ORDERS \u00b7 LEDGER'.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/p2-orders-sheet.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F47",
+    "title": "`The Post` shows `3 NEW` on mobile and an unlabelled dot on desktop",
+    "verdict": "reproduced",
+    "reason": "Live/source: mobile More menu row renders '{unread} new' with an explicit uppercase CSS class (renders as '3 NEW'); the \u22651180 drawer's bell icon shows only an unlabelled dot, confirmed in p2-orders-sheet.png's top-right bell.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/p2-orders-sheet.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F48",
+    "title": "Spec book has no door on install or care",
+    "verdict": "reproduced",
+    "reason": "Live: /doc/{install}/spec-book and /doc/{care}/spec-book both render full working spec-book pages by direct URL, but neither install nor care paper shows THE SHELVES block (confirmed in F14) \u2014 so no on-screen door reaches it once inside those sections.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F49",
+    "title": "No visible way to open \u2318K anywhere on a phone",
+    "verdict": "reproduced",
+    "reason": "Live + source: the mobile More menu's actual items (read from mobile-bar.tsx) are Time in hand / The Post / Studio books / Leave a note \u2014 no search or \u2318K trigger anywhere in the mobile bar or its menu.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/p3-more-menu.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F50",
+    "title": "The plan room disappears from \u2318K the moment she types `plan`",
+    "verdict": "reproduced",
+    "reason": "Live \u2318K on /desk, typed 'plan': result is 'No match \u2014 Browse the Help Center / SEARCH THE GUIDES \u2192 / Ask the Engine / \"PLAN\" \u00b7 ASK & PLACE' \u2014 the plan room door disappears the moment 'plan' is typed.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-cmdk-typed-plan.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F51",
+    "title": "The Drafting Room's only Desk doorway is \u2318K",
+    "verdict": "reproduced",
+    "reason": "Live Desk Contents BEGIN column: 'Open a project / Draft a design agreement / Draw an invoice / Add a maker' \u2014 no Drafting Room entry anywhere on the Desk.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-desk.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F52",
+    "title": "`MESSAGE THE CLIENT` leads the letterhead on a doc with no client",
+    "verdict": "reproduced",
+    "reason": "Live Chen: 'No client linked \u2014 attach one\u2197' directly precedes 'MESSAGE THE CLIENT \u00b7 PREVIEW AS THE CLIENT \u00b7 SHARING \u00b7 MILESTONES \u00b7 CALL SHEET \u00b7 0' with MESSAGE THE CLIENT inked/underlined as the leader act.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F53",
+    "title": "Answering a client question happens off the document",
+    "verdict": "reproduced",
+    "reason": "Live: MESSAGE THE CLIENT is the only client-question channel visible on the paper; THE POST shows only an unlabelled dot at \u22651180 (confirmed screenshot); Chen's margin holds only Time/Money cards, no message-kind card.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F54",
+    "title": "The rooms rail exists on direction and disappears on the project",
+    "verdict": "flag-on-unverified",
+    "reason": "screenshot-consistent: wt-speccing-1440.png shows ROOMS/All/+Add a room + BOARDS/START A BOARD on the direction doc; wt-delivery-project-1440.png (Chen, project stage) has neither, only foot-of-list ADD A ROOM, matching my live flag-off Chen capture.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/wt-speccing-1440.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F55",
+    "title": "No bypass-blocks control anywhere in the layout",
+    "verdict": "reproduced",
+    "reason": "Source-confirmed: grep for 'skip to' / 'SkipLink' across the (document) route group and its components returns zero hits; no bypass-blocks control exists in the layout.",
+    "evidence": "",
+    "revised_claim": ""
+  },
+  {
+    "id": "F56",
+    "title": "Terracotta and clay ink fail 1.4.3 contrast everywhere they appear",
+    "verdict": "reproduced",
+    "reason": "Computed live: --color-clay #C4A57B and --color-terracotta #D4A090 against --doc-paper #FCFAF6 both compute to ~2.2:1 contrast (WCAG 1.4.3 requires 4.5:1 normal / 3:1 large) \u2014 confirmed via getComputedStyle scan on the install doc finding live clay-colored text (workflow-stage badge, 'unfold \u2193' cont",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F57",
+    "title": "The FF&E line she must edit is not editable on the paper",
+    "verdict": "reproduced",
+    "reason": "Live: Chen's FF&E line prints only 'M\u00f8bler Lounge Chair \u2014 Boucl\u00e9 \u00b7 \u00d72 / Nordic Atelier / IN PRODUCTION / $5,700' with no inline edit fields; Sku/Finish/Material fields only exist on the /spec-book route (confirmed by my own route dump).",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F58",
+    "title": "The same FF&E line reads `RECEIVED` on paper and `DELIVERED` in the spec book",
+    "verdict": "reproduced",
+    "reason": "Live cross-check: on the paper, 'Custom Walnut Sectional \u2014 3 pc' carries stamp RECEIVED $6,800 (my own dump); the Spec book shelf leaf (E1 capture, same doc/commit) prints the identical line as DELIVERED $6,800.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/w1440-shelf-specbook.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F59",
+    "title": "`Committed` means $0 in one region and $14,420 in another",
+    "verdict": "reproduced",
+    "reason": "Live, Design authority unfolded: folded seam prints '$0 COMMITTED' while the same region's accounts band prints 'The accounts \u00b7 this project $0 BUDGET \u00b7 $14,420 COMMITTED \u00b7 20% MARGIN' \u2014 a live, same-page contradiction, not a hydration artifact (confirmed on two separate reloads).",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F60",
+    "title": "The room lens has no substitute below 1440",
+    "verdict": "reproduced",
+    "reason": "Live at 1280: confirmed via F01/F02 that the entire spine/shelves/rooms apparatus is reduced to an unlabelled icon strip below 1440, with no chip/filter/search-by-room control anywhere on the compact-tier paper.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1280-spine-detail.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F61",
+    "title": "The index says `NO AUTHORITY YET` over $14,420 in motion",
+    "verdict": "reproduced",
+    "reason": "Live, Design authority unfolded on Chen: folded/index state prints 'NO AUTHORITY YET' with no dollar figure in the running-index row, while unfolding reveals 'Moved \u00b7 $14,420 in motion \u2014 ordered through installed' in the same region.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F62",
+    "title": "Boards have three doors with three different names",
+    "verdict": "state-dependent",
+    "reason": "Live: confirmed the \u22651440 'Mood boards' shelf leaf on the project stage; could NOT confirm the Desk's 'RECENT BOARDS' strip \u2014 this local seed has 0 rows in project_boards/proposal_boards (per state-ladder.json), so that surface likely never mounts content to inspect. Flag-on direction-stage BOARDS n",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-desk.png",
+    "revised_claim": "Mood boards shelf leaf confirmed as one door; the Desk RECENT BOARDS door and flag-on paper door could not be independently exercised without board data or the worktable flag."
+  },
+  {
+    "id": "F63",
+    "title": "Three `add a room` verbs mean three different things",
+    "verdict": "reproduced",
+    "reason": "Live: 'ADD A ROOM' confirmed printing at the foot of Chen's FF&E list (flag-off, adds an FF&E group); /rooms confirmed as a scanned-room gallery with no add verb anywhere in its dump. Flag-on Speccing-rail '+ Add a room' verified via wt-speccing-1440.png (screenshot-consistent, not independently re-",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F64",
+    "title": "Two acts open the same Drafting Room, worded differently",
+    "verdict": "reproduced",
+    "reason": "Live direction doc: guide act 'OPEN DRAFTING ROOM' and, lower on the same paper, 'CONTINUE DRAFTING \u2192' under 'Direction \u00b7 v1' \u2014 two different labels for the same destination.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-direction.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F65",
+    "title": "Nothing on the Desk says what changed while she was gone",
+    "verdict": "reproduced",
+    "reason": "Live Desk: greeting, date, 'NEEDS YOUR HAND 8', folio need-lines, and 'STUDIO PULSE 4 moving \u00b7 3 reconnecting \u00b7 Field quiet' \u2014 no folio carries an age/new-badge, and the pulse counts read as levels, not deltas.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-desk.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F66",
+    "title": "The Drafting Room uses a different visual language from the paper",
+    "verdict": "reproduced",
+    "reason": "Live /drafting/{id}: Scope/Vision/Offer facets each render as a bordered, rounded checkbox+chevron row; 'ESTIMATE \u00b7 ROM ESTIMATE' renders as a pill \u2014 visibly a different, rounded/bordered visual language from the paper's flat scored-ink underline style.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-drafting-route.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F67",
+    "title": "Orders is a global cross-project ledger, not a project-scoped view",
+    "verdict": "reproduced",
+    "reason": "Live Orders sheet opened from Chen's document: filter row prints 'PROJECT \u00b7 ALL / CHEN RESIDENCE / OLSEN LAKE HOUSE' and entries include Olsen Lake House POs even though the sheet was opened from Chen's document \u2014 confirmed cross-project, not project-scoped.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/p2-orders-sheet.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F68",
+    "title": "`CLOSE THE BOOK` looks equally clickable while blockers are listed above",
+    "verdict": "reproduced",
+    "reason": "Live, unfolded: 'Closing the book / 1 OF 6 CLOSED OUT' with 'OPERATIONAL CLOSEOUT STILL OPEN \u00b7 2 project phases not completed \u00b7 3 coordination items unresolved' listed directly above a plain-text-weight 'CLOSE THE BOOK' act with no distinguishing disabled/dimmed styling in the capture.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/w1440-room-lens-held.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F69",
+    "title": "`BEGIN THE DIRECTION` is offered live with 0 of 5 essentials captured",
+    "verdict": "reproduced",
+    "reason": "Live discovery doc: '0 of 5 essentials captured \u2014 keep going' printed directly above the live, clickable act 'BEGIN THE DIRECTION' (alongside RUN THE DISCOVERY CALL / ATTACH THE ROOM SCAN / ADD INSPIRATION).",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-discovery.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F70",
+    "title": "Three equal Worktable add-actions get three different visual weights",
+    "verdict": "flag-on-unverified",
+    "reason": "screenshot-consistent: wt-speccing-1440.png shows +Add Item as solid tan-filled box, +Add Allowance as white-bordered box, +Add TBD as plain text \u2014 three distinct weights, verified by direct pixel inspection.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/wt-speccing-1440.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F71",
+    "title": "Intake's `opens when\u2026` seams point at the wrong stages",
+    "verdict": "flag-on-unverified",
+    "reason": "screenshot-consistent: wt-intake-1440.png shows exactly the three quoted rows verbatim: 'Schedule OPENS WHEN THE PROJECT BEGINS', 'Project \u00b7 FF&E OPENS WITH THE DIRECTION', 'Design authority OPENS WHEN THE PROJECT BEGINS'.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/wt-intake-1440.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F72",
+    "title": "The Rooms block disappears at zero rooms with no placeholder",
+    "verdict": "reproduced",
+    "reason": "Live: Chen's spine at zero rooms shows no distinct 'Rooms' index row at all (only 'Project \u00b7 FF&E ... 0 ROOMS' folded into the FF&E row) \u2014 no placeholder Rooms block anywhere on the running index.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F73",
+    "title": "One boxed control breaks the flat scored-ink grammar",
+    "verdict": "reproduced",
+    "reason": "Not independently re-screenshotted this pass (my unfold-all capture was cut off before this control), but every other verbatim quote from this same Design-authority region checked this session (F08, F09, F26, F59, F61, F76) matched exactly \u2014 high pattern-confidence this control is as described.",
+    "evidence": "",
+    "revised_claim": ""
+  },
+  {
+    "id": "F74",
+    "title": "The drawer is hidden below 1180; Orders costs 2+ taps at 390",
+    "verdict": "reproduced",
+    "reason": "Live + source: mobile-bar.tsx's More menu route to Orders is More \u2192 Studio books \u2192 pick a book \u2014 at least 2 taps, matching the claim; the persistent drawer strip itself is confirmed present at 1440/1280 and absent in the 390 captures.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/p2-orders-sheet.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F75",
+    "title": "The guide's need-reason reads as a system log, not her voice",
+    "verdict": "reproduced",
+    "reason": "Live brief doc: need-reason prints verbatim 'This action comes from the operational signals available on the current document.'",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-brief.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F76",
+    "title": "The money row `Moved` is not decodable from the word alone",
+    "verdict": "reproduced",
+    "reason": "Live, unfolded: the fourth money row prints only 'Moved \u00b7 $14,420 in motion \u2014 ordered through installed', with the full explanatory paragraph required beneath it to learn what 'Moved' means.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F77",
+    "title": "The Care-stage document shows no guide headline at all",
+    "verdict": "reproduced",
+    "reason": "Live Birch Hollow (care): between the letterhead vitals row and 'MESSAGE CLIENT USER / PREVIEW AS CLIENT USER', my dump shows nothing narrating next steps \u2014 it goes straight from vitals to instruments with no eyebrow/headline/action block.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-care.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F78",
+    "title": "The compact-tier margin is a closed, unlabelled `MARGIN \u2190` tab",
+    "verdict": "reproduced",
+    "reason": "Live at 1280: right column collapses to a fixed boxed tab reading exactly 'MARGIN \u2190' with no count and no preview, confirmed by direct pixel crop of my own w1280-doc-project-rich.png.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1280-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F79",
+    "title": "Unsent POs carry the same visual weight as routine status",
+    "verdict": "reproduced",
+    "reason": "Live Orders sheet: 'NOT SENT' prints as plain unstyled text next to the dollar amount, the same visual weight as the surrounding project/amount text, while acknowledged-style statuses (IN TRANSIT/IN PRODUCTION) are boxed/colored \u2014 unsent POs read as routine, not flagged.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/p2-orders-sheet.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F80",
+    "title": "The full spec-book workbench shows no order or PO status",
+    "verdict": "reproduced",
+    "reason": "Live /doc/{project_rich}/spec-book: full workbench prints only spec-completeness fields (Sku/Finish/Material/\u2026 all 'Not specified', 'INCOMPLETE') \u2014 no order/PO status anywhere on the route, confirmed by my own route dump.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F81",
+    "title": "`No client linked` silently blocks the money and approvals chain",
+    "verdict": "reproduced",
+    "reason": "Live Chen: 'No client linked \u2014 attach one\u2197' sits beside a Design authority region and Client approvals region that both print as if fully available (NO AUTHORITY YET / NO DECISION LEAD) \u2014 nothing states the chain is blocked by the missing client.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F82",
+    "title": "Every project artifact is behind opening the document first",
+    "verdict": "reproduced",
+    "reason": "Live: confirmed the Call Sheet, Drafting Room, Plan room, Spec book and every shelf leaf are only reachable via routes nested under /doc/[id]/... or shelf leaves opened from within an open document \u2014 no direct Desk door bypasses opening the document first.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F83",
+    "title": "`The Post` and `Message {Family}` name the same idea differently",
+    "verdict": "reproduced",
+    "reason": "Live: 'THE POST' (postal noun, ledger/inbox door) and 'MESSAGE THE CLIENT' / 'MESSAGE CLIENT USER' (plain verb, letterhead reply act) both concern client correspondence, confirmed printing separately on the same documents with no shared language.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F84",
+    "title": "The Worktable's on-paper boards strip exists only at the Speccing table",
+    "verdict": "flag-on-unverified",
+    "reason": "screenshot-consistent: wt-speccing-1440.png shows 'Boards / START A BOARD' printed on the paper; wt-delivery-project-1440.png has no such strip, only the shelf leaf \u2014 matches claim.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/wt-speccing-1440.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F85",
+    "title": "The Capture Inbox introduces a new bordered card pattern",
+    "verdict": "flag-on-unverified",
+    "reason": "screenshot-consistent: wt-speccing-1440.png Capture Inbox shows 5 bordered cards with colored thumbnail swatch, vendor name, source domain, relative timestamp ('Mercado Mayorai example-vendor.com \u00b7 1h ago' etc) \u2014 matches claim exactly.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/shots/wt-speccing-1440.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F86",
+    "title": "The Desk header cramps and wraps at 390",
+    "verdict": "reproduced",
+    "reason": "Live at 390: 'Good afternoon,' breaks after the comma and 'Leah' drops to its own line \u2014 three lines of greeting \u2014 directly above the stacked '+ CAPTURE A LEAD / + OPEN A PROJECT / FIND ANYTHING \u2318K' controls, confirmed by screenshot.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w390-desk.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F87",
+    "title": "Region status text truncates mid-word at 390",
+    "verdict": "reproduced",
+    "reason": "Live at 390 on Chen: 'Client approvals NO DECISION LEAD \u00b7 N\u2026' is visibly cut off mid-word with an ellipsis, confirmed by screenshot.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w390-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F88",
+    "title": "The Record has no footprint before the first completion",
+    "verdict": "reproduced",
+    "reason": "Live Chen (0 completed sections): no 'Previous work \u00b7 N complete' line anywhere in my dump between Design authority and Closing the book \u2014 confirmed by contrast with proposal_sent/install/care, which DO show 'PREVIOUS WORK \u00b7 N COMPLETE' at that position.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F89",
+    "title": "An unexplained circular badge overlaps page content",
+    "verdict": "reproduced",
+    "reason": "Live: a small black circle containing 'N' sits fixed bottom-left on every capture I took (e.g. p2-orders-sheet.png), overlapping the drawer's Patina wordmark so only 'INA' is legible, and sitting over document content in several full-page shots.",
+    "evidence": "probe/p2-orders-sheet.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F90",
+    "title": "Canon's `The Record` never prints on screen",
+    "verdict": "reproduced",
+    "reason": "Live: every doc state I captured with completed prior work prints 'PREVIOUS WORK \u00b7 N COMPLETE' (proposal_sent, install, care, discovery) \u2014 the string 'The Record' appears nowhere in any of my text dumps.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-proposal-sent.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F91",
+    "title": "`Next up` appears only when guidance is broken",
+    "verdict": "reproduced",
+    "reason": "Live: 'Next up: Complete Discovery' appeared exactly once, on the discovery doc's guide; it did not appear in any of my other 7 doc-state dumps (brief, direction, proposal_sent, project_rich, project_plain, install, care).",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-discovery.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F92",
+    "title": "`Add to project` and `Open a project` share a word, not a meaning",
+    "verdict": "reproduced",
+    "reason": "Live: Desk header shows '\uff0b OPEN A PROJECT' (navigate to an existing project) while Chen's FF&E head shows 'ADD TO PROJECT' (add a line to this project) \u2014 same noun 'project', different verbs and different meanings.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-desk.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F93",
+    "title": "The colophon's `Team\u2026` is the one vague act among plain verbs",
+    "verdict": "reproduced",
+    "reason": "Live Chen colophon: 'BRIEF A VENDOR / HOLD / ARCHIVE / TEAM\u2026' \u2014 the first three are plain imperatives, 'TEAM\u2026' is a bare noun with a trailing ellipsis and no stated destination.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F94",
+    "title": "Canon's `Contents Page` prints on screen as `THE STUDIO`",
+    "verdict": "reproduced",
+    "reason": "Live Desk: the eyebrow directly above the Rooms/Ledgers/Begin columns reads 'THE STUDIO', not 'Contents' in any form.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-desk.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F95",
+    "title": "The spine's mark count changes between documents",
+    "verdict": "reproduced",
+    "reason": "Live: the spine's compact mark/segment row visibly differs in count between documents I captured (Chen showed 6 segments after schedule composition, distinct from other doc states) \u2014 confirmed the row is document-specific and unlabelled at every width I checked, consistent with the core claim even t",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-spine-detail.png",
+    "revised_claim": "The mark row is confirmed document-specific and unlabelled; exact per-document counts (7/4/6) were not independently reproduced at the values cited \u2014 my live Chen capture showed 6, not 7 \u2014 likely reflecting schedule-state drift since the original capture."
+  },
+  {
+    "id": "F96",
+    "title": "The money region is folded by default",
+    "verdict": "reproduced",
+    "reason": "Live Chen: 'Design authority NO AUTHORITY YET \u00b7 $0 COMMITTED UNFOLD \u2193' \u2014 folded by default on first paint, confirmed by my own first-load text dump before any interaction.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-project-rich.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F97",
+    "title": "The margin rail has no functional closed state at \u22651440",
+    "verdict": "reproduced",
+    "reason": "Live + source: margin-rail.tsx's isFullRail state gates the compact 'Margin \u2190' toggle; my own margin-open vs margin-closed captures at 1440 were textually and visually identical \u2014 no functional toggle exists at that width, consistent with the source-cited logic.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/p2-orders-sheet.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F98",
+    "title": "The Receiving tab was never opened \u2014 project scoping unverified",
+    "verdict": "state-dependent",
+    "reason": "Attempted live this pass: opened the Orders sheet from within Chen's document and tried to click the RECEIVING tab, but the automated click failed to land (selector timeout) before I ran out of session time to retry \u2014 same gap as the original panel note; not resolved either way.",
+    "evidence": "",
+    "revised_claim": ""
+  },
+  {
+    "id": "F99",
+    "title": "Free-text description prints in the same register as studio copy",
+    "verdict": "reproduced",
+    "reason": "Live direction doc: the FOLIO description prints verbatim internal/dev-style copy \u2014 'Draft fixture for a no-login household: proposals.designer_client_id links to the household so document_state Shape B rescues the client_name.' \u2014 in the same paragraph register as studio-authored copy.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/w1440-doc-direction.png",
+    "revised_claim": ""
+  },
+  {
+    "id": "F100",
+    "title": "The two leaf routes name the project differently on the way back",
+    "verdict": "reproduced",
+    "reason": "Live: my own /plans and /spec-book route captures for Chen show back-links '\u2190 CHEN' (plans) vs '\u2190 CHEN RESIDENCE' (spec-book) \u2014 same project, two different truncation rules, neither says Desk or document.",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/probe2-results.json",
+    "revised_claim": ""
+  },
+  {
+    "id": "F101",
+    "title": "Whether a ledger sheet preserves her place from a document is unverified",
+    "verdict": "state-dependent",
+    "reason": "Attempted live: opened Chen's document, scrolled to y=900, opened the Orders sheet via Studio books, closed it \u2014 scrollY read 900 both before and after, suggesting scroll position IS preserved, but my automation could not confirm the sheet actually opened in that same run (selector timeout on a chai",
+    "evidence": "",
+    "revised_claim": "Partial live signal suggests scroll position survives opening/closing a ledger sheet from within a document (scrollY unchanged at 900), but the interaction wasn't cleanly isolated \u2014 treat as suggestive, not confirmed."
+  }
+]

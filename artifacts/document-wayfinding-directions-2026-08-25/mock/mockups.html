@@ -1,0 +1,1875 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wayfinding Mockups — A vs B</title>
+<link rel="stylesheet" href="kit.css">
+<link rel="stylesheet" href="direction-a.css">
+<link rel="stylesheet" href="direction-b.css">
+<style>
+  html, body { margin: 0; background: var(--bg-primary, #FAF7F2); }
+  .cmp-page { width: 1600px; margin: 0 auto; padding: 48px 40px 96px; box-sizing: border-box; }
+  .cmp-head { margin-bottom: 40px; }
+  .cmp-title { font-family: var(--font-display); font-size: 32px; font-weight: 500; color: var(--color-charcoal); margin: 0 0 8px; }
+  .cmp-sub { font-family: var(--font-meta); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); margin: 0; }
+  .cmp-legend { margin-top: 18px; display: flex; gap: 28px; font-family: var(--font-meta); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
+  .cmp-legend-a::before, .cmp-legend-b::before { content: "●"; margin-right: 6px; }
+  .cmp-legend-a { color: var(--color-clay, #A8532E); }
+  .cmp-legend-b { color: var(--color-dusty-blue, #5C7A8A); }
+  .cmp-row { border-top: 1px solid var(--border-hairline, #DCD5C8); padding: 36px 0; }
+  .cmp-row:first-of-type { border-top: none; }
+  .cmp-row-title { font-family: var(--font-meta); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 20px; }
+  .cmp-pair { display: flex; gap: 40px; align-items: flex-start; }
+  .cmp-cell { flex: 1; min-width: 0; }
+  .cmp-cell.cmp-cell-1to1 { flex: none; width: 390px; }
+  .cmp-cell.cmp-cell-1to1 .cmp-frame { width: 390px; }
+  .cmp-lane { font-family: var(--font-meta); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-hairline, #DCD5C8); }
+  .cmp-lane-a { color: var(--color-clay, #A8532E); }
+  .cmp-lane-b { color: var(--color-dusty-blue, #5C7A8A); }
+  .cmp-frame { border: 1px solid var(--border-hairline, #DCD5C8); overflow: hidden; background: var(--doc-paper, #fff); transform-origin: top left; }
+  .cmp-frame figcaption { font-family: var(--font-body, Inter, sans-serif); font-size: 12.5px; line-height: 1.5; color: var(--text-secondary, #5B5347); padding: 12px 16px; background: var(--bg-secondary, #F2ECE0); border-top: 1px solid var(--border-hairline, #DCD5C8); }
+  .cmp-row-m4 .cmp-pair { gap: 40px; }
+</style>
+</head>
+<body class="patina-mock">
+<div class="cmp-page">
+  <header class="cmp-head">
+    <h1 class="cmp-title">The Document — Wayfinding Review</h1>
+    <p class="cmp-sub">Direction A vs Direction B · five screens · the Vandersteen residence · 2026-08-25</p>
+    <div class="cmp-legend">
+      <span class="cmp-legend-a">Direction A — Everything Prints</span>
+      <span class="cmp-legend-b">Direction B — The Shop Ticket</span>
+    </div>
+  </header>
+<section class="cmp-row" id="row-M1">
+  <h2 class="cmp-row-title">M1 · /desk at 1440</h2>
+  <div class="cmp-pair">
+    <div class="cmp-cell">
+      <p class="cmp-lane cmp-lane-a">Direction A — Everything Prints</p>
+      <div class="cmp-frame" style="zoom:0.5">
+<section class="mock-frame patina-mock" data-screen="M1" data-width="1440" data-lane="A">
+  <div class="a-screen" style="width:1440px;height:1300px">
+
+    <!-- ── the Desk, 940px measure, no rails ────────────────────────────── -->
+    <div class="a-desk">
+      <div class="a-measure">
+
+        <!-- 1. Header -->
+        <div class="a-deskhead">
+          <div>
+            <h1 class="a-greet">Good afternoon, <i>Leah</i></h1>
+            <p class="a-deskhead-date">Tuesday · August 25</p>
+          </div>
+          <div class="a-headacts">
+            <span class="a-headact"><span class="a-act">+ Capture a lead</span><span class="a-headact-sub">Begin a brief</span></span>
+            <span class="a-headact"><span class="a-act">+ Open a project</span><span class="a-headact-sub">No proposal needed</span></span>
+            <span class="a-headact"><span class="a-act">Find anything ⌘K</span></span>
+          </div>
+        </div>
+
+        <!-- 2. Needs your hand · 5 -->
+        <div style="margin-top:54px">
+          <div class="a-blocklabel">
+            <span class="a-rules"><i></i><i></i><i></i></span>
+            <span>Needs your hand</span><em>5</em>
+          </div>
+          <p class="a-mono9" style="margin-top:8px">Five in reach · one quiet below</p>
+        </div>
+
+        <div class="a-foliogrid" style="margin-top:22px">
+
+          <div class="a-fol">
+            <span class="a-fol-tab" style="background:var(--color-warning)">Vandersteen · Project</span>
+            <div class="a-fol-face">
+              <h3 class="a-fol-title">Vandersteen residence</h3>
+              <p class="a-fol-meta">Procurement &amp; orders</p>
+              <div class="a-fol-need">
+                <p>three days past the workroom's COM date</p>
+                <span class="stamp size-xs a-stamp-spec-due">spec due</span>
+              </div>
+              <div class="a-fol-act"><span class="a-act">Pick the fabric</span><span class="a-mono10 a-oak">→</span></div>
+            </div>
+          </div>
+
+          <div class="a-fol">
+            <span class="a-fol-tab" style="background:var(--color-dusty-blue)">Byrne · Proposal</span>
+            <div class="a-fol-face">
+              <h3 class="a-fol-title">The Byrne remodel</h3>
+              <p class="a-fol-meta">Proposal · Cedarburg WI</p>
+              <div class="a-fol-need">
+                <p>Sent Aug 19 · six days, never opened</p>
+                <span class="stamp size-xs a-stamp-ordered">out</span>
+              </div>
+              <div class="a-fol-act"><span class="a-act">Nudge Erin Byrne</span><span class="a-mono10 a-oak">→</span></div>
+            </div>
+          </div>
+
+          <div class="a-fol">
+            <span class="a-fol-tab" style="background:var(--phase-installation)">Okonkwo · Install</span>
+            <div class="a-fol-face">
+              <h3 class="a-fol-title">Okonkwo kitchen</h3>
+              <p class="a-fol-meta">Install · Middleton WI</p>
+              <div class="a-fol-need">
+                <p>punch list still open</p>
+                <span class="stamp size-xs a-stamp-decision">punch</span>
+              </div>
+              <div class="a-fol-act"><span class="a-act">Work the punch list</span><span class="a-mono10 a-oak">→</span></div>
+            </div>
+          </div>
+
+          <div class="a-fol">
+            <span class="a-fol-tab" style="background:var(--color-aged-oak)">Reinhardt · Discovery</span>
+            <div class="a-fol-face">
+              <h3 class="a-fol-title">Reinhardt lake house</h3>
+              <p class="a-fol-meta">Discovery · Green Lake WI</p>
+              <div class="a-fol-need">
+                <p>0 of 5 essentials captured</p>
+                <span class="stamp size-xs a-stamp-unspecified">setup</span>
+              </div>
+              <div class="a-fol-act"><span class="a-act">Add scope &amp; rooms</span><span class="a-mono10 a-oak">→</span></div>
+            </div>
+          </div>
+
+          <div class="a-fol">
+            <span class="a-fol-tab" style="background:var(--phase-concept)">Kaminski · Direction</span>
+            <div class="a-fol-face">
+              <h3 class="a-fol-title">Kaminski condo</h3>
+              <p class="a-fol-meta">Direction · Milwaukee</p>
+              <div class="a-fol-need">
+                <p>Draw up the direction</p>
+                <span class="stamp size-xs a-stamp-unspecified">direction</span>
+              </div>
+              <div class="a-fol-act"><span class="a-act">Open the Drafting Room</span><span class="a-mono10 a-oak">→</span></div>
+            </div>
+          </div>
+
+          <div style="align-self:end;padding-bottom:12px">
+            <p class="a-mono9">5 in reach · 1 folded below</p>
+            <p class="a-mono9 a-oak" style="margin-top:8px">Reveal 1 more folio ↓</p>
+          </div>
+        </div>
+
+        <!-- 3. The studio today -->
+        <div style="margin-top:52px">
+          <div class="a-blocklabel">
+            <span class="a-rules"><i></i><i></i><i></i></span>
+            <span>The studio today</span>
+          </div>
+          <p class="a-sentence" style="margin-top:14px"><span class="a-door">One in install</span> · <span class="a-door">one in procurement</span> · <span class="a-door">one in direction</span> · <span class="a-door">one in discovery</span> · <span class="a-door">one letter out</span>.</p>
+          <p class="a-body" style="margin-top:12px">Since Friday: the console arrived damaged, and the Byrnes still haven't opened their agreement.</p>
+        </div>
+
+        <!-- 4. Recent boards -->
+        <div style="margin-top:48px">
+          <div class="a-blocklabel">
+            <span class="a-rules"><i></i><i></i><i></i></span>
+            <span>Recent boards</span>
+          </div>
+          <div class="a-boards" style="margin-top:14px">
+            <div class="a-board"><p class="a-board-name">Vandersteen residence</p><p class="a-mono8" style="margin-top:3px">Living room</p></div>
+            <div class="a-board"><p class="a-board-name">Vandersteen residence</p><p class="a-mono8" style="margin-top:3px">Primary bedroom</p></div>
+            <div class="a-board"><p class="a-board-name">Kaminski condo</p><p class="a-mono8" style="margin-top:3px">Direction</p></div>
+          </div>
+        </div>
+
+        <!-- 5. The Studio (Contents) -->
+        <div style="margin-top:48px">
+          <div class="a-blocklabel">
+            <span class="a-rules"><i></i><i></i><i></i></span>
+            <span>The Studio</span>
+          </div>
+          <div class="a-contents" style="margin-top:14px">
+            <div>
+              <p class="a-contents-head">Rooms</p>
+              <div class="a-crow"><span><span class="a-crow-name">Library</span><span class="a-crow-sub">pieces and makers</span></span><span class="a-crow-mark">↗</span></div>
+              <div class="a-crow"><span><span class="a-crow-name">People</span><span class="a-crow-sub">makers, trades, clients</span></span><span class="a-crow-mark">↗</span></div>
+              <div class="a-crow"><span><span class="a-crow-name">The Scans</span><span class="a-crow-sub">measured rooms</span></span><span class="a-crow-mark">↗</span></div>
+            </div>
+            <div>
+              <p class="a-contents-head">Ledgers</p>
+              <div class="a-crow"><span><span class="a-crow-name">Orders</span><span class="a-crow-sub">POs, receiving, claims</span></span><span class="a-crow-mark">Sheet</span></div>
+              <div class="a-crow"><span><span class="a-crow-name">Accounts</span><span class="a-crow-sub">invoices and payments</span></span><span class="a-crow-mark">Sheet</span></div>
+              <div class="a-crow"><span><span class="a-crow-name">Hours</span><span class="a-crow-sub">time on the work</span></span><span class="a-crow-mark">Sheet</span></div>
+              <div class="a-crow"><span><span class="a-crow-name">The Post</span><span class="a-crow-sub">mail and messages</span></span><span class="a-crow-mark">Sheet</span></div>
+            </div>
+            <div>
+              <p class="a-contents-head">Begin</p>
+              <div class="a-crow"><span><span class="a-crow-name">Open a project</span><span class="a-crow-sub">no proposal needed</span></span><span class="a-crow-mark">—</span></div>
+              <div class="a-crow"><span><span class="a-crow-name">Draft a design agreement</span><span class="a-crow-sub">from a lead or a project</span></span><span class="a-crow-mark">—</span></div>
+              <div class="a-crow"><span><span class="a-crow-name">Draw an invoice · new</span><span class="a-crow-sub">names its scope</span></span><span class="a-crow-mark">—</span></div>
+              <div class="a-crow"><span><span class="a-crow-name">Add a maker</span><span class="a-crow-sub">to the Library</span></span><span class="a-crow-mark">—</span></div>
+              <div class="a-crow"><span><span class="a-crow-name">Open the Drafting Room</span><span class="a-crow-sub">draw up a direction</span></span><span class="a-crow-mark">—</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 6. ⌘K, drawn open beside the artboard — the T2 route -->
+    <div class="a-inset" style="position:absolute;left:1032px;top:108px;width:352px">
+      <span class="a-inset-label">⌘K · opened from the header · nothing typed</span>
+      <div class="cmdk a-cmdk" style="border:none;border-radius:0">
+        <div class="cmdk-input">Find a document or a ledger…</div>
+        <p class="cmdk-group-label">Where the work stands</p>
+        <div class="cmdk-row is-lead"><span class="cmdk-row-title">In install · 1</span><span class="cmdk-row-meta">Okonkwo kitchen · punch list open</span></div>
+        <div class="cmdk-row is-lead"><span class="cmdk-row-title">In procurement · 1</span><span class="cmdk-row-meta">Vandersteen residence</span></div>
+        <div class="cmdk-row is-lead"><span class="cmdk-row-title">In direction · 1</span><span class="cmdk-row-meta">Kaminski condo</span></div>
+        <div class="cmdk-row is-lead"><span class="cmdk-row-title">In discovery · 1</span><span class="cmdk-row-meta">Reinhardt lake house</span></div>
+        <div class="cmdk-row is-lead"><span class="cmdk-row-title">Out for signature · 1</span><span class="cmdk-row-meta">The Byrne remodel · sent Aug 19</span></div>
+        <p class="cmdk-group-label">Recent</p>
+        <div class="cmdk-row"><span class="cmdk-row-title">Vandersteen residence</span><span class="cmdk-row-meta">Project</span></div>
+        <div class="cmdk-row"><span class="cmdk-row-title">The Byrne remodel</span><span class="cmdk-row-meta">Proposal</span></div>
+        <p class="cmdk-group-label">Rooms &amp; ledgers</p>
+        <div class="cmdk-row"><span class="cmdk-row-title">The Scans</span><span class="cmdk-row-meta">measured rooms</span></div>
+        <div class="cmdk-row"><span class="cmdk-row-title">Orders</span><span class="cmdk-row-meta">Sheet</span></div>
+        <p class="cmdk-group-label">Begin</p>
+        <div class="cmdk-row"><span class="cmdk-row-title">Open a project</span><span class="cmdk-row-meta">no proposal needed</span></div>
+        <div class="cmdk-row"><span class="cmdk-row-title">Open the Drafting Room</span><span class="cmdk-row-meta">draw up a direction</span></div>
+        <p class="cmdk-group-label">Studio</p>
+        <div class="cmdk-row"><span class="cmdk-row-title">The studio today</span><span class="cmdk-row-meta">Desk</span></div>
+      </div>
+    </div>
+
+    <!-- 7. Studio Drawer -->
+    <div class="a-drawer" style="position:absolute;left:0;right:0;bottom:0">
+      <div>
+        <span class="a-drawer-word">Patina</span><span class="a-drawer-crumb">Desk</span>
+      </div>
+      <div class="a-drawer-mid">
+        <span class="a-drawer-item">Library</span>
+        <span class="a-drawer-item">People</span>
+        <span class="a-drawer-item">The Scans</span>
+        <span class="a-drawer-item">Ledgers ↑</span>
+        <span class="a-drawer-item is-door">Find anything ⌘K</span>
+      </div>
+      <div class="a-drawer-right">
+        <span class="a-mono10">In hand today <span class="a-ink">0:47</span></span>
+        <span class="a-mono10">The Post<span class="a-dot"></span></span>
+        <span class="a-nameplate"><span class="a-avatar">LH</span><span><span style="display:block;font-family:var(--font-display);font-size:13px;color:var(--color-charcoal)">Leah Hartwell</span><span class="a-mono8" style="display:block">Middlewest Studio</span></span></span>
+      </div>
+    </div>
+
+  </div>
+  <figcaption><b>M1 · /desk at 1440 — the fold.</b> Proves the studio's stages are printed as rows in ⌘K's own empty state before a character is typed (F04), each folio leads with the need's own verb rather than <i>Review now</i> (F18), and the Drafting Room, The Scans and every Contents row carry a static sub-label (F51, F17, F38).</figcaption>
+</section>
+      </div>
+    </div>
+    <div class="cmp-cell">
+      <p class="cmp-lane cmp-lane-b">Direction B — The Shop Ticket</p>
+      <div class="cmp-frame" style="zoom:0.5">
+<section class="mock-frame b-frame" data-screen="M1" data-width="1440" data-lane="B">
+<figure class="b-figure">
+<div class="mock-frame-inner b-inner" style="width:1440px;height:1300px">
+  <div class="b-page">
+    <div class="b-col">
+
+      <!-- 1. Header — three scored acts, each with its sub-label on the Desk for the first time (F24) -->
+      <div class="b-desk-head">
+        <div>
+          <h1 class="b-greet">Good morning, <em>Leah</em></h1>
+          <p class="b-date">Tuesday · August 25</p>
+        </div>
+        <div class="b-begin">
+          <span class="b-begin-item"><span class="b-act scored">＋ Capture a lead</span><span class="b-begin-sub">Begin a Brief</span></span>
+          <span class="b-begin-item"><span class="b-act scored">＋ Open a project</span><span class="b-begin-sub">No proposal needed</span></span>
+          <span class="b-begin-item"><span class="b-act b-act-quiet scored">Find anything ⌘K</span></span>
+        </div>
+      </div>
+
+      <!-- 2. EVERY JOB — one roster replaces the folio grid, STUDIO PULSE and RECENT BOARDS -->
+      <div class="b-roster-head">
+        <p class="b-roster-eyebrow"><i></i>Every job · 6 live · 2 overdue</p>
+        <p class="b-roster-line">Two things are overdue — Vandersteen and Byrne.</p>
+      </div>
+
+      <!-- 3. The roster, grouped by stage in the paper's order; empty stages unprinted -->
+      <div class="b-group">
+        <p class="b-group-name">Discovery · 1</p>
+        <div class="b-job">
+          <span class="b-job-mark"></span>
+          <span class="b-job-name">Reinhardt lake house</span>
+          <span class="b-job-state">Green Lake WI · 0 of 5 essentials captured — keep going</span>
+          <span class="b-job-act"><span class="b-act scored">Add scope &amp; rooms</span></span>
+        </div>
+      </div>
+
+      <div class="b-group">
+        <p class="b-group-name">Direction · 1</p>
+        <div class="b-job">
+          <span class="b-job-mark"></span>
+          <span class="b-job-name">Kaminski condo</span>
+          <span class="b-job-state">Milwaukee · the direction isn’t written yet</span>
+          <span class="b-job-act"><span class="b-act scored">Open the Drafting Room</span></span>
+        </div>
+      </div>
+
+      <div class="b-group">
+        <p class="b-group-name">Proposal · 1</p>
+        <div class="b-job">
+          <span class="b-job-mark is-overdue"></span>
+          <span class="b-job-name">Byrne remodel</span>
+          <span class="b-job-state">Cedarburg WI · design agreement sent August 19 — six days, never opened · $9,400 · four milestones</span>
+          <span class="b-job-act"><span class="b-act scored">Nudge Erin Byrne</span></span>
+        </div>
+      </div>
+
+      <div class="b-group">
+        <p class="b-group-name">Project · 1</p>
+        <div class="b-job">
+          <span class="b-job-mark is-overdue"></span>
+          <span class="b-job-name">Vandersteen residence</span>
+          <span class="b-job-state">Shorewood Hills · Procurement &amp; Orders · 4 of 6 · install Tuesday, September 15 · $17,500 out 22 days<br><span class="b-od">Overdue 6 days</span> — primary bedroom approval</span>
+          <span class="b-job-act"><span class="b-act scored">Open the job</span></span>
+        </div>
+      </div>
+
+      <div class="b-group">
+        <p class="b-group-name">Install · 1</p>
+        <div class="b-job">
+          <span class="b-job-mark"></span>
+          <span class="b-job-name">Okonkwo kitchen</span>
+          <span class="b-job-state">Middleton WI · installed August 14 · punch list open</span>
+          <span class="b-job-act"><span class="b-act scored">Work the punch list</span></span>
+        </div>
+      </div>
+
+      <div class="b-group">
+        <p class="b-group-name">Care · 1</p>
+        <div class="b-job">
+          <span class="b-job-mark"></span>
+          <span class="b-job-name">The sixth job</span>
+          <span class="b-job-state b-empty">quiet · nothing needs your hand</span>
+          <span class="b-job-act"></span>
+        </div>
+      </div>
+
+      <!-- 4. THE STUDIO — the Contents Page, unchanged in kind; three edits -->
+      <div class="b-contents">
+        <div class="b-contents-col">
+          <h3>Rooms</h3>
+          <div class="b-contents-row"><span>Library</span><span class="b-meta">↗</span></div>
+          <div class="b-contents-row"><span>People</span><span class="b-meta">↗</span></div>
+          <div class="b-contents-row"><span>Scans</span><span class="b-meta">rooms you’ve measured ↗</span></div>
+        </div>
+        <div class="b-contents-col">
+          <h3>Ledgers</h3>
+          <div class="b-contents-row"><span>Orders</span><span class="b-meta">sheet</span></div>
+          <div class="b-contents-row"><span>Accounts</span><span class="b-meta">sheet</span></div>
+          <div class="b-contents-row"><span>Hours</span><span class="b-meta">sheet</span></div>
+          <div class="b-contents-row"><span>The Post</span><span class="b-meta b-new">mail &amp; messages · new</span></div>
+        </div>
+        <div class="b-contents-col">
+          <h3>Begin</h3>
+          <div class="b-contents-row"><span>Open a project</span><span class="b-meta">—</span></div>
+          <div class="b-contents-row"><span>Draft a design agreement</span><span class="b-meta">—</span></div>
+          <div class="b-contents-row"><span>Draw an invoice</span><span class="b-meta">—</span></div>
+          <div class="b-contents-row"><span>＋ Open the Drafting Room</span><span class="b-meta">—</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 5. Studio Drawer, unchanged but for the two renames -->
+    <nav class="drawer b-foot">
+      <div><span class="drawer-word">Patina</span><span class="drawer-crumb">Desk</span></div>
+      <div class="drawer-center">
+        <span class="drawer-nav-item">Library</span>
+        <span class="drawer-nav-item">People</span>
+        <span class="drawer-nav-item">Scans</span>
+        <span class="drawer-nav-item">The ledgers ↑</span>
+      </div>
+      <div class="drawer-right">
+        <span class="drawer-time">In hand today 0:47</span>
+        <span class="drawer-time" style="margin-left:18px">The Post <span class="b-dot" style="margin-left:4px;vertical-align:middle"></span></span>
+        <span class="drawer-time" style="margin-left:18px;color:var(--text-primary)">Leah Hartwell</span>
+      </div>
+    </nav>
+  </div>
+</div>
+<figcaption class="mock-frame-caption b-cap"><b>M1 · /desk at 1440 (first 1300px).</b> One roster of every live job, grouped by stage, replaces the folio grid, Studio Pulse and Recent boards — so “show me everything that’s in install” is answered by a heading, at zero acts.</figcaption>
+</figure>
+</section>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="cmp-row" id="row-M2">
+  <h2 class="cmp-row-title">M2 · /doc project at 1440 — the fold</h2>
+  <div class="cmp-pair">
+    <div class="cmp-cell">
+      <p class="cmp-lane cmp-lane-a">Direction A — Everything Prints</p>
+      <div class="cmp-frame" style="zoom:0.5">
+<section class="mock-frame patina-mock" data-screen="M2" data-width="1440" data-lane="A">
+  <div class="a-screen" style="width:1440px;height:1300px">
+    <div class="a-doc a-t1440">
+
+      <!-- ── SPINE ─────────────────────────────────────────────────────── -->
+      <aside class="a-spine">
+        <p class="a-putdown">← Put down</p>
+        <div class="a-marks"><i class="is-past"></i><i class="is-past"></i><i class="is-past"></i><i class="is-past"></i><i class="is-here"></i><i></i><i></i></div>
+        <p class="a-spine-name">Project</p>
+        <p class="a-spine-state">Active</p>
+
+        <div class="a-block">
+          <p class="a-block-label">In this document</p>
+          <div class="a-srow"><span class="a-srow-name">Client approvals</span><span class="a-srow-val">2 awaiting decision</span></div>
+          <div class="a-srow"><span class="a-srow-name">Schedule</span><span class="a-srow-val">Install Sept 2026</span></div>
+          <div class="a-srow is-current"><span class="a-srow-name">FF&amp;E</span><span class="a-srow-val">36 pieces · 4 rooms</span></div>
+          <div class="a-srow is-money"><span class="a-srow-name">Money</span><span class="a-srow-val">$17,500 owed</span></div>
+        </div>
+
+        <div class="a-block">
+          <p class="a-block-label">Rooms</p>
+          <p class="a-block-note">Take a room in hand · nothing hides</p>
+          <div class="a-srow"><span class="a-srow-name">Living room</span><span class="a-srow-val">14 lines · 1 damaged</span></div>
+          <div class="a-srow"><span class="a-srow-name">Dining room</span><span class="a-srow-val">8 lines · 6 delivered</span></div>
+          <div class="a-srow"><span class="a-srow-name">Primary bedroom</span><span class="a-srow-val">9 lines · 2 awaiting</span></div>
+          <div class="a-srow"><span class="a-srow-name">Mudroom</span><span class="a-srow-val">5 lines · 2 unspecified</span></div>
+        </div>
+
+        <div class="a-block">
+          <p class="a-block-label">The shelves</p>
+          <div class="a-shelf"><span><span class="a-shelf-title">Plan room</span><span class="a-shelf-sub">the drawing set · nothing filed</span></span><span class="a-mono8 a-oak">→</span></div>
+          <div class="a-shelf"><span><span class="a-shelf-title">Spec book</span><span class="a-shelf-sub">34 specified · by room</span></span><span class="a-mono8 a-oak">→</span></div>
+          <div class="a-shelf"><span><span class="a-shelf-title">Mood boards</span><span class="a-shelf-sub">3 boards</span></span><span class="a-mono8 a-oak">→</span></div>
+          <div class="a-shelf"><span><span class="a-shelf-title">Call sheet</span><span class="a-shelf-sub">5 on the roster</span></span><span class="a-mono8 a-oak">→</span></div>
+        </div>
+
+        <div class="a-inhand">
+          <p class="a-inhand-l">● In hand</p>
+          <p class="a-inhand-t">0:47</p>
+          <p class="a-inhand-acts"><span class="a-act a-quiet-act" style="font-size:9px">Pause</span><span class="a-act a-quiet-act" style="font-size:9px">+ Log</span></p>
+        </div>
+      </aside>
+
+      <!-- ── PAPER ─────────────────────────────────────────────────────── -->
+      <div class="a-paper" style="padding:12px 32px 0">
+
+        <!-- 1. Letterhead -->
+        <h1 class="a-lh-title">Vandersteen residence</h1>
+        <p class="a-lh-client">for Marit &amp; Dale Vandersteen ↗</p>
+        <p class="a-lh-vitals">Procurement &amp; orders · Target Sept 2026 · $184,500</p>
+
+        <!-- 2. Red-letter zone -->
+        <div class="a-rl" style="margin-top:7px">
+          <p class="a-rl-label">Needs attention · in one place</p>
+          <div class="a-rl-row">
+            <span class="stamp size-xs a-stamp-spec-due">spec due</span>
+            <span class="a-rl-text is-lead">The reading chair fabric is three days past the workroom's COM date</span>
+            <span class="a-act">Pick the fabric</span>
+          </div>
+          <div class="a-rl-row">
+            <span class="stamp size-xs a-stamp-decision">decision due</span>
+            <span class="a-rl-text">The primary bedroom rug and nightstands — six days past due with Marit and Dale</span>
+            <span class="a-act">Chase the approval</span>
+          </div>
+        </div>
+
+        <!-- 3. Instruments -->
+        <div class="a-instr" style="margin-top:6px">
+          <span class="a-act">Message the Vandersteens</span>
+          <span class="a-mono11">Preview as</span>
+          <span class="a-mono11">Sharing</span>
+          <span class="a-mono11">Milestones</span>
+          <span class="a-mono11">Call sheet · <span class="a-ink">5</span></span>
+        </div>
+
+        <!-- 4-5. Two fold seams -->
+        <div class="a-seam" style="margin-top:8px">
+          <span class="a-seam-name">Client approvals</span>
+          <span class="a-seam-sum">2 awaiting decision · oldest sent Aug 13</span>
+          <span class="a-seam-unf">Unfold ↓</span>
+        </div>
+        <div class="a-seam">
+          <span class="a-seam-name">Schedule dates</span>
+          <span class="a-seam-sum">Install Tuesday, September 15</span>
+          <span class="a-seam-unf">Unfold ↓</span>
+        </div>
+
+        <!-- 6. Schedule region -->
+        <div class="a-rule"></div>
+        <div class="a-rhead">
+          <div>
+            <p class="a-rhead-eyebrow">Band</p>
+            <h2 class="a-rhead-name">Schedule</h2>
+            <p class="a-rhead-status">6 phases · Procurement &amp; Orders active · install Tuesday, September 15</p>
+          </div>
+          <div class="a-ledger"><span class="a-act">Adjust dates</span><span class="a-mono10 a-clay">Fold ↑</span></div>
+        </div>
+        <p class="a-quiet" style="margin-top:4px">The six phases are how the work is scheduled. The document's own sections — Brief through Care — are how it is filed.</p>
+
+        <!-- 7. Folio -->
+        <div class="a-instr" style="margin-top:7px;gap:20px">
+          <span class="a-mono10">Folio · 4 files</span>
+          <span class="a-act a-quiet-act">+ File</span>
+          <span class="a-act">Plan room →</span>
+        </div>
+
+        <!-- 8. Project · FF&E -->
+        <div class="a-rule"></div>
+        <div class="a-rhead">
+          <div>
+            <p class="a-rhead-eyebrow">FF&amp;E</p>
+            <h2 class="a-rhead-name">Project · FF&amp;E</h2>
+            <p class="a-rhead-status">4 rooms · 36 lines · 1 damaged · 1 PO unanswered</p>
+          </div>
+          <div class="a-ledger">
+            <span class="a-act a-inked">File the claim</span>
+            <span class="a-act">Spec the 2 unspecified →</span>
+            <span class="a-act">Bill 3 uninvoiced lines →</span>
+            <span class="a-act a-quiet-act">Add a line</span>
+            <span class="a-act">Spec book →</span>
+            <span class="a-mono10 a-clay">Fold ↑</span>
+          </div>
+        </div>
+
+        <div class="a-roomhead"><span class="a-roomhead-name">Living room</span><span></span><span class="a-roomhead-count">14 lines · 11 ordered · 2 in transit · 1 damaged</span></div>
+        <div class="a-line">
+          <span><span class="a-line-name">Brass-and-oak console</span><span class="a-line-vendor">Fond du Lac Ironworks · ×1</span></span>
+          <span class="a-line-right"><span class="stamp size-xs stamp-damaged">damaged</span><span class="a-line-price">$4,300</span></span>
+        </div>
+        <div class="a-line">
+          <span><span class="a-line-name">Reading chair</span><span class="a-line-vendor">The workroom · COM due Aug 22</span></span>
+          <span class="a-line-right"><span class="stamp size-xs a-stamp-spec-due">spec due</span><span class="a-line-price">—</span></span>
+        </div>
+
+        <div class="a-roomhead"><span class="a-roomhead-name">Dining room</span><span></span><span class="a-roomhead-count">8 lines · 8 ordered · 6 delivered</span></div>
+        <div class="a-line">
+          <span><span class="a-line-name">Dining table + 6 side chairs</span><span class="a-line-vendor">Sturdy Oak Woodworks · PO-2026-0418 · sent Aug 11 · no acknowledgement in 14 days</span></span>
+          <span class="a-line-right"><span class="stamp size-xs a-stamp-ordered">ordered</span><span class="a-line-price">$14,880</span></span>
+        </div>
+
+        <div class="a-roomhead"><span class="a-roomhead-name">Primary bedroom</span><span></span><span class="a-roomhead-count">9 lines · 7 ordered · 2 awaiting approval</span></div>
+        <div class="a-line">
+          <span><span class="a-line-name">Hartland wool rug</span><span class="a-line-vendor">sent to Marit &amp; Dale Aug 13 · six days past due</span></span>
+          <span class="a-line-right"><span class="stamp size-xs a-stamp-decision">awaiting approval</span><span class="a-line-price">—</span></span>
+        </div>
+
+        <div class="a-roomhead"><span class="a-roomhead-name">Mudroom</span><span></span><span class="a-roomhead-count">5 lines · 3 ordered · 2 unspecified</span></div>
+        <p style="margin-top:8px"><span class="a-act a-quiet-act">Add a room</span></p>
+
+        <!-- 9. Money -->
+        <div class="a-rule"></div>
+        <div class="a-rhead">
+          <div>
+            <p class="a-rhead-eyebrow">The money · one region</p>
+            <h2 class="a-rhead-name">Money</h2>
+            <p class="a-rhead-status">$17,500 owed · $12,300 not drawn</p>
+          </div>
+          <div class="a-ledger">
+            <span class="a-act a-inked">Draw an invoice</span>
+            <span class="a-act">Add a change</span>
+            <span class="a-act">Hours · this project ↗</span>
+            <span class="a-mono10 a-clay">Fold ↑</span>
+          </div>
+        </div>
+
+        <div class="a-ml">
+          <div class="a-ml-rung"><span class="a-ml-label">Budget</span><span class="a-ml-value">$184,500 approved</span><span class="a-ml-gloss">what the client has agreed to fund</span></div>
+          <div class="a-ml-rung"><span class="a-ml-label">Plan</span><span class="a-ml-value">$171,240 specified</span><span class="a-ml-gloss">what the plan intends to spend</span></div>
+          <div class="a-ml-rung"><span class="a-ml-label">Authorized</span><span class="a-ml-value">$141,600 ordered</span><span class="a-ml-gloss">what is contractually owed to makers</span></div>
+          <div class="a-ml-rung"><span class="a-ml-label">Moved</span><span class="a-ml-value">$62,700 in motion</span><span class="a-ml-gloss">ordered $141,600 less $78,900 paid out</span></div>
+          <div class="a-ml-rung"><span class="a-ml-label">Owed</span><span class="a-ml-value">$17,500 out</span><span class="a-ml-gloss">Invoice 2026-114, 22 days · $96,400 billed to date</span></div>
+          <div class="a-ml-rung"><span class="a-ml-label">Not drawn</span><span class="a-ml-value">$12,300 deposit</span><span class="a-ml-gloss">PO-2026-0418, 50% at release</span></div>
+        </div>
+        <p class="a-quiet" style="margin-top:4px">Budget → plan → authorized → moved. Moved is what is ordered and not yet paid out — not the contractually owed total above it. <span class="a-act a-quiet-act" style="margin-left:8px">Sync from the schedule</span></p>
+
+        <!-- 10. Closing the book -->
+        <div class="a-seam" style="margin-top:9px">
+          <span class="a-seam-name">Closing the book</span>
+          <span class="a-seam-sum">0 of 6 closed out</span>
+          <span class="a-seam-unf">Unfold ↓</span>
+        </div>
+        <div class="a-seam">
+          <span class="a-seam-name">The record</span>
+          <span class="a-seam-sum">3 complete</span>
+          <span class="a-seam-unf">Unfold ↓</span>
+        </div>
+        <div class="a-instr" style="margin-top:9px;gap:20px">
+          <span class="a-mono9">Middlewest Studio · hands on the work: you</span>
+          <span style="flex:1"></span>
+          <span class="a-act a-quiet-act">Brief a vendor</span>
+          <span class="a-act a-quiet-act">Hold</span>
+          <span class="a-act a-quiet-act">Archive</span>
+          <span class="a-act a-quiet-act">Add to the team</span>
+        </div>
+      </div>
+
+      <!-- ── MARGIN ────────────────────────────────────────────────────── -->
+      <aside class="a-marginrail">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <span class="a-mono9 a-ink">In the margin</span>
+          <span class="a-act a-quiet-act" style="font-size:9px">+ Note</span>
+        </div>
+        <div class="a-mi" style="margin-top:10px"><p class="a-mi-eyebrow">Money · deposit due</p><p class="a-mi-line">$12,300 — PO-2026-0418, 50% at release</p></div>
+        <div class="a-mi"><p class="a-mi-eyebrow">Decision · primary bedroom</p><p class="a-mi-line">Hartland wool rug + walnut nightstands, six days past due</p></div>
+        <div class="a-mi"><p class="a-mi-eyebrow">Message · mudroom bench</p><p class="a-mi-line">Marit asked about the bench — unanswered in The Post</p></div>
+        <div class="a-mi" style="border-bottom:none"><p class="a-mi-eyebrow">Settled · 4 ↓</p></div>
+      </aside>
+    </div>
+
+    <!-- Studio Drawer -->
+    <div class="a-drawer" style="position:absolute;left:0;right:0;bottom:0">
+      <div><span class="a-drawer-word">Patina</span><span class="a-drawer-crumb">Document · Vandersteen</span></div>
+      <div class="a-drawer-mid">
+        <span class="a-drawer-item">Library</span>
+        <span class="a-drawer-item">People</span>
+        <span class="a-drawer-item">The Scans</span>
+        <span class="a-drawer-item">Ledgers ↑</span>
+        <span class="a-drawer-item is-door">Find anything ⌘K</span>
+      </div>
+      <div class="a-drawer-right">
+        <span class="a-mono10">In hand today <span class="a-ink">0:47</span></span>
+        <span class="a-mono10">The Post<span class="a-dot"></span></span>
+        <span class="a-nameplate"><span class="a-avatar">LH</span><span><span style="display:block;font-family:var(--font-display);font-size:13px;color:var(--color-charcoal)">Leah Hartwell</span><span class="a-mono8" style="display:block">Middlewest Studio</span></span></span>
+      </div>
+    </div>
+
+  </div>
+  <figcaption><b>M2 · /doc project at 1440 — the fold.</b> Proves the index reports the live rung — <i>Money $17,500 owed</i> in place of <i>Design authority / no authority yet</i> (F09, F61) — that the FF&amp;E head elects one leader, <i>File the claim</i> (F34/F08), and that the ladder prints all six figures with <i>Moved</i> re-derived to $62,700.</figcaption>
+</section>
+      </div>
+    </div>
+    <div class="cmp-cell">
+      <p class="cmp-lane cmp-lane-b">Direction B — The Shop Ticket</p>
+      <div class="cmp-frame" style="zoom:0.5">
+<section class="mock-frame b-frame" data-screen="M2" data-width="1440" data-lane="B">
+<figure class="b-figure">
+<div class="mock-frame-inner b-inner" style="width:1440px;height:1300px">
+  <div class="b-page b-grid-1440">
+
+    <!-- SPINE — no rooms block, no shelves block. Both moved onto the paper. -->
+    <aside class="b-spine-col">
+      <p class="b-put-down">← Put down</p>
+      <div class="b-marks">
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-lifted"><i></i><i></i><i></i></span>
+        <span class="b-mark"><i></i><i></i><i></i></span>
+        <span class="b-mark"><i></i><i></i><i></i></span>
+      </div>
+      <div style="margin-top:12px">
+        <span class="b-active-label">Project</span>
+        <span class="b-active-sub">Active</span>
+      </div>
+
+      <div class="b-spine-block">
+        <p class="b-spine-label">On this paper</p>
+        <div class="b-ri-row is-current"><span class="b-ri-name">Client approvals</span><span class="b-ri-value">2 awaiting</span></div>
+        <div class="b-ri-row"><span class="b-ri-name">Schedule</span><span class="b-ri-value">install September 2026</span></div>
+        <div class="b-ri-row"><span class="b-ri-name">Pieces</span><span class="b-ri-value">36 lines · 4 rooms</span></div>
+        <div class="b-ri-row"><span class="b-ri-name">Money</span><span class="b-ri-value">$141,600 ordered</span></div>
+      </div>
+
+      <div class="b-timer">
+        <p class="b-timer-eyebrow"><span class="b-dot"></span> In hand</p>
+        <p class="b-timer-value">0:47</p>
+        <p class="b-timer-acts"><span>Pause</span><span>+ Log</span></p>
+      </div>
+      <p class="b-presence">Just you · visible<br>to the studio</p>
+    </aside>
+
+    <!-- PAPER -->
+    <div class="b-paper-col">
+
+      <!-- 1. Letterhead -->
+      <header class="letterhead">
+        <h1 class="lh-title">Vandersteen residence</h1>
+        <p class="b-lh-client">for the Vandersteens ↗</p>
+        <p class="vitals">
+          <span class="vital-value">Procurement &amp; Orders</span>
+          <span class="vital-value">· Target September 2026</span>
+          <span class="vital-value">· $184,500</span>
+        </p>
+      </header>
+
+      <!-- 2. ★ THE TICKET — one band, eight rows, every width, every section -->
+      <div class="b-ticket">
+        <div class="b-tk-head">
+          <span class="b-tk-eyebrow">The job · Project</span>
+          <span class="b-tk-phase">Procurement &amp; Orders · 4 of 6</span>
+          <span class="b-tk-fold">Fold ↑</span>
+        </div>
+
+        <div class="b-tk-row">
+          <span class="b-tk-label">Rooms</span>
+          <span class="b-tk-value">4 rooms · 36 lines</span>
+          <span class="b-tk-door">→</span>
+          <span class="b-tk-chips">
+            <span class="b-tk-chip">Living room <em>14</em></span><span class="b-tk-sep">·</span>
+            <span class="b-tk-chip">Dining room <em>8</em></span><span class="b-tk-sep">·</span>
+            <span class="b-tk-chip">Primary bedroom <em>9</em></span><span class="b-tk-sep">·</span>
+            <span class="b-tk-chip">Mudroom <em>5</em></span>
+          </span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Pieces</span>
+          <span class="b-tk-value">29 ordered · 6 delivered · 2 in transit · <span class="b-x">1 damaged</span> · 2 unspecified</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Drawings</span>
+          <span class="b-tk-value b-empty">Nothing filed</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Spec</span>
+          <span class="b-tk-value">34 of 36 specified · by room</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Boards</span>
+          <span class="b-tk-value"><span class="b-empty">No boards yet</span> · start one</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Money</span>
+          <span class="b-tk-value">$141,600 ordered · <span class="b-x">$17,500 owed you, 22 days</span> · $12,300 deposit not drawn</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Dates</span>
+          <span class="b-tk-value">Install Tuesday, September 15 · three weeks out</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">People</span>
+          <span class="b-tk-value b-empty">Nobody on it yet</span>
+          <span class="b-tk-door">→</span>
+        </div>
+      </div>
+
+      <!-- 3. Red-letter zone — exactly the specimen's two, older first, no badge -->
+      <section class="red-letter">
+        <p class="rl-label">Needs attention · in one place</p>
+        <div class="b-rl-row">
+          <span class="b-rl-mark"></span>
+          <span>
+            <span class="b-rl-when">Overdue 6 days</span>
+            <span class="b-rl-line">The Vandersteens still haven’t approved the Hartland wool rug and the walnut nightstands for the primary bedroom. Sent August 13.</span>
+          </span>
+          <span class="b-act scored" style="align-self:center">Send a reminder</span>
+        </div>
+        <div class="b-rl-row">
+          <span class="b-rl-mark"></span>
+          <span>
+            <span class="b-rl-when">Overdue 3 days</span>
+            <span class="b-rl-line">The reading chair still has no fabric. The workroom needed COM by August 22 to hold install.</span>
+          </span>
+          <span class="b-act scored" style="align-self:center">Choose the fabric</span>
+        </div>
+      </section>
+
+      <!-- 4. Letterhead instruments -->
+      <div class="b-instr">
+        <span class="b-act scored">Message the Vandersteens</span>
+        <span class="b-act b-act-quiet">Preview as the Vandersteens</span>
+        <span class="b-act b-act-quiet">Sharing · Milestones</span>
+        <span class="b-act b-act-quiet">Call sheet · 0</span>
+      </div>
+
+      <!-- 5. Regions, mount order unchanged (C11) -->
+      <div class="seam b-seam">
+        <span class="seam-name">Client approvals</span>
+        <span class="seam-summary">2 awaiting · the Vandersteens</span>
+        <span class="seam-unfold">Unfold ↓</span>
+      </div>
+      <div class="seam b-seam">
+        <span class="seam-name">Schedule dates</span>
+        <span class="seam-summary">Install Tuesday, September 15</span>
+        <span class="seam-unfold">Unfold ↓</span>
+      </div>
+
+      <div class="b-region">
+        <div class="region-rule"></div>
+        <div class="b-reg-head">
+          <div>
+            <p class="b-reg-name">Pieces</p>
+            <p class="b-reg-sub">the FF&amp;E schedule, by room</p>
+            <p class="b-reg-status">4 groups · 36 lines · 2 awaiting authorization</p>
+          </div>
+          <div class="b-ledger">
+            <span class="b-inked">Release for authorization</span>
+            <span class="b-act b-act-quiet scored">Add a line</span>
+            <span class="b-act b-act-quiet">Bill 3 uninvoiced</span>
+            <span class="b-act b-act-quiet">Spec book →</span>
+          </div>
+        </div>
+
+        <div class="b-room-head"><span class="b-room-name">Living room</span><span class="b-room-count">14 lines · 11 ordered · 2 in transit · 1 damaged</span></div>
+        <div class="ffe-row">
+          <div><span class="ffe-name">Brass-and-oak console</span><span class="ffe-vendor">Fond du Lac Ironworks</span></div>
+          <div class="ffe-right"><span class="stamp stamp-damaged">Damaged</span></div>
+        </div>
+        <div class="b-unfolded">
+          <p>Brass-and-oak console · Fond du Lac Ironworks · delivered August 19 · top panel gouged · claim drafted, not filed · <span class="b-strong">carrier window closes tomorrow</span></p>
+          <p class="b-acts"><span class="b-act scored">File the claim</span><span class="b-act b-act-quiet scored">Edit spec details →</span></p>
+        </div>
+
+        <div class="b-room-head"><span class="b-room-name">Dining room</span><span class="b-room-count">8 lines · 8 ordered · 6 delivered · PO-2026-0418 unanswered 14 days</span></div>
+        <div class="b-room-head"><span class="b-room-name">Primary bedroom</span><span class="b-room-count">9 lines · 7 ordered · 2 awaiting client approval</span></div>
+        <div class="b-room-head"><span class="b-room-name">Mudroom</span><span class="b-room-count">5 lines · 3 ordered · 2 unspecified</span></div>
+        <p class="b-addroom"><span class="b-act b-act-quiet scored">Add a room</span></p>
+      </div>
+
+      <!-- 6. Money — renamed head, and a fifth rung -->
+      <div class="b-region">
+        <div class="region-rule"></div>
+        <div class="b-reg-head">
+          <div>
+            <p class="b-reg-name">Money</p>
+            <p class="b-reg-sub">what’s authorized, what’s owed</p>
+          </div>
+          <div class="b-ledger"><span class="b-act b-act-quiet">Open the accounts →</span></div>
+        </div>
+        <div class="money-ladder" style="margin-top:8px">
+          <div class="ml-rung"><span class="ml-label">Authorized</span><span class="ml-value">$184,500 approved</span></div>
+          <div class="ml-rung"><span class="ml-label">Plan</span><span class="ml-value">$171,240 specified</span></div>
+          <div class="ml-rung"><span class="ml-label">Committed</span><span class="ml-value">$141,600 ordered</span></div>
+          <div class="ml-rung"><span class="ml-label">Moved <em>in motion — ordered through installed (committed, not yet paid out)</em></span><span class="ml-value">$141,600</span></div>
+          <div class="ml-rung"><span class="ml-label">Owed you <em>Invoice 2026-114 · 22 days</em></span><span class="ml-value">$17,500 <span class="b-act scored" style="margin-left:16px;font-size:10px">Send a reminder</span></span></div>
+        </div>
+      </div>
+
+      <!-- 7. The record · kickoff · colophon -->
+      <div class="b-region">
+        <div class="region-rule"></div>
+        <div class="b-reg-head">
+          <div><p class="b-reg-name">The record · 3 settled</p></div>
+          <div class="b-ledger"><span class="b-act b-act-quiet">Unfold ↓</span></div>
+        </div>
+        <div class="b-instr b-colophon" style="margin-top:20px;border-bottom:none"><span class="b-colophon-id">Leah Hartwell · hands on the work: you</span><span style="display:flex;gap:22px;align-items:center">
+          <span class="b-act b-act-quiet">Brief a vendor</span>
+          <span class="b-act b-act-quiet">Hold</span>
+          <span class="b-act b-act-quiet">Archive</span>
+          <span class="b-act b-act-quiet scored">Add to the team</span></span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MARGIN RAIL -->
+    <aside class="b-margin-col">
+      <div class="b-margin-head"><span class="b-margin-title">In the margin</span></div>
+      <div class="b-margin-acts"><span>+ Decision</span><span>+ Note</span></div>
+      <div class="margin-item" style="margin-top:8px">
+        <p class="mi-eyebrow">Money · invoice out</p>
+        <p class="mi-line">Invoice 2026-114 · $17,500 · 22 days</p>
+      </div>
+      <div class="margin-item">
+        <p class="mi-eyebrow">Money · deposit not drawn</p>
+        <p class="mi-line">PO-2026-0418 · $12,300 · 50% at release</p>
+      </div>
+      <div class="margin-item">
+        <p class="mi-eyebrow">Decision · carrier window</p>
+        <p class="mi-line">Brass-and-oak console claim · closes tomorrow</p>
+      </div>
+      <div class="margin-item">
+        <p class="mi-eyebrow">Time · Aug 25</p>
+        <p class="mi-line">In hand 0:47 · 6.4 hours this week</p>
+      </div>
+    </aside>
+
+  </div>
+</div>
+<figcaption class="mock-frame-caption b-cap"><b>M2 · /doc project at 1440 (first 1300px).</b> The map is clipped to the paper: one band, eight rows, under the letterhead — and the spine has lost its rooms and shelves blocks. Money grows a fifth rung, $17,500 owed you.</figcaption>
+</figure>
+</section>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="cmp-row" id="row-M3">
+  <h2 class="cmp-row-title">M3 · /doc project at 1280 — compact spine</h2>
+  <div class="cmp-pair">
+    <div class="cmp-cell">
+      <p class="cmp-lane cmp-lane-a">Direction A — Everything Prints</p>
+      <div class="cmp-frame" style="zoom:0.56">
+<section class="mock-frame patina-mock" data-screen="M3" data-width="1280" data-lane="A">
+  <div class="a-screen" style="width:1280px;height:1100px">
+
+    <!-- ── the document at 1280: 56px spine · paper · MARGIN tab ───────── -->
+    <div class="a-doc a-t1280" style="height:776px;min-height:0;overflow:hidden">
+
+      <aside class="a-spine56">
+        <p class="a-pd">←<br>Put<br>down</p>
+        <div class="a-vmarks"><i class="is-past"></i><i class="is-past"></i><i class="is-past"></i><i class="is-past"></i><i class="is-here"></i><i></i><i></i></div>
+        <p class="a-here-name">Project</p>
+        <p class="a-here-name a-oak" style="margin-top:18px">● In<br>hand</p>
+        <p class="a-here-name" style="margin-top:3px">0:47</p>
+      </aside>
+
+      <div class="a-paper" style="padding:28px 32px 0">
+        <h1 class="a-lh-title" style="font-size:28px">Vandersteen residence</h1>
+        <p class="a-lh-client" style="font-size:16px">for Marit &amp; Dale Vandersteen ↗</p>
+        <p class="a-lh-vitals">Procurement &amp; orders · Target Sept 2026 · $184,500</p>
+
+        <div class="a-rl" style="margin-top:13px">
+          <p class="a-rl-label">Needs attention · in one place</p>
+          <div class="a-rl-row">
+            <span class="stamp size-xs a-stamp-spec-due">spec due</span>
+            <span class="a-rl-text is-lead">The reading chair fabric is three days past the workroom's COM date</span>
+            <span class="a-act">Pick the fabric</span>
+          </div>
+          <div class="a-rl-row">
+            <span class="stamp size-xs a-stamp-decision">decision due</span>
+            <span class="a-rl-text">The primary bedroom rug and nightstands — six days past due with Marit and Dale</span>
+            <span class="a-act">Chase the approval</span>
+          </div>
+        </div>
+
+        <div class="a-instr" style="margin-top:13px">
+          <span class="a-act">Message the Vandersteens</span>
+          <span class="a-mono11">Preview as</span>
+          <span class="a-mono11">Sharing</span>
+          <span class="a-mono11">Milestones</span>
+          <span class="a-mono11">Call sheet · <span class="a-ink">5</span></span>
+        </div>
+
+        <div class="a-seam" style="margin-top:11px">
+          <span class="a-seam-name">Client approvals</span>
+          <span class="a-seam-sum">2 awaiting decision · oldest sent Aug 13</span>
+          <span class="a-seam-unf">Unfold ↓</span>
+        </div>
+        <div class="a-seam">
+          <span class="a-seam-name">Schedule dates</span>
+          <span class="a-seam-sum">Install Tuesday, September 15</span>
+          <span class="a-seam-unf">Unfold ↓</span>
+        </div>
+
+        <div class="a-rule"></div>
+        <div class="a-rhead">
+          <div>
+            <p class="a-rhead-eyebrow">Band</p>
+            <h2 class="a-rhead-name" style="font-size:20px">Schedule</h2>
+            <p class="a-rhead-status">6 phases · Procurement &amp; Orders active · install Tuesday, September 15</p>
+          </div>
+          <div class="a-ledger"><span class="a-act">Adjust dates</span><span class="a-mono10 a-clay">Fold ↑</span></div>
+        </div>
+
+        <div class="a-instr" style="margin-top:12px;gap:20px">
+          <span class="a-mono10">Folio · 4 files</span>
+          <span class="a-act a-quiet-act">+ File</span>
+          <span class="a-act">Plan room →</span>
+        </div>
+
+        <div class="a-rule"></div>
+        <div class="a-rhead">
+          <div>
+            <p class="a-rhead-eyebrow">FF&amp;E</p>
+            <h2 class="a-rhead-name" style="font-size:20px">Project · FF&amp;E</h2>
+            <p class="a-rhead-status">4 rooms · 36 lines · 1 damaged · 1 PO unanswered</p>
+          </div>
+          <div class="a-ledger">
+            <span class="a-act a-inked">File the claim</span>
+            <span class="a-act">Spec the 2 unspecified →</span>
+            <span class="a-act">Bill 3 uninvoiced lines →</span>
+            <span class="a-act a-quiet-act">Add a line</span>
+            <span class="a-act">Spec book →</span>
+          </div>
+        </div>
+
+        <div class="a-roomhead"><span class="a-roomhead-name">Living room</span><span></span><span class="a-roomhead-count">14 lines · 11 ordered · 2 in transit · 1 damaged</span></div>
+        <div class="a-line">
+          <span><span class="a-line-name">Brass-and-oak console</span><span class="a-line-vendor">Fond du Lac Ironworks · ×1</span></span>
+          <span class="a-line-right"><span class="stamp size-xs stamp-damaged">damaged</span><span class="a-line-price">$4,300</span></span>
+        </div>
+        <div class="a-line">
+          <span><span class="a-line-name">Reading chair</span><span class="a-line-vendor">The workroom · COM due Aug 22</span></span>
+          <span class="a-line-right"><span class="stamp size-xs a-stamp-spec-due">spec due</span><span class="a-line-price">—</span></span>
+        </div>
+        <div class="a-roomhead"><span class="a-roomhead-name">Dining room</span><span></span><span class="a-roomhead-count">8 lines · 8 ordered · 6 delivered</span></div>
+        <div class="a-line">
+          <span><span class="a-line-name">Dining table + 6 side chairs</span><span class="a-line-vendor">Sturdy Oak Woodworks · PO-2026-0418 · sent Aug 11 · no acknowledgement in 14 days</span></span>
+          <span class="a-line-right"><span class="stamp size-xs a-stamp-ordered">ordered</span><span class="a-line-price">$14,880</span></span>
+        </div>
+      </div>
+
+      <aside class="a-margintab"><span>Margin ← · 3</span></aside>
+    </div>
+
+    <!-- ── what the tier reaches without a shelved block ────────────────── -->
+    <div style="padding:0 32px">
+      <p class="a-seamlabel">At 1280 the spine keeps no index, no rooms block, no shelves — C8 untouched. The doors move onto the body they act on, and the register prints its own doorway.</p>
+
+      <div style="display:flex;gap:26px;margin-top:12px;align-items:flex-start">
+
+        <div class="a-inset" style="width:600px">
+          <span class="a-inset-label">⌘K · opened from the drawer's printed <b>Find anything</b> door · nothing typed</span>
+          <div class="cmdk a-cmdk" style="border:none;border-radius:0">
+            <div class="cmdk-input">Find a document or a ledger…</div>
+            <p class="cmdk-group-label">This surface</p>
+            <div class="cmdk-row is-lead"><span class="cmdk-row-title">Plan room</span><span class="cmdk-row-meta">this project · the drawing set</span></div>
+            <div class="cmdk-row is-lead"><span class="cmdk-row-title">Spec book</span><span class="cmdk-row-meta">this project · 34 specified</span></div>
+            <div class="cmdk-row is-lead"><span class="cmdk-row-title">Mood boards</span><span class="cmdk-row-meta">this project · 3 boards</span></div>
+            <div class="cmdk-row is-lead"><span class="cmdk-row-title">Call sheet</span><span class="cmdk-row-meta">this project · 5 on the roster</span></div>
+          </div>
+        </div>
+
+        <div class="a-inset" style="width:330px">
+          <span class="a-inset-label">The margin tab, 1180–1439, carries its count</span>
+          <div class="a-inset-body">
+            <p class="a-mono11 a-ink" style="letter-spacing:.12em">Margin ← · 3</p>
+            <p class="a-quiet" style="margin-top:8px">Money · deposit due $12,300 · Decision · primary bedroom · Message · mudroom bench</p>
+            <p class="a-mono8" style="margin-top:10px">Today it is an unlabelled tab</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Studio Drawer -->
+    <div class="a-drawer" style="position:absolute;left:0;right:0;bottom:0">
+      <div><span class="a-drawer-word">Patina</span><span class="a-drawer-crumb">Document · Vandersteen</span></div>
+      <div class="a-drawer-mid">
+        <span class="a-drawer-item">Library</span>
+        <span class="a-drawer-item">People</span>
+        <span class="a-drawer-item">The Scans</span>
+        <span class="a-drawer-item">Ledgers ↑</span>
+        <span class="a-drawer-item is-door">Find anything ⌘K</span>
+      </div>
+      <div class="a-drawer-right">
+        <span class="a-mono10">In hand today <span class="a-ink">0:47</span></span>
+        <span class="a-mono10">The Post<span class="a-dot"></span></span>
+        <span class="a-nameplate"><span class="a-avatar">LH</span><span><span style="display:block;font-family:var(--font-display);font-size:13px;color:var(--color-charcoal)">Leah Hartwell</span><span class="a-mono8" style="display:block">Middlewest Studio</span></span></span>
+      </div>
+    </div>
+
+  </div>
+  <figcaption><b>M3 · /doc project at 1280.</b> Proves the compact spine finally prints its put-down word and the active section's name (F02), that every door has moved onto the body it acts on — <i>Plan room →</i> on the Folio, <i>Spec book →</i> on the FF&amp;E head, <i>Call sheet · 5</i> on the instruments row — and that boards cost two printed acts through the register, never a recalled chord (F49, C-AP-05).</figcaption>
+</section>
+      </div>
+    </div>
+    <div class="cmp-cell">
+      <p class="cmp-lane cmp-lane-b">Direction B — The Shop Ticket</p>
+      <div class="cmp-frame" style="zoom:0.56">
+<section class="mock-frame b-frame" data-screen="M3" data-width="1280" data-lane="B">
+<figure class="b-figure">
+<div class="mock-frame-inner b-inner" style="width:1280px;height:1100px">
+  <div class="b-page b-grid-1280">
+
+    <!-- COMPACT SPINE — bare ←, seven marks, the timer. The word "Project" is not here. -->
+    <aside class="b-spine-compact">
+      <span class="b-glyph">←</span>
+      <div class="b-marks-v">
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-lifted"><i></i><i></i><i></i></span>
+        <span class="b-mark"><i></i><i></i><i></i></span>
+        <span class="b-mark"><i></i><i></i><i></i></span>
+      </div>
+      <span class="b-dot" style="margin-top:6px"></span>
+      <span class="b-compact-timer">In hand 0:47</span>
+    </aside>
+
+    <!-- PAPER — identical to M2, ticket included -->
+    <div class="b-paper-col">
+
+      <header class="letterhead">
+        <h1 class="lh-title">Vandersteen residence</h1>
+        <p class="b-lh-client">for the Vandersteens ↗</p>
+        <p class="vitals">
+          <span class="vital-value">Procurement &amp; Orders</span>
+          <span class="vital-value">· Target September 2026</span>
+          <span class="vital-value">· $184,500</span>
+        </p>
+      </header>
+
+      <div class="b-ticket">
+        <div class="b-tk-head">
+          <span class="b-tk-eyebrow">The job · Project</span>
+          <span class="b-tk-phase">Procurement &amp; Orders · 4 of 6</span>
+          <span class="b-tk-fold">Fold ↑</span>
+        </div>
+
+        <div class="b-tk-row">
+          <span class="b-tk-label">Rooms</span>
+          <span class="b-tk-value">4 rooms · 36 lines</span>
+          <span class="b-tk-door">→</span>
+          <span class="b-tk-chips">
+            <span class="b-tk-chip">Living room <em>14</em></span><span class="b-tk-sep">·</span>
+            <span class="b-tk-chip">Dining room <em>8</em></span><span class="b-tk-sep">·</span>
+            <span class="b-tk-chip">Primary bedroom <em>9</em></span><span class="b-tk-sep">·</span>
+            <span class="b-tk-chip">Mudroom <em>5</em></span>
+          </span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Pieces</span>
+          <span class="b-tk-value">29 ordered · 6 delivered · 2 in transit · <span class="b-x">1 damaged</span> · 2 unspecified</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Drawings</span>
+          <span class="b-tk-value b-empty">Nothing filed</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Spec</span>
+          <span class="b-tk-value">34 of 36 specified · by room</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Boards</span>
+          <span class="b-tk-value"><span class="b-empty">No boards yet</span> · start one</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Money</span>
+          <span class="b-tk-value">$141,600 ordered · <span class="b-x">$17,500 owed you, 22 days</span> · $12,300 deposit not drawn</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">Dates</span>
+          <span class="b-tk-value">Install Tuesday, September 15 · three weeks out</span>
+          <span class="b-tk-door">→</span>
+        </div>
+        <div class="b-tk-row">
+          <span class="b-tk-label">People</span>
+          <span class="b-tk-value b-empty">Nobody on it yet</span>
+          <span class="b-tk-door">→</span>
+        </div>
+      </div>
+
+      <section class="red-letter">
+        <p class="rl-label">Needs attention · in one place</p>
+        <div class="b-rl-row">
+          <span class="b-rl-mark"></span>
+          <span>
+            <span class="b-rl-when">Overdue 6 days</span>
+            <span class="b-rl-line">The Vandersteens still haven’t approved the Hartland wool rug and the walnut nightstands for the primary bedroom. Sent August 13.</span>
+          </span>
+          <span class="b-act scored" style="align-self:center">Send a reminder</span>
+        </div>
+        <div class="b-rl-row">
+          <span class="b-rl-mark"></span>
+          <span>
+            <span class="b-rl-when">Overdue 3 days</span>
+            <span class="b-rl-line">The reading chair still has no fabric. The workroom needed COM by August 22 to hold install.</span>
+          </span>
+          <span class="b-act scored" style="align-self:center">Choose the fabric</span>
+        </div>
+      </section>
+
+      <div class="b-instr">
+        <span class="b-act scored">Message the Vandersteens</span>
+        <span class="b-act b-act-quiet">Preview as the Vandersteens</span>
+        <span class="b-act b-act-quiet">Sharing · Milestones</span>
+        <span class="b-act b-act-quiet">Call sheet · 0</span>
+      </div>
+
+      <div class="seam b-seam">
+        <span class="seam-name">Client approvals</span>
+        <span class="seam-summary">2 awaiting · the Vandersteens</span>
+        <span class="seam-unfold">Unfold ↓</span>
+      </div>
+      <div class="seam b-seam">
+        <span class="seam-name">Schedule dates</span>
+        <span class="seam-summary">Install Tuesday, September 15</span>
+        <span class="seam-unfold">Unfold ↓</span>
+      </div>
+
+      <div class="b-region">
+        <div class="region-rule"></div>
+        <div class="b-reg-head">
+          <div>
+            <p class="b-reg-name">Pieces</p>
+            <p class="b-reg-sub">the FF&amp;E schedule, by room</p>
+            <p class="b-reg-status">4 groups · 36 lines · 2 awaiting authorization</p>
+          </div>
+          <div class="b-ledger">
+            <span class="b-inked">Release for authorization</span>
+            <span class="b-act b-act-quiet scored">Add a line</span>
+            <span class="b-act b-act-quiet">Bill 3 uninvoiced</span>
+            <span class="b-act b-act-quiet">Spec book →</span>
+          </div>
+        </div>
+        <div class="b-room-head"><span class="b-room-name">Living room</span><span class="b-room-count">14 lines · 11 ordered · 2 in transit · 1 damaged</span></div>
+        <div class="ffe-row">
+          <div><span class="ffe-name">Brass-and-oak console</span><span class="ffe-vendor">Fond du Lac Ironworks</span></div>
+          <div class="ffe-right"><span class="stamp stamp-damaged">Damaged</span></div>
+        </div>
+        <div class="b-unfolded">
+          <p>Brass-and-oak console · Fond du Lac Ironworks · delivered August 19 · top panel gouged · claim drafted, not filed · <span class="b-strong">carrier window closes tomorrow</span></p>
+          <p class="b-acts"><span class="b-act scored">File the claim</span><span class="b-act b-act-quiet scored">Edit spec details →</span></p>
+        </div>
+        <div class="b-room-head"><span class="b-room-name">Dining room</span><span class="b-room-count">8 lines · 8 ordered · 6 delivered · PO-2026-0418 unanswered 14 days</span></div>
+        <div class="b-room-head"><span class="b-room-name">Primary bedroom</span><span class="b-room-count">9 lines · 7 ordered · 2 awaiting client approval</span></div>
+        <div class="b-room-head"><span class="b-room-name">Mudroom</span><span class="b-room-count">5 lines · 3 ordered · 2 unspecified</span></div>
+        <p class="b-addroom"><span class="b-act b-act-quiet scored">Add a room</span></p>
+      </div>
+
+      <div class="b-region">
+        <div class="region-rule"></div>
+        <div class="b-reg-head">
+          <div>
+            <p class="b-reg-name">Money</p>
+            <p class="b-reg-sub">what’s authorized, what’s owed</p>
+          </div>
+          <div class="b-ledger"><span class="b-act b-act-quiet">Open the accounts →</span></div>
+        </div>
+        <div class="money-ladder">
+          <div class="ml-rung"><span class="ml-label">Authorized</span><span class="ml-value">$184,500 approved</span></div>
+          <div class="ml-rung"><span class="ml-label">Plan</span><span class="ml-value">$171,240 specified</span></div>
+          <div class="ml-rung"><span class="ml-label">Committed</span><span class="ml-value">$141,600 ordered</span></div>
+          <div class="ml-rung"><span class="ml-label">Moved <em>in motion — ordered through installed (committed, not yet paid out)</em></span><span class="ml-value">$141,600</span></div>
+          <div class="ml-rung"><span class="ml-label">Owed you <em>Invoice 2026-114 · 22 days</em></span><span class="ml-value">$17,500 <span class="b-act scored" style="margin-left:16px;font-size:10px">Send a reminder</span></span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- The margin at this tier is its own tab -->
+    <aside class="b-margin-tab"><span>Margin ←</span></aside>
+
+  </div>
+</div>
+<figcaption class="mock-frame-caption b-cap"><b>M3 · /doc project at 1280 (first 1100px).</b> Everything that vanishes below 1440 today is on this screen — rooms, drawings, spec, boards, roster — because the ticket belongs to the paper, not the tier. The room chips are the lens’s put-down affordance at this width.</figcaption>
+</figure>
+</section>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="cmp-row cmp-row-m4" id="row-M4">
+  <h2 class="cmp-row-title">M4 · /doc project at 390 — mobile, More sheet open</h2>
+  <div class="cmp-pair">
+    <div class="cmp-cell cmp-cell-1to1">
+      <p class="cmp-lane cmp-lane-a">Direction A — Everything Prints</p>
+      <div class="cmp-frame" style="zoom:1">
+<section class="mock-frame patina-mock" data-screen="M4" data-width="390" data-lane="A">
+  <div class="a-screen" style="width:390px;height:1400px">
+
+    <!-- ── plate A: the document at 390, one column, full bleed ────────── -->
+    <div style="position:absolute;left:0;top:0;width:390px;height:884px;overflow:hidden;background:var(--doc-paper)">
+      <div class="a-mpaper">
+        <h1 class="a-m-lh-title">Vandersteen residence</h1>
+        <p class="a-lh-client" style="font-size:14px">for Marit &amp; Dale Vandersteen ↗</p>
+        <p class="a-lh-vitals" style="font-size:8.5px">Procurement &amp; orders · Target Sept 2026 · $184,500</p>
+
+        <div class="a-rl" style="margin-top:10px;padding:7px 10px">
+          <p class="a-rl-label">Needs attention · in one place</p>
+          <div class="a-rl-row" style="grid-template-columns:1fr;gap:3px">
+            <span class="a-rl-text is-lead" style="font-size:13.5px">The reading chair fabric is three days past the workroom's COM date</span>
+            <span><span class="stamp size-xs a-stamp-spec-due">spec due</span> <span class="a-act" style="margin-left:8px">Pick the fabric</span></span>
+          </div>
+          <div class="a-rl-row" style="grid-template-columns:1fr;gap:3px">
+            <span class="a-rl-text" style="font-size:13.5px">The primary bedroom rug and nightstands — six days past due with Marit and Dale</span>
+            <span><span class="stamp size-xs a-stamp-decision">decision due</span> <span class="a-act" style="margin-left:8px">Chase the approval</span></span>
+          </div>
+        </div>
+
+        <div class="a-m-instr" style="margin-top:10px">
+          <div><span class="a-act">Message the Vandersteens</span></div>
+          <div><span class="a-mono11">Preview as</span></div>
+          <div><span class="a-mono11">Sharing</span></div>
+          <div><span class="a-mono11">Milestones</span></div>
+          <div><span class="a-mono11">Call sheet · <span class="a-ink">5</span></span></div>
+        </div>
+
+        <p class="a-mono9 a-ink" style="margin-top:11px">In the margin · 3</p>
+        <div class="a-chips" style="margin-top:7px">
+          <span class="a-chip"><b>Money · deposit due</b><span>$12,300</span></span>
+          <span class="a-chip"><b>Decision</b><span>Primary bedroom</span></span>
+          <span class="a-chip"><b>Message</b><span>Mudroom bench</span></span>
+        </div>
+
+        <div class="a-rule"></div>
+        <div class="a-ffehead-m">
+          <p class="a-l1">Project · FF&amp;E</p>
+          <p class="a-l2">4 rooms · 36 lines · 1 damaged</p>
+          <p class="a-l3">
+            <span class="a-act a-inked">File the claim</span>
+            <span class="a-act">Spec book →</span>
+            <span class="a-act a-quiet-act">Add a line</span>
+          </p>
+        </div>
+
+        <div class="a-roomhead"><span class="a-roomhead-name">Living room</span><span></span><span class="a-roomhead-count">14 · 1 damaged</span></div>
+        <div class="a-line">
+          <span><span class="a-line-name">Brass-and-oak console</span><span class="a-line-vendor">Fond du Lac Ironworks · ×1</span></span>
+          <span class="a-line-right"><span class="stamp size-xs stamp-damaged">damaged</span><span class="a-line-price">$4,300</span></span>
+        </div>
+        <div class="a-line">
+          <span><span class="a-line-name">Reading chair</span><span class="a-line-vendor">The workroom · COM due Aug 22</span></span>
+          <span class="a-line-right"><span class="stamp size-xs a-stamp-spec-due">spec due</span></span>
+        </div>
+      </div>
+
+      <div class="a-mbar" style="position:absolute;left:0;right:0;bottom:0">
+        <div class="a-mbar-item"><span class="a-mbar-eyebrow">In this document</span><span class="a-mbar-value">Project</span></div>
+        <div class="a-mbar-item a-mbar-lead">Pick the fabric</div>
+        <div class="a-mbar-item a-mbar-more">···<br>More</div>
+      </div>
+    </div>
+
+    <!-- ── plate B: the same screen with `More` open ───────────────────── -->
+    <div style="position:absolute;left:0;top:884px;width:390px;height:516px;overflow:hidden;background:var(--doc-sheet-2)">
+      <p class="a-seamlabel" style="margin:0 16px;padding-top:9px">More · the same screen, one tap on</p>
+
+      <div class="a-sheet" style="position:absolute;left:0;right:0;bottom:64px;top:44px">
+        <div class="a-sheet-handle"></div>
+        <p class="a-mono9 a-ink">In this document</p>
+        <div class="a-srow-m"><span class="a-n">Plan room</span><span class="a-mono8">the drawing set · nothing filed</span></div>
+        <div class="a-srow-m"><span class="a-n">Spec book</span><span class="a-mono8">34 specified · by room</span></div>
+        <div class="a-srow-m"><span class="a-n">Boards</span><span class="a-mono8">3 boards</span></div>
+        <div class="a-srow-m" style="border-bottom:none"><span class="a-n">Call sheet</span><span class="a-mono8">5 on the roster</span></div>
+
+        <div class="a-sgroup">
+          <div class="a-srow-m"><span class="a-n">Find anything ⌘K</span><span class="a-mono8">the register</span></div>
+          <div class="a-srow-m"><span class="a-n">Time in hand</span><span class="a-mono8">0:47</span></div>
+          <div class="a-srow-m"><span class="a-n">The Post</span><span class="a-mono8 a-oak">New</span></div>
+          <div class="a-srow-m"><span class="a-n">Ledgers</span><span class="a-mono8">Orders · Accounts · Hours</span></div>
+          <div class="a-srow-m" style="border-bottom:none"><span class="a-n">Leave a note</span><span class="a-mono8">to the margin</span></div>
+        </div>
+      </div>
+
+      <div class="a-mbar" style="position:absolute;left:0;right:0;bottom:0">
+        <div class="a-mbar-item"><span class="a-mbar-eyebrow">In this document</span><span class="a-mbar-value">Project</span></div>
+        <div class="a-mbar-item a-mbar-lead">Pick the fabric</div>
+        <div class="a-mbar-item a-mbar-more">···<br>More</div>
+      </div>
+    </div>
+
+  </div>
+  <figcaption><b>M4 · /doc project at 390, and the <i>More</i> menu open.</b> Proves the FF&amp;E head recomposes onto three lines so the leader never covers the heading (F28), the bar's one act prints untruncated — <i>Pick the fabric</i>, not <i>Message the cli…</i> (F07) — and that ⌘K, the plan room, the spec book, boards and the roster finally have a printed door on a phone (F49).</figcaption>
+</section>
+      </div>
+    </div>
+    <div class="cmp-cell cmp-cell-1to1">
+      <p class="cmp-lane cmp-lane-b">Direction B — The Shop Ticket</p>
+      <div class="cmp-frame" style="zoom:1">
+<section class="mock-frame b-frame" data-screen="M4" data-width="390" data-lane="B">
+<figure class="b-figure">
+<div class="mock-frame-inner b-inner" style="width:390px;height:1400px">
+  <div class="b-page">
+    <div class="b-m">
+
+      <header class="letterhead">
+        <h1 class="b-m-title">Vandersteen residence</h1>
+        <p class="b-lh-client" style="font-size:15px">for the Vandersteens ↗</p>
+        <p class="vitals">
+          <span class="vital-value">Procurement &amp; Orders</span>
+          <span class="vital-value">· $184,500</span>
+        </p>
+      </header>
+
+      <!-- THE TICKET at rest: one scored seam, a fixed two-line wrap rule -->
+      <div class="b-seam2">
+        <p class="b-seam2-l1">The job · Project · Procurement &amp; Orders 4 of 6</p>
+        <p class="b-seam2-l2">
+          <span class="b-seam2-ex">1 damaged · $17,500 owed you</span>
+          <span class="b-seam2-unfold">Unfold ↓</span>
+        </p>
+      </div>
+
+      <section class="red-letter">
+        <p class="rl-label">Needs attention · in one place</p>
+        <div class="b-rl-row" style="grid-template-columns:3px 1fr">
+          <span class="b-rl-mark"></span>
+          <span>
+            <span class="b-rl-when">Overdue 6 days</span>
+            <span class="b-rl-line">The Vandersteens still haven’t approved the Hartland wool rug and the walnut nightstands for the primary bedroom. Sent August 13.</span>
+            <span class="b-tap44"><span class="b-act scored">Send a reminder</span></span>
+          </span>
+        </div>
+        <div class="b-rl-row" style="grid-template-columns:3px 1fr">
+          <span class="b-rl-mark"></span>
+          <span>
+            <span class="b-rl-when">Overdue 3 days</span>
+            <span class="b-rl-line">The reading chair still has no fabric. The workroom needed COM by August 22 to hold install.</span>
+            <span class="b-tap44"><span class="b-act scored">Choose the fabric</span></span>
+          </span>
+        </div>
+      </section>
+
+      <div class="b-instr" style="gap:2px 20px">
+        <span class="b-act scored b-tap44">Message the Vandersteens</span>
+        <span class="b-act b-act-quiet b-tap44">Preview as the Vandersteens</span>
+        <span class="b-act b-act-quiet b-tap44">Sharing · Milestones</span>
+        <span class="b-act b-act-quiet b-tap44">Call sheet · 0</span>
+      </div>
+
+      <!-- Region status no longer truncates mid-word (F87) -->
+      <div class="seam b-seam" style="grid-template-columns:1fr auto">
+        <span class="seam-name" style="grid-column:1/2">Client approvals</span>
+        <span class="seam-unfold" style="grid-column:2/3">Unfold ↓</span>
+        <span class="seam-summary" style="grid-column:1/3;white-space:normal;overflow:visible">2 awaiting · the Vandersteens</span>
+      </div>
+      <div class="seam b-seam" style="grid-template-columns:1fr auto">
+        <span class="seam-name" style="grid-column:1/2">Schedule dates</span>
+        <span class="seam-unfold" style="grid-column:2/3">Unfold ↓</span>
+        <span class="seam-summary" style="grid-column:1/3;white-space:normal;overflow:visible">Install Tuesday, September 15</span>
+      </div>
+
+      <!-- Pieces head on its own line; the ledger acts wrap BELOW it (F28) -->
+      <div class="b-region">
+        <div class="region-rule"></div>
+        <p class="b-reg-name">Pieces</p>
+        <p class="b-reg-sub">the FF&amp;E schedule, by room</p>
+        <p class="b-reg-status">4 groups · 36 lines · 2 awaiting authorization</p>
+        <div class="b-ledger" style="justify-content:flex-start;gap:14px 18px;margin-top:12px">
+          <span class="b-inked b-tap44">Release for authorization</span>
+          <span class="b-act b-act-quiet scored b-tap44">Add a line</span>
+          <span class="b-act b-act-quiet b-tap44">Bill 3 uninvoiced</span>
+          <span class="b-act b-act-quiet b-tap44">Spec book →</span>
+        </div>
+
+        <div class="b-room-head"><span class="b-room-name">Living room</span><span class="b-room-count">14 lines · 1 damaged</span></div>
+        <div class="ffe-row">
+          <div><span class="ffe-name">Brass-and-oak console</span><span class="ffe-vendor">Fond du Lac Ironworks</span></div>
+          <div class="ffe-right"><span class="stamp stamp-damaged">Damaged</span></div>
+        </div>
+        <div class="b-unfolded">
+          <p>Delivered August 19 · top panel gouged · claim drafted, not filed · <span class="b-strong">carrier window closes tomorrow</span></p>
+          <p class="b-acts" style="gap:18px;flex-wrap:wrap"><span class="b-act scored b-tap44">File the claim</span><span class="b-act b-act-quiet scored b-tap44">Edit spec details →</span></p>
+        </div>
+
+        <div class="b-room-head"><span class="b-room-name">Dining room</span><span class="b-room-count">8 lines · 6 delivered</span></div>
+        <div class="ffe-row">
+          <div><span class="ffe-name">Dining table + 6 side chairs</span><span class="ffe-vendor">Sturdy Oak Woodworks · PO-2026-0418</span></div>
+          <div class="ffe-right"><span class="ffe-price">$14,880</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MORE menu — its first row is the first reachable way to open ⌘K on a phone -->
+    <div class="b-m-menu">
+      <div class="b-handle"></div>
+      <div class="b-menu-row is-first"><span class="b-menu-name">Find anything</span><span class="b-menu-meta">⌘K</span></div>
+      <p class="b-menu-group">Mail &amp; messages</p>
+      <div class="b-menu-row"><span class="b-menu-name">The Post</span><span class="b-menu-meta">New</span></div>
+      <div class="b-menu-row"><span class="b-menu-name">The ledgers</span><span class="b-menu-meta">↑</span></div>
+      <div class="b-menu-row"><span class="b-menu-name">Time in hand</span><span class="b-menu-meta">0:47</span></div>
+      <div class="b-menu-row"><span class="b-menu-name">Leave a note</span><span class="b-menu-meta">+</span></div>
+    </div>
+
+    <!-- MOBILE BAR — three elements. The centre act is the red-letter zone's first. -->
+    <nav class="b-m-bar">
+      <span>
+        <span class="b-mb-eyebrow">In this document</span>
+        <span class="b-mb-value">Project</span>
+      </span>
+      <span class="b-mb-primary">Send a reminder</span>
+      <span class="b-mb-more"><b>···</b><span>More</span></span>
+    </nav>
+  </div>
+</div>
+<figcaption class="mock-frame-caption b-cap"><b>M4 · /doc project at 390 (first 1400px).</b> The ticket rests as a two-line seam — identity, then the worst two exceptions — and the bar carries three elements, its centre act elected by the red-letter zone. ⌘K gets its first phone opener, at the top of More.</figcaption>
+</figure>
+</section>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="cmp-row" id="row-M5">
+  <h2 class="cmp-row-title">M5 · /doc at 1440 — a second document state</h2>
+  <div class="cmp-pair">
+    <div class="cmp-cell">
+      <p class="cmp-lane cmp-lane-a">Direction A — Everything Prints</p>
+      <div class="cmp-frame" style="zoom:0.5">
+<section class="mock-frame patina-mock" data-screen="M5" data-width="1440" data-lane="A">
+  <div class="a-screen" style="width:1440px;height:1300px">
+
+    <!-- ── plate A: Tuesday 3:40pm, the carrier window ─────────────────── -->
+    <div class="a-doc a-t1440" style="height:900px;min-height:0;overflow:hidden">
+
+      <aside class="a-spine">
+        <p class="a-putdown">← Put down</p>
+        <div class="a-marks"><i class="is-past"></i><i class="is-past"></i><i class="is-past"></i><i class="is-past"></i><i class="is-here"></i><i></i><i></i></div>
+        <p class="a-spine-name">Project</p>
+        <p class="a-spine-state">Active</p>
+
+        <div class="a-block">
+          <p class="a-block-label">In this document</p>
+          <div class="a-srow"><span class="a-srow-name">Client approvals</span><span class="a-srow-val">2 awaiting decision</span></div>
+          <div class="a-srow"><span class="a-srow-name">Schedule</span><span class="a-srow-val">Install Sept 2026</span></div>
+          <div class="a-srow is-current"><span class="a-srow-name">FF&amp;E</span><span class="a-srow-val">36 pieces · 4 rooms</span></div>
+          <div class="a-srow is-money"><span class="a-srow-name">Money</span><span class="a-srow-val">$17,500 owed</span></div>
+        </div>
+
+        <div class="a-block">
+          <p class="a-block-label">Rooms</p>
+          <p class="a-block-note">Take a room in hand · nothing hides</p>
+          <div class="a-srow is-current"><span class="a-srow-name">Living room</span><span class="a-srow-val">14 lines · 1 damaged</span></div>
+          <div class="a-srow"><span class="a-srow-name">Dining room</span><span class="a-srow-val">8 lines · 6 delivered</span></div>
+          <div class="a-srow"><span class="a-srow-name">Primary bedroom</span><span class="a-srow-val">9 lines · 2 awaiting</span></div>
+          <div class="a-srow"><span class="a-srow-name">Mudroom</span><span class="a-srow-val">5 lines · 2 unspecified</span></div>
+        </div>
+
+        <div class="a-block">
+          <p class="a-block-label">The shelves</p>
+          <div class="a-shelf"><span><span class="a-shelf-title">Plan room</span><span class="a-shelf-sub">the drawing set · nothing filed</span></span><span class="a-mono8 a-oak">→</span></div>
+          <div class="a-shelf"><span><span class="a-shelf-title">Spec book</span><span class="a-shelf-sub">34 specified · by room</span></span><span class="a-mono8 a-oak">→</span></div>
+          <div class="a-shelf"><span><span class="a-shelf-title">Mood boards</span><span class="a-shelf-sub">3 boards</span></span><span class="a-mono8 a-oak">→</span></div>
+          <div class="a-shelf"><span><span class="a-shelf-title">Call sheet</span><span class="a-shelf-sub">5 on the roster</span></span><span class="a-mono8 a-oak">→</span></div>
+        </div>
+
+        <div class="a-inhand">
+          <p class="a-inhand-l">● In hand</p>
+          <p class="a-inhand-t">0:47</p>
+          <p class="a-inhand-acts"><span class="a-act a-quiet-act" style="font-size:9px">Pause</span><span class="a-act a-quiet-act" style="font-size:9px">+ Log</span></p>
+        </div>
+      </aside>
+
+      <div class="a-paper" style="padding:26px 32px 0">
+        <p class="a-mono9" style="margin-bottom:10px">Tuesday, August 25 · 3:40 pm</p>
+
+        <div class="a-rule" style="margin-top:0"></div>
+        <div class="a-rhead">
+          <div>
+            <p class="a-rhead-eyebrow">FF&amp;E</p>
+            <h2 class="a-rhead-name">Project · FF&amp;E</h2>
+            <p class="a-rhead-status">4 rooms · 36 lines · 1 damaged · 1 PO unanswered</p>
+            <p class="a-rhead-quiet">The carrier window on the console closes tomorrow, Aug 26.</p>
+          </div>
+          <div class="a-ledger">
+            <span class="a-act a-inked">File the claim</span>
+            <span class="a-act">Spec the 2 unspecified →</span>
+            <span class="a-act">Bill 3 uninvoiced lines →</span>
+            <span class="a-act a-quiet-act">Add a line</span>
+            <span class="a-act">Spec book →</span>
+            <span class="a-mono10 a-clay">Fold ↑</span>
+          </div>
+        </div>
+
+        <div class="a-roomhead"><span class="a-roomhead-name">Living room</span><span></span><span class="a-roomhead-count">14 lines · 11 ordered · 2 in transit · 1 damaged</span></div>
+
+        <div class="a-line" style="border-bottom:none">
+          <span><span class="a-line-name">Brass-and-oak console</span><span class="a-line-vendor">Fond du Lac Ironworks · ×1</span></span>
+          <span class="a-line-right"><span class="stamp size-xs stamp-damaged">damaged</span><span class="a-line-price">$4,300</span></span>
+        </div>
+        <div class="a-unfold">
+          <dl class="a-prov">
+            <dt>PO</dt><dd>CER-0091 · sent Jul 28 · acknowledged Jul 29</dd>
+            <dt>Movement</dt><dd>shipped Aug 15 · delivered Aug 19</dd>
+            <dt>Receiving</dt><dd>top panel gouged, photographed Aug 19</dd>
+            <dt>Claim</dt><dd class="is-hot">drafted, not filed · window closes Aug 26</dd>
+          </dl>
+          <p style="margin-top:11px;display:flex;gap:22px;align-items:center">
+            <span class="a-act a-inked">File the claim</span>
+            <span class="a-act">See the receiving photos</span>
+            <span class="a-act">Edit spec details →</span>
+          </p>
+        </div>
+
+        <div class="a-line">
+          <span><span class="a-line-name">Reading chair</span><span class="a-line-vendor">The workroom · COM due Aug 22</span></span>
+          <span class="a-line-right"><span class="stamp size-xs a-stamp-spec-due">spec due</span><span class="a-line-price">—</span></span>
+        </div>
+
+        <div class="a-roomhead"><span class="a-roomhead-name">Dining room</span><span></span><span class="a-roomhead-count">8 lines · 8 ordered · 6 delivered</span></div>
+        <div class="a-line">
+          <span><span class="a-line-name">Dining table + 6 side chairs</span><span class="a-line-vendor">Sturdy Oak Woodworks · PO-2026-0418 · sent Aug 11 · no acknowledgement in 14 days</span></span>
+          <span class="a-line-right"><span class="a-act">Chase Sturdy Oak</span><span class="stamp size-xs a-stamp-ordered">ordered</span><span class="a-line-price">$14,880</span></span>
+        </div>
+
+        <div class="a-roomhead"><span class="a-roomhead-name">Primary bedroom</span><span></span><span class="a-roomhead-count">9 lines · 7 ordered · 2 awaiting approval</span></div>
+        <div class="a-line">
+          <span><span class="a-line-name">Hartland wool rug</span><span class="a-line-vendor">sent to Marit &amp; Dale Aug 13 · six days past due</span></span>
+          <span class="a-line-right"><span class="stamp size-xs a-stamp-decision">awaiting approval</span><span class="a-line-price">—</span></span>
+        </div>
+        <div class="a-roomhead"><span class="a-roomhead-name">Mudroom</span><span></span><span class="a-roomhead-count">5 lines · 3 ordered · 2 unspecified</span></div>
+        <p style="margin-top:8px"><span class="a-act a-quiet-act">Add a room</span></p>
+
+        <div class="a-rule"></div>
+        <div class="a-rhead">
+          <div>
+            <p class="a-rhead-eyebrow">The money · one region</p>
+            <h2 class="a-rhead-name">Money</h2>
+            <p class="a-rhead-status">$17,500 owed · $12,300 not drawn</p>
+          </div>
+          <div class="a-ledger">
+            <span class="a-act a-inked">Draw an invoice</span>
+            <span class="a-act">Add a change</span>
+            <span class="a-act">Hours · this project ↗</span>
+            <span class="a-mono10 a-clay">Fold ↑</span>
+          </div>
+        </div>
+        <div class="a-ml">
+          <div class="a-ml-rung"><span class="a-ml-label">Budget</span><span class="a-ml-value">$184,500 approved</span><span class="a-ml-gloss">what the client has agreed to fund</span></div>
+          <div class="a-ml-rung"><span class="a-ml-label">Plan</span><span class="a-ml-value">$171,240 specified</span><span class="a-ml-gloss">what the plan intends to spend</span></div>
+          <div class="a-ml-rung"><span class="a-ml-label">Authorized</span><span class="a-ml-value">$141,600 ordered</span><span class="a-ml-gloss">what is contractually owed to makers</span></div>
+        </div>
+      </div>
+
+      <aside class="a-marginrail">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <span class="a-mono9 a-ink">In the margin</span>
+          <span class="a-act a-quiet-act" style="font-size:9px">+ Note</span>
+        </div>
+        <div class="a-mi" style="margin-top:10px"><p class="a-mi-eyebrow">Money · deposit due</p><p class="a-mi-line">$12,300 — PO-2026-0418, 50% at release</p></div>
+        <div class="a-mi"><p class="a-mi-eyebrow">Decision · primary bedroom</p><p class="a-mi-line">Hartland wool rug + walnut nightstands, six days past due</p></div>
+        <div class="a-mi"><p class="a-mi-eyebrow">Message · mudroom bench</p><p class="a-mi-line">Marit asked about the bench — unanswered in The Post</p></div>
+        <div class="a-mi" style="border-bottom:none"><p class="a-mi-eyebrow">Settled · 4 ↓</p></div>
+      </aside>
+    </div>
+
+    <!-- ── plate B: the same PO studio-wide, and the two mount conditions ── -->
+    <div style="padding:0 30px">
+      <p class="a-seamlabel">The same PO on the Orders sheet · and the two documents that lose every block today, at ≥1440</p>
+
+      <div style="display:flex;gap:20px;margin-top:12px;align-items:flex-start">
+
+        <div class="a-inset" style="width:352px">
+          <span class="a-inset-label">Orders sheet · studio-wide · the word she was looking for</span>
+          <div class="a-inset-body">
+            <div style="display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:baseline;padding-bottom:8px;border-bottom:1px solid var(--doc-ink-border)">
+              <span class="a-mono10 a-ink">PO-2026-0418</span>
+              <span class="stamp size-xs a-stamp-in-transit">in transit</span>
+              <span class="a-quiet">Sturdy Oak Woodworks · Dodgeville WI</span>
+              <span class="a-mono9 a-oak">$14,880</span>
+            </div>
+            <p class="a-mono10 a-ink" style="margin-top:9px">No ack · 14 days</p>
+            <p class="a-mono8" style="margin-top:9px">Today the sheet prints received / inspect / in transit / not sent and never says whether the maker answered</p>
+          </div>
+        </div>
+
+        <div class="a-inset" style="width:472px">
+          <span class="a-inset-label">An <b>install</b> document · the blocks mount, the spec book has a door</span>
+          <div style="display:flex">
+            <div style="width:158px;background:var(--spine-wash);border-right:1px solid var(--color-pearl);padding:12px 10px">
+              <p class="a-block-label" style="margin-bottom:5px">In this document</p>
+              <div class="a-srow" style="padding:3px 0 3px 8px"><span class="a-srow-name" style="font-size:11.5px">Client approvals</span></div>
+              <div class="a-srow" style="padding:3px 0 3px 8px"><span class="a-srow-name" style="font-size:11.5px">Schedule</span></div>
+              <div class="a-srow is-current" style="padding:3px 0 3px 8px"><span class="a-srow-name" style="font-size:11.5px">Install</span></div>
+              <div class="a-srow" style="padding:3px 0 3px 8px"><span class="a-srow-name" style="font-size:11.5px">FF&amp;E</span></div>
+              <p class="a-block-label" style="margin:10px 0 5px">Rooms</p>
+              <p class="a-mono8">4 rooms · lifts, never filters</p>
+              <p class="a-block-label" style="margin:10px 0 5px">The shelves</p>
+              <p class="a-mono8">Plan room · <span class="a-ink">Spec book</span> · Mood boards · Call sheet</p>
+            </div>
+            <div style="flex:1;padding:12px 14px">
+              <p class="a-rhead-eyebrow">Install · three weeks out</p>
+              <p class="a-sentence" style="font-size:15px;font-style:normal;margin-top:3px">Install is three weeks out — Tuesday, September 15</p>
+              <p style="margin-top:7px"><span class="a-act">Check what's arriving</span></p>
+              <div class="a-rule" style="margin:12px 0 8px"></div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+                <span class="a-rhead-name" style="font-size:18px">Install</span>
+                <span class="a-act">Spec book →</span>
+              </div>
+              <p class="a-quiet" style="margin-top:5px">4 rooms · 36 lines · 2 in transit</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="a-inset" style="width:472px">
+          <span class="a-inset-label">A <b>care</b> document · the head reads Care, and a guide finally prints</span>
+          <div style="display:flex">
+            <div style="width:158px;background:var(--spine-wash);border-right:1px solid var(--color-pearl);padding:12px 10px">
+              <p class="a-block-label" style="margin-bottom:5px">In this document</p>
+              <div class="a-srow" style="padding:3px 0 3px 8px"><span class="a-srow-name" style="font-size:11.5px">Client approvals</span></div>
+              <div class="a-srow" style="padding:3px 0 3px 8px"><span class="a-srow-name" style="font-size:11.5px">Schedule</span></div>
+              <div class="a-srow is-current" style="padding:3px 0 3px 8px"><span class="a-srow-name" style="font-size:11.5px">Care</span></div>
+              <div class="a-srow" style="padding:3px 0 3px 8px"><span class="a-srow-name" style="font-size:11.5px">FF&amp;E</span></div>
+              <p class="a-block-label" style="margin:10px 0 5px">Rooms</p>
+              <p class="a-mono8">4 rooms · lifts, never filters</p>
+              <p class="a-block-label" style="margin:10px 0 5px">The shelves</p>
+              <p class="a-mono8">Plan room · <span class="a-ink">Spec book</span> · Mood boards · Call sheet</p>
+            </div>
+            <div style="flex:1;padding:12px 14px">
+              <p class="a-rhead-eyebrow">Care · closing out</p>
+              <p class="a-sentence" style="font-size:15px;font-style:normal;margin-top:3px">Close the book on this one</p>
+              <p style="margin-top:7px"><span class="a-act">Run the closeout checklist</span></p>
+              <div class="a-rule" style="margin:12px 0 8px"></div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+                <span class="a-rhead-name" style="font-size:18px">Care</span>
+                <span class="a-act">Spec book →</span>
+              </div>
+              <p class="a-quiet" style="margin-top:5px">No FF&amp;E lines remain open for care.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Studio Drawer -->
+    <div class="a-drawer" style="position:absolute;left:0;right:0;bottom:0">
+      <div><span class="a-drawer-word">Patina</span><span class="a-drawer-crumb">Document · Vandersteen</span></div>
+      <div class="a-drawer-mid">
+        <span class="a-drawer-item">Library</span>
+        <span class="a-drawer-item">People</span>
+        <span class="a-drawer-item">The Scans</span>
+        <span class="a-drawer-item">Ledgers ↑</span>
+        <span class="a-drawer-item is-door">Find anything ⌘K</span>
+      </div>
+      <div class="a-drawer-right">
+        <span class="a-mono10">In hand today <span class="a-ink">0:47</span></span>
+        <span class="a-mono10">The Post<span class="a-dot"></span></span>
+        <span class="a-nameplate"><span class="a-avatar">LH</span><span><span style="display:block;font-family:var(--font-display);font-size:13px;color:var(--color-charcoal)">Leah Hartwell</span><span class="a-mono8" style="display:block">Middlewest Studio</span></span></span>
+      </div>
+    </div>
+
+  </div>
+  <figcaption><b>M5 · Tuesday 3:40 pm — the carrier window.</b> Proves the damage claim already exists as a lifecycle on the line and can lead the region from the body it acts on rather than sending her to the Orders ledger (T14, F34), that the Orders sheet finally prints an acknowledgement state (F06), and that an install or a care document keeps its index, rooms and shelves — with <i>Spec book →</i> printed and the care head reading <i>Care</i> (F14, F48, SP-01, F77).</figcaption>
+</section>
+      </div>
+    </div>
+    <div class="cmp-cell">
+      <p class="cmp-lane cmp-lane-b">Direction B — The Shop Ticket</p>
+      <div class="cmp-frame" style="zoom:0.5">
+<section class="mock-frame b-frame" data-screen="M5" data-width="1440" data-lane="B">
+<figure class="b-figure">
+<div class="mock-frame-inner b-inner" style="width:1440px;height:1300px">
+  <div class="b-page b-grid-1440">
+
+    <aside class="b-spine-col">
+      <p class="b-put-down">← Put down</p>
+      <div class="b-marks">
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-past"><i></i><i></i><i></i></span>
+        <span class="b-mark is-lifted"><i></i><i></i><i></i></span>
+        <span class="b-mark"><i></i><i></i><i></i></span>
+      </div>
+      <div style="margin-top:12px">
+        <span class="b-active-label">Install</span>
+        <span class="b-active-sub">Active</span>
+      </div>
+
+      <div class="b-spine-block">
+        <p class="b-spine-label">On this paper</p>
+        <div class="b-ri-row is-current"><span class="b-ri-name">Client approvals</span><span class="b-ri-value">nothing awaiting</span></div>
+        <div class="b-ri-row"><span class="b-ri-name">Schedule</span><span class="b-ri-value">installed August 14</span></div>
+        <div class="b-ri-row"><span class="b-ri-name">Install</span><span class="b-ri-value">punch list open</span></div>
+        <div class="b-ri-row"><span class="b-ri-name">Money</span><span class="b-ri-value">no balance due</span></div>
+      </div>
+
+      <div class="b-timer">
+        <p class="b-timer-eyebrow"><span class="b-dot"></span> In hand</p>
+        <p class="b-timer-value">0:47</p>
+        <p class="b-timer-acts"><span>Pause</span><span>+ Log</span></p>
+      </div>
+      <p class="b-presence">Just you · visible<br>to the studio</p>
+    </aside>
+
+    <div class="b-paper-col">
+
+      <header class="letterhead">
+        <h1 class="lh-title">Okonkwo kitchen</h1>
+        <p class="b-lh-client">for the Okonkwos ↗</p>
+        <p class="vitals">
+          <span class="vital-value">Installation &amp; Styling</span>
+          <span class="vital-value">· Middleton WI</span>
+        </p>
+      </header>
+
+      <!-- The same organ, the same eight rows — on the spread where today no map mounts at all -->
+      <div class="b-ticket">
+        <div class="b-tk-head">
+          <span class="b-tk-eyebrow">The job · Install</span>
+          <span class="b-tk-phase">Installation &amp; Styling · 5 of 6</span>
+          <span class="b-tk-fold">Fold ↑</span>
+        </div>
+        <div class="b-tk-row"><span class="b-tk-label">Rooms</span><span class="b-tk-value">Kitchen</span><span class="b-tk-door">→</span></div>
+        <div class="b-tk-row"><span class="b-tk-label">Pieces</span><span class="b-tk-value">Everything delivered · <span class="b-x">punch list open</span></span><span class="b-tk-door">→</span></div>
+        <div class="b-tk-row"><span class="b-tk-label">Drawings</span><span class="b-tk-value b-empty">Nothing filed</span><span class="b-tk-door">→</span></div>
+        <div class="b-tk-row"><span class="b-tk-label">Spec</span><span class="b-tk-value b-empty">Nothing specified yet</span><span class="b-tk-door">→</span></div>
+        <div class="b-tk-row"><span class="b-tk-label">Boards</span><span class="b-tk-value"><span class="b-empty">No boards yet</span> · start one</span><span class="b-tk-door">→</span></div>
+        <div class="b-tk-row"><span class="b-tk-label">Money</span><span class="b-tk-value">No balance due · verified from billing</span><span class="b-tk-door">→</span></div>
+        <div class="b-tk-row"><span class="b-tk-label">Dates</span><span class="b-tk-value">Installed August 14 · punch list open</span><span class="b-tk-door">→</span></div>
+        <div class="b-tk-row"><span class="b-tk-label">People</span><span class="b-tk-value b-empty">Nobody on it yet</span><span class="b-tk-door">→</span></div>
+      </div>
+
+      <!-- GUIDE — a verb and an object; no shrug, no "Review" -->
+      <div class="b-guide">
+        <p class="b-guide-eyebrow">Next up · finish in the field</p>
+        <p class="b-guide-row">
+          <span class="b-guide-line">Two punch-list items are still open.</span>
+          <span class="b-act scored">Work the punch list</span>
+        </p>
+      </div>
+
+      <div class="seam b-seam">
+        <span class="seam-name">Client approvals</span>
+        <span class="seam-summary b-empty">Nothing awaiting</span>
+        <span class="seam-unfold">Unfold ↓</span>
+      </div>
+      <div class="seam b-seam">
+        <span class="seam-name">Schedule dates</span>
+        <span class="seam-summary">Installed Friday, August 14</span>
+        <span class="seam-unfold">Unfold ↓</span>
+      </div>
+
+      <!-- The FF&E heading reads Install here, and Care on a care document (SP-01) -->
+      <div class="b-region">
+        <div class="region-rule"></div>
+        <div class="b-reg-head">
+          <div>
+            <p class="b-reg-name">Install</p>
+            <p class="b-reg-sub">the FF&amp;E schedule, by room</p>
+            <p class="b-reg-status">1 group · everything delivered · punch list open</p>
+          </div>
+          <div class="b-ledger">
+            <span class="b-inked">Work the punch list</span>
+            <span class="b-act b-act-quiet scored">Add a line</span>
+            <span class="b-act b-act-quiet">Spec book →</span>
+          </div>
+        </div>
+        <div class="b-room-head"><span class="b-room-name">Kitchen</span><span class="b-room-count">everything delivered · installed August 14</span></div>
+        <p class="b-addroom"><span class="b-act b-act-quiet scored">Add a room</span></p>
+      </div>
+
+      <div class="b-region">
+        <div class="region-rule"></div>
+        <div class="b-reg-head">
+          <div>
+            <p class="b-reg-name">Money</p>
+            <p class="b-reg-sub">what’s authorized, what’s owed</p>
+            <p class="b-reg-status">No balance due · verified from billing</p>
+          </div>
+          <div class="b-ledger"><span class="b-act b-act-quiet">Open the accounts →</span></div>
+        </div>
+      </div>
+
+      <div class="seam b-seam" style="margin-top:16px">
+        <span class="seam-name">Closing the book</span>
+        <span class="seam-summary">0 of 6 closed out · the last six things</span>
+        <span class="seam-unfold">Unfold ↓</span>
+      </div>
+
+      <div class="b-region">
+        <div class="region-rule"></div>
+        <div class="b-reg-head">
+          <div><p class="b-reg-name">The record · 1 settled</p></div>
+          <div class="b-ledger"><span class="b-act b-act-quiet">Unfold ↓</span></div>
+        </div>
+        <div class="b-instr b-colophon" style="margin-top:20px;border-bottom:none"><span class="b-colophon-id">Leah Hartwell · hands on the work: you</span><span style="display:flex;gap:22px;align-items:center">
+          <span class="b-act b-act-quiet">Brief a vendor</span>
+          <span class="b-act b-act-quiet">Hold</span>
+          <span class="b-act b-act-quiet">Archive</span>
+          <span class="b-act b-act-quiet scored">Add to the team</span></span>
+        </div>
+      </div>
+
+    </div>
+
+    <aside class="b-margin-col">
+      <div class="b-margin-head"><span class="b-margin-title">In the margin</span></div>
+      <div class="b-margin-acts"><span>+ Decision</span><span>+ Note</span></div>
+      <div class="margin-item" style="margin-top:8px">
+        <p class="mi-line b-empty">Nothing in the margin yet.</p>
+      </div>
+    </aside>
+
+  </div>
+</div>
+<figcaption class="mock-frame-caption b-cap"><b>M5 · /doc install at 1440 (first 1300px) — the Okonkwo kitchen.</b> The stage-specific state: today no map mounts here at all and the spec book has no door. The ticket reads the same eight rows as M2 because it is mounted by the document, not the section — and the whole install document now ends above the fold.</figcaption>
+</figure>
+</section>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+</body>
+</html>

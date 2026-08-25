@@ -1,0 +1,132 @@
+
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── The index is built from the paper's own order — nothing is hand-listed. */
+  var sections = Array.prototype.slice.call(
+    document.querySelectorAll("main > section[data-index-title]")
+  );
+  var spineList = document.getElementById("dk-spine-list");
+  var inlineList = document.getElementById("dk-inline-index");
+  var links = [];
+  var counter = 0;
+
+  sections.forEach(function (section) {
+    var title = section.getAttribute("data-index-title") || section.id;
+    var numbered = section.getAttribute("data-unnumbered") !== "true";
+    var label = title;
+    if (numbered) {
+      counter += 1;
+      var n = counter < 10 ? "0" + counter : String(counter);
+      label = n + " &middot; " + title;
+      var eyebrow = section.querySelector("[data-eyebrow]");
+      if (eyebrow) { eyebrow.innerHTML = n + " &middot; " + eyebrow.innerHTML; }
+    }
+
+    if (spineList) {
+      var li = document.createElement("li");
+      var a = document.createElement("a");
+      a.className = "dk-spine-link";
+      a.href = "#" + section.id;
+      var tick = document.createElement("span");
+      tick.className = "dk-tick";
+      tick.setAttribute("aria-hidden", "true");
+      var text = document.createElement("span");
+      text.innerHTML = label;
+      a.appendChild(tick);
+      a.appendChild(text);
+      li.appendChild(a);
+      spineList.appendChild(li);
+      links.push({ el: a, id: section.id });
+    }
+
+    if (inlineList) {
+      var li2 = document.createElement("li");
+      var a2 = document.createElement("a");
+      a2.href = "#" + section.id;
+      a2.innerHTML = label;
+      li2.appendChild(a2);
+      inlineList.appendChild(li2);
+    }
+  });
+
+  /* ── Scroll spy: exactly one current row, always. */
+  function setCurrent(id) {
+    links.forEach(function (link) {
+      if (link.id === id) { link.el.setAttribute("aria-current", "true"); }
+      else { link.el.removeAttribute("aria-current"); }
+    });
+  }
+  if ("IntersectionObserver" in window && sections.length) {
+    var visible = Object.create(null);
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        visible[entry.target.id] = entry.isIntersecting;
+      });
+      for (var i = 0; i < sections.length; i += 1) {
+        if (visible[sections[i].id]) { setCurrent(sections[i].id); return; }
+      }
+    }, { rootMargin: "-12% 0px -70% 0px", threshold: 0 });
+    sections.forEach(function (s) { spy.observe(s); });
+    setCurrent(sections[0].id);
+  }
+
+  /* ── Fit each CSS-built mock to the column it sits in. */
+  function fitMocks() {
+    var mocks = document.querySelectorAll(".dk-mock");
+    Array.prototype.forEach.call(mocks, function (mock) {
+      var nw = parseFloat(mock.getAttribute("data-w"));
+      var nh = parseFloat(mock.getAttribute("data-h"));
+      var viewport = mock.querySelector(".dk-mock-viewport");
+      var scale = mock.querySelector(".dk-mock-scale");
+      if (!nw || !nh || !viewport || !scale) { return; }
+      /* Measure the figure, never the viewport: the viewport is what we
+         resize, so measuring it would feed its own output back in. */
+      var avail = mock.clientWidth;
+      if (!avail) { return; }
+      var s = Math.min(1, avail / nw);
+      scale.style.transform = "scale(" + s + ")";
+      viewport.style.width = Math.round(nw * s) + "px";
+      viewport.style.height = Math.round(nh * s) + "px";
+    });
+  }
+  fitMocks();
+  window.addEventListener("load", fitMocks);
+  var resizeTimer = null;
+  window.addEventListener("resize", function () {
+    if (resizeTimer) { window.clearTimeout(resizeTimer); }
+    resizeTimer = window.setTimeout(fitMocks, 120);
+  });
+
+  /* ── Theme: system → light → dark → system. Stored per viewer, best effort. */
+  var root = document.documentElement;
+  var toggle = document.getElementById("dk-theme-toggle");
+  var order = ["system", "light", "dark"];
+  var labels = { system: "Match the system", light: "Light paper", dark: "Dark paper" };
+  var mode = "system";
+  try {
+    var saved = window.localStorage.getItem("dk-wayfinding-theme");
+    if (saved && order.indexOf(saved) !== -1) { mode = saved; }
+  } catch (e) { /* private window, blocked storage — the default stands */ }
+
+  function apply() {
+    if (mode === "system") { root.removeAttribute("data-theme"); }
+    else { root.setAttribute("data-theme", mode); }
+    if (toggle) { toggle.textContent = labels[mode]; }
+  }
+  apply();
+
+  if (toggle) {
+    toggle.addEventListener("click", function () {
+      mode = order[(order.indexOf(mode) + 1) % order.length];
+      apply();
+      try { window.localStorage.setItem("dk-wayfinding-theme", mode); }
+      catch (e) { /* nothing to remember; the page still works */ }
+    });
+  }
+})();
+</script>

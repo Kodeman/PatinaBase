@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Mock Kit Demo</title>
+<link rel="stylesheet" href="./kit.css" />
+<style>
+  html, body { margin: 0; padding: 0; background: var(--bg-primary, #FAF7F2); }
+  .demo-page { max-width: 1200px; margin: 0 auto; padding: 32px; }
+  .demo-block { margin-bottom: 40px; }
+  .demo-block h2 { font-family: var(--font-display); font-size: 20px; font-weight: 500; color: var(--text-primary); margin: 0 0 4px; }
+  .demo-block .demo-caption { font-family: var(--font-meta); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin: 0 0 14px; }
+  .demo-surface { border: 1px solid var(--doc-ink-border); background: var(--doc-paper); padding: 20px; }
+  .demo-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+  .demo-frame-row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+  .demo-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  .demo-swatch { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 96px; }
+  .demo-swatch-chip { width: 72px; height: 40px; border: 1px solid var(--doc-ink-border); border-radius: 2px; }
+  .demo-swatch-label { font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); text-align: center; }
+  .demo-cols { display: grid; grid-template-columns: auto 1fr auto; gap: 0; border: 1px solid var(--doc-ink-border); }
+</style>
+</head>
+<body>
+<div class="patina-mock demo-page">
+
+  <div class="demo-block">
+    <h2>The Document — Mock Kit Demo</h2>
+    <p class="demo-caption">Every primitive in kit.css, once. Rendered by Playwright in light and dark via prefers-color-scheme.</p>
+  </div>
+
+  <div class="demo-block">
+    <h2>1. Token swatches</h2>
+    <p class="demo-caption">Primary palette + document paper surfaces + phase colors</p>
+    <div class="demo-swatches">
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--doc-paper)"></div><span class="demo-swatch-label">doc-paper</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--doc-sheet-2)"></div><span class="demo-swatch-label">doc-sheet-2</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--doc-sheet-3)"></div><span class="demo-swatch-label">doc-sheet-3</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--color-charcoal)"></div><span class="demo-swatch-label">charcoal</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--color-mocha)"></div><span class="demo-swatch-label">mocha</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--color-quiet-ink)"></div><span class="demo-swatch-label">quiet-ink</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--color-clay)"></div><span class="demo-swatch-label">clay</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--color-aged-oak)"></div><span class="demo-swatch-label">aged-oak</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--color-pearl)"></div><span class="demo-swatch-label">pearl</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--color-sage)"></div><span class="demo-swatch-label">sage</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--color-dusty-blue)"></div><span class="demo-swatch-label">dusty-blue</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--color-terracotta)"></div><span class="demo-swatch-label">terracotta</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--color-golden-hour)"></div><span class="demo-swatch-label">golden-hour</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--phase-consultation)"></div><span class="demo-swatch-label">consultation</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--phase-concept)"></div><span class="demo-swatch-label">concept</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--phase-refinement)"></div><span class="demo-swatch-label">refinement</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--phase-procurement)"></div><span class="demo-swatch-label">procurement</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--phase-installation)"></div><span class="demo-swatch-label">installation</span></div>
+      <div class="demo-swatch"><div class="demo-swatch-chip" style="background:var(--phase-walkthrough)"></div><span class="demo-swatch-label">walkthrough</span></div>
+    </div>
+  </div>
+
+  <div class="demo-block">
+    <h2>2. Type roles</h2>
+    <p class="demo-caption">eyebrow · serif-h · mono · scored</p>
+    <div class="demo-surface">
+      <p class="eyebrow">Studio · in progress</p>
+      <p class="serif-h" style="font-size:28px;margin:6px 0;">The Hendricks Residence</p>
+      <p class="mono" style="font-size:13px;color:var(--text-muted);">2026-08-25T14:02 · PO-00417</p>
+      <p style="margin-top:10px;"><span class="scored" style="color:var(--color-mocha);">Review</span> &nbsp; <span class="scored scored-double" style="color:var(--doc-paper);background:var(--text-primary);padding:3px 8px;border-radius:2px;">Bill client</span></p>
+    </div>
+  </div>
+
+  <div class="demo-block">
+    <h2>3. Strata Mark</h2>
+    <p class="demo-caption">state variants (settled/active/future) and fill/progress variant</p>
+    <div class="demo-row">
+      <span class="strata-mark state-settled size-sm"><i class="strata-line"></i><i class="strata-line"></i><i class="strata-line"></i></span>
+      <span class="strata-mark state-active size-sm"><i class="strata-line"></i><i class="strata-line"></i><i class="strata-line"></i></span>
+      <span class="strata-mark state-future size-sm"><i class="strata-line"></i><i class="strata-line"></i><i class="strata-line"></i></span>
+      <span class="strata-mark fill size-md">
+        <i class="strata-line"><i class="strata-fill" style="width:100%"></i></i>
+        <i class="strata-line"><i class="strata-fill" style="width:60%"></i></i>
+        <i class="strata-line"><i class="strata-fill" style="width:20%"></i></i>
+      </span>
+    </div>
+  </div>
+
+  <div class="demo-block">
+    <h2>4. Letterhead, vitals, guide, red-letter</h2>
+    <div class="demo-surface">
+      <header class="letterhead">
+        <h1 class="lh-title">The Hendricks Residence</h1>
+        <p class="vitals">
+          <span>Refinement</span>
+          <span><span class="vital">Start</span><span class="vital-value">Mar 4</span></span>
+          <span><span class="vital">Target</span><span class="vital-value">Nov 12</span></span>
+          <span><span class="vital">Band</span><span class="vital-value">$85k–$120k</span></span>
+        </p>
+      </header>
+      <p class="guide">Next up — confirm the sofa PO before Friday</p>
+      <div style="height:14px;"></div>
+      <section class="red-letter">
+        <p class="rl-label">Needs attention · in one place</p>
+        <div class="rl-row">
+          <p class="rl-text is-urgent">2 items awaiting your signature</p>
+          <span class="rl-action">Review</span>
+        </div>
+        <div class="rl-row">
+          <p class="rl-text">Client hasn't opened the latest proposal</p>
+          <span class="rl-action">Nudge</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="demo-block">
+    <h2>5. Region head, region rule, seam</h2>
+    <div class="demo-surface">
+      <div class="region-head">
+        <div>
+          <p class="rh-eyebrow">FF&amp;E</p>
+          <h2 class="rh-name">Living Room</h2>
+          <p class="rh-status">4 of 6 priced · 2 awaiting vendor confirmation</p>
+        </div>
+        <div class="rh-ledger">
+          <span class="rh-act">Add item</span>
+          <span class="rh-act is-inked">Bill client</span>
+        </div>
+      </div>
+      <div class="region-rule"></div>
+      <button class="seam" style="border:none;background:none;width:100%;cursor:pointer;">
+        <span class="seam-name">Procurement</span>
+        <span class="seam-summary">6 of 9 ordered · 2 delayed</span>
+        <span class="seam-unfold">unfold ↓</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="demo-block">
+    <h2>6. FF&amp;E rows, stamps, money ladder</h2>
+    <div class="demo-surface">
+      <div class="ffe-row">
+        <div>
+          <span class="ffe-name">Camden Sofa</span>
+          <span class="ffe-vendor">Studio McGee Home</span>
+        </div>
+        <div class="ffe-right">
+          <span class="stamp stamp-in-production">in production</span>
+          <span class="ffe-price">$4,200</span>
+        </div>
+      </div>
+      <div class="ffe-row">
+        <div>
+          <span class="ffe-name">Oak Console</span>
+          <span class="ffe-vendor">Lawson-Fenning</span>
+        </div>
+        <div class="ffe-right">
+          <span class="stamp stamp-received">received</span>
+          <span class="ffe-price">$2,850</span>
+        </div>
+      </div>
+      <div class="ffe-row">
+        <div>
+          <span class="ffe-name">Plaster Sconce (pair)</span>
+          <span class="ffe-vendor">Apparatus</span>
+        </div>
+        <div class="ffe-right">
+          <span class="stamp stamp-damaged">damaged</span>
+          <span class="ffe-price">$1,180</span>
+        </div>
+      </div>
+
+      <div class="demo-row" style="margin-top:16px;">
+        <span class="stamp stamp-draft">draft</span>
+        <span class="stamp stamp-confirmed">confirmed</span>
+        <span class="stamp stamp-in-production">in production</span>
+        <span class="stamp stamp-shipped">shipped</span>
+        <span class="stamp stamp-delivered">delivered</span>
+        <span class="stamp stamp-cancelled">cancelled</span>
+        <span class="stamp stamp-damaged size-sm">damaged</span>
+      </div>
+
+      <div style="max-width:320px;margin-top:20px;">
+        <div class="money-ladder">
+          <div class="ml-rung"><span class="ml-label">Subtotal</span><span class="ml-value">$12,400</span></div>
+          <div class="ml-rung"><span class="ml-label">Tax</span><span class="ml-value">$992</span></div>
+          <div class="ml-rung"><span class="ml-label">Shipping</span><span class="ml-value">$788</span></div>
+          <div class="ml-rung"><span class="ml-label">Total</span><span class="ml-value">$14,180</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-block">
+    <h2>7. Spine, spine-compact, running index, shelves</h2>
+    <div class="demo-frame-row">
+      <div class="spine">
+        <span class="spine-put-down">← Put down</span>
+        <div class="spine-mark-row">
+          <span class="strata-mark state-settled size-xs"><i class="strata-line"></i><i class="strata-line"></i><i class="strata-line"></i></span>
+          <span class="strata-mark state-active size-xs"><i class="strata-line"></i><i class="strata-line"></i><i class="strata-line"></i></span>
+          <span class="strata-mark state-future size-xs"><i class="strata-line"></i><i class="strata-line"></i><i class="strata-line"></i></span>
+        </div>
+        <p class="spine-active-label">Concept</p>
+        <p class="spine-active-sub">Mood boards · in review</p>
+        <div class="running-index">
+          <p class="ri-label">In this document</p>
+          <div class="ri-row is-current"><span class="ri-name">Living Room</span><span class="ri-value">4 pieces</span></div>
+          <div class="ri-row"><span class="ri-name">Kitchen</span><span class="ri-value">2 pieces</span></div>
+          <div class="ri-row"><span class="ri-name">Primary Bedroom</span><span class="ri-value">Not started</span></div>
+        </div>
+        <div class="running-index">
+          <p class="ri-label">The shelves</p>
+          <div class="shelf-row is-open"><span><span class="shelf-title">Call sheet</span><span class="shelf-status">3 confirmed</span></span><span class="shelf-arrow">→</span></div>
+          <div class="shelf-row"><span><span class="shelf-title">People</span><span class="shelf-status">5 on the team</span></span><span class="shelf-arrow">→</span></div>
+        </div>
+        <p class="spine-presence">Just you · visible to the studio</p>
+      </div>
+      <div class="spine-compact">
+        <span class="strata-mark state-active size-xs"><i class="strata-line"></i><i class="strata-line"></i><i class="strata-line"></i></span>
+        <span class="strata-mark state-future size-xs"><i class="strata-line"></i><i class="strata-line"></i><i class="strata-line"></i></span>
+        <span class="strata-mark state-future size-xs"><i class="strata-line"></i><i class="strata-line"></i><i class="strata-line"></i></span>
+      </div>
+      <aside class="margin">
+        <div class="margin-item">
+          <p class="mi-eyebrow">Decision needed</p>
+          <p class="mi-line">Fabric swatch approval — Camden Sofa</p>
+        </div>
+        <div class="margin-item">
+          <p class="mi-eyebrow">Coordination</p>
+          <p class="mi-line">Electrician confirmed for Thu 10a</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="demo-block">
+    <h2>8. Folio (desk card)</h2>
+    <div class="demo-surface" style="padding-top:40px;">
+      <div style="max-width:360px;">
+        <div class="folio">
+          <div class="folio-sheet-back"></div>
+          <div class="folio-sheet-front"></div>
+          <div class="folio-tab" style="background:var(--phase-procurement)">Procurement</div>
+          <div class="folio-face">
+            <h3 class="folio-face-title">Hendricks Residence</h3>
+            <p class="folio-face-meta">Refinement · Week 14</p>
+            <p class="folio-face-need">3 purchase orders awaiting your approval</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-block">
+    <h2>9. Command bar (⌘K)</h2>
+    <div class="demo-surface" style="position:relative;height:220px;background:var(--bg-subtle);">
+      <div class="cmdk-overlay"></div>
+      <div class="cmdk" style="margin-top:0;">
+        <input class="cmdk-input" placeholder="Jump to a room, a person, a document…" readonly />
+        <p class="cmdk-group-label">Rooms</p>
+        <div class="cmdk-row"><span class="cmdk-row-title">Kitchen</span><span class="cmdk-row-meta">2 pieces</span></div>
+        <div class="cmdk-row"><span class="cmdk-row-title">Living Room</span><span class="cmdk-row-meta">4 pieces</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-block">
+    <h2>10. Studio Drawer (60px)</h2>
+    <nav class="drawer">
+      <div>
+        <span class="drawer-word">Patina</span>
+        <span class="drawer-crumb">Hendricks Residence</span>
+      </div>
+      <div class="drawer-center">
+        <span class="drawer-nav-item is-active">Library</span>
+        <span class="drawer-nav-item">People</span>
+        <span class="drawer-nav-item">The Rooms</span>
+      </div>
+      <div class="drawer-right">
+        <span class="drawer-time">2h 14m in hand</span>
+      </div>
+    </nav>
+  </div>
+
+  <div class="demo-block">
+    <h2>11. Mobile bar + sheet (390px)</h2>
+    <div class="demo-frame-row">
+      <div style="width:390px;border:1px solid var(--doc-ink-border);">
+        <div style="height:120px;background:var(--doc-paper);"></div>
+        <nav class="mobile-bar">
+          <div class="mb-item">
+            <span class="mb-eyebrow">Room</span>
+            <span class="mb-value">Kitchen</span>
+          </div>
+          <div class="mb-item">
+            <span class="mb-eyebrow">Phase</span>
+            <span class="mb-value is-clay">Refinement</span>
+          </div>
+        </nav>
+      </div>
+      <div style="width:390px;">
+        <div class="sheet">
+          <div class="sheet-handle"></div>
+          <p class="eyebrow">Time in hand</p>
+          <p class="serif-h" style="font-size:20px;">2h 14m</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-block">
+    <h2>12. Mock frame (scaled screen)</h2>
+    <p class="demo-caption">A 1440px-wide screen scaled to fit a deck column</p>
+    <div class="mock-frame" style="width:480px;height:180px;">
+      <div class="mock-frame-inner" style="width:1440px;height:540px;transform:scale(0.3333);background:var(--doc-paper);padding:40px;">
+        <p class="eyebrow">Desk</p>
+        <p class="serif-h" style="font-size:40px;">The Hendricks Residence</p>
+        <p style="font-size:20px;color:var(--text-body);">This is a full 1440px-wide screen, rendered at native size and scaled down.</p>
+      </div>
+    </div>
+    <p class="mock-frame-caption">Desk — 1440px, scaled to 480px</p>
+  </div>
+
+</div>
+</body>
+</html>
