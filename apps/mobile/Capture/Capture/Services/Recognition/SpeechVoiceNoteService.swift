@@ -733,19 +733,31 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             return
         }
 
-        // Order, not luck. The old recognition task is live and delivering
-        // partials at this instant, so a carry taken BEFORE endAudio() reports
-        // a transcript the old request then advances past — those words never
-        // reach the joined value below and are lost from the note. endAudio()
-        // first stops the old request taking audio; carryForwardAndAdvance()
-        // then takes the carry and retires the old request's identity in one
-        // atomic step, so it can neither observe a torn String nor race the
-        // callback thread's store — and the final result that endAudio() itself
-        // provokes arrives against a generation that no longer matches, folds
-        // nowhere, and cannot rewrite the carry it was already counted into.
+        // Order, not luck — and the old request is RETIRED FIRST. endAudio()
+        // and finish() are the two calls that PROVOKE the outgoing request's
+        // terminal callback, so every instant between them and the retirement
+        // is a window in which that request still matches the live generation.
+        // A terminal *error* landing there takes the error door and ends the
+        // note at a routine rotation — the very bug the isFinal fix is named
+        // for, re-entering through the other door, once per rotation on every
+        // note (~23 times in a twenty-minute one). Retiring the generation
+        // before the provocation closes the window outright: the old request's
+        // result folds nowhere and its error is no longer live, so it can
+        // neither rewrite the carry nor end the note.
+        //
+        // The cost is deliberate and bounded: the carry is taken BEFORE
+        // endAudio(), so any words the old request had not yet reported — the
+        // last partial at the boundary — are lost. §8.2 settles the trade:
+        // "the audio is the record. The transcript is a reading of it." The
+        // .m4a spans the boundary continuously and loses nothing; a few
+        // boundary words are the right price for a note that cannot be torn
+        // down by its own rotation.
+        //
         // NOTE the stream is NOT finished here or in any callback: the note
-        // outlives its requests, and only finish()/endAtCap()/endAbandonedNote()
-        // may end it.
+        // outlives its requests, and only endAtCap()/endAbandonedNote() may end
+        // it (finish() nils the continuation and relies on the consumer having
+        // cancelled its own loop).
+        let generation = carryForwardAndAdvance()
         request?.endAudio()
         task?.finish()
         let next = SFSpeechAudioBufferRecognitionRequest()
@@ -754,7 +766,6 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         request = next
         segmentStartedAt = Date()
         analytics.event("voice.segment_rotated", ["index": String(audioSegments.count)])
-        let generation = carryForwardAndAdvance()
         task = recognizer.recognitionTask(
             with: next,
             resultHandler: recognitionHandler(generation: generation, continuation: continuation))
