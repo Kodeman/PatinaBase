@@ -322,33 +322,32 @@ struct VoiceNoteSheet: View {
         guard let specimen = currentSpecimen() else { return }
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         specimen.voiceTranscript = text
-        specimen.voiceAudioFilename = result?.audioFilename
-        specimen.voiceAudioSegmentsRaw = result?.audioSegments
-        // attach() is shared with the manual-entry fallback, and a result that
-        // carries NEITHER a transcript NOR a segment is not a recording: an
-        // engine-start failure finishes the stream synchronously, before
-        // startLiveTranscription() even returns, so the sheet's error path hands
-        // back an empty result and the text above was typed. That is 'designer'
-        // (00530) — labelling it device_partial would claim speech and imply
-        // audio, and reporting a duration would time a note nobody spoke.
-        // EITHER signal means a real recording, so a note with audio but no
-        // words still attaches as device_partial and keeps its segments.
-        let recorded = result.flatMap {
-            $0.transcript.isEmpty && $0.audioSegments.isEmpty ? nil : $0
-        }
+        // This sheet is re-openable on a specimen that ALREADY carries audio —
+        // with the flag off it opens straight into the typed editor — and the
+        // take in hand is then nil. Writing it through unconditionally, as this
+        // did, nulled voiceAudioSegmentsRaw over a recording whose bytes are in
+        // Storage and whose remote-path stamps are only reachable BY those
+        // names: the next commit then wrote voice_audio_path = NULL and
+        // voice_audio_segments = '[]' over intact server audio. The rule lives
+        // in CaptureKit, tested: replace only on a take that published a
+        // segment; otherwise preserve every existing stamp and path.
+        let merged = VoiceAttachPolicy.merge(
+            existing: VoiceAttachment(audioFilename: specimen.voiceAudioFilename,
+                                      audioSegments: specimen.voiceAudioSegmentsRaw,
+                                      transcriptSource: specimen.voiceTranscriptSourceRaw,
+                                      durationSeconds: specimen.voiceDurationSeconds),
+            new: result)
+        specimen.voiceAudioFilename = merged.audioFilename
+        specimen.voiceAudioSegmentsRaw = merged.audioSegments
+        specimen.voiceTranscriptSourceRaw = merged.transcriptSource
+        specimen.voiceDurationSeconds = merged.durationSeconds
         // The honesty repair's own metric: a real recording committing with no
-        // words. `recorded` is non-nil here only when transcript or audio is
-        // non-empty, so an empty transcript in this branch always has audio —
-        // read the count rather than assume it.
-        if let recorded, recorded.transcript.isEmpty {
-            analytics.event("voice.empty_transcript",
-                            ["had_audio": String(!recorded.audioSegments.isEmpty)])
+        // words. A take with an empty transcript is only a recording at all
+        // when it published a segment — read the count rather than assume it.
+        if let result, result.transcript.isEmpty, !result.audioSegments.isEmpty {
+            analytics.event("voice.empty_transcript", ["had_audio": "true"])
         }
-        specimen.voiceTranscriptSourceRaw = recorded.map {
-            $0.transcript.isEmpty ? "device_partial" : "device"
-        } ?? "designer"
         specimen.captureKindRaw = "note"
-        specimen.voiceDurationSeconds = recorded?.durationSeconds
         specimen.setValue(text, for: .note, source: .voice)
         try? store.save()
         analytics.event("N4.attach", ["chars": String(text.count)])
