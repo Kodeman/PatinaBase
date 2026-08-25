@@ -92,7 +92,7 @@ final class SiteScanContextModel {
             provenance: provenance(pose: snapshot.poseRowMajor))
         await sync.enqueue(created.id)
         guard !Task.isCancelled, ownerScopeProvider() == creationScope else { return }
-        toast = "Photo added to Inbox"
+        toast = "Photo saved to this room."
     }
 
     func toggleVoice() {
@@ -136,10 +136,25 @@ final class SiteScanContextModel {
                   self.ownerScopeProvider() == creationScope,
                   let service = self.service(for: creationScope) else { return }
             let transcript = result.transcript.isEmpty ? self.partialTranscript : result.transcript
-            guard !transcript.isEmpty || result.audioFilename != nil else {
-                self.toast = "Nothing recorded"
+            // The audio is the record. A note that transcribes to nothing on a noisy
+            // site used to be discarded with "Nothing recorded" — she spoke and
+            // nothing was kept. Keep anything we actually captured, and say plainly
+            // when the words did not come through.
+            //
+            // `transcript` is the LOCAL above, which already falls back to
+            // partialTranscript — key the copy off the same local the guard uses, or
+            // the two disagree about what "has text" means.
+            let hasAudio = !result.audioSegments.isEmpty
+            guard !transcript.isEmpty || hasAudio else {
+                self.toast = "Nothing was recorded — try holding the mic a moment longer."
                 return
             }
+            // Held in a local and assigned ONCE at the end: the shipped code set the
+            // success toast unconditionally two lines later, so an honest failure
+            // message set earlier never rendered at all.
+            let message = transcript.isEmpty
+                ? "We couldn't make out the words — the audio is here."
+                : "Note saved to this room."
             let created = service.enqueueVoice(
                 transcript: transcript,
                 audioFilename: result.audioFilename,
@@ -150,7 +165,7 @@ final class SiteScanContextModel {
             await self.sync.enqueue(created.id)
             guard !Task.isCancelled,
                   self.ownerScopeProvider() == creationScope else { return }
-            self.toast = "Voice note added to Inbox"
+            self.toast = message
         }
     }
 
@@ -275,13 +290,13 @@ struct SiteScanContextScreen: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Reference capture")               // ESCALATE placeholder
+            Text("This iPhone can't measure a room.")               // ESCALATE placeholder
                 .font(CaptureType.eyebrow).textCase(.uppercase)
                 .foregroundStyle(CaptureColor.paper3)
-            Text("Photos & notes for this room")    // ESCALATE placeholder
+            Text("Photos & notes for this room.")    // ESCALATE placeholder
                 .font(CaptureType.title2)
                 .foregroundStyle(CaptureColor.paper)
-            Text("This device has no LiDAR, so this isn't a scan — these land in your Inbox.")  // ESCALATE
+            Text("These reach the studio as soon as you have signal — they're notes, not a scan.")  // ESCALATE
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.paper2)
         }
