@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { StorageClient } from "@supabase/storage-js";
 
 /**
  * Workstream D-B1 (docs/engineering/repoint-b0-audit.md §5): pins the
@@ -36,6 +37,13 @@ const mockCreateBrowserClient = vi.fn(
   (_url: string, _key: string, options?: unknown) => ({
     __fake: "browser-client",
     options,
+    // D-F2 (storage-direct pin): the real SupabaseClient exposes these as
+    // protected/public instance fields; the mock needs to carry them too so
+    // pinStorageDirect() has something to read (headers/fetch) and rewire
+    // (storage) — see the D-F2 describe block below.
+    headers: { "x-test-header": "yes" },
+    fetch: vi.fn(),
+    storage: { __fake: "original-storage" },
   }),
 );
 const mockCreateServerClient = vi.fn(
@@ -259,5 +267,61 @@ describe("D-B2: runtime-resolved Supabase origin", () => {
 
     expect(mockCreateBrowserClient.mock.calls[0][0]).toBe(PROD_URL);
     expect(mockCreateServerClient.mock.calls[0][0]).toBe(PROD_URL);
+  });
+});
+
+describe("D-F2: storage pinned to the direct origin (storage-direct ruling)", () => {
+  const RUNTIME_ORIGIN = "https://api.patina.cloud";
+
+  beforeEach(() => {
+    mockCreateBrowserClient.mockClear();
+    mockCreateServerClient.mockClear();
+    process.env.NEXT_PUBLIC_SUPABASE_URL = PROD_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = PROD_ANON_KEY;
+    delete process.env.NEXT_PUBLIC_SUPABASE_STORAGE_KEY;
+    // @ts-expect-error -- test-only global cleanup guard
+    delete globalThis.window;
+    delete globalThis.__supabaseBrowserClient;
+    delete globalThis.__PATINA_SUPABASE_ORIGIN;
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    // @ts-expect-error -- test-only global cleanup guard
+    delete globalThis.window;
+    delete globalThis.__supabaseBrowserClient;
+    delete globalThis.__PATINA_SUPABASE_ORIGIN;
+    vi.resetModules();
+  });
+
+  it("flipped: repoints storage to the build-time (direct) Supabase host, not the runtime origin", async () => {
+    globalThis.__PATINA_SUPABASE_ORIGIN = RUNTIME_ORIGIN;
+    const { createBrowserClient } = await importFreshClientModule();
+
+    const client = createBrowserClient() as unknown as {
+      storage: { url?: string };
+    };
+
+    // The underlying @supabase/ssr constructor still receives the runtime
+    // (repointed) origin for everything else (auth, postgrest, realtime) —
+    // only .storage gets pinned back to the direct host.
+    expect(mockCreateBrowserClient).toHaveBeenCalledTimes(1);
+    expect(mockCreateBrowserClient.mock.calls[0][0]).toBe(RUNTIME_ORIGIN);
+
+    expect(client.storage).toBeInstanceOf(StorageClient);
+    expect(client.storage.url).toBe(`${PROD_URL}/storage/v1`);
+  });
+
+  it("un-flipped: leaves storage exactly as constructed (pin is inert when the origin hasn't been repointed)", async () => {
+    const { createBrowserClient } = await importFreshClientModule();
+
+    const client = createBrowserClient() as unknown as { storage: unknown };
+
+    expect(mockCreateBrowserClient).toHaveBeenCalledTimes(1);
+    expect(mockCreateBrowserClient.mock.calls[0][0]).toBe(PROD_URL);
+
+    const originalReturnValue = mockCreateBrowserClient.mock.results[0]
+      .value as { storage: unknown };
+    expect(client.storage).toBe(originalReturnValue.storage);
   });
 });

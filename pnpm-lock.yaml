@@ -1728,6 +1728,9 @@ importers:
       '@supabase/ssr':
         specifier: ^0.5.2
         version: 0.5.2(@supabase/supabase-js@2.98.0)
+      '@supabase/storage-js':
+        specifier: 2.98.0
+        version: 2.98.0
       '@supabase/supabase-js':
         specifier: ^2.43.0
         version: 2.98.0

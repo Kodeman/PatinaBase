@@ -6,6 +6,7 @@ import {
   createBrowserClient as createSSRBrowserClient,
   createServerClient as createSSRServerClient,
 } from "@supabase/ssr";
+import { StorageClient } from "@supabase/storage-js";
 import type { Database } from "./database.types";
 import { getCookieDomain } from "./lib/cookie-domain";
 
@@ -52,6 +53,46 @@ function getSupabaseUrl(): string {
     return globalThis.__PATINA_SUPABASE_ORIGIN;
   }
   return process.env.NEXT_PUBLIC_SUPABASE_URL!;
+}
+
+/**
+ * Pins the browser client's Storage instance to the build-time (direct)
+ * Supabase host, even when `getSupabaseUrl()` has been runtime-repointed to
+ * a different origin (e.g. api.patina.cloud) — the F2 storage-direct ruling
+ * (docs/engineering/repoint-b0-audit.md).
+ *
+ * Storage MUST stay on the direct host: the Workers edge enforces a 100MB
+ * request-body cap that would break large uploads, and PDF viewers embed
+ * signed URLs in an `<iframe>` under a CSP `frame-src` that allows only the
+ * direct origin, not api.patina.cloud. `supabase-js` derives `.storage` from
+ * the single client URL with no override hook, so this reaches in after
+ * construction and swaps it for a `StorageClient` built against the
+ * build-time URL instead — reusing the client's own `headers` and `fetch`
+ * (the session-JWT-injecting `fetchWithAuth`) so auth keeps working and only
+ * the base URL changes. `.storage` is a plain, non-readonly instance
+ * property (not a getter) on `SupabaseClient`, so this reassignment is safe.
+ *
+ * Inert (no-op) when the origin hasn't been runtime-repointed — i.e. today,
+ * before `SUPABASE_ORIGIN_RUNTIME` is set at deploy time.
+ *
+ * IMPORTANT: relies on `@supabase/storage-js`'s constructor and protected
+ * field shapes staying identical to the copy `@supabase/supabase-js` bundles
+ * internally — see the version-lock comment on the dependency in
+ * package.json. Do not bump one without the other.
+ */
+function pinStorageDirect(client: SupabaseClient<Database>): void {
+  const buildTimeUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  if (getSupabaseUrl() === buildTimeUrl) return; // inert when un-flipped
+  const i = client as unknown as {
+    headers: Record<string, string>;
+    fetch?: typeof fetch;
+    storage: StorageClient;
+  };
+  i.storage = new StorageClient(
+    new URL("storage/v1", buildTimeUrl).href,
+    i.headers,
+    i.fetch,
+  );
 }
 
 /**
@@ -129,14 +170,22 @@ export function createBrowserClient(): SupabaseClient<Database> {
           auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
         },
       ) as unknown as SupabaseClient<Database>;
+      pinStorageDirect(globalThis.__supabaseBrowserClient);
     }
     return globalThis.__supabaseBrowserClient;
   }
-  // SSR fallback - create new instance (will be replaced on client)
-  return createSSRBrowserClient<Database>(getSupabaseUrl(), supabaseAnonKey, {
-    cookieOptions,
-    auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
-  }) as unknown as SupabaseClient<Database>;
+  // SSR fallback - create new instance (will be replaced on client). Inert
+  // no-op below since globalThis.__PATINA_SUPABASE_ORIGIN is unset server-side.
+  const ssrFallbackClient = createSSRBrowserClient<Database>(
+    getSupabaseUrl(),
+    supabaseAnonKey,
+    {
+      cookieOptions,
+      auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
+    },
+  ) as unknown as SupabaseClient<Database>;
+  pinStorageDirect(ssrFallbackClient);
+  return ssrFallbackClient;
 }
 
 /**
