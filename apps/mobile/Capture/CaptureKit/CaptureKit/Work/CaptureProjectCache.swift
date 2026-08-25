@@ -5,6 +5,7 @@
 //  never an empty list, never a spinner, never a disabled control.
 
 import Foundation
+import os
 import SwiftData
 
 public struct CaptureProjectSnapshot: Identifiable, Hashable, Sendable {
@@ -134,6 +135,8 @@ public enum CaptureProjectCachePolicy {
 /// later teaches the suggestion tray where a project physically is.
 @MainActor
 public final class CaptureProjectCache {
+    private static let log = Logger(subsystem: "cloud.patina.field", category: "project-cache")
+
     private let store: CaptureStore
     private let projects: any ProjectsService
 
@@ -165,7 +168,7 @@ public final class CaptureProjectCache {
             ref.lastRefreshedAt = now
         }
         evict(owner: owner, now: now)
-        try? store.save()
+        save("refreshList")
         return true
     }
 
@@ -187,11 +190,14 @@ public final class CaptureProjectCache {
         ref.specRooms = detail.specRooms.map { CaptureCachedRoom(id: $0.id, name: $0.name) }
         ref.rooms = detail.rooms.map { CaptureCachedRoom(id: $0.id, name: $0.name) }
         ref.lastRefreshedAt = now
-        try? store.save()
+        save("refreshDetail")
         return true
     }
 
     /// Called when a capture is FILED to a project — feeds the learned centroid.
+    /// `now` is unused on purpose: it is part of the ratified signature, but filing
+    /// deliberately does not stamp the eviction clock. Only a refresh or a visit
+    /// does, so a burst of filings cannot keep an abandoned project alive.
     public func recordFiling(projectID: String, at coordinate: CaptureCoordinate?,
                              owner: CaptureOwnerIdentity, now: Date = Date()) {
         guard let ref = ref(snapshotID: projectID, owner: owner) else { return }
@@ -207,22 +213,35 @@ public final class CaptureProjectCache {
                 ref.lastFiledCoordinate = coordinate
             }
         }
-        try? store.save()
+        save("recordFiling")
     }
 
     /// Called when a visit opens on a project.
     public func recordVisit(projectID: String, owner: CaptureOwnerIdentity, now: Date = Date()) {
         guard let ref = ref(snapshotID: projectID, owner: owner) else { return }
         ref.lastVisitedAt = now
-        try? store.save()
+        save("recordVisit")
     }
 
     // ── plumbing ──
 
+    /// A failed save is silent to every caller here — none of these methods can
+    /// change its return contract to report one — and it is invisible to a test,
+    /// because `snapshots` reads back out of the same context that failed to
+    /// flush. The log line is the only trace a dropped centroid or a survived
+    /// eviction would otherwise leave.
+    private func save(_ operation: StaticString) {
+        do {
+            try store.save()
+        } catch {
+            Self.log.error("\(operation, privacy: .public) could not persist: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     private func refs(owner: CaptureOwnerIdentity) -> [CaptureProjectRef] {
         let all = (try? store.context.fetch(FetchDescriptor<CaptureProjectRef>())) ?? []
-        // NO remoteId filter: a project created offline (S2, with the create call
-        // refused) has none until it syncs, and the door must still list it.
+        // NO remoteId filter: a project that exists only on this phone has no
+        // `projects.id` until it syncs, and the door must still list it.
         return all.filter { $0.belongs(to: owner) }
     }
 
@@ -251,6 +270,10 @@ public final class CaptureProjectCache {
         guard !candidates.isEmpty else { return }
         // `evictable` returns CANDIDATES, not a verdict: a pure value type cannot
         // reach the store, so the ownership subtraction has to happen here.
+        // Note what this narrowing does to `maxCachedProjects`: the cap is applied
+        // to cache-written rows ALONE, so locally created rows never count toward
+        // it and never overflow out of it. The cache stays bounded; the store as a
+        // whole does not, which is the sparing side of the trade (R24).
         let doomed = Set(CaptureProjectCachePolicy.evictable(
             candidates.map(Self.snapshot), now: now))
         guard !doomed.isEmpty else { return }

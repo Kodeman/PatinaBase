@@ -4,6 +4,7 @@
 //  The offline project + room cache (Field Companion wave 3, package 3-1).
 
 import Foundation
+import SwiftData
 import Testing
 @testable import CaptureKit
 
@@ -340,8 +341,10 @@ struct ProjectCacheTests {
     @Test func aProjectCreatedOfflineIsStillOnTheDoor() async throws {
         let store = try CaptureStore.inMemory()
         let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
-        // Exactly what S2CreateProjectScreen writes when the create call fails:
-        // a ref with a name, an owner and NO remoteId.
+        // A PROSPECTIVE row: a name, an owner, and NO remoteId. Nothing writes
+        // one today — S2's real-mode catch sets an error and persists nothing —
+        // so this fixture stands for the shape the cache is built to carry once
+        // something does, not for a shipped code path.
         let local = CaptureProjectRef(remoteId: nil, name: "Kippley residence", owner: owner)
         store.context.insert(local)
         try store.save()
@@ -440,6 +443,35 @@ struct ProjectCacheTests {
         #expect(cache.snapshots(owner: owner, now: now).map(\.id) == ["p-placed"])
     }
 
+    @Test func evictionSparesAProjectAPendingScanUploadNames() async throws {
+        let store = try CaptureStore.inMemory()
+        let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let ancient = now.addingTimeInterval(-CaptureProjectCachePolicy.evictAfter - 1)
+
+        // R25's third referent. There is NO Specimen anywhere in this store, so
+        // this can only pass through the ScanUploadRecord lane — drop that lane
+        // and the scan's project goes over the side while its upload is still
+        // queued.
+        let scanned = CaptureProjectRef(remoteId: "p-scanned", name: "Harbor", owner: owner)
+        scanned.lastRefreshedAt = ancient
+        let orphan = CaptureProjectRef(remoteId: "p-orphan", name: "Old job", owner: owner)
+        orphan.lastRefreshedAt = ancient
+        for ref in [scanned, orphan] { store.context.insert(ref) }
+
+        store.context.insert(ScanUploadRecord(
+            bundlePath: "SiteScans/site-scan-1", scanID: "s1", roomID: "r1",
+            name: "Living", projectID: "p-scanned", projectRoomID: nil, owner: owner))
+        #expect((try store.context.fetch(FetchDescriptor<Specimen>())).isEmpty)
+        try store.save()
+
+        let service = StubProjectsService()
+        let cache = CaptureProjectCache(store: store, projects: service)
+        _ = await cache.refreshList(owner: owner, now: now)
+
+        #expect(cache.snapshots(owner: owner, now: now).map(\.id) == ["p-scanned"])
+    }
+
     @Test func recordVisitLiftsAProjectToTheTopOfTheDoor() async throws {
         let store = try CaptureStore.inMemory()
         let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
@@ -460,6 +492,9 @@ struct ProjectCacheTests {
         let store = try CaptureStore.inMemory()
         let owner = CaptureOwnerIdentity(userID: "u1", workspaceID: "w1")!
         let now = Date(timeIntervalSince1970: 1_800_000_000)
+        // The same prospective shape as above, and likewise not written by any
+        // shipped path yet: with no remoteId, every id the cache hands out for it
+        // is the local uuid.
         let local = CaptureProjectRef(remoteId: nil, name: "Kippley residence", owner: owner)
         store.context.insert(local)
         try store.save()
