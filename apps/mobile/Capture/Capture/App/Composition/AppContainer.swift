@@ -47,7 +47,7 @@ public final class AppContainer {
         defaultHint: "Next steps"
     )
 
-    // ── Phase 2 designer/pro seams (frozen; wave agents build the screens) ──
+    // ── Phase 2 designer/pro seams (frozen — foundation-owner-only) ──
     public let projects: any ProjectsService
     public let leads: any LeadsService
     public let decisions: any DecisionsReadService
@@ -97,9 +97,9 @@ public final class AppContainer {
                                                 session: session, remote: gateway)
             self.projectCreator = SupabaseProjectCreator(client: client, session: session)
 
-            // Phase 2 seams — each flow's own factory. The freeze leaves these
-            // returning the mock conformer; a wave agent swaps in the real
-            // service by editing ONLY its `<Flow>ServiceFactory` + its own files.
+            // Phase 2 seams — each flow owns a `<Flow>ServiceFactory.make(deps:)`,
+            // and all eight now hand back a real Supabase service. Mock mode never
+            // reaches this branch; it wires the CaptureKitMocks conformers below.
             let work = Self.makeWorkServices(deps: WorkServiceDependencies(
                 client: client, session: session, store: store))
             self.projects = work.projects; self.leads = work.leads; self.decisions = work.decisions
