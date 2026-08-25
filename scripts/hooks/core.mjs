@@ -214,10 +214,19 @@ function workspaceChecks(workspaceState, root) {
             : null;
 
     if (gate) {
+      // Retained services (orders/media/projects) depend on dist-only
+      // @patina/auth; route their build gate through turbo so `^build`
+      // builds that dependency's dist first, same as verify-affected.sh's
+      // apps/services blocks. A raw `pnpm --filter <svc> build` skips that
+      // graph and can build against a stale (or absent) dist.
+      const command =
+        gate === "build" && isRetainedService
+          ? `pnpm exec turbo run build --filter=${manifest.name}`
+          : `pnpm --filter ${manifest.name} ${gate}`;
       addCheck(checks, {
         id: `${manifest.name}:${gate}`,
         scope: manifest.name,
-        command: `pnpm --filter ${manifest.name} ${gate}`,
+        command,
         tier: "fast",
       });
     }
