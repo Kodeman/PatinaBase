@@ -28,7 +28,7 @@ ALL_SCREENS=(
   N1.tag-ocr N2.scan N3.measure N4.voice N5.smart-guess
   R1.low-light R2.ocr-fallback R3.denied R4.offline
   S1.assign S2.create-project S3.destination S4.saved S5.inbox
-  V1.session-tray V2.cull V3.detail
+  V0.visit V1.session-tray V2.cull V3.detail
   U1.sync U2.library-search T1.settings T2.account
   W1.work
   P1.project-list P2.project-detail
@@ -45,10 +45,11 @@ ALL_SCREENS=(
   SR17.guest-queue SR18.guest-receipt SR19.guest-done SR20.guest-returned
 )
 
-# Not swept: V0.visit, C6.voice and V4.visit-review. Their CaptureScreenID cases
-# exist (the enum is a frozen seam edited once, wave 2) but the screens behind
-# them are waves 3–4. Sweeping them would produce a PNG of C1 filed under
-# another screen's name, which is worse than a gap.
+# Not swept: C6.voice and V4.visit-review. Their CaptureScreenID cases exist
+# (the enum is a frozen seam edited once, wave 2) but the screens behind them
+# are waves 3–4. Sweeping them would produce a PNG of C1 filed under another
+# screen's name, which is worse than a gap. V0.visit joined the sweep in wave 3
+# with the door itself; the harness presents the `.visit` sheet for it.
 
 # Optional filter: keep screens whose suffix starts with any given prefix (e.g. "C5", "N").
 SCREENS=()

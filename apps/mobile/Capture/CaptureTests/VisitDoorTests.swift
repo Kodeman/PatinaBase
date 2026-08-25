@@ -505,4 +505,35 @@ struct VisitDoorTests {
         #expect(model.projects.count == 1)
         #expect(model.offlineCaption == "2 projects on this phone. Others need signal.")
     }
+
+    /// The contract the door's START owes the chip: what `draft()` produced is
+    /// what the visit reads back, on BOTH FC-R5 lanes, and End clears it.
+    @Test func startingFromTheDoorPersistsAVisitTheChipCanRead() async throws {
+        let service = seededService()
+        let cache = try makeCache(service)
+        let identity = CaptureSessionIdentity(userID: "u1", workspaceID: "w1")
+        let defaults = try #require(UserDefaults(suiteName: "test.v0.\(UUID().uuidString)"))
+        let store = CaptureSessionContextStore(defaults: defaults,
+                                               key: "capture.session-context.v1")
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+        let model = FieldVisitDoorModel(cache: cache, owner: owner)
+        await model.load()
+        await model.select(projectID: "p1")
+        model.selectedRoom = model.roomOptions.first { $0.name == "Living" }
+        model.kit = .walkThrough
+
+        let draft = try #require(model.draft())
+        store.startVisit(draft, identity: identity, now: now)
+
+        let state = store.visitState(identity: identity, now: now.addingTimeInterval(60))
+        let context = try #require(state.context)
+        #expect(context.isVisit)
+        #expect(context.label == "Maple St residence")
+        #expect(context.routing.projectRoomID == "sr1")
+        #expect(context.scanRoomID == "r1")
+
+        _ = store.endVisit(identity: identity, now: now.addingTimeInterval(120))
+        #expect(store.visitState(identity: identity, now: now.addingTimeInterval(180)) == .none)
+    }
 }

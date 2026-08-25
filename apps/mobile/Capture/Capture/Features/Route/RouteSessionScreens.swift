@@ -77,5 +77,9 @@ enum RouteSessionScreens {
                 store: store, sync: sync, session: session,
                 coordinator: coordinator))
         }
+
+        // V0 — the door. One line rather than three: `register` sits on
+        // SwiftLint's function_body_length limit for this file.
+        r.registerSheet(CaptureSheet.visit.registryKey) { _ in AnyView(V0VisitSheet(container: container, coordinator: coordinator)) }
     }
 }

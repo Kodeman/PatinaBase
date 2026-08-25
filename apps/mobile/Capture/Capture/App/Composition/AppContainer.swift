@@ -42,6 +42,8 @@ public final class AppContainer {
     /// Remote flags, fail-closed. `.allOff` in mock mode: the harness and the
     /// previews must never light a gated surface.
     public let featureFlags: CaptureFeatureFlags
+    /// The offline project + room cache the door and the suggestion lane share.
+    public let projectCache: CaptureProjectCache
     public let companion = FieldCompanionController(
         initialPresentation: .hidden(reason: .cameraActive),
         defaultHint: "Next steps"
@@ -144,6 +146,7 @@ public final class AppContainer {
             self.guestSiteRequests = siteRequests
             self.siteRequestOutboxDrainer = SiteRequestOutboxDrainer(store: store, remote: siteRequests)
         }
+        projectCache = CaptureProjectCache(store: store, projects: projects)
     }
 
     /// Every protocol-typed Work dependency the app wires in real mode, bundled
