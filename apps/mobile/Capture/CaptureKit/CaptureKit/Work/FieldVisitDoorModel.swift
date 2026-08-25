@@ -16,6 +16,9 @@ public final class FieldVisitDoorModel {
     private let existing: CaptureVisitState
     private var allProjects: [CaptureProjectSnapshot] = []
     private var selectedDetail: CaptureProjectSnapshot?
+    /// FC-R5: the two lanes an open visit stored, held until `select` has the
+    /// project's merged rooms. Never a `FieldVisitRoomOption` rebuilt from one id.
+    private var restoringRoomLanes: (projectRoomID: String?, scanRoomID: String?)?
 
     public var kind: FieldVisitKind = .site
     public var query: String = ""
@@ -37,7 +40,15 @@ public final class FieldVisitDoorModel {
             kit = open.kit
             selectedProjectID = open.routing.projectID
             venueName = open.kind == .sourcing ? (open.label ?? "") : ""
-            projectsInMind = open.projectsInMind
+            // R36 again, on the way IN: `CaptureSessionContext` truncates in its
+            // memberwise init, but a DECODED context assigns stored properties
+            // directly and bypasses that, so the type is not a validation
+            // boundary in either direction. The door is where an over-cap array
+            // first becomes visible, so the door is where it gets trimmed.
+            projectsInMind = Array(open.projectsInMind.prefix(CaptureSessionContext.maxProjectsInMind))
+            if open.routing.projectRoomID != nil || open.scanRoomID != nil {
+                restoringRoomLanes = (open.routing.projectRoomID, open.scanRoomID)
+            }
         }
     }
 
@@ -72,7 +83,12 @@ public final class FieldVisitDoorModel {
     public var canStart: Bool {
         switch kind {
         case .site:
-            return selectedProjectID?.isEmpty == false
+            // Membership, not merely non-empty: `draft()` requires the project to
+            // still be in the cache, so a restored id whose project has since been
+            // evicted would otherwise light the primary button and return nil on
+            // tap — a live-but-dead control.
+            guard let selectedProjectID, !selectedProjectID.isEmpty else { return false }
+            return allProjects.contains { $0.id == selectedProjectID }
         case .sourcing:
             return !venueName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
@@ -88,12 +104,29 @@ public final class FieldVisitDoorModel {
     }
 
     public func select(projectID: String) async {
-        if selectedProjectID != projectID { selectedRoom = nil }
+        if selectedProjectID != projectID {
+            selectedRoom = nil
+            restoringRoomLanes = nil
+        }
         selectedProjectID = projectID
         let refreshed = await cache.refreshDetail(projectID: projectID, owner: owner)
         if !refreshed { isOffline = true }
         allProjects = cache.snapshots(owner: owner)
         selectedDetail = allProjects.first { $0.id == projectID }
+        restoreSelectedRoom()
+    }
+
+    /// FC-R5: an open visit stored its room as TWO ids, so the option is
+    /// RECOVERED by matching both lanes against the merged list — never rebuilt
+    /// from one id, which is the exact cross-assignment the merge exists to
+    /// prevent. No match (renamed room, re-cached project) leaves it nil rather
+    /// than inventing an option.
+    private func restoreSelectedRoom() {
+        guard let lanes = restoringRoomLanes else { return }
+        restoringRoomLanes = nil
+        selectedRoom = roomOptions.first {
+            $0.projectRoomID == lanes.projectRoomID && $0.scanRoomID == lanes.scanRoomID
+        }
     }
 
     /// R36: the cap is enforced HERE, at selection time. `CaptureSessionContext`
@@ -131,5 +164,26 @@ public final class FieldVisitDoorModel {
                 label: venueName.trimmingCharacters(in: .whitespacesAndNewlines),
                 projectsInMind: projectsInMind)
         }
+    }
+}
+
+public extension FieldVisitDoorModel {
+    /// Never overwrites a typed venue — a GPS guess is a courtesy, not a fact.
+    func prefillVenue(from location: any LocationService) async {
+        guard venueName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard let placemark = await location.currentVenue()?.placemarkName else { return }
+        venueName = placemark
+    }
+
+    var offeredKits: [FieldVisitKit] { FieldVisitKit.allCases }
+
+    /// FC-R11: the kit carries the consent default, and wave 3 ships ONLY that
+    /// posture — the four-way pill row that tunes the shutter is wave 4.
+    var consentPosture: FieldNoteSetting {
+        CaptureVisitDraft(kind: kind, kit: kit).defaultNoteSetting
+    }
+
+    var projectsInMindIsFull: Bool {
+        projectsInMind.count >= CaptureSessionContext.maxProjectsInMind
     }
 }
