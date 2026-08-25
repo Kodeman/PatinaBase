@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { ImageTransformService, TransformOptions, RenditionSpec } from './image-transform.service';
 import { OCIStorageService } from '../storage/oci-storage.service';
-import * as sharp from 'sharp';
+import sharp from 'sharp';
 
 jest.mock('sharp');
 
@@ -22,6 +22,7 @@ describe('ImageTransformService', () => {
       avif: jest.fn().mockReturnThis(),
       toBuffer: jest.fn(),
       composite: jest.fn().mockReturnThis(),
+      ensureAlpha: jest.fn().mockReturnThis(),
     };
 
     (sharp as any as jest.Mock).mockReturnValue(mockSharp);

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MetadataExtractionService } from './metadata-extraction.service';
-import * as sharp from 'sharp';
+import sharp from 'sharp';
 
 jest.mock('sharp');
 jest.mock('image-hash');
@@ -60,7 +60,10 @@ describe('MetadataExtractionService', () => {
       });
 
       const imageHash = require('image-hash');
-      imageHash.imageHash = jest.fn((buf, bits, precise, callback) => {
+      // Production captures `imageHash` once via `promisify(imageHash)` at
+      // module load, so reassigning the property here would orphan that
+      // closure; update the existing automocked fn in place instead.
+      (imageHash.imageHash as jest.Mock).mockImplementation((buf, bits, precise, callback) => {
         callback(null, 'abc123def456');
       });
 
@@ -125,7 +128,7 @@ describe('MetadataExtractionService', () => {
       });
 
       const imageHash = require('image-hash');
-      imageHash.imageHash = jest.fn((buf, bits, precise, callback) => {
+      (imageHash.imageHash as jest.Mock).mockImplementation((buf, bits, precise, callback) => {
         callback(null, 'hash123');
       });
 
@@ -177,7 +180,7 @@ describe('MetadataExtractionService', () => {
       });
 
       const imageHash = require('image-hash');
-      imageHash.imageHash = jest.fn((buf, bits, precise, callback) => {
+      (imageHash.imageHash as jest.Mock).mockImplementation((buf, bits, precise, callback) => {
         callback(null, 'hash456');
       });
 
@@ -222,7 +225,7 @@ describe('MetadataExtractionService', () => {
       });
 
       const imageHash = require('image-hash');
-      imageHash.imageHash = jest.fn((buf, bits, precise, callback) => {
+      (imageHash.imageHash as jest.Mock).mockImplementation((buf, bits, precise, callback) => {
         callback(null, 'qualityhash');
       });
 
@@ -251,7 +254,9 @@ describe('MetadataExtractionService', () => {
 
   describe('validateImageDimensions', () => {
     it('should validate HERO image dimensions', () => {
-      const result = service.validateImageDimensions(2000, 1600, 'HERO');
+      // 2400x1600: shortest edge meets the 1600px HERO floor and the 1.5:1
+      // aspect ratio sits inside the allowed 4:3 (1.33) to 16:9 (1.78) range.
+      const result = service.validateImageDimensions(2400, 1600, 'HERO');
 
       expect(result.valid).toBe(true);
       expect(result.issues).toHaveLength(0);
@@ -261,7 +266,7 @@ describe('MetadataExtractionService', () => {
       const result = service.validateImageDimensions(1200, 800, 'HERO');
 
       expect(result.valid).toBe(false);
-      expect(result.issues).toContain(expect.stringContaining('1600px'));
+      expect(result.issues).toContainEqual(expect.stringContaining('1600px'));
     });
 
     it('should validate ANGLE image dimensions', () => {
@@ -275,12 +280,14 @@ describe('MetadataExtractionService', () => {
       const result = service.validateImageDimensions(1000, 800, 'ANGLE');
 
       expect(result.valid).toBe(false);
-      expect(result.issues).toContain(expect.stringContaining('1200px'));
+      expect(result.issues).toContainEqual(expect.stringContaining('1200px'));
     });
 
     it('should validate aspect ratio within range', () => {
-      // 16:9 aspect ratio
-      const result = service.validateImageDimensions(1920, 1080, 'HERO');
+      // 16:9 aspect ratio, scaled up so the shortest edge also clears the
+      // 1600px HERO floor (1920x1080 is 16:9 but its 1080px short edge would
+      // fail the HERO minimum on its own).
+      const result = service.validateImageDimensions(2880, 1620, 'HERO');
 
       expect(result.valid).toBe(true);
     });
@@ -290,7 +297,8 @@ describe('MetadataExtractionService', () => {
       const result = service.validateImageDimensions(2560, 1080, 'HERO');
 
       expect(result.valid).toBe(false);
-      expect(result.issues.some(issue => issue.includes('aspect ratio'))).toBe(true);
+      // Production message is "Aspect ratio ..." (capital A); match case-insensitively.
+      expect(result.issues.some(issue => issue.toLowerCase().includes('aspect ratio'))).toBe(true);
     });
 
     it('should reject very narrow aspect ratio', () => {
@@ -298,7 +306,8 @@ describe('MetadataExtractionService', () => {
       const result = service.validateImageDimensions(1000, 2000, 'HERO');
 
       expect(result.valid).toBe(false);
-      expect(result.issues.some(issue => issue.includes('aspect ratio'))).toBe(true);
+      // Production message is "Aspect ratio ..." (capital A); match case-insensitively.
+      expect(result.issues.some(issue => issue.toLowerCase().includes('aspect ratio'))).toBe(true);
     });
   });
 
