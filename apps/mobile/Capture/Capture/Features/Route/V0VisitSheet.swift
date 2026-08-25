@@ -5,9 +5,9 @@
 //  you today. Everything after this inherits the answer.
 //
 //  A THIN RENDERER over `FieldVisitDoorModel`. Every decision — what can start,
-//  what the primary says, which rooms exist, what the offline line reads — is
-//  the model's. What lives here is presentation and the one hold the model
-//  cannot own (see `roomLanesAreUnresolved`).
+//  what the primary says, which rooms exist, whether a restored room is still
+//  pending, what the offline line reads — is the model's. Nothing here computes
+//  one.
 
 import SwiftUI
 import CaptureKit
@@ -18,10 +18,6 @@ struct V0VisitSheet: View {
     let coordinator: CaptureCoordinator
 
     @State private var model: FieldVisitDoorModel?
-    /// The open visit this sheet was built from, kept so the sheet can tell
-    /// "the stored room has not resolved yet" from "there is no stored room".
-    /// The model holds the same lanes privately and offers no accessor.
-    @State private var restored: CaptureSessionContext?
     @State private var hasLoaded = false
     @State private var ownerIsMissing = false
 
@@ -45,9 +41,8 @@ struct V0VisitSheet: View {
                 } else if ownerIsMissing {
                     PatinaEmptyState(
                         icon: "mappin.and.ellipse",
-                        title: "No studio open",
-                        message: "A visit belongs to a studio. Open one from Account, "
-                            + "then come back.")
+                        title: "No workspace yet",
+                        message: "A visit belongs to a workspace. Come back once you're in one.")
                 }
             }
             .padding(20)
@@ -70,11 +65,9 @@ struct V0VisitSheet: View {
             ownerIsMissing = true
             return
         }
-        let existing = contextStore.visitState(identity: identity)
-        restored = existing.context
         let door = FieldVisitDoorModel(cache: container.projectCache,
                                        owner: owner,
-                                       existing: existing)
+                                       existing: contextStore.visitState(identity: identity))
         model = door
         await door.load()
         await door.prefillVenue(from: container.location)
@@ -215,7 +208,7 @@ struct V0VisitSheet: View {
     // MARK: - Site: room
 
     private func roomStep(_ model: FieldVisitDoorModel) -> some View {
-        let pending = roomLanesAreUnresolved(model)
+        let pending = model.isAwaitingRestoredRoom
         // A visit opened on Whole house reopens with `selectedRoom == nil`, and
         // `draft()` reads nil and Whole house identically — so nil RENDERS as
         // Whole house rather than as a missing answer. Not while the stored
@@ -239,24 +232,6 @@ struct V0VisitSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-    }
-
-    /// The one hold the model cannot own. An open visit stores its room as two
-    /// ids, and the model consumes them only once the merged list has a real
-    /// room to match against (`roomOptions.count > 1`). Until then `draft()`
-    /// reads `selectedRoom` alone — so "Change" would write BOTH lanes nil and
-    /// quietly demote the visit to Whole house while `canStart` stayed true.
-    /// `draft()` and `canStart` are closed, and carrying the lanes through would
-    /// mean hand-building a `FieldVisitRoomOption`, so the sheet holds the
-    /// primary instead. The test mirrors the model's own.
-    private func roomLanesAreUnresolved(_ model: FieldVisitDoorModel) -> Bool {
-        guard hasLoaded,
-              model.kind == .site,
-              model.selectedRoom == nil,
-              let open = restored,
-              open.routing.projectRoomID != nil || open.scanRoomID != nil,
-              model.selectedProjectID == open.routing.projectID else { return false }
-        return model.roomOptions.count <= 1
     }
 
     // MARK: - Sourcing
@@ -327,12 +302,15 @@ struct V0VisitSheet: View {
     // MARK: - Primary
 
     private func primaryRow(_ model: FieldVisitDoorModel) -> some View {
-        let pending = roomLanesAreUnresolved(model)
-        let held = !model.canStart || pending
+        let held = !model.canStart || model.isAwaitingRestoredRoom
+        // The caption names a Whole house chip, so it waits until there is one on
+        // screen — `roomStep` is hidden while `roomOptions` is empty, which is also
+        // every moment before `load()` returns.
+        let explain = model.isAwaitingRestoredRoom && !model.roomOptions.isEmpty
         return VStack(alignment: .leading, spacing: 8) {
             // R78: the ONLY line that ever sits under a held primary, and it
             // names what the app is missing, never something she failed to do.
-            if pending {
+            if explain {
                 Text("This project's rooms aren't on this phone yet. Change waits "
                      + "for them — or pick Whole house and mean it.")
                     .font(CaptureType.footnote)

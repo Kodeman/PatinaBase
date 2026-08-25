@@ -91,6 +91,24 @@ public final class FieldVisitDoorModel {
         }
     }
 
+    /// True while an OPEN visit's two stored room lanes are still waiting for a
+    /// merged list to match against — the state in which `draft()` reads
+    /// `selectedRoom` ALONE and would write both lanes nil, quietly demoting the
+    /// visit to Whole house while `canStart` stayed true. The door holds its
+    /// primary on this. It is the read side of `restoreSelectedRoom`'s guard and
+    /// answers false the moment that guard would: once the lanes are consumed,
+    /// once she picks a room herself (Whole house included), and once she selects
+    /// another project, which clears them for good — a caller-side mirror keyed on
+    /// "is this still the restored project?" would wrongly re-fire on a switch
+    /// away and back.
+    ///
+    /// Sourcing is never awaiting a room: `draft()` carries none on that branch,
+    /// so a hold taken there could never be released.
+    public var isAwaitingRestoredRoom: Bool {
+        guard kind == .site else { return false }
+        return restoringRoomLanes != nil && selectedRoom == nil && roomOptions.count <= 1
+    }
+
     public func load() async {
         let refreshed = await cache.refreshList(owner: owner)
         isOffline = !refreshed

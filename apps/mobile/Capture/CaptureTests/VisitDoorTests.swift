@@ -536,4 +536,88 @@ struct VisitDoorTests {
         _ = store.endVisit(identity: identity, now: now.addingTimeInterval(120))
         #expect(store.visitState(identity: identity, now: now.addingTimeInterval(180)) == .none)
     }
+
+    /// The hold the door hangs its primary on, and why it has to be the MODEL's.
+    /// `canStart` is TRUE in this state — `draft()` reads `selectedRoom` alone, so
+    /// a "Change" taken here writes BOTH lanes nil and demotes the visit to Whole
+    /// house behind a button that looked live. And a CALLER-side mirror of the
+    /// rule ("is this still the restored project, with no room and no merged
+    /// list?") re-fires after a switch away and back — holding Change forever for
+    /// lanes `select` already threw away.
+    @Test func awaitingARestoredRoomHoldsWhilePendingAndNeverReturnsAfterASwitch() async throws {
+        let service = seededService()
+        service.detail["p2"] = FieldProjectDetail(
+            project: FieldProject(id: "p2", name: "Harbor loft", status: "active"),
+            specRooms: [], rooms: [])
+        let cache = try makeCache(service)
+        let warm = FieldVisitDoorModel(cache: cache, owner: owner)
+        await warm.load()                            // list cached, rooms never fetched
+
+        let open = opened(CaptureVisitDraft(
+            kind: .site, kit: .install, label: "Maple St residence",
+            projectID: "p1", projectName: "Maple St residence",
+            projectRoomID: "sr2", scanRoomID: nil, room: "Dining"))
+
+        service.offline = true
+        let model = FieldVisitDoorModel(cache: cache, owner: owner, existing: .active(open))
+        await model.load()
+
+        #expect(model.roomOptions.count == 1)        // Whole house alone
+        #expect(model.canStart)                      // live-looking...
+        #expect(model.isAwaitingRestoredRoom)        // ...and the door holds it
+
+        await model.select(projectID: "p2")
+        #expect(!model.isAwaitingRestoredRoom)       // `select` cleared the lanes
+        await model.select(projectID: "p1")
+        #expect(!model.isAwaitingRestoredRoom)       // and they never come back
+    }
+
+    /// The escape hatch the door offers under that hold: choosing Whole house
+    /// herself is a real answer, so the hold lifts even though the rooms never
+    /// arrived — otherwise a designer with no signal could never change a visit.
+    @Test func choosingWholeHouseLiftsTheHoldWhileTheRoomsStayUnreachable() async throws {
+        let service = seededService()
+        let cache = try makeCache(service)
+        let warm = FieldVisitDoorModel(cache: cache, owner: owner)
+        await warm.load()
+
+        let open = opened(CaptureVisitDraft(
+            kind: .site, kit: .install, label: "Maple St residence",
+            projectID: "p1", projectName: "Maple St residence",
+            projectRoomID: "sr2", scanRoomID: nil, room: "Dining"))
+
+        service.offline = true
+        let model = FieldVisitDoorModel(cache: cache, owner: owner, existing: .active(open))
+        await model.load()
+        #expect(model.isAwaitingRestoredRoom)
+
+        model.selectedRoom = model.roomOptions.first { $0.isWholeHouse }
+        #expect(!model.isAwaitingRestoredRoom)
+        let draft = try #require(model.draft())
+        #expect(draft.projectRoomID == nil)          // and Whole house is what lands
+        #expect(draft.scanRoomID == nil)
+    }
+
+    /// Sourcing carries no room at all, so a hold taken there could never be
+    /// released — she would be locked out of starting a market run by a room she
+    /// is no longer choosing.
+    @Test func sourcingIsNeverAwaitingARestoredRoom() async throws {
+        let service = seededService()
+        let cache = try makeCache(service)
+        let warm = FieldVisitDoorModel(cache: cache, owner: owner)
+        await warm.load()
+
+        let open = opened(CaptureVisitDraft(
+            kind: .site, kit: .install, label: "Maple St residence",
+            projectID: "p1", projectName: "Maple St residence",
+            projectRoomID: "sr2", scanRoomID: nil, room: "Dining"))
+
+        service.offline = true
+        let model = FieldVisitDoorModel(cache: cache, owner: owner, existing: .active(open))
+        await model.load()
+        #expect(model.isAwaitingRestoredRoom)
+
+        model.kind = .sourcing
+        #expect(!model.isAwaitingRestoredRoom)
+    }
 }
