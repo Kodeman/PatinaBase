@@ -64,6 +64,7 @@ function stripJsonComments(input: string): string {
 interface WranglerVars {
   NEXT_PUBLIC_SUPABASE_URL?: string;
   SUPABASE_ORIGIN_RUNTIME?: string;
+  NEXT_PUBLIC_EDGE_API_URL?: string;
   [key: string]: unknown;
 }
 
@@ -115,10 +116,104 @@ describe("D-repoint wiring guard: designer-portal edge repoint stays scoped", ()
     expect(new URL(url!).hostname.endsWith(".supabase.co")).toBe(true);
   });
 
-  it("infra/deploy-portal.sh: the allowlist literal appears exactly once (drift guard)", () => {
+  // F10: the carve-out in infra/deploy-portal.sh is scoped to
+  // PORTAL=designer && TARGET_ENV=production only (see F11 below) — but
+  // that scoping is only as good as the values actually committed to
+  // wrangler.jsonc. If SUPABASE_ORIGIN_RUNTIME is ever set on staging, it
+  // must never be the prod edge-API origin (staging is a SEPARATE Supabase
+  // project — pointing it at the prod edge worker is the exact
+  // cross-project hazard this guard family exists to catch). Designer-only
+  // scope for now; extend to other portals' wrangler.jsonc if they ever
+  // grow a SUPABASE_ORIGIN_RUNTIME var.
+  it("staging vars: SUPABASE_ORIGIN_RUNTIME, if present, is NOT the prod edge-API origin", () => {
+    const config = readDesignerWranglerConfig();
+    const stagingRuntimeOrigin =
+      config.env?.staging?.vars?.SUPABASE_ORIGIN_RUNTIME;
+
+    if (stagingRuntimeOrigin === undefined) {
+      // Expected today: staging doesn't set this var.
+      return;
+    }
+    expect(stagingRuntimeOrigin).not.toBe(ALLOWED_RUNTIME_ORIGIN);
+  });
+
+  // F5: @supabase/storage-js must stay version-locked to whatever
+  // @supabase/supabase-js bundles internally (packages/supabase/package.json's
+  // "_versionLocks" comment) — pinStorageDirect() constructs a StorageClient
+  // directly from this package and reaches into SupabaseClient's
+  // protected `headers`/`fetch`/`storage` fields, which rely on the two
+  // packages' shapes staying identical. A future supabase-js bump that
+  // drifts its internal storage-js version without this package's pin
+  // being bumped in lockstep must fail loudly here, not silently at
+  // runtime.
+  it("@supabase/storage-js stays version-locked to what @supabase/supabase-js bundles internally", () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const supabaseJsPkg = require("@supabase/supabase-js/package.json") as {
+      dependencies?: Record<string, string>;
+    };
+    const bundledStorageJsVersion =
+      supabaseJsPkg.dependencies?.["@supabase/storage-js"];
+
+    const ownPkg = JSON.parse(
+      readFileSync(
+        resolve(REPO_ROOT, "packages/supabase/package.json"),
+        "utf-8",
+      ),
+    ) as { dependencies?: Record<string, string> };
+    const pinnedStorageJsVersion =
+      ownPkg.dependencies?.["@supabase/storage-js"];
+
+    expect(
+      bundledStorageJsVersion,
+      "@supabase/supabase-js's package.json dependencies['@supabase/storage-js']",
+    ).toBeTruthy();
+    expect(
+      pinnedStorageJsVersion,
+      "packages/supabase/package.json dependencies['@supabase/storage-js']",
+    ).toBeTruthy();
+    expect(pinnedStorageJsVersion).toBe(bundledStorageJsVersion);
+  });
+
+  // F11: a plain "does the URL string appear exactly once" count doesn't
+  // actually protect the policy — someone could widen the comparison to a
+  // prefix/glob match (`case $PREFLIGHT_ORIGIN_RUNTIME in api.patina.cloud*)`)
+  // or add a second allowlist variable without ever touching the literal
+  // string, and this test would stay green. Assert the carve-out's exact
+  // shape instead: an EXACT equality comparison against
+  // $ALLOWED_RUNTIME_ORIGIN, gated behind a flag that is true ONLY when
+  // BOTH TARGET_ENV=production AND PORTAL=designer, with exactly one
+  // allowlist variable declared.
+  it("infra/deploy-portal.sh: the carve-out's exact-match, production+designer-scoped policy shape is intact", () => {
     const scriptPath = resolve(REPO_ROOT, "infra/deploy-portal.sh");
     const script = readFileSync(scriptPath, "utf-8");
-    const occurrences = script.split(ALLOWED_RUNTIME_ORIGIN).length - 1;
-    expect(occurrences).toBe(1);
+
+    // Exactly one allowlist variable is declared — a second allowlist var
+    // (e.g. a differently-named fallback) would defeat the "one sanctioned
+    // repoint target" invariant this guard exists to enforce.
+    const allowlistAssignments =
+      script.match(/^ALLOWED_RUNTIME_ORIGIN[A-Z0-9_]*=/gm) ?? [];
+    expect(allowlistAssignments).toEqual(["ALLOWED_RUNTIME_ORIGIN="]);
+    expect(script).toContain(
+      `ALLOWED_RUNTIME_ORIGIN="${ALLOWED_RUNTIME_ORIGIN}"`,
+    );
+
+    // The comparison against it must be an EXACT string-equality test
+    // (`[ "$x" = "$ALLOWED_RUNTIME_ORIGIN" ]`), not a prefix/glob/regex
+    // match. It appears twice by design: once to decide whether the
+    // carve-out is satisfied, once to decide whether to print the loud
+    // "RUNTIME REPOINT ACTIVE" line — both must use the same exact
+    // comparison, never a widened one.
+    const exactMatchPattern =
+      /\[\s*"\$PREFLIGHT_ORIGIN_RUNTIME"\s*=\s*"\$ALLOWED_RUNTIME_ORIGIN"\s*\]/g;
+    const exactMatchOccurrences = script.match(exactMatchPattern) ?? [];
+    expect(exactMatchOccurrences.length).toBe(2);
+
+    // That exact-match comparison must sit behind a carve-out flag that is
+    // set true ONLY when BOTH TARGET_ENV=production AND PORTAL=designer —
+    // dropping either condition, or loosening either comparison, must fail
+    // this test.
+    const carveoutGatePattern =
+      /if\s*\[\s*"\$TARGET_ENV"\s*=\s*"production"\s*\]\s*&&\s*\[\s*"\$PORTAL"\s*=\s*"designer"\s*\]\s*;\s*then\s*\n\s*CARVEOUT_APPLIES=true/;
+    expect(carveoutGatePattern.test(script)).toBe(true);
   });
 });

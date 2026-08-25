@@ -219,31 +219,48 @@ fi
 # until a future repoint sets it.
 #
 # D-repoint carve-out: the ONE sanctioned divergence is the deliberate
-# browser-traffic repoint to the edge API, api.patina.cloud — Storage is kept
-# pinned to the direct host by packages/supabase/src/client.ts's
-# pinStorageDirect() (see that file), so this is not the same failure mode as
-# an accidental divergence. Anything else still fails CLOSED.
+# browser-traffic repoint to the edge API, api.patina.cloud, for the
+# DESIGNER portal's PRODUCTION build only — Storage is kept pinned to the
+# direct host by packages/supabase/src/client.ts's pinStorageDirect() (see
+# that file), so this is not the same failure mode as an accidental
+# divergence. A staging build (a DIFFERENT Supabase project) pointed at the
+# prod edge API is exactly the cross-project hazard this guard exists to
+# catch, so the carve-out must NOT extend to staging or to any other portal
+# — anything else still fails CLOSED.
 # ---------------------------------------------------------------------------
 ALLOWED_RUNTIME_ORIGIN="https://api.patina.cloud"
 PREFLIGHT_ORIGIN_RUNTIME="$(resolve_next_public_var SUPABASE_ORIGIN_RUNTIME)"
-if [ -n "$PREFLIGHT_ORIGIN_RUNTIME" ] \
-  && [ "$PREFLIGHT_ORIGIN_RUNTIME" != "$PREFLIGHT_URL" ] \
-  && [ "$PREFLIGHT_ORIGIN_RUNTIME" != "$ALLOWED_RUNTIME_ORIGIN" ]; then
+
+CARVEOUT_APPLIES=false
+if [ "$TARGET_ENV" = "production" ] && [ "$PORTAL" = "designer" ]; then
+  CARVEOUT_APPLIES=true
+fi
+
+ORIGIN_RUNTIME_OK=false
+if [ -z "$PREFLIGHT_ORIGIN_RUNTIME" ] || [ "$PREFLIGHT_ORIGIN_RUNTIME" = "$PREFLIGHT_URL" ]; then
+  ORIGIN_RUNTIME_OK=true
+elif [ "$CARVEOUT_APPLIES" = "true" ] && [ "$PREFLIGHT_ORIGIN_RUNTIME" = "$ALLOWED_RUNTIME_ORIGIN" ]; then
+  ORIGIN_RUNTIME_OK=true
+fi
+
+if [ "$ORIGIN_RUNTIME_OK" != "true" ]; then
   echo "ERROR: refusing to build ${PORTAL} portal — SUPABASE_ORIGIN_RUNTIME=" >&2
   echo "       ${PREFLIGHT_ORIGIN_RUNTIME} diverges from the build-time" >&2
   echo "       NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL} this bundle is" >&2
   echo "       compiled against, and it isn't the sanctioned repoint target" >&2
-  echo "       (${ALLOWED_RUNTIME_ORIGIN}). packages/supabase/src/client.ts" >&2
+  echo "       for this portal/env. The carve-out (${ALLOWED_RUNTIME_ORIGIN})" >&2
+  echo "       applies ONLY to the designer portal's production build" >&2
+  echo "       (PORTAL=designer, TARGET_ENV=production) — here PORTAL=${PORTAL}," >&2
+  echo "       TARGET_ENV=${TARGET_ENV}. packages/supabase/src/client.ts" >&2
   echo "       resolves the runtime origin FIRST, so this build's client" >&2
   echo "       would silently target a different Supabase project than its" >&2
   echo "       anon key/storage key were compiled for. Align" >&2
-  echo "       SUPABASE_ORIGIN_RUNTIME with NEXT_PUBLIC_SUPABASE_URL or with" >&2
-  echo "       ${ALLOWED_RUNTIME_ORIGIN}, or unset it to inherit the" >&2
-  echo "       build-time value, before deploying." >&2
+  echo "       SUPABASE_ORIGIN_RUNTIME with NEXT_PUBLIC_SUPABASE_URL, or" >&2
+  echo "       unset it to inherit the build-time value, before deploying." >&2
   exit 1
 fi
 
-if [ -n "$PREFLIGHT_ORIGIN_RUNTIME" ] && [ "$PREFLIGHT_ORIGIN_RUNTIME" = "$ALLOWED_RUNTIME_ORIGIN" ]; then
+if [ -n "$PREFLIGHT_ORIGIN_RUNTIME" ] && [ "$CARVEOUT_APPLIES" = "true" ] && [ "$PREFLIGHT_ORIGIN_RUNTIME" = "$ALLOWED_RUNTIME_ORIGIN" ]; then
   echo "==> [0/3] Preflight OK: RUNTIME REPOINT ACTIVE → ${ALLOWED_RUNTIME_ORIGIN} (storage pinned direct)"
 fi
 
