@@ -101,6 +101,15 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// recognizer swap is POSTED here instead of performed inline.
     private let rotationQueue = DispatchQueue(label: "cloud.patina.field.voice.rotation")
     private var rotationInFlight = false
+    /// The format installTap was last given. A configuration change whose format
+    /// matches it is not a route change we need to act on — see the observer.
+    private var tapFormat: AVAudioFormat?
+    /// reopenEngineAndSegment() stops, reinstalls and restarts the engine, and
+    /// those mutations post AVAudioEngineConfigurationChange themselves. There is
+    /// no rotationInFlight analogue for it, and an unbounded fan-out would open a
+    /// segment per pass until VoiceRecordingPolicy's 24-segment cap ended a note
+    /// with plenty of time left.
+    private var reopenInFlight = false
 
     /// `mediaDirectory` is the App Group media dir (CaptureStore.mediaDirectory()).
     /// Pass nil to skip writing an audio file (transcript-only).
@@ -113,10 +122,14 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     }
 
     deinit {
-        // Same teardown finish() does. A screen dismissed mid-note otherwise
-        // leaves the mic live, other apps ducked, and the recording indicator lit.
+        // Same teardown finish() does, but ONLY for a note that was still live.
+        // One of these is constructed per screen and most are never recorded on;
+        // deactivating the shared session on every dismissal would reach across
+        // features (ARKit/RoomPlan run in this app too).
         removeObservers()
+        let wasRecording = noteIsActive
         noteIsActive = false
+        guard wasRecording else { return }
         stopEngineAndCloseSegment()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
@@ -149,6 +162,8 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         continuation = nil
         noteIsActive = false
         rotationInFlight = false
+        reopenInFlight = false
+        tapFormat = nil
 
         guard let recognizer, recognizer.isAvailable else {
             throw VoiceNoteError.recognizerUnavailable
@@ -181,6 +196,12 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
                 }
                 if let error {
                     continuation.finish(throwing: error)
+                    // The OTHER door to an abandoned note: VoiceNoteSheet.begin()'s
+                    // catch flips to manual entry without calling finish(), and its
+                    // end()/discard() are both gated on isRecording, so no later
+                    // user action can reach finish() either.
+                    let service = self
+                    DispatchQueue.main.async { service?.endAbandonedNote() }
                 }
             }
 
@@ -190,12 +211,7 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
                 self.audioEngine.prepare()
                 try self.audioEngine.start()
             } catch {
-                // Neither consumer calls finish() on this path, so disarm here or
-                // the observers outlive the abandoned note and reopen the mic.
-                inputNode.removeTap(onBus: 0)
-                self.noteIsActive = false
-                self.removeObservers()
-                self.closeCurrentSegment()
+                self.endAbandonedNote()
                 continuation.finish(throwing: error)
             }
         }
@@ -228,6 +244,7 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// The ONE tap in the class. The start path, the interruption-resume path
     /// and the configuration-change path install this, so they cannot drift.
     private func installTap(on input: AVAudioInputNode, format: AVAudioFormat) {
+        tapFormat = format
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self else { return }
             // RENDER THREAD. Two jobs only: feed recognition, write bytes.
@@ -314,11 +331,29 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         if audioFilename == nil { audioFilename = closed.name }
     }
 
+    /// Tear down a note no consumer will call finish() on. Two doors reach it —
+    /// the engine failing to start, and recognition erroring out — and both leave
+    /// the sheet on manual entry with finish() unreachable. Without this the mic
+    /// stays live, the file keeps growing, other apps stay ducked, and both
+    /// observers stay armed to reopen segments behind a manual-entry sheet.
+    /// Idempotent: a later finish() finds nothing left to do.
+    private func endAbandonedNote() {
+        guard noteIsActive else { return }
+        noteIsActive = false
+        removeObservers()
+        stopEngineAndCloseSegment()
+        request = nil
+        task = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
     private func stopEngineAndCloseSegment() {
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
-        }
+        if audioEngine.isRunning { audioEngine.stop() }
+        // OUTSIDE the isRunning check, and a no-op when no tap is installed:
+        // after an interruption .began iOS has already stopped the engine, so a
+        // guarded removeTap leaves the tap in place and the NEXT note's
+        // installTap raises `nullptr == Tap()` instead of replacing it.
+        audioEngine.inputNode.removeTap(onBus: 0)
         closeCurrentSegment()
     }
 
@@ -463,6 +498,15 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
             // isRunning is checked HERE, unlike at .ended: a config change during
             // an interruption must not restart the mic under the phone call.
             guard let self, self.noteIsActive, self.audioEngine.isRunning else { return }
+            // Our own stop/reinstall/start posts this notification too. Reopening
+            // on a format that did not move would open a segment for nothing and
+            // feed a self-sustaining cycle; channel count and sample rate are
+            // exactly what decides whether the installed tap's buffers are still
+            // writable, so they are what "the route moved" means here.
+            let current = self.audioEngine.inputNode.outputFormat(forBus: 0)
+            guard let installed = self.tapFormat,
+                  installed.channelCount != current.channelCount
+                    || installed.sampleRate != current.sampleRate else { return }
             self.reopenEngineAndSegment(reason: "route")
         }
     }
@@ -470,6 +514,9 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// Remove the stale tap, re-read the input format, reinstall, restart, and
     /// open segment N+1 at the format the route actually delivers now.
     private func reopenEngineAndSegment(reason: String) {
+        guard !reopenInFlight else { return }
+        reopenInFlight = true
+        defer { reopenInFlight = false }
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .measurement, options: .duckOthers)
