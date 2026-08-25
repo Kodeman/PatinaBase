@@ -310,4 +310,50 @@ struct VisitChipTests {
         #expect(!FieldPlacementLine.isUnplaced(draft))
         #expect(FieldPlacementLine.text(for: draft) == "Library")
     }
+
+    /// R138 at the `adopt` call site. Sequence (b): one deliberate Library tap
+    /// on S3 inside a SITE visit writes `.library` into routing memory, which is
+    /// day-agnostic and outlives whatever wrote it. Without the gate the draft
+    /// she left on the card inherits it at the door and auto-routes to Library —
+    /// a photo of a damaged baseboard becomes a draft product, one tap away.
+    ///
+    /// Built directly rather than through `site(room:)`, which hardcodes
+    /// `.inbox` and is shared with five other tests.
+    @MainActor
+    @Test func aSiteVisitAtTheDoorDoesNotInheritARememberedLibrary() throws {
+        let store = try CaptureStore.inMemory()
+
+        let poisoned = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            routing: CaptureRoutingMemory(destination: .library, projectID: "p1",
+                                          projectName: "Maple St", room: "Living"),
+            kind: .site, label: "Maple St"))
+
+        let draft = store.newDraft()
+        #expect(FieldInHandPlacement.adopt(poisoned, into: draft))
+        #expect(draft.destination == .inbox)
+        // The gate constrains the DESTINATION and nothing else: she is still at
+        // Maple St, and the rest of the visit stamp rides along untouched.
+        #expect(draft.venue?.projectId == "p1")
+        #expect(draft.visitKind == .site)
+        #expect(FieldPlacementLine.text(for: draft) == "Maple St · Living")
+    }
+
+    /// The pass-through half, at the same call site: the visit that EARNS
+    /// `.library` still gets it. Pinning only the constrained half would let a
+    /// blanket `.inbox` stamp pass.
+    @MainActor
+    @Test func aSourcingVisitAtTheDoorStillInheritsItsLibrary() throws {
+        let store = try CaptureStore.inMemory()
+
+        let sourcing = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            routing: CaptureRoutingMemory(destination: .library),
+            kind: .sourcing, label: "High Point 214"))
+
+        let draft = store.newDraft()
+        #expect(FieldInHandPlacement.adopt(sourcing, into: draft))
+        #expect(draft.destination == .library)
+        #expect(draft.visitKind == .sourcing)
+    }
 }
