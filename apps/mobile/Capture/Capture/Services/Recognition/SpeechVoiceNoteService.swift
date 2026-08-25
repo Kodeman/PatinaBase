@@ -35,10 +35,25 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         let name: String
         let file: AVAudioFile
         var framesWritten: AVAudioFramePosition = 0
+        /// Why a segment took nothing, recorded so closeCurrentSegment can say so.
+        /// Both are set on the render thread, so both are as cheap as possible: a
+        /// counter, and the FIRST error retained without formatting it. Turning it
+        /// into a string happens off-thread, at close.
+        var buffersSeen = 0
+        var writeError: Error?
         init(name: String, file: AVAudioFile) {
             self.name = name
             self.file = file
         }
+    }
+
+    /// What a segment turned out to be, once closed. A value type, so nothing
+    /// escapes the lock by reference.
+    private struct ClosedSegment {
+        let name: String
+        let frames: AVAudioFramePosition
+        let buffers: Int
+        let failure: String?
     }
 
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -104,11 +119,14 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
     /// The format installTap was last given. A configuration change whose format
     /// matches it is not a route change we need to act on — see the observer.
     private var tapFormat: AVAudioFormat?
-    /// reopenEngineAndSegment() stops, reinstalls and restarts the engine, and
-    /// those mutations post AVAudioEngineConfigurationChange themselves. There is
-    /// no rotationInFlight analogue for it, and an unbounded fan-out would open a
-    /// segment per pass until VoiceRecordingPolicy's 24-segment cap ended a note
-    /// with plenty of time left.
+    /// Guards SYNCHRONOUS re-entry of reopenEngineAndSegment() only. It does NOT
+    /// bound the fan-out it looks like it bounds: AVAudioEngine posts
+    /// AVAudioEngineConfigurationChange from an internal thread and the observer
+    /// is registered with queue: .main, so the notification our own stop()/start()
+    /// provokes drains on a LATER runloop turn, by which time `defer` has already
+    /// cleared this. The format comparison in the observer is what actually
+    /// prevents the cycle; this is a cheap backstop for a path that, as written,
+    /// cannot re-enter synchronously.
     private var reopenInFlight = false
 
     /// `mediaDirectory` is the App Group media dir (CaptureStore.mediaDirectory()).
@@ -255,8 +273,9 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
                 // raises NSInvalidArgumentException, which is not a Swift Error —
                 // try? does not catch it and the process traps. A route change
                 // (AirPods in or out) is enough to trigger it.
-                guard let segment,
-                      buffer.format.channelCount == segment.file.processingFormat.channelCount,
+                guard let segment else { return }
+                segment.buffersSeen += 1
+                guard buffer.format.channelCount == segment.file.processingFormat.channelCount,
                       buffer.format.sampleRate == segment.file.processingFormat.sampleRate
                 else { return }
                 do {
@@ -264,7 +283,11 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
                     // Only a write that RETURNED counts. This is what makes the
                     // filename real; nothing else publishes it.
                     segment.framesWritten += AVAudioFramePosition(buffer.frameLength)
-                } catch {}
+                } catch {
+                    // Keep the first one only: retaining an Error is cheap, and a
+                    // failing write usually fails for every buffer after it.
+                    if segment.writeError == nil { segment.writeError = error }
+                }
             }
             // Everything else is POSTED off the render thread.
             guard let recognizer = self.recognizer,
@@ -313,14 +336,27 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         // Taking the segment out of the box drops the last reference to the
         // AVAudioFile inside the lock, so the .m4a container is finalised and
         // flushed to disk before this returns.
-        let closed: (name: String, frames: AVAudioFramePosition)? =
-            openSegmentBox.withLock { segment in
-                guard let current = segment else { return nil }
-                segment = nil
-                return (current.name, current.framesWritten)
-            }
+        // localizedDescription is formatted HERE, inside the lock but on the
+        // caller's thread (never the render thread), so nothing escapes that the
+        // tuple cannot carry.
+        let closed: ClosedSegment? = openSegmentBox.withLock { segment in
+            guard let current = segment else { return nil }
+            segment = nil
+            return ClosedSegment(name: current.name,
+                                 frames: current.framesWritten,
+                                 buffers: current.buffersSeen,
+                                 failure: current.writeError?.localizedDescription)
+        }
         guard let closed else { return }
         guard closed.frames > 0 else {
+            // Say WHY there is no audio. Without this a write that throws on
+            // device deletes every segment of every note and reports exactly what
+            // the pre-Task-8 bug reported — nothing — and the device pass would
+            // have only the absence of files to read.
+            var properties = ["reason": closed.failure == nil ? "empty" : "write",
+                              "buffers": String(closed.buffers)]
+            if let failure = closed.failure { properties["detail"] = String(failure.prefix(120)) }
+            analytics.event("voice.audio_write_failed", properties)
             if let mediaDirectory {
                 try? FileManager.default.removeItem(
                     at: mediaDirectory.appendingPathComponent(closed.name))
@@ -342,6 +378,11 @@ public final class SpeechVoiceNoteService: VoiceNoteService, @unchecked Sendable
         noteIsActive = false
         removeObservers()
         stopEngineAndCloseSegment()
+        // On the engine-start door the task was created and never fed: without
+        // this it stays in flight holding the XPC session until SFSpeechRecognizer
+        // times out. cancel() rather than finish() because nobody wants its result.
+        request?.endAudio()
+        task?.cancel()
         request = nil
         task = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)

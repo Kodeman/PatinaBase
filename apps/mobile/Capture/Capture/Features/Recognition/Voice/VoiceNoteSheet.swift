@@ -177,6 +177,11 @@ struct VoiceNoteSheet: View {
                 } catch {
                     manualFallback = true
                     isRecording = false
+                    // The recorder tore its own note down, but the segments it
+                    // published need a referrer or a real recording sits in the
+                    // media dir unreferenced and the note ships labelled as typed.
+                    // finish() is idempotent against that teardown.
+                    Task { result = await voice.finish() }
                 }
             }
         } catch {
