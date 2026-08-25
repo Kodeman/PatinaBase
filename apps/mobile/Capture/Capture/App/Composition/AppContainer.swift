@@ -144,6 +144,30 @@ public final class AppContainer {
             self.guestSiteRequests = siteRequests
             self.siteRequestOutboxDrainer = SiteRequestOutboxDrainer(store: store, remote: siteRequests)
         }
+
+        // The ladder runs before analytics exists, so it reports rather than
+        // emits. Report it now — a degraded store must never be silent.
+        Self.reportStoreOpen(store.openReport, analytics: self.analytics)
+    }
+
+    /// Telemetry for the store-open ladder. `store.reset_incompatible` fires
+    /// when an unreadable store was deleted and recreated (Kody ruling
+    /// 2026-08-24: Field is not live, a fresh install may reset the store);
+    /// `store.in_memory_fallback` fires when persistence was asked for and
+    /// every on-disk rung refused, which costs the designer every capture made
+    /// in that run.
+    private static func reportStoreOpen(_ report: CaptureStoreOpenReport,
+                                        analytics: any CaptureAnalytics) {
+        if report.didResetIncompatibleStore {
+            analytics.event("store.reset_incompatible", [
+                "persistence": report.persistence.rawValue,
+                "failures": report.failures.joined(separator: " | ")
+            ])
+        }
+        guard report.losesWorkOnRelaunch else { return }
+        analytics.event("store.in_memory_fallback", [
+            "failures": report.failures.joined(separator: " | ")
+        ])
     }
 
     /// Every protocol-typed Work dependency the app wires in real mode, bundled

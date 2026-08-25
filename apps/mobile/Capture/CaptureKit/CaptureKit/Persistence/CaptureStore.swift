@@ -33,6 +33,39 @@ public struct SpecimenQuery: Sendable {
     }
 }
 
+/// Where the live store actually landed. Reported so the app can say out loud
+/// that it is running without persistence instead of pretending otherwise.
+public enum CaptureStorePersistence: String, Sendable {
+    case appGroup
+    case applicationSupport
+    /// Persistence was never asked for: mock mode, previews, unit tests.
+    case inMemoryByDesign
+    /// Persistence WAS asked for and every on-disk rung refused. Work made in
+    /// this run dies with the process.
+    case inMemoryFallback
+}
+
+/// What the store-open ladder did, carried out of `resilient(persistent:)` so
+/// the composition root can emit telemetry and the UI can tell the truth.
+public struct CaptureStoreOpenReport: Sendable {
+    public let persistence: CaptureStorePersistence
+    /// An unreadable store was deleted and recreated empty.
+    public let didResetIncompatibleStore: Bool
+    /// One localized line per failed rung, in ladder order.
+    public let failures: [String]
+
+    public init(persistence: CaptureStorePersistence,
+                didResetIncompatibleStore: Bool = false,
+                failures: [String] = []) {
+        self.persistence = persistence
+        self.didResetIncompatibleStore = didResetIncompatibleStore
+        self.failures = failures
+    }
+
+    /// True only when nothing written in this run survives relaunch.
+    public var losesWorkOnRelaunch: Bool { persistence == .inMemoryFallback }
+}
+
 @MainActor
 public final class CaptureStore {
     public nonisolated(unsafe) static let appGroupID = "group.cloud.patina.field"
@@ -45,9 +78,13 @@ public final class CaptureStore {
 
     public let container: ModelContainer
     public var context: ModelContext { container.mainContext }
+    public let openReport: CaptureStoreOpenReport
 
-    public init(container: ModelContainer) {
+    public init(container: ModelContainer,
+                openReport: CaptureStoreOpenReport =
+                    CaptureStoreOpenReport(persistence: .inMemoryByDesign)) {
         self.container = container
+        self.openReport = openReport
     }
 
     /// App Group container (shared with extensions), or in-memory for tests/previews.
@@ -70,48 +107,178 @@ public final class CaptureStore {
 
     /// Best-effort store that never crashes on a missing container.
     ///
-    /// `persistent: true` (real mode) walks a fallback ladder so an unsigned or
-    /// entitlement-less build still runs:
-    ///   1. App Group container (shared with Share/Widget extensions),
-    ///   2. default on-disk container in Application Support,
-    ///   3. in-memory (not persisted, but the app stays up).
+    /// `persistent: true` (real mode) walks a fallback ladder:
+    ///   1. App Group container (shared with the Share/Widget extensions),
+    ///   2. a store under THIS app's own Application Support,
+    ///   3. in-memory — reported as a degradation, never silently.
     /// `persistent: false` (mock/preview/UITest) goes straight to in-memory.
-    /// Each fallback is logged; there is no `try!` on this path.
+    ///
+    /// Rung 2 must be addressed by an explicit URL. `ModelConfiguration()`
+    /// defaults `groupContainer: .automatic`, which resolves to the app's App
+    /// Group whenever the entitlement is present — so the old rung 2 reopened
+    /// the very file rung 1 had just failed on and inherited its failure
+    /// verbatim (same sourceURL, same destinationURL). It was never a fallback.
     public static func resilient(persistent: Bool = true,
                                  appGroupID: String = CaptureStore.appGroupID) -> CaptureStore {
-        if persistent {
-            // Only attempt the App Group container when the group is actually
-            // provisioned. On an unsigned build the entitlement is inert and
-            // SwiftData *traps* (assertionFailure) instead of throwing, which a
-            // do/catch cannot intercept — so we gate on the resolvable container
-            // URL first, exactly as `mediaDirectory()` does.
-            if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) != nil {
-                do {
-                    let config = ModelConfiguration(groupContainer: .identifier(appGroupID))
-                    return CaptureStore(container: try ModelContainer(for: schema, configurations: [config]))
-                } catch {
-                    log.error("App Group container unavailable (\(error.localizedDescription, privacy: .public)); falling back to Application Support")
-                }
-            } else {
-                log.warning("App Group '\(appGroupID, privacy: .public)' not provisioned (unsigned build?); using Application Support")
+        guard persistent else {
+            return CaptureStore(container: inMemoryContainer(),
+                                openReport: CaptureStoreOpenReport(persistence: .inMemoryByDesign))
+        }
+
+        var failures: [String] = []
+
+        // Rung 1 — App Group. Only attempted when the group is actually
+        // provisioned: on an unsigned build the entitlement is inert and
+        // SwiftData *traps* (assertionFailure) instead of throwing, which a
+        // do/catch cannot intercept — so gate on the resolvable container URL
+        // first, exactly as `mediaDirectory()` does.
+        if FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupID) != nil {
+            let outcome = openRung(ModelConfiguration(groupContainer: .identifier(appGroupID)),
+                                   named: "App Group")
+            failures += outcome.failures
+            if let container = outcome.container {
+                return CaptureStore(
+                    container: container,
+                    openReport: CaptureStoreOpenReport(
+                        persistence: .appGroup,
+                        didResetIncompatibleStore: outcome.didReset,
+                        failures: failures))
             }
+        } else {
+            let message = "App Group '\(appGroupID)' not provisioned (unsigned build?)"
+            failures.append(message)
+            log.warning("\(message, privacy: .public); trying Application Support")
+        }
+
+        // Rung 2 — this app's own container, a genuinely different file.
+        let outcome = openRung(ModelConfiguration(url: applicationSupportStoreURL()),
+                               named: "Application Support")
+        failures += outcome.failures
+        if let container = outcome.container {
+            return CaptureStore(
+                container: container,
+                openReport: CaptureStoreOpenReport(
+                    persistence: .applicationSupport,
+                    didResetIncompatibleStore: outcome.didReset,
+                    failures: failures))
+        }
+
+        // Rung 3 — memory. Loud by construction: the report says so, the
+        // composition root emits `store.in_memory_fallback`, and the sync
+        // surface prints the honest line next to the outbox depth.
+        log.fault("""
+            Persisted storage unavailable — running in memory; captures will \
+            NOT survive relaunch. Rungs: \(failures.joined(separator: " | "), privacy: .public)
+            """)
+        return CaptureStore(container: inMemoryContainer(),
+                            openReport: CaptureStoreOpenReport(persistence: .inMemoryFallback,
+                                                               failures: failures))
+    }
+
+    struct RungOutcome {
+        var container: ModelContainer?
+        var failures: [String] = []
+        var didReset = false
+    }
+
+    /// Opens one on-disk rung, and on failure deletes the store and retries
+    /// exactly ONCE.
+    ///
+    /// There is nothing to branch on: SwiftData collapses every load failure
+    /// into the same opaque `SwiftDataError.loadIssueModelContainer` with an
+    /// empty userInfo — the CoreData detail (`NSCocoaErrorDomain 134110
+    /// "Cannot migrate store in-place: Validation error missing attribute
+    /// values on mandatory destination attribute"`) reaches the log only,
+    /// never the thrown value. Field is not live (Kody ruling 2026-08-24), so
+    /// an unreadable store is reset rather than allowed to cost the designer
+    /// every future capture.
+    static func openRung(_ config: ModelConfiguration,
+                         named rung: String) -> RungOutcome {
+        var outcome = RungOutcome()
+        createParentDirectory(of: config.url)
+
+        do {
+            outcome.container = try ModelContainer(for: schema, configurations: [config])
+            log.notice("Store opened on \(rung, privacy: .public) at \(config.url.path, privacy: .public)")
+            return outcome
+        } catch {
+            outcome.failures.append("\(rung): \(error.localizedDescription)")
+            log.error("""
+                \(rung) store at \(config.url.path, privacy: .public) could not be opened \
+                (\(error.localizedDescription, privacy: .public))
+                """)
+        }
+
+        guard removeStoreFiles(at: config.url) else { return outcome }
+        outcome.didReset = true
+        log.notice("Reset incompatible store at \(config.url.path, privacy: .public); retrying \(rung, privacy: .public)")
+
+        do {
+            outcome.container = try ModelContainer(for: schema, configurations: [config])
+        } catch {
+            outcome.failures.append("\(rung) after reset: \(error.localizedDescription)")
+            log.error("""
+                \(rung) store still unusable after reset \
+                (\(error.localizedDescription, privacy: .public))
+                """)
+        }
+        return outcome
+    }
+
+    /// The rung-2 store, under THIS app's container — never the App Group.
+    static func applicationSupportStoreURL() -> URL {
+        FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("default.store")
+    }
+
+    static func createParentDirectory(of url: URL) {
+        let directory = url.deletingLastPathComponent()
+        do {
+            try FileManager.default.createDirectory(at: directory,
+                                                    withIntermediateDirectories: true)
+        } catch {
+            log.error("""
+                Could not create \(directory.path, privacy: .public) \
+                (\(error.localizedDescription, privacy: .public))
+                """)
+        }
+    }
+
+    /// Deletes the SQLite trio. Returns false when there was nothing to delete,
+    /// so a rung that failed for some other reason never claims a reset.
+    @discardableResult
+    static func removeStoreFiles(at url: URL) -> Bool {
+        let manager = FileManager.default
+        var removedAnything = false
+        for candidate in [url,
+                          URL(fileURLWithPath: url.path + "-wal"),
+                          URL(fileURLWithPath: url.path + "-shm")]
+        where manager.fileExists(atPath: candidate.path) {
             do {
-                // Default configuration → on-disk store in the app's Application Support.
-                return CaptureStore(container: try ModelContainer(for: schema, configurations: [ModelConfiguration()]))
+                try manager.removeItem(at: candidate)
+                removedAnything = true
             } catch {
-                log.error("Application Support container unavailable (\(error.localizedDescription, privacy: .public)); falling back to in-memory")
+                log.error("""
+                    Could not delete \(candidate.lastPathComponent, privacy: .public) \
+                    (\(error.localizedDescription, privacy: .public))
+                    """)
             }
-            log.fault("Persisted storage unavailable — running with an in-memory store; captures will not survive relaunch")
         }
-        // In-memory terminal. For a valid compiled schema this performs no disk
-        // I/O and cannot fail; the guard documents that invariant without a try!.
-        if let container = try? makeContainer(inMemory: true) {
-            return CaptureStore(container: container)
+        return removedAnything
+    }
+
+    /// For a valid compiled schema this performs no disk I/O and cannot fail;
+    /// the guard documents that invariant without a `try!`. Unreachable unless
+    /// the Capture schema itself is invalid — a build-time error the unit tests
+    /// catch — so it is not an operational (runtime-data) failure path.
+    private static func inMemoryContainer() -> ModelContainer {
+        guard let container = try? makeContainer(inMemory: true) else {
+            preconditionFailure(
+                "CaptureStore.resilient: unable to construct any ModelContainer for the Capture schema")
         }
-        // Unreachable unless the Capture schema itself is invalid (a build-time
-        // error caught by the unit tests). Asserting the invariant here keeps the
-        // factory total; it is not an operational (runtime-data) failure path.
-        preconditionFailure("CaptureStore.resilient: unable to construct any ModelContainer for the Capture schema")
+        return container
     }
 
     // ── CRUD / outbox ──

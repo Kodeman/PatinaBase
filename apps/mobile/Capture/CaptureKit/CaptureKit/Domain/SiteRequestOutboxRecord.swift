@@ -56,21 +56,21 @@ public enum SiteRequestOutboxTerminalReason: String, Codable, CaseIterable, Send
 
 @Model
 public final class SiteRequestOutboxRecord {
-    @Attribute(.unique) public var clientDeliveryID: UUID
-    public var requestID: String
-    public var itemID: String
-    public var itemVersionID: String
-    public var payloadPath: String
-    public var mediaPaths: [String]
-    public var checksumSHA256: String
-    public var stateRaw: String
-    public var retryCount: Int
+    @Attribute(.unique) public var clientDeliveryID: UUID = UUID()
+    public var requestID: String = ""
+    public var itemID: String = ""
+    public var itemVersionID: String = ""
+    public var payloadPath: String = ""
+    public var mediaPaths: [String] = []
+    public var checksumSHA256: String = ""
+    public var stateRaw: String = ""
+    public var retryCount: Int = 0
     public var nextAttemptAt: Date?
     public var lastError: String?
     public var serverDeliverableID: String?
     public var terminalReasonRaw: String?
-    public var createdAt: Date
-    public var updatedAt: Date
+    public var createdAt: Date = Date()
+    public var updatedAt: Date = Date()
 
     public var state: SiteRequestOutboxState {
         get { SiteRequestOutboxState(rawValue: stateRaw) ?? .failed }
