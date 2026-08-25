@@ -4,12 +4,14 @@
  * CaptureContextSection — the field-capture items pinned to this scan during
  * capture (photos, voice notes, typed notes), resolved via provenance
  * (useScanContextCaptures — the flat `siteScanContext.scanId` key the Field app
- * writes). v0 lists each with its timestamp and content summary; a thumbnail
- * renders only when the row already carries a usable http(s) URL (the capture
- * media bucket's own signing is out of this slice's scope). Typography-first.
+ * writes). Each row lists its timestamp and content summary; the thumbnail is
+ * the row's `primary_photo_path` signed against the private capture-media
+ * bucket (spec §11.1, `useCaptureMediaUrls`), falling back to an already-usable
+ * `thumbnail_url` for rows that carry one. Typography-first.
  */
 
-import type { ScanContextCapture } from '@patina/supabase';
+import { useMemo } from 'react';
+import { useCaptureMediaUrls, type ScanContextCapture } from '@patina/supabase';
 import { SectionHeading, EmptyLine } from './drawings-section';
 import { ROOM_FILE_COPY as C } from './room-file-copy';
 
@@ -36,6 +38,16 @@ export interface CaptureContextSectionProps {
 }
 
 export function CaptureContextSection({ captures }: CaptureContextSectionProps) {
+  // One signing call for every path on the page, not one per row.
+  const paths = useMemo(
+    () =>
+      captures
+        .map((c) => c.primary_photo_path)
+        .filter((p): p is string => typeof p === 'string' && p.length > 0),
+    [captures],
+  );
+  const { data: signedByPath } = useCaptureMediaUrls(paths);
+
   return (
     <section className="mt-12">
       <SectionHeading title={C.contextTitle} meta={`${captures.length}`} />
@@ -47,7 +59,10 @@ export function CaptureContextSection({ captures }: CaptureContextSectionProps) 
         <ul className="mt-4 border-t border-[var(--doc-ink-border)]">
           {captures.map((cap) => {
             const nPhotos = photoCount(cap.photos);
-            const thumb = usableImage(cap.thumbnail_url);
+            const signedThumb = cap.primary_photo_path
+              ? (signedByPath?.[cap.primary_photo_path] ?? null)
+              : null;
+            const thumb = signedThumb ?? usableImage(cap.thumbnail_url);
             const summary: string[] = [];
             if (nPhotos > 0) summary.push(`${nPhotos} photo${nPhotos === 1 ? '' : 's'}`);
             if (cap.voice_transcript) summary.push(C.contextVoiceLabel);
