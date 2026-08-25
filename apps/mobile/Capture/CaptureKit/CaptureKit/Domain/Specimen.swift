@@ -250,6 +250,19 @@ public final class CaptureProjectRef {
     public private(set) var ownerUserID: String?
     public private(set) var ownerWorkspaceID: String?
 
+    // ── Offline cache (Field Companion wave 3 · package 3-1) ──
+    // All additive optionals → SwiftData migrates lightweight. Room lists are
+    // JSON Data, not stored arrays of a Codable struct, so no composite type
+    // enters the schema. lastFiledCoordinate is a computed pair: SwiftData
+    // cannot persist a tuple.
+    public var specRoomsData: Data?
+    public var roomsData: Data?
+    public var lastRefreshedAt: Date?
+    public var lastVisitedAt: Date?
+    public var lastFiledLatitude: Double?
+    public var lastFiledLongitude: Double?
+    public var filedCaptureCount: Int?
+
     public init(
         id: UUID = UUID(),
         remoteId: String? = nil,
@@ -267,5 +280,37 @@ public final class CaptureProjectRef {
 
     public func belongs(to owner: CaptureOwnerIdentity) -> Bool {
         owner.matches(userID: ownerUserID, workspaceID: ownerWorkspaceID)
+    }
+
+    /// FC-R5: the `project_rooms` lane. Never derived from, nor fallen back to, `rooms`.
+    public var specRooms: [CaptureCachedRoom] {
+        get { CaptureProjectRef.decodeRooms(specRoomsData) }
+        set { specRoomsData = CaptureProjectRef.encodeRooms(newValue) }
+    }
+
+    /// FC-R5: the `public.rooms` lane. Never derived from, nor fallen back to, `specRooms`.
+    public var rooms: [CaptureCachedRoom] {
+        get { CaptureProjectRef.decodeRooms(roomsData) }
+        set { roomsData = CaptureProjectRef.encodeRooms(newValue) }
+    }
+
+    public var lastFiledCoordinate: CaptureCoordinate? {
+        get {
+            guard let lastFiledLatitude, let lastFiledLongitude else { return nil }
+            return CaptureCoordinate(latitude: lastFiledLatitude, longitude: lastFiledLongitude)
+        }
+        set {
+            lastFiledLatitude = newValue?.latitude
+            lastFiledLongitude = newValue?.longitude
+        }
+    }
+
+    private static func decodeRooms(_ data: Data?) -> [CaptureCachedRoom] {
+        guard let data else { return [] }
+        return (try? JSONDecoder().decode([CaptureCachedRoom].self, from: data)) ?? []
+    }
+
+    private static func encodeRooms(_ rooms: [CaptureCachedRoom]) -> Data? {
+        rooms.isEmpty ? nil : try? JSONEncoder().encode(rooms)
     }
 }
