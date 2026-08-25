@@ -9,9 +9,9 @@ Phase 2 layered a second surface onto the same app — **Work** — for
 designers and trades: a Work dashboard, their projects, open leads,
 read-only pending decisions, a messages inbox, on-site PO receiving,
 Face-ID-gated QR portal-login approval, and a pro LiDAR site-scan flow that
-attaches a scan to a project. The 8 Work flows (18 screens) sit alongside
+attaches a scan to a project. The 8 Work flows (19 screens) sit alongside
 the original 8 capture flows (33 screens) — one `CaptureScreenID` enum, one
-harness, one set of dev-loop scripts drives all 71.
+harness, one set of dev-loop scripts drives all 75.
 
 ## Screens
 
@@ -32,11 +32,11 @@ harness, one set of dev-loop scripts drives all 71.
 | 12 | Messages | M1 inbox · M2 thread |
 | 13 | Receiving / goods-in | G1 arriving · G2 inspection · G3 outcome |
 | 14 | QR portal-login approval | Q1 qr-scan · Q2 qr-approve |
-| 15 | Pro site-scan | F1 scan-setup · F2 site-scan · F3 scan-review · F4 scan-upload |
+| 15 | Pro site-scan | F1 scan-setup · F1 context · F2 site-scan · F3 scan-review · F4 scan-upload |
 | 16 | Site Request P1 | SR01 site-hub → SR12 Binder history · SR13 guest-landing → SR20 returned item |
 
-Flows 0–7 are the original 33 screens; flows 8–15 are the 18 Work-flow
-screens added in Phase 2 plus 20 P1 Site Request screens (71 total). Screen ids are defined once, in
+Flows 0–7 are the original 33 screens; flows 8–15 are the 19 Work-flow
+screens added in Phase 2 plus 20 P1 Site Request screens — 72 built — and three reserved visit-spine ids (75 total). Screen ids are defined once, in
 `CaptureKit/CaptureKit/Support/CaptureScreenID.swift`, and are what
 `capture-run.sh`, `capture-shots.sh`, and the `-CaptureScreen` launch flag
 key off (see Dev loop, below).
@@ -48,8 +48,7 @@ key off (see Dev loop, below).
   Activity attributes). Built by the foundation owner; teams code against it.
 - **`CaptureKitMocks/`** — mock conformer for every seam, so all screens render
   in the Simulator without camera/LiDAR/Speech/network.
-- **`Capture/`** — the app target (all 71 screens, Features/ per flow).
-- `CaptureShareExtension/`, `CaptureWidgets/` — Team F (Phase 1).
+- **`Capture/`** — the app target (Features/ per flow).
 
 ## Build
 
@@ -98,7 +97,7 @@ default on a physical device (`AppConfiguration.runsRealServices`).
 
 Field-capture migrations `supabase/migrations/00232`–`00235`
 (`field_captures` inbox + `capture-media` bucket + `commit_field_capture` RPC).
-Migration `00258` adds the Work flows' site-scan linkage: `room_scans` gets
+Migration `00265_room_scans_project_linkage.sql` adds the Work flows' site-scan
 `project_id` / `project_room_id` plus a routing guard, so the F-flow (pro
 site-scan) can attach a scan to one of the scanning designer's projects.
 
@@ -113,11 +112,11 @@ scripts/capture-gate.sh            # or: build | test | lint
 
 # RUN — generate → build → boot sim → install → launch
 scripts/capture-run.sh                    # real entry (viewfinder / onboarding)
-scripts/capture-run.sh C5.specimen-sheet  # jump straight to any of the 71 screens
+scripts/capture-run.sh C5.specimen-sheet  # jump straight to any built screen
 CAPTURE_SIM="iPhone 17 Pro" scripts/capture-run.sh N3.measure
 
 # SWEEP — screenshot every screen (pure simctl, no MCP) → .build/shots/
-scripts/capture-shots.sh                  # all 71
+scripts/capture-shots.sh                  # all 72 built screens
 scripts/capture-shots.sh C5 N1 S3         # subset (prefix match)
 ```
 

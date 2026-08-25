@@ -93,7 +93,7 @@ public enum AppConfiguration {
     ///
     /// All-mock (returns `false`): `-CaptureUseMocks` / `--uitesting`,
     /// `-CaptureUITest`, **or** running on the simulator without
-    /// `-CaptureForceReal`. This keeps the 51-screen `-CaptureScreen` harness,
+    /// `-CaptureForceReal`. This keeps the screen harness, capture-run.sh,
     /// capture-run.sh, capture-shots.sh, and previews working by default.
     ///
     /// Real (returns `true`): a physical device by default, or the simulator
@@ -115,7 +115,7 @@ public enum AppConfiguration {
     }
 
     /// `-CaptureScreen <suffix>` drives a screen on launch (deterministic sim/UITest
-    /// verification of the 51-screen matrix), e.g. `-CaptureScreen T1.settings`.
+    /// verification of the screen matrix), e.g. `-CaptureScreen T1.settings`.
     public static var initialScreenRaw: String? {
         let args = ProcessInfo.processInfo.arguments
         guard let i = args.firstIndex(of: "-CaptureScreen"), i + 1 < args.count else { return nil }

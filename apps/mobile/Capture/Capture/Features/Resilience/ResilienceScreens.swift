@@ -5,9 +5,9 @@
 //  sheet ("Camera is off for Patina Field") + the ResilienceScreens registrar. This
 //  sheet doubles as the E3 share-import finisher: same surface, reflected id.
 //
-//  Registers ONLY `.photoImport`. (R1/R4 ship as composable overlays — see
-//  LowLightTorchOverlay / OfflineQueueBanner — not registered screens. `.ocr`
-//  (R2) and `.syncStatus` (U1) belong to Teams C/F.)
+//  Registers ONLY `.photoImport`. OfflineQueueBanner is a composable overlay the
+//  C1 viewfinder renders, not a registered screen; `.ocr` (R2) and `.syncStatus`
+//  (U1) belong to Teams C/F.
 
 import SwiftUI
 import PhotosUI
