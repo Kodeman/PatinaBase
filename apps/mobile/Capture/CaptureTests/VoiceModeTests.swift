@@ -161,6 +161,10 @@ struct VoiceModeTests {
         #expect(FieldVoiceGesture.forSurface(.quickConfirmCard) == .pressAndHold)
     }
 
+    /// F-11 / R262: this guards the constants, and the guard is only worth
+    /// anything because `SiteScanContextControls` now READS them. It held its
+    /// own copy of the same two literals until this fix, so the test's name was
+    /// a claim about production code that nothing connected it to.
     @Test func theToggleLabelsMatchTheShippedScanContextControl() {
         #expect(FieldVoiceModeCopy.toggleLabel(isRecording: false) == "Note")
         #expect(FieldVoiceModeCopy.toggleLabel(isRecording: true) == "Stop")

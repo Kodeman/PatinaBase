@@ -59,9 +59,11 @@ public enum FieldVoiceModeCopy {
         "Voice notes aren't ready yet. Pick another mode to keep capturing."
 }
 
-/// N4's toggle (Task 24, §7.4 parity with C6/F2). Matches the shipped control
-/// at SiteScanContextCapture's SiteScanContextControls exactly, so N4 does not
-/// invent its own mic/stop vocabulary.
+/// The long-form voice toggle (Task 24, §7.4). N4 AND F2's
+/// `SiteScanContextControls` both read these, so neither invents its own
+/// mic/stop vocabulary and one copy change is one edit. F2 held its own copy of
+/// the same two literals until F-11; the test that claimed to guard the match
+/// was comparing the constants with themselves.
 public extension FieldVoiceModeCopy {
     static func toggleLabel(isRecording: Bool) -> String { isRecording ? "Stop" : "Note" }
     static func toggleGlyph(isRecording: Bool) -> String {

@@ -293,8 +293,15 @@ struct SiteScanContextControls: View {
             HStack(spacing: 14) {
                 pill("camera.fill", "Photo") { Task { await model.capturePhoto() } }
                 if model.voiceCaptureEnabled {
-                    pill(model.isRecordingVoice ? "stop.circle.fill" : "mic.fill",
-                         model.isRecordingVoice ? "Stop" : "Note") { model.toggleVoice() }
+                    // F-11 / R262: these came from the same two literals
+                    // `FieldVoiceModeCopy.toggleGlyph`/`toggleLabel` hold and
+                    // `VoiceModeTests.theToggleLabelsMatchTheShippedScanContextControl`
+                    // claims to guard — but it was guarding the constants
+                    // against themselves while this control kept its own copy.
+                    pill(FieldVoiceModeCopy.toggleGlyph(isRecording: model.isRecordingVoice),
+                         FieldVoiceModeCopy.toggleLabel(isRecording: model.isRecordingVoice)) {
+                        model.toggleVoice()
+                    }
                 }
             }
         }
