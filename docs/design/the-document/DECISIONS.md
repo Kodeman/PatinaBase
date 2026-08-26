@@ -9878,4 +9878,30 @@ regressions. Deferred to B2, per R125 item 4: `deriveTicket` growing cases for
 ticket's ninth row on proposal documents, the Desk's stage-grouped roster and `deriveTicketLeader`, and the
 Worktable composition behind the pre-existing `worktable` flag (B2-L4, untouched by this program).
 
-*Entries add: I149 · last id = I149*
+### I150 · Wave B2 — the ticket everywhere, and the Desk roster — 2026-08-26
+
+`deriveTicket` grows cases for `brief`/`discovery`/`direction`/`proposal`, still eight constant rows
+(`Rooms · Pieces · Drawings · Spec · Boards · Money · Dates · People`) on every document phase, with the
+ticket now carrying a phase cell across all seven spreads; the Finalize table's `The client's copy` shelf
+becomes the ticket's ninth row on proposal documents, and the old shelves block that carried it is retired.
+The Desk's four-up folio grid, Studio Pulse, and the Recent Boards strip are unmounted (not deleted — their
+fate stays open) in favour of one stage-grouped roster, `desk-roster.tsx`, one line per live job under
+section headings in the paper's own order, nothing folded on first paint, red-letter marks with no badges
+(C4) — T2 and T4 both answered at zero new acts. `deriveTicketLeader` (new `ticket-leader.ts`) replaces
+`document-guide.ts`'s rung six: the guide's headline is now always derived from the same eight ticket rows
+on screen, resolving the tie-break-vs-example contradiction in the tie-break's favour, over the direction's
+own worked example. The Worktable composition mounts the ticket above `TableFrame` on all four tables,
+still behind the pre-existing `worktable` flag (untouched by this program, per R124's narrow C14 reading
+and R125 item 2) — the Speccing rooms rail, the Delivery money seam, the release lift, and Intake's seams
+all stand as what the ticket's `Rooms`/`Money` rows anchor to, not what they replace. Shipped unflagged
+otherwise, per R125 item 2.
+
+Gate on `main` after the merge: `pnpm --filter @patina/designer-portal type-check` clean (0 errors); `pnpm
+--filter @patina/designer-portal test -- --ci` — 446 suites / 4975 tests passed, all green, no SIGSEGVs on
+this run; `pnpm --filter @patina/designer-portal lint` — the same 2 pre-existing errors
+(`piece-room-save-gate.test.tsx:159:1` `import/first`, `use-commercial-documents.test.ts:930:8`
+`react-hooks/rules-of-hooks`, both untouched by this wave, neither file changed by this merge) + warnings,
+no new lint regressions. Deferred to B3, per R125 item 4: F58's Option 3 stamp-label unification and F56's
+repo-wide `-ink` contrast tokens.
+
+*Entries add: I150 · last id = I150*
