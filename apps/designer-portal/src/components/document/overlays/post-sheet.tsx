@@ -379,7 +379,7 @@ function RecordRow({ item, onOpen }: { item: RecordItem; onOpen: () => void }) {
                 <>
                   <span aria-hidden> · </span>
                   {/* A quiet reference, not an act — the Desk already holds it. */}
-                  <span className="font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+                  <span className="font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
                     on your Desk ↗
                   </span>
                 </>

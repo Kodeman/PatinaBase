@@ -477,7 +477,7 @@ export function ItemComposer({
       {/* Header: the New-item chip + Playfair title. */}
       <div
         className="mb-1 inline-block -rotate-[1.5deg] rounded-[3px] border-[1.5px] px-[9px] py-[3px] font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
-        style={{ borderColor: 'var(--color-clay)', color: 'var(--color-clay)' }}
+        style={{ borderColor: 'var(--color-clay)', color: 'var(--color-clay-ink)' }}
       >
         {isEdit ? 'Edit draft' : 'New decision'}
       </div>
@@ -898,7 +898,7 @@ export function ItemComposer({
               actionKey="open-delete-coordination-draft"
               variant="tertiary"
               onClick={() => setConfirmingDelete(true)}
-              className="text-[var(--color-terracotta)]"
+              className="text-[var(--color-terracotta-ink)]"
             >
               Delete
             </DocumentAction>

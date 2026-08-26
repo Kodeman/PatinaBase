@@ -111,7 +111,7 @@ import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
-  approved: '#A8895E',
+  approved: 'var(--color-clay-ink)',
   production: '#B89A2E',
   shipped: '#B89A2E',
   delivered: '#85947C',
@@ -150,7 +150,7 @@ function stampProps(stamp: LineStamp): {
       return {
         label: 'Substantially complete',
         color: 'var(--color-clay)',
-        ink: '#A8895E',
+        ink: 'var(--color-clay-ink)',
       };
     case 'trade_accepted':
       return { label: 'Accepted', color: 'var(--color-sage)', ink: '#85947C' };
@@ -167,7 +167,7 @@ function stampProps(stamp: LineStamp): {
           ? `Decision due · ${fmtDay(stamp.dueDate)}`
           : 'Decision due',
         color: 'var(--color-terracotta)',
-        ink: '#C4836F',
+        ink: 'var(--color-terracotta-ink)',
       };
     case 'received':
       return { label: 'Received', color: 'var(--color-sage)', ink: '#85947C' };
@@ -184,7 +184,7 @@ function stampProps(stamp: LineStamp): {
       return {
         label: 'Damaged',
         color: 'var(--color-terracotta)',
-        ink: '#C4836F',
+        ink: 'var(--color-terracotta-ink)',
       };
     default: {
       const cfg = STAGE_CONFIG[stamp.kind];
@@ -367,7 +367,7 @@ function FFELine({
         )}
         {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
         {item.added_via === 'engine' && (
-          <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay)] opacity-70">
+          <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] opacity-70">
             via the Engine
           </p>
         )}
@@ -1175,7 +1175,7 @@ function FFESectionBody({
               <>
                 <Link
                   href={`/doc/${projectId}/spec-book`}
-                  className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
+                  className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:text-[var(--color-charcoal)]"
                 >
                   Spec book →
                 </Link>
@@ -1252,7 +1252,7 @@ function FFESectionBody({
           would simply be missing with no reason given. */}
       {mode === 'project' && readinessQuery.isError && (
         <div className="mb-2">
-          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta)]">
+          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta-ink)]">
             Release readiness could not be read, so no line can be released yet.
           </p>
           <DocumentAction
@@ -1321,7 +1321,7 @@ function FFESectionBody({
 
       {!isLoading && isError && (
         <div className="border-t border-[var(--color-pearl)] py-3">
-          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta)]">
+          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta-ink)]">
             The FF&amp;E schedule could not be read.
           </p>
           <DocumentAction

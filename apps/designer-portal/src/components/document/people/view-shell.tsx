@@ -171,7 +171,7 @@ function EngineNudge({
         is the strongest dormant tie · {nudge.since}.{' '}
         <span
           aria-hidden
-          className="text-[var(--color-quiet-ink)] transition-colors group-hover:text-[var(--color-clay)] motion-reduce:transition-none"
+          className="text-[var(--color-quiet-ink)] transition-colors group-hover:text-[var(--color-clay-ink)] motion-reduce:transition-none"
         >
           →
         </span>

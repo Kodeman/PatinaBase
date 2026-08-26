@@ -579,7 +579,7 @@ export function PieceConfigurationWorkspace({
                           {selected && (
                             <span
                               aria-hidden
-                              className="ml-auto text-[var(--color-clay)]"
+                              className="ml-auto text-[var(--color-clay-ink)]"
                             >
                               ✓
                             </span>
@@ -707,7 +707,7 @@ export function PieceConfigurationWorkspace({
       {saveError && (
         <p
           role="alert"
-          className="mt-2 text-[0.75rem] text-[var(--color-terracotta)]"
+          className="mt-2 text-[0.75rem] text-[var(--color-terracotta-ink)]"
         >
           {saveError}
         </p>
@@ -1291,7 +1291,7 @@ function CompatibilityFeedback({
     >
       {nonChoiceErrors.length > 0 && (
         <div role="alert">
-          <p className="text-[0.76rem] font-semibold text-[var(--color-terracotta)]">
+          <p className="text-[0.76rem] font-semibold text-[var(--color-terracotta-ink)]">
             This combination cannot be ordered yet.
           </p>
           <ul className="mt-1 list-disc space-y-1 pl-5 text-[0.72rem] text-[var(--color-charcoal)]">
@@ -1339,7 +1339,7 @@ function SavedConfigurations({
                 {item.isLibraryTemplate ? " · Library family" : ""}
               </span>
               {item.sourceChanged && (
-                <span className="mt-0.5 block text-[0.66rem] font-medium text-[var(--color-terracotta)]">
+                <span className="mt-0.5 block text-[0.66rem] font-medium text-[var(--color-terracotta-ink)]">
                   Source changed · review
                 </span>
               )}

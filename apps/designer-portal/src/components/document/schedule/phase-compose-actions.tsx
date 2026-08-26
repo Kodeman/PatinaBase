@@ -63,7 +63,7 @@ export function PhaseComposeActions({
           actionKey="open-delete-phase"
           variant="tertiary"
           onClick={onDelete}
-          className="text-[var(--color-terracotta)]"
+          className="text-[var(--color-terracotta-ink)]"
         >
           Delete
         </DocumentAction>

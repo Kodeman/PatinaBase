@@ -93,7 +93,7 @@ export function CertificateSection({ certificate, scaleIgnored }: CertificateSec
                     <Td align="right">{fmtMm(a.typed_mm)}</Td>
                     <Td align="right">{fmtMm(a.model_mm)}</Td>
                     <Td align="right">
-                      <span className={a.flagged ? 'text-[var(--color-clay)]' : undefined}>
+                      <span className={a.flagged ? 'text-[var(--color-clay-ink)]' : undefined}>
                         {a.residual_mm != null ? `${a.residual_mm > 0 ? '+' : ''}${Math.round(a.residual_mm)} mm` : '—'}
                         {a.flagged && (
                           <span className="ml-1.5 font-mono text-[8px] uppercase tracking-[0.1em]">{C.certFlagged}</span>
@@ -157,7 +157,7 @@ function SubTitle({ children }: { children: React.ReactNode }) {
 function ClassCount({ glyph, label, n }: { glyph: string; label: string; n: number }) {
   return (
     <div className="flex items-baseline gap-2">
-      <span className="font-mono text-[13px] text-[var(--color-clay)]">{glyph}</span>
+      <span className="font-mono text-[13px] text-[var(--color-clay-ink)]">{glyph}</span>
       <span className="text-[15px] text-[var(--color-charcoal)]">{n}</span>
       <span className="font-heading text-[12px] italic text-[var(--color-mocha)]">{label}</span>
     </div>
@@ -167,7 +167,7 @@ function ClassCount({ glyph, label, n }: { glyph: string; label: string; n: numb
 function ToleranceLine({ glyph, label, detail }: { glyph: string; label: string; detail: string }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-2.5">
-      <span className="font-mono text-[12px] text-[var(--color-clay)]">{glyph}</span>
+      <span className="font-mono text-[12px] text-[var(--color-clay-ink)]">{glyph}</span>
       <span className="text-[13px] text-[var(--color-charcoal)]">{label}</span>
       <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">{detail}</span>
     </div>

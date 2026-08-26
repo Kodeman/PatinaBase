@@ -453,7 +453,7 @@ function CallSheetInstrument({ projectId }: { projectId: string }) {
       }}
       trailing={
         onPaperSuffix ? (
-          <span className="text-[var(--color-terracotta)]">{onPaperSuffix}</span>
+          <span className="text-[var(--color-terracotta-ink)]">{onPaperSuffix}</span>
         ) : undefined
       }
     >
@@ -540,7 +540,7 @@ function SharingTierInstrument({ projectId }: { projectId: string }) {
           {error && (
             <span
               role="alert"
-              className="block px-2 pb-1 pt-0.5 text-[10px] text-[var(--color-terracotta)]"
+              className="block px-2 pb-1 pt-0.5 text-[10px] text-[var(--color-terracotta-ink)]"
             >
               {error}
             </span>

@@ -263,7 +263,7 @@ export function StepDetails(props: StepDetailsProps) {
           background: 'rgba(196,165,123,0.04)',
         }}
       >
-        <div className="mb-2 type-meta-small text-[var(--color-clay,#C4A57B)]">
+        <div className="mb-2 type-meta-small text-[var(--color-clay-ink)]">
           Payment terms
         </div>
 

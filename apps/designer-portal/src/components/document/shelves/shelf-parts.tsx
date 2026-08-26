@@ -119,7 +119,7 @@ export function ShelfNote({ children }: { children: ReactNode }) {
 
 export function ShelfDoor({ children }: { children: ReactNode }) {
   return (
-    <div className="mt-5 border-t border-[var(--color-pearl)] pt-3 font-mono text-[10px] uppercase tracking-[0.09em] text-[var(--color-clay)] [&_a]:min-h-11 [&_a]:content-center [&_a:hover]:text-[var(--color-charcoal)] [&_a:focus-visible]:outline [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-offset-2 [&_a:focus-visible]:outline-[var(--color-clay)]">
+    <div className="mt-5 border-t border-[var(--color-pearl)] pt-3 font-mono text-[10px] uppercase tracking-[0.09em] text-[var(--color-clay-ink)] [&_a]:min-h-11 [&_a]:content-center [&_a:hover]:text-[var(--color-charcoal)] [&_a:focus-visible]:outline [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-offset-2 [&_a:focus-visible]:outline-[var(--color-clay)]">
       {children}
     </div>
   );

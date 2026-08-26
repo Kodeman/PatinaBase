@@ -511,7 +511,7 @@ function Field({
           {required && (
             <span
               aria-hidden="true"
-              style={{ color: 'var(--color-terracotta, #D4A090)', marginLeft: 3 }}
+              style={{ color: 'var(--color-terracotta-ink)', marginLeft: 3 }}
             >
               *
             </span>

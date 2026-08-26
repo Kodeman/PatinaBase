@@ -105,7 +105,7 @@ export function ProjectTeamRoster({
       )}
       {!isLoading && isError && (
         <div className="border-y border-[var(--color-pearl)] py-3">
-          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta)]">
+          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta-ink)]">
             The project roster could not be read.
           </p>
           <DocumentAction

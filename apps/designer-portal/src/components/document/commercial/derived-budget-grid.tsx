@@ -21,6 +21,7 @@
 
 import { useEffect, useState } from "react";
 import { Button, Input, Textarea } from "@/components/ui/controls";
+import { DocumentAction, DocumentActionGroup } from "../document-action";
 import {
   useDeriveWorkingBudget,
   useOverrideBudgetCheckpoint,
@@ -95,7 +96,7 @@ function TargetCell({
         data-version-id={versionId}
       />
       {error && (
-        <span role="alert" className="mt-1 block text-[9.5px] text-[var(--color-terracotta)]">
+        <span role="alert" className="mt-1 block text-[9.5px] text-[var(--color-terracotta-ink)]">
           {error}
         </span>
       )}
@@ -130,7 +131,7 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
 
   if (budgetQuery.error) {
     return (
-      <p role="alert" className="text-[11px] text-[var(--color-terracotta)]">
+      <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
         The project working budget is unavailable.
       </p>
     );
@@ -224,26 +225,34 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
             grants no purchasing authority.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
+        {/* Both stay secondary weight: the Money head's "Draw an invoice" is
+            this region's one inked leader (C7), and a working budget grants no
+            purchasing authority — neither act may outrank it. */}
+        <DocumentActionGroup
+          surfaceKey="open-document"
+          regionKey="working-budget"
+          aria-label="Working budget actions"
+        >
+          <DocumentAction
+            actionKey="working-budget-sync"
             variant="secondary"
             loading={deriveBudget.isPending}
             onClick={syncFromSchedule}
           >
             Sync from the schedule
-          </Button>
+          </DocumentAction>
           {editable && (
-            <Button
-              size="sm"
+            <DocumentAction
+              actionKey="working-budget-publish"
+              variant="secondary"
               disabled={publish.isPending || !agreementId || !version}
               loading={publish.isPending}
               onClick={publishCheckpoint}
             >
               Publish checkpoint
-            </Button>
+            </DocumentAction>
           )}
-        </div>
+        </DocumentActionGroup>
       </div>
 
       {editable && !agreementId && (
@@ -406,7 +415,7 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
       )}
 
       {actionError && (
-        <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta)]">
+        <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta-ink)]">
           {actionError}
         </p>
       )}

@@ -92,7 +92,7 @@ function KindChoice({
           aria-current={kind === k ? 'true' : undefined}
           className={`min-h-11 rounded-[3px] font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
             kind === k
-              ? 'text-[var(--color-clay)]'
+              ? 'text-[var(--color-clay-ink)]'
               : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
           }`}
         >
@@ -355,7 +355,7 @@ export function AddPersonSheet({
 
   return (
     <RoomSheet open={open} onClose={close} title="Add someone to your people">
-      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay)]">
+      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         Add · to your roster
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
@@ -623,7 +623,7 @@ export function AddPersonSheet({
       )}
 
       {error && (
-        <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta)]">
+        <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}

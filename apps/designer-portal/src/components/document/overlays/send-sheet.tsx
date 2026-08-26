@@ -619,7 +619,7 @@ export function SendSheet({
         {proposalQuery.isError ? (
           <p
             role="alert"
-            className="mt-6 text-[12.5px] text-[var(--color-terracotta)]"
+            className="mt-6 text-[12.5px] text-[var(--color-terracotta-ink)]"
           >
             This proposal could not be loaded. Close this panel and try again.
           </p>
@@ -635,7 +635,7 @@ export function SendSheet({
             {/* Link-a-client banner */}
             {!proposal.client_id && (
               <div className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3.5">
-                <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)]">
+                <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
                   Link a client to send
                 </p>
                 {proposal.designer_client_id && capturedHouseholdLoading ? (
@@ -688,7 +688,7 @@ export function SendSheet({
                 {linkError && (
                   <p
                     role="alert"
-                    className="mt-2 text-[11px] leading-snug text-[var(--color-terracotta)]"
+                    className="mt-2 text-[11px] leading-snug text-[var(--color-terracotta-ink)]"
                   >
                     {linkError}{' '}
                     <span className="opacity-80">
@@ -702,7 +702,7 @@ export function SendSheet({
             {/* Accepted-sibling warning */}
             {hasAcceptedSibling && (
               <div className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3.5">
-                <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)]">
+                <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
                   Another version is already accepted
                 </p>
                 <p className="text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
@@ -736,7 +736,7 @@ export function SendSheet({
                 </p>
               )}
               {proposal.client_id && !clientEmail && (
-                <p role="alert" className="text-[12px] text-[var(--color-terracotta)]">
+                <p role="alert" className="text-[12px] text-[var(--color-terracotta-ink)]">
                   Add an email to the linked client before sending.
                 </p>
               )}
@@ -765,7 +765,7 @@ export function SendSheet({
                   <p
                     id="send-sheet-cc-error"
                     role="alert"
-                    className="text-[11px] text-[var(--color-terracotta)]"
+                    className="text-[11px] text-[var(--color-terracotta-ink)]"
                   >
                     {ccEmailError}
                   </p>
@@ -825,19 +825,19 @@ export function SendSheet({
               )}
 
               {!checkingClientCopy && autosaveReviewError && (
-                <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
+                <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]">
                   {autosaveReviewError} Sending is blocked until every proposal edit is saved.
                 </p>
               )}
 
               {!checkingClientCopy && !autosaveReviewError && clientCopyError && (
-                <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
+                <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]">
                   The client preview or proposal readiness could not be verified. Refresh before sending.
                 </p>
               )}
 
               {!checkingClientCopy && !autosaveReviewError && !clientCopyError && hasBlockers && (
-                <div role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
+                <div role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]">
                   <p className="font-semibold">Not safe to send yet</p>
                   <ul className="mt-1 list-disc space-y-1 pl-5">
                     {readiness?.blockers.map((blocker, index) => (
@@ -907,7 +907,7 @@ export function SendSheet({
             {deliveryStatusLoadError && (
               <div
                 role="alert"
-                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
+                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay-ink)]"
               >
                 The proposal is sent, but its email delivery status could not
                 be verified. Refresh before retrying so Patina does not risk a
@@ -918,7 +918,7 @@ export function SendSheet({
             {deliveryRecovery && (
               <div
                 role="status"
-                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
+                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay-ink)]"
               >
                 <p>{deliveryRecoveryMessage(deliveryRecovery)}</p>
                 {deliveryRecovery.detail && (
@@ -932,7 +932,7 @@ export function SendSheet({
             {sendError && (
               <div
                 role="alert"
-                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
+                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay-ink)]"
               >
                 {sendError}
               </div>

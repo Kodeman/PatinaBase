@@ -142,7 +142,7 @@ export function CaptureLeadSheet({
         data-overlay-capture-lead
         className="mx-auto w-full max-w-[34rem]"
       >
-        <span className="font-mono text-[12px] uppercase tracking-[0.14em] text-[var(--color-clay)]">
+        <span className="font-mono text-[12px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
           New lead · begin a Brief
         </span>
         <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-charcoal)]">
@@ -313,7 +313,7 @@ function Field({
       >
         {label}
         {required && (
-          <span className="ml-1 text-[var(--color-terracotta)]">required</span>
+          <span className="ml-1 text-[var(--color-terracotta-ink)]">required</span>
         )}
       </label>
       {children}
@@ -321,7 +321,7 @@ function Field({
         <p
           id={`${id}-error`}
           role="alert"
-          className="mt-1.5 text-[12px] text-[var(--color-terracotta)]"
+          className="mt-1.5 text-[12px] text-[var(--color-terracotta-ink)]"
         >
           {error}
         </p>

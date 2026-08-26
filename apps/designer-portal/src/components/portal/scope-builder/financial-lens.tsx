@@ -175,7 +175,7 @@ function RoomBlock({
         <td
           colSpan={7}
           className="px-3 py-1 font-mono uppercase"
-          style={{ fontSize: '0.58rem', letterSpacing: '0.06em', color: 'var(--color-clay)' }}
+          style={{ fontSize: '0.58rem', letterSpacing: '0.06em', color: 'var(--color-clay-ink)' }}
         >
           {roomName}
         </td>

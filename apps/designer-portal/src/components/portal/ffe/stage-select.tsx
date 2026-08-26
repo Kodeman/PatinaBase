@@ -182,7 +182,7 @@ export function StageSelect({
             <span
               title={syncTitle}
               className="inline-flex shrink-0 items-center"
-              style={{ color: 'var(--color-clay, #C4A57B)' }}
+              style={{ color: 'var(--color-clay-ink)' }}
             >
               <Zap size={10} strokeWidth={2.5} aria-hidden />
             </span>

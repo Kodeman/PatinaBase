@@ -280,7 +280,7 @@ export function DecisionBody({
                       </span>
                     )}
                     {o.is_recommended && (
-                      <span className="font-mono text-[8px] uppercase text-[var(--color-clay)]">
+                      <span className="font-mono text-[8px] uppercase text-[var(--color-clay-ink)]">
                         your pick
                       </span>
                     )}
@@ -372,7 +372,7 @@ export function DecisionBody({
               }
               style={{
                 color: extendNote.startsWith("Couldn't")
-                  ? '#C4836F'
+                  ? 'var(--color-terracotta-ink)'
                   : '#85947C',
               }}
             >
@@ -932,7 +932,7 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
         {needsReview && (
           <Link
             href="/desk"
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] hover:opacity-80"
           >
             review on the desk →
           </Link>
@@ -940,7 +940,7 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
         {threadHref && (
           <Link
             href={threadHref}
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             open the thread →
           </Link>

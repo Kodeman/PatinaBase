@@ -614,7 +614,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
               aria-label="Toggle the v1 baseline ghosts"
               className={`font-mono text-[0.56rem] uppercase tracking-[0.07em] ${
                 showBaseline
-                  ? 'text-[var(--color-clay)]'
+                  ? 'text-[var(--color-clay-ink)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
               }`}
             >

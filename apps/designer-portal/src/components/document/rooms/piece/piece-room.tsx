@@ -1396,7 +1396,7 @@ function RefreshFromSource({
       </div>
 
       {error && (
-        <p role="alert" className="doc-type-body mt-2 text-[var(--color-clay)]">
+        <p role="alert" className="doc-type-body mt-2 text-[var(--color-clay-ink)]">
           {error}
         </p>
       )}
@@ -1458,7 +1458,7 @@ function RefreshFromSource({
       )}
 
       {applyError && (
-        <p role="alert" className="doc-type-body mt-2 text-[var(--color-clay)]">
+        <p role="alert" className="doc-type-body mt-2 text-[var(--color-clay-ink)]">
           {applyError}
         </p>
       )}

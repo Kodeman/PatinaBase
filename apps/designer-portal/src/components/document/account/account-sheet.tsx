@@ -197,7 +197,7 @@ export function AccountSheet() {
               </p>
             )}
             {studio && (
-              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)]">
+              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
                 {studio.name}
                 <span className="text-[var(--color-aged-oak)]">
                   {' '}
@@ -255,7 +255,7 @@ export function AccountSheet() {
               aria-current={page === p.key ? 'page' : undefined}
               className={`min-h-11 min-w-11 font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                 page === p.key
-                  ? 'text-[var(--color-clay)]'
+                  ? 'text-[var(--color-clay-ink)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
               }`}
             >
@@ -282,7 +282,7 @@ export function AccountSheet() {
             disabled={isSigningOut}
             loading={isSigningOut}
             loadingLabel="Signing out…"
-            className="text-[var(--color-terracotta)] decoration-[var(--color-terracotta)] hover:text-[var(--color-charcoal)]"
+            className="text-[var(--color-terracotta-ink)] decoration-[var(--color-terracotta)] hover:text-[var(--color-charcoal)]"
           >
             ⏻ Sign out
           </DocumentAction>

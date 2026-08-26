@@ -387,7 +387,7 @@ export function PlanRoomSet({
                   {outcome[transmittal.id] && (
                     <p
                       role="status"
-                      className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]"
+                      className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
                     >
                       {outcome[transmittal.id]}
                     </p>

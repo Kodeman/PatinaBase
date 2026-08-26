@@ -157,7 +157,7 @@ export function ImportSheet({
 
   return (
     <RoomSheet open={open} onClose={close} title="Import into My Library">
-      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay)]">
+      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         Import · onto My Library
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
@@ -182,7 +182,7 @@ export function ImportSheet({
             className="min-h-[168px]"
           />
           {parseError && (
-            <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta)]">
+            <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta-ink)]">
               {parseError}
             </p>
           )}
@@ -257,7 +257,7 @@ export function ImportSheet({
           </div>
 
           {!hasName && (
-            <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta)]">
+            <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta-ink)]">
               Map one column to <strong>Name</strong> — a piece needs a name to
               land.
             </p>
@@ -271,7 +271,7 @@ export function ImportSheet({
           </p>
 
           {importError && (
-            <p className="mt-2 text-[0.72rem] text-[var(--color-terracotta)]">
+            <p className="mt-2 text-[0.72rem] text-[var(--color-terracotta-ink)]">
               {importError}
             </p>
           )}

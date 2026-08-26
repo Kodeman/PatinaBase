@@ -150,7 +150,7 @@ export function AudiencesTab({ notify }: { notify: (m: string) => void }) {
           {/* The live preview — "who is in it and why", straight from the roster. */}
           <div className="mt-3 flex items-center justify-between rounded-[8px] border border-[var(--color-pearl)] bg-[var(--color-off-white)] px-3.5 py-2.5">
             <div className="flex items-center gap-2">
-              <span className="rounded-[3px] border border-[var(--color-clay)] px-[6px] py-[2px] font-mono text-[0.42rem] font-semibold uppercase tracking-[0.05em] text-[var(--color-clay)]">
+              <span className="rounded-[3px] border border-[var(--color-clay)] px-[6px] py-[2px] font-mono text-[0.42rem] font-semibold uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
                 {AXIS_LABEL[preset.rule.axis]}
               </span>
               <span className="text-[0.7rem] text-[var(--color-aged-oak)]">

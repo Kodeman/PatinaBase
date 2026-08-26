@@ -38,7 +38,7 @@ function ActiveStrata() {
   return (
     <span
       aria-hidden
-      className="inline-flex w-3 flex-col gap-[2px] text-[var(--color-clay)]"
+      className="inline-flex w-3 flex-col gap-[2px] text-[var(--color-clay-ink)]"
     >
       <i className="h-px w-3 bg-current" />
       <i className="h-px w-2 bg-current opacity-65" />

@@ -37,7 +37,7 @@ export interface MarginItemRow {
 const ACCENT: Record<MarginKind, { border: string; label: string }> = {
   decision: { border: 'var(--color-golden-hour)', label: '#B89A2E' },
   message: { border: 'var(--color-dusty-blue)', label: 'var(--color-dusty-blue)' },
-  invoice: { border: 'var(--color-clay)', label: '#A8895E' },
+  invoice: { border: 'var(--color-clay)', label: 'var(--color-clay-ink)' },
   pulse: { border: 'var(--color-sage)', label: '#85947C' },
   time: { border: 'var(--color-mocha)', label: 'var(--color-mocha)' },
   // R14: Mocha-adjacent, distinct from time — Aged Oak.

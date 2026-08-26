@@ -46,7 +46,7 @@ import { useReconcileInvoiceCheckout } from '@/hooks/use-invoice-checkout-reconc
 import { AccountsQueryFailure } from './accounts-query-failure';
 
 const SAGE_INK = '#85947C';
-const TERRACOTTA_INK = '#C4836F';
+const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
 
 /** Paper-ink stamp palette (the ledger page's dark palette re-inked for cream). */
 const FOLIO_STAMP: Record<string, { label: string; color: string; ink?: string }> = {
@@ -590,7 +590,7 @@ export function InvoiceFolio({
               variant="tertiary"
               disabled={busy}
               onClick={() => openPanel('void')}
-              className="text-[var(--color-terracotta)]"
+              className="text-[var(--color-terracotta-ink)]"
             >
               Void
             </DocumentAction>
@@ -639,7 +639,7 @@ export function InvoiceFolio({
                   href={clientInvoiceUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-1 block break-all font-mono text-[9px] text-[var(--color-clay)] underline"
+                  className="mt-1 block break-all font-mono text-[9px] text-[var(--color-clay-ink)] underline"
                 >
                   {clientInvoiceUrl}
                 </a>

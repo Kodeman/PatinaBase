@@ -175,7 +175,7 @@ export function DrawScheduleEditor({
                   {draw.gatesOnAcceptance && (
                     <span
                       data-testid="draw-gates-on-acceptance"
-                      className="ml-2 font-mono text-[8px] font-normal uppercase tracking-[0.06em] text-[var(--color-clay)]"
+                      className="ml-2 font-mono text-[8px] font-normal uppercase tracking-[0.06em] text-[var(--color-clay-ink)]"
                     >
                       On acceptance
                     </span>
@@ -228,7 +228,7 @@ export function DrawScheduleEditor({
       )}
 
       {problem && (
-        <p role="status" className="mt-1 text-[11px] text-[var(--color-terracotta)]">
+        <p role="status" className="mt-1 text-[11px] text-[var(--color-terracotta-ink)]">
           {problem}
         </p>
       )}

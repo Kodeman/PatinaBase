@@ -90,7 +90,7 @@ function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | nul
       role="status"
       aria-live="polite"
       className={`ml-1 font-mono text-[8px] uppercase tracking-[0.05em] ${
-        state === 'error' ? 'text-[var(--color-terracotta)]' : 'text-[var(--color-sage)]'
+        state === 'error' ? 'text-[var(--color-terracotta-ink)]' : 'text-[var(--color-sage)]'
       }`}
     >
       {state === 'saving' && '· saving…'}
@@ -183,7 +183,7 @@ function VitalDate({
           aria-label={`Clear ${label.toLowerCase()}`}
           onClick={clear}
           disabled={state === 'saving'}
-          className="font-mono text-[9px] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)] disabled:opacity-50"
+          className="font-mono text-[9px] text-[var(--color-aged-oak)] hover:text-[var(--color-clay-ink)] disabled:opacity-50"
         >
           ×
         </button>
@@ -351,7 +351,7 @@ function PhasesFold({ projectId }: { projectId: string }) {
         </tbody>
       </table>
       {rowError && (
-        <p role="alert" className="mt-0.5 text-[10px] text-[var(--color-terracotta)]">
+        <p role="alert" className="mt-0.5 text-[10px] text-[var(--color-terracotta-ink)]">
           {rowError}
         </p>
       )}
@@ -411,7 +411,7 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           <button
             type="button"
             onClick={() => setBandOpen(true)}
-            className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             Set a budget band
           </button>
@@ -446,7 +446,7 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           type="button"
           aria-expanded={phasesOpen}
           onClick={() => setPhasesOpen((v) => !v)}
-          className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
+          className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay-ink)]"
         >
           Phases {phasesOpen ? '▾' : '▸'}
         </button>

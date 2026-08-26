@@ -222,7 +222,7 @@ export function BoardExportDialog({
           </div>
         )}
         {message && <p className="text-[12px] text-[var(--color-sage)]">{message}</p>}
-        {error && <p role="alert" className="text-[12px] text-[var(--color-clay)]">{error}</p>}
+        {error && <p role="alert" className="text-[12px] text-[var(--color-clay-ink)]">{error}</p>}
         <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy !== null}>
           Done
         </Button>

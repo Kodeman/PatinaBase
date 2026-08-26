@@ -22,7 +22,7 @@ export function AccountExtensionPage() {
     <div className="pt-1">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.11em] text-[var(--color-clay)]">
+          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.11em] text-[var(--color-clay-ink)]">
             Chrome capture
           </p>
           <h3 className="mt-1 font-heading text-[18px] text-[var(--color-charcoal)]">

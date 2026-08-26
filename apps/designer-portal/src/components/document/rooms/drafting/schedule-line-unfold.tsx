@@ -371,7 +371,7 @@ export function ScheduleLineUnfold({
               href={product.source_url}
               target="_blank"
               rel="noreferrer"
-              className="max-w-[260px] truncate text-[10.5px] text-[var(--color-clay)] hover:underline"
+              className="max-w-[260px] truncate text-[10.5px] text-[var(--color-clay-ink)] hover:underline"
             >
               {product.source_url.replace(/^https?:\/\//, '')}
             </a>
@@ -448,7 +448,7 @@ export function ScheduleLineUnfold({
       )}
       {error && (
         // R83 — inline at the act.
-        <p role="alert" className="mb-2 text-[10px] text-[#C4836F]">
+        <p role="alert" className="mb-2 text-[10px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}
@@ -717,7 +717,7 @@ function AlternativesBand({
         <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">{saved}</p>
       )}
       {error && (
-        <p role="alert" className="mt-1.5 text-[10px] text-[#C4836F]">
+        <p role="alert" className="mt-1.5 text-[10px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}
@@ -733,7 +733,7 @@ function LayerBadge({ layer }: { layer: string }) {
   return (
     <span
       className={`font-mono text-[7.5px] uppercase tracking-[0.08em] ${
-        taught ? 'text-[var(--color-clay)]' : 'text-[var(--text-muted)]'
+        taught ? 'text-[var(--color-clay-ink)]' : 'text-[var(--text-muted)]'
       }`}
     >
       {label}
@@ -881,7 +881,7 @@ function LineFeedbackBlock({
         <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">{saved}</p>
       )}
       {error && (
-        <p role="alert" className="mt-1.5 text-[10px] text-[#C4836F]">
+        <p role="alert" className="mt-1.5 text-[10px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}

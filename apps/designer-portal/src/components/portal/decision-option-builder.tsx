@@ -404,7 +404,7 @@ export function DecisionOptionBuilder({
             variant="ghost"
             size="sm"
             onClick={onRemove}
-            className="px-0 py-0 text-[0.72rem] text-[var(--color-terracotta)] hover:text-[var(--color-terracotta)]"
+            className="px-0 py-0 text-[0.72rem] text-[var(--color-terracotta-ink)] hover:text-[var(--color-terracotta-ink)]"
           >
             Remove
           </Button>

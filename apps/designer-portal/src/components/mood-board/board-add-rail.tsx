@@ -495,7 +495,7 @@ function PalettePanel({
           </span>
         </button>
       ))}
-      {error && <p role="alert" className="text-[11px] text-[var(--color-clay)]">{error}</p>}
+      {error && <p role="alert" className="text-[11px] text-[var(--color-clay-ink)]">{error}</p>}
     </div>
   );
 }
@@ -628,7 +628,7 @@ function FeedbackPanel({
             type="button"
             aria-pressed={filter === value}
             onClick={() => setFilter(value)}
-            className={`min-h-11 min-w-11 rounded-full border px-2 py-1 font-mono text-[8px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] ${filter === value ? 'border-[var(--color-clay)] text-[var(--color-clay)]' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}
+            className={`min-h-11 min-w-11 rounded-full border px-2 py-1 font-mono text-[8px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] ${filter === value ? 'border-[var(--color-clay)] text-[var(--color-clay-ink)]' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}
           >
             {value === 'rejected' ? 'flagged' : value === 'comment' ? 'noted' : value === 'none' ? 'no verdict' : value}
           </button>
@@ -888,7 +888,7 @@ export function BoardAddRail({
             role="tab"
             aria-selected={tab === value}
             onClick={() => selectTab(value)}
-            className={`min-h-11 min-w-11 shrink-0 px-2 font-mono text-[8px] uppercase tracking-[0.04em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] ${tab === value ? 'border-b-2 border-[var(--color-clay)] text-[var(--color-clay)]' : 'text-[var(--text-muted)]'}`}
+            className={`min-h-11 min-w-11 shrink-0 px-2 font-mono text-[8px] uppercase tracking-[0.04em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] ${tab === value ? 'border-b-2 border-[var(--color-clay)] text-[var(--color-clay-ink)]' : 'text-[var(--text-muted)]'}`}
           >
             {value === 'project' ? 'In project' : value}
           </button>
@@ -924,7 +924,7 @@ export function BoardAddRail({
                     {selection.room?.name ?? (selection.assignmentScope === 'unassigned' ? 'Unsorted' : 'Throughout')} · {selection.designDisposition.replace('_', ' ')}
                   </span>
                 </span>
-                <span className="shrink-0 font-mono text-[8px] uppercase text-[var(--color-clay)]">Place</span>
+                <span className="shrink-0 font-mono text-[8px] uppercase text-[var(--color-clay-ink)]">Place</span>
               </button>
             ))}
           </div>
@@ -1118,7 +1118,7 @@ export function BoardAddRail({
           }
         />
         <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={addNote}>+ Note</Button>
-        {error && <p role="alert" className="mt-2 text-[11px] text-[var(--color-clay)]">{error}</p>}
+        {error && <p role="alert" className="mt-2 text-[11px] text-[var(--color-clay-ink)]">{error}</p>}
       </div>
 
       <ProductPickerModal

@@ -91,7 +91,7 @@ export function RefineReadout({
     <div>
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-[14px] text-[var(--color-charcoal)]">{summary}</span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay)]">
+        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
           {COPY.notCertifiedBadge}
         </span>
       </div>

@@ -157,7 +157,7 @@ export function ShelfPanel({
           ref={closeRef}
           type="button"
           onClick={onClose}
-          className="min-h-11 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.09em] text-[var(--color-charcoal)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          className="min-h-11 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.09em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         >
           ✕ Close
         </button>

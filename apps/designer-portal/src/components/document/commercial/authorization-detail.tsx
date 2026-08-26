@@ -82,7 +82,7 @@ function DeltaGlyph({
           ? `Schedule now reads ${money(Math.abs(delta))} higher than what was signed`
           : `Schedule now reads ${money(Math.abs(delta))} lower than what was signed`
       }
-      className={up ? "ml-1.5 text-[var(--color-terracotta)]" : "ml-1.5 text-[var(--color-sage)]"}
+      className={up ? "ml-1.5 text-[var(--color-terracotta-ink)]" : "ml-1.5 text-[var(--color-sage)]"}
       title={`${up ? "+" : "-"}${money(Math.abs(delta))} since signing`}
     >
       {up ? "▲" : "▼"}
@@ -118,12 +118,12 @@ function DispatchRetryBand({
         </p>
       )}
       {deliveryStatus.isError && (
-        <p role="alert" className="mt-2 text-[10.5px] text-[var(--color-terracotta)]">
+        <p role="alert" className="mt-2 text-[10.5px] text-[var(--color-terracotta-ink)]">
           Email delivery status is unavailable. Refresh before retrying.
         </p>
       )}
       {!hasCommittedDelivery && (
-        <p role="alert" className="mt-2 text-[10.5px] text-[var(--color-terracotta)]">
+        <p role="alert" className="mt-2 text-[10.5px] text-[var(--color-terracotta-ink)]">
           Email delivery status is incomplete. Refresh before retrying.
         </p>
       )}
@@ -171,7 +171,7 @@ function DispatchRetryBand({
         </div>
       )}
       {deliveryError && (
-        <p role="alert" className="mt-2 text-[10.5px] text-[var(--color-terracotta)]">
+        <p role="alert" className="mt-2 text-[10.5px] text-[var(--color-terracotta-ink)]">
           {deliveryError}
         </p>
       )}
@@ -267,7 +267,7 @@ export function AuthorizationDetail({
       wide
     >
       <div>
-        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay)]">
+        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
           Authorization № {instrument.number}
         </p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
@@ -295,7 +295,7 @@ export function AuthorizationDetail({
           </Button>
         )}
         {sendError && (
-          <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta)]">
+          <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta-ink)]">
             {sendError}
           </p>
         )}

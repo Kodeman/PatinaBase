@@ -85,11 +85,11 @@ export function BoardScheduleInspectorAction({
             : 'Send to the schedule'}
       </Button>
       {schedule.isError && (
-        <p className="text-[11px] text-[var(--color-clay)]" role="alert">
+        <p className="text-[11px] text-[var(--color-clay-ink)]" role="alert">
           The schedule is unavailable. Try again in a moment.
         </p>
       )}
-      {error && <p className="text-[11px] text-[var(--color-clay)]" role="alert">{error}</p>}
+      {error && <p className="text-[11px] text-[var(--color-clay-ink)]" role="alert">{error}</p>}
     </div>
   );
 }

@@ -85,7 +85,7 @@ export function AskBar({
             <button
               type="submit"
               aria-label="Ask the Engine"
-              className="doc-type-control flex min-h-11 min-w-11 shrink-0 items-center justify-center text-[var(--text-primary)] transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+              className="doc-type-control flex min-h-11 min-w-11 shrink-0 items-center justify-center text-[var(--text-primary)] transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
             >
               →
             </button>

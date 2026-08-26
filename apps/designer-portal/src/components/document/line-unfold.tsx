@@ -152,7 +152,7 @@ function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
           )}
           {error && (
             // R83: inline at the act — the reason and a retry.
-            <div role="alert" className="text-[10px] text-[#C4836F]">
+            <div role="alert" className="text-[10px] text-[var(--color-terracotta-ink)]">
               <p>{error}</p>
               <DocumentAction
                 actionKey="retry-save-ffe-eta"
@@ -224,7 +224,7 @@ function ClaimActs({ claims }: { claims: { id: string; state: string }[] }) {
       {claims.map((c) => (
         <div key={c.id} className="py-0.5">
           <div className="flex flex-wrap items-baseline gap-2">
-            <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
+            <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
               Claim ·{' '}
               {c.state === 'vendor_notified' ? 'vendor notified' : 'drafted'}
             </span>
@@ -289,7 +289,7 @@ function ClaimActs({ claims }: { claims: { id: string; state: string }[] }) {
       )}
       {error && (
         // R83: inline at the act.
-        <p role="alert" className="text-[10px] text-[#C4836F]">
+        <p role="alert" className="text-[10px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}
@@ -440,7 +440,7 @@ export function LineUnfold({
           )}
           {delta && (
             // The signed price stands; the drift is stated, never silent.
-            <p className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
+            <p className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
               {delta}
             </p>
           )}

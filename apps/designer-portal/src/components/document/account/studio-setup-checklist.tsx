@@ -96,7 +96,7 @@ function ChecklistRow({
         {error ? (
           <span
             role="alert"
-            className="mt-0.5 block text-[11px] leading-relaxed text-[var(--color-terracotta)]"
+            className="mt-0.5 block text-[11px] leading-relaxed text-[var(--color-terracotta-ink)]"
           >
             {error}
           </span>

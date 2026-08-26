@@ -222,7 +222,7 @@ export function TriageBar({
         loading={decline.isPending}
         loadingLabel="Passing…"
         onClick={guard(onPass)}
-        className="text-[var(--color-terracotta)] decoration-[var(--color-terracotta)] hover:text-[var(--color-charcoal)]"
+        className="text-[var(--color-terracotta-ink)] decoration-[var(--color-terracotta)] hover:text-[var(--color-charcoal)]"
       >
         Pass
       </DocumentAction>

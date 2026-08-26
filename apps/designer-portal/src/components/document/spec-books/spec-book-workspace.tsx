@@ -98,7 +98,7 @@ function readinessColor(value: DerivedReadiness): string {
     case "ready":
       return "text-[#66765f]";
     case "unavailable":
-      return "text-[var(--color-terracotta)]";
+      return "text-[var(--color-terracotta-ink)]";
     case "incomplete":
       return "text-[#a47f33]";
     default:
@@ -231,7 +231,7 @@ function ItemCard({
         <div className="mt-3 flex items-center gap-3">
           <ReadinessMark status={readiness} missingFields={missingFields} />
           {drift && (
-            <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]">
+            <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               changed since issue
             </span>
           )}
@@ -412,7 +412,7 @@ export function SelectionEditor({
 
   if (!item.spec) {
     return (
-      <div className="border border-[var(--color-terracotta)] p-4 text-sm text-[var(--color-terracotta)]">
+      <div className="border border-[var(--color-terracotta)] p-4 text-sm text-[var(--color-terracotta-ink)]">
         This schedule line has no project selection record. Route or repair it
         before editing; the product itself remains safe.
       </div>
@@ -478,7 +478,7 @@ export function SelectionEditor({
                     ? `/library/${item.product_id}`
                     : `/library/${item.product_id}?projectId=${encodeURIComponent(item.project_id)}&ffeItemId=${encodeURIComponent(item.id)}&configurationId=${encodeURIComponent(configuration.configurationId)}&snapshotHash=${encodeURIComponent(configuration.hash ?? "")}`
                 }
-                className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] underline-offset-4 hover:underline"
+                className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-4 hover:underline"
               >
                 {!canReviseConfiguration
                   ? "View source piece"
@@ -531,7 +531,7 @@ export function SelectionEditor({
                 <button
                   type="button"
                   onClick={switchToStructuredDimensions}
-                  className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] underline-offset-4 hover:underline"
+                  className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-4 hover:underline"
                 >
                   Use structured editor
                 </button>
@@ -1091,7 +1091,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-4">
           <Link
             href={`/doc/${projectId}`}
-            className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+            className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             ← {projectName}
           </Link>
@@ -1360,7 +1360,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
               {preflight.ready ? (
                 <Check className="h-6 w-6 text-[#66765f]" />
               ) : (
-                <AlertCircle className="h-6 w-6 text-[var(--color-terracotta)]" />
+                <AlertCircle className="h-6 w-6 text-[var(--color-terracotta-ink)]" />
               )}
               <div>
                 <h2 className="font-heading text-2xl">
@@ -1398,7 +1398,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                             setSelectedItemId(issue.itemId!);
                             setView("workbench");
                           }}
-                          className="min-h-11 px-2 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay)]"
+                          className="min-h-11 px-2 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
                         >
                           Resolve
                         </button>
@@ -1589,7 +1589,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                           {artifact.status === "ready" ? (
                             <FileText className="h-4 w-4 text-[#66765f]" />
                           ) : artifact.status === "failed" ? (
-                            <AlertCircle className="h-4 w-4 text-[var(--color-terracotta)]" />
+                            <AlertCircle className="h-4 w-4 text-[var(--color-terracotta-ink)]" />
                           ) : (
                             <FileClock className="h-4 w-4 text-[#a47f33]" />
                           )}

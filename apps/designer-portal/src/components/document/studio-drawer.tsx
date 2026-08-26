@@ -443,7 +443,7 @@ export function StudioDrawer() {
                   className="flex min-h-11 w-full items-center gap-3 border-t border-[var(--color-clay)] px-3 py-2 text-left text-[var(--text-body)] hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)]"
                 >
                   <MessageSquareText
-                    className="h-4 w-4 text-[var(--color-clay)]"
+                    className="h-4 w-4 text-[var(--color-clay-ink)]"
                     strokeWidth={1.5}
                     aria-hidden
                   />
@@ -451,7 +451,7 @@ export function StudioDrawer() {
                     Leave a note
                   </span>
                   {hasUnseenFeedback && (
-                    <span className="ml-auto font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay)]">
+                    <span className="ml-auto font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
                       Shipped
                     </span>
                   )}
@@ -489,7 +489,7 @@ export function StudioDrawer() {
                 <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
                   In hand today
                 </span>
-                <span className="font-heading text-[14px] italic text-[var(--color-clay)]">
+                <span className="font-heading text-[14px] italic text-[var(--color-clay-ink)]">
                   {fmtMinutes(inHandToday)}
                 </span>
               </>

@@ -217,7 +217,7 @@ export function MakersMarketplace({
                         {line || 'Maker'}
                       </span>
                       {rowError !== null && rowError.id === v.id && (
-                        <span className="mt-[0.15rem] block font-mono text-[0.52rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
+                        <span className="mt-[0.15rem] block font-mono text-[0.52rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
                           {rowError.text}
                         </span>
                       )}

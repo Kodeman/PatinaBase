@@ -257,7 +257,7 @@ export function GhostAddLine({
         )}
 
         {errorText && (
-          <div className="mt-[0.45rem] font-mono text-[0.6rem] uppercase tracking-[0.07em] text-[var(--color-terracotta)]">
+          <div className="mt-[0.45rem] font-mono text-[0.6rem] uppercase tracking-[0.07em] text-[var(--color-terracotta-ink)]">
             {errorText}
           </div>
         )}

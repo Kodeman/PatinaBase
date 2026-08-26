@@ -83,7 +83,7 @@ function ContactRow({
           {archived ? ' · archived' : ''}
         </span>
         {error && (
-          <span className="mt-0.5 block text-[0.68rem] text-[var(--color-terracotta)]">
+          <span className="mt-0.5 block text-[0.68rem] text-[var(--color-terracotta-ink)]">
             {error}
           </span>
         )}
@@ -96,7 +96,7 @@ function ContactRow({
         onClick={() => (archived ? onRestore(contact.id) : onArchive(contact.id))}
         disabled={pending}
         loading={pending}
-        className={archived ? undefined : 'text-[var(--color-terracotta)]'}
+        className={archived ? undefined : 'text-[var(--color-terracotta-ink)]'}
       >
         {archived ? 'Restore' : 'Archive'}
       </DocumentAction>
@@ -165,7 +165,7 @@ export function RolodexSeedSheet({
 
   return (
     <RoomSheet open={open} onClose={onClose} title="Seed the rolodex">
-      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay)]">
+      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         The rolodex · seeded
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">

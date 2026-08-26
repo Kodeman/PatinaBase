@@ -304,7 +304,7 @@ export function PoSendPopover({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="font-mono text-[0.58rem] uppercase tracking-[0.05em] text-[var(--color-clay,#C4A57B)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--text-primary)] hover:decoration-solid"
+        className="font-mono text-[0.58rem] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--text-primary)] hover:decoration-solid"
       >
         Send to vendor
       </button>

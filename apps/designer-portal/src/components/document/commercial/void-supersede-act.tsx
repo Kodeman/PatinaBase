@@ -91,7 +91,7 @@ export function VoidAct({
       <Button
         size="sm"
         variant="ghost"
-        className="text-[var(--color-terracotta)] hover:bg-[rgba(196,124,92,0.08)]"
+        className="text-[var(--color-terracotta-ink)] hover:bg-[rgba(196,124,92,0.08)]"
         onClick={() => setOpen(true)}
       >
         Void this authorization
@@ -101,7 +101,7 @@ export function VoidAct({
 
   return (
     <div className="border-l-2 border-[var(--color-terracotta)] pl-3">
-      <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]">
+      <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
         Void authorization № {instrument.number}
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-mocha)]">
@@ -132,7 +132,7 @@ export function VoidAct({
       </label>
 
       {error && (
-        <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta)]">
+        <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}

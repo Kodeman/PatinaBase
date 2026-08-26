@@ -256,7 +256,7 @@ export function LightTableCard({
       {conflict && (
         <p
           role="alert"
-          className="border-l-2 border-[var(--color-terracotta)] pl-2 text-[0.75rem] leading-snug text-[var(--color-terracotta)]"
+          className="border-l-2 border-[var(--color-terracotta)] pl-2 text-[0.75rem] leading-snug text-[var(--color-terracotta-ink)]"
         >
           {conflict}
         </p>

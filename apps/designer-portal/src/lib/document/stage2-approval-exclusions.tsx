@@ -109,7 +109,7 @@ export function MarginDecisionClassificationNotice({
     <p
       role="alert"
       data-testid="margin-decision-classification-error"
-      className="w-full text-[12px] text-[var(--color-terracotta)]"
+      className="w-full text-[12px] text-[var(--color-terracotta-ink)]"
     >
       Margin decisions are hidden because their approval authority could not be
       verified. Try again when the project record is available.

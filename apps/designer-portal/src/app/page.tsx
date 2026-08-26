@@ -68,7 +68,7 @@ export default function LandingPage() {
             <p className="type-meta mb-1">Enter</p>
             <Link
               href="/desk"
-              className="type-body-small text-patina-charcoal hover:text-patina-clay transition-colors"
+              className="type-body-small text-patina-charcoal hover:text-patina-clay-ink transition-colors"
             >
               Designer Portal
             </Link>
@@ -77,7 +77,7 @@ export default function LandingPage() {
             <p className="type-meta mb-1">Account</p>
             <Link
               href="/auth/signin"
-              className="type-body-small text-patina-charcoal hover:text-patina-clay transition-colors"
+              className="type-body-small text-patina-charcoal hover:text-patina-clay-ink transition-colors"
             >
               Sign In
             </Link>
@@ -86,7 +86,7 @@ export default function LandingPage() {
             <p className="type-meta mb-1">New Here?</p>
             <Link
               href="/auth/signup"
-              className="type-body-small text-patina-charcoal hover:text-patina-clay transition-colors"
+              className="type-body-small text-patina-charcoal hover:text-patina-clay-ink transition-colors"
             >
               Create Account
             </Link>

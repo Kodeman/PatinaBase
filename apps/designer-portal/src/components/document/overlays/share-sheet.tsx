@@ -224,7 +224,7 @@ export function ShareSheet({
                         onClick={() => handleRevoke(s)}
                         loading={revokeShare.isPending}
                         loadingLabel="Revoking…"
-                        className="shrink-0 self-center text-[var(--color-terracotta)] decoration-[var(--color-terracotta)]"
+                        className="shrink-0 self-center text-[var(--color-terracotta-ink)] decoration-[var(--color-terracotta)]"
                       >
                         Revoke
                       </DocumentAction>
@@ -270,7 +270,7 @@ export function ShareSheet({
                   <span
                     className={`shrink-0 self-center font-mono text-[12px] uppercase tracking-[0.08em] ${
                       on
-                        ? 'text-[var(--color-clay)]'
+                        ? 'text-[var(--color-clay-ink)]'
                         : 'text-[var(--color-aged-oak)]'
                     }`}
                   >

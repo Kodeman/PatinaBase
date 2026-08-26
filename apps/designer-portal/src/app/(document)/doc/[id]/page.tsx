@@ -1519,7 +1519,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         <div className="flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.08em]">
           <button
             type="button"
-            className="text-[var(--color-clay)]"
+            className="text-[var(--color-clay-ink)]"
             onClick={() => void retryDocumentResolution()}
           >
             Try again
@@ -1540,7 +1540,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         </p>
         <Link
           href="/desk"
-          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)]"
+          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
         >
           ← Back to the desk
         </Link>

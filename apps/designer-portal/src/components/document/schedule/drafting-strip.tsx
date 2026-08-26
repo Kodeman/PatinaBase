@@ -351,7 +351,7 @@ export function DraftingStrip({
         {todayXPct != null && (
           <div className="relative h-4">
             <span
-              className="absolute whitespace-nowrap font-mono text-[0.52rem] uppercase tracking-[0.14em] text-[var(--color-terracotta)]"
+              className="absolute whitespace-nowrap font-mono text-[0.52rem] uppercase tracking-[0.14em] text-[var(--color-terracotta-ink)]"
               style={{ left: `${clampPct(todayXPct)}%`, top: 3, marginLeft: 4 }}
             >
               Today · {fmtDay(today)}
@@ -408,7 +408,7 @@ function LaneRow({
       >
         {name}
         {ghost?.deltaDays != null && ghost.deltaDays !== 0 && (
-          <span className="border border-[var(--color-terracotta)] px-[3px] text-[var(--color-terracotta)]">
+          <span className="border border-[var(--color-terracotta)] px-[3px] text-[var(--color-terracotta-ink)]">
             {fmtDelta(ghost.deltaDays)}
           </span>
         )}

@@ -56,7 +56,7 @@ function BoardRow({
           {detail}
         </span>
       </span>
-      <span aria-hidden className="font-mono text-[13px] text-[var(--color-clay)]">
+      <span aria-hidden className="font-mono text-[13px] text-[var(--color-clay-ink)]">
         →
       </span>
     </Link>
@@ -118,14 +118,14 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
           {draftingProposalId && (
             <Link
               href={`/drafting/${draftingProposalId}`}
-              className="inline-flex min-h-[44px] items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)]"
+              className="inline-flex min-h-[44px] items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]"
             >
               Open the Drafting Room →
             </Link>
           )}
           <Link
             href={`/doc/${routeId}`}
-            className="inline-flex min-h-[44px] items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+            className="inline-flex min-h-[44px] items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             ← Back to the document
           </Link>
@@ -149,7 +149,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
         <div className="mx-auto flex max-w-[1100px] flex-wrap items-center gap-4">
           <Link
             href={`/doc/${routeId}`}
-            className="inline-flex min-h-11 items-center py-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+            className="inline-flex min-h-11 items-center py-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             ← {projectName}
           </Link>

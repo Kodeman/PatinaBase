@@ -114,14 +114,14 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
           never actually depended on). */}
       <Link
         href={`/room/${scanId}`}
-        className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay)]"
+        className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)]"
       >
         {C.backToRoom(roomLabel)}
       </Link>
 
       {/* Header */}
       <header className="mt-4">
-        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-clay)]">
+        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
           {C.eyebrow}
         </p>
         <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -135,7 +135,7 @@ export function RoomFileView({ scanId }: RoomFileViewProps) {
             )}
           </h1>
           {current?.unverified && (
-            <span className="rounded-[2px] border border-[var(--color-clay)] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay)]">
+            <span className="rounded-[2px] border border-[var(--color-clay)] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
               {C.unverifiedBadge}
             </span>
           )}

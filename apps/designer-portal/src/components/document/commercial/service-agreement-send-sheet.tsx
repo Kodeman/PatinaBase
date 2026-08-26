@@ -71,7 +71,7 @@ export function ServiceAgreementSendSheet({
   return (
     <DocSheet open={open} onClose={onClose} title="Send design agreement">
       <div className="mx-auto max-w-xl">
-        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay)]">
+        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
           Yes to the designer
         </p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
@@ -122,7 +122,7 @@ export function ServiceAgreementSendSheet({
           </p>
         ) : (
           <div className="mt-4 border-l-2 border-[var(--color-terracotta)] pl-3">
-            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]">
+            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               Finish before sending
             </p>
             <ul className="mt-2 space-y-1 text-[12px] text-[var(--color-mocha)]">

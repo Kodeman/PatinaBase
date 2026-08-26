@@ -132,7 +132,7 @@ export function BlockedByDecisionInline({
       <div className="flex items-start gap-2">
         <AlertTriangle
           className="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
-          style={{ color: 'var(--color-terracotta, #D4A090)' }}
+          style={{ color: 'var(--color-terracotta-ink)' }}
           aria-hidden="true"
         />
         <div className="min-w-0">
@@ -149,7 +149,7 @@ export function BlockedByDecisionInline({
             <Link
               href={href}
               className="font-medium underline decoration-dotted underline-offset-2 hover:decoration-solid"
-              style={{ color: 'var(--color-terracotta, #D4A090)' }}
+              style={{ color: 'var(--color-terracotta-ink)' }}
             >
               {isSingle ? 'View the decision' : 'View blocking decisions'}
             </Link>
@@ -200,7 +200,7 @@ export function BlockedItemsRollup({
       style={{
         borderColor: 'var(--color-terracotta, #D4A090)',
         background: 'rgba(212, 160, 144, 0.08)',
-        color: 'var(--color-terracotta, #D4A090)',
+        color: 'var(--color-terracotta-ink)',
       }}
     >
       <AlertTriangle className="h-3 w-3" aria-hidden="true" />
