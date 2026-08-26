@@ -307,3 +307,17 @@ struct FieldAttentionBuilderTests {
         #expect(snapshot.movingToday.isEmpty)
     }
 }
+
+struct FieldCopyAuditTests {
+    @Test func fieldsUserFacingVocabularyHasNoInboxAndNoAI() {
+        #expect(FieldCopyAudit.forbiddenWords == ["inbox", "ai"])
+        for word in FieldCopyAudit.forbiddenWords {
+            #expect(!FieldCopyAudit.contains(word, in: "Held for you"))
+        }
+        #expect(FieldCopyAudit.contains("inbox", in: "Parked in your inbox"))
+        #expect(FieldCopyAudit.contains("inbox", in: "Inbox — finish later"))
+        // "maintain" must not trip the AI check — whole words only.
+        #expect(!FieldCopyAudit.contains("ai", in: "We'll maintain the audio."))
+        #expect(FieldCopyAudit.contains("ai", in: "AI wrote this up"))
+    }
+}

@@ -79,7 +79,7 @@ private struct S1Content: View {
             VStack(alignment: .leading, spacing: 20) {
                 RouteSheetHeader(
                     eyebrow: "Route",
-                    title: "Route this capture",
+                    title: "Where this belongs.",
                     subtitle: "It already knows where it was found. Add where it belongs.",
                     onClose: {
                         // ✕ used to drop the project she had just picked, silently.
@@ -220,7 +220,7 @@ private struct S1Content: View {
     private var placementField: some View {
         RouteFieldShell(label: "FF&E schedule") {
             Menu {
-                Button("No FF&E line — Library or project inbox") {
+                Button("No FF&E line — library, or held for later") {
                     placementChoice = .none
                 }
                 Button("Create a new line") {
@@ -325,7 +325,7 @@ private struct S1Content: View {
             }
         } catch {
             projectLoadError =
-                "Project rooms are unavailable offline. This capture can still go to Library or Inbox."
+                "Rooms need signal. This capture still saves — place it when you're back."
         }
     }
 
@@ -352,7 +352,7 @@ private struct S1Content: View {
         } catch {
             projectDetail = nil
             projectLoadError =
-                "Project rooms are unavailable offline. This capture can still go to Library or Inbox."
+                "Rooms need signal. This capture still saves — place it when you're back."
         }
     }
 

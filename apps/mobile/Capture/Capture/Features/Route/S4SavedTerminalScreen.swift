@@ -59,7 +59,7 @@ struct S4SavedTerminalScreen: View {
 
             VStack(spacing: 10) {
                 if confirmedDestination == .inbox {
-                    RouteActionButton("Open inbox", systemImage: "tray.full", kind: .secondary) {
+                    RouteActionButton("See what's waiting", systemImage: "tray.full", kind: .secondary) {
                         coordinator.dismissSheet()
                         coordinator.navigate(to: .librarySearch)
                     }
@@ -118,7 +118,7 @@ struct S4SavedTerminalScreen: View {
     private var title: String {
         switch confirmedDestination {
         case .library: return "Kept to your library"
-        case .inbox: return "Parked in your inbox"
+        case .inbox: return "Held for you"
         case .undecided, nil: return "Saved on this device"
         }
     }
@@ -136,7 +136,7 @@ struct S4SavedTerminalScreen: View {
         case .library:
             return "Photos, measures, the tag and your voice note are ready to reuse."
         case .inbox:
-            return "The capture landed safely in your inbox for review before it joins the library."
+            return "It's held safely for review, before it joins the library."
         case .undecided, nil:
             if transfer.phase == .complete {
                 return "Patina has the receipt, but the destination still needs confirmation."
@@ -167,7 +167,7 @@ struct S4SavedTerminalScreen: View {
         var parts: [String] = []
         switch confirmedDestination {
         case .library: parts.append("Library")
-        case .inbox: parts.append("Inbox")
+        case .inbox: parts.append("Held")
         case .undecided, nil: break
         }
         if let venue = specimen?.venue {

@@ -85,8 +85,8 @@ private struct S3Content: View {
             destinationCard(
                 destination: .inbox,
                 glyph: "tray.full.fill",
-                title: "Inbox — finish later",
-                blurb: "Smart guesses to confirm, a tag to verify, or a quick visit you’ll triage tonight."
+                title: "Hold it — finish later",
+                blurb: "Guesses to confirm, or a tag to verify. It waits on Today."
             )
 
             if let routeError {

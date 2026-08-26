@@ -96,7 +96,7 @@ final class ViewfinderModel {
     var quickSaveTitle: String {
         switch cardSpecimen?.destination {
         case .library: return "Save to library"
-        case .inbox: return "Send to inbox"
+        case .inbox: return "Hold for later"
         default: return "Choose destination"
         }
     }

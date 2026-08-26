@@ -35,7 +35,7 @@ enum LocalSyncError: LocalizedError {
         case .remoteUnavailable:
             return "Sync isn't available yet — this capture stays on this device."
         case .destinationRequired:
-            return "Choose Library or Inbox before sending this capture."
+            return "Choose where this belongs before sending it."
         case .missingRemoteReceipt:
             return "The server did not confirm this capture."
         case .remoteRejected(let message):
@@ -603,7 +603,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
             }
         } else if previousDestination != .inbox {
             throw LocalSyncError.remoteRejected(
-                "A confirmed library capture can’t be moved to the inbox from this device.")
+                "A confirmed library capture can’t be held for later from this device.")
         }
 
         analytics?.event("sync.route", [

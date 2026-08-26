@@ -212,7 +212,7 @@ struct SiteScanSetupScreen: View {
                 .font(CaptureType.bodyEmph)
                 .foregroundStyle(CaptureColor.terracotta)
                 .accessibilityHidden(true)
-            Text("This device has no LiDAR — capture reference photos and voice notes for this room instead. They land in your Inbox.")
+            Text("This device has no LiDAR — capture reference photos and voice notes for this room instead. They reach the studio as soon as you have signal.")
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.ink)
         }

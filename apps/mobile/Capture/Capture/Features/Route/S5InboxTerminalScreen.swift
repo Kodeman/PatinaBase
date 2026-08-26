@@ -33,7 +33,7 @@ struct S5InboxTerminalScreen: View {
             .animation(.spring(response: 0.45, dampingFraction: 0.7), value: appeared)
 
             VStack(spacing: 6) {
-                Text(isConfirmed ? "Parked in your inbox" : "Held on this device")
+                Text(isConfirmed ? "Held for you" : "Held on this device")
                     .font(CaptureType.title)
                     .foregroundStyle(CaptureColor.ink)
                 Text(leftToFinish)
@@ -43,13 +43,13 @@ struct S5InboxTerminalScreen: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(isConfirmed ? "Next in the inbox" : transferLabel)
+                Text(isConfirmed ? "What's left to finish" : transferLabel)
                     .font(CaptureType.eyebrow)
                     .textCase(.uppercase)
                     .foregroundStyle(CaptureColor.warning)
                 Text(isConfirmed
                      ? "Confirm the material, verify the trade price, then promote it to the library."
-                     : "Nothing is lost. Patina will send it to your inbox and confirm when it lands.")
+                     : "Nothing is lost. Patina will send it up and confirm when it lands.")
                     .font(CaptureType.callout)
                     .foregroundStyle(CaptureColor.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
@@ -59,7 +59,7 @@ struct S5InboxTerminalScreen: View {
             Spacer(minLength: 8)
 
             VStack(spacing: 10) {
-                RouteActionButton("Open inbox", systemImage: "tray.full", kind: .secondary) {
+                RouteActionButton("See what's waiting", systemImage: "tray.full", kind: .secondary) {
                     coordinator.dismissSheet()
                     // No dedicated inbox route exists; the library search surface
                     // carries the inbox filter (U2). See manifest seam note.

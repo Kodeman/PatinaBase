@@ -210,7 +210,7 @@ struct LibrarySearchScreen: View {
         let tag: String
         switch s.destination {
         case .library: tag = s.status == .committed ? "verified" : "library"
-        case .inbox: tag = "inbox"
+        case .inbox: tag = "held"
         case .undecided: tag = "draft"
         }
         return "\(place) · \(tag)"
@@ -220,7 +220,7 @@ struct LibrarySearchScreen: View {
         let (text, color): (String, Color) = {
             switch s.destination {
             case .library: return ("library", CaptureColor.verdigris)
-            case .inbox: return ("inbox", CaptureColor.warning)
+            case .inbox: return ("held", CaptureColor.warning)
             case .undecided: return ("draft", CaptureColor.inkSoft)
             }
         }()

@@ -31,7 +31,7 @@ enum CapturePrefs {
             switch self {
             case .ask: return "Ask each time"
             case .library: return "Library"
-            case .inbox: return "Inbox"
+            case .inbox: return "Hold for later"
             }
         }
     }
