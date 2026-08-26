@@ -17,6 +17,18 @@ struct VoiceModeTests {
                 == "Tap to talk. It waits on Today until you place it.")
     }
 
+    @Test func aWhitespaceOnlyLabelIsTreatedAsAbsent() {
+        #expect(FieldVoiceModeCopy.idleLine(visitLabel: " ")
+                == "Tap to talk. It waits on Today until you place it.")
+        #expect(FieldVoiceModeCopy.idleLine(visitLabel: "\n")
+                == "Tap to talk. It waits on Today until you place it.")
+    }
+
+    @Test func aPaddedLabelIsTrimmedBeforeItLands() {
+        #expect(FieldVoiceModeCopy.idleLine(visitLabel: "  Maple St  ")
+                == "Tap to talk. It lands on Maple St.")
+    }
+
     @Test func elapsedIsMinutesAndSecondsAndNeverASegmentCount() {
         #expect(FieldVoiceModeCopy.elapsed(0) == "0:00")
         #expect(FieldVoiceModeCopy.elapsed(134) == "2:14")

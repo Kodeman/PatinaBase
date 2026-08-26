@@ -19,10 +19,11 @@ public enum FieldVoiceModeState: Equatable, Sendable {
 
 public enum FieldVoiceModeCopy {
     public static func idleLine(visitLabel: String?) -> String {
-        guard let visitLabel, !visitLabel.trimmingCharacters(in: .whitespaces).isEmpty else {
+        let trimmed = visitLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let trimmed, !trimmed.isEmpty else {
             return "Tap to talk. It waits on Today until you place it."
         }
-        return "Tap to talk. It lands on \(visitLabel)."
+        return "Tap to talk. It lands on \(trimmed)."
     }
 
     public static func line(for state: FieldVoiceModeState) -> String {
