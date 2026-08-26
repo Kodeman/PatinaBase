@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * DocSheet — the first Doc* overlay wrapper (R3), now the LAID SHEET (R96).
@@ -29,17 +29,17 @@ import {
   useId,
   useRef,
   useState,
-} from 'react';
-import { createPortal } from 'react-dom';
-import type { LucideIcon } from 'lucide-react';
-import { openHelp, type HelpOpenSource } from '@/lib/help-system/open-help';
-import { lockBodyScroll } from './body-scroll-lock';
+} from "react";
+import { createPortal } from "react-dom";
+import type { LucideIcon } from "lucide-react";
+import { openHelp, type HelpOpenSource } from "@/lib/help-system/open-help";
+import { lockBodyScroll } from "./body-scroll-lock";
 import {
   isElementRendered,
   registerManagedModalDialog,
   topActiveModalDialog,
   topDismissiblePopover,
-} from './active-dialog';
+} from "./active-dialog";
 
 const FOCUSABLE_SELECTOR = [
   'a[href]:not([tabindex="-1"])',
@@ -49,10 +49,10 @@ const FOCUSABLE_SELECTOR = [
   'textarea:not([disabled]):not([tabindex="-1"])',
   '[contenteditable="true"]:not([tabindex="-1"])',
   '[tabindex]:not([tabindex="-1"])',
-].join(',');
+].join(",");
 
-type DocSheetOrigin = 'document' | 'margin';
-const DocSheetOriginContext = createContext<DocSheetOrigin>('document');
+type DocSheetOrigin = "document" | "margin";
+const DocSheetOriginContext = createContext<DocSheetOrigin>("document");
 
 export function DocSheetOriginProvider({
   origin,
@@ -75,11 +75,11 @@ function getFocusableElements(panel: HTMLElement) {
     const style = window.getComputedStyle(element);
     return (
       !element.hidden &&
-      !element.matches(':disabled') &&
-      element.getAttribute('aria-disabled') !== 'true' &&
+      !element.matches(":disabled") &&
+      element.getAttribute("aria-disabled") !== "true" &&
       !element.closest('[hidden], [aria-hidden="true"], [inert]') &&
-      style.display !== 'none' &&
-      style.visibility !== 'hidden'
+      style.display !== "none" &&
+      style.visibility !== "hidden"
     );
   });
 }
@@ -94,7 +94,7 @@ function getFocusableElements(panel: HTMLElement) {
 export function HelpGlyph({
   helpKey,
   source,
-  label = 'About this sheet',
+  label = "About this sheet",
   className,
 }: {
   /** The help surface key this doorway scopes the panel to — always a
@@ -110,7 +110,7 @@ export function HelpGlyph({
       type="button"
       aria-label={label}
       onClick={() => openHelp({ source, surfaceKey: helpKey })}
-      className={`doc-type-meta -my-2 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-[3px] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)] ${className ?? ''}`}
+      className={`doc-type-meta -my-2 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-[3px] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)] ${className ?? ""}`}
     >
       ?
     </button>
@@ -164,7 +164,7 @@ export function DocSheetHead({
               className="hidden font-normal text-[var(--color-quiet-ink)] sm:inline"
               data-doc-sheet-page-label
             >
-              {' '}
+              {" "}
               · {pageLabel}
             </span>
           ) : null}
@@ -217,7 +217,7 @@ export function DocSheet({
   children: React.ReactNode;
   /** Retained for backward compatibility — both variants are now the same laid
    *  paper sheet (R96), so the prop no longer changes the ground. */
-  variant?: 'sheet' | 'center';
+  variant?: "sheet" | "center";
   /** A ledger that needs a wider column than the 640px default. */
   wide?: boolean;
   /** When set, DocSheet renders the standard {@link DocSheetHead} at the top
@@ -296,14 +296,14 @@ export function DocSheet({
       const panel = panelRef.current;
       if (!panel || topActiveModalDialog() !== panel) return;
 
-      if (e.key === 'Escape' && !e.defaultPrevented) {
+      if (e.key === "Escape" && !e.defaultPrevented) {
         e.preventDefault();
         e.stopPropagation();
         onClose();
         return;
       }
 
-      if (e.key !== 'Tab' || e.defaultPrevented) return;
+      if (e.key !== "Tab" || e.defaultPrevented) return;
       // A dismissible popover (the Calendar Folio) is PORTALED out of this
       // sheet's subtree, so trapping to the panel would strand it: Tab would
       // walk out of the open panel and back into the sheet behind it. While one
@@ -333,16 +333,16 @@ export function DocSheet({
         last.focus();
       }
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open || typeof document === 'undefined') return null;
+  if (!open || typeof document === "undefined") return null;
 
   return createPortal(
     <div
       data-doc-sheet-layer
-      data-doc-sheet-stack-state={isTopModal ? 'top' : 'covered'}
+      data-doc-sheet-stack-state={isTopModal ? "top" : "covered"}
       aria-hidden={isTopModal ? undefined : true}
       inert={isTopModal ? undefined : true}
       className="doc-sheet-layer fixed inset-0 z-50 box-border flex items-start justify-center overflow-hidden overscroll-contain pb-[var(--doc-sheet-inset-bottom)] pl-[var(--doc-sheet-inset-left)] pr-[var(--doc-sheet-inset-right)] pt-[var(--doc-sheet-inset-top)]"
@@ -366,7 +366,7 @@ export function DocSheet({
         data-doc-sheet-panel
         data-doc-sheet-scroll-region
         className={`doc-sheet-panel relative my-auto max-h-[calc(100dvh_-_var(--doc-sheet-inset-top)_-_var(--doc-sheet-inset-bottom))] min-w-0 w-full ${
-          wide ? 'max-w-[760px]' : 'max-w-[640px]'
+          wide ? "max-w-[760px]" : "max-w-[640px]"
         } overflow-y-auto overscroll-contain rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none sm:px-9`}
       >
         {icon ? (

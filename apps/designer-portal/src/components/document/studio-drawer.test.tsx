@@ -4,41 +4,41 @@ import {
   screen,
   waitFor,
   within,
-} from '@testing-library/react';
-import { StudioDrawer } from './studio-drawer';
-import { openFeedbackSheet } from './feedback/feedback-sheet';
+} from "@testing-library/react";
+import { StudioDrawer } from "./studio-drawer";
+import { openFeedbackSheet } from "./feedback/feedback-sheet";
 
 const mockPush = jest.fn();
 let mockUnseenFeedback: Array<{ id: string }> = [];
 
-jest.mock('next/navigation', () => ({
-  usePathname: () => '/desk',
+jest.mock("next/navigation", () => ({
+  usePathname: () => "/desk",
   useRouter: () => ({ push: mockPush }),
 }));
 
-jest.mock('@patina/supabase', () => ({
+jest.mock("@patina/supabase", () => ({
   useUnreadInboxCount: () => ({ data: 0 }),
   useProcurementUnreadCount: () => ({ data: 0 }),
   useUnseenShipped: () => ({ data: mockUnseenFeedback }),
 }));
 
-jest.mock('@/hooks/use-hydrated', () => ({
+jest.mock("@/hooks/use-hydrated", () => ({
   useHydrated: () => true,
 }));
 
-jest.mock('@/hooks/document-time-provider', () => ({
+jest.mock("@/hooks/document-time-provider", () => ({
   useDocumentTime: () => ({ inHandToday: 0 }),
 }));
 
-jest.mock('@/lib/help-system/use-sheet-surface-key', () => ({
+jest.mock("@/lib/help-system/use-sheet-surface-key", () => ({
   useSheetSurfaceKey: jest.fn(),
 }));
 
-jest.mock('@/lib/document/room-origin', () => ({
+jest.mock("@/lib/document/room-origin", () => ({
   rememberRoomOrigin: jest.fn(),
 }));
 
-jest.mock('@/lib/analytics/document-events', () => ({
+jest.mock("@/lib/analytics/document-events", () => ({
   documentEvents: {
     wayfinding: {
       roomEntered: jest.fn(),
@@ -51,36 +51,36 @@ jest.mock('@/lib/analytics/document-events', () => ({
 // (fallbackFocusRef) lives in doc-sheet.tsx, and studio-drawer.tsx only
 // wires it up, so the real focus-restore behaviour must run for that test.
 
-jest.mock('./overlays/post-sheet', () => ({
+jest.mock("./overlays/post-sheet", () => ({
   PostSheet: () => null,
   openPost: jest.fn(),
 }));
 
-jest.mock('./orders-ledger', () => ({
+jest.mock("./orders-ledger", () => ({
   OrdersLedger: () => <div>Orders ledger</div>,
 }));
 
-jest.mock('./accounts/accounts-book', () => ({
+jest.mock("./accounts/accounts-book", () => ({
   AccountsBook: () => <div>Accounts book</div>,
 }));
 
-jest.mock('./hours-ledger', () => ({
+jest.mock("./hours-ledger", () => ({
   HoursLedger: () => <div>Hours ledger</div>,
 }));
 
-jest.mock('./feedback/feedback-ledger', () => ({
+jest.mock("./feedback/feedback-ledger", () => ({
   FeedbackLedger: () => <div>Feedback ledger</div>,
 }));
 
-jest.mock('./feedback/feedback-sheet', () => ({
+jest.mock("./feedback/feedback-sheet", () => ({
   openFeedbackSheet: jest.fn(),
 }));
 
-jest.mock('./account/account-nameplate', () => ({
+jest.mock("./account/account-nameplate", () => ({
   AccountNameplate: () => <div>Designer account</div>,
 }));
 
-describe('StudioDrawer', () => {
+describe("StudioDrawer", () => {
   beforeEach(() => {
     mockPush.mockClear();
     mockUnseenFeedback = [];
@@ -88,109 +88,109 @@ describe('StudioDrawer', () => {
     window.localStorage.clear();
   });
 
-  it('keeps Rooms direct and gathers sheet ledgers behind one doorway', () => {
+  it("keeps Rooms direct and gathers sheet ledgers behind one doorway", () => {
     render(<StudioDrawer />);
 
-    const drawer = screen.getByRole('navigation', { name: 'Studio drawer' });
-    expect(drawer).toHaveClass('min-[1180px]:grid');
-    expect(screen.getByRole('button', { name: 'Library' })).toHaveClass(
-      'min-h-11',
+    const drawer = screen.getByRole("navigation", { name: "Studio drawer" });
+    expect(drawer).toHaveClass("min-[1180px]:grid");
+    expect(screen.getByRole("button", { name: "Library" })).toHaveClass(
+      "min-h-11",
     );
-    expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "People" })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'The Rooms' }),
+      screen.getByRole("button", { name: "The Rooms" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Orders' }),
+      screen.queryByRole("button", { name: "Orders" }),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
-    const menu = screen.getByRole('group', { name: 'Studio books' });
-    expect(within(menu).getByRole('button', { name: 'Orders' })).toHaveFocus();
-    expect(within(menu).getByRole('button', { name: 'Accounts' })).toHaveClass(
-      'min-h-11',
+    fireEvent.click(screen.getByRole("button", { name: /Studio books/i }));
+    const menu = screen.getByRole("group", { name: "Studio books" });
+    expect(within(menu).getByRole("button", { name: "Orders" })).toHaveFocus();
+    expect(within(menu).getByRole("button", { name: "Accounts" })).toHaveClass(
+      "min-h-11",
     );
     expect(
-      within(menu).getByRole('button', { name: 'Hours' }),
+      within(menu).getByRole("button", { name: "Hours" }),
     ).toBeInTheDocument();
     expect(
-      within(menu).queryByRole('button', { name: 'Feedback' }),
+      within(menu).queryByRole("button", { name: "Feedback" }),
     ).not.toBeInTheDocument();
     expect(
-      within(menu).getByRole('button', { name: 'Leave a note' }),
+      within(menu).getByRole("button", { name: "Leave a note" }),
     ).toBeInTheDocument();
   });
 
-  it('puts the most recently opened book first on the next visit', async () => {
+  it("puts the most recently opened book first on the next visit", async () => {
     const first = render(<StudioDrawer />);
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Accounts' }));
+    fireEvent.click(screen.getByRole("button", { name: /Studio books/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
 
     expect(
-      screen.getByRole('dialog', { name: 'Accounts' }),
+      screen.getByRole("dialog", { name: "Accounts" }),
     ).toBeInTheDocument();
     expect(
-      window.localStorage.getItem('patina.document.recentStudioBook'),
-    ).toBe('accounts');
+      window.localStorage.getItem("patina.document.recentStudioBook"),
+    ).toBe("accounts");
 
     first.unmount();
     render(<StudioDrawer />);
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Studio books/i }));
 
     await waitFor(() => {
       const items = within(
-        screen.getByRole('group', { name: 'Studio books' }),
-      ).getAllByRole('button');
+        screen.getByRole("group", { name: "Studio books" }),
+      ).getAllByRole("button");
       expect(items[0]).toHaveAccessibleName(/Accounts.*Recent/i);
     });
   });
 
-  it('offers feedback contextually from the books hub', () => {
+  it("offers feedback contextually from the books hub", () => {
     render(<StudioDrawer />);
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Leave a note' }));
+    fireEvent.click(screen.getByRole("button", { name: /Studio books/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Leave a note" }));
 
     expect(openFeedbackSheet).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('group')).not.toBeInTheDocument();
+    expect(screen.queryByRole("group")).not.toBeInTheDocument();
   });
 
-  it('F11 — closing the Orders sheet returns focus to Studio books when the opening row has unmounted', async () => {
+  it("F11 — closing the Orders sheet returns focus to Studio books when the opening row has unmounted", async () => {
     render(<StudioDrawer />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
-    const ordersRow = screen.getByRole('button', { name: 'Orders' });
+    fireEvent.click(screen.getByRole("button", { name: /Studio books/i }));
+    const ordersRow = screen.getByRole("button", { name: "Orders" });
     ordersRow.focus();
     fireEvent.click(ordersRow);
 
     // Opening the sheet closes the books menu, so the row that was clicked
     // (the pre-open activeElement DocSheet captured) is now unmounted.
     expect(
-      screen.queryByRole('button', { name: 'Orders' }),
+      screen.queryByRole("button", { name: "Orders" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: 'Orders' })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Orders" })).toBeInTheDocument();
 
-    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.keyDown(document, { key: "Escape" });
 
     await waitFor(() =>
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: /Studio books/i }),
+        screen.getByRole("button", { name: /Studio books/i }),
       ).toHaveFocus(),
     );
   });
 
-  it('carries the shipped-feedback signal into the single feedback entrance', () => {
-    mockUnseenFeedback = [{ id: 'feedback-1' }];
+  it("carries the shipped-feedback signal into the single feedback entrance", () => {
+    mockUnseenFeedback = [{ id: "feedback-1" }];
     render(<StudioDrawer />);
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Studio books/i }));
 
     expect(
-      screen.getByRole('button', { name: /Leave a note.*Shipped/i }),
+      screen.getByRole("button", { name: /Leave a note.*Shipped/i }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Feedback' }),
+      screen.queryByRole("button", { name: "Feedback" }),
     ).not.toBeInTheDocument();
   });
 });
