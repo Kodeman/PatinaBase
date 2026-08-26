@@ -54,6 +54,15 @@ jest.mock("@patina/supabase", () => ({
 
 jest.mock("@/hooks/use-hydrated", () => ({ useHydrated: () => true }));
 
+// SP-19/F57 — the workspace reads `?ffeItemId=` to land on one line. The
+// global jest.setup mock returns an empty stub, so this file drives it.
+let mockSearchParams = new URLSearchParams();
+jest.mock("next/navigation", () => ({
+  useSearchParams: () => mockSearchParams,
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+  usePathname: () => "/doc/project-1/spec-book",
+}));
+
 jest.mock("@/lib/analytics/spec-book-events", () => ({
   specBookEvents: {
     addendumStarted: jest.fn(),
@@ -149,6 +158,7 @@ beforeEach(() => {
   readinessChanged.mockClear();
   artifactRetry.mockClear();
   opened.mockClear();
+  mockSearchParams = new URLSearchParams();
   mockWorkbenchHookResult = {
     data: {
       book: { id: "book-1", title: "Oak project specification" },
@@ -426,5 +436,65 @@ describe("SelectionEditor — raw JSON toggle", () => {
         2,
       ),
     );
+  });
+});
+
+describe("SP-19/F57 — the spec book lands on the addressed FF&E line", () => {
+  function withItems() {
+    const base = mockWorkbenchHookResult as { data: Record<string, unknown> };
+    base.data.items = [
+      buildItem({}, { id: "item-1", name: "Sofa", document_code: "F-01" }),
+      buildItem({}, { id: "item-2", name: "Sconce", document_code: "F-02" }),
+      buildItem({}, { id: "item-3", name: "Banquette", document_code: "F-03" }),
+    ];
+  }
+
+  it("selects the item named by ?ffeItemId=, not the first in the book", () => {
+    withItems();
+    mockSearchParams = new URLSearchParams("ffeItemId=item-3");
+
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    expect(container.querySelector("#spec-book-item-item-3")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(container.querySelector("#spec-book-item-item-1")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("falls back to the first item when no line is addressed", () => {
+    withItems();
+
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    expect(container.querySelector("#spec-book-item-item-1")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("ignores an ffeItemId that is not in this book", () => {
+    withItems();
+    mockSearchParams = new URLSearchParams("ffeItemId=not-in-this-project");
+
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    expect(container.querySelector("#spec-book-item-item-1")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("SP-14/F100 — the leaf's return link names the full project", () => {
+    withItems();
+
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    expect(
+      screen.getByRole("link", { name: "← Oak project" }),
+    ).toBeInTheDocument();
   });
 });

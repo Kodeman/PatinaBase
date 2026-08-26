@@ -50,6 +50,8 @@ function surfaceLabel(pathname: string | null): string {
   return 'The Studio';
 }
 
+const MAIL_GROUP_LABEL_ID = 'mobile-more-mail-group';
+
 const MENU_ITEM =
   'flex min-h-11 w-full items-center gap-3 border-b border-[rgba(250,247,242,0.1)] px-3 py-2 text-left text-[var(--color-pearl)] last:border-b-0 hover:bg-[rgba(250,247,242,0.06)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -286,23 +288,42 @@ export function MobileBar() {
               </span>
             </span>
           </button>
-          <button
-            type="button"
-            onClick={() => closeThen(openPost)}
-            className={MENU_ITEM}
-          >
-            <THE_POST.icon
-              className="h-4 w-4 text-[var(--color-clay)]"
-              strokeWidth={1.5}
-              aria-hidden
-            />
-            <span className="min-w-0 flex-1 text-[14px]">{THE_POST.label}</span>
-            {unread > 0 && (
-              <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay)]">
-                {unread} new
+          {/* SP-11/F83 — a connecting group label so a first-time reader can
+              infer The Post is kin to the letterhead's "Message {Family}" act,
+              without merging the two doors or renaming The Post itself. The
+              group closes around The Post alone: the rows below it (Studio
+              books, Leave a note) are not mail. */}
+          <div role="group" aria-labelledby={MAIL_GROUP_LABEL_ID}>
+            <div className="border-b border-[rgba(250,247,242,0.1)] px-3 pt-2">
+              <span
+                id={MAIL_GROUP_LABEL_ID}
+                className="font-mono text-[11px] uppercase tracking-[0.1em] text-[rgba(250,247,242,0.5)]"
+              >
+                Mail &amp; messages
               </span>
-            )}
-          </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => closeThen(openPost)}
+              className={MENU_ITEM}
+            >
+              <THE_POST.icon
+                className="h-4 w-4 text-[var(--color-clay)]"
+                strokeWidth={1.5}
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1 text-[14px]">
+                {THE_POST.label}
+              </span>
+              {/* SP-15/F47 — state-only, matching the drawer's unlabelled dot;
+                  C4 forbids a badge/count here. */}
+              {unread > 0 && (
+                <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay)]">
+                  New
+                </span>
+              )}
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => closeThen(openDrawer)}

@@ -442,17 +442,39 @@ function FFELine({
         anchorId={item.id}
       />
       {unfolded && !selecting && (
-        <LineUnfold
-          item={item}
-          projectId={projectId}
-          projectName={projectName}
-          onAddNote={onAddNote}
-          onFold={onToggle}
-          auth={auth}
-          isCommercialOrigin={isCommercialOrigin}
-          onIncludeInRelease={onIncludeInRelease}
-          canEditSelection={canEditSelection}
-        />
+        <>
+          <LineUnfold
+            item={item}
+            projectId={projectId}
+            projectName={projectName}
+            onAddNote={onAddNote}
+            onFold={onToggle}
+            auth={auth}
+            isCommercialOrigin={isCommercialOrigin}
+            onIncludeInRelease={onIncludeInRelease}
+            canEditSelection={canEditSelection}
+          />
+          {/* SP-19/F57 — Sku/Finish/Material/Colour/Exact Location are only
+              editable in the spec-book route; this in-flow act is the
+              unfolded line's own door to that route, scoped to this line. No
+              attribute becomes editable here.
+
+              It sits beside LineUnfold rather than inside its
+              `ffe-line-actions` group (line-unfold.tsx belongs to no A2 lane),
+              so it declares its own region key: one region key must never
+              span two disjoint subtrees, or DocumentActionGroup's
+              one-primary-per-region check silently stops seeing a member. */}
+          <DocumentAction
+            actionKey="edit-ffe-line-spec-details"
+            surfaceKey="project"
+            regionKey="ffe-line-spec-details"
+            variant="tertiary"
+            href={`/doc/${projectId}/spec-book?ffeItemId=${encodeURIComponent(item.id)}`}
+            className="-mt-1 mb-2"
+          >
+            Edit spec details →
+          </DocumentAction>
+        </>
       )}
     </li>
   );

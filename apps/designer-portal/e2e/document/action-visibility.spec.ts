@@ -105,7 +105,13 @@ test.describe('Inked Instruments action visibility', () => {
       )
       .first();
     await expect(folioAction).toBeVisible();
-    await expect(folioAction).toContainText(FOLIO_ACTION);
+    // A1 follow-up: the pick-up Link is a full-bleed sibling BEHIND
+    // FolderFace, so the act's legible label prints in the face, not inside
+    // this Link — its own textContent is empty and its accessible name names
+    // the folio and its need, not the act. Assert the label on the card the
+    // primary belongs to; "one legible primary per region" is unchanged, only
+    // which node in the card carries the words.
+    await expect(folioAction.locator('xpath=..')).toContainText(FOLIO_ACTION);
     await expectMinTarget(folioAction);
 
     await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {

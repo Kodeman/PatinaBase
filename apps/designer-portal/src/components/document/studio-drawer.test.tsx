@@ -47,22 +47,9 @@ jest.mock('@/lib/analytics/document-events', () => ({
   },
 }));
 
-jest.mock('./overlays/doc-sheet', () => ({
-  DocSheet: ({
-    open,
-    title,
-    children,
-  }: {
-    open: boolean;
-    title: string;
-    children: React.ReactNode;
-  }) =>
-    open ? (
-      <div role="dialog" aria-label={title}>
-        {children}
-      </div>
-    ) : null,
-}));
+// F11 — DocSheet is deliberately NOT mocked here: the focus-restore fix lives
+// in doc-sheet.tsx and studio-drawer.tsx only wires it up, so the real restore
+// must run for the test below.
 
 jest.mock('./overlays/post-sheet', () => ({
   PostSheet: () => null,
@@ -132,6 +119,30 @@ describe('StudioDrawer', () => {
     expect(
       within(menu).getByRole('button', { name: 'Leave a note' }),
     ).toBeInTheDocument();
+  });
+
+  it('F11 — closing a books-menu sheet returns focus to Studio books once the opening row has unmounted', async () => {
+    render(<StudioDrawer />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+    const ordersRow = screen.getByRole('button', { name: 'Orders' });
+    ordersRow.focus();
+    fireEvent.click(ordersRow);
+
+    // Opening the sheet closes the books menu, so the row DocSheet captured as
+    // the pre-open activeElement is gone by the time it restores.
+    expect(
+      screen.queryByRole('button', { name: 'Orders' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Orders' })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Studio books/i })).toHaveFocus(),
+    );
   });
 
   it('puts the most recently opened book first on the next visit', async () => {

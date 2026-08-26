@@ -232,6 +232,28 @@ describe('unified mobile edge owner', () => {
     expect(screen.queryByRole('group')).not.toBeInTheDocument();
   });
 
+  it('SP-11/SP-15 — The Post sits under a Mail & messages group and reads a state-only NEW', () => {
+    render(
+      <MobileShellProvider>
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'More studio actions' }));
+
+    const menu = screen.getByRole('group', { name: 'More studio actions' });
+    const mail = within(menu).getByRole('group', { name: 'Mail & messages' });
+    const post = within(mail).getByRole('button', { name: /The Post/i });
+    expect(post).toHaveTextContent('The Post');
+    // State-only, matching the drawer's dot (C4) — never a literal count.
+    expect(post).toHaveTextContent('New');
+    expect(post).not.toHaveTextContent(/\d+\s*new/i);
+    // The group closes around The Post alone: the drawer row is not mail.
+    expect(
+      within(mail).queryByRole('button', { name: 'Studio books' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('registers and removes a surface-owned secondary action in More', () => {
     const share = jest.fn();
     const action: MobileSecondaryAction = {

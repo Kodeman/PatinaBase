@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FileText } from 'lucide-react';
-import { DocSheet } from './doc-sheet';
+import { DocSheet, DocSheetHead } from './doc-sheet';
 
 jest.mock('@/lib/help-system/open-help', () => ({
   openHelp: jest.fn(),
@@ -41,6 +41,43 @@ function SheetHarness({
           </div>
         ) : null}
         <button type="button">Last action</button>
+      </DocSheet>
+    </>
+  );
+}
+
+/** F11 — mirrors a Studio-books disclosure: the row that opens the sheet
+ *  unmounts the instant it opens (the menu closes), leaving only a
+ *  still-mounted fallback (the books toggle) to restore focus to. */
+function UnmountingTriggerHarness() {
+  const [rowMounted, setRowMounted] = useState(true);
+  const [open, setOpen] = useState(false);
+  const fallbackRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <>
+      <button type="button" ref={fallbackRef}>
+        Studio books
+      </button>
+      {rowMounted && (
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(true);
+            setRowMounted(false);
+          }}
+        >
+          Orders
+        </button>
+      )}
+      <DocSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Orders"
+        headOwnedByChild
+        fallbackFocusRef={fallbackRef}
+      >
+        <button type="button">Orders ledger</button>
       </DocSheet>
     </>
   );
@@ -297,5 +334,48 @@ describe('DocSheet', () => {
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('SP-13/F46 — headOwnedByChild prints no outer `Put back · Esc` of its own', async () => {
+    render(
+      <DocSheet open onClose={jest.fn()} title="Orders" headOwnedByChild>
+        <button type="button">Orders ledger</button>
+      </DocSheet>,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Orders' });
+    await waitFor(() => expect(dialog).toHaveFocus());
+    expect(
+      screen.queryByRole('button', { name: 'Put back · Esc' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Close sheet' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('SP-13/F46 — a child head with no onClose prints the string nowhere', () => {
+    render(<DocSheetHead icon={FileText} title="Hours" />);
+
+    expect(screen.queryByText('Put back · Esc')).not.toBeInTheDocument();
+  });
+
+  it('F11 — restores focus to the fallback when the original trigger has unmounted', async () => {
+    render(<UnmountingTriggerHarness />);
+
+    const opener = screen.getByRole('button', { name: 'Orders' });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(screen.queryByRole('button', { name: 'Orders' })).toBeNull();
+
+    const dialog = screen.getByRole('dialog', { name: 'Orders' });
+    await waitFor(() => expect(dialog).toHaveFocus());
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Studio books' })).toHaveFocus(),
+    );
   });
 });
