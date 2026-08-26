@@ -447,7 +447,7 @@ final class ViewfinderModel {
     private(set) var cardTranscript = ""
     private var cardVoiceTask: Task<Void, Never>?
 
-    var micIsAvailable: Bool { featureFlags.isEnabled("field-companion-voice") }
+    var micIsAvailable: Bool { featureFlags.isEnabled("field-companion-voice") && mode != .voice }
 
     func beginCardNote(affirmed: Bool) {
         // `mode != .voice`: C6 builds its OWN recorder as a child of this
