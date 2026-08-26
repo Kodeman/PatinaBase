@@ -124,7 +124,7 @@ const STEPS: CoachmarkStep[] = [
     // bottom-placed coachmark below the fold.)
     fallbackHeading: 'The Desk',
     fallbackBody:
-      'Only what needs your hand lands here — a folder, one need line. Quiet means the work is in motion.',
+      'Every live job lands here, one line each, grouped by stage. A mark at the margin is a job that needs your hand.',
   },
   {
     surfaceKey: TOUR.Step2TheFolder,
@@ -132,7 +132,7 @@ const STEPS: CoachmarkStep[] = [
     side: 'bottom',
     fallbackHeading: 'One client, one document',
     fallbackBody:
-      'Every client’s work lives in one document. When it needs you, it lands here as a folder — pick it up.',
+      'Every client’s work lives in one document. Its line names where it stands and what it is waiting on — pick it up.',
   },
   {
     surfaceKey: TOUR.Step3TheStudio,

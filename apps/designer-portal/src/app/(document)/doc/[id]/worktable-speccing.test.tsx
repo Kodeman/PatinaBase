@@ -125,6 +125,7 @@ jest.mock('@patina/supabase', () => ({
     isError: false,
   }),
   /* the rooms rail (rooms-rail.test.tsx pattern) */
+  useProposalScheduleItems: () => ({ data: [], isLoading: false }),
   useProposalScopeRooms: (proposalId: string) => {
     mockScopeRoomsHook(proposalId);
     return { data: RAIL_ROOMS, isLoading: false };
@@ -541,6 +542,52 @@ describe('the Speccing table, tooled (W3)', () => {
 
     // The scheme's lines arrive through the builder's own read.
     expect(await screen.findByText('A mohair sofa')).toBeInTheDocument();
+  });
+
+  it('stands the ticket above the table, and the rail still under it', () => {
+    // B2-L4's acceptance, on the PAGE's own composition: the ticket is the
+    // job's header over the job's middle (I138), and I139's rail is not
+    // replaced by the Rooms row — it keeps being add-a-room's speccing home.
+    const { container } = renderPage('chain-root-1');
+
+    const ticket = container.querySelector('[data-job-ticket]')!;
+    const table = container.querySelector('[data-table="speccing"]')!;
+    const rail = container.querySelector('[data-table-slot="rooms-rail"]')!;
+    expect(ticket).not.toBeNull();
+    expect(precedes(ticket, table)).toBe(true);
+    expect(precedes(ticket, rail)).toBe(true);
+    expect(container.querySelectorAll('[data-job-ticket]')).toHaveLength(1);
+  });
+
+  it('anchors the ticket’s Rooms and Boards rows to the tools already on the paper', () => {
+    // direction-b §9 / C9 — two doors to the boards on one paper is the split
+    // Q1 exists to prevent, so the row takes the reader to the strip below it.
+    const { container } = renderPage('chain-root-1');
+
+    const rooms = container.querySelector<HTMLElement>(
+      '[data-ticket-row="rooms"] button',
+    )!;
+    const boards = container.querySelector<HTMLElement>(
+      '[data-ticket-row="boards"] button',
+    )!;
+    // Not the rooms-chip expander, and not the mood-board leaf.
+    expect(rooms.getAttribute('aria-expanded')).toBeNull();
+
+    const rail = container.querySelector<HTMLElement>(
+      '[data-table-slot="rooms-rail"]',
+    )!;
+    const strip = container.querySelector<HTMLElement>(
+      '[data-table-slot="boards-strip"]',
+    )!;
+    const scrolled = HTMLElement.prototype.scrollIntoView as jest.Mock;
+
+    scrolled.mockClear();
+    fireEvent.click(rooms);
+    expect(scrolled.mock.instances).toContain(rail);
+
+    scrolled.mockClear();
+    fireEvent.click(boards);
+    expect(scrolled.mock.instances).toContain(strip);
   });
 
   it('keys every tool on the proposal identity — never the chain-root route id', async () => {

@@ -19,10 +19,11 @@ import { SectionEyebrow } from './section-eyebrow';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { openLedger } from './command-bar';
 
-/** SP-20's device — a setup chore never wears the dated-overdue colour. */
+/** SP-20's device — a quiet need (a setup chore, an unopened proposal, a PO
+ *  nobody answered) never wears the red letter's own ink. */
 const MARK_COLOR = {
-  overdue: 'var(--color-terracotta)',
-  setup: 'var(--color-dusty-blue)',
+  urgent: 'var(--color-terracotta)',
+  quiet: 'var(--color-dusty-blue)',
 } as const;
 
 function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }) {
@@ -64,9 +65,15 @@ function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }
           </>
         )}
       </p>
+      {/* The visible label alone does not say which job it belongs to, and
+          eleven lines yield eleven acts reading `Open the job` — so the
+          accessible name carries the job, as the folio card's did. The
+          telemetry key carries it for the same reason: two jobs sharing a need
+          kind are two acts, not one fired twice. */}
       {line.act.ledger ? (
         <DocumentAction
-          actionKey={`roster-${line.needKind ?? 'open-the-job'}`}
+          actionKey={`roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`}
+          aria-label={`${line.act.label} — ${line.name}`}
           variant="secondary"
           onClick={() =>
             openLedger(line.act.ledger!.name, line.act.ledger!.context)
@@ -76,7 +83,8 @@ function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }
         </DocumentAction>
       ) : (
         <DocumentAction
-          actionKey={`roster-${line.needKind ?? 'open-the-job'}`}
+          actionKey={`roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`}
+          aria-label={`${line.act.label} — ${line.name}`}
           variant="secondary"
           href={line.act.href}
         >
@@ -111,12 +119,11 @@ export function DeskRoster({ roster }: { roster: DeskRosterModel }) {
         aria-label="Every job actions"
       >
         <div className="w-full">
+          {/* A plain div, not a named <section>: seven stage groups would add
+              seven `region` landmarks nested inside this one group, and the
+              <h3> already navigates a screen reader to each of them. */}
           {roster.groups.map((group) => (
-            <section
-              key={group.key}
-              aria-labelledby={`roster-stage-${group.key}`}
-              className="mb-8 last:mb-0"
-            >
+            <div key={group.key} className="mb-8 last:mb-0">
               <h3
                 id={`roster-stage-${group.key}`}
                 className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]"
@@ -136,7 +143,7 @@ export function DeskRoster({ roster }: { roster: DeskRosterModel }) {
                   );
                 })}
               </ul>
-            </section>
+            </div>
           ))}
         </div>
       </DocumentActionGroup>

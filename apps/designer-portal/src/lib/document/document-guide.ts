@@ -721,6 +721,14 @@ export function deriveDocumentGuide({
     return withInputs({
       ...base,
       stage,
+      // The stage's own `state`/`reason`/`eyebrow` are the CALM register, and
+      // the sentence this branch prints is an exception the map is standing on.
+      // Rung 4 says the same thing the same way for the Desk's operational
+      // need; a strip cannot carry `Money · $17,500 owed you` in the voice it
+      // uses for `Everything ordered is moving.`
+      state: 'actionable',
+      eyebrow: `${base.eyebrow} · needs attention`,
+      reason: 'The job ticket is showing something unresolved.',
       headline: leader.headline,
       action: leader.action
         ? { ...leader.action, destination: destination ?? leader.action.destination }
@@ -740,6 +748,13 @@ export function deriveDocumentGuide({
       : isRestState(stage, row, inputFacts, closureReady, inputsPending);
   if (restActive) {
     const rest = restCopy[stage];
+    // The leader's other seven states. With no row unclear it returns this
+    // stage's `restCopy` row, so routing the rest half through it too is what
+    // makes "fourteen states, all derived from the ticket" true of the wired
+    // path rather than only of the module's own tests. The two facts the leader
+    // is not passed stay this branch's: `install`'s dated sentence, and the
+    // landing each stage's working act already resolved.
+    const leader = ticketRows ? deriveTicketLeader(ticketRows, stage) : null;
     // A rest state changes what the strip SAYS, and its act keeps the working
     // landing — with one exception: `discovery`'s rest act names the DIRECTION,
     // and landing `Begin the direction` back on the discovery checklist it has
@@ -749,8 +764,11 @@ export function deriveDocumentGuide({
       stage === 'discovery'
         ? stageCopy.direction.action!.destination
         : (action?.destination ?? stageCopy[stage].action!.destination);
-    const restAction: DocumentGuideAction | null =
-      rest.actionLabel === null
+    const restAction: DocumentGuideAction | null = leader
+      ? leader.action
+        ? { ...leader.action, destination: restDestination }
+        : null
+      : rest.actionLabel === null
         ? null
         : {
             key: `rest-${stage}`,
@@ -760,7 +778,10 @@ export function deriveDocumentGuide({
     return withInputs({
       ...base,
       stage,
-      headline: stage === 'install' ? installHeadline! : rest.headline,
+      headline:
+        stage === 'install'
+          ? installHeadline!
+          : (leader?.headline ?? rest.headline),
       action: restAction,
     }, inputFacts);
   }

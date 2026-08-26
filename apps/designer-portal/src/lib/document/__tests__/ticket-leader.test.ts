@@ -11,11 +11,17 @@ const LABELS: Record<TicketRowKey, string> = {
   money: 'Money',
   dates: 'Dates',
   people: 'People',
+  clientcopy: 'Copy',
 };
 
 const ROW_ORDER: readonly TicketRowKey[] = [
   'rooms', 'pieces', 'drawings', 'spec', 'boards', 'money', 'dates', 'people',
 ];
+
+/** The proposal document on the Finalize table — the one composition with a
+ *  ninth row. `tsc --noEmit` excludes this file, so the `Record` above is the
+ *  only thing that would have caught the key going missing. */
+const NINE_ROW_ORDER: readonly TicketRowKey[] = [...ROW_ORDER, 'clientcopy'];
 
 const SECTIONS: readonly SectionKey[] = [
   'brief', 'discovery', 'direction', 'proposal', 'project', 'install', 'care',
@@ -55,6 +61,26 @@ const pieceStuck = (standingSince: string | null = null): TicketException => ({
   rank: 'piece-stuck',
   phrase: '2 unspecified',
   standingSince,
+});
+
+describe('deriveTicketLeader — the ninth row', () => {
+  const nine = (exceptions: Partial<Record<TicketRowKey, TicketException>> = {}) =>
+    NINE_ROW_ORDER.map((key) => row(key, exceptions[key] ?? null));
+
+  it('never leads with the client’s copy, which carries no exception', () => {
+    expect(leadTicketException(nine())).toBeNull();
+    expect(deriveTicketLeader(nine(), 'proposal').headline).toBe(
+      'Signed. Open the project.',
+    );
+  });
+
+  it('elects the row that IS unclear on a nine-row ticket', () => {
+    const rows = nine({ money: promisePastDue('2026-08-03') });
+    expect(leadTicketException(rows)?.key).toBe('money');
+    expect(deriveTicketLeader(rows, 'proposal').headline).toBe(
+      'Money · $17,500 owed you',
+    );
+  });
 });
 
 describe('deriveTicketLeader — the fourteen states', () => {

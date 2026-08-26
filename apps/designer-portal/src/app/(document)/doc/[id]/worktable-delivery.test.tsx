@@ -41,6 +41,12 @@ jest.mock('@patina/supabase', () => ({
      these; none of them is this suite's subject. */
   usePlanRoom: () => ({ data: { sheets: [] }, isLoading: false }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
+  // The ticket reads the PROPOSAL's own three populations on a paper with no
+  // project (B2). All three are `enabled` on a proposal id, so a document
+  // without one runs none of them.
+  useProposalScopeRooms: () => ({ data: [], isLoading: false }),
+  useProposalScheduleItems: () => ({ data: [], isLoading: false }),
+  useBoards: () => ({ data: [], isLoading: false, isError: false }),
   useProjectBoards: () => ({ data: [], isLoading: false }),
   useProjectInvoices: () => ({ isLoading: false, error: null, data: [] }),
   usePurchaseOrders: () => ({ isLoading: false, error: null, data: [] }),
@@ -331,6 +337,27 @@ describe('the Delivery table, tooled', () => {
       expect(nodes.indexOf(lift as Element)).toBeLessThan(
         nodes.indexOf(container.querySelector('[data-index-region="ffe"]')!),
       );
+    });
+
+    it('stands the ticket above the table, and the lift still leads it', () => {
+      // B2-L4's acceptance on the PAGE's own composition: the ticket heads the
+      // table, the release lift still leads the table's body, and the money
+      // seam still stands — the Money row is the seam's index, not its
+      // replacement.
+      mockReleaseOffered = true;
+      const { container } = render(<DocumentPage params={params} />);
+
+      const ticket = container.querySelector('[data-job-ticket]')!;
+      const table = container.querySelector('[data-table="delivery"]')!;
+      const lift = container.querySelector('[data-release-lift]')!;
+      const money = container.querySelector('[data-index-region="money"]')!;
+      expect(ticket).not.toBeNull();
+      const order = (el: Element) =>
+        Array.from(container.querySelectorAll('*')).indexOf(el);
+      expect(order(ticket)).toBeLessThan(order(table));
+      expect(order(ticket)).toBeLessThan(order(lift));
+      expect(order(lift)).toBeLessThan(order(money));
+      expect(container.querySelectorAll('[data-job-ticket]')).toHaveLength(1);
     });
 
     it('inks exactly one release leader on the page — never two', () => {

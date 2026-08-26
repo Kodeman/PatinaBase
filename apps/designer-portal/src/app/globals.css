@@ -773,6 +773,17 @@
   top: var(--doc-seam-height, 0px);
 }
 
+/* Every region root the ticket's rows and the running index land on stands
+   clear of the pinned seam, not the Money one alone: `scrollToRegion` lands
+   each of them at `block: start`, and the seam is what is holding that top.
+   The FF&E region keeps the 4rem breathing room it already had as its floor. */
+[data-document-shell] [data-index-region] {
+  scroll-margin-top: var(--doc-seam-height, 0px);
+}
+[data-document-shell] [data-index-region='ffe'] {
+  scroll-margin-top: max(var(--doc-seam-height, 0px), 4rem);
+}
+
 /* Typography: now provided by @patina/design-system/styles/typography.css.
    Font variable mappings set on body below in @layer base. */
 

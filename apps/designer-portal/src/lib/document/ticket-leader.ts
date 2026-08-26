@@ -16,6 +16,16 @@
  *     (direction-b §3.2: "with no row unclear, the guide prints the stage's
  *     rest state, never a shrug").
  *
+ * Both halves are wired: `deriveDocumentGuide` elects the first from rung six
+ * and takes the second in its rest branch, substituting the two facts this
+ * module is not passed (`install`'s day, and the landing the stage's working
+ * act already resolved).
+ *
+ * The exception half QUOTES rather than composes — the row's own label and the
+ * row's own exception clause, both already printed on the paper. A per-stage
+ * sentence template would be the static table F18 named and this module
+ * replaced, one indirection further back.
+ *
  * `stageCopy` and `restCopy` stay in `document-guide.ts` as the vocabulary this
  * module speaks; they stop being the precedence. The import back into that file
  * is a cycle, and a deliberate one: nothing here reads either table at module
@@ -97,10 +107,12 @@ export function leadTicketException(rows: readonly TicketRow[]): TicketRow | nul
 }
 
 /**
- * The rest act's landing, mirroring `deriveDocumentGuide`'s own rest branch:
- * every stage keeps its working landing except `discovery`, whose rest act
- * names the DIRECTION and must not point back at the checklist it has just
- * called complete (C20).
+ * The rest act's landing when this module is asked on its own — every stage
+ * keeps its working landing except `discovery`, whose rest act names the
+ * DIRECTION and must not point back at the checklist it has just called
+ * complete (C20). `deriveDocumentGuide` overrides it with the landing it has
+ * already resolved for the row (the FF&E heading, the movement column, the
+ * drafting room), which is the richer of the two and the one that ships.
  */
 function restDestination(stage: SectionKey): DocumentGuideDestination {
   return stage === 'discovery'
@@ -128,7 +140,8 @@ export function deriveTicketLeader(
     // `install`'s rest sentence is a template, and the day it states lives in
     // the schedule facts the guide holds and this function is not passed. The
     // vocabulary's row is stated here; `deriveDocumentGuide` substitutes the
-    // dated form on the spread.
+    // dated form on the spread (`installGuideHeadline`), and it is the only
+    // caller, so the template never reaches paper.
     headline: rest.headline,
     action:
       rest.actionLabel === null

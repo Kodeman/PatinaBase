@@ -47,19 +47,41 @@ const STAGE_LABEL: Record<SectionKey, string> = {
   care: 'Care',
 };
 
-/** SP-20's device: a setup chore must not wear the dated-overdue colour. The
- *  surface's one setup-tier need, matching red-letter-zone.tsx's divergence. */
-const SETUP_NEED_KINDS: ReadonlySet<NeedKind> = new Set(['schedule_unconfigured']);
+/**
+ * The needs that stand in the red letter's own ink — the ones whose stamp is
+ * terracotta at derivation (`red-letter-zone.tsx`'s NEED_KIND_STAMP_COLOR).
+ * Every OTHER need is the quiet tier the setup chore already sits in and takes
+ * dusty blue, which is SP-20's whole device: those two must never look alike.
+ *
+ * Two tones and no third (C4/D8): the mark tells one register from the other,
+ * and never grows a count, a label, or a further urgency tier.
+ */
+const URGENT_NEED_KINDS: ReadonlySet<NeedKind> = new Set([
+  'overdue_decision',
+  'overdue_invoice',
+  'damage_claim',
+  'proposal_declined',
+  'proposal_expired',
+  'schedule_conflict',
+]);
 
 /** The view's own "we don't know the client" fallbacks (desk-derivation's
- *  ROLE_NOUNS, which it keeps module-private). */
+ *  ROLE_NOUNS, which it keeps module-private). Read off the LAST word, exactly
+ *  as `folderTab` reads it: the seed's placeholder is `Client User`, and a
+ *  whole-string test lets it through as if it were a family name. */
 const PLACEHOLDER_CLIENT_NAMES: ReadonlySet<string> = new Set(['client', 'user']);
 
 const QUIET_STATE = 'quiet · nothing needs your hand';
 
+/** `deriveDocumentGuide`'s rung 2 says "This project is paused" on the paper;
+ *  the roster line says the same thing in its own register. */
+const PAUSED_STATE = 'paused';
+
 export const OPEN_THE_JOB = 'Open the job';
 
-export type RosterMark = 'overdue' | 'setup' | null;
+/** `urgent` is terracotta, `quiet` is dusty blue; a job carrying no need at
+ *  all wears no mark. §2.1: "Needs are a red-letter mark on the job's line". */
+export type RosterMark = 'urgent' | 'quiet' | null;
 
 export interface RosterAct {
   label: string;
@@ -75,7 +97,8 @@ export interface RosterLine {
   engagementId: string;
   /** Playfair. */
   name: string;
-  /** Inter — the place and the state, in one run. */
+  /** Inter — the client and the state, in one run (M1 draws a place; the row
+   *  carries no location column, so the name stands in its position). */
   state: string;
   /** Inter, red — the dated overdue phrase and what is overdue. */
   overdueText: string | null;
@@ -118,10 +141,14 @@ function prettyPhase(phase: string | null): string | null {
     .join(' ');
 }
 
-function placeOf(row: DocumentStateRow): string | null {
+/** Who the job is for. M1 draws a PLACE here; `document_state` carries no
+ *  location column, so the client's name stands in its position — the nearest
+ *  true thing, and never a role noun standing in for a name we do not have. */
+function clientOf(row: DocumentStateRow): string | null {
   const name = (row.client_name ?? '').trim();
   if (!name) return null;
-  return PLACEHOLDER_CLIENT_NAMES.has(name.toLowerCase()) ? null : name;
+  const last = name.split(/\s+/).filter(Boolean).pop() ?? '';
+  return PLACEHOLDER_CLIENT_NAMES.has(last.toLowerCase()) ? null : name;
 }
 
 const NUMBER_WORDS = [
@@ -199,16 +226,25 @@ export function deriveDeskRoster(
     const chip = chipByEngagement.get(row.engagement_id) ?? null;
     const need = folder?.need ?? null;
     const overdue = need ? deriveOverdue(need.dueOn, now) : NOT_OVERDUE;
-    const mark: RosterMark = overdue.isOverdue
-      ? 'overdue'
-      : need && SETUP_NEED_KINDS.has(need.kind)
-        ? 'setup'
-        : null;
-
-    const body = overdue.isOverdue
+    // EVERY need is a mark (§2.1). A need with no due date is still a need —
+    // a damage claim, a flagged line, a PO nobody answered — and leaving those
+    // unmarked printed a roster where a studio's whole open workload was
+    // invisible at the margin.
+    const mark: RosterMark = !need
       ? null
-      : (need?.text ?? chip?.text ?? QUIET_STATE);
-    const state = [placeOf(row), prettyPhase(row.current_phase), body]
+      : overdue.isOverdue || URGENT_NEED_KINDS.has(need.kind)
+        ? 'urgent'
+        : 'quiet';
+
+    // A paused job says so. `deriveNeeds` returns nothing for one, so without
+    // this it read `quiet · nothing needs your hand` — the same sentence a job
+    // in motion prints, while the document's own guide says it is paused.
+    const body = row.is_paused
+      ? PAUSED_STATE
+      : overdue.isOverdue
+        ? null
+        : (need?.text ?? chip?.text ?? QUIET_STATE);
+    const state = [clientOf(row), prettyPhase(row.current_phase), body]
       .filter((part): part is string => Boolean(part))
       .join(' · ');
 
@@ -240,12 +276,17 @@ export function deriveDeskRoster(
       stage: row.active_section,
       tab: folderTab(row),
       tier: overdue.isOverdue ? 0 : 1,
-      at: anchorTime(need?.dueOn ?? row.updated_at),
+      // ONE clock per tier. An overdue job is ordered by the promise it broke;
+      // every other job by when it was last touched. Mixing the two compared a
+      // future due date against a past timestamp, so a job with a real need due
+      // in December sorted behind a quiet one last touched in August.
+      at: overdue.isOverdue
+        ? anchorTime(need?.dueOn)
+        : anchorTime(row.updated_at),
     };
   });
 
   const groups: RosterGroup[] = [];
-  const overdueNames: string[] = [];
 
   for (const stage of ROSTER_STAGE_ORDER) {
     const inStage = entries
@@ -257,9 +298,6 @@ export function deriveDeskRoster(
           a.line.engagementId.localeCompare(b.line.engagementId),
       );
     if (inStage.length === 0) continue;
-    for (const entry of inStage) {
-      if (entry.tier === 0) overdueNames.push(entry.tab);
-    }
     groups.push({
       key: stage,
       label: STAGE_LABEL[stage],
@@ -268,7 +306,20 @@ export function deriveDeskRoster(
     });
   }
 
-  const liveCount = entries.length;
+  // The sentence names what is overdue in PRESSURE order — oldest promise
+  // first, across the whole roster — not in the order the stage groups happen
+  // to be walked, which put a proposal ahead of a project purely because the
+  // paper prints proposals first.
+  const overdueNames = entries
+    .filter((entry) => entry.tier === 0)
+    .sort((a, b) => a.at - b.at || a.tab.localeCompare(b.tab))
+    .map((entry) => entry.tab);
+
+  // Counted off the GROUPS, never off `entries`: a row whose `active_section`
+  // fell outside `ROSTER_STAGE_ORDER` would otherwise be counted in the header
+  // and printed under no heading — the header claiming more jobs than the
+  // roster shows is the exact drift this module's independence risks.
+  const liveCount = groups.reduce((total, group) => total + group.count, 0);
   return {
     groups,
     liveCount,

@@ -73,6 +73,7 @@ jest.mock('@patina/supabase', () => ({
   useProposalPaymentMilestones: () => ({ data: [] }),
   useProposalSections: () => ({ data: [] }),
   /* the speccing tools, which must not mount here */
+  useProposalScheduleItems: () => ({ data: [], isLoading: false }),
   useProposalScopeRooms: () => ({ data: [], isLoading: false }),
   useAddScopeRoom: () => ({ mutate: jest.fn(), isPending: false }),
   useBoards: () => ({ data: [], isLoading: false, isError: false }),

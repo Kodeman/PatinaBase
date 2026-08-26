@@ -64,8 +64,11 @@ export function overdueElapsedPhrase(
   return condition.isOverdue ? dayCount(condition.days) : null;
 }
 
-/** The Desk's leading sort tier: an overdue folio rises. Position is the
- *  pressure — the folio gains no count, no colour, and no second act. */
+/** The Desk's leading sort tier: an overdue line rises. Position carries the
+ *  pressure, and the line gains no count and no second act. It does carry a
+ *  mark — direction-b M1's red-letter mark at the left margin, ratified with
+ *  the roster ("no badge — C4"); the two tones are the roster's own, and this
+ *  module still states no colour of its own. */
 export function overdueSortTier(condition: OverdueCondition): number {
   return condition.isOverdue ? 0 : 1;
 }

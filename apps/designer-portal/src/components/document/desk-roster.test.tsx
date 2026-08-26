@@ -27,7 +27,7 @@ function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
             name: 'Byrne remodel',
             state: 'Erin Byrne · design agreement sent August 19',
             overdueText: null,
-            mark: null,
+            mark: 'quiet',
             needKind: 'hesitating_proposal',
             overdue: { isOverdue: false, days: 0 },
             jobHref: '/doc/byrne',
@@ -45,8 +45,8 @@ function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
             name: 'Vandersteen residence',
             state: 'Anne Vandersteen · Procurement And Orders',
             overdueText:
-              'Overdue 6 days — Invoice 1042 overdue — oldest due Aug 2 — send a reminder',
-            mark: 'overdue',
+              'Overdue 6 days — Invoice 1042 · $17,500 overdue — oldest due Aug 2 — send a reminder',
+            mark: 'urgent',
             needKind: 'overdue_invoice',
             overdue: { isOverdue: true, days: 6 },
             jobHref: '/doc/vandersteen',
@@ -101,27 +101,28 @@ describe('DeskRoster — the density rule', () => {
 });
 
 describe('DeskRoster — the marks', () => {
-  it('marks an overdue line at the left margin, and leaves a quiet one unmarked', () => {
-    const { container } = render(<DeskRoster roster={roster()} />);
+  it('marks every job that needs a hand, and leaves a job with no need unmarked', () => {
+    const model = roster();
+    model.groups[0].lines[0].mark = null;
+    model.groups[0].lines[0].needKind = null;
+    const { container } = render(<DeskRoster roster={model} />);
 
     const marks = Array.from(
       container.querySelectorAll('[data-roster-mark]'),
     ).map((m) => m.getAttribute('data-mark-tone'));
-    expect(marks).toEqual([null, 'overdue']);
+    expect(marks).toEqual([null, 'urgent']);
   });
 
-  it('gives a setup chore a different stamp colour from a dated overdue item', () => {
-    const model = roster();
-    model.groups[0].lines[0].mark = 'setup';
-    const { container } = render(<DeskRoster roster={model} />);
+  it('gives a quiet need a different stamp colour from a red-letter one', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
 
-    const [setup, overdue] = Array.from(
+    const [quiet, urgent] = Array.from(
       container.querySelectorAll<HTMLElement>('[data-roster-mark]'),
     );
-    expect(setup.getAttribute('data-mark-tone')).toBe('setup');
-    expect(overdue.getAttribute('data-mark-tone')).toBe('overdue');
-    expect(setup.getAttribute('data-mark-color')).not.toBe(
-      overdue.getAttribute('data-mark-color'),
+    expect(quiet.getAttribute('data-mark-tone')).toBe('quiet');
+    expect(urgent.getAttribute('data-mark-tone')).toBe('urgent');
+    expect(quiet.getAttribute('data-mark-color')).not.toBe(
+      urgent.getAttribute('data-mark-color'),
     );
   });
 });
@@ -130,12 +131,29 @@ describe('DeskRoster — the acts', () => {
   it('carries the receivable’s figure and age on the invoice line', () => {
     render(<DeskRoster roster={roster()} />);
 
-    expect(
-      screen.getByText(
-        'Overdue 6 days — Invoice 1042 overdue — oldest due Aug 2 — send a reminder',
-      ),
-    ).toBeInTheDocument();
+    const overdue = screen.getByText(/Overdue 6 days/);
+    expect(overdue).toHaveTextContent('$17,500');
+    expect(overdue).toHaveTextContent('oldest due Aug 2');
     expect(screen.getByText('Send reminder')).toBeInTheDocument();
+  });
+
+  it('names the job on every act, so eleven `Open the job`s are eleven acts', () => {
+    render(<DeskRoster roster={roster()} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Send reminder — Vandersteen residence' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Follow up — Byrne remodel' }),
+    ).toBeInTheDocument();
+  });
+
+  it('adds no region landmark per stage group', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+    // The roster is one region; seven stage headings must not become seven
+    // more landmarks nested inside its action group.
+    expect(container.querySelectorAll('section')).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Proposal · 1' })).toBeInTheDocument();
   });
 
   it('opens the job from the line, and prints the job’s own act at the right', () => {

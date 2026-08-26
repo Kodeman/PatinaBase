@@ -206,6 +206,21 @@ function renderTicket(props: Partial<Parameters<typeof JobTicket>[0]> = {}) {
   return { ...view, onOpenLeaf, onUnfoldRegion, onOpenCallSheet };
 }
 
+/** ≥1440 — the tier where a shelf row opens the leaf beside the spine. Every
+ *  case that does not call this answers `false` to every query, i.e. 390. */
+function atFullTier() {
+  (window.matchMedia as jest.Mock).mockImplementation((query: string) => ({
+    matches: query === '(min-width: 1440px)',
+    media: query,
+    onchange: null,
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
+  }));
+}
+
 const ticketRows = () =>
   Array.from(document.querySelectorAll('[data-ticket-row]')).map((el) =>
     el.getAttribute('data-ticket-row'),
@@ -283,6 +298,9 @@ describe('JobTicket', () => {
   });
 
   it('opens each row on its own door', () => {
+    // At the full tier: below 1440 a shelf row with no page of its own has
+    // nowhere to send the reader, and prints no door at all (see below).
+    atFullTier();
     const { onOpenLeaf, onUnfoldRegion, onOpenCallSheet } = renderTicket();
 
     fireEvent.click(screen.getByRole('button', { name: /Pieces/ }));
@@ -331,6 +349,7 @@ describe('JobTicket', () => {
   });
 
   it('opens the client’s copy leaf from the ninth row on the Finalize table', () => {
+    atFullTier();
     const rows = deriveTicket({
       ...FINALIZE_INPUT,
       clientCopy: { settled: true, sent: true },
@@ -342,6 +361,44 @@ describe('JobTicket', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Copy/ }));
     expect(onOpenLeaf).toHaveBeenCalledWith('clientcopy');
+  });
+
+  it('prints a leaf row that has nowhere to go below 1440 as a fact', () => {
+    // The leaf stands only from 1440px, and `The client’s copy` has no page of
+    // its own. A press that toggles state and shows nothing is worse than a
+    // row that plainly does not open, so the row prints no `→` and no control.
+    const rows = deriveTicket({
+      ...FINALIZE_INPUT,
+      clientCopy: { settled: true, sent: true },
+    });
+    renderTicket({ rows });
+
+    expect(ticketRows()).toContain('clientcopy');
+    expect(screen.queryByRole('button', { name: /Copy/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Copy/ })).toBeNull();
+    const row = document.querySelector('[data-ticket-row="clientcopy"]')!;
+    expect(row.textContent).not.toContain('→');
+  });
+
+  it('anchors a row to the tool the table already stands on the paper', () => {
+    // B2-L4 / direction-b §9 — on the Speccing table the Rooms row takes the
+    // reader to I139's rail rather than expanding a second list of the rooms.
+    const scrollIntoView = jest.fn();
+    const slot = document.createElement('div');
+    slot.setAttribute('data-table-slot', 'rooms-rail');
+    slot.scrollIntoView = scrollIntoView;
+    document.body.appendChild(slot);
+
+    renderTicket({
+      rows: ROWS.map((row) =>
+        row.key === 'rooms'
+          ? { ...row, door: { kind: 'slot' as const, slot: 'rooms-rail' as const } }
+          : row,
+      ),
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Rooms/ }));
+    expect(scrollIntoView).toHaveBeenCalled();
+    slot.remove();
   });
 
   it('opens at rest as the seam at 390, and unfolds to the eight rows', () => {
@@ -441,6 +498,7 @@ describe('JobTicket', () => {
   });
 
   it('catches focus when the letterhead scrolls past and the rows go', () => {
+    atFullTier();
     renderTicket();
     const drawings = screen.getByRole('button', { name: /Drawings/ });
     drawings.focus();

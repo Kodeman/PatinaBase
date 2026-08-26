@@ -94,6 +94,12 @@ jest.mock('@patina/supabase', () => ({
      these; none of them is this suite's subject. */
   usePlanRoom: () => ({ data: { sheets: [] }, isLoading: false }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
+  // The ticket reads the PROPOSAL's own three populations on a paper with no
+  // project (B2). All three are `enabled` on a proposal id, so a document
+  // without one runs none of them.
+  useProposalScopeRooms: () => ({ data: [], isLoading: false }),
+  useProposalScheduleItems: () => ({ data: [], isLoading: false }),
+  useBoards: () => ({ data: [], isLoading: false, isError: false }),
   useProjectBoards: () => ({ data: [], isLoading: false }),
   useProjectInvoices: () => ({ isLoading: false, error: null, data: mockInvoices }),
   usePurchaseOrders: () => ({ isLoading: false, error: null, data: [] }),
@@ -1296,24 +1302,27 @@ describe('DocumentPage guide activation', () => {
       expect(document.querySelectorAll(TICKET)).toHaveLength(1);
     });
 
-    it('sets the letterhead sentinel between the letterhead and the ticket', () => {
+    it('carries its pin sentinel with it, immediately above itself', () => {
       asProjectDocument();
 
       render(<DocumentPage params={fulfilledParams} />);
 
-      const sentinel = document.getElementById('doc-letterhead-sentinel');
+      const sentinel = document.getElementById('doc-ticket-sentinel');
       const ticket = document.querySelector(TICKET);
       const letterhead = document.querySelector('main header');
       expect(sentinel).not.toBeNull();
-      // The observer watches the sentinel to know the letterhead has gone; a
-      // sentinel on the wrong side of either would pin the seam at the wrong
-      // moment, which is why this is asserted as document ORDER.
+      // The ticket stands in one of two positions — under the letterhead, or
+      // inside TableFrame above the table — so the sentinel is the TICKET's,
+      // rendered directly above it. Anchored to the letterhead instead, the
+      // second position collapsed the rows and published a seam height while
+      // the ticket was still far below the viewport top.
       expect(
         letterhead!.compareDocumentPosition(sentinel!) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
       expect(
         sentinel!.compareDocumentPosition(ticket!) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
+      expect(sentinel!.nextElementSibling).toBe(ticket);
     });
 
     it('stands above the red-letter zone', () => {

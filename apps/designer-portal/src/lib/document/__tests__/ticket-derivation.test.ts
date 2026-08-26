@@ -70,6 +70,13 @@ function emptyInput(section: TicketInput['section'] = 'project'): TicketInput {
   };
 }
 
+/** A paper with no project behind it — the four stages before the work starts.
+ *  The three shelf leaves and the call sheet are project-keyed and mounted only
+ *  where one stands, which is what `project: false` states. */
+function projectlessInput(section: TicketInput['section']): TicketInput {
+  return { ...emptyInput(section), project: false };
+}
+
 /** The Vandersteen residence — direction-b §8's specimen, M2's drawn ticket. */
 function specimenInput(): TicketInput {
   return {
@@ -170,7 +177,7 @@ describe('deriveTicket — the four spreads before the work starts', () => {
   it.each(BEFORE_THE_WORK)(
     'prints the same eight rows, in the same order, on a %s document',
     (section) => {
-      const rows = deriveTicket(emptyInput(section));
+      const rows = deriveTicket(projectlessInput(section));
       expect(rows).toHaveLength(8);
       expect(rows.map((row) => row.key)).toEqual(ORDER);
     },
@@ -179,33 +186,55 @@ describe('deriveTicket — the four spreads before the work starts', () => {
   it.each(BEFORE_THE_WORK)(
     'says what a %s document has none of, without naming an install it has no use for',
     (section) => {
-      const rows = deriveTicket(emptyInput(section));
+      const rows = deriveTicket(projectlessInput(section));
       expect(valueOf(rows, 'rooms')).toBe('No rooms yet');
       expect(valueOf(rows, 'pieces')).toBe('No pieces yet');
       expect(valueOf(rows, 'drawings')).toBe('Nothing filed');
       expect(valueOf(rows, 'spec')).toBe('Nothing specified yet');
-      expect(valueOf(rows, 'boards')).toBe('No boards yet · start one');
+      // `start one` is an offer, and nothing here can make it: the boards leaf
+      // is the project's.
+      expect(valueOf(rows, 'boards')).toBe('No boards yet');
       expect(valueOf(rows, 'money')).toBe('Nothing moving yet');
       expect(valueOf(rows, 'dates')).toBe('No dates yet');
-      expect(valueOf(rows, 'people')).toBe('Nobody on it yet');
+      expect(valueOf(rows, 'people')).toBe('No roster yet');
+    },
+  );
+
+  it.each(BEFORE_THE_WORK)(
+    'never claims the STUDIO turned the call sheet off on a %s document',
+    (section) => {
+      // The call sheet is project-keyed. Saying the studio has it turned off
+      // is a claim about the studio — and a false one in the same session its
+      // project documents open theirs.
+      const rows = deriveTicket({
+        ...projectlessInput(section),
+        people: { settled: true, callSheetEnabled: true, rosterCount: 0 },
+      });
+      expect(valueOf(rows, 'people')).toBe('No roster yet');
+      expect(rows.find((row) => row.key === 'people')!.door).toEqual({
+        kind: 'overlay',
+        overlay: 'call-sheet',
+        available: false,
+      });
     },
   );
 
   it.each(BEFORE_THE_WORK)(
     'opens on a %s document only what such a spread actually prints',
     (section) => {
-      const rows = deriveTicket(emptyInput(section));
+      const rows = deriveTicket(projectlessInput(section));
       // No Project region stands on these four spreads
       // (`paperRegionsForSection` returns nothing), so the three rows that
-      // index a region state their figure and open nothing — while the three
-      // leaf rows, which have a page of their own, open on every section
-      // (direction-b §4, F48).
+      // index a region state their figure and open nothing. The three leaf
+      // rows open nothing either: the plan room, the spec book and the boards
+      // are the PROJECT's, and this paper has none, so `DocumentShelves` is
+      // not mounted and a `→` on those rows would open air.
       expect(rows.map((row) => row.door.kind)).toEqual([
         'expand',
         'none',
-        'leaf',
-        'leaf',
-        'leaf',
+        'none',
+        'none',
+        'none',
         'none',
         'none',
         'overlay',
@@ -213,11 +242,32 @@ describe('deriveTicket — the four spreads before the work starts', () => {
     },
   );
 
+  it('reads the proposal’s own rooms, lines and boards where it has them', () => {
+    // A direction or proposal document is exactly what the Speccing and
+    // Finalize tables stand on, and it carries all three. Reporting them
+    // settled-and-empty printed `No rooms yet` above a rail listing rooms.
+    const rows = deriveTicket({
+      ...projectlessInput('proposal'),
+      rooms: { settled: true, list: [{ id: 'living', name: 'Living room' }] },
+      pieces: {
+        settled: true,
+        lines: [
+          ...lines(2, 'specified', true, 'living'),
+          ...lines(1, 'specified', false, 'living'),
+        ],
+      },
+      boards: { settled: true, count: 2 },
+    });
+    expect(valueOf(rows, 'rooms')).toBe('1 room · 3 lines');
+    expect(valueOf(rows, 'pieces')).toBe('2 not ordered yet · 1 unspecified');
+    expect(valueOf(rows, 'boards')).toBe('2 boards');
+  });
+
   it.each(BEFORE_THE_WORK)(
     'still states the schedule’s own position on a %s document that has one',
     (section) => {
       const rows = deriveTicket({
-        ...emptyInput(section),
+        ...projectlessInput(section),
         dates: {
           settled: true,
           schedule: {
@@ -245,7 +295,7 @@ describe('deriveTicket — the four spreads before the work starts', () => {
     'prints the phase on a %s document, and never the section word',
     (section) => {
       const head = deriveTicketHead({
-        ...emptyInput(section),
+        ...projectlessInput(section),
         phase: { name: 'Schematic Design', position: 2, of: 6 },
       });
       expect(head.phase).toBe('Schematic Design · 2 of 6');
@@ -294,6 +344,96 @@ describe('deriveTicket — the ninth row, `The client’s copy`', () => {
     expect(deriveTicketSeam(rows, 'The job · Proposal').exceptions).toBe(
       'Nothing overdue',
     );
+  });
+
+  it('never wears the not-sent face over a read that failed', () => {
+    // Worse than the loading/empty conflation this type refuses: the designer
+    // is told a proposal they sent has not gone out.
+    const rows = deriveTicket({
+      ...emptyInput('proposal'),
+      clientCopy: { settled: false, sent: false, failed: true },
+    });
+    expect(rows.find((r) => r.key === 'clientcopy')!.value).toBe(
+      'The client’s copy could not be read',
+    );
+  });
+});
+
+describe('deriveTicket — the unanswered PO (§3.2 rank three)', () => {
+  const withPo = (sentAt: string) =>
+    deriveTicket({
+      ...emptyInput('project'),
+      pieces: {
+        settled: true,
+        lines: lines(3, 'ordered', true, 'living'),
+        unansweredPo: { count: 1, label: 'PO-2026-0418', sentAt },
+      },
+    });
+
+  it('rides the Pieces row, so the guide can quote a clause the map prints', () => {
+    const rows = withPo('2026-08-11');
+    expect(valueOf(rows, 'pieces')).toBe(
+      '3 ordered · PO-2026-0418 unanswered, 14 days',
+    );
+    expect(rows.find((row) => row.key === 'pieces')!.exception).toEqual({
+      rank: 'piece-stuck',
+      phrase: 'PO-2026-0418 unanswered, 14 days',
+      standingSince: '2026-08-11',
+    });
+  });
+
+  it('says nothing on the day it went out', () => {
+    const rows = withPo('2026-08-25');
+    expect(valueOf(rows, 'pieces')).toBe('3 ordered');
+    expect(rows.find((row) => row.key === 'pieces')!.exception).toBeNull();
+  });
+
+  it('counts more than one without naming any of them', () => {
+    const rows = deriveTicket({
+      ...emptyInput('project'),
+      pieces: {
+        settled: true,
+        lines: [],
+        unansweredPo: { count: 3, label: 'PO-2026-0418', sentAt: '2026-08-20' },
+      },
+    });
+    expect(valueOf(rows, 'pieces')).toBe('3 purchase orders unanswered, 5 days');
+  });
+});
+
+describe('deriveTicket — a row anchors to what the table already stands', () => {
+  const speccing = () =>
+    deriveTicket({
+      ...projectlessInput('direction'),
+      tableSlots: ['rooms-rail', 'boards-strip'],
+      rooms: { settled: true, list: [{ id: 'living', name: 'Living room' }] },
+      boards: { settled: true, count: 2 },
+    });
+
+  it('sends Rooms to I139’s rail rather than expanding its own list', () => {
+    expect(speccing().find((row) => row.key === 'rooms')!.door).toEqual({
+      kind: 'slot',
+      slot: 'rooms-rail',
+    });
+  });
+
+  it('sends Boards to the on-paper strip, so one paper has one boards door', () => {
+    expect(speccing().find((row) => row.key === 'boards')!.door).toEqual({
+      kind: 'slot',
+      slot: 'boards-strip',
+    });
+  });
+
+  it('expands its own rooms where no table stands one', () => {
+    const rows = deriveTicket({
+      ...emptyInput('project'),
+      rooms: { settled: true, list: [{ id: 'living', name: 'Living room' }] },
+    });
+    expect(rows.find((row) => row.key === 'rooms')!.door.kind).toBe('expand');
+    expect(rows.find((row) => row.key === 'boards')!.door).toEqual({
+      kind: 'leaf',
+      shelf: 'moodboards',
+    });
   });
 });
 
@@ -482,8 +622,10 @@ describe('deriveTicket — what is wrong is counted once, and named first', () =
       },
     });
     expect(valueOf(rows, 'pieces')).toBe('1 damaged · 2 unspecified');
+    // direction-b §3.2 rank three: "a piece that cannot move — an unanswered
+    // PO, a missing COM, a damaged line."
     expect(rows.find((row) => row.key === 'pieces')!.exception).toEqual({
-      rank: 'money-at-risk',
+      rank: 'piece-stuck',
       phrase: '1 damaged',
       standingSince: null,
     });
@@ -573,7 +715,9 @@ describe('deriveTicketSeam', () => {
   it('prints the worst two exceptions, in tie-break order', () => {
     const rows = deriveTicket(specimenInput());
     const seam = deriveTicketSeam(rows, deriveTicketIdentity(specimenInput()));
-    expect(seam.exceptions).toBe('1 damaged · $17,500 owed you');
+    // Rank two (a dated promise past its date) leads rank three (a piece that
+    // cannot move), whatever order the rows print in.
+    expect(seam.exceptions).toBe('$17,500 owed you · 1 damaged');
   });
 
   it('drops a third exception whole, never abbreviated', () => {

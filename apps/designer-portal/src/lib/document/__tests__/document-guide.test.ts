@@ -864,6 +864,41 @@ describe('the sixth rung derives from the ticket (B2-L3)', () => {
     expect(guide.headline).toBe('Pieces · 2 unspecified');
   });
 
+  it('speaks the exception in the actionable register, not the stage’s calm one', () => {
+    // Rung four does exactly this for the Desk's operational need. A strip
+    // carrying `Money · $17,500 owed you` under `state: on_track` and the plain
+    // `Project · active work` eyebrow prints an urgent sentence in a calm voice.
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      ticketRows: ticketRows({ money: OWED }),
+    });
+
+    expect(guide.state).toBe('actionable');
+    expect(guide.eyebrow).toBe('Project · active work · needs attention');
+    expect(guide.reason).toBe('The job ticket is showing something unresolved.');
+  });
+
+  it('takes the leader’s rest sentence too, so both halves are wired', () => {
+    // The rest half used to be unreachable: the caller pre-filtered to only
+    // call the leader where an exception already stood, so seven of the
+    // fourteen states were computed by a path the ticket never touched.
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      ticketRows: ticketRows(),
+    });
+
+    expect(guide.headline).toBe('Everything ordered is moving.');
+    // And it keeps the landing the working act had already resolved, which the
+    // leader alone does not hold.
+    expect(guide.action?.destination).toEqual({
+      kind: 'anchor',
+      section: 'project',
+      focusId: 'ffe-region-heading-project-1',
+    });
+  });
+
   it('keeps the stage path when the ticket shows nothing unclear', () => {
     const guide = deriveDocumentGuide({
       row: row('project'),

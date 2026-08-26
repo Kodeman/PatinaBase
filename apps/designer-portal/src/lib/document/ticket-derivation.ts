@@ -62,9 +62,14 @@ export interface TicketRoomChip {
  *
  * `none` is the row that states a fact this spread has nowhere to open: the
  * install and care spreads print neither the Money region nor the Schedule
- * (`paperRegionsForSection`), so those two rows print their figure and no `→`.
- * A button that fires an unfold nobody hears is a worse answer than a row that
- * plainly does not open.
+ * (`paperRegionsForSection`), and a paper with no project mounts none of the
+ * three leaves, so those rows print their figure and no `→`. A button that
+ * fires an unfold nobody hears is a worse answer than a row that plainly does
+ * not open.
+ *
+ * `slot` is the row whose subject is already standing on this paper — the
+ * Speccing table's rooms rail and boards strip. The row takes the reader to it
+ * rather than opening a second door to the same thing.
  */
 export type TicketDoor =
   | { kind: 'leaf'; shelf: ShelfLeafKey }
@@ -72,7 +77,16 @@ export type TicketDoor =
   | { kind: 'route'; href: string }
   | { kind: 'unfold-region'; region: DocumentIndexKey }
   | { kind: 'overlay'; overlay: 'call-sheet'; available: boolean }
-  | { kind: 'expand'; rooms: readonly TicketRoomChip[] };
+  | { kind: 'expand'; rooms: readonly TicketRoomChip[] }
+  | { kind: 'slot'; slot: TicketSlotKey };
+
+/**
+ * A tool the pinned Worktable composition already stands on this paper. The
+ * Speccing table mounts I139's rooms rail and Q1/C9's on-paper boards strip, so
+ * the two ticket rows that name those subjects ANCHOR to them (direction-b §9)
+ * instead of opening a second door to the same thing.
+ */
+export type TicketSlotKey = 'rooms-rail' | 'boards-strip';
 
 /**
  * direction-b §3.2's three standing ranks, in order. Its fourth — "work that
@@ -143,13 +157,45 @@ export interface TicketPhase {
 export interface TicketClientCopy {
   settled: boolean;
   sent: boolean;
+  /** The read came back an error. A third face, as `moneyRow` already has:
+   *  telling a designer their sent proposal has not gone out is worse than the
+   *  loading/empty conflation this type was written to refuse. */
+  failed?: boolean;
+}
+
+/** A purchase order the maker has not answered — direction-b §3.2's rank three,
+ *  "a piece that cannot move". The count and the day it went out; the derivation
+ *  states the age, so nothing here is a sentence already written. */
+export interface TicketUnansweredPo {
+  count: number;
+  /** `PO-2026-0418`, or null where the row carries no label. */
+  label: string | null;
+  /** The oldest unanswered PO's `sent_at`. */
+  sentAt: string;
 }
 
 export interface TicketInput {
   section: SectionKey;
   phase: TicketPhase | null;
+  /**
+   * Whether this document has a project behind it.
+   *
+   * The three shelf leaves (plan room · spec book · boards) and the call sheet
+   * are project-keyed and mounted only where one stands, so off a project those
+   * rows state their figure and open nothing — the same rule `regionDoor`
+   * applies to a region this spread does not print. Defaults to true: every
+   * document the ticket read facts for before B2 carried a project.
+   */
+  project?: boolean;
+  /** What the pinned composition already stands on the paper (see
+   *  `TicketSlotKey`). Empty off the Worktable, and on every table but Speccing. */
+  tableSlots?: readonly TicketSlotKey[];
   rooms: { settled: boolean; list: readonly TicketRoomFact[] };
-  pieces: { settled: boolean; lines: readonly TicketLine[] };
+  pieces: {
+    settled: boolean;
+    lines: readonly TicketLine[];
+    unansweredPo?: TicketUnansweredPo | null;
+  };
   drawings: { settled: boolean; sheetCount: number };
   boards: { settled: boolean; count: number };
   money: {
@@ -195,6 +241,18 @@ function regionDoor(input: TicketInput, region: DocumentIndexKey): TicketDoor {
     ? { kind: 'unfold-region', region }
     : { kind: 'none' };
 }
+
+/** The three shelf leaves and the call sheet are mounted by the project, so a
+ *  paper with none opens neither. */
+const hasProject = (input: TicketInput) => input.project !== false;
+
+/** The row's subject already stands on this paper — anchor to it rather than
+ *  print a second door to it (C9/Q1). */
+const slotDoor = (
+  input: TicketInput,
+  slot: TicketSlotKey,
+): TicketDoor | null =>
+  input.tableSlots?.includes(slot) ? { kind: 'slot', slot } : null;
 
 const SECTION_LABEL: Record<SectionKey, string> = {
   brief: 'Brief',
@@ -378,13 +436,42 @@ function roomsRow(input: TicketInput): TicketRow {
     label: 'Rooms',
     value,
     emphasis: null,
-    door: { kind: 'expand', rooms: chips },
+    door: slotDoor(input, 'rooms-rail') ?? { kind: 'expand', rooms: chips },
     exception: null,
+  };
+}
+
+/** A PO is unanswered once a day has passed since it went out — the same
+ *  threshold the Desk's own `po_unacknowledged` need waits out. */
+const PO_UNANSWERED_DAYS = 1;
+
+/** `PO-2026-0418 unanswered, 14 days` — the clause the Pieces row prints and
+ *  the guide quotes, or null while nothing is standing. */
+function unansweredPoClause(
+  po: TicketUnansweredPo | null | undefined,
+  now: Date,
+): { phrase: string; sentAt: string } | null {
+  if (!po || po.count < 1) return null;
+  const out = calendarDaysUntil(po.sentAt, now);
+  if (out === null) return null;
+  const days = -out;
+  if (days < PO_UNANSWERED_DAYS) return null;
+  const subject =
+    po.count > 1
+      ? plural(po.count, 'purchase order', 'purchase orders')
+      : (po.label ?? 'A purchase order');
+  return {
+    phrase: `${subject} unanswered, ${plural(days, 'day', 'days')}`,
+    sentAt: po.sentAt,
   };
 }
 
 function piecesRow(input: TicketInput): TicketRow {
   const counts = countPieces(input.pieces.lines);
+  const po = unansweredPoClause(
+    input.pieces.unansweredPo,
+    input.now ?? new Date(),
+  );
   const parts: string[] = [];
   if (counts.ordered > 0) parts.push(`${counts.ordered} ordered`);
   if (counts.delivered > 0) parts.push(`${counts.delivered} delivered`);
@@ -395,31 +482,38 @@ function piecesRow(input: TicketInput): TicketRow {
   }
   if (counts.notOrdered > 0) parts.push(`${counts.notOrdered} not ordered yet`);
   if (counts.unspecified > 0) parts.push(`${counts.unspecified} unspecified`);
+  // §3.3's project specimen puts the unanswered PO on this row, so the row
+  // prints it: a guide sentence quoting a clause the map does not carry is the
+  // exact failure `deriveTicketLeader` exists to make impossible.
+  if (input.pieces.settled && po) parts.push(po.phrase);
 
   const value = !input.pieces.settled
     ? READING
-    : counts.total === 0
+    : counts.total === 0 && !po
       ? 'No pieces yet'
       : parts.join(' · ');
 
-  // A damaged line is rank one, not rank three: what expires on it is a
-  // carrier window, and direction-b §3.2 names a carrier window as the
-  // money-at-risk example.
+  // All three are direction-b §3.2's rank three, "a piece that cannot move —
+  // an unanswered PO, a missing COM, a damaged line". §3.3's install row reads
+  // a CARRIER WINDOW as rank one; the window is a date this row is not given,
+  // and a damaged line without one is the enumeration's own rank three.
   const exception: TicketException | null = !input.pieces.settled
     ? null
-    : counts.damaged > 0
-      ? {
-          rank: 'money-at-risk',
-          phrase: `${counts.damaged} damaged`,
-          standingSince: null,
-        }
-      : counts.awaiting > 0
+    : po
+      ? { rank: 'piece-stuck', phrase: po.phrase, standingSince: po.sentAt }
+      : counts.damaged > 0
         ? {
             rank: 'piece-stuck',
-            phrase: `${counts.awaiting} awaiting a decision`,
+            phrase: `${counts.damaged} damaged`,
             standingSince: null,
           }
-        : null;
+        : counts.awaiting > 0
+          ? {
+              rank: 'piece-stuck',
+              phrase: `${counts.awaiting} awaiting a decision`,
+              standingSince: null,
+            }
+          : null;
 
   return {
     key: 'pieces',
@@ -445,7 +539,7 @@ function drawingsRow(input: TicketInput): TicketRow {
     label: 'Drawings',
     value,
     emphasis: null,
-    door: { kind: 'leaf', shelf: 'planroom' },
+    door: hasProject(input) ? { kind: 'leaf', shelf: 'planroom' } : { kind: 'none' },
     exception: null,
   };
 }
@@ -472,23 +566,30 @@ function specRow(input: TicketInput): TicketRow {
     label: 'Spec',
     value,
     emphasis: null,
-    door: { kind: 'leaf', shelf: 'specbook' },
+    door: hasProject(input) ? { kind: 'leaf', shelf: 'specbook' } : { kind: 'none' },
     exception,
   };
 }
 
 function boardsRow(input: TicketInput): TicketRow {
+  const door: TicketDoor =
+    slotDoor(input, 'boards-strip') ??
+    (hasProject(input) ? { kind: 'leaf', shelf: 'moodboards' } : { kind: 'none' });
   const value = !input.boards.settled
     ? READING
     : input.boards.count === 0
-      ? 'No boards yet · start one'
+      ? // `start one` is an offer, and only the row that opens somewhere can
+        // make it.
+        door.kind === 'none'
+        ? 'No boards yet'
+        : 'No boards yet · start one'
       : plural(input.boards.count, 'board', 'boards');
   return {
     key: 'boards',
     label: 'Boards',
     value,
     emphasis: null,
-    door: { kind: 'leaf', shelf: 'moodboards' },
+    door,
     exception: null,
   };
 }
@@ -612,13 +713,19 @@ function datesRow(input: TicketInput): TicketRow {
 
 function peopleRow(input: TicketInput): TicketRow {
   const { settled, callSheetEnabled, rosterCount } = input.people;
-  const value = !callSheetEnabled
-    ? "the call sheet isn't turned on for this studio"
-    : !settled
-      ? READING
-      : rosterCount === 0
-        ? 'Nobody on it yet'
-        : `${rosterCount} on the roster`;
+  // Two different absences, and they must not wear one face. A paper with no
+  // project has no roster to hold — saying the studio has the call sheet turned
+  // off would be a claim about the studio, and a false one in the same session
+  // its project documents open theirs.
+  const value = !hasProject(input)
+    ? 'No roster yet'
+    : !callSheetEnabled
+      ? "the call sheet isn't turned on for this studio"
+      : !settled
+        ? READING
+        : rosterCount === 0
+          ? 'Nobody on it yet'
+          : `${rosterCount} on the roster`;
   return {
     key: 'people',
     label: 'People',
@@ -627,7 +734,7 @@ function peopleRow(input: TicketInput): TicketRow {
     door: {
       kind: 'overlay',
       overlay: 'call-sheet',
-      available: callSheetEnabled,
+      available: hasProject(input) && callSheetEnabled,
     },
     exception: null,
   };
@@ -644,11 +751,13 @@ function peopleRow(input: TicketInput): TicketRow {
  * Preview act has always been its form (Q7/A4).
  */
 function clientCopyRow(copy: TicketClientCopy): TicketRow {
-  const value = !copy.settled
-    ? READING
-    : copy.sent
-      ? 'The client’s copy · as sent, live'
-      : 'The client’s copy · not sent yet';
+  const value = copy.failed
+    ? 'The client’s copy could not be read'
+    : !copy.settled
+      ? READING
+      : copy.sent
+        ? 'The client’s copy · as sent, live'
+        : 'The client’s copy · not sent yet';
   return {
     key: 'clientcopy',
     label: 'Copy',

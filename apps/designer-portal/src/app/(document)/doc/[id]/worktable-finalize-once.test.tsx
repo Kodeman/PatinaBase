@@ -98,6 +98,7 @@ jest.mock('@patina/supabase', () => ({
   /* the watch's own reads */
   useActivateProposal: () => ({ mutateAsync: jest.fn(), isPending: false }),
   /* the speccing tools, which must not mount here */
+  useProposalScheduleItems: () => ({ data: [], isLoading: false }),
   useProposalScopeRooms: () => ({ data: [], isLoading: false }),
   useAddScopeRoom: () => ({ mutate: jest.fn(), isPending: false }),
   useBoards: () => ({ data: [], isLoading: false, isError: false }),

@@ -186,6 +186,20 @@ describe('deriveDeskRoster — the line', () => {
     );
   });
 
+  it('counts only what it prints, so the header can never over-claim', () => {
+    // A row whose active_section falls outside ROSTER_STAGE_ORDER would be
+    // printed under no heading; counting it would have the header claim more
+    // jobs than the roster shows.
+    const stray = row('x', 'nowhere' as SectionKey);
+    const roster = deriveDeskRoster(
+      input({ live: [row('a', 'project'), stray] }),
+      NOW,
+    );
+
+    expect(roster.liveCount).toBe(1);
+    expect(roster.heading).toBe('Every job · 1 live · 0 overdue');
+  });
+
   it('carries the motion when there is no need, and says so when there is neither', () => {
     const moving = row('m', 'install');
     const quiet = row('q', 'care', { client_name: '' });
@@ -271,7 +285,100 @@ describe('deriveDeskRoster — the line', () => {
     const marks = Object.fromEntries(
       roster.groups[0].lines.map((l) => [l.engagementId, l.mark]),
     );
-    expect(marks).toEqual({ late: 'overdue', setup: 'setup' });
+    expect(marks).toEqual({ late: 'urgent', setup: 'quiet' });
+  });
+
+  it('marks EVERY need, dated or not, and nothing that has none', () => {
+    // §2.1: "Needs are a red-letter mark on the job's line." A damage claim
+    // and a flagged proposal carry no due date and were left unmarked, so a
+    // studio's whole open workload could read as an unmarked roster.
+    const claim = row('claim', 'project');
+    const flagged = row('flagged', 'proposal');
+    const idle = row('idle', 'care');
+    const roster = deriveDeskRoster(
+      input({
+        live: [claim, flagged, idle],
+        folders: [
+          folder(claim, need({ kind: 'damage_claim', dueOn: null })),
+          folder(flagged, need({ kind: 'hesitating_proposal', dueOn: null })),
+        ],
+      }),
+      NOW,
+    );
+
+    const marks = Object.fromEntries(
+      roster.groups.flatMap((g) => g.lines).map((l) => [l.engagementId, l.mark]),
+    );
+    expect(marks).toEqual({ claim: 'urgent', flagged: 'quiet', idle: null });
+  });
+
+  it('says a paused job is paused rather than calling it quiet', () => {
+    const paused = row('p', 'project', { is_paused: true });
+    const roster = deriveDeskRoster(input({ live: [paused] }), NOW);
+
+    expect(roster.groups[0].lines[0].state).toContain('paused');
+    expect(roster.groups[0].lines[0].state).not.toContain('nothing needs your hand');
+  });
+
+  it('drops a placeholder client name the way the folder tab does', () => {
+    // The seed's placeholder is the two-word `Client User`; a whole-string test
+    // let it through onto the line as if it were a family name.
+    const seeded = row('s', 'project', { client_name: 'Client User' });
+    const real = row('r', 'project', { client_name: 'Anne Vandersteen' });
+    const roster = deriveDeskRoster(input({ live: [seeded, real] }), NOW);
+
+    const states = Object.fromEntries(
+      roster.groups[0].lines.map((l) => [l.engagementId, l.state]),
+    );
+    expect(states.s).not.toContain('Client User');
+    expect(states.r).toContain('Anne Vandersteen');
+  });
+});
+
+describe('deriveDeskRoster — one clock per tier', () => {
+  it('orders quiet jobs by when they were last touched, never by a future due date', () => {
+    // A promise date and a last-touched stamp are two clocks. Compared against
+    // each other, a job with a real need due in December sorted behind a quiet
+    // one last touched in August.
+    const quietOld = row('quiet-old', 'project', {
+      updated_at: '2026-06-01T00:00:00Z',
+    });
+    const needsFuture = row('needs-future', 'project', {
+      updated_at: '2026-08-24T00:00:00Z',
+    });
+    const roster = deriveDeskRoster(
+      input({
+        live: [needsFuture, quietOld],
+        folders: [folder(needsFuture, need({ dueOn: '2026-12-01' }))],
+      }),
+      NOW,
+    );
+
+    expect(roster.groups[0].lines.map((l) => l.engagementId)).toEqual([
+      'quiet-old',
+      'needs-future',
+    ]);
+  });
+
+  it('names what is overdue in pressure order, not in stage order', () => {
+    // M1 prints `Vandersteen and Byrne` — the older promise first — while the
+    // paper's stage order puts every proposal ahead of every project.
+    const vandersteen = row('v', 'project', { client_name: 'Anne Vandersteen' });
+    const byrne = row('b', 'proposal', { client_name: 'Erin Byrne' });
+    const roster = deriveDeskRoster(
+      input({
+        live: [byrne, vandersteen],
+        folders: [
+          folder(vandersteen, need({ dueOn: '2026-08-01' })),
+          folder(byrne, need({ dueOn: '2026-08-19' })),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(roster.overdueLine).toBe(
+      'Two things are overdue — Vandersteen and Byrne.',
+    );
   });
 });
 

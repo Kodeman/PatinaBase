@@ -27,6 +27,9 @@ import {
   useProjectRoster,
   useDiscovery,
   useProjectContextualHandoffs,
+  useProposalScopeRooms,
+  useProposalScheduleItems,
+  useBoards,
   usePurchaseOrders,
   useResolvedSchedule,
 } from '@patina/supabase';
@@ -146,10 +149,7 @@ import {
   useRoomLens,
 } from '@/components/document/room-lens-context';
 import { DocSpineShelvedBlocks } from '@/components/document/spine-shelved-blocks';
-import {
-  JobTicket,
-  LETTERHEAD_SENTINEL_ID,
-} from '@/components/document/job-ticket';
+import { JobTicket } from '@/components/document/job-ticket';
 import {
   deriveTicket,
   deriveTicketHead,
@@ -161,6 +161,8 @@ import {
   type TicketPhase,
   type TicketRoomFact,
   type TicketRow,
+  type TicketSlotKey,
+  type TicketUnansweredPo,
 } from '@/lib/document/ticket-derivation';
 import { boardsRoutePath } from '@/lib/document/registry';
 import { deriveMoneyLadder, type MoneyLadder } from '@/lib/document/money-ladder';
@@ -277,6 +279,13 @@ function deskEnrichmentApplies(row: DocumentStateRow | null): boolean {
   );
 }
 
+/** The two Speccing tools the ticket's Rooms and Boards rows anchor to. A
+ *  module constant so the mounts' memos see one identity across renders. */
+const SPECCING_TICKET_SLOTS: readonly TicketSlotKey[] = [
+  'rooms-rail',
+  'boards-strip',
+];
+
 function vitalsFor(
   row: DocumentStateRow,
   project: ProjectVitalsRecord,
@@ -384,6 +393,9 @@ function JobTicketMount({
   routeId,
   section,
   regionSection,
+  project,
+  tableSlots,
+  unansweredPo,
   phase,
   rooms,
   roomsSettled,
@@ -406,6 +418,13 @@ function JobTicketMount({
    *  flag this IS `section`; with a table pinned the two differ, and a row
    *  that unfolds a region the pinned spread never mounted opens nothing. */
   regionSection: SectionKey;
+  /** Whether the three shelf leaves and the call sheet are mounted on this
+   *  document — the same predicate their own mounts read below. */
+  project: boolean;
+  /** What the pinned composition already stands on this paper (Speccing). */
+  tableSlots: readonly TicketSlotKey[] | undefined;
+  /** direction-b §3.2 rank three, riding the Pieces row (§3.3's specimen). */
+  unansweredPo: TicketUnansweredPo | null;
   phase: TicketPhase | null;
   rooms: readonly TicketRoomFact[];
   roomsSettled: boolean;
@@ -464,16 +483,31 @@ function JobTicketMount({
     [regionSection],
   );
 
-  // See `ProjectlessTicketMount` — the two facts, not the object identity.
+  // See `ProjectlessTicketMount` — the facts, not the object identity. Both
+  // props are rebuilt on every render of the page, which sits above an early
+  // return no memo of theirs could be hoisted over.
   const copySettled = clientCopy?.settled ?? null;
   const copySent = clientCopy?.sent ?? null;
+  const copyFailed = clientCopy?.failed ?? null;
+  const poCount = unansweredPo?.count ?? 0;
+  const poLabel = unansweredPo?.label ?? null;
+  const poSentAt = unansweredPo?.sentAt ?? null;
+  const po = useMemo<TicketUnansweredPo | null>(
+    () =>
+      poCount > 0 && poSentAt
+        ? { count: poCount, label: poLabel, sentAt: poSentAt }
+        : null,
+    [poCount, poLabel, poSentAt],
+  );
 
   const ticketInput = useMemo<TicketInput>(
     () => ({
       section,
       phase,
+      project,
+      tableSlots,
       rooms: { settled: roomsSettled, list: rooms },
-      pieces: { settled: !ffeQuery.isLoading, lines },
+      pieces: { settled: !ffeQuery.isLoading, lines, unansweredPo: po },
       drawings: {
         settled: !planRoomQuery.isLoading,
         sheetCount: planRoomQuery.data?.sheets.length ?? 0,
@@ -498,14 +532,18 @@ function JobTicketMount({
       clientCopy:
         copySettled == null || copySent == null
           ? null
-          : { settled: copySettled, sent: copySent },
+          : { settled: copySettled, sent: copySent, failed: copyFailed ?? false },
       paperRegions: paperRegionKeys,
     }),
     [
       copySettled,
       copySent,
+      copyFailed,
       section,
       phase,
+      project,
+      tableSlots,
+      po,
       roomsSettled,
       rooms,
       ffeQuery.isLoading,
@@ -544,48 +582,102 @@ function JobTicketMount({
  * The ticket on a document that has no project yet — the four stages before
  * the work starts (brief · discovery · direction · proposal).
  *
- * It reads NOTHING. A paper with no project has no rooms, pieces, drawings,
- * boards or money to read, so every fact group arrives settled and empty and
- * `deriveTicket` prints the honest empties it already holds for those four
- * sections. Running `JobTicketMount`'s reads with no project id would do one
- * of two wrong things instead: the `enabled`-gated queries would never answer,
- * pinning five rows at `Reading…` for the life of the document, and the two
- * un-`enabled` ones named above would fetch the studio's whole ledger.
+ * It reads the PROPOSAL's three populations, never the project's. A direction
+ * or a proposal document carries rooms, priced lines and boards of its own —
+ * the very things the Speccing and Finalize tables mount beside this ticket —
+ * so reporting them settled-and-empty printed `No rooms yet` above a rail
+ * listing rooms. Everything a project owns and a proposal does not (the plan
+ * room, the money ladder, the schedule, the roster) stays settled and empty:
+ * an honest empty for a paper that genuinely has none.
+ *
+ * `JobTicketMount`'s own reads still may not run here. Its `enabled`-gated
+ * queries would never answer with no project id, pinning rows at `Reading…`
+ * for the life of the document, and its two un-`enabled` ones would fetch the
+ * studio's whole ledger.
  */
 function ProjectlessTicketMount({
   routeId,
+  proposalId,
   section,
   regionSection,
+  tableSlots,
   clientCopy,
   onOpenLeaf,
   onUnfoldRegion,
   onRows,
 }: {
   routeId: string;
+  /** The proposal this paper is composed from, where it has one. */
+  proposalId: string | null;
   section: SectionKey;
   regionSection: SectionKey;
+  tableSlots: readonly TicketSlotKey[] | undefined;
   clientCopy: TicketClientCopy | null;
   onOpenLeaf: (key: ShelfKey) => void;
   onUnfoldRegion: (region: DocumentIndexKey) => void;
   onRows: (rows: readonly TicketRow[]) => void;
 }) {
+  // The proposal's OWN three populations — the same reads the Speccing table's
+  // rail, scheme and strip make from the same cache. All three are `enabled`
+  // on the proposal id, so a brief or a discovery with no proposal runs none of
+  // them and settles empty. Without this the ticket printed `No rooms yet`
+  // directly above a rail listing rooms.
+  const scopeRoomsQuery = useProposalScopeRooms(proposalId) as {
+    data: Array<{ id: string; name: string | null }> | undefined;
+    isLoading: boolean;
+  };
+  const proposalItemsQuery = useProposalScheduleItems(proposalId);
+  const proposalBoardsQuery = useBoards(proposalId);
+
+  const rooms = useMemo<TicketRoomFact[]>(
+    () =>
+      (scopeRoomsQuery.data ?? []).map((room) => ({
+        id: room.id,
+        name: room.name ?? 'Room',
+      })),
+    [scopeRoomsQuery.data],
+  );
+  const lines = useMemo<TicketLine[]>(
+    () =>
+      (proposalItemsQuery.data ?? []).map((item) => ({
+        // A proposal line has no movement — nothing is ordered from a document
+        // that has not become a project — so every line reads as the schedule's
+        // own `specified` register and the census counts it `not ordered yet`.
+        stamp: 'specified' as const,
+        roomId: item.scope_room_id ?? null,
+        specified: Boolean(item.product_id),
+      })),
+    [proposalItemsQuery.data],
+  );
+  const boardsCount = (proposalBoardsQuery.data ?? []).filter(
+    (board) => board.status !== 'archived',
+  ).length;
+
   const paperRegionKeys = useMemo(
     () => paperRegionsForSection(regionSection).map((region) => region.key),
     [regionSection],
   );
   // The prop is a fresh object on every render of the page, which sits above
-  // an early return the memo it would need cannot be hoisted over. Its two
+  // an early return the memo it would need cannot be hoisted over. Its three
   // facts are what the derivation actually depends on.
   const copySettled = clientCopy?.settled ?? null;
   const copySent = clientCopy?.sent ?? null;
+  const copyFailed = clientCopy?.failed ?? null;
   const ticketInput = useMemo<TicketInput>(
     () => ({
       section,
       phase: null,
-      rooms: { settled: true, list: [] },
-      pieces: { settled: true, lines: [] },
+      // No project stands behind this paper, so the three leaves and the call
+      // sheet are not mounted (see the `DocumentShelves` and `CallSheetMount`
+      // gates below) and those rows open nothing.
+      project: false,
+      tableSlots,
+      rooms: { settled: !scopeRoomsQuery.isLoading, list: rooms },
+      pieces: { settled: !proposalItemsQuery.isLoading, lines },
+      // A plan room and a spec book are the project's; a paper with none has
+      // nothing filed and nothing to read.
       drawings: { settled: true, sheetCount: 0 },
-      boards: { settled: true, count: 0 },
+      boards: { settled: !proposalBoardsQuery.isLoading, count: boardsCount },
       money: {
         settled: true,
         failed: false,
@@ -595,17 +687,27 @@ function ProjectlessTicketMount({
         owedSince: null,
       },
       dates: { settled: true, schedule: null },
-      // `CallSheetMount` is project-keyed, so this document has no call sheet
-      // to open — and the People row's door reads this same field. The page
-      // and the ticket therefore name one availability, never two.
       people: { settled: true, callSheetEnabled: false, rosterCount: 0 },
       clientCopy:
         copySettled == null || copySent == null
           ? null
-          : { settled: copySettled, sent: copySent },
+          : { settled: copySettled, sent: copySent, failed: copyFailed ?? false },
       paperRegions: paperRegionKeys,
     }),
-    [section, copySettled, copySent, paperRegionKeys],
+    [
+      section,
+      tableSlots,
+      copySettled,
+      copySent,
+      copyFailed,
+      paperRegionKeys,
+      rooms,
+      lines,
+      boardsCount,
+      scopeRoomsQuery.isLoading,
+      proposalItemsQuery.isLoading,
+      proposalBoardsQuery.isLoading,
+    ],
   );
   return (
     <TicketFace
@@ -1527,8 +1629,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const clientCopy: TicketClientCopy | null =
     finalizeTable && row.proposal_id
       ? {
-          settled: proposalIsError || Boolean(liveProposal),
+          settled: Boolean(liveProposal),
           sent: Boolean(liveProposal?.sent_at),
+          // A failed read wears its own face. Settling an error as `not sent
+          // yet` tells a designer the proposal in the client's hands never went
+          // out — the same conflation `Reading…` is kept apart from, with the
+          // worse of the two lies substituted for the harmless one.
+          failed: proposalIsError && !liveProposal,
         }
       : null;
   // W4b — the Delivery table's procurement setting: the one composition where
@@ -1568,11 +1675,42 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // `TableFrame` prints nothing when it has no composition, so handing the
   // node to both positions cannot print two.
   //
+  // THE ORDER, RULED. direction-b §2.2 draws LETTERHEAD → TICKET → GUIDE on the
+  // paper with no table, and §9 asks for the ticket immediately above
+  // `TableFrame` where one stands — which puts the guide above the ticket on
+  // the four compositions. §9 wins, and deliberately: the guide's sentence is a
+  // quotation of a ticket row, and the reader who wants the whole map is one
+  // scroll from it either way, while a ticket divorced from the table it heads
+  // stops being the job's header over the job's middle (I138). Nothing about
+  // the guide's own position changes with the flag off.
+  //
   // All seven spreads print it. A document that carries a project reads its
   // seven facts; the four stages before the work starts have no project to
   // read and print the honest empties `deriveTicket` holds for them. Exactly
   // one of the two mounts stands on any document, so the rows the guide's
   // leader is elected from are always the rows on this paper.
+  // The three shelf leaves and the call sheet are project-keyed and mounted
+  // only on a project document (see `DocumentShelves` / `CallSheetMount`
+  // below). The ticket reads the SAME predicate, so a row never prints a `→`
+  // for a leaf this document has not mounted.
+  const ticketLeaves =
+    row.engagement_kind === 'project' && Boolean(row.project_id);
+  // The Speccing table already stands I139's rooms rail and Q1/C9's on-paper
+  // boards strip on this paper, so those two rows anchor to them instead of
+  // opening a second door to the same subject (direction-b §9).
+  const ticketSlots: readonly TicketSlotKey[] | undefined =
+    table?.table === 'speccing' && row.proposal_id
+      ? SPECCING_TICKET_SLOTS
+      : undefined;
+  // direction-b §3.3's project specimen rides the Pieces row.
+  const unansweredPo: TicketUnansweredPo | null =
+    row.unacked_po_count > 0 && row.oldest_unacked_sent_at
+      ? {
+          count: row.unacked_po_count,
+          label: row.unacked_po_label,
+          sentAt: row.oldest_unacked_sent_at,
+        }
+      : null;
   const jobTicket =
     row.project_id ? (
       <JobTicketMount
@@ -1580,6 +1718,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         routeId={id}
         section={row.active_section}
         regionSection={spreadSection}
+        project={ticketLeaves}
+        tableSlots={ticketSlots}
+        unansweredPo={unansweredPo}
         phase={ticketPhase}
         rooms={docRooms ?? []}
         roomsSettled={docRoomsSettled}
@@ -1596,8 +1737,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     ) : (
       <ProjectlessTicketMount
         routeId={id}
+        proposalId={row.proposal_id}
         section={row.active_section}
         regionSection={spreadSection}
+        tableSlots={ticketSlots}
         clientCopy={clientCopy}
         onOpenLeaf={toggleShelf}
         onUnfoldRegion={unfoldRegion}
@@ -1677,13 +1820,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           inHandRoomName={heldRoomName}
           onReleaseRoom={heldRoomId ? () => toggleRoom(heldRoomId) : null}
         />
-
-        {/* The sticky seam's one bit of input (R124): while this element is on
-            screen the ticket prints its eight rows; once it has scrolled past,
-            the ticket collapses in place and sticks. An IntersectionObserver
-            reads it — a scroll listener would run every frame to learn the
-            same thing. */}
-        <div id={LETTERHEAD_SENTINEL_ID} aria-hidden />
 
         {/* THE TICKET — the document's map, mounted by the DOCUMENT rather
             than the section, so all seven spreads read identically (B1, B2).
