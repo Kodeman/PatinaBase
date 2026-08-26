@@ -1,18 +1,22 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+/**
+ * The spine after B1's subtraction: one block, the running index, and nothing
+ * else. The rooms and the shelves are the ticket's rows on the paper now, so
+ * the two blocks that used to stand here are gone — `spine-rooms-block.tsx` is
+ * deleted, and the shelves block survives only as the Finalize table's own.
+ */
+
+import { fireEvent, render, screen } from '@testing-library/react';
 import { useRoomLens, RoomLensProvider } from '../room-lens-context';
 import { SpineRunningIndex } from '../spine-running-index';
-import { SpineRoomsBlock } from '../spine-rooms-block';
 import { SpineShelvesBlock } from '../spine-shelves-block';
 import { DocSpineShelvedBlocks } from '../spine-shelved-blocks';
-import { ShelfPanel } from '../shelves/shelf-panel';
-import { requestShelfClose } from '@/lib/document/shelves';
 import {
   PROJECT_PAPER_ORDER,
   paperRegionsForSection,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
 
-/** The blocks' reads; none of them is this file's subject except where the
+/** The block's reads; none of them is this file's subject except where the
  *  ladder's live rung is what a test is checking. */
 const mockInvoiceRows: unknown[] = [];
 const mockPurchaseOrderRows: unknown[] = [];
@@ -25,9 +29,6 @@ jest.mock('@patina/supabase', () => {
   return {
     __esModule: true,
     useProjectFFEItems: () => ({ data: [] }),
-    useProjectBoards: () => ({ data: [] }),
-    useProjectOwnedBoards: () => ({ data: [] }),
-    usePlanRoom: () => ({ data: { sheets: [] } }),
     useProjectInvoices: () => {
       mockLadderReads.invoices += 1;
       return { isLoading: false, error: null, data: mockInvoiceRows };
@@ -111,60 +112,12 @@ describe('the running index', () => {
     ]);
   });
 
-  it('takes the "In this document" name the presence line used to carry', () => {
+  it('is named "On this paper" — the product’s own metaphor, and no longer the ticket’s word', () => {
     render(
       <SpineRunningIndex entries={entries} activeKey={null} onJump={jest.fn()} />,
     );
-    expect(screen.getByText('In this document')).toBeInTheDocument();
-  });
-});
-
-describe('the rooms block', () => {
-  const rooms = [
-    { id: 'r1', name: 'Kitchen', stateWord: 'Underway' },
-    { id: 'r2', name: 'Entry', stateWord: 'Not started' },
-  ];
-
-  it('presses the held room and keeps its state word beside the hold', () => {
-    render(
-      <SpineRoomsBlock
-        rooms={rooms}
-        heldRoomId="r1"
-        onToggleRoom={jest.fn()}
-      />,
-    );
-    const kitchen = screen.getByRole('button', { name: /Kitchen/ });
-    expect(kitchen).toHaveAttribute('aria-pressed', 'true');
-    expect(kitchen).toHaveTextContent('In hand');
-    expect(kitchen).toHaveTextContent('Underway');
-    expect(screen.getByRole('button', { name: /Entry/ })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
-  });
-
-  it('asks its room to be taken in hand', () => {
-    const onToggleRoom = jest.fn();
-    render(
-      <SpineRoomsBlock
-        rooms={rooms}
-        heldRoomId={null}
-        onToggleRoom={onToggleRoom}
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: /Entry/ }));
-    expect(onToggleRoom).toHaveBeenCalledWith('r2');
-  });
-
-  it('prints the heading and placeholder rather than nothing at zero rooms (F72)', () => {
-    render(
-      <SpineRoomsBlock rooms={[]} heldRoomId={null} onToggleRoom={jest.fn()} />,
-    );
-    expect(screen.getByText('Rooms')).toBeInTheDocument();
-    expect(
-      screen.getByText('Take a room in hand · nothing hides'),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByText('On this paper')).toBeInTheDocument();
+    expect(screen.queryByText('In this document')).not.toBeInTheDocument();
   });
 });
 
@@ -198,13 +151,13 @@ describe('the room lens', () => {
   });
 });
 
-describe('the shelves block', () => {
+describe('the shelves block — the Finalize table’s now, never the spine’s', () => {
   const statuses = {
     planroom: '4 sheets',
     specbook: '10 specified · by room',
     moodboards: '3 boards',
     callsheet: '3 on the roster',
-    knowledge: 'Studio library',
+    clientcopy: 'As sent · live',
   };
 
   it('declares expansion on the leaf shelves only', () => {
@@ -275,89 +228,6 @@ describe('the shelves block', () => {
   });
 });
 
-describe('the shelf leaf', () => {
-  function Harness({ open }: { open: boolean }) {
-    return (
-      <>
-        <button type="button" data-shelf-trigger="specbook">
-          Spec book
-        </button>
-        <ShelfPanel
-          openShelf={open ? 'specbook' : null}
-          onClose={jest.fn()}
-        >
-          <p>leaf body</p>
-        </ShelfPanel>
-      </>
-    );
-  }
-
-  it('renders nothing while no shelf is pulled out', () => {
-    render(<Harness open={false} />);
-    expect(screen.queryByText('leaf body')).not.toBeInTheDocument();
-  });
-
-  it('is a region, not a dialog — the paper behind stays live', () => {
-    render(<Harness open />);
-    const leaf = screen.getByRole('region', { name: 'Spec book shelf' });
-    expect(leaf).toBeInTheDocument();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('takes focus to its close word on open', () => {
-    render(<Harness open />);
-    expect(document.activeElement).toBe(
-      screen.getByRole('button', { name: /Close/ }),
-    );
-  });
-
-  it('closes on Escape', () => {
-    const onClose = jest.fn();
-    render(
-      <ShelfPanel openShelf="planroom" onClose={onClose}>
-        <p>leaf body</p>
-      </ShelfPanel>,
-    );
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('stands down from Escape while a sheet is open over it', () => {
-    const onClose = jest.fn();
-    render(
-      <>
-        <div role="dialog" aria-label="A sheet" />
-        <ShelfPanel openShelf="planroom" onClose={onClose}>
-          <p>leaf body</p>
-        </ShelfPanel>
-      </>,
-    );
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('closes when a leaf asks to be put away', () => {
-    const onClose = jest.fn();
-    render(
-      <ShelfPanel openShelf="moodboards" onClose={onClose}>
-        <p>leaf body</p>
-      </ShelfPanel>,
-    );
-    act(() => {
-      requestShelfClose();
-    });
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('hands focus back to the shelf row it came from', () => {
-    const { rerender } = render(<Harness open />);
-    rerender(<Harness open={false} />);
-    expect(document.activeElement).toBe(
-      screen.getByRole('button', { name: 'Spec book' }),
-    );
-  });
-});
-
 describe('paperRegionsForSection', () => {
   it('gives the Project spread all four regions, in the paper order', () => {
     expect(paperRegionsForSection('project').map((r) => r.key)).toEqual([
@@ -401,16 +271,12 @@ describe('paperRegionsForSection', () => {
   });
 });
 
-describe('the shelved blocks', () => {
+describe('the spine’s one block', () => {
   const props = {
     projectId: 'proj-1',
     rooms: [],
     scheduleValue: 'Week 1 of 14',
     approvalsValue: '3 in the log',
-    rosterCount: 0,
-    callSheetEnabled: false,
-    openShelf: null,
-    onToggleShelf: jest.fn(),
   } as const;
 
   beforeEach(() => {
@@ -420,9 +286,30 @@ describe('the shelved blocks', () => {
   const indexRows = () =>
     Array.from(
       screen
-        .getByRole('group', { name: 'In this document' })
+        .getByRole('group', { name: 'On this paper' })
         .querySelectorAll('button'),
     );
+
+  it('renders On this paper and nothing else — no rooms block, no shelves block', () => {
+    const { container } = render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    expect(screen.getByText('On this paper')).toBeInTheDocument();
+    // The two headings the spine used to grow beneath the index.
+    expect(screen.queryByText('Rooms')).not.toBeInTheDocument();
+    expect(screen.queryByText('The shelves')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Take a room in hand · nothing hides'),
+    ).not.toBeInTheDocument();
+    expect(container.querySelector('[data-shelf-trigger]')).toBeNull();
+    // Every button left in the spine's block belongs to the index itself.
+    expect(container.querySelectorAll('button')).toHaveLength(
+      indexRows().length,
+    );
+  });
 
   it('prints one index line per region the spread mounts — four on project', () => {
     render(
@@ -534,44 +421,5 @@ describe('the shelved blocks', () => {
     );
     expect(mockLadderReads.purchaseOrders).toBeGreaterThan(0);
     expect(mockLadderReads.invoices).toBeGreaterThan(0);
-  });
-
-  it('offers no Knowledge row among the shelves (F12)', () => {
-    render(
-      <DocSpineShelvedBlocks
-        {...props}
-        regions={paperRegionsForSection('project')}
-      />,
-    );
-    expect(
-      screen.queryByRole('button', { name: /Knowledge/ }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('names the plan room shelf with its drawing-set gloss (F17)', () => {
-    render(
-      <DocSpineShelvedBlocks
-        {...props}
-        regions={paperRegionsForSection('project')}
-      />,
-    );
-    expect(
-      screen.getByRole('button', { name: /Plan room/ }),
-    ).toHaveTextContent('the drawing set');
-  });
-
-  it('prints the Rooms heading and placeholder even at zero rooms (F72)', () => {
-    render(
-      <DocSpineShelvedBlocks
-        {...props}
-        rooms={[]}
-        regions={paperRegionsForSection('project')}
-      />,
-    );
-    expect(screen.getByText('Rooms')).toBeInTheDocument();
-    expect(
-      screen.getByText('Take a room in hand · nothing hides'),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Rooms' })).not.toBeInTheDocument();
   });
 });
