@@ -142,7 +142,7 @@ describe('the release lift — the schedule’s half', () => {
 
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Add to project');
+    expect(inked[0]).toHaveTextContent('Add a line');
     expect(
       screen.queryByRole('button', { name: 'Release for authorization' }),
     ).toBeNull();
