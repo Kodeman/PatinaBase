@@ -9,11 +9,17 @@
  * 'Find anything' across *.test.tsx returned zero hits), so this pins it: a
  * real DOM click on the real DocumentAction opens the real CommandBar.
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+// SP-16/F21 (A2-L3) — both new suites below need a controllable pathname (to
+// put a document "in hand") and desk data (the row itself); every earlier
+// test keeps working off the same defaults ('/desk', no rows) the old static
+// mocks returned.
+const mockPathname = jest.fn(() => '/desk');
+const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
-  usePathname: () => '/desk',
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+  usePathname: () => mockPathname(),
+  useRouter: () => ({ push: mockPush, replace: jest.fn() }),
 }));
 
 jest.mock('@patina/supabase', () => ({
@@ -21,8 +27,9 @@ jest.mock('@patina/supabase', () => ({
   useRecentBoards: () => ({ data: [] }),
 }));
 
+const mockDeskData = jest.fn(() => ({ folders: [] as unknown[], chips: [] as unknown[] }));
 jest.mock('@/hooks/use-desk-engagements', () => ({
-  useDeskEngagements: () => ({ data: undefined }),
+  useDeskEngagements: () => ({ data: mockDeskData() }),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -43,6 +50,38 @@ jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 
 import { CommandBar, openCommandBar } from './command-bar';
 import { DocumentAction } from './document-action';
+
+// A minimal document_state row — only the fields command-bar.tsx's own code
+// paths read (folderTab, fillStateForDesk's active_section, the
+// engagement/project id match), same fixture shape as
+// __tests__/call-sheet-doorways.test.tsx's deskRow.
+function deskRow(over: Record<string, unknown> = {}) {
+  return {
+    engagement_kind: 'project',
+    engagement_id: 'eng-1',
+    project_id: 'proj-1',
+    proposal_id: null,
+    lead_id: null,
+    designer_id: 'designer-1',
+    client_profile_id: 'client-1',
+    client_name: 'Ellsworth',
+    title: 'Ellsworth Residence',
+    project_status: 'active',
+    current_phase: 'procurement',
+    active_section: 'project',
+    is_paused: false,
+    is_archived: false,
+    proposal_status: null,
+    updated_at: '2026-01-01T00:00:00Z',
+    ...over,
+  } as any;
+}
+
+beforeEach(() => {
+  mockPathname.mockReturnValue('/desk');
+  mockDeskData.mockReturnValue({ folders: [], chips: [] });
+  mockPush.mockClear();
+});
 
 /** The Desk header's actual control (desk/page.tsx:225-237), reproduced
  *  exactly enough to exercise the real click circuit rather than a stand-in. */
@@ -124,5 +163,93 @@ describe('SP-07 — the palette drops the Engine framing', () => {
     });
 
     expect(dialog.textContent).not.toMatch(/\bEngine\b/);
+  });
+});
+
+// ============================================================================
+// SP-16/F50 (A2-L3) — ⌘K's typed search finds the plan room. Empty-query
+// already carried "The plan room" as a "This surface" row; matchSurfaces()
+// had no entry for it, so a typed "plan" fell through to "No match". Gated
+// the same way the empty-query row is: only with a project document in hand.
+// ============================================================================
+describe('SP-16 — ⌘K typed search finds the plan room', () => {
+  async function openPaletteAndType(query: string) {
+    render(
+      <>
+        <FindAnythingButton />
+        <CommandBar />
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+    const input = screen.getByRole('textbox', { name: 'Find anything' });
+    fireEvent.change(input, { target: { value: query } });
+  }
+
+  it('offers no match for "plan" without a document in hand', async () => {
+    mockPathname.mockReturnValue('/desk');
+    mockDeskData.mockReturnValue({ folders: [], chips: [] });
+
+    await openPaletteAndType('plan');
+
+    expect(screen.queryByText('The plan room')).not.toBeInTheDocument();
+    expect(screen.getByText('No match')).toBeInTheDocument();
+  });
+
+  it('matches "plan", "plan room", "floor plan", "plans" and "drawings" with a document in hand', async () => {
+    mockPathname.mockReturnValue('/doc/eng-1');
+    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] });
+
+    for (const query of ['plan', 'plan room', 'floor plan', 'plans', 'drawings']) {
+      const { unmount } = render(
+        <>
+          <FindAnythingButton />
+          <CommandBar />
+        </>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+      fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+        target: { value: query },
+      });
+      expect(screen.getByText('The plan room')).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('navigates to the in-hand engagement\'s plan room when chosen', async () => {
+    mockPathname.mockReturnValue('/doc/eng-1');
+    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] });
+
+    await openPaletteAndType('plan room');
+
+    fireEvent.click(screen.getByText('The plan room').closest('button')!);
+
+    expect(mockPush).toHaveBeenCalledWith('/doc/eng-1/plans');
+  });
+});
+
+// ============================================================================
+// F21 (A2-L3) — closing ⌘K restores focus to whatever opened it.
+// ============================================================================
+describe('F21 — ⌘K restores focus to the opener on close', () => {
+  it('returns focus to the control that opened it after Esc', async () => {
+    render(
+      <>
+        <FindAnythingButton />
+        <CommandBar />
+      </>,
+    );
+    const opener = screen.getByRole('button', { name: /find anything/i });
+    opener.focus();
+    fireEvent.click(opener);
+
+    const input = await screen.findByRole('textbox', { name: 'Find anything' });
+    await waitFor(() => expect(input).toHaveFocus());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Command bar' })).not.toBeInTheDocument(),
+    );
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 });
