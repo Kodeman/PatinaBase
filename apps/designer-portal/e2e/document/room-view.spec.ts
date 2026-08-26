@@ -304,8 +304,11 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
   // ── 1. The Rooms roster — card count + Elena's mini-plan ───────────────
   await page.goto('/rooms', { waitUntil: 'domcontentloaded' });
   // RoomShell's title is a plain <span> in its `<header>` — scoped via the
-  // implicit "banner" landmark role, since the StudioDrawer's OWN "The
-  // Rooms" nav button also matches a bare text/exact locator.
+  // implicit "banner" landmark role, which also keeps this off any other
+  // chrome that happens to print the roster's name. A3-L3 renamed the studio
+  // lexicon's door to "The Scans" (registry.tsx, the StudioDrawer, ⌘K); the
+  // `/rooms` page's own banner is outside that rename and still reads
+  // "The Rooms", which is the string asserted here.
   await expect(page.getByRole('banner').getByText('The Rooms', { exact: true })).toBeVisible({
     timeout: 20_000,
   });
@@ -463,15 +466,18 @@ test('the Room View — roster, wall truth, measure, Orbit boundary, and the /ro
 
   // ── 10. Leave → "← the Rooms" (fix A: room-card.tsx stashed /rooms as the
   //      origin on click) → actually returns to /rooms ────────────────────
-  // exact + case-sensitive: the StudioDrawer's OWN nav button is "The Rooms"
-  // (capital T) — RoomShell's leave affordance is the lowercase originLabel().
+  // exact + case-sensitive: RoomShell's leave affordance is the lowercase
+  // originLabel(), distinct from the roster banner's capital-T "The Rooms".
   const leaveButton = page.getByRole('button', { name: 'the Rooms', exact: true });
   await expect(leaveButton).toBeVisible();
   await leaveButton.click();
   await page.waitForURL(/\/rooms$/, { timeout: 5_000 });
   // RoomShell's title is a plain <span> in its `<header>` — scoped via the
-  // implicit "banner" landmark role, since the StudioDrawer's OWN "The
-  // Rooms" nav button also matches a bare text/exact locator.
+  // implicit "banner" landmark role, which also keeps this off any other
+  // chrome that happens to print the roster's name. A3-L3 renamed the studio
+  // lexicon's door to "The Scans" (registry.tsx, the StudioDrawer, ⌘K); the
+  // `/rooms` page's own banner is outside that rename and still reads
+  // "The Rooms", which is the string asserted here.
   await expect(page.getByRole('banner').getByText('The Rooms', { exact: true })).toBeVisible({
     timeout: 20_000,
   });

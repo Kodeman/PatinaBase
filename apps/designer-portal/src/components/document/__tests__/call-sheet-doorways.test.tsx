@@ -458,7 +458,7 @@ describe('spine shelves — the Call sheet row', () => {
     );
   }
 
-  it('renders the row with the flag on, beside the four leaf shelves', () => {
+  it('renders the row with the flag on, beside the three leaf shelves', () => {
     mockCallSheetFlag = true;
     render(<ShelvesHarness />);
 
@@ -472,9 +472,9 @@ describe('spine shelves — the Call sheet row', () => {
 
     expect(screen.queryByRole('button', { name: /Call sheet/ })).not.toBeInTheDocument();
     expect(baseElement.querySelector('[data-shelf-trigger="callsheet"]')).toBeNull();
-    // The four leaf shelves are untouched by the flag.
+    // The three leaf shelves are untouched by the flag.
     expect(screen.getByRole('button', { name: /Plan room/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Knowledge/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mood boards/ })).toBeInTheDocument();
   });
 
   it('reaches the roster sheet — never a leaf — when pressed', () => {

@@ -110,6 +110,11 @@ interface DeriveDocumentGuideInput {
    *  `false` — the care rest state never claims a book is closed on an
    *  absent answer. */
   closureReady?: boolean;
+  /** A3-L8 — has the read that feeds `inputFacts` for THIS stage answered yet?
+   *  An empty `inputFacts` from a read still in flight is not the same fact as
+   *  a read that answered "nothing outstanding", and only the second may rest.
+   *  Omitted (the caller does not track it) reads as answered. */
+  inputsPending?: boolean;
 }
 
 const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
@@ -207,7 +212,10 @@ export const restCopy: Record<SectionKey, { headline: string; actionLabel: strin
  *   discovery  — quiet once every discovery input is answered; `inputFacts`
  *                (the checklist row-source) is the same list `withInputs`
  *                already reads, so an empty/absent list IS the "five things
- *                missing" list going to zero.
+ *                missing" list going to zero — but only once the read has
+ *                ANSWERED (`inputsPending`), because a discovery query still
+ *                in flight also yields an empty list, and a stage may not
+ *                announce itself complete on a fact nobody has stated.
  *   direction  — quiet once the direction has a proposal drafted
  *                (`row.proposal_id`) AND every direction input is answered
  *                (the same `inputFacts` emptiness `discovery` reads): a
@@ -225,11 +233,13 @@ export function isRestState(
   row: DocumentStateRow,
   inputFacts: readonly DocumentGuideInputFact[] | undefined,
   closureReady: boolean | undefined,
+  inputsPending = false,
 ): boolean {
+  const inputsSettled = !inputsPending && (!inputFacts || inputFacts.length === 0);
   switch (stage) {
     case 'brief': return true;
-    case 'discovery': return !inputFacts || inputFacts.length === 0;
-    case 'direction': return Boolean(row.proposal_id) && (!inputFacts || inputFacts.length === 0);
+    case 'discovery': return inputsSettled;
+    case 'direction': return Boolean(row.proposal_id) && inputsSettled;
     case 'project': return true;
     case 'install': return true;
     case 'care': return closureReady === true;
@@ -596,6 +606,7 @@ export function deriveDocumentGuide({
   inputFacts,
   gate,
   closureReady,
+  inputsPending = false,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
   const stage = row.active_section;
   if (availability === 'unavailable') {
@@ -695,7 +706,9 @@ export function deriveDocumentGuide({
   // `installHeadline` — the same ⌥ template `installGuideHeadline` builds for
   // the non-rest branch — rather than the literal placeholder in `restCopy`.
   const restActive =
-    stage === 'install' ? installHeadline !== null : isRestState(stage, row, inputFacts, closureReady);
+    stage === 'install'
+      ? installHeadline !== null
+      : isRestState(stage, row, inputFacts, closureReady, inputsPending);
   if (restActive) {
     const rest = restCopy[stage];
     const restAction: DocumentGuideAction | null =

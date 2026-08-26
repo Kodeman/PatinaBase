@@ -46,7 +46,7 @@ function surfaceLabel(pathname: string | null): string {
   if (pathname.startsWith('/library')) return 'The Library';
   if (pathname.startsWith('/people')) return 'The People Room';
   if (pathname.startsWith('/rooms') || pathname.startsWith('/room/'))
-    return 'The Rooms';
+    return 'The Scans';
   if (pathname.startsWith('/drafting')) return 'Drafting';
   if (pathname.startsWith('/compose')) return 'Composing';
   return 'The Studio';

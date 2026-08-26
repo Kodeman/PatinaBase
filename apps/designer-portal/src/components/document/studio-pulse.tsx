@@ -246,7 +246,7 @@ export function StudioPulseDisclosure({
           <DocumentActionGroup
             surfaceKey="desk"
             regionKey="studio-pulse"
-            aria-label="Studio pulse display"
+            aria-label="The studio today display"
           >
             <DocumentAction
               actionKey={expanded ? 'fold-studio-pulse' : 'open-studio-pulse'}
@@ -269,7 +269,7 @@ export function StudioPulseDisclosure({
       <div
         id={panelId}
         role="region"
-        aria-label="Studio pulse details"
+        aria-label="The studio today details"
         hidden={!expanded}
         className="mt-6 space-y-12 border-t border-dashed border-[var(--border-default)] pt-10"
       >

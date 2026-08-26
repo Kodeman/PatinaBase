@@ -110,7 +110,10 @@ import {
   type DocumentGuideAction,
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
-import { composeDocumentGuideInputs } from '@/lib/document/document-guide-inputs';
+import {
+  composeDocumentGuideInputs,
+  type DocumentGuideReadinessFacts,
+} from '@/lib/document/document-guide-inputs';
 import { deriveGates, nearestOpenGate } from '@/lib/document/workflow-gate';
 import {
   asCommercialDocumentKind,
@@ -755,26 +758,32 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         projectId: liveProposal.project_id ?? null,
       }
     : null;
+  const discoveryReadiness: DocumentGuideReadinessFacts['discovery'] = discoveryQuery.isError
+    ? { state: 'error' }
+    : discoveryQuery.isLoading
+      ? { state: 'loading' }
+      : discoveryQuery.data
+        ? { state: 'ready', data: discoveryQuery.data.row ?? discoveryQuery.data.prefill ?? {} }
+        : { state: 'idle' };
+  const draftingReadiness: DocumentGuideReadinessFacts['drafting'] = draftingState.error
+    ? { state: 'error' }
+    : draftingState.isLoading
+      ? { state: 'loading' }
+      : { state: 'ready', data: { gaps: draftingState.gaps } };
   const guideInputs = row
     ? composeDocumentGuideInputs({
         row,
         proposal: proposalGuideFacts,
-        readiness: {
-          discovery: discoveryQuery.isError
-            ? { state: 'error' }
-            : discoveryQuery.isLoading
-              ? { state: 'loading' }
-              : discoveryQuery.data
-                ? { state: 'ready', data: discoveryQuery.data.row ?? discoveryQuery.data.prefill ?? {} }
-                : { state: 'idle' },
-          drafting: draftingState.error
-            ? { state: 'error' }
-            : draftingState.isLoading
-              ? { state: 'loading' }
-              : { state: 'ready', data: { gaps: draftingState.gaps } },
-        },
+        readiness: { discovery: discoveryReadiness, drafting: draftingReadiness },
       })
     : [];
+  // A3-L7's rest states read an empty `guideInputs` as "nothing outstanding".
+  // On these two stages that list is also empty while its own read is still in
+  // flight, so the stage would announce itself finished on a fact nobody has
+  // stated yet. Pending is not quiet.
+  const guideInputsPending =
+    (row?.active_section === 'discovery' && discoveryReadiness.state !== 'ready') ||
+    (row?.active_section === 'direction' && draftingReadiness.state !== 'ready');
   // A failed Desk read only blanks guidance that depended on it. A document its
   // side feeds never key on keeps its own truthful guidance through the outage.
   const deskGuidanceFailed = deskEnrichment && enrichedOperationalQuery.isError;
@@ -800,6 +809,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           : null,
         schedule: scheduleFacts,
         inputFacts: guideInputs,
+        inputsPending: guideInputsPending,
         operationalNeed: rankedOperationalNeeds?.[0] ?? enrichedOperationalNeed,
         gate: nearestGate,
       })
@@ -1427,6 +1437,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     projectId={row.project_id}
                     projectName={row.title}
                     mode="project"
+                    needs={rankedOperationalNeeds}
                     highlightId={highlightLineId}
                     onAddNote={setPendingNoteAnchor}
                     sectionKey="project"
@@ -1467,6 +1478,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   projectId={row.project_id}
                   projectName={row.title}
                   mode="install"
+                  needs={rankedOperationalNeeds}
                   highlightId={highlightLineId}
                   onAddNote={setPendingNoteAnchor}
                   sectionKey="install"
@@ -1496,6 +1508,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   <FFESection
                     projectId={row.project_id}
                     mode="install"
+                    needs={rankedOperationalNeeds}
                     highlightId={highlightLineId}
                     sectionKey="care"
                     clientUserId={row.client_profile_id}

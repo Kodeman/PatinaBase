@@ -34,7 +34,7 @@ export function PreviousWork({
   if (count === 0) return null;
 
   return (
-    <section className="mb-5 mt-4" aria-label="Previous work">
+    <section className="mb-5 mt-4" aria-label="The record">
       <button
         type="button"
         aria-expanded={open}
