@@ -9,8 +9,10 @@
  *      drafting-room-here).
  *   3. The letterhead instrument — present with the flag on, byte-absent
  *      (not merely hidden) with it off.
- *   5. The spine's "The shelves" call-sheet row (I136) — the same gate: the
- *      row is byte-absent with the flag off, not a disabled stub.
+ *   5. The ticket's `People` row (B1/B2) — the same gate. The spine's "The
+ *      shelves" block is deleted, so the fourth doorway is the ticket row: it
+ *      opens the roster sheet with the flag on, and with the flag off it names
+ *      the absence instead of offering a door into nothing.
  *   4. The ⌘K TYPED-search leak fix — matchSurfaces has no scope/flag check
  *      of its own (registry.tsx stays data-only), so command-bar.tsx's typed
  *      branch must filter document-scoped surfaces itself: typing "roster"
@@ -121,7 +123,9 @@ jest.mock('../proposal-preview', () => ({ ProposalPreview: () => null }));
 // cosmetic, but it keeps the file honest about what's real vs stubbed).
 import { CommandBar } from '../command-bar';
 import { LetterheadInstruments } from '../letterhead-instruments';
-import { SpineShelvesBlock } from '../spine-shelves-block';
+import { JobTicket } from '../job-ticket';
+import { deriveTicket, type TicketInput } from '@/lib/document/ticket-derivation';
+import type { MoneyLadder, MoneyRung } from '@/lib/document/money-ladder';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 function rosterRow(over: Partial<ProjectRosterRow> = {}): ProjectRosterRow {
@@ -471,63 +475,83 @@ describe('letterhead-instruments — the Call Sheet instrument', () => {
 
 
 // ============================================================================
-// 5. The spine's shelf row — the fourth doorway (I136, "The Shelved Spine")
+// 5. The ticket's `People` row — the fourth doorway (B1/B2)
 //    The row is a doorway to the SAME roster sheet the three above open, so it
 //    answers to the same flag. The page resolves it through `useFeatureFlag`
-//    and threads it down, exactly as this harness does.
+//    and threads it into the derivation, exactly as this harness does.
 // ============================================================================
 
-describe('spine shelves — the Call sheet row', () => {
-  const statuses = {
-    planroom: '4 sheets',
-    specbook: '10 specified · by room',
-    moodboards: '3 boards',
-    callsheet: '3 on the roster',
-    knowledge: 'Studio library',
-  };
+describe('the ticket — the People row', () => {
+  const rung = (word: string): MoneyRung => ({ cents: null, note: '', word });
+  const ticketInput = (callSheetEnabled: boolean): TicketInput => ({
+    section: 'project',
+    phase: null,
+    rooms: { settled: true, list: [] },
+    pieces: { settled: true, lines: [] },
+    drawings: { settled: true, sheetCount: 0 },
+    boards: { settled: true, count: 0 },
+    money: {
+      settled: true,
+      failed: false,
+      ladder: {
+        budget: rung('budget'),
+        plan: rung('plan'),
+        authorized: rung('authorized'),
+        moved: rung('moved'),
+        owed: rung('owed'),
+        notDrawn: rung('not drawn'),
+      } as MoneyLadder,
+      owedDays: null,
+      undrawnKind: null,
+      owedSince: null,
+    },
+    dates: { settled: true, schedule: null },
+    people: { settled: true, callSheetEnabled, rosterCount: 3 },
+  });
 
-  function ShelvesHarness({ onToggle }: { onToggle?: jest.Mock }) {
-    // Mirrors page.tsx: the flag is read once and threaded into the block.
+  function TicketHarness({ onOpen }: { onOpen?: jest.Mock }) {
+    // Mirrors page.tsx: the flag is read once and threaded into the ticket.
     const gate = useFeatureFlag('call-sheet');
+    const rows = deriveTicket(ticketInput(gate.value));
     return (
-      <SpineShelvesBlock
-        openShelf={null}
-        statuses={statuses}
-        callSheetEnabled={gate.value}
-        onToggleShelf={onToggle ?? jest.fn()}
+      <JobTicket
+        rows={rows}
+        seam={{ identity: 'The job · Project', exceptions: 'Nothing overdue' }}
+        head={{ subject: 'The job · Project', phase: null }}
+        onOpenLeaf={jest.fn()}
+        routes={{}}
+        onUnfoldRegion={jest.fn()}
+        onOpenCallSheet={onOpen ?? jest.fn()}
       />
     );
   }
 
-  it('renders the row with the flag on, beside the three leaf shelves', () => {
+  it('offers the row as a door with the flag on', () => {
     mockCallSheetFlag = true;
-    render(<ShelvesHarness />);
+    render(<TicketHarness />);
 
-    expect(screen.getByRole('button', { name: /Call sheet/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Plan room/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /People/ })).toBeInTheDocument();
+    expect(screen.getByText('3 on the roster')).toBeInTheDocument();
   });
 
-  it('is byte-absent — not a disabled stub — when the flag is off', () => {
+  it('names the absence — not an empty roster — when the flag is off', () => {
     mockCallSheetFlag = false;
-    const { baseElement } = render(<ShelvesHarness />);
+    render(<TicketHarness />);
 
-    expect(screen.queryByRole('button', { name: /Call sheet/ })).not.toBeInTheDocument();
-    expect(baseElement.querySelector('[data-shelf-trigger="callsheet"]')).toBeNull();
-    // The three leaf shelves are untouched by the flag.
-    expect(screen.getByRole('button', { name: /Plan room/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Boards/ })).toBeInTheDocument();
+    // The row still prints: a row that vanishes at zero cannot be told from a
+    // row that failed to load. What it loses is the door.
+    expect(screen.queryByRole('button', { name: /People/ })).toBeNull();
+    expect(
+      screen.getByText("the call sheet isn't turned on for this studio"),
+    ).toBeInTheDocument();
   });
 
   it('reaches the roster sheet — never a leaf — when pressed', () => {
     mockCallSheetFlag = true;
-    const onToggle = jest.fn();
-    render(<ShelvesHarness onToggle={onToggle} />);
+    const onOpen = jest.fn();
+    render(<TicketHarness onOpen={onOpen} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Call sheet/ }));
-    expect(onToggle).toHaveBeenCalledWith('callsheet');
-    // A doorway promises no panel of its own.
-    expect(
-      screen.getByRole('button', { name: /Call sheet/ }),
-    ).not.toHaveAttribute('aria-expanded');
+    fireEvent.click(screen.getByRole('button', { name: /People/ }));
+    expect(onOpen).toHaveBeenCalled();
   });
 });

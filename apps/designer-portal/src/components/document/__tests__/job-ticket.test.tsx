@@ -4,11 +4,14 @@ import {
   LETTERHEAD_SENTINEL_ID,
 } from '@/components/document/job-ticket';
 import { RoomLensProvider } from '@/components/document/room-lens-context';
-import type {
-  TicketHead,
-  TicketRow,
-  TicketSeam,
+import {
+  deriveTicket,
+  type TicketHead,
+  type TicketInput,
+  type TicketRow,
+  type TicketSeam,
 } from '@/lib/document/ticket-derivation';
+import type { MoneyLadder, MoneyRung } from '@/lib/document/money-ladder';
 
 type ObserverCallback = (entries: { isIntersecting: boolean }[]) => void;
 
@@ -127,6 +130,49 @@ const ROWS: TicketRow[] = [
     exception: null,
   },
 ];
+
+const EIGHT = [
+  'rooms',
+  'pieces',
+  'drawings',
+  'spec',
+  'boards',
+  'money',
+  'dates',
+  'people',
+];
+
+const rung = (word: string): MoneyRung => ({ cents: null, note: '', word });
+
+const emptyLadder = (): MoneyLadder => ({
+  budget: rung('budget'),
+  plan: rung('plan'),
+  authorized: rung('authorized'),
+  moved: rung('moved'),
+  owed: rung('owed'),
+  notDrawn: rung('not drawn'),
+});
+
+/** A proposal document standing on the Finalize table — the one composition
+ *  that derives a ninth row. */
+const FINALIZE_INPUT: TicketInput = {
+  section: 'proposal',
+  phase: null,
+  rooms: { settled: true, list: [] },
+  pieces: { settled: true, lines: [] },
+  drawings: { settled: true, sheetCount: 0 },
+  boards: { settled: true, count: 0 },
+  money: {
+    settled: true,
+    failed: false,
+    ladder: emptyLadder(),
+    owedDays: null,
+    undrawnKind: null,
+    owedSince: null,
+  },
+  dates: { settled: true, schedule: null },
+  people: { settled: true, callSheetEnabled: true, rosterCount: 0 },
+};
 
 const SEAM: TicketSeam = {
   identity: 'The job · Project · Procurement & Orders 4 of 6',
@@ -275,6 +321,27 @@ describe('JobTicket', () => {
     expect(
       screen.getByText("the call sheet isn't turned on for this studio"),
     ).toBeInTheDocument();
+  });
+
+  it('prints the ninth row only where the derivation gave it one', () => {
+    // Eight is what every project, install and care document derives, so the
+    // component must not invent a ninth of its own.
+    renderTicket();
+    expect(ticketRows()).not.toContain('clientcopy');
+  });
+
+  it('opens the client’s copy leaf from the ninth row on the Finalize table', () => {
+    const rows = deriveTicket({
+      ...FINALIZE_INPUT,
+      clientCopy: { settled: true, sent: true },
+    });
+    const { onOpenLeaf } = renderTicket({ rows });
+
+    expect(ticketRows()).toEqual([...EIGHT, 'clientcopy']);
+    expect(screen.getByText('The client’s copy · as sent, live')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Copy/ }));
+    expect(onOpenLeaf).toHaveBeenCalledWith('clientcopy');
   });
 
   it('opens at rest as the seam at 390, and unfolds to the eight rows', () => {

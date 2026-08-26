@@ -3,9 +3,10 @@
  * work itself. The paper holds what the studio is composing; the shelves hold
  * the artifacts it composes from.
  *
- * They are the ticket's rows now, not the spine's block, so their contents are
- * reachable at EVERY width: from 1440px a shelf opens the leaf beside the
- * spine; below that it resolves to the page it already has
+ * They are the ticket's rows now, not the spine's block — the project's four on
+ * every document, and the proposal's one as the ticket's ninth row — so their
+ * contents are reachable at EVERY width: from 1440px a shelf opens the leaf
+ * beside the spine; below that it resolves to the page it already has
  * (`shelfRouteFor`). The call sheet is a DOORWAY, not a leaf: the roster
  * already has a sheet of its own, and printing a second, thinner copy of it in
  * a leaf would be two answers to one question.
@@ -19,6 +20,11 @@ export type ShelfKey =
   | 'clientcopy';
 
 export type ShelfLeafKey = Exclude<ShelfKey, 'callsheet'>;
+
+/** The id the open leaf answers to. It lived on the spine's shelves block
+ *  until that block was deleted; the leaf outlived it, so the id lives with
+ *  the registry that names the leaf rather than with any one caller. */
+export const SHELF_LEAF_ID = 'doc-shelf-leaf';
 
 /** What a shelf belongs to. Four are the project's; the client's copy is the
  *  proposal's, and a document that has one never has the other. */
@@ -73,6 +79,8 @@ const ALL_SHELVES: readonly ShelfDefinition[] = [
     routeSegment: null,
   },
   {
+    // The ticket's ninth row, not a shelf row — kept in the registry because
+    // the leaf it opens is still resolved by key (`ShelfPanel`).
     key: 'clientcopy',
     title: 'The client’s copy',
     eyebrow: 'The client’s copy · Live',
@@ -89,30 +97,27 @@ const ALL_SHELVES: readonly ShelfDefinition[] = [
  * behaves (⌘K, the letterhead instrument, the kickoff band). A disabled stub
  * would still name a surface this studio does not have.
  *
- * The client's copy is the Drafting Room's ≥1440 live rail, re-homed as a leaf
- * (Start to Signature W4a, amendment A3). It is the ONE shelf that belongs to a
- * proposal rather than a project, and it stands only where its subject does —
- * on the Finalize table, behind the `worktable` flag. Everywhere else the copy
- * is reached by the Preview act that has always carried it, so nothing is lost
- * below 1440 where no shelf exists at all (Q7/A4).
+ * The client's copy is NOT among them any more. It is the ticket's ninth row
+ * on a proposal document (B2), so it is offered by the ticket's derivation and
+ * by nothing here; its definition stays only because the leaf it opens still
+ * needs a title and an eyebrow. A proposal document therefore has no shelves
+ * at all, which is why this returns an empty list for that subject.
  */
 export function shelvesFor({
   subject = 'project',
   callSheetEnabled,
-  clientCopyEnabled = false,
 }: {
   /** What this document IS. A proposal has no plan room, no spec book, no
    *  boards and no roster — offering them would name four surfaces it does
    *  not have, which is the same lie the call-sheet stub would tell. */
   subject?: ShelfSubject;
   callSheetEnabled: boolean;
-  clientCopyEnabled?: boolean;
 }): readonly ShelfDefinition[] {
   return ALL_SHELVES.filter(
     (s) =>
       s.subject === subject &&
-      (s.key !== 'callsheet' || callSheetEnabled) &&
-      (s.key !== 'clientcopy' || clientCopyEnabled),
+      s.key !== 'clientcopy' &&
+      (s.key !== 'callsheet' || callSheetEnabled),
   );
 }
 
