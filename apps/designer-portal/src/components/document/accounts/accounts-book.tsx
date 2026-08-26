@@ -115,7 +115,7 @@ export function AccountsBook({
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <div>
           <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
-            Accounts <em className="italic text-[var(--color-clay)]">· the studio&apos;s book</em>
+            Accounts <em className="italic text-[var(--color-clay-ink)]">· the studio&apos;s book</em>
           </h2>
           <p className="mt-0.5 text-[11px] text-[var(--color-aged-oak)]">
             Revenue, what&apos;s owed, what you earn — the sum of every engagement&apos;s account.
@@ -136,7 +136,7 @@ export function AccountsBook({
             aria-current={page === p.key ? 'page' : undefined}
             className={`font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors ${
               page === p.key
-                ? 'text-[var(--color-clay)]'
+                ? 'text-[var(--color-clay-ink)]'
                 : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
             }`}
           >
@@ -163,13 +163,13 @@ export function AccountsBook({
           <button
             type="button"
             onClick={() => openLedger('Library')}
-            className="-mt-2 mb-4 flex items-baseline gap-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
+            className="-mt-2 mb-4 flex items-baseline gap-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay-ink)]"
           >
-            <span className="text-[var(--color-clay)]">teaching</span>
+            <span className="text-[var(--color-clay-ink)]">teaching</span>
             <span className="text-[var(--color-charcoal)]">{taughtCount} taught</span>
             <span>·</span>
             <span className="text-[var(--color-charcoal)]">{fmtUsd(pledgeYtd)} returned</span>
-            <span className="text-[var(--color-clay)] opacity-70">→ Library ↗</span>
+            <span className="text-[var(--color-clay-ink)] opacity-70">→ Library ↗</span>
           </button>
 
           {page === 'ledger' && (

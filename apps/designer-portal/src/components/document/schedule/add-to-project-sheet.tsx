@@ -278,7 +278,7 @@ export function AddToProjectSheet({
                   <span className="block font-heading text-[14px] text-[var(--color-charcoal)]">{String(label)}</span>
                   <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">{String(description)}</span>
                 </span>
-                <span aria-hidden className="text-[var(--color-clay)]">→</span>
+                <span aria-hidden className="text-[var(--color-clay-ink)]">→</span>
               </button>
             ))}
           </div>
@@ -350,7 +350,7 @@ export function AddToProjectSheet({
           </div>
         )}
 
-        {error && <p role="alert" className="mt-3 text-[11px] text-[var(--color-clay)]">{error}</p>}
+        {error && <p role="alert" className="mt-3 text-[11px] text-[var(--color-clay-ink)]">{error}</p>}
       </DocSheet>
 
       <ProductPickerModal

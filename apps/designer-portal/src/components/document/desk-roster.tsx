@@ -58,7 +58,7 @@ function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }
             <br />
             <span
               data-roster-overdue
-              className="text-[var(--color-terracotta)]"
+              className="text-[var(--color-terracotta-ink)]"
             >
               {line.overdueText}
             </span>

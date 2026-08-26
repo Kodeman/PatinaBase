@@ -622,7 +622,7 @@ export function ProjectApprovalDocument({
         <div className="mt-4 border-l-2 border-[var(--color-terracotta)] pl-3">
           <p
             role="alert"
-            className="text-[13px] text-[var(--color-terracotta)]"
+            className="text-[13px] text-[var(--color-terracotta-ink)]"
           >
             Decision authority does not match this project’s current client.
           </p>
@@ -842,7 +842,7 @@ export function ProjectApprovalDocument({
         {approvalsQuery.isError && (
           <p
             role="alert"
-            className="mt-3 text-[13px] text-[var(--color-terracotta)]"
+            className="mt-3 text-[13px] text-[var(--color-terracotta-ink)]"
           >
             Approvals could not be read.
           </p>

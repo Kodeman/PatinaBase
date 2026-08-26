@@ -227,13 +227,13 @@ export function ScheduleThreadPanel({ projectId, today, onSet, onBack }: Schedul
   if (isError) {
     return (
       <div className="w-[420px] max-w-full p-4">
-        <p role="alert" className="mb-2 text-[11.5px] text-[var(--color-terracotta)]">
+        <p role="alert" className="mb-2 text-[11.5px] text-[var(--color-terracotta-ink)]">
           The schedule could not be read.
         </p>
         <button
           type="button"
           onClick={onBack}
-          className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-clay)]"
+          className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-clay-ink)]"
         >
           Back
         </button>
@@ -311,7 +311,7 @@ export function ScheduleThreadPanel({ projectId, today, onSet, onBack }: Schedul
         <button
           type="button"
           onClick={onBack}
-          className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-clay)]"
+          className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-clay-ink)]"
         >
           Back
         </button>

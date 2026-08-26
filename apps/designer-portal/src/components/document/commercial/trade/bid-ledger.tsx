@@ -330,7 +330,7 @@ export function BidLedger({
                   {rfqError?.partyId === party.id && (
                     <p
                       role="alert"
-                      className="mt-1 text-[10.5px] text-[var(--color-terracotta)]"
+                      className="mt-1 text-[10.5px] text-[var(--color-terracotta-ink)]"
                     >
                       {rfqError.message}
                     </p>
@@ -432,7 +432,7 @@ export function BidLedger({
       )}
 
       {error && (
-        <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta)]">
+        <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}

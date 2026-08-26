@@ -152,7 +152,7 @@ export function ReviseSheet({
             {error && (
               <div
                 role="alert"
-                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
+                className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay-ink)]"
               >
                 {error}
               </div>

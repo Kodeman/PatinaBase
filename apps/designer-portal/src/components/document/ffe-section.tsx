@@ -45,6 +45,7 @@ import type { FFEStageKey } from '@patina/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   deriveLineStamp,
+  lineStampLabel,
   type LineStamp,
   type TradeLineProgress,
 } from '@/lib/document/stamp-derivation';
@@ -111,11 +112,11 @@ import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
-  approved: '#A8895E',
-  production: '#B89A2E',
-  shipped: '#B89A2E',
-  delivered: '#85947C',
-  installed: '#85947C',
+  approved: 'var(--color-clay-ink)',
+  production: 'var(--color-golden-hour-ink)',
+  shipped: 'var(--color-golden-hour-ink)',
+  delivered: 'var(--color-sage-ink)',
+  installed: 'var(--color-sage-ink)',
 };
 
 /** The authority states that can still put work in front of a client. */
@@ -130,65 +131,54 @@ function stampProps(stamp: LineStamp): {
   color: string;
   ink?: string;
 } {
+  // F58: the word is never chosen here — stamp-derivation is the one source,
+  // so this surface and the spec-book leaf cannot name a line differently.
+  const label = lineStampLabel(stamp.kind);
   switch (stamp.kind) {
     // Act IV — trade work is judged, not delivered. Aged oak while it is only
     // committed, golden hour while hands are on it, clay when it waits on the
     // client's judgement, sage when they have given it.
     case 'trade_engaged':
-      return {
-        label: 'Engaged',
-        color: 'var(--color-aged-oak)',
-        ink: '#8B7355',
-      };
+      return { label, color: 'var(--color-aged-oak)', ink: '#8B7355' };
     case 'trade_in_progress':
-      return {
-        label: 'In progress',
-        color: 'var(--color-golden-hour)',
-        ink: '#B89A2E',
-      };
+      return { label, color: 'var(--color-golden-hour)', ink: 'var(--color-golden-hour-ink)' };
     case 'trade_substantially_complete':
-      return {
-        label: 'Substantially complete',
-        color: 'var(--color-clay)',
-        ink: '#A8895E',
-      };
+      return { label, color: 'var(--color-clay)', ink: 'var(--color-clay-ink)' };
     case 'trade_accepted':
-      return { label: 'Accepted', color: 'var(--color-sage)', ink: '#85947C' };
+      return { label, color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' };
     // Never actually rendered — the line below skips <Stamp> entirely for
     // this kind, so a line whose real progress is not yet known stays quiet
     // rather than guessing. Kept exhaustive/safe rather than falling into
     // STAGE_CONFIG (keyed by FFEStageKey, not LineStampKind — it has no
     // 'trade_pending' entry and would throw).
     case 'trade_pending':
-      return { label: '', color: 'var(--color-aged-oak)' };
+      return { label, color: 'var(--color-aged-oak)' };
     case 'decision_due':
       return {
-        label: stamp.dueDate
-          ? `Decision due · ${fmtDay(stamp.dueDate)}`
-          : 'Decision due',
+        label: stamp.dueDate ? `${label} · ${fmtDay(stamp.dueDate)}` : label,
         color: 'var(--color-terracotta)',
-        ink: '#C4836F',
+        ink: 'var(--color-terracotta-ink)',
       };
+    // Arrived, awaiting inspection — its own word, not STAGE_CONFIG's
+    // dropdown word, which would print RECEIVED over an unopened pallet.
+    case 'delivered':
+      return { label, color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' };
     case 'received':
-      return { label: 'Received', color: 'var(--color-sage)', ink: '#85947C' };
+      return { label, color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' };
     case 'partial':
       // R18: the W5-T2 short receipt, surfaced — golden hour like the
       // inspection outcome it derives from.
-      return {
-        label: 'Partial',
-        color: 'var(--color-golden-hour)',
-        ink: '#B89A2E',
-      };
+      return { label, color: 'var(--color-golden-hour)', ink: 'var(--color-golden-hour-ink)' };
     case 'damaged':
       // Item-grain truth only (00196): an open claim attributed to THIS line.
       return {
-        label: 'Damaged',
+        label,
         color: 'var(--color-terracotta)',
-        ink: '#C4836F',
+        ink: 'var(--color-terracotta-ink)',
       };
     default: {
       const cfg = STAGE_CONFIG[stamp.kind];
-      return { label: cfg.label, color: cfg.color, ink: STAGE_INK[stamp.kind] };
+      return { label, color: cfg.color, ink: STAGE_INK[stamp.kind] };
     }
   }
 }
@@ -250,7 +240,7 @@ function TradeAuthorizationStamp({ hold }: { hold: TradeLineHold }) {
       <Stamp
         label={hold.number ? `On trade scope · TS${hold.number}` : 'On trade scope'}
         color="var(--color-sage)"
-        ink="#85947C"
+        ink="var(--color-sage-ink)"
       />
     </span>
   );
@@ -263,7 +253,7 @@ function coverageNote(
   coverage: FfeItemCoverage | undefined,
 ): { text: string; color: string } | null {
   if (coverage && coverage.coverage === 'paid')
-    return { text: 'paid', color: '#85947C' };
+    return { text: 'paid', color: 'var(--color-sage-ink)' };
   if (coverage && coverage.coverage === 'invoiced')
     return {
       text: coverage.invoiceNumber
@@ -367,7 +357,7 @@ function FFELine({
         )}
         {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
         {item.added_via === 'engine' && (
-          <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay)] opacity-70">
+          <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] opacity-70">
             via the Engine
           </p>
         )}
@@ -1175,7 +1165,7 @@ function FFESectionBody({
               <>
                 <Link
                   href={`/doc/${projectId}/spec-book`}
-                  className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
+                  className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:text-[var(--color-charcoal)]"
                 >
                   Spec book →
                 </Link>
@@ -1252,7 +1242,7 @@ function FFESectionBody({
           would simply be missing with no reason given. */}
       {mode === 'project' && readinessQuery.isError && (
         <div className="mb-2">
-          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta)]">
+          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta-ink)]">
             Release readiness could not be read, so no line can be released yet.
           </p>
           <DocumentAction
@@ -1321,7 +1311,7 @@ function FFESectionBody({
 
       {!isLoading && isError && (
         <div className="border-t border-[var(--color-pearl)] py-3">
-          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta)]">
+          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta-ink)]">
             The FF&amp;E schedule could not be read.
           </p>
           <DocumentAction

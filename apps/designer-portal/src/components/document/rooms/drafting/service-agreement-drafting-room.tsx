@@ -280,7 +280,7 @@ function ServiceAgreementEditor({
     >
       <div className="mx-auto max-w-[1240px] px-6 py-7 sm:px-8">
         <header className="border-b border-[var(--doc-ink-border)] pb-5">
-          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay)]">
+          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
             Yes to the designer · professional services only
           </p>
           <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
@@ -678,7 +678,7 @@ function AgreementFacet({
   return (
     <section className="border-t border-[var(--doc-ink-border)] pt-4">
       <div className="mb-4 grid gap-2 sm:grid-cols-[40px_190px_minmax(0,1fr)]">
-        <span className="font-mono text-[9px] text-[var(--color-clay)]">
+        <span className="font-mono text-[9px] text-[var(--color-clay-ink)]">
           {index}
         </span>
         <h2 className="font-heading text-[1.15rem] italic text-[var(--color-charcoal)]">

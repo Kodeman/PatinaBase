@@ -58,7 +58,7 @@ export function WorkOrderSheet({
     >
       <style>{PRINT_CSS}</style>
       <div data-work-order-region>
-        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay)]">
+        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
           Work order · Trade scope № {scopeNumber}
         </p>
         <h3 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">

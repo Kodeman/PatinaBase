@@ -63,7 +63,7 @@ const SOURCE_LABEL: Record<string, string> = {
   manual_entry: 'typed',
 };
 
-const TERRACOTTA_INK = '#C4836F';
+const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
 
 /** Local Monday 00:00 of the week `offset` weeks before the current one. */
 function weekRange(offset: number): { start: Date; end: Date } {
@@ -337,14 +337,14 @@ export function HoursLedger({
         <div className="min-w-0">
           <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
             Hours{' '}
-            <em className="italic text-[var(--color-clay)]">· {weekLabel}</em>
+            <em className="italic text-[var(--color-clay-ink)]">· {weekLabel}</em>
             {lensName && (
               <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 · {lensName}
                 <button
                   type="button"
                   onClick={() => setLensProjectId(null)}
-                  className="ml-1.5 text-[var(--color-clay)] hover:opacity-80"
+                  className="ml-1.5 text-[var(--color-clay-ink)] hover:opacity-80"
                 >
                   all documents ×
                 </button>
@@ -360,7 +360,7 @@ export function HoursLedger({
             <button
               type="button"
               onClick={() => setWeekOffset((o) => o + 1)}
-              className="ml-3 text-[var(--color-clay)] hover:opacity-80"
+              className="ml-3 text-[var(--color-clay-ink)] hover:opacity-80"
             >
               ‹ earlier
             </button>
@@ -368,7 +368,7 @@ export function HoursLedger({
               <button
                 type="button"
                 onClick={() => setWeekOffset((o) => Math.max(0, o - 1))}
-                className="ml-2 text-[var(--color-clay)] hover:opacity-80"
+                className="ml-2 text-[var(--color-clay-ink)] hover:opacity-80"
               >
                 later ›
               </button>
@@ -394,7 +394,7 @@ export function HoursLedger({
               initialTimeEntryIds: weekUnbilled.map((e) => e.id),
             })
           }
-          className="whitespace-nowrap rounded-[3px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:border-[var(--color-pearl)] disabled:text-[var(--color-aged-oak)] disabled:hover:bg-transparent"
+          className="whitespace-nowrap rounded-[3px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:border-[var(--color-pearl)] disabled:text-[var(--color-aged-oak)] disabled:hover:bg-transparent"
         >
           Export week → Accounts
         </button>
@@ -438,7 +438,7 @@ export function HoursLedger({
       {/* R77 — the all-time unbilled balance, with its one act. */}
       {unbilledMinutes > 0 && (
         <div className="-mt-2 mb-4 flex flex-wrap items-baseline gap-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-          <span className="text-[var(--color-clay)]">unbilled · all time</span>
+          <span className="text-[var(--color-clay-ink)]">unbilled · all time</span>
           <span className="text-[var(--color-charcoal)]">
             {fmtUsd(unbilledCents)} · {fmtMinutes(unbilledMinutes)}
           </span>
@@ -515,7 +515,7 @@ export function HoursLedger({
 
       {days.map(([day, rows]) => (
         <section key={day} className="mb-4">
-          <p className="mb-1 flex items-baseline justify-between font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay)]">
+          <p className="mb-1 flex items-baseline justify-between font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
             <span>
               {day === todayKey ? 'Today' : fmtDay(rows[0].started_at)}
             </span>
@@ -729,7 +729,7 @@ function EntryRow({
               variant="tertiary"
               aria-label="Delete entry"
               onClick={() => setConfirming(true)}
-              className="text-[13px] leading-none text-[var(--color-aged-oak)] decoration-transparent hover:text-[#C4836F]"
+              className="text-[13px] leading-none text-[var(--color-aged-oak)] decoration-transparent hover:text-[var(--color-terracotta-ink)]"
             >
               ×
             </DocumentAction>

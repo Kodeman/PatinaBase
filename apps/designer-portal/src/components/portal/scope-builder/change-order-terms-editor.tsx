@@ -96,7 +96,7 @@ function ChangeOrderTermsEditorState({ proposalId }: ChangeOrderTermsEditorProps
     return (
       <div
         role="alert"
-        className="rounded-[3px] border border-[var(--color-terracotta)] px-3 py-3 font-body text-[0.78rem] text-[var(--color-terracotta)]"
+        className="rounded-[3px] border border-[var(--color-terracotta)] px-3 py-3 font-body text-[0.78rem] text-[var(--color-terracotta-ink)]"
       >
         <p>Change-order terms could not be loaded. Editing is paused to protect the client copy.</p>
         <button
@@ -255,7 +255,7 @@ function ChangeOrderTermsEditorState({ proposalId }: ChangeOrderTermsEditorProps
         {termsAutosave.state === 'error' && (
           <p
             role="alert"
-            className="font-body text-[0.72rem] text-[var(--color-terracotta)]"
+            className="font-body text-[0.72rem] text-[var(--color-terracotta-ink)]"
           >
             {termsAutosave.error ?? 'Could not save the change-order terms.'}{' '}
             Your client copy was not updated.

@@ -76,7 +76,7 @@ export function MobileAccountHeader({ onOpen }: { onOpen: () => void }) {
       </span>
       <span
         aria-hidden
-        className="font-mono text-[14px] text-[var(--color-clay)] opacity-70"
+        className="font-mono text-[14px] text-[var(--color-clay-ink)] opacity-70"
       >
         ›
       </span>

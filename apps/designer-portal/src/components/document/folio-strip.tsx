@@ -97,7 +97,7 @@ function FileChip({
         className="inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[8.5px] uppercase tracking-[0.05em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         style={{
           color: head.client_visible
-            ? '#85947C'
+            ? 'var(--color-sage-ink)'
             : 'var(--color-aged-oak, #8B7355)',
         }}
         title={

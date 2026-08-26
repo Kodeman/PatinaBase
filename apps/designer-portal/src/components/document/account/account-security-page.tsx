@@ -110,7 +110,7 @@ export function AccountSecurityPage() {
       {error && (
         <p
           role="alert"
-          className="mb-4 border-l-2 border-[var(--color-terracotta)] pl-3 text-[12px] text-[var(--color-terracotta)]"
+          className="mb-4 border-l-2 border-[var(--color-terracotta)] pl-3 text-[12px] text-[var(--color-terracotta-ink)]"
         >
           {error}
         </p>
@@ -153,7 +153,7 @@ export function AccountSecurityPage() {
                 variant="tertiary"
                 onClick={() => handleUnenroll(factor)}
                 disabled={unenrollMfa.isPending}
-                className="text-[var(--color-terracotta)]"
+                className="text-[var(--color-terracotta-ink)]"
               >
                 Remove
               </DocumentAction>

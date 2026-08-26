@@ -209,7 +209,7 @@ export function CoordinationWork({
                     <span
                       className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.05em]"
                       style={{
-                        color: overdue ? '#C4836F' : 'var(--text-muted)',
+                        color: overdue ? 'var(--color-terracotta-ink)' : 'var(--text-muted)',
                       }}
                     >
                       {done

@@ -183,7 +183,7 @@ export function PhaseSection({
           // a hidden affordance on a closed chapter is a lie).
           const foldLabel = expanded ? 'Fold' : 'Unfold';
           const foldCls =
-            'ml-4 font-mono text-[0.58rem] font-normal uppercase tracking-[0.08em] text-[var(--color-clay)]';
+            'ml-4 font-mono text-[0.58rem] font-normal uppercase tracking-[0.08em] text-[var(--color-clay-ink)]';
           // An unpinnable anchor chip renders a real <button>; it must never
           // nest inside the fold toggle <button> (invalid HTML — the walk's
           // hydration warning). When the chip is inert (a <span>, the read-only
@@ -259,7 +259,7 @@ export function PhaseSection({
         })()}
 
         {metaLine && (
-          <div className="mb-[0.2rem] mt-[0.15rem] font-mono text-[0.6rem] uppercase tracking-[0.08em] text-[var(--color-clay)]">
+          <div className="mb-[0.2rem] mt-[0.15rem] font-mono text-[0.6rem] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
             {metaLine}
           </div>
         )}
@@ -269,7 +269,7 @@ export function PhaseSection({
             around it. Absent whenever this phase isn't the conflict's anchor
             (the common case) — no extra DOM, byte-identical to before. */}
         {overrunText && (
-          <div className="mb-[0.2rem] font-mono text-[0.6rem] uppercase tracking-[0.08em] text-[var(--color-terracotta)]">
+          <div className="mb-[0.2rem] font-mono text-[0.6rem] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
             {overrunText}
           </div>
         )}
@@ -280,7 +280,7 @@ export function PhaseSection({
             Absent when no ripple touches this phase → byte-identical to before. */}
         {ghostLine && (
           <div className="mb-[0.2rem] font-mono text-[0.6rem] uppercase tracking-[0.08em]">
-            <span className="border-b border-dashed border-[var(--color-terracotta)] text-[var(--color-terracotta)]">
+            <span className="border-b border-dashed border-[var(--color-terracotta)] text-[var(--color-terracotta-ink)]">
               {ghostLine}
             </span>
           </div>

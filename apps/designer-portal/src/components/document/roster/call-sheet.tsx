@@ -130,7 +130,7 @@ export function CallSheet({
             Everyone on {projectTitle}, and how to reach them.
           </p>
           {clientName && (
-            <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay)]">
+            <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
               {clientName}
             </p>
           )}

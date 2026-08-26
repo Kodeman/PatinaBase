@@ -67,7 +67,7 @@ export function CaptureSheet({
 
   return (
     <RoomSheet open={open} onClose={onClose} title="Capture into My Library">
-      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay)]">
+      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         Capture · into My Library
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
@@ -105,7 +105,7 @@ export function CaptureSheet({
       </p>
 
       {error && (
-        <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta)]">
+        <p className="mt-3 text-[0.72rem] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}

@@ -20,7 +20,7 @@ export function ServiceAgreementDocumentBody({
   }
   if (bundle.error || !bundle.data) {
     return (
-      <p className="py-3 text-[11.5px] text-[var(--color-terracotta)]">
+      <p className="py-3 text-[11.5px] text-[var(--color-terracotta-ink)]">
         Agreement unavailable.
       </p>
     );

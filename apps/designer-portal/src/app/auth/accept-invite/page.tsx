@@ -139,7 +139,7 @@ function AcceptInviteContent() {
           </p>
           <a
             href="/auth/signin"
-            className="inline-block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
+            className="inline-block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] hover:text-[var(--color-charcoal)]"
           >
             Sign in
           </a>

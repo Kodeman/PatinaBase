@@ -74,7 +74,7 @@ export function DrawingsSection({ drawings, version, roomName }: DrawingsSection
             <span className="block font-heading text-[16px] text-[var(--color-charcoal)]">{C.dxfLabel}</span>
             <span className="mt-0.5 block font-heading text-[12px] italic text-[var(--color-mocha)]">{C.dxfHint}</span>
           </span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-clay)]">
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
             {busyKey === 'dxf' ? '…' : 'Download'}
           </span>
         </button>
@@ -111,7 +111,7 @@ export function DrawingsSection({ drawings, version, roomName }: DrawingsSection
       )}
 
       {error && (
-        <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)]">{error}</p>
+        <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">{error}</p>
       )}
     </section>
   );
@@ -174,7 +174,7 @@ function ArtifactLink({ label, busy, onClick }: { label: string; busy: boolean; 
       type="button"
       onClick={onClick}
       disabled={busy}
-      className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay)] disabled:opacity-50"
+      className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)] disabled:opacity-50"
     >
       {busy ? '…' : label}
     </button>

@@ -87,7 +87,7 @@ export function CourtGroup({
         </span>
         <span
           className="font-mono text-[9px] uppercase tracking-[0.05em]"
-          style={{ color: isYours ? 'var(--color-clay)' : 'var(--color-aged-oak)' }}
+          style={{ color: isYours ? 'var(--color-clay-ink)' : 'var(--color-aged-oak)' }}
         >
           {meta}
         </span>

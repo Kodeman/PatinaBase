@@ -292,7 +292,7 @@ export function PieceConfigurationEditor({
       {saveError && (
         <p
           role="alert"
-          className="mt-2 text-[0.75rem] text-[var(--color-terracotta)]"
+          className="mt-2 text-[0.75rem] text-[var(--color-terracotta-ink)]"
         >
           {saveError}
         </p>

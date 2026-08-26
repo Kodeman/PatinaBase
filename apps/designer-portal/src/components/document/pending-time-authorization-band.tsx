@@ -59,7 +59,7 @@ export function PendingTimeAuthorizationBand({
               type="button"
               aria-label={`Review ${name} billing setup`}
               onClick={() => onSelectProject(projectId)}
-              className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-clay)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+              className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
             >
               {name} · {minutesLabel(minutes)} →
             </button>

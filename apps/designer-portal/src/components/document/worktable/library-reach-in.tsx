@@ -322,7 +322,7 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
                             )}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[14px] text-[var(--color-charcoal)] transition-colors group-hover:text-[var(--color-clay)]">
+                            <span className="block truncate text-[14px] text-[var(--color-charcoal)] transition-colors group-hover:text-[var(--color-clay-ink)]">
                               {row.name}
                             </span>
                             <span className="block truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">

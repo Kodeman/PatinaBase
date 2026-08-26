@@ -30,8 +30,8 @@ import { DocumentAction, DocumentActionGroup } from './document-action';
 import { AccountsQueryFailure } from './accounts/accounts-query-failure';
 import { SectionLoadingLine } from './section-loading-line';
 
-const SAGE_INK = '#85947C';
-const TERRACOTTA_INK = '#C4836F';
+const SAGE_INK = 'var(--color-sage-ink)';
+const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
 
 const TRIGGER_LABELS: Record<string, string> = {
   on_signing: 'on signing',
@@ -99,7 +99,7 @@ function MilestoneRow({
               })
             }
             aria-label={`${m.label} section`}
-            className="bg-transparent font-mono text-[9px] uppercase tracking-[0.04em] text-[var(--color-clay)] outline-none"
+            className="bg-transparent font-mono text-[9px] uppercase tracking-[0.04em] text-[var(--color-clay-ink)] outline-none"
           >
             <option value="">pick a section</option>
             {GATE_SECTIONS.map((s) => (
@@ -120,7 +120,7 @@ function MilestoneRow({
               })
             }
             ariaLabel={`${m.label} date`}
-            className="bg-transparent font-mono text-[9px] text-[var(--color-clay)] outline-none"
+            className="bg-transparent font-mono text-[9px] text-[var(--color-clay-ink)] outline-none"
           />
         )}
       </span>
@@ -257,7 +257,7 @@ export function AccountBand({
         <span className="font-mono text-[7.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak,#8B7355)]">
           Studio eyes only
         </span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+        <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
           {open ? 'fold ↑' : 'unfold ↓'}
         </span>
       </button>

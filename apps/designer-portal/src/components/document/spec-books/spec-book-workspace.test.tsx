@@ -498,3 +498,50 @@ describe("SP-19/F57 — the spec book lands on the addressed FF&E line", () => {
     ).toBeInTheDocument();
   });
 });
+
+/**
+ * F58 — the workbench is not a line-status printer and must not become a third
+ * vocabulary. It reads `item.status` only as a gate on configuration revision;
+ * the lifecycle word belongs to the paper's stamp and the shelf's value, both
+ * of which derive it from `stamp-derivation`.
+ */
+describe("F58 — the workbench names no lifecycle word", () => {
+  function withDeliveredLine() {
+    const base = mockWorkbenchHookResult as { data: Record<string, unknown> };
+    base.data.items = [
+      buildItem(
+        {},
+        {
+          id: "item-1",
+          name: "Custom Walnut Sectional — 3 pc",
+          document_code: "F-01",
+          status: "delivered",
+        },
+      ),
+    ];
+  }
+
+  it.each(["Delivered", "Received", "delivered", "Partial", "Damaged"])(
+    "never prints %s for a delivered line",
+    (word) => {
+      withDeliveredLine();
+
+      render(<SpecBookWorkspace projectId="project-1" />);
+
+      expect(
+        screen.getByText("Custom Walnut Sectional — 3 pc"),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(word)).not.toBeInTheDocument();
+    },
+  );
+
+  it("marks readiness instead — a different question, in its own words", () => {
+    withDeliveredLine();
+
+    const { container } = render(<SpecBookWorkspace projectId="project-1" />);
+
+    expect(
+      container.querySelector("#spec-book-item-item-1"),
+    ).toHaveTextContent("incomplete");
+  });
+});

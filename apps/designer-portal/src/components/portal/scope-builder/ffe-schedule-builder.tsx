@@ -681,7 +681,7 @@ function TwinChip({ twins, onJump }: { twins: TwinRef[]; onJump: (id: string) =>
       style={{
         fontSize: '0.58rem',
         letterSpacing: '0.04em',
-        color: '#C4836F',
+        color: 'var(--color-terracotta-ink)',
       }}
     >
       ⚠ twin: {label}
@@ -1400,7 +1400,7 @@ export function FFEScheduleBuilder({
           style={{
             fontFamily: 'var(--font-body)',
             fontSize: '0.78rem',
-            color: '#C4836F',
+            color: 'var(--color-terracotta-ink)',
             borderColor: 'rgba(196,131,111,0.4)',
           }}
         >
@@ -1419,7 +1419,7 @@ export function FFEScheduleBuilder({
           style={{
             fontFamily: 'var(--font-body)',
             fontSize: '0.78rem',
-            color: '#C4836F',
+            color: 'var(--color-terracotta-ink)',
             borderColor: 'rgba(196,131,111,0.4)',
           }}
         >
@@ -1455,7 +1455,7 @@ export function FFEScheduleBuilder({
                     fontSize: '0.62rem',
                     textTransform: 'uppercase',
                     letterSpacing: '0.06em',
-                    color: 'var(--color-clay)',
+                    color: 'var(--color-clay-ink)',
                   }}
                 >
                   {group.roomName}
@@ -1562,7 +1562,7 @@ export function FFEScheduleBuilder({
                     fontSize: '0.62rem',
                     textTransform: 'uppercase',
                     letterSpacing: '0.06em',
-                    color: 'var(--color-clay)',
+                    color: 'var(--color-clay-ink)',
                   }}
                 >
                   {room.name}

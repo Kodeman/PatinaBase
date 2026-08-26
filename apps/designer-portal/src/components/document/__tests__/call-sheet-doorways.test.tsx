@@ -486,6 +486,9 @@ describe('the ticket — the People row', () => {
   const ticketInput = (callSheetEnabled: boolean): TicketInput => ({
     section: 'project',
     phase: null,
+    // A project document — the only shape on which the flag's on/off split is
+    // the thing the People row is telling you about.
+    project: true,
     rooms: { settled: true, list: [] },
     pieces: { settled: true, lines: [] },
     drawings: { settled: true, sheetCount: 0 },

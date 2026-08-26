@@ -131,7 +131,7 @@ export function NurtureCard({
     <Card title="Nurture" edge={due ? 'var(--color-terracotta)' : 'var(--color-sage)'}>
       <p
         className="text-[0.74rem] leading-relaxed"
-        style={{ color: due ? '#c4836f' : 'var(--color-mocha)' }}
+        style={{ color: due ? 'var(--color-terracotta-ink)' : 'var(--color-mocha)' }}
       >
         {text}
       </p>

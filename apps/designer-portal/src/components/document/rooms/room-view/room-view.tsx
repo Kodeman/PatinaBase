@@ -369,7 +369,7 @@ export function RoomView({
           className="-mb-px cursor-not-allowed border-b-2 border-transparent px-5 pb-3 pt-2.5 font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-mocha)] opacity-35"
         >
           Walk
-          <span className="mt-0.5 block text-[8px] tracking-[0.1em] text-[var(--color-clay)] opacity-100">
+          <span className="mt-0.5 block text-[8px] tracking-[0.1em] text-[var(--color-clay-ink)] opacity-100">
             arrives with Place
           </span>
         </span>

@@ -104,7 +104,7 @@ export function ProposalMilestonesEditor({ phaseId, proposalId, today }: Proposa
                 <span className="min-w-0 flex-1 truncate font-body text-[0.82rem] text-[var(--text-primary)]">
                   {m.name}
                 </span>
-                <span className="flex-none font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--color-clay)]">
+                <span className="flex-none font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
                   {KINDS.find((k) => k.key === m.kind)?.label ?? m.kind} · {fmtDay(m.anchor_date)}
                 </span>
                 <button
@@ -112,7 +112,7 @@ export function ProposalMilestonesEditor({ phaseId, proposalId, today }: Proposa
                   onClick={() => removeMilestone.mutate({ milestoneId: m.id, proposalId })}
                   disabled={removeMilestone.isPending}
                   aria-label={`Remove milestone ${m.name}`}
-                  className="flex-none font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-terracotta)] disabled:opacity-50"
+                  className="flex-none font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-terracotta-ink)] disabled:opacity-50"
                 >
                   ×
                 </button>
@@ -176,12 +176,12 @@ export function ProposalMilestonesEditor({ phaseId, proposalId, today }: Proposa
       </div>
 
       {nameError && (
-        <p className="mt-[0.35rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
+        <p className="mt-[0.35rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
           {nameError}
         </p>
       )}
       {addMilestone.isError && (
-        <p className="mt-[0.35rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
+        <p className="mt-[0.35rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
           Add failed — nothing was saved
         </p>
       )}

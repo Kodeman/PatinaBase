@@ -247,7 +247,7 @@ export function ProposalWatch({
             type="button"
             onClick={() => setRecordOpen((o) => !o)}
             aria-expanded={recordOpen}
-            className="shrink-0 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+            className="shrink-0 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             the record {recordOpen ? '↑' : '↓'}
           </button>

@@ -456,11 +456,11 @@ const NEED_RANK: Record<NeedKind, number> = {
  *  vars; warm-toned stamps darken their text ink for contrast on paper.
  *  Golden Hour is reserved for the urgent folder outline, never stamp text. */
 const STAMP = {
-  due: { color: 'var(--color-terracotta)', ink: '#C4836F' },
-  terracotta: { color: 'var(--color-terracotta)', ink: '#C4836F' },
-  clay: { color: 'var(--color-clay)', ink: '#A8895E' },
+  due: { color: 'var(--color-terracotta)', ink: 'var(--color-terracotta-ink)' },
+  terracotta: { color: 'var(--color-terracotta)', ink: 'var(--color-terracotta-ink)' },
+  clay: { color: 'var(--color-clay)', ink: 'var(--color-clay-ink)' },
   dustyBlue: { color: 'var(--color-dusty-blue)' },
-  sage: { color: 'var(--color-sage)', ink: '#85947C' },
+  sage: { color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' },
 } as const;
 
 // Bare DATE columns (e.g. an invoice due_date 'YYYY-MM-DD') must parse as LOCAL
@@ -668,7 +668,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
             ? `1 line flagged on ${flagged.docTitle}`
             : `${n} lines flagged on ${flagged.docTitle}`,
         actionLabel: NEED_ACTION_LABELS.lines_flagged,
-        stamp: { label: 'FLAGGED', color: 'var(--color-clay)' },
+        stamp: { label: 'FLAGGED', ...STAMP.clay },
         urgent: false,
         deepLink: `/drafting/${flagged.proposalId}?flagged=1`,
       });

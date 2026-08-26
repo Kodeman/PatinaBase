@@ -478,7 +478,7 @@ export function ReviewReleaseSheet({
       >
         {blocked && !awaitingAcknowledgment ? (
           <>
-            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]">
+            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               Budget checkpoint
             </p>
             <p className="mt-0.5 text-[11.5px] text-[var(--color-charcoal)]">
@@ -505,7 +505,7 @@ export function ReviewReleaseSheet({
           </>
         ) : blocked && awaitingAcknowledgment ? (
           <>
-            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]">
+            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               Budget checkpoint
             </p>
             <p className="mt-0.5 text-[11.5px] text-[var(--color-charcoal)]">
@@ -592,7 +592,7 @@ export function ReviewReleaseSheet({
       </div>
 
       {error && (
-        <p role="alert" className="mb-1 text-[11px] text-[#C4836F]">
+        <p role="alert" className="mb-1 text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}

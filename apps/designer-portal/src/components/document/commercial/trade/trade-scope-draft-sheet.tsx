@@ -302,7 +302,7 @@ export function TradeScopeDraftSheet({
             </DocumentAction>
           </DocumentActionGroup>
           {error && (
-            <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta)]">
+            <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta-ink)]">
               {error}
             </p>
           )}
@@ -524,7 +524,7 @@ export function TradeScopeDraftSheet({
           </section>
 
           {error && (
-            <p role="alert" className="mt-4 text-[11px] text-[var(--color-terracotta)]">
+            <p role="alert" className="mt-4 text-[11px] text-[var(--color-terracotta-ink)]">
               {error}
             </p>
           )}

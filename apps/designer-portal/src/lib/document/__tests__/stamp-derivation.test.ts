@@ -1,4 +1,9 @@
-import { deriveLineStamp } from '../stamp-derivation';
+import {
+  deriveLineStamp,
+  lineStampLabel,
+  type LineStampInput,
+  type LineStampKind,
+} from '../stamp-derivation';
 
 const base = {
   status: 'specified',
@@ -134,5 +139,138 @@ describe('PARTIAL (R18 — surfaced from W5-T2 per-item counts)', () => {
         item_claims: [{ state: 'drafted' }],
       }).kind,
     ).toBe('damaged');
+  });
+});
+
+/**
+ * F58 — one derivation, one word per state. This table is the contract every
+ * surface that names a line's lifecycle is held to; the consumers' own suites
+ * assert they print exactly what it says.
+ */
+const STAMP_WORD_FIXTURES: {
+  state: string;
+  row: LineStampInput;
+  kind: LineStampKind;
+  word: string;
+}[] = [
+  {
+    state: 'unspecified',
+    row: { status: 'specified', blocked: false, received_quantity: null },
+    kind: 'specified',
+    word: 'Specified',
+  },
+  {
+    state: 'quoted',
+    row: { status: 'quoted', blocked: false, received_quantity: null },
+    kind: 'quoted',
+    word: 'Quoted',
+  },
+  {
+    state: 'approved',
+    row: { status: 'approved', blocked: false, received_quantity: null },
+    kind: 'approved',
+    word: 'Approved',
+  },
+  {
+    state: 'ordered',
+    row: { status: 'ordered', blocked: false, received_quantity: null },
+    kind: 'ordered',
+    word: 'Released to maker',
+  },
+  {
+    state: 'in production',
+    row: { status: 'production', blocked: false, received_quantity: null },
+    kind: 'production',
+    word: 'In production',
+  },
+  {
+    state: 'in transit',
+    row: { status: 'shipped', blocked: false, received_quantity: null },
+    kind: 'shipped',
+    word: 'In transit',
+  },
+  {
+    state: 'arrived, awaiting inspection',
+    row: { status: 'delivered', blocked: false, received_quantity: null },
+    kind: 'delivered',
+    word: 'Delivered',
+  },
+  {
+    state: 'inspected in full',
+    row: {
+      status: 'delivered',
+      blocked: false,
+      received_quantity: 2,
+      quantity: 2,
+    },
+    kind: 'received',
+    word: 'Received',
+  },
+  {
+    state: 'inspected short',
+    row: {
+      status: 'delivered',
+      blocked: false,
+      received_quantity: 1,
+      quantity: 3,
+    },
+    kind: 'partial',
+    word: 'Partial',
+  },
+  {
+    state: 'open claim',
+    row: {
+      status: 'delivered',
+      blocked: false,
+      received_quantity: 2,
+      quantity: 2,
+      item_claims: [{ state: 'drafted' }],
+    },
+    kind: 'damaged',
+    word: 'Damaged',
+  },
+  {
+    state: 'blocked on a pending decision',
+    row: {
+      status: 'specified',
+      blocked: true,
+      received_quantity: null,
+      blocking_decision: { status: 'pending', due_date: null },
+    },
+    kind: 'decision_due',
+    word: 'Decision due',
+  },
+  {
+    state: 'installed',
+    row: { status: 'installed', blocked: false, received_quantity: null },
+    kind: 'installed',
+    word: 'Installed',
+  },
+];
+
+describe('lineStampLabel — F58, one word per state', () => {
+  it.each(STAMP_WORD_FIXTURES)('$state reads $word', ({ row, kind, word }) => {
+    expect(deriveLineStamp(row).kind).toBe(kind);
+    expect(lineStampLabel(deriveLineStamp(row).kind)).toBe(word);
+  });
+
+  it('arrived and inspected-in-full are two states with two words', () => {
+    expect(lineStampLabel('delivered')).not.toBe(lineStampLabel('received'));
+  });
+
+  it('a trade line whose scope progress is unresolved stays wordless', () => {
+    expect(
+      lineStampLabel(
+        deriveLineStamp(
+          {
+            status: 'approved',
+            blocked: false,
+            received_quantity: null,
+            trade_scope_document_id: 'pcd-1',
+          },
+          null,
+        ).kind,
+      ),
+    ).toBe('');
   });
 });

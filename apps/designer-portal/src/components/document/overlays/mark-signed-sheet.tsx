@@ -80,7 +80,7 @@ export function MarkSignedSheet({
   return (
     <DocSheet open={open} onClose={onClose} title="Record the signature">
       <form onSubmit={submit} className="mx-auto w-full max-w-[34rem]">
-        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay)]">
+        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
           Signed offline · on paper
         </span>
         <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-charcoal)]">
@@ -113,7 +113,7 @@ export function MarkSignedSheet({
 
         {error && (
           <p
-            className="mt-5 text-[12px] text-[var(--color-terracotta)]"
+            className="mt-5 text-[12px] text-[var(--color-terracotta-ink)]"
             role="alert"
           >
             {error}

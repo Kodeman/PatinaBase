@@ -75,7 +75,7 @@ export function StepReview({
         }}
       >
         <div className="mb-1 flex items-center justify-between gap-2">
-          <div className="type-meta-small text-[var(--color-clay,#C4A57B)]">
+          <div className="type-meta-small text-[var(--color-clay-ink)]">
             Open vendor portal
           </div>
           {vendor.trade_portal_url ? (

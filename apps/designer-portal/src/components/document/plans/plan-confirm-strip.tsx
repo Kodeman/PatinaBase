@@ -315,7 +315,7 @@ export function PlanConfirmStrip({
         {failure && (
           <p
             role="alert"
-            className="mt-1 font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]"
+            className="mt-1 font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]"
           >
             {STAGE_LINE[failure.stage].replace('…', '')} failed — nothing moved.{' '}
             {failure.message}

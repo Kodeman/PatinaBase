@@ -66,7 +66,7 @@ export function PlanLinkOnce({
       {copyFailed && (
         <p
           role="alert"
-          className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]"
+          className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
         >
           Copy failed &mdash; select the link text
         </p>

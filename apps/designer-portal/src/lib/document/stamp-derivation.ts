@@ -135,3 +135,42 @@ export function deriveLineStamp(
     dueDate: null,
   };
 }
+
+/**
+ * The word a stamp prints — F58, ruling: one derivation, one word per state.
+ * Every surface that names a line's lifecycle reads this, so the paper and the
+ * spine's spec-book leaf cannot drift apart again.
+ *
+ * The eight machine words are STAGE_CONFIG's, carried as literals rather than
+ * imported: stages.ts pulls @patina/help-system (the Jest ESM trap this module
+ * stays clear of, per the header above).
+ *
+ * `delivered` is the one deliberate divergence from STAGE_CONFIG, whose word
+ * is still `Received`: the FF&E board's dropdown names the stage a line can be
+ * moved TO, while a stamp names what is true of the goods — and arrived is not
+ * inspected. `trade_pending` is empty by design (no badge beats a guessed one);
+ * callers render nothing for it.
+ */
+const LINE_STAMP_LABEL: Record<LineStampKind, string> = {
+  specified: 'Specified',
+  quoted: 'Quoted',
+  approved: 'Approved',
+  ordered: 'Released to maker',
+  production: 'In production',
+  shipped: 'In transit',
+  delivered: 'Delivered',
+  installed: 'Installed',
+  received: 'Received',
+  partial: 'Partial',
+  damaged: 'Damaged',
+  decision_due: 'Decision due',
+  trade_engaged: 'Engaged',
+  trade_in_progress: 'In progress',
+  trade_substantially_complete: 'Substantially complete',
+  trade_accepted: 'Accepted',
+  trade_pending: '',
+};
+
+export function lineStampLabel(kind: LineStampKind): string {
+  return LINE_STAMP_LABEL[kind];
+}

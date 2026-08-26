@@ -500,7 +500,7 @@ function TierInstrument({
           </p>
         )}
         {feedback === 'error' && (
-          <p role="alert" className="font-mono text-[8.5px] text-[var(--color-terracotta)]">
+          <p role="alert" className="font-mono text-[8.5px] text-[var(--color-terracotta-ink)]">
             {feedbackError ?? 'Could not update the client preview.'}
           </p>
         )}
@@ -522,7 +522,7 @@ export function ProposalPreviewRail({
     return (
       <div
         role="alert"
-        className="rounded-[3px] border border-[var(--color-terracotta)] px-3 py-3 text-[12px] text-[var(--color-terracotta)]"
+        className="rounded-[3px] border border-[var(--color-terracotta)] px-3 py-3 text-[12px] text-[var(--color-terracotta-ink)]"
       >
         <p>The client copy could not be verified. Preview and send remain unavailable.</p>
         <button

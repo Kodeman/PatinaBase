@@ -358,7 +358,7 @@ export function LightTable({
                     {proposal.sheetTitle ? ` · ${proposal.sheetTitle}` : ''}
                   </span>
                   {state === 'sent' ? (
-                    <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#85947C]">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-sage-ink)]">
                       In the Folio
                     </span>
                   ) : (
@@ -380,7 +380,7 @@ export function LightTable({
                   {state && state !== 'sent' && state !== 'sending' && (
                     <p
                       role="alert"
-                      className="w-full font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]"
+                      className="w-full font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
                     >
                       {state}
                     </p>

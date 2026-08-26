@@ -155,7 +155,7 @@ export function BoardImageInspectorActions({
         {removeBackground.isPending ? 'Removing background…' : 'Remove background'}
       </Button>
       {mutationError && (
-        <p role="alert" className="text-[11px] leading-4 text-[var(--color-clay)]">
+        <p role="alert" className="text-[11px] leading-4 text-[var(--color-clay-ink)]">
           {readableError(mutationError)}
         </p>
       )}

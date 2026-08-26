@@ -165,7 +165,7 @@ function QuoteSheet({
       onClose={close}
       title={`Request a quote from ${vendorName}`}
     >
-      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay)]">
+      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         Quote · {vendorName}
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
@@ -238,7 +238,7 @@ function QuoteSheet({
           </p>
 
           {error && (
-            <p className="mt-3 border-l-2 border-[var(--color-terracotta)] py-1 pl-3 text-[0.72rem] text-[var(--color-terracotta)]">
+            <p className="mt-3 border-l-2 border-[var(--color-terracotta)] py-1 pl-3 text-[0.72rem] text-[var(--color-terracotta-ink)]">
               {error}
             </p>
           )}
@@ -419,7 +419,7 @@ export function MakerProfile({
           role="status"
           className={`mt-3 border-l-2 py-1.5 pl-3 font-mono text-[0.56rem] uppercase tracking-[0.07em] ${
             rosterError
-              ? 'border-[var(--color-terracotta)] text-[var(--color-terracotta)]'
+              ? 'border-[var(--color-terracotta)] text-[var(--color-terracotta-ink)]'
               : 'border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] text-[#6f8268]'
           }`}
         >
@@ -452,7 +452,7 @@ export function MakerProfile({
                   }
                   target="_blank"
                   rel="noreferrer"
-                  className="font-mono text-[0.56rem] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-aged-oak)]"
+                  className="font-mono text-[0.56rem] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:text-[var(--color-aged-oak)]"
                 >
                   their site →
                 </a>
@@ -571,7 +571,7 @@ export function MakerProfile({
               onClick={() => void toggleRoster()}
               className={
                 isSaved
-                  ? 'mt-[0.6rem] text-[var(--color-terracotta)] decoration-[var(--color-terracotta)]'
+                  ? 'mt-[0.6rem] text-[var(--color-terracotta-ink)] decoration-[var(--color-terracotta)]'
                   : 'mt-[0.6rem]'
               }
             >

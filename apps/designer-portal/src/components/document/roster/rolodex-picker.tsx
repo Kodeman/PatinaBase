@@ -365,14 +365,14 @@ export function RolodexPicker({
       </div>
 
       {error && (
-        <p role="status" className="mt-2 text-[0.72rem] text-[var(--color-terracotta)]">
+        <p role="status" className="mt-2 text-[0.72rem] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}
 
       {adding && (
         <div className="mt-4 border-t border-[var(--color-pearl)] pt-4">
-          <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay)]">
+          <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
             Someone new
           </p>
 

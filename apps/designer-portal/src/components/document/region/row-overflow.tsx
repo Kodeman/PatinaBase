@@ -62,7 +62,7 @@ export function RowOverflow({
         data-surface-key={surfaceKey}
         data-action-region={regionKey}
         onClick={() => onOpenChange(open ? null : rowKey)}
-        className="inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[13px] leading-none text-[var(--color-clay)]"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[13px] leading-none text-[var(--color-clay-ink)]"
       >
         ···
       </button>

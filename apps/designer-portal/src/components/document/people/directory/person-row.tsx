@@ -84,7 +84,7 @@ export function PersonRow({
         <span
           className={`mt-[0.15rem] block truncate text-[0.7rem] ${
             line.due
-              ? 'font-medium text-[var(--color-terracotta)]'
+              ? 'font-medium text-[var(--color-terracotta-ink)]'
               : 'text-[var(--color-aged-oak)]'
           }`}
         >

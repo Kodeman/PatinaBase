@@ -217,7 +217,7 @@ export function BoardTemplateDialog({
           )}
         </section>
 
-        {error && <p role="alert" className="text-[12px] text-[var(--color-clay)]">{error}</p>}
+        {error && <p role="alert" className="text-[12px] text-[var(--color-clay-ink)]">{error}</p>}
       </DialogContent>
     </Dialog>
   );

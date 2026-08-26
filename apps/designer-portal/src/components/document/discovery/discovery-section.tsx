@@ -443,7 +443,7 @@ export function DiscoverySection({
           band with the server's reason and a retry. Never a toast. */}
       {beginError && (
         <div className="mb-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.10)] px-4 py-2.5">
-          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[#C4836F]">
+          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
             Couldn&rsquo;t begin the Direction
           </span>
           <span className="text-[12px] leading-snug text-[var(--color-charcoal)]">

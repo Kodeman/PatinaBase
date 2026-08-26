@@ -71,7 +71,7 @@ export function ComposerOptionBuilder({ value, onChange }: ComposerOptionBuilder
       <button
         type="button"
         onClick={add}
-        className="self-start font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+        className="self-start font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] hover:opacity-80"
       >
         + Option
       </button>

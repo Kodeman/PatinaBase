@@ -170,7 +170,7 @@ export function PlanSheetDetail({
         {stateError && (
           <p
             role="alert"
-            className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]"
+            className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
           >
             {stateError}
           </p>

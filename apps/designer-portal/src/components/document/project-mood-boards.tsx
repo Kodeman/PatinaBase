@@ -253,7 +253,7 @@ export function ProjectMoodBoards({
         <h2 id="project-mood-boards" className="font-heading text-[16px] text-[var(--color-charcoal)]">
           Boards
         </h2>
-        <p role="alert" className="mt-2 text-[12px] text-[var(--color-clay)]">
+        <p role="alert" className="mt-2 text-[12px] text-[var(--color-clay-ink)]">
           The project&apos;s boards could not be read.
         </p>
       </section>
@@ -372,7 +372,7 @@ export function ProjectMoodBoards({
               <>
                 <span className="font-heading text-[13px] text-[var(--color-charcoal)]">{item.label}</span>
                 <span className="text-[10.5px] text-[var(--text-muted)]">{item.detail}</span>
-                <span aria-hidden className="ml-auto text-[var(--color-clay)]">→</span>
+                <span aria-hidden className="ml-auto text-[var(--color-clay-ink)]">→</span>
               </>
             );
             return item.href ? (
@@ -464,7 +464,7 @@ export function ProjectMoodBoards({
                   {continued ? (
                     <Link
                       href={roomHref(continued.id, pathname)}
-                      className="inline-flex min-h-11 items-center rounded-[4px] border border-[var(--color-clay)] px-3 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                      className="inline-flex min-h-11 items-center rounded-[4px] border border-[var(--color-clay)] px-3 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                     >
                       Open continued board
                     </Link>
@@ -513,7 +513,7 @@ export function ProjectMoodBoards({
       )}
 
       {error && (
-        <p role="alert" className="mt-3 text-[12px] text-[var(--color-clay)]">
+        <p role="alert" className="mt-3 text-[12px] text-[var(--color-clay-ink)]">
           {error}
         </p>
       )}

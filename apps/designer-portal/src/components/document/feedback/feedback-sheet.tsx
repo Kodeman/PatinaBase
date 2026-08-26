@@ -181,7 +181,7 @@ export function FeedbackSheet() {
           </h2>
           <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             on{' '}
-            <span className="text-[var(--color-clay)]">
+            <span className="text-[var(--color-clay-ink)]">
               {context.screen_name}
             </span>
           </span>
@@ -305,7 +305,7 @@ export function FeedbackSheet() {
         </div>
 
         {error && (
-          <p className="mt-3 text-[13px] text-[var(--color-terracotta)]">
+          <p className="mt-3 text-[13px] text-[var(--color-terracotta-ink)]">
             {error}
           </p>
         )}

@@ -1036,7 +1036,7 @@ export function CommandBar() {
         {asking ? (
           <div className="max-h-[60vh] overflow-y-auto px-4 pb-3 pt-2">
             <div className="mb-1 flex items-center justify-between gap-3">
-              <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay)]">
+              <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
                 Results · “{asking}”
               </span>
               <button

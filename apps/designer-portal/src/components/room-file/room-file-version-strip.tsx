@@ -50,7 +50,7 @@ export function RoomFileVersionStrip({ versions, currentId, onSelect }: RoomFile
           return (
             <span
               key={v.id}
-              className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)]"
+              className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
             >
               v{v.version} · {label}
             </span>
@@ -61,7 +61,7 @@ export function RoomFileVersionStrip({ versions, currentId, onSelect }: RoomFile
             key={v.id}
             type="button"
             onClick={() => onSelect(v.id)}
-            className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay)]"
+            className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay-ink)]"
           >
             v{v.version} · {label}
           </button>

@@ -36,7 +36,7 @@ export function NeedsSetupChip({
         aria-expanded={open}
         aria-controls={contentId}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-baseline gap-1 border border-dashed border-[var(--color-aged-oak)] px-2 py-1 font-mono text-[8.5px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="inline-flex items-baseline gap-1 border border-dashed border-[var(--color-aged-oak)] px-2 py-1 font-mono text-[8.5px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
         <span>Needs setup · {count}</span>
         <span aria-hidden>→</span>
@@ -49,7 +49,7 @@ export function NeedsSetupChip({
                 <button
                   type="button"
                   onClick={entry.onActivate}
-                  className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-clay)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                  className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                 >
                   {entry.remedyLabel}
                 </button>

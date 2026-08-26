@@ -253,7 +253,7 @@ export function DiscoveryScheduleLine({
                 </DocumentAction>
               </DocumentActionRow>
               {refresh.isError && (
-                <p className="mt-1.5 text-[11px] text-[var(--color-terracotta)]">
+                <p className="mt-1.5 text-[11px] text-[var(--color-terracotta-ink)]">
                   {(refresh.error as { message?: string } | null)?.message ||
                     'Could not send fresh times.'}
                 </p>

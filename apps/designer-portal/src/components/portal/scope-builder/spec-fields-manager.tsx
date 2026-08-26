@@ -228,7 +228,7 @@ export function SpecFieldsManager({ owner }: { owner: SpecFieldOwner }) {
           </div>
 
           {error && (
-            <p role="alert" className="mt-2" style={{ fontSize: '0.72rem', color: '#C4836F' }}>
+            <p role="alert" className="mt-2" style={{ fontSize: '0.72rem', color: 'var(--color-terracotta-ink)' }}>
               {error}
             </p>
           )}

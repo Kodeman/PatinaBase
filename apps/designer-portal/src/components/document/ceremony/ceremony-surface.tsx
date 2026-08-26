@@ -353,7 +353,7 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
         </p>
 
         <header className="mb-10">
-          <p className="mb-2.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-[var(--color-clay)]">
+          <p className="mb-2.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
             The match ceremony
           </p>
           <h1 className="font-heading text-[34px] font-medium leading-[1.12] text-[var(--text-primary)] sm:text-[44px]">
@@ -465,7 +465,7 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
                 </DocumentAction>
               </DocumentActionGroup>
               {sendError && (
-                <p className="mt-3 text-[12px] text-[var(--color-terracotta)]">
+                <p className="mt-3 text-[12px] text-[var(--color-terracotta-ink)]">
                   The send didn’t go through — your draft is held. Try again.
                 </p>
               )}

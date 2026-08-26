@@ -501,7 +501,7 @@ export function PlanIssueCeremony({
                   {name}
                 </p>
                 {finalized ? (
-                  <Stamp label="ISSUED" color="var(--color-sage)" ink="#85947C" />
+                  <Stamp label="ISSUED" color="var(--color-sage)" ink="var(--color-sage-ink)" />
                 ) : (
                   <StatusChip label="Not yet minted" color="var(--color-aged-oak)" />
                 )}
@@ -520,7 +520,7 @@ export function PlanIssueCeremony({
               {failure && (
                 <p
                   role="alert"
-                  className="mt-3 border-l-2 border-[var(--color-terracotta)] pl-2 text-[0.78rem] leading-snug text-[var(--color-terracotta)]"
+                  className="mt-3 border-l-2 border-[var(--color-terracotta)] pl-2 text-[0.78rem] leading-snug text-[var(--color-terracotta-ink)]"
                 >
                   {failure}
                 </p>

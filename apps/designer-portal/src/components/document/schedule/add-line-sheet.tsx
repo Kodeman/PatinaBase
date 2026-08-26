@@ -118,7 +118,7 @@ export function AddLineSheet({
       </p>
 
       {error && (
-        <p role="alert" className="mt-2 text-[11px] text-[#C4836F]">
+        <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}

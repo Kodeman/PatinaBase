@@ -88,7 +88,7 @@ export function DeepAnalysisSheet({
 
   return (
     <RoomSheet open onClose={onClose} title={`Deep analysis — ${productName}`}>
-      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay)]">
+      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         Deep analysis · the 15-minute sitting
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
@@ -131,7 +131,7 @@ export function DeepAnalysisSheet({
       </div>
 
       {error && (
-        <p className="mt-4 text-[0.72rem] text-[var(--color-terracotta)]">
+        <p className="mt-4 text-[0.72rem] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}

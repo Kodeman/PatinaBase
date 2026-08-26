@@ -16,6 +16,29 @@
   /* Quiet Ink carries small explanatory copy at 6.3:1+ on Patina paper.
      Aged Oak and Clay remain material pigments for rules, washes, and marks. */
   --color-quiet-ink: #65594E;
+  /* F56 — text-grade companions. The base pigments stay material colour for
+     fills, borders, rules, pools and stamp outlines; when the same pigment is
+     asked to also be READ ON PAPER, it takes the -ink value. Same hue (within
+     2°), dark enough to clear WCAG 2.2 AA 4.5:1 on every LIGHT ground the
+     surface paints behind text — --doc-paper, --color-off-white, white, and
+     the two tinted bands the red-letter zone and the note band lay over paper.
+     No site using these qualifies as large text (the mono eyebrows are 9–12px),
+     so 4.5:1 is the floor, not 3:1. --color-terracotta-ink also supersedes the
+     old #C4836F "terracotta ink" literal, which was the same hue at 2.9:1.
+
+     These are PAPER inks and only paper inks. On the charcoal grounds — the
+     mobile bar and its More popover, a dark Sheet, the log strip below 1180,
+     the two client-preview banners — the darkening inverts: clay-ink falls to
+     2.41:1 there while base clay already reads at 6.21:1. Those sites keep the
+     base pigment, and contrast.test.ts holds both halves of that rule. */
+  --color-clay-ink: #7C5E30; /* 5.75:1 paper · 5.61:1 off-white · 6.00:1 white */
+  --color-terracotta-ink: #9C5340; /* 5.41:1 paper · 5.28:1 off-white · 5.64:1 white */
+  /* The two remaining pre-darkened ink LITERALS the surface carried inline
+     (#B89A2E golden hour at 2.62:1, #85947C sage at 3.09:1), now tokens that
+     actually clear the floor. Same role: stamp labels, margin-item words and
+     the quiet mono notes that name a state. */
+  --color-golden-hour-ink: #79651E; /* 5.45:1 paper · 5.32:1 off-white · 5.69:1 white */
+  --color-sage-ink: #5F6B57; /* 5.40:1 paper · 5.27:1 off-white · 5.63:1 white */
 
   /* — Extended Palette — */
   --color-sage: #A8B5A0;
@@ -359,7 +382,7 @@
 }
 .da-primary .da-leading,
 .da-primary .da-trailing {
-  color: var(--color-clay);
+  color: var(--color-clay-ink);
 }
 
 /* ── SECONDARY · one score, held back; the ink only warms the paper ──────── */

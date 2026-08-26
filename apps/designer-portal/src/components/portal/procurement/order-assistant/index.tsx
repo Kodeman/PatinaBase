@@ -751,7 +751,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
             <div className="flex flex-col gap-1 border-b border-[var(--border-default)] px-5 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="type-meta-small text-[var(--color-clay,#C4A57B)]">
+                  <div className="type-meta-small text-[var(--color-clay-ink)]">
                     Order Assistant · {vendor.name}
                   </div>
                   <div className="mt-0.5 truncate font-heading text-[1rem] font-medium text-[var(--text-primary)]">
@@ -1024,7 +1024,7 @@ function CreatedConfirmation({
             {deferredPayNow.error && (
               <p
                 className="mt-2 text-[0.7rem]"
-                style={{ color: 'var(--color-terracotta,#D4A090)' }}
+                style={{ color: 'var(--color-terracotta-ink)' }}
                 role="alert"
               >
                 {deferredPayNow.error}
@@ -1075,7 +1075,7 @@ const ROUTING_COPY: Record<
   catalog: {
     label: 'Order via Patina',
     hint: 'Order through Patina and pay now, via Stripe, to place the order.',
-    color: 'var(--color-clay, #C4A57B)',
+    color: 'var(--color-clay-ink)',
     bg: 'rgba(196, 165, 123, 0.15)',
   },
 };

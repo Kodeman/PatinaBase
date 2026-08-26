@@ -183,10 +183,15 @@ export interface TicketInput {
    * The three shelf leaves (plan room · spec book · boards) and the call sheet
    * are project-keyed and mounted only where one stands, so off a project those
    * rows state their figure and open nothing — the same rule `regionDoor`
-   * applies to a region this spread does not print. Defaults to true: every
-   * document the ticket read facts for before B2 carried a project.
+   * applies to a region this spread does not print.
+   *
+   * Required, deliberately. An omitted optional here read as "has a project",
+   * so a mount that forgot it would tell a projectless reader the call sheet
+   * is turned off for their studio — a false claim about the studio, which is
+   * exactly what `peopleRow`'s three-way split exists to prevent. The type
+   * asks rather than assumes.
    */
-  project?: boolean;
+  project: boolean;
   /** What the pinned composition already stands on the paper (see
    *  `TicketSlotKey`). Empty off the Worktable, and on every table but Speccing. */
   tableSlots?: readonly TicketSlotKey[];
@@ -244,7 +249,7 @@ function regionDoor(input: TicketInput, region: DocumentIndexKey): TicketDoor {
 
 /** The three shelf leaves and the call sheet are mounted by the project, so a
  *  paper with none opens neither. */
-const hasProject = (input: TicketInput) => input.project !== false;
+const hasProject = (input: TicketInput) => input.project;
 
 /** The row's subject already stands on this paper — anchor to it rather than
  *  print a second door to it (C9/Q1). */

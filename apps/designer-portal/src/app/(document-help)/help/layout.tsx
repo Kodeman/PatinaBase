@@ -25,13 +25,13 @@ export default function HelpCenterLayout({ children }: { children: React.ReactNo
         <div className="mx-auto flex max-w-3xl items-baseline justify-between">
           <Link
             href="/help"
-            className="font-heading text-[22px] font-medium text-[var(--color-charcoal)] hover:text-[var(--color-clay)]"
+            className="font-heading text-[22px] font-medium text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)]"
           >
             Help
           </Link>
           <Link
             href="/desk"
-            className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+            className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:opacity-80"
           >
             ← The Desk
           </Link>

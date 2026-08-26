@@ -340,7 +340,7 @@ export function CareBand({
           role="status"
           className="mt-3 rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.08)] px-3.5 py-2.5"
         >
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[#C4836F]">
+          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
             Operational closeout still open
           </p>
           <ul className="mt-1 space-y-0.5 text-[11.5px] text-[var(--color-charcoal)]">
@@ -472,7 +472,7 @@ export function CareBand({
       {error && (
         <p
           role="alert"
-          className="mt-3 text-[11.5px] text-[var(--color-terracotta)]"
+          className="mt-3 text-[11.5px] text-[var(--color-terracotta-ink)]"
         >
           {error} <span className="opacity-80">The act is safe to retry.</span>
         </p>

@@ -225,7 +225,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
             {/* Header */}
             <div className="flex items-start justify-between gap-3 border-b border-[var(--border-default)] px-5 py-4">
               <div className="min-w-0">
-                <div className="type-meta-small text-[var(--color-clay,#C4A57B)]">
+                <div className="type-meta-small text-[var(--color-clay-ink)]">
                   Log inspection
                 </div>
                 <div className="mt-0.5 truncate font-heading text-[1rem] font-medium text-[var(--text-primary)]">
@@ -473,7 +473,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                   style={{
                     borderColor: 'var(--color-terracotta)',
                     background: 'rgba(212,160,144,0.10)',
-                    color: 'var(--color-terracotta)',
+                    color: 'var(--color-terracotta-ink)',
                   }}
                   role="alert"
                 >

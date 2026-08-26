@@ -52,6 +52,7 @@ function emptyInput(section: TicketInput['section'] = 'project'): TicketInput {
   return {
     section,
     phase: null,
+    project: true,
     rooms: { settled: true, list: [] },
     pieces: { settled: true, lines: [] },
     drawings: { settled: true, sheetCount: 0 },
@@ -209,6 +210,25 @@ describe('deriveTicket — the four spreads before the work starts', () => {
       const rows = deriveTicket({
         ...projectlessInput(section),
         people: { settled: true, callSheetEnabled: true, rosterCount: 0 },
+      });
+      expect(valueOf(rows, 'people')).toBe('No roster yet');
+      expect(rows.find((row) => row.key === 'people')!.door).toEqual({
+        kind: 'overlay',
+        overlay: 'call-sheet',
+        available: false,
+      });
+    },
+  );
+
+  it.each(BEFORE_THE_WORK)(
+    'reads the same honest-empty on a %s document whether the studio flag is on or off',
+    (section) => {
+      // hasProject wins outright: a paper with no roster cannot state
+      // anything true about the studio's flag either way, so the flag being
+      // off changes nothing here — only a project changes this row.
+      const rows = deriveTicket({
+        ...projectlessInput(section),
+        people: { settled: true, callSheetEnabled: false, rosterCount: 0 },
       });
       expect(valueOf(rows, 'people')).toBe('No roster yet');
       expect(rows.find((row) => row.key === 'people')!.door).toEqual({

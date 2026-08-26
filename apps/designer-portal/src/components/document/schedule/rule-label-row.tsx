@@ -132,7 +132,7 @@ export function RuleLabelRow({ labels, onReveal }: RuleLabelRowProps) {
           >
             {l.name}
             {l.subline && (
-              <small className="mt-px block font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[var(--color-clay)]">
+              <small className="mt-px block font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
                 {l.subline}
               </small>
             )}

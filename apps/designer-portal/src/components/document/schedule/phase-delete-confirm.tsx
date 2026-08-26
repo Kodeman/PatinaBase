@@ -88,7 +88,7 @@ export function PhaseDeleteConfirm({
         </DocumentActionGroup>
       </div>
       {errorText && (
-        <div className="mt-[0.35rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
+        <div className="mt-[0.35rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
           {errorText}
         </div>
       )}

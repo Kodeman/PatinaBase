@@ -179,7 +179,7 @@ function TradeVoidAct({
 
   return (
     <div className="border-l-2 border-[var(--color-terracotta)] pl-3">
-      <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]">
+      <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
         Void trade scope № {scope.number}
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-mocha)]">
@@ -213,7 +213,7 @@ function TradeVoidAct({
       </label>
 
       {error && (
-        <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta)]">
+        <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}
@@ -350,7 +350,7 @@ export function TradeScopeDetail({
       pageLabel={`№ ${scope.number}`}
     >
       <div>
-        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay)]">
+        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
           Trade scope № {scope.number}
         </p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
@@ -522,7 +522,7 @@ export function TradeScopeDetail({
         )}
 
         {error && (
-          <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta)]">
+          <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta-ink)]">
             {error}
           </p>
         )}

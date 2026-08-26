@@ -82,9 +82,11 @@ export interface ProposalWatchModel {
 
 // Brand tokens — the same state hues the Desk stamps use (globals.css).
 const CLAY = 'var(--color-clay)';
+const CLAY_INK = 'var(--color-clay-ink)';
 const SAGE = 'var(--color-sage)';
 const GOLDEN = 'var(--color-golden-hour)';
 const TERRACOTTA = 'var(--color-terracotta)';
+const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
 const MUTED = 'var(--text-muted)';
 
 /**
@@ -125,14 +127,14 @@ export function sectionLabel(sectionType: string | null | undefined): string | n
 function deriveStamp(status: WatchStatus, aged: boolean): WatchStamp {
   switch (status) {
     case 'sent':
-      return { label: 'SENT', color: CLAY };
+      return { label: 'SENT', color: CLAY, ink: CLAY_INK };
     case 'viewed':
       // Opened and sitting too long without a signature → promote to AWAITING.
       return aged ? { label: 'AWAITING', color: GOLDEN } : { label: 'VIEWED', color: SAGE };
     case 'accepted':
       return { label: 'SIGNED', color: SAGE };
     case 'declined':
-      return { label: 'DECLINED', color: TERRACOTTA };
+      return { label: 'DECLINED', color: TERRACOTTA, ink: TERRACOTTA_INK };
     case 'expired':
       return { label: 'EXPIRED', color: MUTED };
     case 'revised':

@@ -145,7 +145,7 @@ export function DocColophon({
               actionKey="open-archive-confirmation"
               variant="tertiary"
               onClick={() => setPane(pane === 'archive' ? null : 'archive')}
-              className="text-[var(--color-terracotta)] decoration-[var(--color-terracotta)]"
+              className="text-[var(--color-terracotta-ink)] decoration-[var(--color-terracotta)]"
             >
               Archive
             </DocumentAction>

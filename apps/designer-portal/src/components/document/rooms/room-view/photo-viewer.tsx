@@ -282,7 +282,7 @@ export function PhotoViewer({ photos, index, onIndexChange, onClose }: PhotoView
         <button
           type="button"
           onClick={onClose}
-          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:opacity-80"
         >
           ← Back to the room
         </button>

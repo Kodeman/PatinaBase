@@ -63,7 +63,7 @@ export function RoomCard({ entry }: { entry: RoomRosterEntry }) {
         <div className="relative z-10 mt-2.5 w-fit border-t border-[var(--doc-ink-border)] pt-2.5">
           <Link
             href={`/doc/${entry.docRef.engagementId}`}
-            className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-mocha)] hover:text-[var(--color-clay)]"
+            className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-mocha)] hover:text-[var(--color-clay-ink)]"
           >
             → the document · {entry.docRef.phaseLabel}
           </Link>
