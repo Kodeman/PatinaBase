@@ -15,6 +15,10 @@ import Link from 'next/link';
 import { useProjectFFEItems } from '@patina/supabase';
 import { fmtUsd } from '@/lib/document/format';
 import { liftByRoom } from '@/lib/document/room-state';
+import {
+  deriveLineStamp,
+  lineStampLabel,
+} from '@/lib/document/stamp-derivation';
 import { useRoomLens } from '../room-lens-context';
 import type { DocumentRoom } from '@/hooks/use-document-rooms';
 import {
@@ -26,12 +30,20 @@ import {
   ShelfLifted,
 } from './shelf-parts';
 
+/** Every field `deriveLineStamp` reads is already in this fetch — the leaf's
+ *  call and the paper's differ only in the PO embed (`withLifecycle`). */
 interface SpecRow {
   id: string;
   name: string;
-  status: string | null;
+  status: string;
   project_room_id: string | null;
   line_total_cents: number | null;
+  blocked: boolean | null;
+  received_quantity: number | null;
+  quantity?: number | null;
+  blocking_decision?: { status: string; due_date: string | null } | null;
+  item_claims?: { state: string }[] | null;
+  trade_scope_document_id?: string | null;
 }
 
 export function SpecBookLeaf({
@@ -92,7 +104,7 @@ export function SpecBookLeaf({
                   <ShelfRow
                     key={row.id}
                     name={row.name}
-                    value={row.status ? prettyStatus(row.status) : undefined}
+                    value={stampWord(row)}
                     sub={
                       row.line_total_cents != null
                         ? fmtUsd(row.line_total_cents)
@@ -118,6 +130,10 @@ export function SpecBookLeaf({
   );
 }
 
-function prettyStatus(status: string): string {
-  return status.replace(/_/g, ' ');
+/** F58: the same derivation the paper stamps from, so one line reads one word
+ *  in both places. `null` trade progress, never `undefined` — the leaf does not
+ *  resolve a scope's real state, and a trade line stays quiet rather than
+ *  borrowing the goods machine's vocabulary. */
+function stampWord(row: SpecRow): string | undefined {
+  return lineStampLabel(deriveLineStamp(row, null).kind) || undefined;
 }

@@ -45,6 +45,7 @@ import type { FFEStageKey } from '@patina/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   deriveLineStamp,
+  lineStampLabel,
   type LineStamp,
   type TradeLineProgress,
 } from '@/lib/document/stamp-derivation';
@@ -130,65 +131,50 @@ function stampProps(stamp: LineStamp): {
   color: string;
   ink?: string;
 } {
+  // F58: the word is never chosen here — stamp-derivation is the one source,
+  // so this surface and the spec-book leaf cannot name a line differently.
+  const label = lineStampLabel(stamp.kind);
   switch (stamp.kind) {
     // Act IV — trade work is judged, not delivered. Aged oak while it is only
     // committed, golden hour while hands are on it, clay when it waits on the
     // client's judgement, sage when they have given it.
     case 'trade_engaged':
-      return {
-        label: 'Engaged',
-        color: 'var(--color-aged-oak)',
-        ink: '#8B7355',
-      };
+      return { label, color: 'var(--color-aged-oak)', ink: '#8B7355' };
     case 'trade_in_progress':
-      return {
-        label: 'In progress',
-        color: 'var(--color-golden-hour)',
-        ink: '#B89A2E',
-      };
+      return { label, color: 'var(--color-golden-hour)', ink: '#B89A2E' };
     case 'trade_substantially_complete':
-      return {
-        label: 'Substantially complete',
-        color: 'var(--color-clay)',
-        ink: '#A8895E',
-      };
+      return { label, color: 'var(--color-clay)', ink: '#A8895E' };
     case 'trade_accepted':
-      return { label: 'Accepted', color: 'var(--color-sage)', ink: '#85947C' };
+      return { label, color: 'var(--color-sage)', ink: '#85947C' };
     // Never actually rendered — the line below skips <Stamp> entirely for
     // this kind, so a line whose real progress is not yet known stays quiet
     // rather than guessing. Kept exhaustive/safe rather than falling into
     // STAGE_CONFIG (keyed by FFEStageKey, not LineStampKind — it has no
     // 'trade_pending' entry and would throw).
     case 'trade_pending':
-      return { label: '', color: 'var(--color-aged-oak)' };
+      return { label, color: 'var(--color-aged-oak)' };
     case 'decision_due':
       return {
-        label: stamp.dueDate
-          ? `Decision due · ${fmtDay(stamp.dueDate)}`
-          : 'Decision due',
+        label: stamp.dueDate ? `${label} · ${fmtDay(stamp.dueDate)}` : label,
         color: 'var(--color-terracotta)',
         ink: '#C4836F',
       };
+    // Arrived, awaiting inspection — its own word, not STAGE_CONFIG's
+    // dropdown word, which would print RECEIVED over an unopened pallet.
+    case 'delivered':
+      return { label, color: 'var(--color-sage)', ink: '#85947C' };
     case 'received':
-      return { label: 'Received', color: 'var(--color-sage)', ink: '#85947C' };
+      return { label, color: 'var(--color-sage)', ink: '#85947C' };
     case 'partial':
       // R18: the W5-T2 short receipt, surfaced — golden hour like the
       // inspection outcome it derives from.
-      return {
-        label: 'Partial',
-        color: 'var(--color-golden-hour)',
-        ink: '#B89A2E',
-      };
+      return { label, color: 'var(--color-golden-hour)', ink: '#B89A2E' };
     case 'damaged':
       // Item-grain truth only (00196): an open claim attributed to THIS line.
-      return {
-        label: 'Damaged',
-        color: 'var(--color-terracotta)',
-        ink: '#C4836F',
-      };
+      return { label, color: 'var(--color-terracotta)', ink: '#C4836F' };
     default: {
       const cfg = STAGE_CONFIG[stamp.kind];
-      return { label: cfg.label, color: cfg.color, ink: STAGE_INK[stamp.kind] };
+      return { label, color: cfg.color, ink: STAGE_INK[stamp.kind] };
     }
   }
 }
