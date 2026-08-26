@@ -9754,3 +9754,31 @@ Nothing built yet by this entry; build order = program (A's three waves, then B'
 two deploys, per items 1–3 above).
 
 *Entries add: R125 · last id = R125*
+
+### I146 · Wave A1 — the sentence and the spine — 2026-08-25
+
+Wave A1 of "The Wayfinding Review" build shipped. Seven stage sentences replace the guide's shrugs (F18),
+with the two ⌥-templated dated headlines (install, proposal) built from real facts and never a fabricated
+date; `Review` retires from every guide label; `po_unacknowledged`/`po_unsent` repoint to the FF&E line
+instead of the ledger (C12); the new `rankOperationalNeeds` tie-break orders the red-letter zone and the
+guide identically. The shelved spine's mount predicate widens to install and care (F14, the blocker A1
+exists to fix); the running index derives from the spread's actual mount order via a new
+`paperRegionsForSection` helper rather than a fixed four-row assumption (C11); a composed-but-empty need
+list prints the guide instead of nothing (F77). The FF&E spread's `Spec book →` door ungates on install
+(F48); the care head reads `Care`, not `Install` (F03/SP-01, Kody's ruling answer to R124 item 9);
+`Add to project` becomes `Add a line` in both `ffe-section.tsx` and `command-bar.tsx` (SP-09). ⌘K drops
+its "Engine" framing (SP-07). No canon amendment beyond what R124 already ratified.
+
+Ships unflagged, per Kody's 2026-08-25 ruling (R125 to follow, as R125 itself already codified: no flags,
+two deploys total for this program — DEPLOY A once A3 merges, DEPLOY B once B3 merges — nothing ships to
+production from this merge alone). Gate on `main` after the merge: `pnpm --filter @patina/designer-portal
+type-check` clean; `pnpm --filter @patina/designer-portal test -- --ci` — 428 suites / 4601 tests passed
+(baseline before this wave was 426 suites / 4513 tests; this wave added 2 suites / 88 tests), all green.
+
+Deferred to A2/A3: SP-02, 03, 04, 05, 10, 11, 13, 14, 15, 16, 17, 19, 20; the F55 skip link and F21/F11
+focus-restore fixes; the six-rung money ladder and `vendor-payouts.ts`; the `Design authority` → `Money`
+rename; ⌘K's `WHERE THE WORK STANDS` group and `This surface` group; the FF&E spread's single-leader
+election and 390 wrap rule; the mobile bar's single primary act and `In this document` menu group; and the
+direction B graft of seven rest-state sentences into A — all per program-plan.md §6's I147/I148 scope.
+
+*Entries add: I146 · last id = I146*
