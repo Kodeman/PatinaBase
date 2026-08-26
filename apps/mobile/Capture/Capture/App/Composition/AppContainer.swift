@@ -75,15 +75,24 @@ public final class AppContainer {
     /// the coordinator; unconfigured it simply buffers an incoming link.
     let portalLogin = PortalLoginController()
 
+    /// The store ladder, lifted out of `init()` so it stays under
+    /// `function_body_length` — the same reason `makeWorkServices` exists. The
+    /// merge of wave 3's `projectCache` and main's resilient-store ladder put
+    /// `init()` two lines over on its own.
+    ///
+    /// iOS relaunches Field in the background for the site-scan upload session,
+    /// so the ladder can run before the first unlock, where a good store simply
+    /// cannot be decrypted. UIKit lives app-side; CaptureKit takes the answer as
+    /// a closure.
+    private static func makeResilientStore(persistent: Bool) -> CaptureStore {
+        CaptureStore.resilient(
+            persistent: persistent,
+            isProtectedDataAvailable: { UIApplication.shared.isProtectedDataAvailable })
+    }
+
     public init() {
         let real = AppConfiguration.runsRealServices
-        // iOS relaunches Field in the background for the site-scan upload
-        // session, so the ladder can run before the first unlock, where a good
-        // store simply cannot be decrypted. UIKit lives app-side; CaptureKit
-        // takes the answer as a closure.
-        let store = CaptureStore.resilient(
-            persistent: real,
-            isProtectedDataAvailable: { UIApplication.shared.isProtectedDataAvailable })
+        let store = Self.makeResilientStore(persistent: real)
         self.store = store
 
         if real {
