@@ -407,6 +407,10 @@ function FFELine({
 
   return (
     <li id={`ffe-selection-${item.id}`} className="scroll-mt-24 border-b border-[var(--color-pearl)]">
+      {/* Anchor for a guide destination that names a line, not the whole
+          section (e.g. a po_unacknowledged need) — `ffe-selection-` above is
+          the mood-board's own hash target and stays untouched. */}
+      <span id={`ffe-line-${item.id}`} aria-hidden="true" />
       {selecting ? (
         // The whole row is the tick while the schedule is a selection surface.
         <label
@@ -976,7 +980,7 @@ function FFESectionBody({
 
   const ffeAddToProjectEntry: RegionLedgerEntry = {
     key: 'open-add-to-project',
-    label: 'Add to project',
+    label: 'Add a line',
     onClick: () => openAddToProject('section'),
   };
   const ffeReleaseEntry: RegionLedgerEntry = {
@@ -1034,7 +1038,9 @@ function FFESectionBody({
             {selecting
               ? 'Choose what to release'
               : mode === 'install'
-                ? 'Install'
+                ? sectionKey === 'care'
+                  ? 'Care'
+                  : 'Install'
                 : 'Project · FF&E'}
           </h2>
           <span className="flex items-baseline gap-3">
@@ -1055,14 +1061,12 @@ function FFESectionBody({
               </DocumentAction>
             ) : (
               <>
-                {mode === 'project' && (
-                  <Link
-                    href={`/doc/${projectId}/spec-book`}
-                    className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
-                  >
-                    Spec book →
-                  </Link>
-                )}
+                <Link
+                  href={`/doc/${projectId}/spec-book`}
+                  className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
+                >
+                  Spec book →
+                </Link>
                 {/* Add to project and Release for authorization are project-
                     mode acts, and project mode (not selecting) now renders
                     RegionHead below instead of this block — so both are
@@ -1229,7 +1233,9 @@ function FFESectionBody({
           />
         ) : (
           <p className="border-t border-[var(--color-pearl)] py-3 text-[11.5px] text-[var(--text-muted)]">
-            No FF&amp;E lines are scheduled for installation.
+            {sectionKey === 'care'
+              ? 'No FF&E lines remain open for care.'
+              : 'No FF&E lines are scheduled for installation.'}
           </p>
         )
       )}

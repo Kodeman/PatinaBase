@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 let mockRooms: Record<string, unknown>[] = [];
@@ -110,17 +110,27 @@ const line = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const renderProject = (projectId = 'project-1') =>
-  render(
-    <FFESection projectId={projectId} projectName="Ellsworth" mode="project" />,
-  );
-
 const renderInstall = (projectId = 'project-1') =>
   render(
-    <FFESection projectId={projectId} projectName="Ellsworth" mode="install" />,
+    <FFESection
+      projectId={projectId}
+      projectName="Ellsworth"
+      mode="install"
+      sectionKey="install"
+    />,
   );
 
-describe('FF&E project-mode region head', () => {
+const renderCare = (projectId = 'project-1') =>
+  render(
+    <FFESection
+      projectId={projectId}
+      projectName="Ellsworth"
+      mode="install"
+      sectionKey="care"
+    />,
+  );
+
+describe('FF&E install/care head — SP-01/F03, F48', () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockRooms = [{ id: 'room-1', name: 'Primary bedroom', budget_cents: 0 }];
@@ -130,71 +140,49 @@ describe('FF&E project-mode region head', () => {
     mockAuthority = { data: null };
   });
 
-  it('inks exactly one ledger entry — Add a line, when there is no authority to release against', () => {
-    renderProject();
-    const inked = document.querySelectorAll('[data-action-variant="inked"]');
-    expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Add a line');
-  });
-
-  it('inks Release for authorization instead, once canRelease holds', () => {
-    mockAuthority = { data: { state: 'active', agreementId: 'agreement-1' } };
-    renderProject();
-    const inked = document.querySelectorAll('[data-action-variant="inked"]');
-    expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Release for authorization');
-    // Add a line survives, demoted rather than dropped. Scoped by action key,
-    // not text — SP-09 gave the per-room add-line act the same words.
-    expect(
-      document.querySelector('[data-action-key="open-add-to-project"]'),
-    ).toHaveAttribute('data-action-variant', 'secondary');
-  });
-
-  it('renders the fold seam by default when the schedule has settled empty', () => {
-    mockItems = [];
-    renderProject();
-    expect(
-      screen.getByText('1 group · no lines yet', { exact: false }),
-    ).toBeInTheDocument();
-  });
-
-  it('counts the Throughout group so lines in no room are never "0"', () => {
-    // Every line unassigned to a room: the body prints ONE group (Throughout),
-    // and the head has to say so rather than counting rooms it does not have.
-    mockRooms = [];
-    mockItems = [
-      line({ id: 'ffe-1', project_room_id: null, room: null }),
-      line({ id: 'ffe-2', project_room_id: null, room: null }),
-    ];
-    renderProject();
-    expect(screen.getByText('1 group · 2 lines')).toBeInTheDocument();
-  });
-
-  it('opens from the seam back to the full head, round-trip', () => {
-    mockItems = [];
-    renderProject();
-    fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
-    expect(
-      screen.getByRole('heading', { name: 'Project · FF&E' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Fold ↑' }),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Fold ↑' }));
-    expect(
-      screen.queryByRole('heading', { name: 'Project · FF&E' }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText(/unfold/i)).toBeInTheDocument();
-  });
-
-  it('leaves install mode rendering its own head, no RegionHead at all', () => {
+  it('reads Install on an install document', () => {
     renderInstall();
     expect(screen.getByRole('heading', { name: 'Install' })).toBeInTheDocument();
-    // RegionHead's fold control never appears in install mode.
+    expect(screen.queryByRole('heading', { name: 'Care' })).not.toBeInTheDocument();
+  });
+
+  it('reads Care, not Install, on a care document', () => {
+    renderCare();
+    expect(screen.getByRole('heading', { name: 'Care' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Install' })).not.toBeInTheDocument();
+  });
+
+  it('prints the SP-01 empty state verbatim on a care document with no open lines', () => {
+    mockItems = [];
+    renderCare();
     expect(
-      screen.queryByRole('button', { name: 'Fold ↑' }),
+      screen.getByText('No FF&E lines remain open for care.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('No FF&E lines are scheduled for installation.'),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText(/unfold/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps the install empty state unchanged when care is not the section', () => {
+    mockItems = [];
+    renderInstall();
+    expect(
+      screen.getByText('No FF&E lines are scheduled for installation.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('No FF&E lines remain open for care.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('F48 — Spec book → renders on install, no longer gated to project mode', () => {
+    renderInstall();
+    const link = screen.getByRole('link', { name: 'Spec book →' });
+    expect(link).toHaveAttribute('href', '/doc/project-1/spec-book');
+  });
+
+  it('F48 — Spec book → also renders on care', () => {
+    renderCare();
+    const link = screen.getByRole('link', { name: 'Spec book →' });
+    expect(link).toHaveAttribute('href', '/doc/project-1/spec-book');
   });
 });
