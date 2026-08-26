@@ -500,7 +500,7 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     openPalette();
 
     expect(screen.getByText('This surface')).toBeInTheDocument();
-    for (const label of ['Plan room', 'Spec book', 'Mood boards', 'Call sheet']) {
+    for (const label of ['Plan room', 'Spec book', 'Boards', 'Call sheet']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
     expect(screen.getAllByText('this project · the current set')).toHaveLength(1);
@@ -517,7 +517,7 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     openPalette();
 
     expect(screen.queryByText('This surface')).not.toBeInTheDocument();
-    for (const label of ['Plan room', 'Spec book', 'Mood boards', 'Call sheet']) {
+    for (const label of ['Plan room', 'Spec book', 'Boards', 'Call sheet']) {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     }
   });
@@ -531,6 +531,38 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
     fireEvent.click(screen.getByText('Spec book').closest('button')!);
 
     expect(mockPush).toHaveBeenCalledWith('/doc/proj-1/spec-book');
+  });
+
+  // B1-L4/F62 — one Boards door, one name. The row used to read `Mood boards`
+  // and open the most recent board (or the document) because the boards had no
+  // index route below 1440; it now names the page that exists.
+  it('opens the boards page of the document in hand, labelled Boards', () => {
+    mockCallSheetFlag = true;
+    mockPathname.mockReturnValue('/doc/eng-1');
+    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] } as never);
+
+    openPalette();
+
+    expect(screen.getByText('Boards')).toBeInTheDocument();
+    expect(screen.queryByText('Mood boards')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Boards').closest('button')!);
+    expect(mockPush).toHaveBeenCalledWith('/doc/eng-1/boards');
+  });
+
+  it('offers one boards door for a typed `board`, not three', () => {
+    mockCallSheetFlag = true;
+    mockPathname.mockReturnValue('/doc/eng-1');
+    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] } as never);
+
+    openPalette();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+      target: { value: 'board' },
+    });
+
+    expect(screen.getAllByText('Boards')).toHaveLength(1);
+    expect(screen.queryByText('Drafting Room')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mood boards')).not.toBeInTheDocument();
   });
 
   it('pairs each surface with the most recent document from the Desk', () => {

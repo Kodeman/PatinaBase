@@ -113,14 +113,15 @@ describe('the More menu · In this document (F49)', () => {
       Array.from(group.querySelectorAll('a, button')).map((row) =>
         row.textContent?.replace('→', ''),
       ),
-    ).toEqual(['Plan room', 'Spec book', 'Call sheet']);
+    ).toEqual(['Plan room', 'Spec book', 'Boards', 'Call sheet']);
 
     const labels = Array.from(menu.querySelectorAll('a, button')).map((row) =>
       row.textContent?.replace('→', ''),
     );
-    expect(labels.slice(0, 4)).toEqual([
+    expect(labels.slice(0, 5)).toEqual([
       'Plan room',
       'Spec book',
+      'Boards',
       'Call sheet',
       'Find anything⌘K',
     ]);
@@ -138,6 +139,17 @@ describe('the More menu · In this document (F49)', () => {
       'href',
       '/doc/proj-1/spec-book',
     );
+  });
+
+  it('routes Boards at the destination B1-L4 built, under that one name', () => {
+    mountBar();
+    const menu = openMore();
+
+    expect(menu.getByRole('link', { name: 'Boards' })).toHaveAttribute(
+      'href',
+      '/doc/proj-1/boards',
+    );
+    expect(menu.queryByText('Mood boards')).toBeNull();
   });
 
   it('opens the call sheet through the doorway the surface already listens on', () => {
