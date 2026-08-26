@@ -16,23 +16,29 @@ const kinds = (needs: readonly NeedLine[]) => needs.map((n) => n.kind);
 describe('rankOperationalNeeds', () => {
   it('leads with a hard outside deadline, whoever owns it', () => {
     // Rank 1 — a carrier window, a delivery inspection, an install-blocking
-    // collision, an inquiry's response deadline.
+    // collision.
     expect(needTieBreakRank('damage_claim')).toBe(1);
     expect(needTieBreakRank('awaiting_inspection')).toBe(1);
     expect(needTieBreakRank('schedule_conflict')).toBe(1);
-    expect(needTieBreakRank('new_lead')).toBe(1);
   });
 
-  it('puts what the studio can move today under the outside deadline', () => {
-    expect(needTieBreakRank('po_unsent')).toBe(2);
-    expect(needTieBreakRank('pulse_due')).toBe(2);
-    expect(needTieBreakRank('proposal_signed')).toBe(2);
+  it('puts what is already past its date under the outside deadline', () => {
+    expect(needTieBreakRank('overdue_decision')).toBe(2);
+    expect(needTieBreakRank('overdue_invoice')).toBe(2);
+    expect(needTieBreakRank('task_due')).toBe(2);
+    expect(needTieBreakRank('po_unacknowledged')).toBe(2);
   });
 
-  it('puts what is already overdue under the studio\'s own pen', () => {
-    expect(needTieBreakRank('overdue_decision')).toBe(3);
-    expect(needTieBreakRank('overdue_invoice')).toBe(3);
-    expect(needTieBreakRank('task_due')).toBe(3);
+  it('puts what the studio can move today under what is overdue', () => {
+    expect(needTieBreakRank('po_unsent')).toBe(3);
+    expect(needTieBreakRank('pulse_due')).toBe(3);
+    expect(needTieBreakRank('proposal_signed')).toBe(3);
+  });
+
+  it('ranks a new lead with the studio\'s own pen, not with the outside clocks', () => {
+    // `needLead` raises new_lead for any new/viewed lead, dated or not
+    // ("New lead — respond"), so the kind states no deadline to lead on.
+    expect(needTieBreakRank('new_lead')).toBe(3);
   });
 
   it('puts undated setup chores last', () => {
@@ -40,18 +46,18 @@ describe('rankOperationalNeeds', () => {
   });
 
   it('does not let a one-day-old studio chore outrank a three-week-overdue client decision', () => {
-    // C-AP-06's own falsifier: v1 ranked ownership first, which promoted the
-    // undated chore. The chore now sorts last whichever order it arrives in.
-    const chore = need('schedule_unconfigured', 'Set up the schedule');
+    // The plan's own falsifier, with the plan's own pairing: the chore is the
+    // designer's unsent PO, the decision is three weeks past its date.
+    const chore = need('po_unsent', 'A purchase order has waited 1 day unsent');
     const decision = need('overdue_decision', '1 decision overdue — oldest due Aug 4');
 
     expect(kinds(rankOperationalNeeds([chore, decision], NOW))).toEqual([
       'overdue_decision',
-      'schedule_unconfigured',
+      'po_unsent',
     ]);
     expect(kinds(rankOperationalNeeds([decision, chore], NOW))).toEqual([
       'overdue_decision',
-      'schedule_unconfigured',
+      'po_unsent',
     ]);
   });
 
@@ -59,15 +65,15 @@ describe('rankOperationalNeeds', () => {
     ['damage_claim', 'po_unsent'],
     ['damage_claim', 'overdue_decision'],
     ['damage_claim', 'schedule_unconfigured'],
-    ['po_unsent', 'overdue_decision'],
-    ['po_unsent', 'schedule_unconfigured'],
+    ['overdue_decision', 'po_unsent'],
     ['overdue_decision', 'schedule_unconfigured'],
+    ['po_unsent', 'schedule_unconfigured'],
   ] as const)('keeps %s above %s whichever way round they arrive', (higher, lower) => {
     expect(kinds(rankOperationalNeeds([need(lower), need(higher)], NOW))).toEqual([higher, lower]);
     expect(kinds(rankOperationalNeeds([need(higher), need(lower)], NOW))).toEqual([higher, lower]);
   });
 
-  it('is stable inside a rank, so the composition\'s own dated order survives', () => {
+  it('is stable inside a rank, so the derivation chain\'s own order survives', () => {
     const older = need('overdue_decision', '3 decisions overdue — oldest due Aug 1');
     const newer = need('overdue_invoice', 'INV-204 is 2 days past due');
     const newest = need('task_due', 'Confirm trim — due Aug 25');
@@ -92,11 +98,11 @@ describe('rankOperationalNeeds', () => {
     expect(new Set(ranked)).toEqual(new Set(all));
     expect(kinds(ranked)).toEqual([
       'damage_claim',
-      'new_lead',
-      'po_unsent',
-      'pulse_due',
       'overdue_decision',
       'task_due',
+      'po_unsent',
+      'new_lead',
+      'pulse_due',
       'schedule_unconfigured',
     ]);
   });

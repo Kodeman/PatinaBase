@@ -82,11 +82,11 @@ describe('useDocumentRunningIndex', () => {
     expect(screen.getByTestId('active')).toHaveTextContent('money');
   });
 
-  // C11 — the page hands the index the regions THIS spread mounts, but a
-  // spread can still name a region whose root never appears (the install
-  // spread's FF&E ledger prints no region root, and a pinned Worktable
-  // composition can put a different section on the paper). The reading line
-  // must stay on what the DOM actually answers for.
+  // C11 — the page hands the index the regions THIS spread mounts, but a root
+  // can still be missing when the line first reads: regions arrive as their own
+  // queries settle, and a pinned Worktable composition can put a different
+  // section on the paper. The reading line must stay on what the DOM actually
+  // answers for.
   it('never lands the reading line on a region the spread did not mount', () => {
     const installKeys: DocumentIndexKey[] = ['approvals', 'schedule', 'ffe'];
     mountRegions(['approvals']);

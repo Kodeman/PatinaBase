@@ -172,6 +172,10 @@ function SendWallLine({
 
   return (
     <>
+      {/* The proposal stage's act lands on the wall, ~200px below the guide
+          strip that offers it (`document-guide.ts`). DocumentActionRow states
+          no `id` of its own, so the anchor is the wrapper. */}
+      <div id="proposal-send-wall" tabIndex={-1} className="scroll-mt-16">
       <DocumentActionRow
         surfaceKey="open-document"
         regionKey="proposal-send-wall"
@@ -198,6 +202,7 @@ function SendWallLine({
           </span>
         )}
       </DocumentActionRow>
+      </div>
       {note && (
         <p
           role={note.tone === 'err' ? 'alert' : 'status'}

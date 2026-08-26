@@ -312,7 +312,10 @@ export function gatePartyName(gate: WorkflowGate): string {
 /** The act label the guide offers: the margin's verb plus its object, so the
  *  two scales always name the same act with the same word. */
 export function gateActionLabel(gate: WorkflowGate): string {
-  if (!gate.act) return 'Review now';
+  // F18 retired `Review now`: an act with no verb still names its object, in
+  // the gate's own register. `nearestOpenGate` never returns an actless gate,
+  // so this is the label for a gate handed in directly.
+  if (!gate.act) return `Resolve the ${gate.terms}`;
   const verb = gateActVerb(gate.act.kind, gate.sourceState);
   switch (gate.act.kind) {
     case 'nudge':

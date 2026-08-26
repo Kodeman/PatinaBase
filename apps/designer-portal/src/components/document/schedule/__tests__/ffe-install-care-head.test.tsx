@@ -185,4 +185,35 @@ describe('FF&E install/care head — SP-01/F03, F48', () => {
     const link = screen.getByRole('link', { name: 'Spec book →' });
     expect(link).toHaveAttribute('href', '/doc/project-1/spec-book');
   });
+
+  // The guide names three ids on these spreads. A unit test that asserts the
+  // guide EMITS an id proves nothing about whether the paper prints it, so the
+  // destinations are asserted here, against the rendered section.
+  it.each([
+    ['install', renderInstall],
+    ['care', renderCare],
+  ] as const)('prints the index root and both guide anchors on the %s spread', (_section, renderIt) => {
+    const { container } = renderIt();
+
+    expect(container.querySelector('[data-index-region="ffe"]')).not.toBeNull();
+    // The running index's fallback focus target for this region.
+    expect(container.querySelector('#ffe-region-heading-project-1')).not.toBeNull();
+    // The install act's landing — the movement column.
+    expect(container.querySelector('#ffe-movement-project-1')).not.toBeNull();
+  });
+
+  it('keeps the project spread on its own region head id, not the movement column', () => {
+    const { container } = render(
+      <FFESection
+        projectId="project-1"
+        projectName="Ellsworth"
+        mode="project"
+        sectionKey="project"
+      />,
+    );
+
+    expect(container.querySelector('[data-index-region="ffe"]')).not.toBeNull();
+    expect(container.querySelector('#ffe-region-heading-project-1')).not.toBeNull();
+    expect(container.querySelector('#ffe-movement-project-1')).toBeNull();
+  });
 });

@@ -1,10 +1,18 @@
 import { deriveDocumentGuide, needGuideAction } from '../document-guide';
-import type { DocumentStateRow, SectionKey } from '../desk-derivation';
+import type { DocumentStateRow, NeedKind, SectionKey } from '../desk-derivation';
 import { deriveGate } from '../workflow-gate';
 import type { ProjectContextualHandoff } from '@patina/supabase';
 
 const SECTIONS: readonly SectionKey[] = [
   'brief', 'discovery', 'direction', 'proposal', 'project', 'install', 'care',
+];
+
+const NEED_KINDS: readonly NeedKind[] = [
+  'overdue_decision', 'overdue_invoice', 'proposal_signed', 'damage_claim',
+  'proposal_declined', 'proposal_expired', 'lines_flagged', 'new_lead',
+  'ceremony_pending', 'reconnect_due', 'hesitating_proposal',
+  'awaiting_inspection', 'schedule_conflict', 'schedule_proposal', 'task_due',
+  'schedule_unconfigured', 'po_unsent', 'po_unacknowledged', 'pulse_due',
 ];
 
 const row = (activeSection: SectionKey, overrides: Partial<DocumentStateRow> = {}) =>
@@ -85,6 +93,25 @@ describe('deriveDocumentGuide', () => {
     expect(labels.filter((label) => /\bReview\b/.test(label))).toEqual(['Review signing controls']);
   });
 
+  // The needs-attention branch outranks the stage default, so the Review sweep
+  // has to cover every kind it can print, not only the seven stages.
+  it.each(NEED_KINDS)('never leads the %s act with the word Review', (kind) => {
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      operationalNeed: {
+        kind,
+        text: 'Something is waiting',
+        // The folio's own copy leads six kinds with `Review`; the document
+        // states the kind's verb instead, so this must not reach the strip.
+        actionLabel: 'Review the thing',
+        stamp: { label: 'X', color: 'var(--color-clay)' },
+        urgent: false,
+      },
+    });
+
+    expect(guide.action?.label).not.toMatch(/\bReview\b/);
+  });
+
   it('retires Review now as the needs-attention default, naming the kind\'s own verb', () => {
     const guide = deriveDocumentGuide({
       row: row('brief'),
@@ -103,15 +130,23 @@ describe('deriveDocumentGuide', () => {
     expect(guide.action?.label).not.toMatch(/\bReview\b/);
   });
 
-  it('lands the project and install acts on the FF&E heading they name', () => {
-    const project = deriveDocumentGuide({ row: row('project'), now: new Date('2026-08-10T12:00:00Z') });
-    const install = deriveDocumentGuide({ row: row('install'), now: new Date('2026-08-10T12:00:00Z') });
+  it('lands each stage act on a body that spread actually prints', () => {
+    const now = new Date('2026-08-10T12:00:00Z');
+    const project = deriveDocumentGuide({ row: row('project'), now });
+    const install = deriveDocumentGuide({ row: row('install'), now });
+    const care = deriveDocumentGuide({ row: row('care'), now });
 
+    // The FF&E region head — project mode's RegionHead carries this id.
     expect(project.action?.destination).toEqual({
       kind: 'anchor', section: 'project', focusId: 'ffe-region-heading-project-1',
     });
+    // The movement column — only the install and care spreads print it, which
+    // is why install may not borrow the project head's id.
     expect(install.action?.destination).toEqual({
-      kind: 'anchor', section: 'install', focusId: 'ffe-region-heading-project-1',
+      kind: 'anchor', section: 'install', focusId: 'ffe-movement-project-1',
+    });
+    expect(care.action?.destination).toEqual({
+      kind: 'anchor', section: 'care', focusId: 'closing-the-book',
     });
   });
 
@@ -162,11 +197,12 @@ describe('deriveDocumentGuide', () => {
       },
     });
 
-    expect(guide.headline).toBe('Sent Aug 19 · not opened yet');
+    // The DAY the row carries, never the wall's relative prose.
+    expect(guide.headline).toBe('Sent Aug 9 · not opened yet');
     expect(guide.action).toEqual({
       key: 'nudge-client',
       label: 'Nudge Avery Stone',
-      destination: { kind: 'anchor', section: 'proposal' },
+      destination: { kind: 'anchor', section: 'proposal', focusId: 'proposal-send-wall' },
     });
   });
 
@@ -181,7 +217,7 @@ describe('deriveDocumentGuide', () => {
       },
     });
 
-    expect(guide.headline).toBe('Sent Aug 19 · not opened yet');
+    expect(guide.headline).toBe('Sent Aug 9 · not opened yet');
     expect(guide.action?.label).toBe('Review signing controls');
   });
 
@@ -204,11 +240,42 @@ describe('deriveDocumentGuide', () => {
       row: row('proposal'),
       now: new Date('2026-08-25T12:00:00Z'),
       operationalNeed: null,
-      operationalNeed: null,
       proposal: { status: 'sent', documentKind: 'legacy', commercialState: null, projectId: null },
     });
 
     expect(guide.headline).toBe('Wait for the client’s signature');
+  });
+
+  it('counts the days out until a fortnight, so ten days is never "one week"', () => {
+    const guide = deriveDocumentGuide({
+      row: row('install'),
+      now: new Date('2026-08-25T12:00:00Z'),
+      schedule: {
+        selection: 'primary',
+        fidelity: 'committed',
+        positionText: 'Committed',
+        install: { date: '2026-09-04', fidelity: 'committed' },
+      } as never,
+    });
+
+    expect(guide.headline).toBe('Install is ten days out — Friday, September 4');
+  });
+
+  it('never reports a paper handover as unopened', () => {
+    // 00477's paper door issues without sending, so the row carries no send
+    // date and no open event was ever possible.
+    const guide = deriveDocumentGuide({
+      row: row('proposal', { proposal_sent_at: null }),
+      now: new Date('2026-08-25T12:00:00Z'),
+      operationalNeed: null,
+      proposal: {
+        status: 'sent', documentKind: 'legacy', commercialState: null, projectId: null,
+        sendWall: { sentText: 'Issued on paper', verb: null, stateWord: 'awaiting the client\u2019s signature' },
+      },
+    });
+
+    expect(guide.headline).toBe('Wait for the client\u2019s signature');
+    expect(guide.headline).not.toMatch(/not opened yet/);
   });
 
   it('states what needs a decision instead of naming its own signal source (SP-06)', () => {
@@ -227,7 +294,7 @@ describe('deriveDocumentGuide', () => {
     expect(guide.eyebrow).not.toBe('Next up');
   });
 
-  it.each(['po_unacknowledged', 'po_unsent'] as const)('sends %s to the FF&E line, not the Orders ledger (C12)', (kind) => {
+  it.each(['po_unacknowledged', 'po_unsent'] as const)('sends %s to the FF&E region, not the Orders ledger (C12 — the line waits on A3)', (kind) => {
     const guide = deriveDocumentGuide({
       row: row('project'),
       operationalNeed: {
@@ -280,7 +347,7 @@ describe('deriveDocumentGuide', () => {
     });
     expect(guide.state).toBe('actionable');
     expect(guide.headline).toContain('2 decisions overdue');
-    expect(guide.action?.label).toBe('Review decisions');
+    expect(guide.action?.label).toBe('Chase the approval');
   });
 
   it('accepts the enriched need selected from the shared Desk composition', () => {
@@ -496,7 +563,7 @@ describe('deriveDocumentGuide', () => {
     expect(guide.state).toBe('actionable');
     expect(guide.action).toEqual({
       key: 'resolve-overdue_decision',
-      label: 'Review decisions',
+      label: 'Chase the approval',
       destination: {
         kind: 'anchor', section: 'discovery', focusId: 'document-decision-controls', activate: false,
       },
@@ -600,6 +667,16 @@ describe('the guide surfaces the gate (Ruling V)', () => {
         focusId: 'document-handoff-decision-1',
       },
     });
+  });
+
+  it('never prints Review now from the branch that outranks every other (F18)', () => {
+    // The gate branch sits above the operational need and the stage default,
+    // so its own fallback label was the last live `Review now` on the paper.
+    const gate = { ...deriveGate(handoff(), GATE_NOW, 'Marta'), act: null };
+    const guide = deriveDocumentGuide({ row: row('project'), gate });
+
+    expect(guide.action?.label).toBe('Resolve the Direction approval');
+    expect(guide.action?.label).not.toMatch(/Review now/);
   });
 
   it('names the publish act from the gate rather than the stage default', () => {

@@ -84,7 +84,10 @@ export function DocSpineShelvedBlocks({
   // from (React Query dedupes this one: identical key, identical args). A
   // second derivation off `projects.total_amount_cents` said a different
   // number than the region it points at.
-  const authorityQuery = useProjectBillingAuthority(projectId);
+  // Only the Project spread prints the Design authority row, so only it reads
+  // the door behind it — the install and care spreads filtered that row out.
+  const printsMoneyRow = regions.some((region) => region.key === 'money');
+  const authorityQuery = useProjectBillingAuthority(projectId, printsMoneyRow);
   const planRoom = usePlanRoom(projectId);
   const liveBoards = useProjectOwnedBoards(projectId);
   const frozenBoards = useProjectBoards(projectId);

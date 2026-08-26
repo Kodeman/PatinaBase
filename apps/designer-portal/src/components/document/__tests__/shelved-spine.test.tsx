@@ -334,11 +334,14 @@ describe('paperRegionsForSection', () => {
     ]);
   });
 
-  it('drops the money region on install and on care — neither spread mounts it', () => {
+  it('drops the money and schedule regions on install and on care — neither spread mounts either', () => {
+    // MoneyRegion and ScheduleSpine — the only `data-index-region="money"` and
+    // `="schedule"` roots — both mount inside page.tsx's
+    // `spreadSection === 'project'` branch, so a row for either on these
+    // spreads would be a jump target with nothing behind it.
     for (const section of ['install', 'care'] as const) {
       expect(paperRegionsForSection(section).map((r) => r.key)).toEqual([
         'approvals',
-        'schedule',
         'ffe',
       ]);
     }
@@ -397,7 +400,7 @@ describe('the shelved blocks', () => {
     expect(indexRows()).toHaveLength(4);
   });
 
-  it('prints three on install and on care — no line for the money region', () => {
+  it('prints two on install and on care — no line for the money or schedule region', () => {
     for (const section of ['install', 'care'] as const) {
       const { unmount } = render(
         <DocSpineShelvedBlocks
@@ -406,8 +409,9 @@ describe('the shelved blocks', () => {
         />,
       );
       const rows = indexRows().map((b) => b.querySelector('span')?.textContent);
-      expect(rows).toHaveLength(3);
+      expect(rows).toHaveLength(2);
       expect(rows).not.toContain('Design authority');
+      expect(rows).not.toContain('Schedule');
       unmount();
     }
   });
@@ -419,6 +423,6 @@ describe('the shelved blocks', () => {
         regions={paperRegionsForSection('install')}
       />,
     );
-    expect(mockRunningIndexCalls[0]).toEqual(['approvals', 'schedule', 'ffe']);
+    expect(mockRunningIndexCalls[0]).toEqual(['approvals', 'ffe']);
   });
 });

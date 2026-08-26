@@ -532,7 +532,7 @@ describe('DocumentPage guide activation', () => {
 
     expect(mockSelectOperationalNeed).toHaveReturnedWith(undefined);
     expect(screen.getByText(/2 decisions overdue/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Review decisions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chase the approval' })).toBeInTheDocument();
   });
 
   it('ignores a hot Desk cache for a document its side feeds cannot key on', () => {
@@ -552,7 +552,7 @@ describe('DocumentPage guide activation', () => {
         row: { engagement_id: 'relationship-1' },
         need: {
           kind: 'reconnect_due', text: 'Reconnect with Avery',
-          actionLabel: 'Review now', urgent: false, stamp: { label: 'DORMANT' },
+          actionLabel: null, urgent: false, stamp: { label: 'DORMANT' },
         },
       }],
       chips: [],
@@ -685,7 +685,7 @@ describe('DocumentPage guide activation', () => {
     expect(mockSelectOperationalNeed).toHaveBeenCalledWith(
       mockDeskData, 'proposal-1',
     );
-    expect(screen.getByRole('link', { name: 'Review flagged lines' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open the flagged lines' })).toHaveAttribute(
       'href', '/drafting/proposal-1?flagged=1',
     );
   });
@@ -827,7 +827,7 @@ describe('DocumentPage guide activation', () => {
     };
 
     render(<DocumentPage params={fulfilledParams} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Review decisions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chase the approval' }));
     expect(screen.getByText('Decision controls')).toHaveFocus();
   });
 
@@ -867,14 +867,14 @@ describe('DocumentPage guide activation', () => {
     expect(pulse).toHaveAttribute('aria-expanded', 'false');
 
     // First activation unfolds it.
-    fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send the pulse' }));
     expect(document.getElementById('document-pulse-control-desktop')).toHaveAttribute(
       'aria-expanded', 'true',
     );
     expect(screen.getByText('Pulse body')).toBeInTheDocument();
 
     // Second activation must leave it open, not toggle it shut.
-    fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send the pulse' }));
     expect(document.getElementById('document-pulse-control-desktop')).toHaveAttribute(
       'aria-expanded', 'true',
     );
@@ -1124,7 +1124,7 @@ describe('DocumentPage guide activation', () => {
   // shelved-spine.test.tsx's job; this integration suite only proves the page
   // wires the right region SET through for each spread. ──
   describe('the shelved spine mount (F14/C11)', () => {
-    it('mounts on an install document with three regions and no money row', () => {
+    it('mounts on an install document with the two regions that spread prints', () => {
       asProjectDocument();
       const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
       mockDocumentQuery = {
@@ -1134,13 +1134,17 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
+      // No money row (MoneyRegion mounts only under spreadSection === 'project')
+      // and no schedule row (nor does ScheduleSpine, the only
+      // data-index-region="schedule" root) — a row for either would be a jump
+      // target with nothing behind it.
       const index = screen.getByTestId('shelved-spine-regions');
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-        'approvals', 'schedule', 'ffe',
+        'approvals', 'ffe',
       ]);
     });
 
-    it('mounts on a care document with the same three regions and no money row', () => {
+    it('mounts on a care document with the same two regions', () => {
       asProjectDocument();
       const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
       mockDocumentQuery = {
@@ -1150,9 +1154,13 @@ describe('DocumentPage guide activation', () => {
 
       render(<DocumentPage params={fulfilledParams} />);
 
+      // No money row (MoneyRegion mounts only under spreadSection === 'project')
+      // and no schedule row (nor does ScheduleSpine, the only
+      // data-index-region="schedule" root) — a row for either would be a jump
+      // target with nothing behind it.
       const index = screen.getByTestId('shelved-spine-regions');
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-        'approvals', 'schedule', 'ffe',
+        'approvals', 'ffe',
       ]);
     });
 

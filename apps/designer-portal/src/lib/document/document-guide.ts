@@ -161,15 +161,25 @@ const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput
   },
 };
 
-/** `ffe-section.tsx:948` — the FF&E region heading, the project act's landing. */
+/** `ffe-section.tsx` — the FF&E region heading, the project act's landing. */
 const ffeRegionAnchorId = (projectId: string) => `ffe-region-heading-${projectId}`;
 
-/** `ffe-section.tsx:409` — one FF&E line's own row. */
+/** `ffe-section.tsx` — the movement column: the lines as they arrive, printed
+ *  only on the install and care spreads. The install act's landing. */
+const ffeMovementAnchorId = (projectId: string) => `ffe-movement-${projectId}`;
+
+/** `care-band.tsx` — the closure checklist. The care act's landing. */
+const CLOSING_THE_BOOK_ANCHOR_ID = 'closing-the-book';
+
+/** `proposal-instruments.tsx` — the send wall's state line and its nudge. */
+const SEND_WALL_ANCHOR_ID = 'proposal-send-wall';
+
+/** `ffe-section.tsx` — one FF&E line's own row. */
 const ffeLineAnchorId = (lineId: string) => `ffe-selection-${lineId}`;
 
 const NUMBER_WORDS = [
   'zero', 'one', 'two', 'three', 'four', 'five', 'six',
-  'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+  'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen',
 ];
 
 const spell = (n: number) => NUMBER_WORDS[n] ?? String(n);
@@ -214,16 +224,26 @@ function installGuideHeadline(
   const when = fmtWeekdayDate(install.date);
   if (days === 0) return `Install is today — ${when}`;
   if (days === 1) return `Install is tomorrow — ${when}`;
-  if (days < 7) return `Install is ${spell(days)} days out — ${when}`;
-  const weeks = Math.round(days / 7);
-  return `Install is ${weeks === 1 ? 'one week' : `${spell(weeks)} weeks`} out — ${when}`;
+  // Days up to a fortnight, then whole weeks. Rounding straight to weeks said
+  // "one week out" at ten days, which the date beside it contradicted.
+  if (days < 14) return `Install is ${spell(days)} days out — ${when}`;
+  return `Install is ${spell(Math.round(days / 7))} weeks out — ${when}`;
 }
 
+const fmtShortDay = (iso: string) =>
+  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
+    .format(new Date(iso));
+
 /**
- * ⌥ `Sent {Mon d} · not opened yet` (C-AP-10) — the send wall's own `sentText`,
- * which already refuses to state a date the row did not carry. `null` = either
- * the wall has not answered or the client HAS opened it, and the caller keeps
- * the undated headline rather than printing a claim the facts contradict.
+ * ⌥ `Sent {Mon d} · not opened yet` (C-AP-10). The date is the row's own
+ * `proposal_sent_at`, never the wall's prose: `sentText` is relative for its
+ * first thirty days ("Sent 3 days ago") and reads `Issued on paper` for a
+ * handover that generated no send at all — and nothing handed over on paper can
+ * be reported as unopened, because no open event was ever possible.
+ *
+ * `null` = the wall has not answered, the row states no send date, or the
+ * client HAS opened it; the caller then keeps the undated headline rather than
+ * printing a claim the facts contradict.
  */
 function proposalGuideHeadline(
   row: DocumentStateRow,
@@ -235,7 +255,10 @@ function proposalGuideHeadline(
     Boolean(row.proposal_last_opened_at) ||
     Boolean(row.proposal_viewed_at);
   if (opened) return null;
-  return `${sendWall.sentText} · not opened yet`;
+  if (!row.proposal_sent_at) return null;
+  const sent = new Date(row.proposal_sent_at);
+  if (Number.isNaN(sent.getTime())) return null;
+  return `Sent ${fmtShortDay(row.proposal_sent_at)} · not opened yet`;
 }
 
 function withInputs(
@@ -300,9 +323,13 @@ function gateGuide(
 }
 
 /**
- * The kind's own verb — the act to print when the need itself states none.
- * Exhaustive over `NeedKind`, so a new kind is a type error rather than a
- * silent shrug; `Review now` (F18) said nothing about any of them.
+ * The kind's own verb — the act the paper prints for a need. Exhaustive over
+ * `NeedKind`, so a new kind is a type error rather than a silent shrug.
+ *
+ * It is authoritative here, not a fallback: `NEED_ACTION_LABELS` (the folio
+ * footer's own copy, non-null for seventeen of the nineteen kinds) leads six of
+ * them with `Review`, which is the word F18 retired from the top of the paper.
+ * The Desk's folio keeps that copy; the document states the verb and its object.
  */
 function needVerb(kind: NeedKind): string {
   switch (kind) {
@@ -332,7 +359,12 @@ function needVerb(kind: NeedKind): string {
  *  can reach the same destination the guide strip would have offered. `stage`
  *  is the section an anchor destination lands in; `projectId` reaches the
  *  orders-ledger context and the FF&E region anchor; `lineId` is the FF&E line
- *  the need is about, where the caller knows it. */
+ *  the need is about, where the caller knows it.
+ *
+ *  No production caller knows one yet: `NeedLine` (desk-derivation.ts:214–240)
+ *  carries no line id, so C12's re-point lands on the FF&E REGION today, and the
+ *  line-level landing arrives with the A3 field extension that gives a need its
+ *  own subject. */
 export function needGuideAction(
   need: NeedLine,
   stage: SectionKey,
@@ -380,7 +412,7 @@ export function needGuideAction(
         };
   return {
     key: `resolve-${need.kind}`,
-    label: need.actionLabel ?? needVerb(need.kind),
+    label: needVerb(need.kind),
     destination,
   };
 }
@@ -458,8 +490,16 @@ function proposalGuide(
       sendWall?.verb === 'nudge'
         ? {
             key: 'nudge-client',
-            label: `Nudge ${row.client_name}`,
-            destination: { kind: 'anchor', section: 'proposal' },
+            // `client_name` is typed non-null but arrives empty on rows the
+            // Desk's own derivation guards the same way; `Nudge ` is not an act.
+            label: row.client_name.trim()
+              ? `Nudge ${row.client_name.trim()}`
+              : 'Nudge the client',
+            destination: {
+              kind: 'anchor',
+              section: 'proposal',
+              focusId: SEND_WALL_ANCHOR_ID,
+            },
           }
         : controls,
   };
@@ -542,18 +582,27 @@ export function deriveDocumentGuide({
 
   const base = stageCopy[stage];
   // Each act lands on the body it names: the drafting room, the FF&E heading
-  // the project sentence points at, and — on install — the same schedule the
-  // arrivals live in. Care's `Closing the book` seam carries no id yet, so its
-  // act still lands on the section.
+  // the project sentence points at, the movement column the install spread
+  // prints its arrivals in, and the closure checklist care is about. Where a
+  // spread does not mount the body (the care spread prints the settled Care
+  // section, not the band), `jumpToSection` still lands on the section.
   const ffeAnchor: DocumentGuideDestination | null =
     row.project_id
       ? { kind: 'anchor', section: stage, focusId: ffeRegionAnchorId(row.project_id) }
       : null;
+  const movementAnchor: DocumentGuideDestination | null =
+    row.project_id
+      ? { kind: 'anchor', section: stage, focusId: ffeMovementAnchorId(row.project_id) }
+      : null;
   const destination: DocumentGuideDestination | null =
     stage === 'direction' && row.proposal_id
       ? { kind: 'href', href: `/drafting/${row.proposal_id}` }
-      : (stage === 'project' || stage === 'install') && ffeAnchor
+      : stage === 'project' && ffeAnchor
         ? ffeAnchor
+      : stage === 'install' && movementAnchor
+        ? movementAnchor
+      : stage === 'care'
+        ? { kind: 'anchor', section: stage, focusId: CLOSING_THE_BOOK_ANCHOR_ID }
         : null;
   const action = destination ? { ...base.action!, destination } : base.action;
   return withInputs({

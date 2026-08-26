@@ -57,17 +57,21 @@ export const PROJECT_PAPER_ORDER: readonly ProjectPaperRegion[] = [
 ];
 
 /**
- * The regions a given spread actually puts on the paper (C11). Only the Project
- * spread mounts the money region (I141), so an install or care index that
- * printed a Money row would offer a scroll-spy target with nothing behind it;
- * the four stages before the work starts put no Project region on the paper at
- * all.
+ * The regions a given spread actually puts on the paper (C11). A row whose
+ * region the spread never mounts is a scroll-spy target with nothing behind it,
+ * so the install and care spreads print neither Money (`MoneyRegion` mounts
+ * only under `spreadSection === 'project'`, page.tsx:1448) nor Schedule
+ * (`ScheduleSpine` — the only `data-index-region="schedule"` root — mounts only
+ * under the same branch, page.tsx:1399). The four stages before the work starts
+ * put no Project region on the paper at all.
  *
  * Derived by filtering `PROJECT_PAPER_ORDER`, so a subset can never state an
  * order the paper does not print.
  */
 const WORK_SPREAD_REGIONS: readonly ProjectPaperRegion[] =
-  PROJECT_PAPER_ORDER.filter((region) => region.key !== 'money');
+  PROJECT_PAPER_ORDER.filter(
+    (region) => region.key !== 'money' && region.key !== 'schedule',
+  );
 
 export function paperRegionsForSection(
   section: SectionKey,
