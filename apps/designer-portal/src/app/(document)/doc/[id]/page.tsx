@@ -159,6 +159,7 @@ import {
   type TicketLine,
   type TicketPhase,
   type TicketRoomFact,
+  type TicketRow,
 } from '@/lib/document/ticket-derivation';
 import { boardsRoutePath } from '@/lib/document/registry';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
@@ -307,6 +308,37 @@ function vitalsFor(
 }
 
 /**
+ * Two derivations are the same map when every row prints the same words and
+ * opens the same kind of door.
+ *
+ * This test is load-bearing, not an optimisation. The ticket re-derives
+ * whenever any of its six live reads hands back a new object identity, so the
+ * rows it reports up carry a fresh array on renders where nothing was said
+ * differently — and since the guide reads that array from page state, an
+ * identity test would have the report re-render the mount that made it, and
+ * that render report again, without end.
+ */
+function sameTicketRows(
+  previous: readonly TicketRow[] | null,
+  next: readonly TicketRow[],
+): boolean {
+  if (!previous || previous.length !== next.length) return false;
+  return previous.every((row, index) => {
+    const other = next[index];
+    return (
+      row.key === other.key &&
+      row.label === other.label &&
+      row.value === other.value &&
+      row.emphasis === other.emphasis &&
+      row.door.kind === other.door.kind &&
+      row.exception?.rank === other.exception?.rank &&
+      row.exception?.phrase === other.exception?.phrase &&
+      row.exception?.standingSince === other.exception?.standingSince
+    );
+  });
+}
+
+/**
  * The ticket's own reads, in a component of their own.
  *
  * `useMoneyLadder` (and the two un-`enabled` queries under it) may only be
@@ -332,6 +364,7 @@ function JobTicketMount({
   rosterSettled,
   onOpenLeaf,
   onUnfoldRegion,
+  onRows,
 }: {
   projectId: string;
   /** The `[id]` this document is mounted at — the address every leaf page and
@@ -352,6 +385,11 @@ function JobTicketMount({
   rosterSettled: boolean;
   onOpenLeaf: (key: ShelfKey) => void;
   onUnfoldRegion: (region: DocumentIndexKey) => void;
+  /** The eight rows, reported up for the guide's leader (B2-L3). The rows are
+   *  derived here because the reads are here; the guide is derived above this
+   *  mount, so the leader can only speak from what the ticket prints if the
+   *  rows travel back up. */
+  onRows: (rows: readonly TicketRow[]) => void;
 }) {
   const ffeQuery = useProjectFFEItems(projectId) as {
     data: TicketFFERow[] | undefined;
@@ -459,6 +497,10 @@ function JobTicketMount({
       head: deriveTicketHead(ticketInput),
     };
   }, [ticketInput]);
+
+  useEffect(() => {
+    onRows(ticket.rows);
+  }, [ticket.rows, onRows]);
 
   return (
     <JobTicket
@@ -1054,6 +1096,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       (row.active_section === 'direction' && draftingState.error)
     ),
   );
+  // B2 — the eight rows the ticket is printing, reported up by its mount. The
+  // guide's leader is elected from these, so it can never name something the
+  // map on the same paper does not show. Null on a document with no ticket,
+  // and null until the mount's first report.
+  const [ticketRows, setTicketRows] = useState<readonly TicketRow[] | null>(null);
+  const acceptTicketRows = useCallback((rows: readonly TicketRow[]) => {
+    setTicketRows((previous) =>
+      sameTicketRows(previous, rows) ? previous : rows,
+    );
+  }, []);
   // The Desk composition enriches guidance; it never gates it. A cold deep-link
   // renders the document's own derivation on first paint and upgrades in place
   // if the Desk read later contributes a need the row alone cannot carry.
@@ -1071,6 +1123,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         operationalNeed: rankedOperationalNeeds?.[0] ?? enrichedOperationalNeed,
         gate: nearestGate,
         closureReady,
+        ticketRows,
       })
     : null;
   // Split from activateGuide so the red-letter zone's per-need actions (below)
@@ -1352,6 +1405,34 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         'reach-in': <LibraryReachIn proposalId={row.proposal_id} />,
       }
     : {};
+  // THE TICKET — the document's map, composed ONCE here and printed in exactly
+  // one of two positions (B2-L4, direction-b §9). With no table it stands
+  // between the letterhead and the guide, which is where B1 mounted it and
+  // where it stays on today's paper. With a table it stands above the table:
+  // the job's header over the job's middle (I138), the same rows, values,
+  // doors and seam either way — what differs is only what sits beneath it.
+  // `TableFrame` prints nothing when it has no composition, so handing the
+  // node to both positions cannot print two.
+  const jobTicket =
+    row.engagement_kind === 'project' && row.project_id ? (
+      <JobTicketMount
+        projectId={row.project_id}
+        routeId={id}
+        section={row.active_section}
+        regionSection={spreadSection}
+        phase={ticketPhase}
+        rooms={docRooms ?? []}
+        roomsSettled={docRoomsSettled}
+        schedule={scheduleFacts}
+        scheduleSettled={!scheduleQuery.isLoading}
+        callSheetEnabled={callSheetGate.value}
+        rosterCount={(rosterRows ?? []).length}
+        rosterSettled={rosterSettled}
+        onOpenLeaf={toggleShelf}
+        onUnfoldRegion={unfoldRegion}
+        onRows={acceptTicketRows}
+      />
+    ) : null;
   const seal = lineage?.signedAt
     ? {
         date: fmtDay(lineage.signedAt),
@@ -1435,25 +1516,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
         {/* THE TICKET — the document's map, mounted by the DOCUMENT rather
             than the section, so project, install and care read identically
-            (B1). Between the letterhead and the guide/red-letter zone. */}
-        {row.engagement_kind === 'project' && row.project_id && (
-          <JobTicketMount
-            projectId={row.project_id}
-            routeId={id}
-            section={row.active_section}
-            regionSection={spreadSection}
-            phase={ticketPhase}
-            rooms={docRooms ?? []}
-            roomsSettled={docRoomsSettled}
-            schedule={scheduleFacts}
-            scheduleSettled={!scheduleQuery.isLoading}
-            callSheetEnabled={callSheetGate.value}
-            rosterCount={(rosterRows ?? []).length}
-            rosterSettled={rosterSettled}
-            onOpenLeaf={toggleShelf}
-            onUnfoldRegion={unfoldRegion}
-          />
-        )}
+            (B1). Between the letterhead and the guide/red-letter zone on the
+            paper that has no table; above the table where one stands, which is
+            the position `TableFrame` prints it in below. */}
+        {!table && jobTicket}
 
         {/* The red letter replaces the guide only where it can actually speak
             for the document: a composed Desk answer for THIS engagement that
@@ -1600,6 +1666,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               onTurn={tablePin.turn}
               sealTurn={sealTurnNoted ? { signedDate: seal?.date ?? null } : null}
               slots={speccingSlots}
+              ticket={jobTicket}
             >
             {/* W4c — Table I's spread header: the household chip promoted into
                 the spread. Printed identity only (Q6). Mounted only on the

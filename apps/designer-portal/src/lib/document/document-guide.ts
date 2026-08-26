@@ -8,6 +8,7 @@ import {
 import type { CommercialDocumentKind, CommercialState } from './commercial-documents';
 import type { SectionScheduleFacts } from './section-derivation';
 import type { SendWallLine } from './proposal-watch-derivation';
+import type { TicketRow } from './ticket-derivation';
 import {
   gateActionLabel,
   gateSentence,
@@ -115,6 +116,10 @@ interface DeriveDocumentGuideInput {
    *  a read that answered "nothing outstanding", and only the second may rest.
    *  Omitted (the caller does not track it) reads as answered. */
   inputsPending?: boolean;
+  /** B2 — the eight rows the ticket is printing on this same paper, so the
+   *  leader can only be elected from something the map also shows. Null on a
+   *  document with no ticket, and null before the ticket's first report. */
+  ticketRows?: readonly TicketRow[] | null;
 }
 
 const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
