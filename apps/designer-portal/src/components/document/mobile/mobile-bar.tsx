@@ -15,7 +15,7 @@ import {
   useProcurementUnreadCount,
   useUnseenShipped,
 } from '@patina/supabase';
-import { ALL_STUDIO_SURFACES } from '@/lib/document/registry';
+import { ALL_STUDIO_SURFACES, boardsRoutePath } from '@/lib/document/registry';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
@@ -116,9 +116,8 @@ export function MobileBar() {
     : surfaceLabel(pathname);
 
   // F49 — the shelves the spine prints at 1440, as doors a phone can reach.
-  // Mood boards is absent on purpose: its list exists only inside the ≥1440
-  // shelf leaf, which is force-closed below 1440, so there is no destination
-  // to offer here until one is built.
+  // The boards now have a page of their own (B1-L4), so the row that used to
+  // be missing here is the fourth door, in the ticket's own order.
   const documentProjectId = inDocument ? (activeDoc?.projectId ?? null) : null;
   const inThisDocument: DocumentDoor[] = documentProjectId
     ? [
@@ -131,6 +130,11 @@ export function MobileBar() {
           key: 'specbook',
           label: 'Spec book',
           href: `/doc/${documentProjectId}/spec-book`,
+        },
+        {
+          key: 'boards',
+          label: 'Boards',
+          href: boardsRoutePath(documentProjectId),
         },
         ...(callSheetOn
           ? [{ key: 'callsheet', label: 'Call sheet', open: openCallSheet }]

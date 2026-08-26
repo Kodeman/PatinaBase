@@ -5,6 +5,13 @@
  * its contents; one shelf is open at a time, because a shelf that stacks is a
  * pile.
  *
+ * From 1440px it is that 320px aside. Below 1440px there is no room for it, so
+ * a shelf that has a page of its own resolves to that page instead of opening
+ * an aside nobody can see (`shelfRouteFor`) — which is what lets the shelves
+ * be reachable at every width, and what replaces the force-close a resize used
+ * to perform. A shelf with no page (the client's copy) keeps the ≥1440 leaf it
+ * has always had.
+ *
  * It is a `region`, not a `dialog`: the paper behind it stays live and
  * scrollable (D1 — no split views, but no modal reference material either), and
  * it must not claim the aria contract a DocSheet keeps. Esc puts the leaf away,
@@ -15,13 +22,37 @@
  * below DocSheet (z-50), which must still win over an open leaf.
  */
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   CLOSE_SHELF_EVENT,
   shelfDefinition,
+  shelfRouteFor,
   type ShelfLeafKey,
 } from '@/lib/document/shelves';
 import { SHELF_LEAF_ID } from '../spine-shelves-block';
+
+/** Re-exported at the leaf, because a caller deciding between the leaf and the
+ *  route asks the leaf for both. */
+export { shelfRouteFor };
+
+/** The width at which the paper can still spare 320px beside the spine. */
+const FULL_TIER = '(min-width: 1440px)';
+
+/** Assumed true until the browser says otherwise, so the server and the first
+ *  client render agree. Below 1440 the aside is display:none anyway. */
+function useFullTier(): boolean {
+  const [full, setFull] = useState(true);
+  useEffect(() => {
+    const query = window.matchMedia?.(FULL_TIER);
+    if (!query) return;
+    const sync = () => setFull(query.matches);
+    sync();
+    query.addEventListener?.('change', sync);
+    return () => query.removeEventListener?.('change', sync);
+  }, []);
+  return full;
+}
 
 /** A field, a picker, or rich text — anything Esc already means something to. */
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -34,14 +65,33 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export function ShelfPanel({
   openShelf,
   onClose,
+  projectId,
   children,
 }: {
   openShelf: ShelfLeafKey | null;
   onClose: () => void;
+  /** Which document's shelves these are. Without it a routing shelf can only
+   *  be put away below 1440, not travelled to. */
+  projectId?: string;
   children: ReactNode;
 }) {
+  const router = useRouter();
+  const fullTier = useFullTier();
   const closeRef = useRef<HTMLButtonElement>(null);
   const openRef = useRef<ShelfLeafKey | null>(null);
+  const route =
+    openShelf && projectId ? shelfRouteFor(openShelf, projectId) : null;
+  const routes = openShelf
+    ? shelfDefinition(openShelf).routeSegment !== null
+    : false;
+
+  // A shelf carried below 1440 — opened at the full tier and then resized —
+  // goes to its own page rather than staying open behind a display:none aside.
+  useEffect(() => {
+    if (!openShelf || fullTier || !routes) return;
+    if (route) router.push(route);
+    onClose();
+  }, [openShelf, fullTier, routes, route, router, onClose]);
 
   useEffect(() => {
     if (!openShelf) return;
@@ -83,6 +133,7 @@ export function ShelfPanel({
   }, [onClose]);
 
   if (!openShelf) return null;
+  if (!fullTier && routes) return null;
   const shelf = shelfDefinition(openShelf);
 
   return (

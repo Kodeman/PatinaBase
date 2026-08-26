@@ -99,9 +99,14 @@ test.describe('Reactive help — panel + Help Center', () => {
     await palette.getByText('Orders', { exact: true }).click();
 
     // The Orders sheet slid over the Desk (its running head copy is unique).
-    await expect(page.getByText('A lens over every document', { exact: false })).toBeVisible({
-      timeout: 10_000,
-    });
+    // Sourced from orders-ledger.tsx:295 — the previous literal here matched
+    // nothing in the app at all, which is why this test could never get past
+    // opening the sheet to the panel assertion that is its actual subject.
+    await expect(
+      page.getByText("Every project's purchase orders, gathered in one studio register.", {
+        exact: false,
+      }),
+    ).toBeVisible({ timeout: 10_000 });
 
     // The quiet ? doorway in the sheet head scopes the panel to Orders.
     await page.getByRole('button', { name: /About this sheet/i }).first().click();

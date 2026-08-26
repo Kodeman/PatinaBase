@@ -46,6 +46,14 @@ const shot = (page: AuthenticatedPage, name: string) =>
 // auto-modal path — we pin an explicit post-ship date instead.
 const FRESH_SIGNUP_CREATED_AT = '2026-07-12T00:00:00Z';
 
+/** A timestamp strictly BEFORE the ship date, so the gate takes the "existing
+ *  designer" branch (offer note, no auto-modal). This is pinned rather than
+ *  read off the seed: the seeded designer's `profiles.created_at` is the row's
+ *  own insert time, which on a freshly reset database is NOW() — after the
+ *  placeholder ship date, not before it. The test that needs an existing
+ *  designer must therefore state that precondition itself. */
+const EXISTING_DESIGNER_CREATED_AT = '2026-07-08T00:00:00Z';
+
 /** The DESK HEADER's own "Find anything" act. The Studio Drawer prints a second
  *  door with the same visible words (C-AP-05), so this is scoped to the desk
  *  head's action region and matched on the exact accessible name — a bare
@@ -107,8 +115,9 @@ test.describe('The Desk Walkthrough (R97)', () => {
   test('existing designer — no modal, the offer note starts the tour, it completes and persists', async ({
     authenticatedPage: page,
   }) => {
-    // Existing designer: created_at < ship date (the seed's own 2026-07-08).
-    await setCreatedAt(designerId, originalCreatedAt);
+    // Existing designer: created_at < ship date. Pinned by the test, not
+    // inherited from the seed (see EXISTING_DESIGNER_CREATED_AT).
+    await setCreatedAt(designerId, EXISTING_DESIGNER_CREATED_AT);
     await clearHelpState(designerId);
 
     await gotoDesk(page);
@@ -185,8 +194,8 @@ test.describe('The Desk Walkthrough (R97)', () => {
     authenticatedPage: page,
   }) => {
     // Existing designer (no auto-modal) with a COMPLETED record — replay must
-    // ignore the one-shot guard.
-    await setCreatedAt(designerId, originalCreatedAt);
+    // ignore the one-shot guard. Same pinned precondition as the first test.
+    await setCreatedAt(designerId, EXISTING_DESIGNER_CREATED_AT);
     await setTourCompleted(designerId);
 
     await gotoDesk(page);

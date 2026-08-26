@@ -87,6 +87,16 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  /* B1 — the job ticket's own reads. The ticket is mounted by every
+     project-kind document now, so every suite that renders one pays for
+     these; none of them is this suite's subject. */
+  usePlanRoom: () => ({ data: { sheets: [] }, isLoading: false }),
+  useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
+  useProjectBoards: () => ({ data: [], isLoading: false }),
+  useProjectInvoices: () => ({ isLoading: false, error: null, data: [] }),
+  usePurchaseOrders: () => ({ isLoading: false, error: null, data: [] }),
+  computeArAging: jest.requireActual('@patina/supabase').computeArAging,
+  invoiceDaysOverdue: jest.requireActual('@patina/supabase').invoiceDaysOverdue,
   useProjectRoomScans: () => ({ data: [] }),
   useGeneratedRoomFilesByScan: () => ({ data: new Map() }),
   useProjectV2: () => mockProjectQuery,
@@ -107,6 +117,20 @@ jest.mock('@patina/supabase', () => ({
     isError: false,
   }),
   useResolvedSchedule: () => mockResolvedSchedule,
+}));
+
+/* The money ladder under the ticket's Money row: four commercial reads that
+   now run on every project document. */
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  __esModule: true,
+  useProjectBillingAuthority: () => ({
+    isLoading: false,
+    error: null,
+    data: { authorizedCents: 0 },
+  }),
+  useWorkingBudget: () => ({ isLoading: false, error: null, data: null }),
+  useProjectInstruments: () => ({ isLoading: false, error: null, data: [] }),
+  useTradeScopes: () => ({ isLoading: false, error: null, data: [] }),
 }));
 
 // The project document's own sections are not what these tests exercise; the
@@ -147,7 +171,7 @@ jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () 
 // right subset through.
 jest.mock('@/components/document/spine-shelved-blocks', () => ({
   DocSpineShelvedBlocks: (props: { regions: ReadonlyArray<{ key: string }> }) => (
-    <ul data-testid="shelved-spine-regions" aria-label="In this document">
+    <ul data-testid="shelved-spine-regions" aria-label="On this paper">
       {props.regions.map((region) => (
         <li key={region.key}>{region.key}</li>
       ))}
@@ -1198,6 +1222,98 @@ describe('DocumentPage guide activation', () => {
       expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
         'approvals', 'schedule', 'ffe', 'money',
       ]);
+    });
+  });
+
+  // ── B1-L3/L5 — the job ticket is mounted by the DOCUMENT, not by the
+  // section: every `engagement_kind === 'project'` spread prints the same
+  // eight rows, and the three project-kind sections read identically. Its
+  // place on the paper is the whole premise of the sticky seam — it stands
+  // between the letterhead and the guide/red-letter zone, so it can collapse
+  // in place once the letterhead scrolls past. ──
+  describe('the job ticket mount (B1)', () => {
+    const TICKET = '[data-job-ticket]';
+
+    const ticketRowKeys = () =>
+      Array.from(
+        document.querySelectorAll(`${TICKET} [data-ticket-row]`),
+        (row) => row.getAttribute('data-ticket-row'),
+      );
+
+    it.each(['project', 'install', 'care'])(
+      'prints the same eight rows on a %s spread',
+      (section) => {
+        asProjectDocument();
+        const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+        mockDocumentQuery = {
+          ...mockDocumentQuery,
+          data: { kind: 'engagement', row: { ...current, active_section: section } },
+        };
+
+        render(<DocumentPage params={fulfilledParams} />);
+
+        expect(document.querySelector(TICKET)).not.toBeNull();
+        expect(ticketRowKeys()).toEqual([
+          'rooms', 'pieces', 'drawings', 'spec', 'boards', 'money', 'dates', 'people',
+        ]);
+      },
+    );
+
+    it('stands on no document that is not a project engagement', () => {
+      // The outer beforeEach's row is a lead (Brief) document — the ticket has
+      // no job to name there, and mounting it would run the money ladder's two
+      // un-`enabled` reads on a document with no project behind them.
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(document.querySelector(TICKET)).toBeNull();
+    });
+
+    it('sets the letterhead sentinel between the letterhead and the ticket', () => {
+      asProjectDocument();
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const sentinel = document.getElementById('doc-letterhead-sentinel');
+      const ticket = document.querySelector(TICKET);
+      const letterhead = document.querySelector('main header');
+      expect(sentinel).not.toBeNull();
+      // The observer watches the sentinel to know the letterhead has gone; a
+      // sentinel on the wrong side of either would pin the seam at the wrong
+      // moment, which is why this is asserted as document ORDER.
+      expect(
+        letterhead!.compareDocumentPosition(sentinel!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        sentinel!.compareDocumentPosition(ticket!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it('stands above the red-letter zone', () => {
+      asProjectDocument();
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: {
+            kind: 'task_due', text: 'Confirm the site measure',
+            actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+          },
+          needs: [{
+            kind: 'task_due', text: 'Confirm the site measure',
+            actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+          }],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const ticket = document.querySelector(TICKET);
+      const zone = screen.getByRole('region', { name: 'Needs attention' });
+      expect(ticket).not.toBeNull();
+      expect(
+        ticket!.compareDocumentPosition(zone) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
     });
   });
 

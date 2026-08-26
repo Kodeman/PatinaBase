@@ -734,7 +734,16 @@
    200px and caps at 1040px with 48px of padding, so its text edge sits at
    200 + (W − 1472)/2 + 48 — which only clears 520px from W ≈ 2016px. Below
    that the paper steps aside rather than being covered; 2020px is the
-   compute-safe threshold. */
+   compute-safe threshold.
+
+   F45, re-verified for B1: the leaf is a FIXED column over 200–520px, so
+   everything the paper prints left of 520px is covered and the whole paper —
+   the job ticket included — has to step aside. What F45 reported was a REGION
+   HEAD re-wrapping under a leaf opened from the spine; the leaf is now opened
+   from the ticket at the top of the paper, which is what the ticket, and not
+   the region head, being what the leaf sits beside means (direction-b §9).
+   The anchor stays `[data-document-paper][data-shelf-open]` because the ticket
+   lives inside the paper; exempting it would put the seam under the leaf. */
 @media (min-width: 1440px) {
   [data-document-paper] {
     transition: padding-left 200ms ease;
@@ -752,6 +761,16 @@
   [data-document-paper] {
     transition: none;
   }
+}
+
+/* Two organs stick to the top of the paper: the job ticket's pinned seam,
+   which has to ride with the reader (R124), and the schedule's own pinned
+   glance. Both are `sticky top-0`, and the glance is later in the same scroll
+   container, so it used to paint over the seam for the whole length of the
+   Schedule region. The seam publishes its height while it is pinned; the
+   glance stands under it, and falls back to the top when nothing is pinned. */
+[data-document-shell] section[aria-label='Schedule rule'] {
+  top: var(--doc-seam-height, 0px);
 }
 
 /* Typography: now provided by @patina/design-system/styles/typography.css.

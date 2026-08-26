@@ -3,9 +3,12 @@
  * work itself. The paper holds what the studio is composing; the shelves hold
  * the artifacts it composes from.
  *
- * Four open as a leaf beside the spine. The call sheet is a DOORWAY, not a
- * leaf: the roster already has a sheet of its own, and printing a second,
- * thinner copy of it in a leaf would be two answers to one question.
+ * They are the ticket's rows now, not the spine's block, so their contents are
+ * reachable at EVERY width: from 1440px a shelf opens the leaf beside the
+ * spine; below that it resolves to the page it already has
+ * (`shelfRouteFor`). The call sheet is a DOORWAY, not a leaf: the roster
+ * already has a sheet of its own, and printing a second, thinner copy of it in
+ * a leaf would be two answers to one question.
  */
 
 export type ShelfKey =
@@ -27,6 +30,11 @@ export interface ShelfDefinition {
   eyebrow: string;
   kind: 'leaf' | 'doorway';
   subject: ShelfSubject;
+  /** The page this shelf has of its own, under `/doc/{projectId}`. A shelf
+   *  with no segment has no page, so it stays the ≥1440 leaf it already is:
+   *  the call sheet is an overlay, and the client's copy is reached below 1440
+   *  by the Preview act that has always carried it (Q7/A4). */
+  routeSegment: string | null;
 }
 
 const ALL_SHELVES: readonly ShelfDefinition[] = [
@@ -36,6 +44,7 @@ const ALL_SHELVES: readonly ShelfDefinition[] = [
     eyebrow: 'Plan room · Drawing set',
     kind: 'leaf',
     subject: 'project',
+    routeSegment: 'plans',
   },
   {
     key: 'specbook',
@@ -43,13 +52,17 @@ const ALL_SHELVES: readonly ShelfDefinition[] = [
     eyebrow: 'Spec book · By room',
     kind: 'leaf',
     subject: 'project',
+    routeSegment: 'spec-book',
   },
   {
     key: 'moodboards',
-    title: 'Mood boards',
-    eyebrow: 'Mood boards · Shared & draft',
+    // F62 — one name for one thing. The row, the leaf, the page and ⌘K all
+    // read `Boards`; the key stays `moodboards` because it is an address.
+    title: 'Boards',
+    eyebrow: 'Boards · Shared & draft',
     kind: 'leaf',
     subject: 'project',
+    routeSegment: 'boards',
   },
   {
     key: 'callsheet',
@@ -57,6 +70,7 @@ const ALL_SHELVES: readonly ShelfDefinition[] = [
     eyebrow: 'Call sheet · The roster',
     kind: 'doorway',
     subject: 'project',
+    routeSegment: null,
   },
   {
     key: 'clientcopy',
@@ -64,6 +78,7 @@ const ALL_SHELVES: readonly ShelfDefinition[] = [
     eyebrow: 'The client’s copy · Live',
     kind: 'leaf',
     subject: 'proposal',
+    routeSegment: null,
   },
 ];
 
@@ -99,6 +114,20 @@ export function shelvesFor({
       (s.key !== 'callsheet' || callSheetEnabled) &&
       (s.key !== 'clientcopy' || clientCopyEnabled),
   );
+}
+
+/**
+ * Where a shelf goes when there is no room beside the spine for a leaf. Below
+ * 1440px the row is a door to the shelf's own page, which returns to the
+ * document by its full name (SP-14); above it the leaf still opens in place.
+ * `null` means this shelf has no page — it stays a leaf, or an overlay.
+ */
+export function shelfRouteFor(
+  key: ShelfKey,
+  projectId: string,
+): string | null {
+  const segment = shelfDefinition(key).routeSegment;
+  return segment ? `/doc/${projectId}/${segment}` : null;
 }
 
 export function shelfDefinition(key: ShelfKey): ShelfDefinition {

@@ -96,6 +96,17 @@ function line(id: string, name: string, scopeRoomId: string | null, position: nu
 }
 
 jest.mock('@patina/supabase', () => ({
+  /* B1 — the job ticket's own reads. The ticket is mounted by every
+     project-kind document now, so every suite that renders one pays for
+     these; none of them is this suite's subject. */
+  useProjectFFEItems: () => ({ data: [], isLoading: false }),
+  usePlanRoom: () => ({ data: { sheets: [] }, isLoading: false }),
+  useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
+  useProjectBoards: () => ({ data: [], isLoading: false }),
+  useProjectInvoices: () => ({ isLoading: false, error: null, data: [] }),
+  usePurchaseOrders: () => ({ isLoading: false, error: null, data: [] }),
+  computeArAging: jest.requireActual('@patina/supabase').computeArAging,
+  invoiceDaysOverdue: jest.requireActual('@patina/supabase').invoiceDaysOverdue,
   useProjectRoomScans: () => ({ data: [] }),
   useGeneratedRoomFilesByScan: () => ({ data: new Map() }),
   /* the page's own reads */
@@ -146,6 +157,20 @@ jest.mock('@patina/supabase', () => ({
       }),
     }),
   }),
+}));
+
+/* The money ladder under the ticket's Money row: four commercial reads that
+   now run on every project document. */
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  __esModule: true,
+  useProjectBillingAuthority: () => ({
+    isLoading: false,
+    error: null,
+    data: { authorizedCents: 0 },
+  }),
+  useWorkingBudget: () => ({ isLoading: false, error: null, data: null }),
+  useProjectInstruments: () => ({ isLoading: false, error: null, data: [] }),
+  useTradeScopes: () => ({ isLoading: false, error: null, data: [] }),
 }));
 
 /* The reach-in's taken-codes read — its own key by design (F1); the key

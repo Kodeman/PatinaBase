@@ -126,7 +126,10 @@ export const STUDIO_ROOMS: StudioSurface[] = [
     kind: 'room',
     label: 'Drafting Room',
     subLabel: 'proposal in hand',
-    aliases: ['drafting', 'proposal editor', 'boards', 'moodboards'],
+    // F62 — 'boards'/'moodboards' used to resolve here as well as to the
+    // boards themselves; the Drafting Room gives them back so one typed word
+    // finds one door.
+    aliases: ['drafting', 'proposal editor'],
     icon: PenTool,
     weight: 'room',
     scope: 'document',
@@ -398,12 +401,12 @@ export const SPEC_BOOK_SURFACE: StudioSurface = {
   },
 };
 
-export const MOOD_BOARDS_SURFACE: StudioSurface = {
-  key: 'mood-boards',
+export const BOARDS_SURFACE: StudioSurface = {
+  key: 'boards',
   kind: 'room',
-  label: 'Mood boards',
+  label: 'Boards',
   subLabel: 'this project · the boards',
-  aliases: ['mood boards', 'moodboards', 'mood board', 'boards', 'board', 'mood'],
+  aliases: ['boards', 'board', 'moodboards', 'mood boards', 'mood board'],
   icon: Images,
   weight: 'room',
   scope: 'document',
@@ -413,13 +416,20 @@ export const MOOD_BOARDS_SURFACE: StudioSurface = {
   },
 };
 
+/** The boards' own page — the destination the `Boards` row opens below 1440,
+ *  where the shelf leaf cannot stand. Built here rather than in each consumer
+ *  so the ticket, the mobile bar and ⌘K name one address. */
+export function boardsRoutePath(docId: string): string {
+  return `/doc/${docId}/boards`;
+}
+
 /** The four surfaces a document scopes, in the order they print. The call
  *  sheet is the one of the four that is already a `STUDIO_LEDGERS` entry (it is
  *  a sheet, not a page), so it is read from there rather than declared twice. */
 export const DOCUMENT_SCOPED_SURFACES: StudioSurface[] = [
   PLAN_ROOM_SURFACE,
   SPEC_BOOK_SURFACE,
-  MOOD_BOARDS_SURFACE,
+  BOARDS_SURFACE,
   STUDIO_LEDGERS.find((s) => s.key === 'call-sheet')!,
 ];
 

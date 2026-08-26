@@ -1,6 +1,16 @@
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 
 const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
+/**
+ * The Drafting Room is for DRAFTS. `draftingEditability` (lib/document/
+ * drafting-editability.ts) evicts any proposal whose `status !== 'draft'` to
+ * `/doc/<id>` — "already been issued. Returning to its read-only document" —
+ * which is R42/R43's own rule, not a defect. Every `/drafting/…` step below
+ * therefore drives the seeded DRAFT; `/doc/…` steps keep the sent proposal,
+ * whose read-only document is what they are actually about.
+ */
+const DRAFT_PROPOSAL_ID = 'd0c10000-0000-0000-0000-0000000000b2';
+
 const FOLIO_ACTION =
   /Review decisions|Send reminder|Open the project|Follow up|Revise proposal|Review flagged lines|Continue the introduction|Review the claim|Inspect the delivery|Resolve the schedule|Open the task|Review the purchase order|Follow up with the maker|Review and send/;
 
@@ -179,7 +189,7 @@ test.describe('Inked Instruments action visibility', () => {
     // `/^Send/` against markup that stopped rendering it two waves earlier —
     // the ACT moved by ruling; role=group and data-action-region never did,
     // which is why the assertion below still queries the same region.
-    await page.goto(`/drafting/${SENT_PROPOSAL_ID}`, {
+    await page.goto(`/drafting/${DRAFT_PROPOSAL_ID}`, {
       waitUntil: 'domcontentloaded',
     });
     await expectInlineQuietAct(page, 'room-head', 'share-proposal', 'Share');

@@ -28,7 +28,9 @@ describe('DocSpine at the compact tier (1180–1439) — F02', () => {
     );
   });
 
-  it('keeps the three shelved blocks hidden below 1440 (C8 untouched)', () => {
+  it('keeps the spine’s one remaining block hidden below 1440 (C8 untouched)', () => {
+    // The rail here is A3's form and B1 does not touch it: the label, the word
+    // `Put down`, and no blocks — the map is the ticket on the paper now.
     render(
       <DocSpine
         sections={sections}

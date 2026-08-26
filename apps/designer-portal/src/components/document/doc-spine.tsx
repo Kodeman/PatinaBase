@@ -27,9 +27,10 @@ export function DocSpine({
   others: string[];
   /** Click a settled/active marker to scroll to (and unfold) that section. */
   onJump?: (key: SectionKey) => void;
-  /** The running index, the rooms and the shelves — the full spine's three
-   *  blocks (≥1440px only; the compact rail and the mobile sheet are
-   *  untouched). Absent on documents with no Project section open. */
+  /** The running index — the full spine's one block (≥1440px only; the
+   *  compact rail and the mobile sheet are untouched). The rooms and the
+   *  shelves are the ticket's rows on the paper now (B1). Absent on documents
+   *  with no Project section open. */
   shelved?: ReactNode;
 }) {
   const activeSection = sections.find((s) => s.state === 'active');
@@ -134,17 +135,18 @@ export function DocSpine({
         </p>
       )}
 
-      {/* The shelved spine's three blocks — the running index, the rooms, the
-          shelves. Full spine only: below 1440px the paper needs its measure
-          more than the rail needs its furniture. */}
+      {/* The shelved spine's one block — the running index. Full spine only:
+          below 1440px the paper needs its measure more than the rail needs its
+          furniture, and the ticket carries the map at every width. */}
       {shelved && <div className="hidden min-[1440px]:block">{shelved}</div>}
 
       <CompactSpineTimerDoorway />
 
       <div className="hidden min-[1440px]:mt-4 min-[1440px]:block">
         <SpineTimer />
-        {/* Presence, unlabelled, at the spine's foot: "In this document" is now
-            the running index's name, and one rail cannot carry it twice. */}
+        {/* Presence, unlabelled, at the spine's foot: the running index above
+            already names what is on this paper, and one rail cannot carry a
+            second heading for the same thing. */}
         <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.08em] leading-relaxed text-[var(--color-aged-oak)]">
           {others.length === 0
             ? 'Just you · visible to the studio'

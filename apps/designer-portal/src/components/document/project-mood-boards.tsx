@@ -240,7 +240,7 @@ export function ProjectMoodBoards({
   }, [canCreate, setBoardsFolded]);
   if (isLoading) {
     return (
-      <section aria-label="Mood boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
+      <section aria-label="Boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
         <div className="h-24 animate-pulse rounded-[5px] bg-[var(--bg-muted)] motion-reduce:animate-none" />
       </section>
     );
@@ -251,10 +251,10 @@ export function ProjectMoodBoards({
     return (
       <section aria-labelledby="project-mood-boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
         <h2 id="project-mood-boards" className="font-heading text-[16px] text-[var(--color-charcoal)]">
-          Mood boards
+          Boards
         </h2>
         <p role="alert" className="mt-2 text-[12px] text-[var(--color-clay)]">
-          The project&apos;s mood boards could not be read.
+          The project&apos;s boards could not be read.
         </p>
       </section>
     );
@@ -283,7 +283,7 @@ export function ProjectMoodBoards({
         <FoldSeam
           headingId={HEADING_ID}
           bodyId={BODY_ID}
-          name="Mood boards"
+          name="Boards"
           summary={status}
           onUnfold={() => {
             unfoldFocusRef.current = true;
@@ -332,7 +332,7 @@ export function ProjectMoodBoards({
       <RegionRule />
       <RegionHead
         headingId={HEADING_ID}
-        name="Mood boards"
+        name="Boards"
         status={status}
         surfaceKey="project"
         regionKey="working-boards"
@@ -340,7 +340,7 @@ export function ProjectMoodBoards({
         bodyId={BODY_ID}
         // F30 — the shelf leaf mounts this region already unfolded, and the
         // fold key is shared with the region on the paper. Leaving the control
-        // wired there would fold the paper's Mood boards region while the leaf
+        // wired there would fold the paper's Boards region while the leaf
         // itself appeared not to move.
         onFold={alwaysUnfolded ? undefined : () => setBoardsFolded(true)}
       />

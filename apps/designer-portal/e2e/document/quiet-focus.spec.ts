@@ -1,6 +1,16 @@
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 
 const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
+/**
+ * The Drafting Room is for DRAFTS. `draftingEditability` (lib/document/
+ * drafting-editability.ts) evicts any proposal whose `status !== 'draft'` to
+ * `/doc/<id>` — "already been issued. Returning to its read-only document" —
+ * which is R42/R43's own rule, not a defect. Every `/drafting/…` step below
+ * therefore drives the seeded DRAFT; `/doc/…` steps keep the sent proposal,
+ * whose read-only document is what they are actually about.
+ */
+const DRAFT_PROPOSAL_ID = 'd0c10000-0000-0000-0000-0000000000b2';
+
 
 async function expectNoHorizontalOverflow(page: AuthenticatedPage) {
   await expect
@@ -54,7 +64,7 @@ test.describe('Quiet Work focused rooms', () => {
     authenticatedPage: page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto(`/drafting/${SENT_PROPOSAL_ID}`, {
+    await page.goto(`/drafting/${DRAFT_PROPOSAL_ID}`, {
       waitUntil: 'domcontentloaded',
     });
     await page.waitForLoadState('networkidle');

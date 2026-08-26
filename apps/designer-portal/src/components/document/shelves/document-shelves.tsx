@@ -37,7 +37,16 @@ export function DocumentShelves({
   clientName?: string;
 }) {
   return (
-    <ShelfPanel openShelf={openShelf} onClose={onClose}>
+    <ShelfPanel
+      openShelf={openShelf}
+      onClose={onClose}
+      /* The leaf needs an address to travel to below 1440, and `routeId` is
+         the one every leaf page already resolves — project id or engagement id
+         alike. Without it a routing shelf carried down a resize, or opened by
+         `NEW_BOARD_EVENT` on a phone, is dropped on the floor: the force-close
+         B1 removed, re-implemented one component lower. */
+      projectId={projectId ?? routeId}
+    >
       {openShelf === 'planroom' && projectId && (
         <PlanRoomLeaf projectId={projectId} routeId={routeId} />
       )}

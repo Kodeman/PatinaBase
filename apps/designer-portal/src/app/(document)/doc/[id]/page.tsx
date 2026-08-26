@@ -13,6 +13,13 @@ import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  computeArAging,
+  invoiceDaysOverdue,
+  usePlanRoom,
+  useProjectBoards,
+  useProjectFFEItems,
+  useProjectInvoices,
+  useProjectOwnedBoards,
   useProjectV2,
   useProjectPhases,
   useProjectApprovals,
@@ -20,6 +27,7 @@ import {
   useProjectRoster,
   useDiscovery,
   useProjectContextualHandoffs,
+  usePurchaseOrders,
   useResolvedSchedule,
 } from '@patina/supabase';
 import {
@@ -49,7 +57,12 @@ import {
   type SectionScheduleFacts,
 } from '@/lib/document/section-derivation';
 import { type DocumentStateRow, type SectionKey } from '@/lib/document/desk-derivation';
-import { paperRegionsForSection } from '@/lib/document/document-index';
+import {
+  paperRegionsForSection,
+  requestRegionUnfold,
+  type DocumentIndexKey,
+} from '@/lib/document/document-index';
+import { scrollToRegion } from '@/hooks/use-document-running-index';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
 import {
   deriveProposalWatch,
@@ -133,6 +146,27 @@ import {
   useRoomLens,
 } from '@/components/document/room-lens-context';
 import { DocSpineShelvedBlocks } from '@/components/document/spine-shelved-blocks';
+import {
+  JobTicket,
+  LETTERHEAD_SENTINEL_ID,
+} from '@/components/document/job-ticket';
+import {
+  deriveTicket,
+  deriveTicketHead,
+  deriveTicketIdentity,
+  deriveTicketSeam,
+  type TicketInput,
+  type TicketLine,
+  type TicketPhase,
+  type TicketRoomFact,
+} from '@/lib/document/ticket-derivation';
+import { boardsRoutePath } from '@/lib/document/registry';
+import { useMoneyLadder } from '@/hooks/use-money-ladder';
+import { selectUndrawnVendorPayments } from '@/lib/document/vendor-payouts';
+import {
+  deriveLineStamp,
+  type LineStampInput,
+} from '@/lib/document/stamp-derivation';
 import { deriveTableComposition } from '@/lib/document/table-derivation';
 import { useTablePin } from '@/components/document/worktable/use-table-pin';
 import { ReleaseLift } from '@/components/document/worktable/release-lift';
@@ -154,6 +188,7 @@ import { DocumentShelves } from '@/components/document/shelves/document-shelves'
 import {
   NEW_BOARD_EVENT,
   isShelfLeafKey,
+  shelfRouteFor,
   type ShelfKey,
   type ShelfLeafKey,
 } from '@/lib/document/shelves';
@@ -178,6 +213,17 @@ interface ProjectVitalsRecord {
   target_end_date?: string | null;
   total_amount_cents?: number | null;
   start_date?: string | null;
+}
+
+/**
+ * The FF&E columns the ticket counts: the stamp machine's own input, plus the
+ * two fields the ticket reads directly — which room a line belongs to, and
+ * whether it carries a product yet.
+ */
+interface TicketFFERow extends LineStampInput {
+  project_room_id?: string | null;
+  product_id?: string | null;
+  removed_at?: string | null;
 }
 
 /**
@@ -258,6 +304,183 @@ function vitalsFor(
     return [row.client_name, 'New inquiry'].filter(Boolean).join(' · ');
   }
   return [row.client_name, 'In discovery'].filter(Boolean).join(' · ');
+}
+
+/**
+ * The ticket's own reads, in a component of their own.
+ *
+ * `useMoneyLadder` (and the two un-`enabled` queries under it) may only be
+ * called where the ticket actually stands, so the mount is CONDITIONAL rather
+ * than a hook the page calls and discards on every non-project document.
+ *
+ * Every read here is a key React Query already holds for this document —
+ * the shelf leaves, the money region and the FF&E section make the same
+ * calls — so the ticket costs cache hits, not round trips.
+ */
+function JobTicketMount({
+  projectId,
+  routeId,
+  section,
+  regionSection,
+  phase,
+  rooms,
+  roomsSettled,
+  schedule,
+  scheduleSettled,
+  callSheetEnabled,
+  rosterCount,
+  rosterSettled,
+  onOpenLeaf,
+  onUnfoldRegion,
+}: {
+  projectId: string;
+  /** The `[id]` this document is mounted at — the address every leaf page and
+   *  the boards route resolve, project id or engagement id alike. */
+  routeId: string;
+  section: SectionKey;
+  /** Which spread's regions are actually on the paper. Off the `worktable`
+   *  flag this IS `section`; with a table pinned the two differ, and a row
+   *  that unfolds a region the pinned spread never mounted opens nothing. */
+  regionSection: SectionKey;
+  phase: TicketPhase | null;
+  rooms: readonly TicketRoomFact[];
+  roomsSettled: boolean;
+  schedule: SectionScheduleFacts | null;
+  scheduleSettled: boolean;
+  callSheetEnabled: boolean;
+  rosterCount: number;
+  rosterSettled: boolean;
+  onOpenLeaf: (key: ShelfKey) => void;
+  onUnfoldRegion: (region: DocumentIndexKey) => void;
+}) {
+  const ffeQuery = useProjectFFEItems(projectId) as {
+    data: TicketFFERow[] | undefined;
+    isLoading: boolean;
+  };
+  const planRoomQuery = usePlanRoom(projectId);
+  const liveBoardsQuery = useProjectOwnedBoards(projectId);
+  const signedBoardsQuery = useProjectBoards(projectId);
+  const invoicesQuery = useProjectInvoices(projectId);
+  const purchaseOrdersQuery = usePurchaseOrders({ projectId });
+  const moneyRead = useMoneyLadder(projectId);
+
+  const lines = useMemo<TicketLine[]>(
+    () =>
+      (ffeQuery.data ?? [])
+        .filter((item) => item.removed_at == null)
+        .map((item) => ({
+          stamp: deriveLineStamp(item).kind,
+          roomId: item.project_room_id ?? null,
+          // The same test the FF&E ledger's own "Spec the N unspecified"
+          // leader runs, so the ticket's numerator and the region's act can
+          // never count different lines.
+          specified: Boolean(item.product_id),
+        })),
+    [ffeQuery.data],
+  );
+
+  const leadingOpenInvoice = useMemo(
+    () => computeArAging(invoicesQuery.data ?? []).openInvoices[0] ?? null,
+    [invoicesQuery.data],
+  );
+
+  const boardsCount =
+    (liveBoardsQuery.data ?? []).filter((board) => board.status !== 'archived')
+      .length + (signedBoardsQuery.data ?? []).length;
+
+  const paperRegionKeys = useMemo(
+    () => paperRegionsForSection(regionSection).map((region) => region.key),
+    [regionSection],
+  );
+
+  const ticketInput = useMemo<TicketInput>(
+    () => ({
+      section,
+      phase,
+      rooms: { settled: roomsSettled, list: rooms },
+      pieces: { settled: !ffeQuery.isLoading, lines },
+      drawings: {
+        settled: !planRoomQuery.isLoading,
+        sheetCount: planRoomQuery.data?.sheets.length ?? 0,
+      },
+      boards: {
+        settled: !liveBoardsQuery.isLoading && !signedBoardsQuery.isLoading,
+        count: boardsCount,
+      },
+      money: {
+        settled: moneyRead.settled,
+        failed: moneyRead.failed,
+        ladder: moneyRead.ladder,
+        owedDays: leadingOpenInvoice
+          ? invoiceDaysOverdue(leadingOpenInvoice)
+          : null,
+        undrawnKind: selectUndrawnVendorPayments(purchaseOrdersQuery.data ?? [])
+          .kind,
+        owedSince: leadingOpenInvoice?.due_date?.slice(0, 10) ?? null,
+      },
+      dates: { settled: scheduleSettled, schedule },
+      people: { settled: rosterSettled, callSheetEnabled, rosterCount },
+      paperRegions: paperRegionKeys,
+    }),
+    [
+      section,
+      phase,
+      roomsSettled,
+      rooms,
+      ffeQuery.isLoading,
+      lines,
+      planRoomQuery.isLoading,
+      planRoomQuery.data,
+      liveBoardsQuery.isLoading,
+      signedBoardsQuery.isLoading,
+      boardsCount,
+      moneyRead.settled,
+      moneyRead.failed,
+      moneyRead.ladder,
+      leadingOpenInvoice,
+      purchaseOrdersQuery.data,
+      scheduleSettled,
+      schedule,
+      rosterSettled,
+      callSheetEnabled,
+      rosterCount,
+      paperRegionKeys,
+    ],
+  );
+
+  // The top of the paper on every project document, under six live queries:
+  // the derivation runs when a fact changes, not on every render one of them
+  // causes.
+  const ticket = useMemo(() => {
+    const rows = deriveTicket(ticketInput);
+    return {
+      rows,
+      seam: deriveTicketSeam(rows, deriveTicketIdentity(ticketInput)),
+      head: deriveTicketHead(ticketInput),
+    };
+  }, [ticketInput]);
+
+  return (
+    <JobTicket
+      rows={ticket.rows}
+      seam={ticket.seam}
+      head={ticket.head}
+      onOpenLeaf={onOpenLeaf}
+      routes={{
+        planroom: shelfRouteFor('planroom', routeId) ?? undefined,
+        specbook: shelfRouteFor('specbook', routeId) ?? undefined,
+        moodboards: boardsRoutePath(routeId),
+      }}
+      onUnfoldRegion={onUnfoldRegion}
+      onOpenCallSheet={() =>
+        window.dispatchEvent(
+          new CustomEvent('document:open-call-sheet', {
+            detail: { mode: 'sheet' },
+          }),
+        )
+      }
+    />
+  );
 }
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -447,7 +670,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // The shelves — one leaf open at a time, beside the spine. The call sheet is
   // not one of them: it is a doorway to the roster sheet mounted below.
   const [openShelf, setOpenShelf] = useState<ShelfLeafKey | null>(null);
-  const { heldRoomId } = useRoomLens();
+  const { heldRoomId, toggleRoom } = useRoomLens();
   // R24: drags anywhere on the active section land in the folio.
   const [sectionDrag, setSectionDrag] = useState(false);
   const [folioDrop, setFolioDrop] = useState<File[] | null>(null);
@@ -531,7 +754,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   }, []);
 
   // R25 rooms (spine-sheet jump rows + headings) · R23 gates (settled stamps).
-  const { data: docRooms } = useDocumentRooms(row?.project_id ?? null);
+  const { data: docRooms, isLoading: docRoomsLoading } = useDocumentRooms(
+    row?.project_id ?? null,
+  );
+  const docRoomsSettled = Boolean(row?.project_id) && !docRoomsLoading;
   const { data: sectionGates } = useSectionGates(row?.project_id ?? null);
 
   // R6: an activated proposal's id redirects to its project document —
@@ -590,19 +816,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     setOpenShelf((current) => (current === key ? null : key));
   }, []);
 
-  // The leaf and its shelf rows only exist from 1440px. Narrower than that
-  // they are display:none, so an open shelf would leave Esc and focus-restore
-  // aiming at elements nobody can see — the same safeguard the room lens keeps.
-  useEffect(() => {
-    if (!openShelf || typeof window === 'undefined') return;
-    const query = window.matchMedia?.('(min-width: 1440px)');
-    if (!query) return;
-    const release = () => {
-      if (!query.matches) setOpenShelf(null);
-    };
-    query.addEventListener('change', release);
-    return () => query.removeEventListener('change', release);
-  }, [openShelf]);
+  // B1 — the force-close is gone. A shelf carried below 1440 used to be
+  // dropped on the floor because its leaf became display:none; ShelfPanel now
+  // routes it to the shelf's own page instead, so the reader arrives at what
+  // they opened rather than at nothing.
+
+  // The region a ticket row unfolds — the same request and the same landing the
+  // running index's own rows make, so a jump from the ticket and a jump from
+  // the index take the reading line to the same place by the same act.
+  const unfoldRegion = useCallback(
+    (key: DocumentIndexKey) => {
+      requestRegionUnfold(key);
+      scrollToRegion(key, row?.project_id ?? '');
+    },
+    [row?.project_id],
+  );
 
   // "Start a board" from the Add-to-project sheet reaches a room that now lives
   // on a shelf. Catch the intent, open the shelf, and re-fire once the room is
@@ -708,6 +936,22 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       target: targetEnd(resolved),
     };
   }, [scheduleQuery.resolved, scheduleQuery.phases, scheduleFacts]);
+
+  // The ticket's identity line names the PHASE and its fraction, never the
+  // section word (direction-b §5 — two vocabularies, two jobs). Null until the
+  // resolver has placed a phase: `Procurement & Orders 4 of 6` with no phase
+  // behind it would be a fraction of nothing.
+  const ticketPhase = useMemo<TicketPhase | null>(() => {
+    const name = scheduleVitals?.activePhaseName ?? null;
+    const activeId = scheduleFacts?.selection.activePhaseId ?? null;
+    if (!name || !activeId) return null;
+    const ordered = [...scheduleQuery.phases].sort(
+      (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+    );
+    const index = ordered.findIndex((phase) => phase.id === activeId);
+    if (index < 0) return null;
+    return { name, position: index + 1, of: ordered.length };
+  }, [scheduleVitals, scheduleFacts, scheduleQuery.phases]);
 
   // R108 — the seam over the folded drafting strip and the running index's
   // Schedule line both read the derivation above. Neither computes a second
@@ -939,7 +1183,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     callSheetGate.value && row?.engagement_kind === 'project' && row.project_id
       ? row.project_id
       : null;
-  const { data: rosterRows } = useProjectRoster(rosterProjectId);
+  const { data: rosterRows, isLoading: rosterLoading } =
+    useProjectRoster(rosterProjectId);
+  const rosterSettled = Boolean(rosterProjectId) && !rosterLoading;
   const resolutionState = documentResolutionState({
     resolutionKind: resolution?.kind,
     isLoading,
@@ -1002,20 +1248,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   settledCountRef.current = settled.length;
   const heldRoomName =
     (docRooms ?? []).find((r) => r.id === heldRoomId)?.name ?? null;
-  // The shelved spine's blocks stand only where their subjects do: the rooms and
-  // the shelves are project things, and the running index names Project
-  // regions — which install and care put on the paper too, minus the money
-  // region (C11: the index is handed the subset THIS spread mounts, never the
-  // fixed four).
+  // B1 — the rooms and the shelves left the spine for the ticket, so the
+  // widened section predicate goes with them: the one block left is the running
+  // index, and the only thing it needs is regions to name. `paperRegionsForSection`
+  // already answers empty for a spread that mounts none (C11), so the gate is
+  // read off the regions themselves rather than kept as a second list of
+  // section names that can drift from it.
+  const paperRegions =
+    row.engagement_kind === 'project' && row.project_id
+      ? paperRegionsForSection(row.active_section)
+      : [];
   const shelvedSpine =
-    row.engagement_kind === 'project' &&
-    row.project_id &&
-    (row.active_section === 'project' ||
-      row.active_section === 'install' ||
-      row.active_section === 'care') ? (
+    row.project_id && paperRegions.length > 0 ? (
       <DocSpineShelvedBlocks
         projectId={row.project_id}
-        regions={paperRegionsForSection(row.active_section)}
+        regions={paperRegions}
         rooms={docRooms ?? []}
         scheduleValue={scheduleFacts?.positionText ?? 'Not scheduled'}
         approvalsValue={
@@ -1023,10 +1270,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             ? 'Reading…'
             : `${(approvalsQuery.data ?? []).length} in the log`
         }
-        rosterCount={(rosterRows ?? []).length}
-        callSheetEnabled={callSheetGate.value}
-        openShelf={openShelf}
-        onToggleShelf={toggleShelf}
       />
     ) : null;
   // W1 — the letterhead's setup chip. deriveNeed returns at most one need per
@@ -1180,7 +1423,37 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           }
           needsSetup={needsSetup}
           inHandRoomName={heldRoomName}
+          onReleaseRoom={heldRoomId ? () => toggleRoom(heldRoomId) : null}
         />
+
+        {/* The sticky seam's one bit of input (R124): while this element is on
+            screen the ticket prints its eight rows; once it has scrolled past,
+            the ticket collapses in place and sticks. An IntersectionObserver
+            reads it — a scroll listener would run every frame to learn the
+            same thing. */}
+        <div id={LETTERHEAD_SENTINEL_ID} aria-hidden />
+
+        {/* THE TICKET — the document's map, mounted by the DOCUMENT rather
+            than the section, so project, install and care read identically
+            (B1). Between the letterhead and the guide/red-letter zone. */}
+        {row.engagement_kind === 'project' && row.project_id && (
+          <JobTicketMount
+            projectId={row.project_id}
+            routeId={id}
+            section={row.active_section}
+            regionSection={spreadSection}
+            phase={ticketPhase}
+            rooms={docRooms ?? []}
+            roomsSettled={docRoomsSettled}
+            schedule={scheduleFacts}
+            scheduleSettled={!scheduleQuery.isLoading}
+            callSheetEnabled={callSheetGate.value}
+            rosterCount={(rosterRows ?? []).length}
+            rosterSettled={rosterSettled}
+            onOpenLeaf={toggleShelf}
+            onUnfoldRegion={unfoldRegion}
+          />
+        )}
 
         {/* The red letter replaces the guide only where it can actually speak
             for the document: a composed Desk answer for THIS engagement that
@@ -1703,7 +1976,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           projectId={row.project_id}
           routeId={id}
           rooms={docRooms ?? []}
-          canCreateBoards={row.active_section === 'project'}
+          /* The ticket's `Boards` row means one act at every width and on
+             every project-kind spread; the leaf answers as its page does. */
+          canCreateBoards={row.engagement_kind === 'project'}
         />
       )}
 

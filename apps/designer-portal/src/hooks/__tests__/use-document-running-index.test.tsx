@@ -82,6 +82,31 @@ describe('useDocumentRunningIndex', () => {
     expect(screen.getByTestId('active')).toHaveTextContent('money');
   });
 
+  it('commits the line when the TICKET asks a region to unfold, not only the index', () => {
+    // B1 — the ticket's Pieces/Money/Dates rows make the same request from
+    // outside this hook. One lock, and it lives with the line it locks; two
+    // copies of the act would let the index and the ticket disagree about
+    // where the reader went.
+    mountRegions();
+    render(<Probe />);
+    expect(screen.getByTestId('active')).not.toHaveTextContent('approvals');
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(UNFOLD_REGION_EVENT, { detail: { region: 'approvals' } }),
+      );
+    });
+    expect(screen.getByTestId('active')).toHaveTextContent('approvals');
+
+    // And it holds through the scroll the request set off, exactly as a jump
+    // from the index's own row does.
+    act(() => {
+      fireEvent.scroll(window);
+      jest.advanceTimersByTime(50);
+    });
+    expect(screen.getByTestId('active')).toHaveTextContent('approvals');
+  });
+
   // C11 — the page hands the index the regions THIS spread mounts, but a root
   // can still be missing when the line first reads: regions arrive as their own
   // queries settle, and a pinned Worktable composition can put a different

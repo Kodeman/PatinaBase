@@ -2,6 +2,16 @@ import type { Locator } from "@playwright/test";
 import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
 
 const SENT_PROPOSAL_ID = "b0000000-0000-0000-0000-000000000002";
+/**
+ * The Drafting Room is for DRAFTS. `draftingEditability` (lib/document/
+ * drafting-editability.ts) evicts any proposal whose `status !== "draft"` to
+ * `/doc/<id>` — "already been issued. Returning to its read-only document" —
+ * which is R42/R43"s own rule, not a defect. Every `/drafting/…` step below
+ * therefore drives the seeded DRAFT; `/doc/…` steps keep the sent proposal,
+ * whose read-only document is what they are actually about.
+ */
+const DRAFT_PROPOSAL_ID = "d0c10000-0000-0000-0000-0000000000b2";
+
 const SEEDED_PROJECT_ID = "b0000000-0000-0000-0000-0000000000d1";
 
 test.describe.configure({ mode: "serial" });
@@ -293,7 +303,7 @@ test.describe("Quiet Work release browser contracts", () => {
     authenticatedPage: page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`/drafting/${SENT_PROPOSAL_ID}`, {
+    await page.goto(`/drafting/${DRAFT_PROPOSAL_ID}`, {
       waitUntil: "domcontentloaded",
     });
 
@@ -305,9 +315,11 @@ test.describe("Quiet Work release browser contracts", () => {
     await expect(desktopDraftingActions).toBeHidden();
     // Let the fetched proposal replace the initial route shell before opening
     // More; that hydration step also settles the primary/secondary registries.
-    await expect(
-      page.getByRole("button", { name: "Send as-is" }),
-    ).toBeVisible();
+    // Waited on the mobile bar's own context line: `Send as-is` has not
+    // rendered on ANY proposal since the legacy-send retirement (f74e20b88 —
+    // action-visibility.spec.ts records the same ruling), so it could no
+    // longer serve as the barrier it was written to be.
+    await expect(page.getByTestId("mobile-bar")).toContainText("Drafting");
 
     const more = page.getByRole("button", { name: "More studio actions" });
     await more.click();
