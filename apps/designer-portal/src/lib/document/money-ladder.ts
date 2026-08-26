@@ -144,6 +144,10 @@ function deriveOwed(input: MoneyLadderInput): MoneyRung {
   const aging = computeArAging([...rows]);
   const lead = aging.openInvoices[0];
   if (!lead) return rung('owed', null, 'nothing owed yet');
+  // A `partially_paid` invoice stays open with a zero remaining balance, so
+  // `openInvoices` is not by itself a receivable. Stating "$0 out" against a
+  // named invoice would be the empty tier F61 retired, one rung lower.
+  if (aging.totalBalanceCents <= 0) return rung('owed', null, 'nothing owed yet');
 
   const billedCents = rows
     .filter(isBilled)
@@ -193,4 +197,26 @@ export function deriveMoneyLadder(input: MoneyLadderInput): MoneyLadder {
 export function formatLadderRung(rung: MoneyRung): string | null {
   if (rung.cents == null) return null;
   return `${money(rung.cents)} ${rung.word}`;
+}
+
+/**
+ * F61 — the one rung the running index prints. The first rung standing at a
+ * LIVE figure, read in the order a designer needs to hear them: what is owed
+ * to the studio, then what is in motion, then what is committed, then what was
+ * approved, and last the money committed on a PO and not yet drawn.
+ *
+ * A rung at zero is not a live figure. `Moved` clamps at zero and `Owed` can
+ * total zero across open invoices, so a `cents === 0` rung would stop the
+ * fallthrough and report an empty tier while money moves elsewhere on the
+ * ladder — F61's exact failure.
+ */
+export function selectIndexRung(ladder: MoneyLadder): MoneyRung | null {
+  const order: readonly MoneyRung[] = [
+    ladder.owed,
+    ladder.moved,
+    ladder.authorized,
+    ladder.budget,
+    ladder.notDrawn,
+  ];
+  return order.find((rung) => rung.cents != null && rung.cents > 0) ?? null;
 }

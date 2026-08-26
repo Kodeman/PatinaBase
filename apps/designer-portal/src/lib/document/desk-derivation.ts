@@ -242,7 +242,10 @@ export interface NeedLine {
    *  due date, a PO's sent or drafted date, a reconnect date, a lead's
    *  response deadline. `null`/absent where the rule states no date even in
    *  its own prose (`schedule_unconfigured`'s setup chore, a claim with no
-   *  per-item date yet). Never invented — read at derivation time only. */
+   *  per-item date yet). Never invented — read at derivation time only, and
+   *  only where the date is one the need is DUE on: a sent-at or created-at
+   *  stamp is provenance, not a deadline, and `need-tie-break.ts` ranks a
+   *  past `dueOn` as overdue. */
   dueOn?: string | null;
   /** A3-L7 — whose hand the need's next move is in, when the rule already
    *  knows: `'client'` where the studio is waiting on the client (an overdue
@@ -667,7 +670,6 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
           actionLabel: NEED_ACTION_LABELS.hesitating_proposal,
           stamp: { label: 'SENT', ...STAMP.dustyBlue },
           urgent: false,
-          dueOn: row.proposal_sent_at,
           owner: 'client',
         });
       }
@@ -690,7 +692,6 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
           actionLabel: NEED_ACTION_LABELS.hesitating_proposal,
           stamp: { label: 'VIEWED', ...STAMP.dustyBlue },
           urgent: false,
-          dueOn: lastOpen,
           owner: 'client',
         });
       }
@@ -944,7 +945,6 @@ const needPoUnsent: NeedRule = ({ row, now }) => {
         actionLabel: NEED_ACTION_LABELS.po_unsent,
         stamp: { label: 'UNSENT', ...STAMP.clay },
         urgent: false,
-        dueOn: row.oldest_draft_po_created_at,
         owner: 'designer',
       };
     }
@@ -1261,9 +1261,20 @@ export function partitionDesk(
   /** R108/R113 — per-project resolver output. `undefined` = the feed degraded;
    *  a project absent from a PRESENT map genuinely has no phases at all. */
   schedules?: ReadonlyMap<string, DeskScheduleInput>,
-): { folders: DeskFolder[]; chips: MotionChip[]; composed: Record<string, true> } {
+): {
+  folders: DeskFolder[];
+  chips: MotionChip[];
+  live: DocumentStateRow[];
+  composed: Record<string, true>;
+} {
   const folders: DeskFolder[] = [];
   const chips: MotionChip[] = [];
+  // Every live row this composition saw, derived need or not. `folders` and
+  // `chips` are the two DERIVED populations — a row with neither a need nor a
+  // motion lands in neither, and `chips` is truncated at MAX_MOTION_CHIPS — so
+  // neither is the studio's live population. A reader counting "how many
+  // documents stand in each stage" must read this.
+  const live: DocumentStateRow[] = [];
   // Every engagement this composition actually put through deriveNeed. A reader
   // asking "does this document have a need?" can only be answered `no` for an
   // engagement that is in here; anything absent — archived rows, rows outside
@@ -1277,6 +1288,7 @@ export function partitionDesk(
   for (const row of rows) {
     if (row.is_archived) continue;
     composed[row.engagement_id] = true;
+    live.push(row);
     const conflict = row.project_id
       ? (conflicts?.get(row.project_id) ?? null)
       : null;
@@ -1333,5 +1345,5 @@ export function partitionDesk(
     return ka[0] - kb[0] || ka[1] - kb[1] || ka[2] - kb[2];
   });
 
-  return { folders, chips: chips.slice(0, MAX_MOTION_CHIPS), composed };
+  return { folders, chips: chips.slice(0, MAX_MOTION_CHIPS), live, composed };
 }

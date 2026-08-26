@@ -39,12 +39,7 @@ export function MoodBoardsLeaf({
   return (
     <>
       <ShelfLifted roomName={heldRoom?.name ?? null} found={inRoom} />
-      <ProjectMoodBoards
-        projectId={projectId}
-        canCreate={canCreate}
-        alwaysUnfolded
-        startBoardLabel="Start a board"
-      />
+      <ProjectMoodBoards projectId={projectId} canCreate={canCreate} alwaysUnfolded />
     </>
   );
 }

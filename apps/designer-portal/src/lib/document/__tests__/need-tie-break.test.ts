@@ -150,9 +150,8 @@ describe('rankOperationalNeeds', () => {
       const withinWeek = dated('overdue_invoice', '2026-09-01', 'client', 'due in 7 days');
       const pastWeek = dated('overdue_invoice', '2026-09-02', 'client', 'due in 8 days');
 
-      // Seven days out (inclusive) is rank 1; eight days out has no
-      // non-designer-owned rank-1 case to win, and (owner !== 'designer',
-      // dueOn not yet past) falls to rank 4.
+      // Seven days out (inclusive) is rank 1; eight days out has no rank-1
+      // case to win and no past date, so it falls back to its kind's rank 2.
       expect(kinds(rankOperationalNeeds([pastWeek, withinWeek], NOW))).toEqual([
         'overdue_invoice',
         'overdue_invoice',
@@ -161,18 +160,39 @@ describe('rankOperationalNeeds', () => {
       expect(first).toBe(withinWeek);
     });
 
-    it('ranks a designer-owned need second regardless of its date', () => {
+    it('keeps an overdue client date above the designer\'s own dated chore', () => {
+      // The ratified order (direction-a §3 as revised by C-AP-06, restated in
+      // this module's header): what is already past its date outranks the
+      // studio's own pen. A designer-owned need carrying a FUTURE date has no
+      // dated rank of its own and falls back to its kind.
       const designerFuture = dated('task_due', '2026-09-20', 'designer', 'Confirm trim');
       const clientOverdue = dated('overdue_decision', '2026-08-01', 'client', 'oldest due Aug 1');
 
-      // A client-owned overdue date is rank 3, under the designer's own act.
-      expect(kinds(rankOperationalNeeds([clientOverdue, designerFuture], NOW))).toEqual([
-        'task_due',
+      expect(kinds(rankOperationalNeeds([designerFuture, clientOverdue], NOW))).toEqual([
         'overdue_decision',
+        'task_due',
+      ]);
+      expect(kinds(rankOperationalNeeds([clientOverdue, designerFuture], NOW))).toEqual([
+        'overdue_decision',
+        'task_due',
       ]);
     });
 
-    it('ranks a past dueOn third, oldest first, when no rank 1 or 2 applies', () => {
+    it('ranks a designer-owned, undated need under what is already past its date', () => {
+      const pulse = dated('pulse_due', null, 'designer', 'The Pulse is due');
+      const overdueInvoice = dated('overdue_invoice', '2026-08-03', 'client', 'INV-204 is 22 days past due');
+
+      expect(kinds(rankOperationalNeeds([pulse, overdueInvoice], NOW))).toEqual([
+        'overdue_invoice',
+        'pulse_due',
+      ]);
+      expect(kinds(rankOperationalNeeds([overdueInvoice, pulse], NOW))).toEqual([
+        'overdue_invoice',
+        'pulse_due',
+      ]);
+    });
+
+    it('ranks a past dueOn second, oldest first, when no hard deadline applies', () => {
       const older = dated('overdue_decision', '2026-08-01', 'client', 'oldest due Aug 1');
       const newer = dated('overdue_invoice', '2026-08-15', 'client', 'INV-204');
 
@@ -198,21 +218,20 @@ describe('rankOperationalNeeds', () => {
       ]);
     });
 
-    it('lands a dated-but-unowned need in the same rank-4 bucket as a plain undated need', () => {
+    it('never demotes a need below the rank its kind already earned', () => {
+      // A distant, unowned dueOn tells the tie-break nothing the kind did not
+      // already know, so `schedule_conflict` keeps its kind rank 1 rather than
+      // dropping into the undated bucket.
       const futureNoOwner = dated('schedule_conflict', '2026-09-20', undefined, 'A far-off date, no owner');
       const undatedChore = need('schedule_unconfigured', 'No schedule yet');
 
-      // schedule_conflict is kind-rank 1 on its own, but a distant, unowned
-      // dueOn drops it out of the dueOn/owner rank's top three buckets into
-      // rank 4 — the same bucket a plain undated need falls into by kind —
-      // so declaration order (not the kind's usual precedence) decides.
       expect(kinds(rankOperationalNeeds([futureNoOwner, undatedChore], NOW))).toEqual([
         'schedule_conflict',
         'schedule_unconfigured',
       ]);
       expect(kinds(rankOperationalNeeds([undatedChore, futureNoOwner], NOW))).toEqual([
-        'schedule_unconfigured',
         'schedule_conflict',
+        'schedule_unconfigured',
       ]);
     });
   });

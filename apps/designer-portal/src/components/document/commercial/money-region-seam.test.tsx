@@ -91,7 +91,7 @@ describe('the Money seam, on the Delivery table', () => {
     render(<MoneyRegion projectId="project-1" tableSeam />);
 
     const seam = screen.getByRole('button', { name: /unfold/i });
-    expect(seam).toHaveTextContent('$62,400 committed of $80,000 authority');
+    expect(seam).toHaveTextContent('$62,400 authorized of $80,000 budget');
     expect(screen.queryByRole('heading', { name: 'Money' })).toBeNull();
   });
 
@@ -105,7 +105,7 @@ describe('the Money seam, on the Delivery table', () => {
     // and the detail surfaces the rungs summarise.
     expect(container.querySelector('[data-index-region="money"]')).toBe(section);
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
-    expect(screen.getByText('$17,600 remaining · $62,400 committed')).toBeVisible();
+    expect(screen.getByText('$17,600 remaining · $62,400 authorized')).toBeVisible();
     expect(screen.getByText('Budget · $80,000 approved')).toBeVisible();
     expect(screen.getByText('Account band')).toBeInTheDocument();
   });
@@ -146,7 +146,7 @@ describe('the Money seam, on the Delivery table', () => {
     render(<MoneyRegion projectId="project-1" tableSeam />);
 
     expect(screen.getByRole('button', { name: /unfold/i })).toHaveTextContent(
-      '$0 committed of $80,000 authority',
+      '$0 authorized of $80,000 budget',
     );
   });
 

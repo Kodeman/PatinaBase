@@ -24,16 +24,10 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
-import { useProjectInvoices, usePurchaseOrders } from '@patina/supabase';
 import { useAccountPage } from '@/hooks/use-account-page';
-import {
-  useProjectBillingAuthority,
-  useProjectInstruments,
-  useTradeScopes,
-  useWorkingBudget,
-} from '@/hooks/use-commercial-documents';
+import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import type { SectionKey } from '@/lib/document/desk-derivation';
-import { deriveMoneyLadder, type MoneyRung } from '@/lib/document/money-ladder';
+import { type MoneyRung } from '@/lib/document/money-ladder';
 import { money } from '@/lib/document/project-commerce';
 import { AccountBand } from '../account-band';
 import { openInvoiceComposer } from '../accounts/invoice-overlays';
@@ -95,46 +89,17 @@ export function MoneyRegion({
    *  the region stands as its seam and unfolds in place to exactly this body. */
   tableSeam?: boolean;
 }) {
-  const authorityQuery = useProjectBillingAuthority(projectId);
-  const budgetQuery = useWorkingBudget(projectId);
-  const instrumentsQuery = useProjectInstruments(projectId);
-  const tradeScopesQuery = useTradeScopes(projectId);
+  // R108 — the one derivation the spine's running index also reads, so the
+  // index can never summarise a ladder this region disagrees with.
+  const {
+    ladder,
+    authority,
+    committedCents,
+    draftScopeCount,
+    committedSettled,
+    settled: ladderSettled,
+  } = useMoneyLadder(projectId);
   const accountQuery = useAccountPage(projectId);
-  // The only figures on this page nothing else already paid for: what has
-  // actually been paid out to makers (Moved, Not drawn) and the receivable
-  // (Owed). Both are plain reads over rows the designer already owns.
-  const purchaseOrdersQuery = usePurchaseOrders({ projectId });
-  const invoicesQuery = useProjectInvoices(projectId);
-
-  const authority = authorityQuery.data ?? null;
-  const authorityFailed = Boolean(authorityQuery.error);
-  const authoritySettled = !authorityQuery.isLoading && !authorityFailed;
-
-  const version = budgetQuery.data?.version ?? null;
-  const budgetFailed = Boolean(budgetQuery.error);
-  const budgetSettled = !budgetQuery.isLoading && !budgetFailed;
-  // project_budget_versions.target_total_cents is stamped only when a version
-  // publishes (00414's publish RPC), so a draft's stored total is stale. The
-  // rows the grid below renders are the honest source for the region's figure.
-  const planLines = version?.lines ?? [];
-  const planCents = planLines.reduce((sum, line) => sum + line.targetCents, 0);
-
-  const committedFailed = Boolean(instrumentsQuery.error || tradeScopesQuery.error);
-  const committedSettled =
-    !instrumentsQuery.isLoading && !tradeScopesQuery.isLoading && !committedFailed;
-  const executedInstruments = (instrumentsQuery.data ?? []).filter(
-    (instrument) => instrument.state === 'executed',
-  );
-  const executedScopes = (tradeScopesQuery.data ?? []).filter(
-    (scope) => scope.state === 'executed',
-  );
-  const draftScopeCount = (tradeScopesQuery.data ?? []).filter(
-    (scope) => scope.state === 'draft',
-  ).length;
-  const executedCount = executedInstruments.length + executedScopes.length;
-  const committedCents =
-    executedInstruments.reduce((sum, instrument) => sum + instrument.totalAmountCents, 0) +
-    executedScopes.reduce((sum, scope) => sum + scope.clientPriceCents, 0);
 
   // The same word the accounts band uses for this act, derived the same way.
   const changeOnly = activeSection === 'install' || activeSection === 'care';
@@ -142,42 +107,6 @@ export function MoneyRegion({
   const account = accountQuery.data ?? null;
   const accountFailed = Boolean(accountQuery.isError);
   const accountSettled = !accountQuery.isLoading && !accountFailed;
-
-  const purchaseOrdersFailed = Boolean(purchaseOrdersQuery.error);
-  const purchaseOrdersSettled = !purchaseOrdersQuery.isLoading && !purchaseOrdersFailed;
-  const invoicesFailed = Boolean(invoicesQuery.error);
-  const invoicesSettled = !invoicesQuery.isLoading && !invoicesFailed;
-
-  const ladder = deriveMoneyLadder({
-    budget: {
-      settled: authoritySettled,
-      failed: authorityFailed,
-      authorizedCents: authority ? authority.authorizedCents : null,
-    },
-    plan: {
-      settled: budgetSettled,
-      failed: budgetFailed,
-      versionNumber: version?.version ?? null,
-      lineCount: planLines.length,
-      targetCents: planCents,
-    },
-    authorized: {
-      settled: committedSettled,
-      failed: committedFailed,
-      executedCount,
-      committedCents,
-    },
-    purchaseOrders: {
-      settled: purchaseOrdersSettled,
-      failed: purchaseOrdersFailed,
-      rows: purchaseOrdersQuery.data ?? [],
-    },
-    invoices: {
-      settled: invoicesSettled,
-      failed: invoicesFailed,
-      rows: invoicesQuery.data ?? [],
-    },
-  });
 
   // The account's own quiet test. A region that folds on authority/plan/
   // committed alone would hide an overdue invoice on a project that never
@@ -196,13 +125,7 @@ export function MoneyRegion({
   // The fold default is withheld until every source the sparse test reads from
   // has settled — a default computed from a partial read could latch shut a
   // region that is actually busy, or open one that is actually quiet.
-  const allSettled =
-    authoritySettled &&
-    budgetSettled &&
-    committedSettled &&
-    accountSettled &&
-    purchaseOrdersSettled &&
-    invoicesSettled;
+  const allSettled = ladderSettled && accountSettled;
   // C-AP-08 — the region opens when it has money to state. Any rung standing
   // at a live figure is live money; so is a receivable the accounts hold that
   // no rung reached, which is the money actually chasing the designer.
@@ -215,7 +138,7 @@ export function MoneyRegion({
   // same two laws the region's own default obeys:
   //
   //   · It waits for the reads to settle. The seam states figures ("$0
-  //     committed · no authority yet"), so a fold declared before the money
+  //     authorized · no budget yet"), so a fold declared before the money
   //     was read would print a sentence it did not know and then flip. The
   //     null is `useRegionFold`'s own refusal of an unsettled default; until
   //     it settles the region stands as it does anywhere else, with each tier
@@ -246,18 +169,21 @@ export function MoneyRegion({
     wasFolded.current = folded;
   }, [folded]);
 
+  // The head and the seam speak the ladder's own words: rung 1 is `Budget`
+  // and rung 3 is `Authorized`. `authority`/`committed` named neither rung
+  // after SP-03, and `authority` is the word direction-a §5 sends away.
   const headStatus = authority
-    ? `${money(authority.remainingCents)} remaining · ${money(committedCents)} committed`
-    : 'no authority yet';
+    ? `${money(authority.remainingCents)} remaining · ${money(committedCents)} authorized`
+    : 'no budget yet';
   // The table's seam states the same two figures as one sentence: what has been
-  // committed, against the authority it is being spent out of.
+  // authorized, against the budget it is being spent out of.
   const seamSummary = tableSeam
     ? authority
-      ? `${money(committedCents)} committed of ${money(authority.authorizedCents)} authority`
-      : `${money(committedCents)} committed · no authority yet`
+      ? `${money(committedCents)} authorized of ${money(authority.authorizedCents)} budget`
+      : `${money(committedCents)} authorized · no budget yet`
     : authority
-      ? `${money(authority.authorizedCents)} authorized · ${money(committedCents)} committed`
-      : `no authority yet · ${money(committedCents)} committed`;
+      ? `${money(authority.authorizedCents)} budget · ${money(committedCents)} authorized`
+      : `no budget yet · ${money(committedCents)} authorized`;
 
   const ledger: RegionLedgerEntry[] = [
     // R74b — draw an invoice for THIS engagement: the anti-wizard composer,

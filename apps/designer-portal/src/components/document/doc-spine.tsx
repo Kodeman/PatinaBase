@@ -120,10 +120,15 @@ export function DocSpine({
 
       {activeSection && (
         <p className="mt-2.5 hidden min-[1180px]:block">
-          <span className="block text-[12px] font-semibold leading-tight text-[var(--color-charcoal)]">
+          {/* 1180–1439 the rail is 56px wide — 44px inside its own px-1.5 —
+              and these are single words, which cannot break at a space. They
+              are set to fit that measure and allowed to break rather than be
+              clipped by the rail's own overflow-x-hidden; from 1440 the column
+              is 200px and they take their full size. */}
+          <span className="block break-words text-[10.5px] font-semibold leading-tight text-[var(--color-charcoal)] min-[1440px]:text-[12px]">
             {activeSection.label}
           </span>
-          <span className="mt-px block font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+          <span className="mt-px block break-words font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--color-clay)] min-[1440px]:text-[12px]">
             {activeSection.sub}
           </span>
         </p>

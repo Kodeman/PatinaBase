@@ -172,7 +172,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
             ← {projectName}
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-heading text-xl">The plan room</h1>
+            <h1 className="truncate font-heading text-xl">Plan room</h1>
             <p className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {bundle?.sheets.length ?? 0}{' '}
               {(bundle?.sheets.length ?? 0) === 1 ? 'sheet' : 'sheets'}

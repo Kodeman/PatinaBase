@@ -78,7 +78,7 @@ const count = (sql: string) => Number(psqlScalar(sql) || '0');
 
 async function openPlanRoom(page: AuthenticatedPage): Promise<void> {
   await page.goto(`/doc/${projectId}/plans`, { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('heading', { name: 'The plan room' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Plan room' })).toBeVisible({
     timeout: 60_000,
   });
 }

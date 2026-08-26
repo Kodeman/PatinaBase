@@ -49,7 +49,7 @@ export function originLabel(origin: string): string {
   if (origin === '/desk' || origin === '') return 'the Desk';
   if (origin === '/library' || origin.startsWith('/library/')) return 'the Library';
   if (origin === '/rooms' || origin.startsWith('/rooms/') || origin.startsWith('/room/')) {
-    return 'the Rooms';
+    return 'the Scans';
   }
   return 'back';
 }

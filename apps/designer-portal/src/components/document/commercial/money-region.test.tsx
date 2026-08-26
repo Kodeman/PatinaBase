@@ -157,7 +157,7 @@ describe('MoneyRegion', () => {
     render(<MoneyRegion projectId="project-1" />);
 
     expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
-    expect(screen.getByText('$18,000 remaining · $13,772 committed')).toBeVisible();
+    expect(screen.getByText('$18,000 remaining · $13,772 authorized')).toBeVisible();
     expect(screen.getByText('Budget · $100,000 approved')).toBeVisible();
     expect(screen.getByText('Plan · $86,540 specified')).toBeVisible();
     expect(screen.getByText('Authorized · $13,772 ordered')).toBeVisible();
@@ -189,12 +189,17 @@ describe('MoneyRegion', () => {
     ]);
   });
 
-  it('retires Design authority from the surface entirely', () => {
+  // The region's OWN copy only. `ProjectAuthorityBandForProject` is mocked
+  // above, and it is the component that used to print the retired words inside
+  // this body — so the real guard against it lives in that component's own
+  // suite (`project-authority-band.test.tsx`), where nothing is mocked away.
+  it('retires the retired vocabulary from its own head, seam and rungs', () => {
     const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
 
     expect(container).not.toHaveTextContent('Design authority');
     expect(container).not.toHaveTextContent('Authority ·');
+    expect(container).not.toHaveTextContent('committed');
   });
 
   it('states Moved as a different figure from Authorized once anything is paid out', () => {
@@ -253,7 +258,7 @@ describe('MoneyRegion', () => {
     const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
 
-    expect(screen.getByText('no authority yet')).toBeVisible();
+    expect(screen.getByText('no budget yet')).toBeVisible();
     expect(screen.queryByText(/remaining/)).not.toBeInTheDocument();
     expect(screen.getByText('Budget · nothing approved yet')).toBeVisible();
     expect(screen.getByText('Plan · no working budget yet')).toBeVisible();
@@ -340,7 +345,7 @@ describe('MoneyRegion', () => {
     expect(
       screen.queryByRole('heading', { name: 'Money' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('no authority yet · $0 committed')).toBeVisible();
+    expect(screen.getByText('no budget yet · $0 authorized')).toBeVisible();
     expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
   });
 

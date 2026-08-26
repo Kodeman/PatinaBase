@@ -12,6 +12,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import type {
   DeskFolder,
+  DocumentStateRow,
   MotionChip,
   SectionKey,
 } from '@/lib/document/desk-derivation';
@@ -40,40 +41,6 @@ export interface StudioPulseCounts {
   inMotion: number;
   reconnects: number;
   field: number;
-}
-
-function counted(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
-export function studioPulsePreview(counts: StudioPulseCounts): string {
-  const phrases: string[] = [];
-
-  if (counts.openRequests > 0) {
-    phrases.push(counted(counts.openRequests, 'open request', 'open requests'));
-  }
-  if (counts.inMotion > 0) {
-    phrases.push(`${counts.inMotion} moving`);
-  }
-  if (counts.reconnects > 0) {
-    phrases.push(`${counts.reconnects} reconnecting`);
-  }
-  if (counts.field > 0) {
-    phrases.push(counted(counts.field, 'field need', 'field needs'));
-  } else {
-    phrases.push('Field quiet');
-  }
-
-  if (
-    counts.openRequests === 0 &&
-    counts.inMotion === 0 &&
-    counts.reconnects === 0 &&
-    counts.field === 0
-  ) {
-    return 'No secondary work needs attention · Field quiet';
-  }
-
-  return phrases.join(' · ');
 }
 
 /** F39/F65 — "The studio today" reads the same live rows ⌘K's `Where the
@@ -107,22 +74,29 @@ export interface StageSentencePart {
   text: string;
 }
 
-/** Reduces the Desk's own live rows (folders + chips) into one entry per
- *  live stage — the same population ⌘K's `Where the work stands` group
- *  reads, never a second query. */
+/** Reduces the Desk's LIVE rows into one entry per live stage — the same
+ *  population ⌘K's `Where the work stands` group reads, never a second query.
+ *
+ *  Not folders + chips: those are the two DERIVED populations, a document with
+ *  neither a need nor a motion is in neither, and chips are capped at
+ *  MAX_MOTION_CHIPS. The sentence would state an undercount, and the palette
+ *  would agree with it. */
 export function studioStageSentenceParts(
-  rows: readonly { row: { active_section: SectionKey } }[],
+  rows: readonly { active_section: SectionKey }[],
 ): StageSentencePart[] {
   return STAGE_ORDER.flatMap((stage) => {
-    const count = rows.filter((r) => r.row.active_section === stage).length;
+    const count = rows.filter((r) => r.active_section === stage).length;
     return count === 0 ? [] : [{ stage, count, text: stagePhrase(stage, count) }];
   });
 }
 
 /** Reuses ⌘K's own open event (`command-bar.tsx`'s `openCommandBar`) so a
  *  stage phrase and the Desk header's "Find anything" open the identical
- *  palette — with the stage carried as `detail.query` for command-bar.tsx to
- *  pre-type whenever it grows a listener for it. */
+ *  palette — this one already filtered to the stage, which is what makes the
+ *  phrase a doorway rather than a label. The event is dispatched directly
+ *  rather than through the exported opener: importing `command-bar.tsx` here
+ *  drags `@patina/help-system` (and its `@portabletext/react` ESM) into every
+ *  Desk suite (patina-testing, trap 2). */
 function openStageInCommandBar(stage: SectionKey) {
   window.dispatchEvent(
     new CustomEvent('document:open-command-bar', { detail: { query: stage } }),
@@ -282,10 +256,13 @@ export function StudioPulseDisclosure({
 export function StudioPulse({
   chips,
   folders = [],
+  live = [],
   engagementsResolved,
 }: {
   chips: readonly MotionChip[];
   folders?: readonly DeskFolder[];
+  /** Every live document the Desk read — the stage sentence's population. */
+  live?: readonly DocumentStateRow[];
   engagementsResolved: boolean;
 }) {
   const openRequests = useOpenRequestsDeskPopulation();
@@ -314,9 +291,9 @@ export function StudioPulse({
     ),
   });
 
-  // F39/F65 — "The studio today"'s sentence reads the same live rows as the
-  // Desk's folios and chips, not a second query.
-  const stageSentenceParts = studioStageSentenceParts([...folders, ...chips]);
+  // F39/F65 — "The studio today"'s sentence reads the same live rows ⌘K's
+  // `Where the work stands` group counts, not a second query.
+  const stageSentenceParts = studioStageSentenceParts(live);
 
   return (
     <StudioPulseDisclosure

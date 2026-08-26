@@ -71,7 +71,7 @@ export function ProjectMoodBoards({
   // second answer to a question already asked, and an empty leaf that only
   // offers `UNFOLD ↓` names no way to start a board.
   alwaysUnfolded = false,
-  startBoardLabel = 'Start a mood board',
+  startBoardLabel = 'Start a board',
 }: {
   projectId: string;
   canCreate?: boolean;
@@ -264,11 +264,13 @@ export function ProjectMoodBoards({
     ? 'no boards yet'
     : `${liveBoards.length} boards · ${frozenBoards.length} frozen`;
 
+  // C20 — one act, one name, in both states: the head's ledger entry and the
+  // empty state's action are the same act and print the same words.
   const ledger: RegionLedgerEntry[] = canCreate
     ? [
         {
           key: 'new-project-board',
-          label: 'New board',
+          label: startBoardLabel,
           onClick: () => setStartingBoard(true),
         },
       ]
@@ -336,7 +338,11 @@ export function ProjectMoodBoards({
         regionKey="working-boards"
         actions={ledger}
         bodyId={BODY_ID}
-        onFold={() => setBoardsFolded(true)}
+        // F30 — the shelf leaf mounts this region already unfolded, and the
+        // fold key is shared with the region on the paper. Leaving the control
+        // wired there would fold the paper's Mood boards region while the leaf
+        // itself appeared not to move.
+        onFold={alwaysUnfolded ? undefined : () => setBoardsFolded(true)}
       />
       <div id={BODY_ID}>
       {boardsEmpty ? (

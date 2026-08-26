@@ -431,8 +431,15 @@ export const DOCUMENT_SCOPED_SURFACES: StudioSurface[] = [
 export function matchSurfaces(query: string): StudioSurface[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
+  // The call sheet is read from STUDIO_LEDGERS into DOCUMENT_SCOPED_SURFACES,
+  // so it stands in both lists — one surface may only ever match once.
+  const seen = new Set<string>();
   return [...ALL_STUDIO_SURFACES, ...DOCUMENT_SCOPED_SURFACES].filter((surface) => {
-    if (surface.label.toLowerCase().includes(q)) return true;
-    return surface.aliases.some((alias) => alias.toLowerCase().includes(q));
+    if (seen.has(surface.key)) return false;
+    const matched =
+      surface.label.toLowerCase().includes(q) ||
+      surface.aliases.some((alias) => alias.toLowerCase().includes(q));
+    if (matched) seen.add(surface.key);
+    return matched;
   });
 }

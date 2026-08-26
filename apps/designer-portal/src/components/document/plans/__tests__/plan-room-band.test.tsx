@@ -85,7 +85,7 @@ describe('PlanRoomBand', () => {
 
   it('states the vitals and opens one door', () => {
     render(<PlanRoomBand routeId="doc-1" projectId="proj" />);
-    expect(screen.getByText(/The plan room — 1 sheet/)).toBeInTheDocument();
+    expect(screen.getByText(/Plan room — 1 sheet/)).toBeInTheDocument();
     const open = screen.getByRole('link', { name: /Open the plan room/i });
     expect(open).toHaveAttribute('href', '/doc/doc-1/plans');
     const region = document.querySelector('[data-action-region="plan-room-band"]');
@@ -96,7 +96,7 @@ describe('PlanRoomBand', () => {
     usePlanRoom.mockReturnValue({ data: EMPTY });
     render(<PlanRoomBand routeId="doc-1" projectId="proj" />);
     expect(
-      screen.getByText('The plan room — no drawings filed yet.'),
+      screen.getByText('Plan room — no drawings filed yet.'),
     ).toBeInTheDocument();
   });
 

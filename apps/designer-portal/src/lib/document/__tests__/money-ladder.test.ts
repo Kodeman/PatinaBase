@@ -17,6 +17,7 @@ import type { Invoice, POPayment, PurchaseOrder } from '@patina/supabase';
 import {
   deriveMoneyLadder,
   formatLadderRung,
+  selectIndexRung,
   type MoneyLadder,
   type MoneyLadderInput,
 } from '../money-ladder';
@@ -388,6 +389,87 @@ describe('formatLadderRung', () => {
       input({ invoices: { ...ANSWERED, rows: [] } }),
     );
 
+    expect(formatLadderRung(ladder.owed)).toBeNull();
+  });
+});
+
+describe('selectIndexRung — F61, the one rung the running index prints', () => {
+  it('leads with the receivable when there is one', () => {
+    expect(selectIndexRung(deriveMoneyLadder(input()))?.word).toBe('owed');
+  });
+
+  it('reaches Not drawn rather than stopping on a rung standing at zero', () => {
+    // The live failure: a project with an undrawn deposit, nothing ordered and
+    // nothing owed. `Moved` clamps at zero — a FIGURE — so a fallthrough that
+    // only skipped nulls printed "$0 moved" beside a real undrawn deposit.
+    const ladder = deriveMoneyLadder(
+      input({
+        budget: { ...ANSWERED, authorizedCents: null },
+        plan: { ...ANSWERED, versionNumber: null, lineCount: 0, targetCents: 0 },
+        authorized: { ...ANSWERED, executedCount: 0, committedCents: 0 },
+        purchaseOrders: {
+          ...ANSWERED,
+          rows: [
+            purchaseOrder({
+              po_number: 'PO-2026-0418',
+              payments: [
+                payment({ id: 'a', state: 'paid', amount_cents: 1_009_000 }),
+                payment({
+                  id: 'b',
+                  state: 'due',
+                  kind: 'deposit',
+                  amount_cents: 1_633_000,
+                  label: '50% at release',
+                }),
+              ],
+            }),
+          ],
+        },
+        invoices: { ...ANSWERED, rows: [] },
+      }),
+    );
+
+    expect(ladder.moved.cents).toBe(0);
+    expect(formatLadderRung(selectIndexRung(ladder)!)).toBe('$16,330 not drawn');
+  });
+
+  it('states nothing when every rung is empty', () => {
+    expect(
+      selectIndexRung(
+        deriveMoneyLadder(
+          input({
+            budget: { ...ANSWERED, authorizedCents: null },
+            plan: { ...ANSWERED, versionNumber: null, lineCount: 0, targetCents: 0 },
+            authorized: { ...ANSWERED, executedCount: 0, committedCents: 0 },
+            purchaseOrders: { ...ANSWERED, rows: [] },
+            invoices: { ...ANSWERED, rows: [] },
+          }),
+        ),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('Owed — an open invoice is not by itself a receivable', () => {
+  it('states nothing owed when every open invoice is paid down to zero', () => {
+    const ladder = deriveMoneyLadder(
+      input({
+        invoices: {
+          ...ANSWERED,
+          rows: [
+            invoice({
+              invoice_number: '2026-114',
+              status: 'partially_paid',
+              total_cents: 9_640_000,
+              amount_paid_cents: 9_640_000,
+              due_date: '2026-08-03',
+            }),
+          ],
+        },
+      }),
+    );
+
+    expect(ladder.owed).toMatchObject({ cents: null, note: 'nothing owed yet' });
     expect(formatLadderRung(ladder.owed)).toBeNull();
   });
 });

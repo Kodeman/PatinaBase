@@ -39,7 +39,23 @@ jest.mock('next/navigation', () => ({
 //    document_state supabase read. ─────────────────────────────────────
 const mockDeskData = jest.fn(() => ({ folders: [] as unknown[], chips: [] as unknown[] }));
 jest.mock('@/hooks/use-desk-engagements', () => ({
-  useDeskEngagements: () => ({ data: mockDeskData() }),
+  useDeskEngagements: () => {
+    const data = mockDeskData() as unknown as Record<string, unknown[]>;
+    if (!data) return { data };
+    // Production's `live` is every non-archived row the composition saw, need
+    // or no need; a fixture that only states folders and chips is stating the
+    // same population through its two derived halves.
+    return {
+      data: {
+        ...data,
+        live:
+          data.live ??
+          [...(data.folders ?? []), ...(data.chips ?? [])].map(
+            (entry) => (entry as { row: unknown }).row,
+          ),
+      },
+    };
+  },
 }));
 
 // ── @patina/supabase — the union of what command-bar.tsx and

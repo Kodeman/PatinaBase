@@ -43,33 +43,30 @@ function calendarDaysUntil(iso: string, now: Date): number | null {
 
 /**
  * A3-L7's dated/owned rank, read directly off the need rather than off its
- * kind:
+ * kind — and in the SAME four-rank order the kind table below keeps, because
+ * one surface may not rank the same four ideas two ways:
  *   1. `dueOn` lands within the next seven days (today included) AND the
  *      need names an owner that is not the designer — a hard outside
  *      deadline, whoever holds it;
- *   2. the need names the designer as owner — the studio's own pen, ranked
- *      ahead of a plain overdue date because a committed act beats a stale
- *      one;
- *   3. `dueOn` has already passed — the oldest-overdue bucket, sorted oldest
- *      first by the caller;
- *   4. anything else that carries a `dueOn` or an `owner` but matches none of
- *      the above (a date more than a week out with no non-designer owner, or
- *      an owner with no date) — the same "nothing pressing yet" bucket as a
- *      true undated need.
+ *   2. `dueOn` has already passed — what is already past its date, sorted
+ *      oldest first by the caller;
+ *   3. the need names the designer as owner and carries no date at all — the
+ *      studio's own pen, against no outside clock.
  *
- * `null` when the need states neither `dueOn` nor `owner` — the caller then
- * reads the kind-based rank instead, so a need this wave left untouched
- * ranks exactly as it always has.
+ * `null` for everything else, INCLUDING a need that states only an owner it
+ * shares with its kind's own rank, or a date further out than a week: the
+ * caller then reads the kind-based rank, which already knows what the need is.
+ * The dated rank may promote a need the kind could not see the urgency of; it
+ * may never demote one below what its kind already earned.
  */
 function datedRank(need: NeedLine, now: Date): NeedTieBreakRank | null {
-  if (need.dueOn == null && need.owner == null) return null;
   const days = need.dueOn != null ? calendarDaysUntil(need.dueOn, now) : null;
   if (days !== null && days >= 0 && days <= 7 && need.owner && need.owner !== 'designer') {
     return 1;
   }
-  if (need.owner === 'designer') return 2;
-  if (days !== null && days < 0) return 3;
-  return 4;
+  if (days !== null && days < 0) return 2;
+  if (need.owner === 'designer' && days === null) return 3;
+  return null;
 }
 
 /**
@@ -146,10 +143,10 @@ export function rankOperationalNeeds(
     }))
     .sort((a, b) => {
       if (a.rank !== b.rank) return a.rank - b.rank;
-      // Rank 3 is "already past its date, oldest first" — a need with no
-      // dueOn (kind-fallback into rank 3) has no date to compare and keeps
-      // derivation order against its rank-3 peers.
-      if (a.rank === 3 && a.need.dueOn != null && b.need.dueOn != null) {
+      // Rank 2 is "already past its date, oldest first" — a need with no
+      // dueOn (kind-fallback into rank 2) has no date to compare and keeps
+      // derivation order against its rank-2 peers.
+      if (a.rank === 2 && a.need.dueOn != null && b.need.dueOn != null) {
         const aTime = new Date(a.need.dueOn).getTime();
         const bTime = new Date(b.need.dueOn).getTime();
         if (!Number.isNaN(aTime) && !Number.isNaN(bTime) && aTime !== bTime) {

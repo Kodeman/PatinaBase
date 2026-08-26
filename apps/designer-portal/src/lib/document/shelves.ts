@@ -13,7 +13,6 @@ export type ShelfKey =
   | 'specbook'
   | 'moodboards'
   | 'callsheet'
-  | 'knowledge'
   | 'clientcopy';
 
 export type ShelfLeafKey = Exclude<ShelfKey, 'callsheet'>;

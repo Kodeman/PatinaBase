@@ -711,15 +711,22 @@ export function deriveDocumentGuide({
       : isRestState(stage, row, inputFacts, closureReady, inputsPending);
   if (restActive) {
     const rest = restCopy[stage];
+    // A rest state changes what the strip SAYS, and its act keeps the working
+    // landing — with one exception: `discovery`'s rest act names the DIRECTION,
+    // and landing `Begin the direction` back on the discovery checklist it has
+    // just called complete would point a verb at the wrong object (C20). It
+    // takes the landing the `direction` stage's own act uses.
+    const restDestination: DocumentGuideDestination =
+      stage === 'discovery'
+        ? stageCopy.direction.action!.destination
+        : (action?.destination ?? stageCopy[stage].action!.destination);
     const restAction: DocumentGuideAction | null =
       rest.actionLabel === null
         ? null
         : {
             key: `rest-${stage}`,
             label: rest.actionLabel,
-            // The same landing the active-state act would use — a rest state
-            // changes what the strip SAYS, never where its act goes.
-            destination: action?.destination ?? stageCopy[stage].action!.destination,
+            destination: restDestination,
           };
     return withInputs({
       ...base,

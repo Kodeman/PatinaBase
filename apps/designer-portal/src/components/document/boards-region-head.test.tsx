@@ -81,7 +81,7 @@ describe('Mood boards region head', () => {
     expect(
       document.querySelectorAll('[data-action-variant="inked"]'),
     ).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'New board' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Start a board' })).toHaveAttribute(
       'data-action-variant',
       'inked',
     );

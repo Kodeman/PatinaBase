@@ -68,7 +68,9 @@ describe('deriveDocumentGuide', () => {
   // act, because "Nothing to decide yet" asks for nothing).
   it.each([
     ['brief', 'Nothing to decide yet.', undefined, null],
-    ['discovery', 'Discovery is complete. Shape the direction.', 'Begin the direction', 'discovery'],
+    // The rest act names the DIRECTION, so it lands there — not back on the
+    // discovery checklist it has just called complete (C20).
+    ['discovery', 'Discovery is complete. Shape the direction.', 'Begin the direction', 'direction'],
     ['direction', 'The direction is written. Send it.', 'Send the agreement', '/drafting/proposal-1'],
     ['proposal', 'Wait for the client’s signature', 'Review signing controls', 'proposal'],
     ['project', 'Everything ordered is moving.', 'Release the next room', 'project'],

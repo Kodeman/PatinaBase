@@ -46,8 +46,8 @@ export function PlanRoomBand({
 
   const lead =
     bundle.sheets.length === 0
-      ? 'The plan room — no drawings filed yet.'
-      : `The plan room — ${bundle.sheets.length} ${bundle.sheets.length === 1 ? 'sheet' : 'sheets'}${lastFiledAt ? ` · last filed ${fmtDay(lastFiledAt)}` : ''}`;
+      ? 'Plan room — no drawings filed yet.'
+      : `Plan room — ${bundle.sheets.length} ${bundle.sheets.length === 1 ? 'sheet' : 'sheets'}${lastFiledAt ? ` · last filed ${fmtDay(lastFiledAt)}` : ''}`;
 
   return (
     <div

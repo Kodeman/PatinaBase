@@ -26,7 +26,7 @@ export function RoomsIndex() {
 
   return (
     <RoomShell
-      title="The Rooms"
+      title="The Scans"
       count={ready ? `${entries.length} scanned room${entries.length === 1 ? '' : 's'}` : undefined}
     >
       <div className="mx-auto max-w-[1180px] px-6 pb-16 pt-8 sm:px-9">

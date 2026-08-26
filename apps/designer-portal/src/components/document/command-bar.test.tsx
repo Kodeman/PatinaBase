@@ -29,7 +29,23 @@ jest.mock('@patina/supabase', () => ({
 
 const mockDeskData = jest.fn(() => ({ folders: [] as unknown[], chips: [] as unknown[] }));
 jest.mock('@/hooks/use-desk-engagements', () => ({
-  useDeskEngagements: () => ({ data: mockDeskData() }),
+  useDeskEngagements: () => {
+    const data = mockDeskData() as unknown as Record<string, unknown[]>;
+    if (!data) return { data };
+    // Production's `live` is every non-archived row the composition saw, need
+    // or no need; a fixture that only states folders and chips is stating the
+    // same population through its two derived halves.
+    return {
+      data: {
+        ...data,
+        live:
+          data.live ??
+          [...(data.folders ?? []), ...(data.chips ?? [])].map(
+            (entry) => (entry as { row: unknown }).row,
+          ),
+      },
+    };
+  },
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -51,7 +67,7 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 jest.mock('./overlays/post-sheet', () => ({ openPost: jest.fn() }));
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 
-import { CommandBar, openCommandBar } from './command-bar';
+import { callSheetPending, CommandBar, openCommandBar } from './command-bar';
 import { DocumentAction } from './document-action';
 import { PLAN_ROOM_SURFACE } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
@@ -420,6 +436,59 @@ describe('F04 — the empty query leads with Where the work stands', () => {
     expect(screen.getByText('Out for signature · 1')).toBeInTheDocument();
     expect(screen.queryByText('No match')).not.toBeInTheDocument();
   });
+
+  it('counts every live document, not only the ones that derived a need or a motion', () => {
+    // `folders` and `chips` are the two DERIVED populations: a document with
+    // neither lands in neither, and chips are capped at MAX_MOTION_CHIPS.
+    // Counting the studio's stages off them printed an undercount.
+    mockDeskData.mockReturnValue({
+      folders: [],
+      chips: [],
+      live: [
+        deskRow({ engagement_id: 'eng-a', active_section: 'project' }),
+        deskRow({ engagement_id: 'eng-b', active_section: 'project' }),
+        deskRow({ engagement_id: 'eng-c', active_section: 'care' }),
+      ],
+    } as never);
+
+    openPalette();
+
+    expect(screen.getByText('Where the work stands')).toBeInTheDocument();
+    expect(screen.getByText('In procurement · 2')).toBeInTheDocument();
+    expect(screen.getByText('In care · 1')).toBeInTheDocument();
+  });
+});
+
+describe('F39/F65 — a stage phrase opens the palette already typed', () => {
+  it('pre-types the stage the doorway asked for', () => {
+    mockDeskData.mockReturnValue({
+      folders: [],
+      chips: [],
+      live: [
+        deskRow({ engagement_id: 'eng-okonkwo', title: 'Okonkwo kitchen', active_section: 'install' }),
+        deskRow({ engagement_id: 'eng-v', title: 'Vandersteen residence', active_section: 'project' }),
+      ],
+    } as never);
+    render(<CommandBar />);
+
+    fireEvent(
+      window,
+      new CustomEvent('document:open-command-bar', { detail: { query: 'install' } }),
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Find anything' })).toHaveValue('install');
+    expect(screen.getByText('Where the work stands')).toBeInTheDocument();
+    expect(screen.getByText('In install · 1')).toBeInTheDocument();
+    expect(screen.queryByText('In procurement · 1')).not.toBeInTheDocument();
+  });
+
+  it('opens empty when the doorway named no stage', () => {
+    render(<CommandBar />);
+
+    fireEvent(window, new CustomEvent('document:open-command-bar'));
+
+    expect(screen.getByRole('textbox', { name: 'Find anything' })).toHaveValue('');
+  });
 });
 
 describe('F29/F48/F50/F82 — This surface carries all four document surfaces', () => {
@@ -490,6 +559,58 @@ describe('F29/F48/F50/F82 — This surface carries all four document surfaces', 
 
     fireEvent.click(screen.getByText('Spec book · Vandersteen').closest('button')!);
     expect(mockPush).toHaveBeenCalledWith('/doc/proj-v/spec-book');
+  });
+
+  it('walks a paired call sheet to the document it names instead of firing into nothing', () => {
+    // The roster sheet is mounted on /doc/[id] and nowhere else, so from the
+    // Desk the event has no listener: the row has to travel first, carrying
+    // its intent in the pending flag the document reads on arrival.
+    mockCallSheetFlag = true;
+    mockPathname.mockReturnValue('/desk');
+    mockDeskData.mockReturnValue({
+      folders: [
+        {
+          row: deskRow({
+            engagement_id: 'eng-v',
+            project_id: 'proj-v',
+            client_name: 'Vandersteen',
+            title: 'Vandersteen residence',
+          }),
+        },
+      ],
+      chips: [],
+    } as never);
+    const dispatched: Event[] = [];
+    const listener = (event: Event) => dispatched.push(event);
+    window.addEventListener('document:open-call-sheet', listener);
+
+    openPalette();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+      target: { value: 'roster' },
+    });
+    fireEvent.click(screen.getByText('Call sheet · Vandersteen').closest('button')!);
+    window.removeEventListener('document:open-call-sheet', listener);
+
+    expect(dispatched).toHaveLength(0);
+    expect(mockPush).toHaveBeenCalledWith('/doc/eng-v');
+    expect(callSheetPending.value).toBe(true);
+    callSheetPending.value = false;
+  });
+
+  it('opens the roster in place when the document it names is already in hand', () => {
+    mockCallSheetFlag = true;
+    mockPathname.mockReturnValue('/doc/eng-1');
+    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] } as never);
+    const dispatched: Event[] = [];
+    const listener = (event: Event) => dispatched.push(event);
+    window.addEventListener('document:open-call-sheet', listener);
+
+    openPalette();
+    fireEvent.click(screen.getByText('Call sheet').closest('button')!);
+    window.removeEventListener('document:open-call-sheet', listener);
+
+    expect(dispatched).toHaveLength(1);
+    expect(callSheetPending.value).toBe(false);
   });
 });
 

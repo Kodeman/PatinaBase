@@ -247,7 +247,7 @@ export default function DeskPage() {
             actionKey="find-anything"
             variant="tertiary"
             data-tour-anchor="desk-find-anything"
-            onClick={openCommandBar}
+            onClick={() => openCommandBar()}
             trailing={
               <kbd className="rounded-[3px] border border-[var(--border-default)] px-1 py-px font-mono">
                 ⌘K
@@ -401,6 +401,7 @@ export default function DeskPage() {
           <StudioPulse
             chips={data?.chips ?? []}
             folders={data?.folders ?? []}
+            live={data?.live ?? []}
             engagementsResolved={Boolean(data) && !isLoading}
           />
 

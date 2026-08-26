@@ -15,7 +15,6 @@ import { ShelfPanel } from './shelf-panel';
 import { PlanRoomLeaf } from './plan-room-leaf';
 import { SpecBookLeaf } from './spec-book-leaf';
 import { MoodBoardsLeaf } from './mood-boards-leaf';
-import { KnowledgeLeaf } from './knowledge-leaf';
 import { ClientCopyLeaf } from './client-copy-leaf';
 
 export function DocumentShelves({
@@ -52,7 +51,6 @@ export function DocumentShelves({
           canCreate={canCreateBoards}
         />
       )}
-      {openShelf === 'knowledge' && <KnowledgeLeaf />}
       {openShelf === 'clientcopy' && proposalId && (
         <ClientCopyLeaf proposalId={proposalId} clientName={clientName} />
       )}

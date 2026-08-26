@@ -45,12 +45,12 @@ export function ProjectAuthorityBand({
 
   return (
     <section
-      aria-label="Design billing authority"
+      aria-label="Design billing budget"
       className="mb-5 border-l-[3px] border-[var(--color-sage)] bg-[rgba(168,181,160,0.1)] px-4 py-3.5"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-          Design authority · {authority.state.replace("_", " ")}
+          Budget · {authority.state.replace("_", " ")}
         </p>
         {authority.billingThrough && (
           <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">

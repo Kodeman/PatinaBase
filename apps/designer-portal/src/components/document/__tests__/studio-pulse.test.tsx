@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import {
   StudioPulseDisclosure,
-  studioPulsePreview,
   studioStageSentenceParts,
 } from '../studio-pulse';
 
@@ -149,37 +148,16 @@ describe('StudioPulseDisclosure — "The studio today" (F39/F65)', () => {
   });
 });
 
-describe('studioPulsePreview — retained for the disclosed populations', () => {
-  it('names the fully quiet state without hiding it behind a zero', () => {
-    expect(
-      studioPulsePreview({
-        openRequests: 0,
-        inMotion: 0,
-        reconnects: 0,
-        field: 0,
-      }),
-    ).toBe('No secondary work needs attention · Field quiet');
-  });
-
-  it('composes the known populations otherwise', () => {
-    expect(
-      studioPulsePreview({
-        openRequests: 2,
-        inMotion: 3,
-        reconnects: 1,
-        field: 2,
-      }),
-    ).toBe('2 open requests · 3 moving · 1 reconnecting · 2 field needs');
-  });
-});
-
 describe('studioStageSentenceParts', () => {
   it('reduces live rows into one entry per stage, furthest along first', () => {
+    // The LIVE population — every document the Desk read — not the derived
+    // folders + chips, which drop a need-free, motion-free document and cap
+    // the chips at six.
     const rows = [
-      { row: { active_section: 'discovery' as const } },
-      { row: { active_section: 'install' as const } },
-      { row: { active_section: 'install' as const } },
-      { row: { active_section: 'proposal' as const } },
+      { active_section: 'discovery' as const },
+      { active_section: 'install' as const },
+      { active_section: 'install' as const },
+      { active_section: 'proposal' as const },
     ];
     expect(studioStageSentenceParts(rows)).toEqual([
       { stage: 'install', count: 2, text: '2 in install' },

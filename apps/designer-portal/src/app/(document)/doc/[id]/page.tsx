@@ -126,7 +126,7 @@ import {
   selectOperationalNeedsForDocument,
   useDeskEngagements,
 } from '@/hooks/use-desk-engagements';
-import { openLedger } from '@/components/document/command-bar';
+import { callSheetPending, openLedger } from '@/components/document/command-bar';
 import { RedLetterZone, type RedLetterRow } from '@/components/document/red-letter-zone';
 import {
   RoomLensProvider,
@@ -435,6 +435,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // default; the letterhead instrument and ⌘K's "This surface" row both
   // dispatch document:open-call-sheet rather than holding their own state.
   const [callSheetOpen, setCallSheetOpen] = useState(false);
+  // A3-L7 — the care rest state ("Everything is settled." / CLOSE THE BOOK) is
+  // gated on the closure gate the Care band alone can compute: it is the only
+  // reader of the eight closeout queries AND of the checklist's own state. The
+  // band publishes its answer here rather than the page paying for that read
+  // twice and getting a second answer.
+  const [closureReady, setClosureReady] = useState(false);
   // FIX 2 — the event's optional { mode } detail (default 'sheet'), read off
   // whichever dispatch opened it and forwarded straight through to CallSheet.
   const [callSheetMode, setCallSheetMode] = useState<CallSheetOpenMode>('sheet');
@@ -513,6 +519,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       setCallSheetOpen(true);
     };
     window.addEventListener('document:open-call-sheet', onOpenCallSheet);
+    // A ⌘K row that named a document NOT in hand walked here instead of
+    // dispatching into a page that had no listener yet; the flag is the
+    // intent, read and cleared once on arrival (openCaptureLead's pattern).
+    if (callSheetPending.value) {
+      callSheetPending.value = false;
+      setCallSheetMode('sheet');
+      setCallSheetOpen(true);
+    }
     return () => window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
   }, []);
 
@@ -812,6 +826,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         inputsPending: guideInputsPending,
         operationalNeed: rankedOperationalNeeds?.[0] ?? enrichedOperationalNeed,
         gate: nearestGate,
+        closureReady,
       })
     : null;
   // Split from activateGuide so the red-letter zone's per-need actions (below)
@@ -1469,7 +1484,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   )}
                   {/* R80: the Care band — closure stays reachable from an active
                     project (a quiet folded line until install nears). */}
-                  <CareBand projectId={row.project_id} />
+                  <CareBand projectId={row.project_id} onCloseoutReady={setClosureReady} />
                 </>
               )}
             {spreadSection === 'install' && row.project_id && (
@@ -1493,7 +1508,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 <InstallWindowCeremony projectId={row.project_id} />
                 {/* R80: at install the band opens unfolded — closing out IS the
                     work of this stage. */}
-                <CareBand projectId={row.project_id} />
+                <CareBand projectId={row.project_id} onCloseoutReady={setClosureReady} />
               </>
             )}
             {spreadSection === 'care' && (

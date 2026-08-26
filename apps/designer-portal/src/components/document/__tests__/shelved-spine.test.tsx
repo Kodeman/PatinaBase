@@ -16,6 +16,10 @@ import {
  *  ladder's live rung is what a test is checking. */
 const mockInvoiceRows: unknown[] = [];
 const mockPurchaseOrderRows: unknown[] = [];
+/** Neither of these two reads carries an `enabled` gate, so the only way to
+ *  withhold them on a spread that prints no money row is not to mount the
+ *  component that calls them. Counted, so that stays true. */
+const mockLadderReads = { purchaseOrders: 0, invoices: 0 };
 jest.mock('@patina/supabase', () => {
   const actual = jest.requireActual('@patina/supabase');
   return {
@@ -24,16 +28,14 @@ jest.mock('@patina/supabase', () => {
     useProjectBoards: () => ({ data: [] }),
     useProjectOwnedBoards: () => ({ data: [] }),
     usePlanRoom: () => ({ data: { sheets: [] } }),
-    useProjectInvoices: () => ({
-      isLoading: false,
-      error: null,
-      data: mockInvoiceRows,
-    }),
-    usePurchaseOrders: () => ({
-      isLoading: false,
-      error: null,
-      data: mockPurchaseOrderRows,
-    }),
+    useProjectInvoices: () => {
+      mockLadderReads.invoices += 1;
+      return { isLoading: false, error: null, data: mockInvoiceRows };
+    },
+    usePurchaseOrders: () => {
+      mockLadderReads.purchaseOrders += 1;
+      return { isLoading: false, error: null, data: mockPurchaseOrderRows };
+    },
     computeArAging: actual.computeArAging,
     invoiceDaysOverdue: actual.invoiceDaysOverdue,
   };
@@ -478,6 +480,60 @@ describe('the shelved blocks', () => {
     const moneyRow = screen.getByRole('button', { name: /Money/ });
     expect(moneyRow).toHaveTextContent('$17,500 owed');
     mockInvoiceRows.length = 0;
+  });
+
+  it('reaches the undrawn deposit rather than reporting $0 moved (F61)', () => {
+    // The live failure on the Chen residence: nothing owed, nothing ordered,
+    // $10,090 paid out and a $16,330 deposit standing undrawn. `Moved` clamps
+    // at zero — a FIGURE — so the index stopped there and printed "$0 moved"
+    // beside real money the region itself opened unfolded to show.
+    mockPurchaseOrderRows.length = 0;
+    mockPurchaseOrderRows.push({
+      id: 'po-1',
+      po_number: 'PO-2026-0418',
+      payments: [
+        { id: 'a', state: 'paid', kind: 'deposit', amount_cents: 1_009_000, label: null },
+        { id: 'b', state: 'due', kind: 'deposit', amount_cents: 1_633_000, label: '50% at release' },
+      ],
+    });
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+
+    const moneyRow = screen.getByRole('button', { name: /Money/ });
+    expect(moneyRow).toHaveTextContent('$16,330 not drawn');
+    expect(moneyRow).not.toHaveTextContent('$0 moved');
+    mockPurchaseOrderRows.length = 0;
+  });
+
+  it('pays for no money read on a spread that prints no money row', () => {
+    // The four commercial hooks were already gated on `printsMoneyRow`; these
+    // two take no `enabled`, so the gate has to be a conditional MOUNT.
+    mockLadderReads.purchaseOrders = 0;
+    mockLadderReads.invoices = 0;
+
+    for (const section of ['install', 'care'] as const) {
+      const { unmount } = render(
+        <DocSpineShelvedBlocks
+          {...props}
+          regions={paperRegionsForSection(section)}
+        />,
+      );
+      unmount();
+    }
+    expect(mockLadderReads).toEqual({ purchaseOrders: 0, invoices: 0 });
+
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    expect(mockLadderReads.purchaseOrders).toBeGreaterThan(0);
+    expect(mockLadderReads.invoices).toBeGreaterThan(0);
   });
 
   it('offers no Knowledge row among the shelves (F12)', () => {
