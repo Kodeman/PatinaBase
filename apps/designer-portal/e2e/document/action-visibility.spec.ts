@@ -105,7 +105,13 @@ test.describe('Inked Instruments action visibility', () => {
       )
       .first();
     await expect(folioAction).toBeVisible();
-    await expect(folioAction).toContainText(FOLIO_ACTION);
+    // A1 follow-up: the pick-up Link is now a full-bleed sibling BEHIND
+    // FolderFace, so the action label prints there, not inside this Link —
+    // its own textContent is empty. The primary's legible name is carried
+    // instead by aria-label (folder-card.tsx), so assert the accessible
+    // name rather than textContent; the "one legible primary per region"
+    // intent is unchanged, only where the label lives.
+    await expect(folioAction).toHaveAccessibleName(FOLIO_ACTION);
     await expectMinTarget(folioAction);
 
     await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {

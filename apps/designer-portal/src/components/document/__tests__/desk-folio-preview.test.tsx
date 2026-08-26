@@ -236,7 +236,11 @@ describe('FolderCard — overdue_invoice (R36 ledger act)', () => {
     const { container } = render(<FolderCard folder={folder} />);
 
     const card = screen.getByRole('link', {
-      name: 'Invoice Folio 1 — Invoice 1 overdue — send a reminder',
+      // A1 e2e follow-up: the pick-up Link's own accessible name now leads
+      // with the action label (folder-card.tsx), so a screen-reader user
+      // hears the primary act even though the label itself prints only in
+      // FolderFace, a DOM sibling.
+      name: 'Send reminder — Invoice Folio 1',
     });
     const sendReminder = screen.getByRole('button', {
       name: 'Send reminder — Invoice Folio 1',
@@ -250,7 +254,11 @@ describe('FolderCard — overdue_invoice (R36 ledger act)', () => {
     render(<FolderCard folder={folder} />);
 
     const card = screen.getByRole('link', {
-      name: 'Invoice Folio 1 — Invoice 1 overdue — send a reminder',
+      // A1 e2e follow-up: the pick-up Link's own accessible name now leads
+      // with the action label (folder-card.tsx), so a screen-reader user
+      // hears the primary act even though the label itself prints only in
+      // FolderFace, a DOM sibling.
+      name: 'Send reminder — Invoice Folio 1',
     });
     expect(card).toHaveAttribute('href', '/doc/invoice-folio-1');
 
@@ -293,7 +301,11 @@ describe('FolderCard — overdue_invoice (R36 ledger act)', () => {
     render(<FolderCard folder={folder} />);
 
     const card = screen.getByRole('link', {
-      name: 'Invoice Folio 1 — Invoice 1 overdue — send a reminder',
+      // A1 e2e follow-up: the pick-up Link's own accessible name now leads
+      // with the action label (folder-card.tsx), so a screen-reader user
+      // hears the primary act even though the label itself prints only in
+      // FolderFace, a DOM sibling.
+      name: 'Send reminder — Invoice Folio 1',
     });
     const sendReminder = screen.getByRole('button', {
       name: 'Send reminder — Invoice Folio 1',
