@@ -75,3 +75,54 @@ describe('the Find anything → command bar circuit', () => {
     expect(screen.getByRole('dialog', { name: 'Command bar' })).toBeInTheDocument();
   });
 });
+
+// SP-07 (A1-L4) — the Engine framing goes: placeholder, aria-label, and the
+// no-match fallback ship the plain replacement copy, and the word "Engine"
+// never appears anywhere in the rendered palette.
+describe('SP-07 — the palette drops the Engine framing', () => {
+  it('opens with the plain placeholder and aria-label', () => {
+    render(
+      <>
+        <FindAnythingButton />
+        <CommandBar />
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+
+    const input = screen.getByRole('textbox', { name: 'Find anything' });
+    expect(input).toHaveAttribute('placeholder', 'Find a document or a ledger…');
+  });
+
+  it('shows "No match" / "Try the Help Center" for a query with no hits', () => {
+    render(
+      <>
+        <FindAnythingButton />
+        <CommandBar />
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+
+    const input = screen.getByRole('textbox', { name: 'Find anything' });
+    fireEvent.change(input, { target: { value: 'zzz-no-such-thing-zzz' } });
+
+    expect(screen.getByText('No match')).toBeInTheDocument();
+    expect(screen.getByText('Try the Help Center')).toBeInTheDocument();
+  });
+
+  it('never renders the word "Engine" anywhere in the palette', () => {
+    render(
+      <>
+        <FindAnythingButton />
+        <CommandBar />
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Command bar' });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find anything' }), {
+      target: { value: 'anything' },
+    });
+
+    expect(dialog.textContent).not.toMatch(/\bEngine\b/);
+  });
+});

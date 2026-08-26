@@ -469,7 +469,7 @@ export function CommandBar() {
       ? {
           kind: 'verb',
           key: 'add-to-project-here',
-          label: 'Add to project',
+          label: 'Add a line',
           sub: 'this project · Library, link, need, import, or board',
           icon: FolderPlus,
           run: () => window.dispatchEvent(new CustomEvent('document:open-add-to-project', {
@@ -630,8 +630,8 @@ export function CommandBar() {
           kind: 'help',
           key: 'help-center-recovery',
           icon: LifeBuoy,
-          label: 'No match — Browse the Help Center',
-          sub: 'search the guides →',
+          label: 'No match',
+          sub: 'Try the Help Center',
           run: () => router.push('/help'),
           match: '',
         });
@@ -641,8 +641,8 @@ export function CommandBar() {
       list.push({
         kind: 'engine',
         key: 'engine',
-        label: 'Ask the Engine',
-        sub: `“${query.trim()}” · ask & place`,
+        label: `Ask about “${query.trim()}”`,
+        sub: 'ASK & PLACE',
         match: '',
       });
       sections = [{ eyebrow: null, rows: list }];
@@ -789,8 +789,8 @@ export function CommandBar() {
         <input
           ref={inputRef}
           type="text"
-          aria-label="Find anything, or ask the Engine"
-          placeholder="Find a document or a ledger — or ask the Engine…"
+          aria-label="Find anything"
+          placeholder="Find a document or a ledger…"
           className="w-full border-b border-[var(--color-pearl)] bg-transparent px-4 py-3 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-muted)] focus:outline-none"
           value={query}
           onChange={(e) => {
@@ -823,7 +823,7 @@ export function CommandBar() {
           <div className="max-h-[60vh] overflow-y-auto px-4 pb-3 pt-2">
             <div className="mb-1 flex items-center justify-between gap-3">
               <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay)]">
-                The Engine · “{asking}”
+                Results · “{asking}”
               </span>
               <button
                 type="button"
