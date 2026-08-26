@@ -9811,3 +9811,41 @@ act and `In this document` menu group; and the direction B graft of seven rest-s
 per program-plan.md §6's I148 scope.
 
 *Entries add: I147 · last id = I147*
+
+### I148 · Wave A3 — the lexicon, ⌘K, money, mobile, the leader — 2026-08-26
+
+Wave A3 of "The Wayfinding Review" build shipped — the largest wave and the last before DEPLOY A. The
+six-rung money ladder (`Budget · Plan · Authorized · Moved · Owed · Not drawn`) ships via two new pure
+modules, `money-ladder.ts` and `vendor-payouts.ts` — the latter Kody's ruling 10 (R124 item 8): `Moved` is
+`Authorized − sum(po_payments.amount_cents where state='paid')`, reading data `usePurchaseOrders` already
+selects, with no migration; `Design authority` retires everywhere in favour of `Money`. The spine index and
+shelves lose the `knowledge` entry (F12, closing I136's open item) and gain corrected rail labels (F02),
+with `Pieces` and `The record`/`The studio today` renames landing across the Desk's header acts and content
+rows (F24/F38/F39/F65/F90). ⌘K gains its `WHERE THE WORK STANDS` empty-query group (F04) and a four-row
+`This surface` group (F29/F48/F50/F82); `The Scans` replaces `The Rooms` and `Ledgers` replaces `Studio
+books` in both ⌘K and the studio drawer, whose own `Find anything ⌘K` door now prints as a fourth row
+(`Library · People · The Scans · Ledgers ↑ · Find anything ⌘K`). The FF&E spread elects exactly one leader
+per exception class (F34/F08, new `ffe-leader.ts`), and every region head gains the 390 wrap rule
+(F28/F87, direction B's graft into A). The mobile bar registers a true single primary act read off the
+red-letter zone and gains an `In this document` menu group (F07/F49). Seven rest-state sentences replace
+the guide's quiet-case shrug on every stage (direction B's §3.3 graft into A). `NeedLine` gains `dueOn` and
+`owner` (A3-L7), and `need-tie-break.ts`'s `rankOperationalNeeds` reads them into a new dated/owned rank
+ahead of the kind-based fallback — a hard outside deadline inside seven days with a non-designer owner
+outranks everything, an already-past `dueOn` sorts oldest-first within its rank, and an undated need owned
+by the designer ranks as the studio's own pen — while a need this wave left undated and unowned still ranks
+exactly as A1-L2 first shipped it. Ships unflagged, per R125 item 2: no feature flags anywhere in this
+program, GA on merge.
+
+Gate on `main` after the merge: `pnpm --filter @patina/designer-portal type-check` clean (0 errors); `pnpm
+--filter @patina/designer-portal test -- --ci` — 437 suites / 4753 tests passed (baseline before this wave
+was 432 suites / 4635 tests; this wave added 5 suites / 118 tests), all green; `pnpm --filter
+@patina/designer-portal lint` — the same 2 pre-existing errors (`piece-room-save-gate.test.tsx:159:1`
+`import/first`, `use-commercial-documents.test.ts:930:8` `react-hooks/rules-of-hooks`, both untouched by
+this wave) + 200 pre-existing warnings, no new lint regressions. DEPLOY A follows once this wave's
+integration lane (A3-L8) merges and the full gate is green on `main`, per R125 item 3 — deployment itself is
+recorded separately once it happens, at I153. Deferred to B, in full per R125 item 4: the job ticket
+(B1/B2), the Desk's stage-grouped roster and `deriveTicketLeader` (B2), the Worktable composition behind
+the pre-existing `worktable` flag (B2-L4, untouched by this program), F58's Option 3 stamp-label unification
+(B3), and F56's repo-wide `-ink` contrast tokens (B3).
+
+*Entries add: I148 · last id = I148*
