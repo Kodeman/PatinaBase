@@ -7,7 +7,13 @@
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { ShelfPanel, shelfRouteFor } from './shelf-panel';
+import { DocumentShelves } from './document-shelves';
 import { requestShelfClose } from '@/lib/document/shelves';
+
+jest.mock('./plan-room-leaf', () => ({ PlanRoomLeaf: () => null }));
+jest.mock('./spec-book-leaf', () => ({ SpecBookLeaf: () => null }));
+jest.mock('./mood-boards-leaf', () => ({ MoodBoardsLeaf: () => null }));
+jest.mock('./client-copy-leaf', () => ({ ClientCopyLeaf: () => null }));
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
@@ -67,7 +73,24 @@ describe('the leaf below 1440 — a route, not an aside', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('puts a routing shelf away even with no document to route to', () => {
+  it('is handed the document’s address by the mount, so it travels', () => {
+    // The regression this replaces: `DocumentShelves` rendered the panel with
+    // no `projectId`, so `route` was always null and the effect below reduced
+    // to `onClose()` — the force-close B1 removed, re-implemented one
+    // component lower. A shelf opened programmatically (`NEW_BOARD_EVENT` from
+    // the Add-to-project sheet) was dropped on the floor on a phone.
+    atWidth(false);
+    render(
+      <DocumentShelves
+        openShelf="moodboards"
+        onClose={jest.fn()}
+        routeId="doc-1"
+      />,
+    );
+    expect(mockPush).toHaveBeenCalledWith('/doc/doc-1/boards');
+  });
+
+  it('still puts a routing shelf away when nothing named a document', () => {
     atWidth(false);
     const onClose = jest.fn();
     render(

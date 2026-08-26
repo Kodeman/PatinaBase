@@ -102,18 +102,34 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
 
   if (resolution?.kind === 'redirect') return null;
 
+  // ⌘K offers one `Boards` door on every document (F62), and a proposal-stage
+  // document has boards — they live in the Drafting Room, which is where this
+  // page sends the reader rather than dead-ending on a sentence.
   if (!projectId) {
+    const draftingProposalId = row?.proposal_id ?? null;
     return (
       <main className="min-h-screen bg-[var(--doc-paper)] px-8 py-16">
         <p className="max-w-lg font-heading text-[1.25rem] italic text-[var(--color-charcoal)]">
-          This paper has no project yet — the boards open when one does.
+          {draftingProposalId
+            ? 'This paper is still a proposal — its boards are in the Drafting Room.'
+            : 'This paper has no project yet — the boards open when one does.'}
         </p>
-        <Link
-          href={`/doc/${routeId}`}
-          className="mt-4 inline-flex min-h-[44px] items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
-        >
-          ← Back to the document
-        </Link>
+        <div className="mt-4 flex flex-wrap items-center gap-6">
+          {draftingProposalId && (
+            <Link
+              href={`/drafting/${draftingProposalId}`}
+              className="inline-flex min-h-[44px] items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)]"
+            >
+              Open the Drafting Room →
+            </Link>
+          )}
+          <Link
+            href={`/doc/${routeId}`}
+            className="inline-flex min-h-[44px] items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+          >
+            ← Back to the document
+          </Link>
+        </div>
       </main>
     );
   }
@@ -127,10 +143,6 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
   );
   const frozenBoards = (frozen.data ?? []) as ProjectBoard[];
   const empty = liveBoards.length === 0 && frozenBoards.length === 0;
-  // The same read the ≥1440 leaf is handed: boards are composed while the
-  // project is being designed, not after it has moved to install or care.
-  const canCreate = row?.active_section === 'project';
-
   return (
     <main className="min-h-screen bg-[var(--doc-paper)] text-[var(--color-charcoal)]">
       <header className="sticky top-0 z-20 border-b border-[var(--color-pearl)] bg-[var(--doc-paper)]/95 px-4 py-3 backdrop-blur md:px-8">
@@ -149,22 +161,24 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
                 : `${liveBoards.length} working · ${frozenBoards.length} signed`}
             </p>
           </div>
-          {canCreate && (
-            <DocumentActionRow surfaceKey={SURFACE_KEY} regionKey={REGION_KEY}>
-              <DocumentAction
-                actionKey="start-a-board"
-                variant="secondary"
-                onClick={() => setStarting(true)}
-              >
-                Start a board
-              </DocumentAction>
-            </DocumentActionRow>
-          )}
+          {/* The ticket mounts on project, install and care alike, so its
+              `Boards` row opens the same page with the same act on all three
+              (B1-L4's acceptance) — and the ≥1440 leaf is handed the same
+              answer, so one row never means two different things by width. */}
+          <DocumentActionRow surfaceKey={SURFACE_KEY} regionKey={REGION_KEY}>
+            <DocumentAction
+              actionKey="start-a-board"
+              variant="secondary"
+              onClick={() => setStarting(true)}
+            >
+              Start a board
+            </DocumentAction>
+          </DocumentActionRow>
         </div>
       </header>
 
       <div className="mx-auto max-w-[1100px] px-4 pb-16 pt-6 md:px-8">
-        {canCreate && starting && (
+        {starting && (
           <div className="mb-8">
             <BoardsBuilder projectId={projectId} />
           </div>

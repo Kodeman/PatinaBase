@@ -17,7 +17,7 @@
  */
 
 import type { SectionKey } from './desk-derivation';
-import type { DocumentIndexKey } from './document-index';
+import { paperRegionsForSection, type DocumentIndexKey } from './document-index';
 import type { MoneyLadder } from './money-ladder';
 import { money } from './project-commerce';
 import type { SectionScheduleFacts } from './section-derivation';
@@ -48,20 +48,31 @@ export interface TicketRoomChip {
  * `leaf` is one door read two ways by width — the 320px leaf beside the spine
  * at ≥1440, the leaf's own page below it — so the derivation names the shelf
  * and the component resolves the width.
+ *
+ * `none` is the row that states a fact this spread has nowhere to open: the
+ * install and care spreads print neither the Money region nor the Schedule
+ * (`paperRegionsForSection`), so those two rows print their figure and no `→`.
+ * A button that fires an unfold nobody hears is a worse answer than a row that
+ * plainly does not open.
  */
 export type TicketDoor =
   | { kind: 'leaf'; shelf: ShelfLeafKey }
+  | { kind: 'none' }
   | { kind: 'route'; href: string }
   | { kind: 'unfold-region'; region: DocumentIndexKey }
   | { kind: 'overlay'; overlay: 'call-sheet'; available: boolean }
   | { kind: 'expand'; rooms: readonly TicketRoomChip[] };
 
-/** direction-b §3.2, in order. `later` is "everything else, in ticket order". */
+/**
+ * direction-b §3.2's three standing ranks, in order. Its fourth — "work that
+ * can wait, everything else, in ticket order" — is not an exception and has no
+ * producer here: it IS the row order, which `deriveTicketSeam` falls back to
+ * when rank and standing day tie.
+ */
 export type TicketExceptionRank =
   | 'money-at-risk'
   | 'promise-past-due'
-  | 'piece-stuck'
-  | 'later';
+  | 'piece-stuck';
 
 export interface TicketException {
   rank: TicketExceptionRank;
@@ -77,6 +88,10 @@ export interface TicketRow {
   label: string;
   /** Inter — the row's own state sentence. */
   value: string;
+  /** The clause inside `value` that carries what is wrong, verbatim, so the row
+   *  leads with it in weight where M2 keeps the census in ledger order
+   *  (`direction-b.css` `.b-tk-value .b-x`). Null where nothing is wrong. */
+  emphasis: string | null;
   door: TicketDoor;
   exception: TicketException | null;
 }
@@ -129,13 +144,33 @@ export interface TicketInput {
     /** `selectUndrawnVendorPayments(...).kind` — `deposit`, `balance`,
      *  `milestone`; same reason. */
     undrawnKind: string | null;
+    /** The leading open invoice's own `due_date` — the day this promise came
+     *  due. Carried rather than reverse-engineered from `owedDays`, because the
+     *  seam's tie-break weighs it against a real install date. */
+    owedSince: string | null;
   };
   dates: { settled: boolean; schedule: SectionScheduleFacts | null };
   people: { settled: boolean; callSheetEnabled: boolean; rosterCount: number };
+  /**
+   * The regions this spread actually mounts (C11). Defaults to what the
+   * section prints; the caller passes its own where a pinned Worktable table
+   * puts a different spread on the paper than the section the ticket names.
+   */
+  paperRegions?: readonly DocumentIndexKey[];
   now?: Date;
 }
 
 const READING = 'Reading…';
+
+/** A region row opens the region — but only where this spread prints it. */
+function regionDoor(input: TicketInput, region: DocumentIndexKey): TicketDoor {
+  const regions =
+    input.paperRegions ??
+    paperRegionsForSection(input.section).map((entry) => entry.key);
+  return regions.includes(region)
+    ? { kind: 'unfold-region', region }
+    : { kind: 'none' };
+}
 
 const SECTION_LABEL: Record<SectionKey, string> = {
   brief: 'Brief',
@@ -151,7 +186,6 @@ const RANK_ORDER: Record<TicketExceptionRank, number> = {
   'money-at-risk': 0,
   'promise-past-due': 1,
   'piece-stuck': 2,
-  later: 3,
 };
 
 const NUMBER_WORDS = [
@@ -163,6 +197,21 @@ const spell = (n: number) => NUMBER_WORDS[n] ?? String(n);
 
 const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
+
+/**
+ * How far out a day is, spelled — one register the whole way. The words run
+ * out at thirteen, so the unit steps up before the numerals would: days to a
+ * fortnight, then weeks to a quarter, then months to a year. Past a year the
+ * date is the whole sentence; "sixteen months out" tells a reader nothing the
+ * date has not already said.
+ */
+function distance(days: number): string {
+  if (days < 14) return ` · ${spell(days)} days out`;
+  const weeks = Math.round(days / 7);
+  if (weeks <= 13) return ` · ${spell(weeks)} weeks out`;
+  const months = Math.round(days / 30.44);
+  return months <= 13 ? ` · ${spell(months)} months out` : '';
+}
 
 /** Bare DATE columns must parse as LOCAL midnight, or the rendered day slips
  *  back a day in negative-offset timezones. */
@@ -194,11 +243,6 @@ const fmtWeekdayDate = (iso: string) =>
     day: 'numeric',
   }).format(asLocalDate(iso));
 
-const ymd = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate(),
-  ).padStart(2, '0')}`;
-
 interface PieceCounts {
   ordered: number;
   delivered: number;
@@ -224,19 +268,27 @@ function countPieces(lines: readonly TicketLine[]): PieceCounts {
     specified: 0,
   };
   for (const line of lines) {
-    // A line without its spec is counted once, as unspecified: its stamp
-    // falls back to `specified` (stamp-derivation's default for a status the
-    // machine does not know), so bucketing it too would print the same line
-    // twice under two words.
+    // The Spec row's numerator counts every line that carries its spec,
+    // whatever else is true of it.
+    if (line.specified) counts.specified += 1;
+    // What is WRONG with a line is read from its stamp, which
+    // `deriveLineStamp` settles from an open damage claim or a pending
+    // blocking decision — neither of which needs a product on the line. So the
+    // exception buckets are taken first, and they take the line out of the
+    // census: one line is counted once, under the word that matters most.
+    if (line.stamp === 'damaged') {
+      counts.damaged += 1;
+      continue;
+    }
+    if (line.stamp === 'decision_due') {
+      counts.awaiting += 1;
+      continue;
+    }
     if (!line.specified) {
       counts.unspecified += 1;
       continue;
     }
-    counts.specified += 1;
     switch (line.stamp) {
-      case 'damaged':
-        counts.damaged += 1;
-        break;
       case 'shipped':
         counts.inTransit += 1;
         break;
@@ -254,9 +306,6 @@ function countPieces(lines: readonly TicketLine[]): PieceCounts {
       case 'trade_in_progress':
       case 'trade_pending':
         counts.ordered += 1;
-        break;
-      case 'decision_due':
-        counts.awaiting += 1;
         break;
       case 'specified':
       case 'quoted':
@@ -289,6 +338,7 @@ function roomsRow(input: TicketInput): TicketRow {
     key: 'rooms',
     label: 'Rooms',
     value,
+    emphasis: null,
     door: { kind: 'expand', rooms: chips },
     exception: null,
   };
@@ -336,7 +386,11 @@ function piecesRow(input: TicketInput): TicketRow {
     key: 'pieces',
     label: 'Pieces',
     value,
-    door: { kind: 'unfold-region', region: 'ffe' },
+    // M2 keeps the census in ledger order and gives the wrong clause the
+    // weight (`.b-tk-value .b-x`); reordering the census would print a
+    // different sentence from the drawn one.
+    emphasis: exception?.phrase ?? null,
+    door: regionDoor(input, 'ffe'),
     exception,
   };
 }
@@ -351,6 +405,7 @@ function drawingsRow(input: TicketInput): TicketRow {
     key: 'drawings',
     label: 'Drawings',
     value,
+    emphasis: null,
     door: { kind: 'leaf', shelf: 'planroom' },
     exception: null,
   };
@@ -377,6 +432,7 @@ function specRow(input: TicketInput): TicketRow {
     key: 'spec',
     label: 'Spec',
     value,
+    emphasis: null,
     door: { kind: 'leaf', shelf: 'specbook' },
     exception,
   };
@@ -392,25 +448,28 @@ function boardsRow(input: TicketInput): TicketRow {
     key: 'boards',
     label: 'Boards',
     value,
+    emphasis: null,
     door: { kind: 'leaf', shelf: 'moodboards' },
     exception: null,
   };
 }
 
 function moneyRow(input: TicketInput): TicketRow {
-  const { failed, settled, ladder, owedDays, undrawnKind } = input.money;
+  const { failed, settled, ladder, owedDays, undrawnKind, owedSince } =
+    input.money;
   const { authorized, owed, notDrawn } = ladder;
 
   const parts: string[] = [];
+  let owedClause: string | null = null;
   if (authorized.cents != null && authorized.cents > 0) {
     parts.push(`${money(authorized.cents)} ${authorized.note}`);
   }
   if (owed.cents != null && owed.cents > 0) {
-    parts.push(
+    owedClause =
       owedDays != null && owedDays > 0
         ? `${money(owed.cents)} owed you, ${plural(owedDays, 'day', 'days')}`
-        : `${money(owed.cents)} owed you`,
-    );
+        : `${money(owed.cents)} owed you`;
+    parts.push(owedClause);
   }
   if (notDrawn.cents != null && notDrawn.cents > 0) {
     parts.push(
@@ -427,26 +486,30 @@ function moneyRow(input: TicketInput): TicketRow {
         : parts.join(' · ');
 
   const owedCents = owed.cents;
-  const now = input.now ?? new Date();
-  const exception: TicketException | null =
+  const standing =
     settled &&
     !failed &&
     owedCents != null &&
     owedCents > 0 &&
     owedDays != null &&
-    owedDays > 0
-      ? {
-          rank: 'promise-past-due',
-          phrase: `${money(owedCents)} owed you`,
-          standingSince: ymd(new Date(now.getTime() - owedDays * DAY_MS)),
-        }
-      : null;
+    owedDays > 0;
+  const exception: TicketException | null = standing
+    ? {
+        rank: 'promise-past-due',
+        phrase: `${money(owedCents)} owed you`,
+        // The invoice's own due date, never a day count run backwards through
+        // millisecond arithmetic: this is weighed against a real install date
+        // inside the same rank.
+        standingSince: owedSince,
+      }
+    : null;
 
   return {
     key: 'money',
     label: 'Money',
     value,
-    door: { kind: 'unfold-region', region: 'money' },
+    emphasis: standing ? owedClause : null,
+    door: regionDoor(input, 'money'),
     exception,
   };
 }
@@ -474,8 +537,7 @@ function datesRow(input: TicketInput): TicketRow {
     if (days < 0) value = `Installed ${when}`;
     else if (days === 0) value = `Install ${when} · today`;
     else if (days === 1) value = `Install ${when} · tomorrow`;
-    else if (days < 14) value = `Install ${when} · ${spell(days)} days out`;
-    else value = `Install ${when} · ${spell(Math.round(days / 7))} weeks out`;
+    else value = `Install ${when}${distance(days)}`;
   }
 
   // Install day behind us while the job is still on the Project spread is a
@@ -498,7 +560,8 @@ function datesRow(input: TicketInput): TicketRow {
     key: 'dates',
     label: 'Dates',
     value,
-    door: { kind: 'unfold-region', region: 'schedule' },
+    emphasis: exception?.phrase ?? null,
+    door: regionDoor(input, 'schedule'),
     exception,
   };
 }
@@ -516,6 +579,7 @@ function peopleRow(input: TicketInput): TicketRow {
     key: 'people',
     label: 'People',
     value,
+    emphasis: null,
     door: {
       kind: 'overlay',
       overlay: 'call-sheet',
@@ -539,12 +603,29 @@ export function deriveTicket(input: TicketInput): TicketRow[] {
   ];
 }
 
-/** `The job · Project · Procurement & Orders 4 of 6` — the seam's line one,
- *  and the ticket's own head. */
+/** `The job · Project · Procurement & Orders 4 of 6` — the seam's line one
+ *  (M4), which never elides and never breaks. */
 export function deriveTicketIdentity(input: TicketInput): string {
   const head = `The job · ${SECTION_LABEL[input.section]}`;
   if (!input.phase) return head;
   return `${head} · ${input.phase.name} ${input.phase.position} of ${input.phase.of}`;
+}
+
+/** The unfolded ticket's own head, which M2 draws in TWO parts across the
+ *  band: what this is on the left, where it stands on the right. Both are set
+ *  in DM Mono and uppercased by CSS, as the seam's one line is. */
+export interface TicketHead {
+  subject: string;
+  phase: string | null;
+}
+
+export function deriveTicketHead(input: TicketInput): TicketHead {
+  return {
+    subject: `The job · ${SECTION_LABEL[input.section]}`,
+    phase: input.phase
+      ? `${input.phase.name} · ${input.phase.position} of ${input.phase.of}`
+      : null,
+  };
 }
 
 /**

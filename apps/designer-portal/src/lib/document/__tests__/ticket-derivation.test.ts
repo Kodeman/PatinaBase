@@ -1,6 +1,7 @@
 import type { MoneyLadder, MoneyRung } from '@/lib/document/money-ladder';
 import {
   deriveTicket,
+  deriveTicketHead,
   deriveTicketIdentity,
   deriveTicketSeam,
   type TicketInput,
@@ -61,6 +62,7 @@ function emptyInput(section: TicketInput['section'] = 'project'): TicketInput {
       ladder: emptyLadder(),
       owedDays: null,
       undrawnKind: null,
+      owedSince: null,
     },
     dates: { settled: true, schedule: null },
     people: { settled: true, callSheetEnabled: true, rosterCount: 0 },
@@ -98,6 +100,8 @@ function specimenInput(): TicketInput {
       ladder: specimenLadder(),
       owedDays: 22,
       undrawnKind: 'deposit',
+      // Invoice 2026-114's own due date, 22 days before NOW.
+      owedSince: '2026-08-03',
     },
     dates: {
       settled: true,
@@ -274,6 +278,145 @@ describe('deriveTicket — the specimen reads as drawn', () => {
   });
 });
 
+describe('deriveTicket — a row only opens what the spread prints', () => {
+  it('unfolds Pieces, Money and Dates on the project spread', () => {
+    const rows = deriveTicket(emptyInput('project'));
+    expect(rows.map((row) => row.door.kind)).toEqual([
+      'expand',
+      'unfold-region',
+      'leaf',
+      'leaf',
+      'leaf',
+      'unfold-region',
+      'unfold-region',
+      'overlay',
+    ]);
+  });
+
+  it.each(['install', 'care'] as const)(
+    'gives Money and Dates no door on a %s spread, where neither region mounts',
+    (section) => {
+      const rows = deriveTicket(emptyInput(section));
+      const doorOf = (key: TicketRowKey) =>
+        rows.find((row) => row.key === key)!.door;
+      expect(doorOf('pieces')).toEqual({ kind: 'unfold-region', region: 'ffe' });
+      expect(doorOf('money')).toEqual({ kind: 'none' });
+      expect(doorOf('dates')).toEqual({ kind: 'none' });
+    },
+  );
+
+  it('reads the regions the caller states over the ones the section implies', () => {
+    const rows = deriveTicket({
+      ...emptyInput('install'),
+      paperRegions: ['approvals', 'schedule', 'ffe', 'money'],
+    });
+    const doorOf = (key: TicketRowKey) =>
+      rows.find((row) => row.key === key)!.door;
+    expect(doorOf('money')).toEqual({ kind: 'unfold-region', region: 'money' });
+    expect(doorOf('dates')).toEqual({
+      kind: 'unfold-region',
+      region: 'schedule',
+    });
+  });
+
+  it('still states the figure on the row that cannot open', () => {
+    const rows = deriveTicket({
+      ...specimenInput(),
+      section: 'install',
+      paperRegions: ['approvals', 'ffe'],
+    });
+    expect(valueOf(rows, 'money')).toBe(
+      '$141,600 ordered · $17,500 owed you, 22 days · $12,300 deposit not drawn',
+    );
+  });
+});
+
+describe('deriveTicket — what is wrong is counted once, and named first', () => {
+  it('counts a damaged line with no product as damaged, not unspecified', () => {
+    const rows = deriveTicket({
+      ...emptyInput(),
+      pieces: {
+        settled: true,
+        lines: [
+          ...lines(1, 'damaged', false, 'living'),
+          ...lines(2, 'specified', false, 'living'),
+        ],
+      },
+    });
+    expect(valueOf(rows, 'pieces')).toBe('1 damaged · 2 unspecified');
+    expect(rows.find((row) => row.key === 'pieces')!.exception).toEqual({
+      rank: 'money-at-risk',
+      phrase: '1 damaged',
+      standingSince: null,
+    });
+    // The Spec row's numerator is untouched: none of the three carries a spec.
+    expect(valueOf(rows, 'spec')).toBe('0 of 3 specified · by room');
+  });
+
+  it('counts a decision-blocked line with no product as awaiting', () => {
+    const rows = deriveTicket({
+      ...emptyInput(),
+      pieces: { settled: true, lines: lines(1, 'decision_due', false) },
+    });
+    expect(valueOf(rows, 'pieces')).toBe('1 awaiting a decision');
+  });
+
+  it('marks the clause that is wrong so the row leads with it in weight', () => {
+    const rows = deriveTicket(specimenInput());
+    expect(rows.find((row) => row.key === 'pieces')!.emphasis).toBe('1 damaged');
+    expect(rows.find((row) => row.key === 'money')!.emphasis).toBe(
+      '$17,500 owed you, 22 days',
+    );
+    expect(rows.find((row) => row.key === 'rooms')!.emphasis).toBeNull();
+  });
+});
+
+describe('deriveTicket — the Dates row keeps one register', () => {
+  const at = (date: string) =>
+    valueOf(
+      deriveTicket({
+        ...emptyInput(),
+        dates: {
+          settled: true,
+          schedule: {
+            selection: SELECTION,
+            fidelity: 'committed',
+            positionText: null,
+            install: { date, fidelity: 'committed' },
+          },
+        },
+      }),
+      'dates',
+    );
+
+  it('spells the distance at every scale it states one', () => {
+    expect(at('2026-09-04')).toContain('· ten days out');
+    expect(at('2026-09-15')).toContain('· three weeks out');
+    // Fourteen weeks out used to print `14 weeks out` beside `three weeks out`.
+    expect(at('2026-12-01')).toContain('· three months out');
+  });
+
+  it('lets the date be the whole sentence past a year', () => {
+    expect(at('2028-01-10')).toBe('Install Monday, January 10');
+  });
+});
+
+describe('deriveTicketHead', () => {
+  it('draws M2’s two-part band head', () => {
+    expect(deriveTicketHead(specimenInput())).toEqual({
+      subject: 'The job · Project',
+      phase: 'Procurement & Orders · 4 of 6',
+    });
+  });
+
+  it('carries no phase clause when the resolver placed none', () => {
+    expect(deriveTicketHead(emptyInput('care'))).toEqual({
+      subject: 'The job · Care',
+      phase: null,
+    });
+  });
+});
+
 describe('deriveTicketIdentity', () => {
   it('names section, phase and fraction', () => {
     expect(deriveTicketIdentity(specimenInput())).toBe(
@@ -325,6 +468,7 @@ describe('deriveTicketSeam', () => {
           key: 'spec',
           label: 'Spec',
           value: '',
+          emphasis: null,
           door: { kind: 'leaf', shelf: 'specbook' },
           exception: {
             rank: 'piece-stuck',
@@ -336,6 +480,7 @@ describe('deriveTicketSeam', () => {
           key: 'money',
           label: 'Money',
           value: '',
+          emphasis: null,
           door: { kind: 'unfold-region', region: 'money' },
           exception: {
             rank: 'promise-past-due',
@@ -347,6 +492,7 @@ describe('deriveTicketSeam', () => {
           key: 'pieces',
           label: 'Pieces',
           value: '',
+          emphasis: null,
           door: { kind: 'unfold-region', region: 'ffe' },
           exception: {
             rank: 'money-at-risk',
@@ -367,6 +513,7 @@ describe('deriveTicketSeam', () => {
           key: 'money',
           label: 'Money',
           value: '',
+          emphasis: null,
           door: { kind: 'unfold-region', region: 'money' },
           exception: {
             rank: 'promise-past-due',
@@ -378,6 +525,7 @@ describe('deriveTicketSeam', () => {
           key: 'dates',
           label: 'Dates',
           value: '',
+          emphasis: null,
           door: { kind: 'unfold-region', region: 'schedule' },
           exception: {
             rank: 'promise-past-due',

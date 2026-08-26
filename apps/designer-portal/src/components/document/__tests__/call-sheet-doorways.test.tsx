@@ -515,7 +515,7 @@ describe('spine shelves — the Call sheet row', () => {
     expect(baseElement.querySelector('[data-shelf-trigger="callsheet"]')).toBeNull();
     // The three leaf shelves are untouched by the flag.
     expect(screen.getByRole('button', { name: /Plan room/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Mood boards/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Boards/ })).toBeInTheDocument();
   });
 
   it('reaches the roster sheet — never a leaf — when pressed', () => {

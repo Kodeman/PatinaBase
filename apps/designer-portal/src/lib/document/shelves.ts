@@ -56,8 +56,10 @@ const ALL_SHELVES: readonly ShelfDefinition[] = [
   },
   {
     key: 'moodboards',
-    title: 'Mood boards',
-    eyebrow: 'Mood boards · Shared & draft',
+    // F62 — one name for one thing. The row, the leaf, the page and ⌘K all
+    // read `Boards`; the key stays `moodboards` because it is an address.
+    title: 'Boards',
+    eyebrow: 'Boards · Shared & draft',
     kind: 'leaf',
     subject: 'project',
     routeSegment: 'boards',

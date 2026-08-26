@@ -135,6 +135,49 @@ describe('the boards page', () => {
     );
   });
 
+  it('offers the same act on install and care, where the ticket also mounts', () => {
+    mockEngagement.mockReturnValue(engagement({ active_section: 'install' }));
+    render(<ProjectBoardsView routeId="eng-1" />);
+    expect(
+      screen.getByRole('button', { name: 'Start a board' }),
+    ).toBeInTheDocument();
+  });
+
+  it('sends a proposal’s boards to the Drafting Room instead of dead-ending', () => {
+    // ⌘K offers ONE Boards door on every document (F62). On a proposal the
+    // project id is null, and the boards that exist are the Drafting Room's.
+    mockEngagement.mockReturnValue(
+      engagement({
+        engagement_kind: 'proposal',
+        project_id: null,
+        proposal_id: 'prop-9',
+      }),
+    );
+    render(<ProjectBoardsView routeId="eng-1" />);
+
+    expect(
+      screen.getByRole('link', { name: 'Open the Drafting Room →' }),
+    ).toHaveAttribute('href', '/drafting/prop-9');
+    expect(
+      screen.getByText(
+        'This paper is still a proposal — its boards are in the Drafting Room.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('says the plain thing when there is no proposal either', () => {
+    mockEngagement.mockReturnValue(
+      engagement({ engagement_kind: 'proposal', project_id: null }),
+    );
+    render(<ProjectBoardsView routeId="eng-1" />);
+    expect(screen.queryByRole('link', { name: /Drafting Room/ })).toBeNull();
+    expect(
+      screen.getByText(
+        'This paper has no project yet — the boards open when one does.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('is what /doc/[id]/boards renders', async () => {
     await act(async () => {
       render(

@@ -194,7 +194,7 @@ describe('the shelves block — the Finalize table’s now, never the spine’s'
       />,
     );
     expect(
-      screen.getByRole('button', { name: /Mood boards/ }),
+      screen.getByRole('button', { name: /Boards/ }),
     ).toHaveAttribute('data-shelf-trigger', 'moodboards');
   });
 

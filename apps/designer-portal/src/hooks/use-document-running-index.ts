@@ -27,6 +27,7 @@ import {
   regionAnchorSelector,
   regionHeadingId,
   requestRegionUnfold,
+  UNFOLD_REGION_EVENT,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
 
@@ -157,39 +158,65 @@ export function useDocumentRunningIndex(
     [],
   );
 
-  const jump = useCallback(
-    (key: DocumentIndexKey) => {
-      // A folded region has no body to land in — ask it to open first, then
-      // scroll once the paint that mounted it has happened.
-      requestRegionUnfold(key);
+  // Anyone may ask a region to unfold — the index's own rows, and the job
+  // ticket's Pieces/Money/Dates rows, which are not inside this hook. Whoever
+  // asks, the reading line commits to the target for the length of the scroll
+  // instead of walking every region the smooth scroll passes; there is one
+  // lock, and it lives with the line it locks.
+  useEffect(() => {
+    const onUnfold = (event: Event) => {
+      const key = (event as CustomEvent<{ region?: DocumentIndexKey }>).detail
+        ?.region;
+      if (!key) return;
       setActiveKey(key);
       lockRef.current = key;
       if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
       lockTimerRef.current = setTimeout(() => {
         lockRef.current = null;
       }, JUMP_LOCK_MS);
+    };
+    window.addEventListener(UNFOLD_REGION_EVENT, onUnfold);
+    return () => window.removeEventListener(UNFOLD_REGION_EVENT, onUnfold);
+  }, []);
 
-      const reduceMotion = window.matchMedia?.(
-        '(prefers-reduced-motion: reduce)',
-      ).matches;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const root = document.querySelector(regionAnchorSelector(key));
-          root?.scrollIntoView({
-            block: 'start',
-            behavior: reduceMotion ? 'auto' : 'smooth',
-          });
-          const heading = document.getElementById(
-            regionHeadingId(key, projectId),
-          );
-          (heading ?? (root as HTMLElement | null))?.focus?.({
-            preventScroll: true,
-          });
-        });
-      });
+  const jump = useCallback(
+    (key: DocumentIndexKey) => {
+      // A folded region has no body to land in — ask it to open first, then
+      // scroll once the paint that mounted it has happened. The lock rides on
+      // the request above.
+      requestRegionUnfold(key);
+      scrollToRegion(key, projectId);
     },
     [projectId],
   );
 
   return { activeKey, jump };
+}
+
+/**
+ * Land on a region: scroll its root into view and put focus on its heading,
+ * after the paint that mounted a just-unfolded body. Exported because the job
+ * ticket performs the same act from outside this hook — one copy, so the two
+ * cannot drift.
+ */
+export function scrollToRegion(
+  key: DocumentIndexKey,
+  projectId: string,
+): void {
+  const reduceMotion = window.matchMedia?.(
+    '(prefers-reduced-motion: reduce)',
+  ).matches;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const root = document.querySelector(regionAnchorSelector(key));
+      root?.scrollIntoView({
+        block: 'start',
+        behavior: reduceMotion ? 'auto' : 'smooth',
+      });
+      const heading = document.getElementById(regionHeadingId(key, projectId));
+      (heading ?? (root as HTMLElement | null))?.focus?.({
+        preventScroll: true,
+      });
+    });
+  });
 }

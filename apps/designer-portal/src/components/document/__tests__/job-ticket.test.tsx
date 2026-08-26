@@ -4,7 +4,11 @@ import {
   LETTERHEAD_SENTINEL_ID,
 } from '@/components/document/job-ticket';
 import { RoomLensProvider } from '@/components/document/room-lens-context';
-import type { TicketRow, TicketSeam } from '@/lib/document/ticket-derivation';
+import type {
+  TicketHead,
+  TicketRow,
+  TicketSeam,
+} from '@/lib/document/ticket-derivation';
 
 type ObserverCallback = (entries: { isIntersecting: boolean }[]) => void;
 
@@ -48,6 +52,7 @@ const ROWS: TicketRow[] = [
     key: 'rooms',
     label: 'Rooms',
     value: '4 rooms · 36 lines',
+    emphasis: null,
     door: {
       kind: 'expand',
       rooms: [
@@ -61,6 +66,7 @@ const ROWS: TicketRow[] = [
     key: 'pieces',
     label: 'Pieces',
     value: '29 ordered · 1 damaged',
+    emphasis: '1 damaged',
     door: { kind: 'unfold-region', region: 'ffe' },
     exception: {
       rank: 'money-at-risk',
@@ -72,6 +78,7 @@ const ROWS: TicketRow[] = [
     key: 'drawings',
     label: 'Drawings',
     value: 'Nothing filed',
+    emphasis: null,
     door: { kind: 'leaf', shelf: 'planroom' },
     exception: null,
   },
@@ -79,6 +86,7 @@ const ROWS: TicketRow[] = [
     key: 'spec',
     label: 'Spec',
     value: '34 of 36 specified · by room',
+    emphasis: null,
     door: { kind: 'leaf', shelf: 'specbook' },
     exception: null,
   },
@@ -86,6 +94,7 @@ const ROWS: TicketRow[] = [
     key: 'boards',
     label: 'Boards',
     value: 'No boards yet · start one',
+    emphasis: null,
     door: { kind: 'leaf', shelf: 'moodboards' },
     exception: null,
   },
@@ -93,6 +102,7 @@ const ROWS: TicketRow[] = [
     key: 'money',
     label: 'Money',
     value: '$141,600 ordered · $17,500 owed you, 22 days',
+    emphasis: '$17,500 owed you, 22 days',
     door: { kind: 'unfold-region', region: 'money' },
     exception: {
       rank: 'promise-past-due',
@@ -104,6 +114,7 @@ const ROWS: TicketRow[] = [
     key: 'dates',
     label: 'Dates',
     value: 'Install Tuesday, September 15 · three weeks out',
+    emphasis: null,
     door: { kind: 'unfold-region', region: 'schedule' },
     exception: null,
   },
@@ -111,6 +122,7 @@ const ROWS: TicketRow[] = [
     key: 'people',
     label: 'People',
     value: 'Nobody on it yet',
+    emphasis: null,
     door: { kind: 'overlay', overlay: 'call-sheet', available: true },
     exception: null,
   },
@@ -119,6 +131,11 @@ const ROWS: TicketRow[] = [
 const SEAM: TicketSeam = {
   identity: 'The job · Project · Procurement & Orders 4 of 6',
   exceptions: '1 damaged · $17,500 owed you',
+};
+
+const HEAD: TicketHead = {
+  subject: 'The job · Project',
+  phase: 'Procurement & Orders · 4 of 6',
 };
 
 function renderTicket(props: Partial<Parameters<typeof JobTicket>[0]> = {}) {
@@ -131,6 +148,7 @@ function renderTicket(props: Partial<Parameters<typeof JobTicket>[0]> = {}) {
       <JobTicket
         rows={ROWS}
         seam={SEAM}
+        head={HEAD}
         onOpenLeaf={onOpenLeaf}
         routes={{}}
         onUnfoldRegion={onUnfoldRegion}
@@ -160,7 +178,9 @@ describe('JobTicket', () => {
       'dates',
       'people',
     ]);
-    expect(screen.getByText(SEAM.identity)).toBeInTheDocument();
+    // M2's head is two parts across the band; the seam's one line is M4's.
+    expect(screen.getByText(HEAD.subject)).toBeInTheDocument();
+    expect(screen.getByText(HEAD.phase!)).toBeInTheDocument();
     expect(screen.getByText('Nothing filed')).toBeInTheDocument();
   });
 
@@ -277,6 +297,116 @@ describe('JobTicket', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Unfold ↓' }));
     expect(ticketRows()).toHaveLength(8);
+  });
+
+  it('opens the leaf, not the route, at the full tier', () => {
+    // B1-L4's acceptance: at ≥1440 the same row that routes on a phone opens
+    // the 320px leaf beside the spine. Every other case here answers `false`
+    // to every query, so this is the only one that proves the wide branch.
+    (window.matchMedia as jest.Mock).mockImplementation((query: string) => ({
+      matches: query === '(min-width: 1440px)',
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    }));
+
+    const { onOpenLeaf } = renderTicket({
+      routes: { moodboards: '/doc/abc/boards' },
+    });
+
+    expect(screen.queryByRole('link', { name: /Boards/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Boards/ }));
+    expect(onOpenLeaf).toHaveBeenCalledWith('moodboards');
+  });
+
+  it('prints a row with no door as a fact, not a button', () => {
+    // The install and care spreads mount neither the Money region nor the
+    // Schedule, so those two rows state their figure and open nothing rather
+    // than firing an unfold nobody hears.
+    renderTicket({
+      rows: ROWS.map((row) =>
+        row.key === 'money' ? { ...row, door: { kind: 'none' as const } } : row,
+      ),
+    });
+    expect(screen.queryByRole('button', { name: /Money/ })).toBeNull();
+    const money = document.querySelector('[data-ticket-row="money"]')!;
+    expect(money).toHaveTextContent('$141,600 ordered');
+    expect(money.textContent).not.toContain('→');
+  });
+
+  it('gives the clause that is wrong the weight, in ledger order', () => {
+    renderTicket();
+    const pieces = document.querySelector('[data-ticket-row="pieces"]')!;
+    expect(pieces).toHaveTextContent('29 ordered · 1 damaged');
+    expect(pieces.querySelector('strong')).toHaveTextContent('1 damaged');
+  });
+
+  it('names what the fold and the Rooms row control', () => {
+    renderTicket();
+    const fold = screen.getByRole('button', { name: 'Fold ↑' });
+    const rowsId = fold.getAttribute('aria-controls');
+    expect(rowsId).toBeTruthy();
+    expect(document.getElementById(rowsId!)).not.toBeNull();
+
+    const rooms = screen.getByRole('button', { name: /Rooms/ });
+    fireEvent.click(rooms);
+    const chipsId = rooms.getAttribute('aria-controls');
+    expect(chipsId).toBeTruthy();
+    expect(document.getElementById(chipsId!)).not.toBeNull();
+  });
+
+  it('keeps the fold control under the reader through a fold and an unfold', () => {
+    renderTicket();
+    const fold = screen.getByRole('button', { name: 'Fold ↑' });
+    fold.focus();
+    fireEvent.click(fold);
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Unfold ↓' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Unfold ↓' }));
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Fold ↑' }),
+    );
+  });
+
+  it('catches focus when the letterhead scrolls past and the rows go', () => {
+    renderTicket();
+    const drawings = screen.getByRole('button', { name: /Drawings/ });
+    drawings.focus();
+
+    crossTheLetterhead(false);
+
+    // The row the reader was standing on is gone; focus lands on the control
+    // that brings it back, not on <body>.
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Unfold ↓' }),
+    );
+  });
+
+  it('holds the top over the schedule’s own pinned glance', () => {
+    // Both are `sticky top-0` inside the same scroll container, and the glance
+    // is later in DOM order. The seam publishes its height so the glance
+    // stands under it (globals.css) instead of painting over the map.
+    renderTicket();
+    const ticket = document.querySelector('[data-job-ticket]')!;
+    expect(ticket).toHaveClass('z-[4]');
+    expect(
+      document.documentElement.style.getPropertyValue('--doc-seam-height'),
+    ).toBe('');
+
+    crossTheLetterhead(false);
+    expect(
+      document.documentElement.style.getPropertyValue('--doc-seam-height'),
+    ).toMatch(/px$/);
+
+    crossTheLetterhead(true);
+    expect(
+      document.documentElement.style.getPropertyValue('--doc-seam-height'),
+    ).toBe('');
   });
 
   it('wears no shadow (D4)', () => {

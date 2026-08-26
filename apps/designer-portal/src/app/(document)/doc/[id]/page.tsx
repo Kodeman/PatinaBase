@@ -60,10 +60,9 @@ import { type DocumentStateRow, type SectionKey } from '@/lib/document/desk-deri
 import {
   paperRegionsForSection,
   requestRegionUnfold,
-  regionAnchorSelector,
-  regionHeadingId,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
+import { scrollToRegion } from '@/hooks/use-document-running-index';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
 import {
   deriveProposalWatch,
@@ -153,6 +152,7 @@ import {
 } from '@/components/document/job-ticket';
 import {
   deriveTicket,
+  deriveTicketHead,
   deriveTicketIdentity,
   deriveTicketSeam,
   type TicketInput,
@@ -321,6 +321,7 @@ function JobTicketMount({
   projectId,
   routeId,
   section,
+  regionSection,
   phase,
   rooms,
   roomsSettled,
@@ -337,6 +338,10 @@ function JobTicketMount({
    *  the boards route resolve, project id or engagement id alike. */
   routeId: string;
   section: SectionKey;
+  /** Which spread's regions are actually on the paper. Off the `worktable`
+   *  flag this IS `section`; with a table pinned the two differ, and a row
+   *  that unfolds a region the pinned spread never mounted opens nothing. */
+  regionSection: SectionKey;
   phase: TicketPhase | null;
   rooms: readonly TicketRoomFact[];
   roomsSettled: boolean;
@@ -374,45 +379,92 @@ function JobTicketMount({
     [ffeQuery.data],
   );
 
-  const leadingOpenInvoice =
-    computeArAging(invoicesQuery.data ?? []).openInvoices[0] ?? null;
+  const leadingOpenInvoice = useMemo(
+    () => computeArAging(invoicesQuery.data ?? []).openInvoices[0] ?? null,
+    [invoicesQuery.data],
+  );
 
   const boardsCount =
     (liveBoardsQuery.data ?? []).filter((board) => board.status !== 'archived')
       .length + (signedBoardsQuery.data ?? []).length;
 
-  const ticketInput: TicketInput = {
-    section,
-    phase,
-    rooms: { settled: roomsSettled, list: rooms },
-    pieces: { settled: !ffeQuery.isLoading, lines },
-    drawings: {
-      settled: !planRoomQuery.isLoading,
-      sheetCount: planRoomQuery.data?.sheets.length ?? 0,
-    },
-    boards: {
-      settled: !liveBoardsQuery.isLoading && !signedBoardsQuery.isLoading,
-      count: boardsCount,
-    },
-    money: {
-      settled: moneyRead.settled,
-      failed: moneyRead.failed,
-      ladder: moneyRead.ladder,
-      owedDays: leadingOpenInvoice
-        ? invoiceDaysOverdue(leadingOpenInvoice)
-        : null,
-      undrawnKind: selectUndrawnVendorPayments(purchaseOrdersQuery.data ?? [])
-        .kind,
-    },
-    dates: { settled: scheduleSettled, schedule },
-    people: { settled: rosterSettled, callSheetEnabled, rosterCount },
-  };
-  const rows = deriveTicket(ticketInput);
+  const paperRegionKeys = useMemo(
+    () => paperRegionsForSection(regionSection).map((region) => region.key),
+    [regionSection],
+  );
+
+  const ticketInput = useMemo<TicketInput>(
+    () => ({
+      section,
+      phase,
+      rooms: { settled: roomsSettled, list: rooms },
+      pieces: { settled: !ffeQuery.isLoading, lines },
+      drawings: {
+        settled: !planRoomQuery.isLoading,
+        sheetCount: planRoomQuery.data?.sheets.length ?? 0,
+      },
+      boards: {
+        settled: !liveBoardsQuery.isLoading && !signedBoardsQuery.isLoading,
+        count: boardsCount,
+      },
+      money: {
+        settled: moneyRead.settled,
+        failed: moneyRead.failed,
+        ladder: moneyRead.ladder,
+        owedDays: leadingOpenInvoice
+          ? invoiceDaysOverdue(leadingOpenInvoice)
+          : null,
+        undrawnKind: selectUndrawnVendorPayments(purchaseOrdersQuery.data ?? [])
+          .kind,
+        owedSince: leadingOpenInvoice?.due_date?.slice(0, 10) ?? null,
+      },
+      dates: { settled: scheduleSettled, schedule },
+      people: { settled: rosterSettled, callSheetEnabled, rosterCount },
+      paperRegions: paperRegionKeys,
+    }),
+    [
+      section,
+      phase,
+      roomsSettled,
+      rooms,
+      ffeQuery.isLoading,
+      lines,
+      planRoomQuery.isLoading,
+      planRoomQuery.data,
+      liveBoardsQuery.isLoading,
+      signedBoardsQuery.isLoading,
+      boardsCount,
+      moneyRead.settled,
+      moneyRead.failed,
+      moneyRead.ladder,
+      leadingOpenInvoice,
+      purchaseOrdersQuery.data,
+      scheduleSettled,
+      schedule,
+      rosterSettled,
+      callSheetEnabled,
+      rosterCount,
+      paperRegionKeys,
+    ],
+  );
+
+  // The top of the paper on every project document, under six live queries:
+  // the derivation runs when a fact changes, not on every render one of them
+  // causes.
+  const ticket = useMemo(() => {
+    const rows = deriveTicket(ticketInput);
+    return {
+      rows,
+      seam: deriveTicketSeam(rows, deriveTicketIdentity(ticketInput)),
+      head: deriveTicketHead(ticketInput),
+    };
+  }, [ticketInput]);
 
   return (
     <JobTicket
-      rows={rows}
-      seam={deriveTicketSeam(rows, deriveTicketIdentity(ticketInput))}
+      rows={ticket.rows}
+      seam={ticket.seam}
+      head={ticket.head}
       onOpenLeaf={onOpenLeaf}
       routes={{
         planroom: shelfRouteFor('planroom', routeId) ?? undefined,
@@ -769,29 +821,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // routes it to the shelf's own page instead, so the reader arrives at what
   // they opened rather than at nothing.
 
-  // The region a ticket row unfolds — the wire the running index already uses,
-  // then the scroll, once the paint that mounted the body has happened.
+  // The region a ticket row unfolds — the same request and the same landing the
+  // running index's own rows make, so a jump from the ticket and a jump from
+  // the index take the reading line to the same place by the same act.
   const unfoldRegion = useCallback(
     (key: DocumentIndexKey) => {
       requestRegionUnfold(key);
-      const reduceMotion = window.matchMedia?.(
-        '(prefers-reduced-motion: reduce)',
-      ).matches;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const root = document.querySelector(regionAnchorSelector(key));
-          root?.scrollIntoView({
-            block: 'start',
-            behavior: reduceMotion ? 'auto' : 'smooth',
-          });
-          const heading = document.getElementById(
-            regionHeadingId(key, row?.project_id ?? ''),
-          );
-          (heading ?? (root as HTMLElement | null))?.focus?.({
-            preventScroll: true,
-          });
-        });
-      });
+      scrollToRegion(key, row?.project_id ?? '');
     },
     [row?.project_id],
   );
@@ -1405,6 +1441,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             projectId={row.project_id}
             routeId={id}
             section={row.active_section}
+            regionSection={spreadSection}
             phase={ticketPhase}
             rooms={docRooms ?? []}
             roomsSettled={docRoomsSettled}
@@ -1939,7 +1976,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           projectId={row.project_id}
           routeId={id}
           rooms={docRooms ?? []}
-          canCreateBoards={row.active_section === 'project'}
+          /* The ticket's `Boards` row means one act at every width and on
+             every project-kind spread; the leaf answers as its page does. */
+          canCreateBoards={row.engagement_kind === 'project'}
         />
       )}
 

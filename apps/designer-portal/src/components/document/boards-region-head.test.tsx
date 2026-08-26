@@ -73,7 +73,7 @@ beforeEach(() => {
   useProjectReviewAttention.mockReturnValue({ data: [], isLoading: false, isError: false });
 });
 
-describe('Mood boards region head', () => {
+describe('Boards region head', () => {
   it('inks exactly one ledger leader when open with a live board', () => {
     useProjectOwnedBoards.mockReturnValue({ data: [live], isLoading: false, isError: false });
     render(<ProjectMoodBoards projectId="project-1" />);
@@ -91,10 +91,10 @@ describe('Mood boards region head', () => {
     render(<ProjectMoodBoards projectId="project-1" />);
 
     expect(
-      screen.queryByRole('heading', { name: 'Mood boards' }),
+      screen.queryByRole('heading', { name: 'Boards' }),
     ).not.toBeInTheDocument();
     const seam = screen.getByRole('button', {
-      name: 'Mood boards no boards yet unfold ↓',
+      name: 'Boards no boards yet unfold ↓',
     });
     expect(seam).toBeInTheDocument();
     expect(seam).toHaveAttribute('aria-expanded', 'false');
@@ -103,11 +103,11 @@ describe('Mood boards region head', () => {
   it('round-trips the seam: unfolding mounts the head and body', () => {
     render(<ProjectMoodBoards projectId="project-1" />);
 
-    const seam = screen.getByRole('button', { name: /mood boards/i });
+    const seam = screen.getByRole('button', { name: /boards/i });
     fireEvent.click(seam);
 
     expect(
-      screen.getByRole('heading', { name: 'Mood boards' }),
+      screen.getByRole('heading', { name: 'Boards' }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/Start the project.s visual direction/),

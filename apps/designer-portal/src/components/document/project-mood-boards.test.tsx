@@ -148,7 +148,7 @@ describe('ProjectMoodBoards', () => {
     render(<ProjectMoodBoards projectId="project-1" />);
 
     // Boards are empty, so the region defaults folded shut — unfold the seam first.
-    fireEvent.click(screen.getByRole('button', { name: /mood boards/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Boards/ }));
     fireEvent.click(screen.getAllByRole('button', { name: 'Start a board' })[0]);
     expect(screen.getByTestId('boards-builder')).toHaveTextContent('Boards for project-1');
   });
@@ -209,7 +209,7 @@ describe('ProjectMoodBoards', () => {
     });
     useProjectFFEItems.mockReturnValue({ data: undefined, isLoading: true, isError: false });
     render(<ProjectMoodBoards projectId="project-1" />);
-    expect(screen.getByLabelText('Mood boards')).toBeInTheDocument();
+    expect(screen.getByLabelText('Boards')).toBeInTheDocument();
     expect(screen.queryByText('Old board')).not.toBeInTheDocument();
   });
 

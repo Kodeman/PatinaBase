@@ -19,17 +19,37 @@
  * Below 1180 the ticket opens AT REST as the seam and unfolds to the eight
  * rows; at or above it opens unfolded. Either way the reader's own fold is
  * honoured until the pin state changes underneath it.
+ *
+ * z-[4], and the pinned seam's height is published as `--doc-seam-height`: the
+ * schedule's own pinned glance is `sticky top-0` too, and stands under the seam
+ * rather than painting over the map the reader is steering by.
  */
 
-import { useEffect, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type { ReactNode } from 'react';
 import type { DocumentIndexKey } from '@/lib/document/document-index';
 import type { ShelfLeafKey } from '@/lib/document/shelves';
-import type { TicketRow, TicketSeam } from '@/lib/document/ticket-derivation';
+import type {
+  TicketHead,
+  TicketRow,
+  TicketSeam,
+} from '@/lib/document/ticket-derivation';
 import { useRoomLens } from './room-lens-context';
 
 /** The id the page gives the element it renders directly under the letterhead. */
 export const LETTERHEAD_SENTINEL_ID = 'doc-letterhead-sentinel';
+
+/** How far down the paper the schedule's pinned glance stands while the seam
+ *  holds the top. Read by `globals.css`; cleared when the seam is not pinned. */
+const SEAM_HEIGHT_VAR = '--doc-seam-height';
 
 /** At or above this the shelf leaf stands beside the spine; below it the row
  *  goes to the leaf's own page (B1-L2's route mode). */
@@ -42,6 +62,8 @@ export interface JobTicketProps {
   rows: readonly TicketRow[];
   /** `deriveTicketSeam(rows, deriveTicketIdentity(input))`. */
   seam: TicketSeam;
+  /** `deriveTicketHead(input)` — M2's two-part band head. */
+  head: TicketHead;
   /** ≥1440 — open the 320px leaf beside the spine (the `onToggleShelf`
    *  contract the spine's shelves block used). */
   onOpenLeaf: (shelf: ShelfLeafKey) => void;
@@ -69,26 +91,66 @@ const DOOR_CLASS = 'shrink-0 font-mono text-[11px] text-[var(--color-aged-oak)]'
 const FOLD_CLASS =
   'shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
-function useMediaMatch(query: string): boolean {
-  const [matches, setMatches] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const media = window.matchMedia?.(query);
-    if (!media) return;
-    setMatches(media.matches);
-    const onChange = () => setMatches(media.matches);
-    media.addEventListener('change', onChange);
-    return () => media.removeEventListener('change', onChange);
-  }, [query]);
-  return matches;
+const META_CLASS =
+  'font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
+
+/** M4's `.b-seam2-l1` — the seam's identity is set in the primary ink, not the
+ *  quiet one the band's head wears. Two utilities of the same property in one
+ *  class attribute do not resolve by order, so this is its own string. */
+const SEAM_IDENTITY_CLASS =
+  'font-mono text-[10.5px] uppercase tracking-[0.09em] text-[var(--color-charcoal)]';
+
+/**
+ * The tier, read on the FIRST render rather than corrected by an effect: a
+ * `false` first paint prints the narrow form of every leaf row at 1440 and the
+ * eight-row form at 390, and a press landing before the effect goes to the
+ * wrong door. `useSyncExternalStore` is what lets the server and the client
+ * disagree here without a hydration warning.
+ */
+function useMediaMatch(query: string, whenUnknown: boolean): boolean {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const media =
+        typeof window === 'undefined' ? null : window.matchMedia?.(query);
+      if (!media?.addEventListener) return () => {};
+      media.addEventListener('change', onChange);
+      return () => media.removeEventListener('change', onChange);
+    },
+    [query],
+  );
+  const read = useCallback(() => {
+    const media =
+      typeof window === 'undefined' ? null : window.matchMedia?.(query);
+    return media ? media.matches : whenUnknown;
+  }, [query, whenUnknown]);
+  const server = useCallback(() => whenUnknown, [whenUnknown]);
+  return useSyncExternalStore(subscribe, read, server);
+}
+
+/** The row's sentence, with the clause that carries what is wrong given the
+ *  weight M2 gives it (`.b-tk-value .b-x`) — the census keeps ledger order. */
+function RowValue({ row }: { row: TicketRow }) {
+  const at = row.emphasis ? row.value.indexOf(row.emphasis) : -1;
+  if (!row.emphasis || at < 0) return <span className={VALUE_CLASS}>{row.value}</span>;
+  return (
+    <span className={VALUE_CLASS}>
+      {row.value.slice(0, at)}
+      <strong className="font-medium text-[var(--color-charcoal)]">
+        {row.emphasis}
+      </strong>
+      {row.value.slice(at + row.emphasis.length)}
+    </span>
+  );
 }
 
 function RowBody({ row }: { row: TicketRow }) {
-  const hasDoor = row.door.kind !== 'overlay' || row.door.available;
+  const hasDoor =
+    row.door.kind !== 'none' &&
+    (row.door.kind !== 'overlay' || row.door.available);
   return (
     <>
       <span className={LABEL_CLASS}>{row.label}</span>
-      <span className={VALUE_CLASS}>{row.value}</span>
+      <RowValue row={row} />
       {hasDoor && (
         <span aria-hidden className={DOOR_CLASS}>
           →
@@ -101,6 +163,7 @@ function RowBody({ row }: { row: TicketRow }) {
 export function JobTicket({
   rows,
   seam,
+  head,
   onOpenLeaf,
   routes,
   onUnfoldRegion,
@@ -108,11 +171,21 @@ export function JobTicket({
   letterheadSentinel = LETTERHEAD_SENTINEL_ID,
 }: JobTicketProps) {
   const { heldRoomId, toggleRoom } = useRoomLens();
-  const wide = useMediaMatch(LEAF_QUERY);
-  const seamAtRest = useMediaMatch(SEAM_AT_REST_QUERY);
+  const wide = useMediaMatch(LEAF_QUERY, true);
+  const seamAtRest = useMediaMatch(SEAM_AT_REST_QUERY, false);
   const [pinned, setPinned] = useState(false);
   const [fold, setFold] = useState<boolean | null>(null);
   const [roomsOpen, setRoomsOpen] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
+  const foldRef = useRef<HTMLButtonElement>(null);
+  // Whether the reader is standing inside the ticket. Read on the fold, not
+  // asked of `document.activeElement`: by the time the effect runs the row
+  // they were on has already been unmounted and the browser has parked focus
+  // on <body>, which is indistinguishable from never having been here.
+  const focusWithin = useRef(false);
+  const ids = useId();
+  const rowsId = `${ids}-rows`;
+  const chipsId = `${ids}-rooms`;
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -129,11 +202,34 @@ export function JobTicket({
 
   // The reader's own fold is theirs until the letterhead crosses the edge —
   // then the ticket collapses in place, and unfolding again is a fresh choice.
+  // A reader standing on a row when that happens has that row unmounted under
+  // them, so focus lands on the control that puts the rows back rather than on
+  // <body>; its label and aria-expanded state are the announcement.
   useEffect(() => {
     setFold(null);
+    const active = document.activeElement;
+    const stillInside =
+      active instanceof HTMLElement && sectionRef.current?.contains(active);
+    if (!focusWithin.current || stillInside) return;
+    foldRef.current?.focus();
   }, [pinned]);
 
   const unfolded = fold ?? (!pinned && !seamAtRest);
+
+  // The schedule's pinned glance sticks to the same top-0 the seam does. It
+  // reads this to stand under the seam instead of over it.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (!pinned || unfolded) {
+      root.style.removeProperty(SEAM_HEIGHT_VAR);
+      return undefined;
+    }
+    const height = sectionRef.current?.getBoundingClientRect().height ?? 0;
+    root.style.setProperty(SEAM_HEIGHT_VAR, `${Math.round(height)}px`);
+    return () => {
+      root.style.removeProperty(SEAM_HEIGHT_VAR);
+    };
+  }, [pinned, unfolded, seam.identity, seam.exceptions]);
 
   const renderRow = (row: TicketRow): ReactNode => {
     const door = row.door;
@@ -180,11 +276,14 @@ export function JobTicket({
         ) : (
           <div className={ROW_CLASS}>{body}</div>
         );
+      case 'none':
+        return <div className={ROW_CLASS}>{body}</div>;
       case 'expand':
         return (
           <button
             type="button"
             aria-expanded={roomsOpen}
+            aria-controls={chipsId}
             onClick={() => setRoomsOpen((open) => !open)}
             className={ROW_CLASS}
           >
@@ -196,103 +295,116 @@ export function JobTicket({
 
   return (
     <section
+      ref={sectionRef}
       aria-label="The job"
       data-job-ticket=""
       data-pinned={pinned ? 'true' : undefined}
       data-unfolded={unfolded ? 'true' : undefined}
-      className="sticky top-0 z-[3] border-y border-[var(--color-pearl)] bg-[var(--doc-paper)] py-2.5"
+      onFocus={() => {
+        focusWithin.current = true;
+      }}
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && sectionRef.current?.contains(next)) return;
+        focusWithin.current = false;
+      }}
+      className="sticky top-0 z-[4] border-y border-[var(--color-pearl)] bg-[var(--doc-paper)] py-2.5"
     >
-      {unfolded ? (
-        <>
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="min-w-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-              {seam.identity}
-            </p>
-            <button
-              type="button"
-              aria-expanded
-              onClick={() => setFold(false)}
-              className={FOLD_CLASS}
+      {/* The head and the fold control keep ONE position in the tree across
+          both forms, so the control the reader is standing on is not unmounted
+          under them every time the ticket folds. */}
+      <div
+        className={`flex justify-between gap-3 ${
+          unfolded ? 'items-baseline' : 'items-end'
+        }`}
+      >
+        <div className="min-w-0 flex-1">
+          {unfolded ? (
+            <div className="flex items-baseline justify-between gap-4">
+              <span className={META_CLASS}>{head.subject}</span>
+              {head.phase && (
+                <span className={`${META_CLASS} text-right`}>{head.phase}</span>
+              )}
+            </div>
+          ) : (
+            <>
+              <p className={SEAM_IDENTITY_CLASS}>{seam.identity}</p>
+              <p className="mt-1 min-w-0 text-[13.5px] font-medium leading-snug text-[var(--color-charcoal)]">
+                {seam.exceptions}
+              </p>
+            </>
+          )}
+        </div>
+        <button
+          ref={foldRef}
+          type="button"
+          aria-expanded={unfolded}
+          aria-controls={rowsId}
+          onClick={() => setFold(!unfolded)}
+          className={FOLD_CLASS}
+        >
+          {unfolded ? 'Fold ↑' : 'Unfold ↓'}
+        </button>
+      </div>
+
+      {unfolded && (
+        <div id={rowsId} className="mt-1.5">
+          {rows.map((row) => (
+            <div
+              key={row.key}
+              data-ticket-row={row.key}
+              className="border-b border-[rgba(44,41,38,0.10)] last:border-b-0"
             >
-              Fold ↑
-            </button>
-          </div>
-          <div className="mt-1.5">
-            {rows.map((row) => (
-              <div
-                key={row.key}
-                data-ticket-row={row.key}
-                className="border-b border-[rgba(44,41,38,0.10)] last:border-b-0"
-              >
-                {renderRow(row)}
-                {row.door.kind === 'expand' && roomsOpen && (
-                  <div
-                    role="group"
-                    aria-label="Rooms on this job"
-                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pb-2 pl-[5.5rem]"
-                  >
-                    {row.door.rooms.length === 0 ? (
-                      <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-                        No rooms yet
-                      </p>
-                    ) : (
-                      row.door.rooms.map((chip) => {
-                        const held = chip.id === heldRoomId;
-                        return (
-                          <button
-                            key={chip.id}
-                            type="button"
-                            aria-pressed={held}
-                            data-room-chip={chip.id}
-                            onClick={() => toggleRoom(chip.id)}
-                            className={`-mx-1 flex items-baseline gap-1.5 px-1 py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
-                              held ? 'doc-room-lifted' : ''
+              {renderRow(row)}
+              {row.door.kind === 'expand' && roomsOpen && (
+                <div
+                  id={chipsId}
+                  role="group"
+                  aria-label="Rooms on this job"
+                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pb-2 pl-[5.5rem]"
+                >
+                  {row.door.rooms.length === 0 ? (
+                    <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                      No rooms yet
+                    </p>
+                  ) : (
+                    row.door.rooms.map((chip) => {
+                      const held = chip.id === heldRoomId;
+                      return (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          aria-pressed={held}
+                          data-room-chip={chip.id}
+                          onClick={() => toggleRoom(chip.id)}
+                          className={`-mx-1 flex items-baseline gap-1.5 px-1 py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                            held ? 'doc-room-lifted' : ''
+                          }`}
+                        >
+                          <span
+                            className={`text-[13px] leading-tight text-[var(--color-charcoal)] ${
+                              held ? 'font-semibold' : ''
                             }`}
                           >
-                            <span
-                              className={`text-[13px] leading-tight text-[var(--color-charcoal)] ${
-                                held ? 'font-semibold' : ''
-                              }`}
-                            >
-                              {chip.name}
+                            {chip.name}
+                          </span>
+                          <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                            {chip.lineCount}
+                          </span>
+                          {held && (
+                            <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-charcoal)]">
+                              · In hand
                             </span>
-                            <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
-                              {chip.lineCount}
-                            </span>
-                            {held && (
-                              <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-charcoal)]">
-                                · In hand
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-            {seam.identity}
-          </p>
-          <div className="mt-1 flex items-baseline justify-between gap-3">
-            <p className="min-w-0 text-[13.5px] leading-snug text-[var(--color-charcoal)]">
-              {seam.exceptions}
-            </p>
-            <button
-              type="button"
-              aria-expanded={false}
-              onClick={() => setFold(true)}
-              className={FOLD_CLASS}
-            >
-              Unfold ↓
-            </button>
-          </div>
-        </>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </section>
   );

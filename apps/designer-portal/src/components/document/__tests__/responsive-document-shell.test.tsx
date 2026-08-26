@@ -24,6 +24,7 @@ import type { SectionKey } from '@/lib/document/desk-derivation';
 import type { MoneyLadder, MoneyRung } from '@/lib/document/money-ladder';
 import {
   deriveTicket,
+  deriveTicketHead,
   deriveTicketIdentity,
   deriveTicketSeam,
   type TicketInput,
@@ -602,6 +603,7 @@ function ticketInputFor(section: SectionKey): TicketInput {
       ladder: ticketLadder(),
       owedDays: null,
       undrawnKind: null,
+      owedSince: null,
     },
     dates: { settled: true, schedule: null },
     people: { settled: true, callSheetEnabled: true, rosterCount: 0 },
@@ -627,6 +629,7 @@ function TicketPaper({ section }: { section: SectionKey }) {
       <JobTicket
         rows={rows}
         seam={deriveTicketSeam(rows, deriveTicketIdentity(input))}
+        head={deriveTicketHead(input)}
         onOpenLeaf={jest.fn()}
         routes={{}}
         onUnfoldRegion={jest.fn()}
