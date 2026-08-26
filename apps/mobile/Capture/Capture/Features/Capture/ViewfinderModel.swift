@@ -450,7 +450,12 @@ final class ViewfinderModel {
     var micIsAvailable: Bool { featureFlags.isEnabled("field-companion-voice") }
 
     func beginCardNote(affirmed: Bool) {
-        guard micIsAvailable, !isRecordingCardNote, let specimen = cardSpecimen else { return }
+        // `mode != .voice`: C6 builds its OWN recorder as a child of this
+        // screen, so a card still on screen when she swipes to VOICE puts two
+        // recorders on `AVAudioSession.sharedInstance()` — and whichever
+        // `finish()` lands second deactivates the session under the other.
+        guard micIsAvailable, !isRecordingCardNote, mode != .voice,
+              let specimen = cardSpecimen else { return }
         // FC-R11 (Ruling 4): a conversation note does not start until she taps.
         guard !FieldAffirmationPolicy.recordingIsBlocked(
             noteSetting: specimen.noteSetting, affirmed: affirmed) else { return }

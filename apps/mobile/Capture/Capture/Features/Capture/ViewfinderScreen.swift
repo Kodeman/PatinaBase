@@ -40,11 +40,16 @@ struct ViewfinderScreen: View {
                 .contentShape(Rectangle())
                 .gesture(navigationGesture)
 
-            ViewfinderFramingGuides(
-                roll: model.roll, isLevel: model.isLevel,
-                showGrid: model.gridOn, reduceMotion: reduceMotion
-            )
-            .allowsHitTesting(false)
+            // C1's photo chrome, and only C1's: VOICE frames nothing and
+            // levels nothing, so a rule-of-thirds grid and corner brackets over
+            // it are the same false promise the suppressed shutter row was.
+            if model.mode != .voice {
+                ViewfinderFramingGuides(
+                    roll: model.roll, isLevel: model.isLevel,
+                    showGrid: model.gridOn, reduceMotion: reduceMotion
+                )
+                .allowsHitTesting(false)
+            }
 
             VStack(spacing: 0) {
                 topBar
@@ -108,9 +113,11 @@ struct ViewfinderScreen: View {
             // C6 is a camera MODE, not a route, so `CaptureDeepLink.drive` has
             // no destination to present for it — without this hop the sweep
             // would file a PNG of C1 under `screen.C6.voice`.
-            if AppConfiguration.initialScreenRaw.map({
-                CaptureScreenID.c6Voice.rawValue.hasSuffix($0)
-            }) == true {
+            // Matched against the FULL harness token — the tail of
+            // `CaptureScreenID.c6Voice.rawValue`, which is what the sweep
+            // passes. `hasSuffix($0)` was true for the empty string, so a bare
+            // `-CaptureScreen` booted silently into voice mode.
+            if AppConfiguration.initialScreenRaw == "C6.voice" {
                 await model.select(.voice)
             }
             reachability.start {
@@ -185,7 +192,9 @@ struct ViewfinderScreen: View {
             if model.isLowLight {
                 ViewfinderLowLightHint(action: model.toggleTorch)
             }
-            ViewfinderLevelReadout(isLevel: model.isLevel)
+            if model.mode != .voice {
+                ViewfinderLevelReadout(isLevel: model.isLevel)
+            }
             ViewfinderModeSelector(mode: model.mode) { newMode in
                 Task { await model.select(newMode) }
             }

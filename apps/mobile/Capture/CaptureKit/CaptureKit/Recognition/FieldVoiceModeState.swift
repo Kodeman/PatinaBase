@@ -49,6 +49,14 @@ public enum FieldVoiceModeCopy {
     }
 
     public static let capReached = VoiceNoteCopy.capReached
+
+    /// C6's control is gated on a flag that answers null on every device build,
+    /// so without this the large white mic did nothing, changed nothing and
+    /// said nothing — and "the app is broken" was the only reading left, with a
+    /// client in the room. Names no flag and no mechanism, and offers the four
+    /// modes that DO work rather than a promise it cannot keep.
+    public static let unavailable =
+        "Voice notes aren't ready yet. Pick another mode to keep capturing."
 }
 
 public enum FieldVoiceModeMachine {

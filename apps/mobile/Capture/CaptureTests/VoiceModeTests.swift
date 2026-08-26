@@ -96,6 +96,19 @@ struct VoiceModeTests {
                 == .recording(elapsed: 1_149))
     }
 
+    @Test func anUnavailableRecorderDeclinesOutLoudInsteadOfGoingQuiet() {
+        #expect(FieldVoiceModeCopy.unavailable
+                == "Voice notes aren't ready yet. Pick another mode to keep capturing.")
+        // Never the flag, never the mechanism, never "AI".
+        let words = FieldVoiceModeCopy.unavailable.lowercased()
+            .split(whereSeparator: { !$0.isLetter && $0 != "-" })
+            .map(String.init)
+        #expect(!words.contains("ai"))
+        for banned in ["flag", "field-companion", "beta", "enable", "toggle", "permission"] {
+            #expect(!FieldVoiceModeCopy.unavailable.lowercased().contains(banned))
+        }
+    }
+
     @Test func noVoiceModeCopyEverSaysInbox() {
         let lines = [
             FieldVoiceModeCopy.idleLine(visitLabel: nil),
@@ -104,7 +117,8 @@ struct VoiceModeTests {
             FieldVoiceModeCopy.line(for: .recording(elapsed: 1)),
             FieldVoiceModeCopy.line(for: .interrupted),
             FieldVoiceModeCopy.line(for: .transcriptUnavailable(elapsed: 1)),
-            FieldVoiceModeCopy.capReached
+            FieldVoiceModeCopy.capReached,
+            FieldVoiceModeCopy.unavailable
         ]
         for line in lines { #expect(!line.lowercased().contains("inbox")) }
     }

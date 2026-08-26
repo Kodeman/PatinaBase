@@ -45,6 +45,12 @@ final class C6VoiceModel {
         self.visit = visit
     }
 
+    /// The recorder is gated on a flag that evaluates null on every device
+    /// build today, so this is the difference between a control that declines
+    /// and one that silently does nothing. C3 hides its mic and N4 falls to a
+    /// typed note; C6 IS the screen, so it says so.
+    var isAvailable: Bool { featureFlags.isEnabled("field-companion-voice") }
+
     var isRecording: Bool {
         switch state {
         case .recording, .transcriptUnavailable: return true
@@ -57,17 +63,20 @@ final class C6VoiceModel {
         return CaptureVisitDraft(kind: kind, kit: context.kit).defaultNoteSetting
     }
 
-    func toggle(affirmed: Bool) {
+    func toggle(affirmed: Bool) async {
         if isRecording {
-            stop()
+            await stop()
         } else if !FieldAffirmationPolicy.recordingIsBlocked(noteSetting: noteSetting,
                                                              affirmed: affirmed) {
             start()
         }
     }
 
+    /// `!isRecording` is the re-entrancy guard `ViewfinderModel.beginCardNote`
+    /// already carries: a second `start()` would strand the first recorder's
+    /// stream task and file handle with nothing left holding them.
     func start() {
-        guard featureFlags.isEnabled("field-companion-voice") else { return }
+        guard isAvailable, !isRecording else { return }
         started = Date()
         segmentCount = 0
         transcript = ""
@@ -95,6 +104,7 @@ final class C6VoiceModel {
     }
 
     private func startTicker() {
+        ticker?.cancel()
         ticker = Task { [weak self] in
             while let self, !Task.isCancelled, self.isRecording {
                 try? await Task.sleep(for: .seconds(1))
@@ -107,36 +117,44 @@ final class C6VoiceModel {
                 self.segmentCount = FieldVoiceModeMachine.segments(forElapsed: elapsed)
                 self.state = FieldVoiceModeMachine.next(self.state, elapsed: elapsed,
                                                         segments: self.segmentCount)
-                if self.state == .capped { self.stop() }
+                if self.state == .capped {
+                    // Detach the handle FIRST. `stop()` cancels `ticker`, and
+                    // this IS that task — cancelling it mid-await would abandon
+                    // the commit and lose the note the cap just ended.
+                    self.ticker = nil
+                    await self.stop()
+                    return
+                }
             }
         }
     }
 
-    func stop() {
+    /// Awaitable because `finish()` is what actually stops the microphone.
+    /// Spawning it left the state saying "Paused" for a main-actor turn while
+    /// the tap was still writing audio, so no caller could honestly claim the
+    /// engine was down before it said so.
+    func stop() async {
         task?.cancel(); ticker?.cancel()
         let partial = transcript
         let wasCapped = state == .capped
         if !wasCapped { state = .idle }
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            // FC-R9: `finish()` is what tears the engine and the audio session
-            // down, so it is awaited BEFORE any early return. The owner guard
-            // used to sit in front of it, which left a signed-out or mock
-            // session recording after she tapped Stop — the same hole
-            // `ViewfinderModel.endCardNote()` documents having closed for C3.
-            let result = await self.voice.finish()
-            let text = result.transcript.isEmpty ? partial : result.transcript
-            let hasAudio = result.audioFilename != nil || !result.audioSegments.isEmpty
-            guard !text.isEmpty || hasAudio else {
-                self.analytics.event("voice.empty_transcript", ["had_audio": "false"])
-                return
-            }
-            if text.isEmpty {
-                self.analytics.event("voice.empty_transcript", ["had_audio": "true"])
-            }
-            guard let owner = self.owner else { return }
-            await self.commit(result, text: text, owner: owner)
+        // FC-R9: `finish()` is what tears the engine and the audio session
+        // down, so it is awaited BEFORE any early return. The owner guard
+        // used to sit in front of it, which left a signed-out or mock
+        // session recording after she tapped Stop — the same hole
+        // `ViewfinderModel.endCardNote()` documents having closed for C3.
+        let result = await voice.finish()
+        let text = result.transcript.isEmpty ? partial : result.transcript
+        let hasAudio = result.audioFilename != nil || !result.audioSegments.isEmpty
+        guard !text.isEmpty || hasAudio else {
+            analytics.event("voice.empty_transcript", ["had_audio": "false"])
+            return
         }
+        if text.isEmpty {
+            analytics.event("voice.empty_transcript", ["had_audio": "true"])
+        }
+        guard let owner else { return }
+        await commit(result, text: text, owner: owner)
     }
 
     /// The note itself. `voice.finish` is NOT emitted here — `SpeechVoiceNoteService`
@@ -174,11 +192,23 @@ final class C6VoiceModel {
     }
 
     /// FC-R9: no background audio. Lock or backgrounding pauses honestly.
-    func interrupt() {
+    func interrupt() async {
         guard isRecording else { return }
         analytics.event("voice.interrupted", ["reason": "backgrounded"])
-        stop()
+        await stop()
         state = .interrupted
+    }
+
+    /// The view is being destroyed mid-recording — the mode selector or a
+    /// left/right swipe, both live while recording. Nothing else calls
+    /// `finish()` on that path (`SpeechVoiceNoteService.deinit` closes the
+    /// engine but never commits), so a twenty-minute note used to vanish on one
+    /// accidental swipe. She did not pause, she left: this commits WITHOUT
+    /// `.interrupted`, whose "Paused" copy no surviving surface would render.
+    func leave() async {
+        guard isRecording else { return }
+        analytics.event("voice.interrupted", ["reason": "left_mode"])
+        await stop()
     }
 }
 
@@ -200,18 +230,19 @@ struct C6VoiceScreen: View {
             Spacer(minLength: 8)
             if let model {
                 transcriptCard(model)
-                Text(line(for: model.state))
+                Text(line(for: model))
                     .font(CaptureType.callout)
                     .foregroundStyle(CaptureColor.paper2)
                     .multilineTextAlignment(.center)
-                if let elapsed = elapsed(for: model.state) {
+                if model.isAvailable, let elapsed = elapsed(for: model.state) {
                     Text(elapsed)
                         .font(CaptureType.monoBody)
                         .foregroundStyle(CaptureColor.paper)
                 }
                 // FC-R11 (Ruling 4): the SAME chip C3 renders, with the same
-                // gate beneath it. One component, one rule, one test.
-                if !model.isRecording {
+                // gate beneath it. One component, one rule, one test. There is
+                // nothing to consent to when the recorder cannot record.
+                if model.isAvailable, !model.isRecording {
                     FieldAffirmationChip(noteSetting: model.noteSetting, affirmed: $affirmed)
                 }
                 toggleControl(model)
@@ -224,8 +255,29 @@ struct C6VoiceScreen: View {
             container.analytics.screen(CaptureScreenID.c6Voice.rawValue)
             if model == nil { model = C6VoiceModel(container: container, visit: visit) }
         }
+        // `.background` and NOT `!= .active`: `.inactive` means frontmost but
+        // not receiving events, which Control Center, the app switcher and a
+        // screenshot all produce — each used to stop the take and commit a
+        // fragment, so one twenty-minute walk-through became several notes. A
+        // genuine backgrounding passes through `.inactive` to `.background`, so
+        // FC-R9 loses nothing.
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { model?.interrupt() }
+            if phase == .background { Task { await model?.interrupt() } }
+        }
+        // FC-R11: the chip stays tapped FOR THAT NOTE. Without this reset the
+        // second conversation note of the session — and the twentieth — started
+        // with the chip already ticked and no consent step at all, while
+        // `setNoteSetting` told the audit trail she had taken one.
+        .onChange(of: model?.isRecording ?? false) { _, recording in
+            if !recording { affirmed = false }
+        }
+        // The mode selector and the left/right swipe both stay live WHILE
+        // recording, and either destroys this view. Binding the model strongly
+        // before the Task is what keeps it — and its recorder — alive long
+        // enough to commit instead of deallocating the note.
+        .onDisappear {
+            guard let model else { return }
+            Task { await model.leave() }
         }
         .accessibilityIdentifier(CaptureScreenID.c6Voice.rawValue)
     }
@@ -247,7 +299,7 @@ struct C6VoiceScreen: View {
     /// `.transcriptUnavailable` — that state's copy names no gesture, so this
     /// control is the whole affordance for ending a twenty-minute recording.
     private func toggleControl(_ model: C6VoiceModel) -> some View {
-        Button { model.toggle(affirmed: affirmed) } label: {
+        Button { Task { await model.toggle(affirmed: affirmed) } } label: {
             ZStack {
                 Circle()
                     .fill(model.isRecording ? CaptureColor.terracotta : CaptureColor.paper)
@@ -256,20 +308,33 @@ struct C6VoiceScreen: View {
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(model.isRecording ? CaptureColor.paper : CaptureColor.ink)
             }
+            // Dimmed rather than removed: it keeps VOICE's one control where
+            // the shutter sits, and a declined control reads as "not yet"
+            // where an empty screen reads as broken.
+            .opacity(model.isAvailable ? 1 : 0.4)
         }
         .buttonStyle(.plain)
-        .disabled(FieldAffirmationPolicy.recordingIsBlocked(
-            noteSetting: model.noteSetting, affirmed: affirmed) && !model.isRecording)
-        .accessibilityLabel(model.isRecording ? "Stop" : "Tap to start")
+        .disabled(!model.isAvailable || (FieldAffirmationPolicy.recordingIsBlocked(
+            noteSetting: model.noteSetting, affirmed: affirmed) && !model.isRecording))
+        .accessibilityLabel(voiceControlLabel(model))
         .accessibilityIdentifier("voice.toggle")
+    }
+
+    private func voiceControlLabel(_ model: C6VoiceModel) -> String {
+        guard model.isAvailable else { return FieldVoiceModeCopy.unavailable }
+        return model.isRecording ? "Stop" : "Tap to start"
     }
 
     /// `FieldVoiceModeCopy.line(for: .idle)` discards the visit label by
     /// construction, and naming where the note will land BEFORE she speaks is
     /// that line's entire purpose — so the idle arm calls `idleLine` directly.
-    private func line(for state: FieldVoiceModeState) -> String {
-        state == .idle ? FieldVoiceModeCopy.idleLine(visitLabel: visitLabel)
-                       : FieldVoiceModeCopy.line(for: state)
+    /// An unavailable recorder overrides every state line: promising a landing
+    /// place for a note that cannot start is the lie this closes.
+    private func line(for model: C6VoiceModel) -> String {
+        guard model.isAvailable else { return FieldVoiceModeCopy.unavailable }
+        return model.state == .idle
+            ? FieldVoiceModeCopy.idleLine(visitLabel: visitLabel)
+            : FieldVoiceModeCopy.line(for: model.state)
     }
 
     /// The chip already carries the visit's own name; a kindless context is not
