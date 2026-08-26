@@ -155,6 +155,7 @@ import {
   deriveTicketHead,
   deriveTicketIdentity,
   deriveTicketSeam,
+  type TicketClientCopy,
   type TicketInput,
   type TicketLine,
   type TicketPhase,
@@ -162,6 +163,7 @@ import {
   type TicketRow,
 } from '@/lib/document/ticket-derivation';
 import { boardsRoutePath } from '@/lib/document/registry';
+import { deriveMoneyLadder, type MoneyLadder } from '@/lib/document/money-ladder';
 import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import { selectUndrawnVendorPayments } from '@/lib/document/vendor-payouts';
 import {
@@ -182,7 +184,6 @@ import { Scheme } from '@/components/document/worktable/scheme';
 import { BoardsStrip } from '@/components/document/worktable/boards-strip';
 import { LibraryReachIn } from '@/components/document/worktable/library-reach-in';
 import { FinalizeHead } from '@/components/document/worktable/finalize-head';
-import { FinalizeShelf } from '@/components/document/worktable/finalize-shelf';
 import { OfferFacets } from '@/components/document/worktable/offer-facets';
 import { IntakeSpreadHeader } from '@/components/document/worktable/intake-spread-header';
 import { DocumentShelves } from '@/components/document/shelves/document-shelves';
@@ -339,6 +340,35 @@ function sameTicketRows(
 }
 
 /**
+ * A settled, empty money ladder — the six rungs of a paper with no project to
+ * spend against. Derived rather than hand-written so the rungs keep
+ * `money-ladder.ts`'s own words for nothing-yet, and so a seventh rung added
+ * there is a rung this paper prints too. Called from inside a memo rather than
+ * at module load: the derivation reaches into `@patina/supabase`, and running
+ * it at load would make merely IMPORTING this page depend on that.
+ */
+function noProjectLadder(): MoneyLadder {
+  return deriveMoneyLadder({
+    budget: { settled: true, failed: false, authorizedCents: null },
+    plan: {
+      settled: true,
+      failed: false,
+      versionNumber: null,
+      lineCount: 0,
+      targetCents: 0,
+    },
+    authorized: {
+      settled: true,
+      failed: false,
+      executedCount: 0,
+      committedCents: 0,
+    },
+    purchaseOrders: { settled: true, failed: false, rows: [] },
+    invoices: { settled: true, failed: false, rows: [] },
+  });
+}
+
+/**
  * The ticket's own reads, in a component of their own.
  *
  * `useMoneyLadder` (and the two un-`enabled` queries under it) may only be
@@ -365,6 +395,7 @@ function JobTicketMount({
   onOpenLeaf,
   onUnfoldRegion,
   onRows,
+  clientCopy,
 }: {
   projectId: string;
   /** The `[id]` this document is mounted at — the address every leaf page and
@@ -390,6 +421,8 @@ function JobTicketMount({
    *  mount, so the leader can only speak from what the ticket prints if the
    *  rows travel back up. */
   onRows: (rows: readonly TicketRow[]) => void;
+  /** The proposal's own copy — the ninth row, and only on the Finalize table. */
+  clientCopy: TicketClientCopy | null;
 }) {
   const ffeQuery = useProjectFFEItems(projectId) as {
     data: TicketFFERow[] | undefined;
@@ -431,6 +464,10 @@ function JobTicketMount({
     [regionSection],
   );
 
+  // See `ProjectlessTicketMount` — the two facts, not the object identity.
+  const copySettled = clientCopy?.settled ?? null;
+  const copySent = clientCopy?.sent ?? null;
+
   const ticketInput = useMemo<TicketInput>(
     () => ({
       section,
@@ -458,9 +495,15 @@ function JobTicketMount({
       },
       dates: { settled: scheduleSettled, schedule },
       people: { settled: rosterSettled, callSheetEnabled, rosterCount },
+      clientCopy:
+        copySettled == null || copySent == null
+          ? null
+          : { settled: copySettled, sent: copySent },
       paperRegions: paperRegionKeys,
     }),
     [
+      copySettled,
+      copySent,
       section,
       phase,
       roomsSettled,
@@ -486,17 +529,123 @@ function JobTicketMount({
     ],
   );
 
-  // The top of the paper on every project document, under six live queries:
-  // the derivation runs when a fact changes, not on every render one of them
-  // causes.
+  return (
+    <TicketFace
+      input={ticketInput}
+      routeId={routeId}
+      onOpenLeaf={onOpenLeaf}
+      onUnfoldRegion={onUnfoldRegion}
+      onRows={onRows}
+    />
+  );
+}
+
+/**
+ * The ticket on a document that has no project yet — the four stages before
+ * the work starts (brief · discovery · direction · proposal).
+ *
+ * It reads NOTHING. A paper with no project has no rooms, pieces, drawings,
+ * boards or money to read, so every fact group arrives settled and empty and
+ * `deriveTicket` prints the honest empties it already holds for those four
+ * sections. Running `JobTicketMount`'s reads with no project id would do one
+ * of two wrong things instead: the `enabled`-gated queries would never answer,
+ * pinning five rows at `Reading…` for the life of the document, and the two
+ * un-`enabled` ones named above would fetch the studio's whole ledger.
+ */
+function ProjectlessTicketMount({
+  routeId,
+  section,
+  regionSection,
+  clientCopy,
+  onOpenLeaf,
+  onUnfoldRegion,
+  onRows,
+}: {
+  routeId: string;
+  section: SectionKey;
+  regionSection: SectionKey;
+  clientCopy: TicketClientCopy | null;
+  onOpenLeaf: (key: ShelfKey) => void;
+  onUnfoldRegion: (region: DocumentIndexKey) => void;
+  onRows: (rows: readonly TicketRow[]) => void;
+}) {
+  const paperRegionKeys = useMemo(
+    () => paperRegionsForSection(regionSection).map((region) => region.key),
+    [regionSection],
+  );
+  // The prop is a fresh object on every render of the page, which sits above
+  // an early return the memo it would need cannot be hoisted over. Its two
+  // facts are what the derivation actually depends on.
+  const copySettled = clientCopy?.settled ?? null;
+  const copySent = clientCopy?.sent ?? null;
+  const ticketInput = useMemo<TicketInput>(
+    () => ({
+      section,
+      phase: null,
+      rooms: { settled: true, list: [] },
+      pieces: { settled: true, lines: [] },
+      drawings: { settled: true, sheetCount: 0 },
+      boards: { settled: true, count: 0 },
+      money: {
+        settled: true,
+        failed: false,
+        ladder: noProjectLadder(),
+        owedDays: null,
+        undrawnKind: null,
+        owedSince: null,
+      },
+      dates: { settled: true, schedule: null },
+      // `CallSheetMount` is project-keyed, so this document has no call sheet
+      // to open — and the People row's door reads this same field. The page
+      // and the ticket therefore name one availability, never two.
+      people: { settled: true, callSheetEnabled: false, rosterCount: 0 },
+      clientCopy:
+        copySettled == null || copySent == null
+          ? null
+          : { settled: copySettled, sent: copySent },
+      paperRegions: paperRegionKeys,
+    }),
+    [section, copySettled, copySent, paperRegionKeys],
+  );
+  return (
+    <TicketFace
+      input={ticketInput}
+      routeId={routeId}
+      onOpenLeaf={onOpenLeaf}
+      onUnfoldRegion={onUnfoldRegion}
+      onRows={onRows}
+    />
+  );
+}
+
+/**
+ * The ticket itself, once its facts are settled — one derivation and one
+ * render, whether the facts came from a project's seven reads or from a paper
+ * that has no project to read.
+ */
+function TicketFace({
+  input,
+  routeId,
+  onOpenLeaf,
+  onUnfoldRegion,
+  onRows,
+}: {
+  input: TicketInput;
+  routeId: string;
+  onOpenLeaf: (key: ShelfKey) => void;
+  onUnfoldRegion: (region: DocumentIndexKey) => void;
+  onRows: (rows: readonly TicketRow[]) => void;
+}) {
+  // The top of the paper on every document: the derivation runs when a fact
+  // changes, not on every render one of the reads beneath it causes.
   const ticket = useMemo(() => {
-    const rows = deriveTicket(ticketInput);
+    const rows = deriveTicket(input);
     return {
       rows,
-      seam: deriveTicketSeam(rows, deriveTicketIdentity(ticketInput)),
-      head: deriveTicketHead(ticketInput),
+      seam: deriveTicketSeam(rows, deriveTicketIdentity(input)),
+      head: deriveTicketHead(input),
     };
-  }, [ticketInput]);
+  }, [input]);
 
   useEffect(() => {
     onRows(ticket.rows);
@@ -1371,12 +1520,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     table?.table === 'finalize' &&
     row.engagement_kind === 'proposal' &&
     commercialDocumentExperience(liveProposal?.document_kind) === 'legacy';
-  // The one shelf a proposal document has. The project's shelved spine has its
-  // own subjects and its own gate; these two never stand at once.
-  const finalizeShelvedSpine =
-    finalizeTable && row.proposal_id ? (
-      <FinalizeShelf openShelf={openShelf} onToggleShelf={toggleShelf} />
-    ) : null;
+  // The client's copy, and whether it has gone out — the proposal's one shelf
+  // until B2 made it the ticket's NINTH row. Non-null only on the Finalize
+  // table, which is what keeps the ticket eight rows on every other paper. The
+  // leaf it opens is still mounted below; only the trigger moved.
+  const clientCopy: TicketClientCopy | null =
+    finalizeTable && row.proposal_id
+      ? {
+          settled: proposalIsError || Boolean(liveProposal),
+          sent: Boolean(liveProposal?.sent_at),
+        }
+      : null;
   // W4b — the Delivery table's procurement setting: the one composition where
   // the release leader stands at the table head. Null off the flag, so nothing
   // below it can lift, seam, or demote anything.
@@ -1413,8 +1567,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // doors and seam either way — what differs is only what sits beneath it.
   // `TableFrame` prints nothing when it has no composition, so handing the
   // node to both positions cannot print two.
+  //
+  // All seven spreads print it. A document that carries a project reads its
+  // seven facts; the four stages before the work starts have no project to
+  // read and print the honest empties `deriveTicket` holds for them. Exactly
+  // one of the two mounts stands on any document, so the rows the guide's
+  // leader is elected from are always the rows on this paper.
   const jobTicket =
-    row.engagement_kind === 'project' && row.project_id ? (
+    row.project_id ? (
       <JobTicketMount
         projectId={row.project_id}
         routeId={id}
@@ -1431,8 +1591,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         onOpenLeaf={toggleShelf}
         onUnfoldRegion={unfoldRegion}
         onRows={acceptTicketRows}
+        clientCopy={clientCopy}
       />
-    ) : null;
+    ) : (
+      <ProjectlessTicketMount
+        routeId={id}
+        section={row.active_section}
+        regionSection={spreadSection}
+        clientCopy={clientCopy}
+        onOpenLeaf={toggleShelf}
+        onUnfoldRegion={unfoldRegion}
+        onRows={acceptTicketRows}
+      />
+    );
   const seal = lineage?.signedAt
     ? {
         date: fmtDay(lineage.signedAt),
@@ -1463,7 +1634,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         sections={sections}
         others={others}
         onJump={jumpToSection}
-        shelved={shelvedSpine ?? finalizeShelvedSpine}
+        shelved={shelvedSpine}
       />
 
       {/* No z-index here: a stacking context on main would trap the fixed
@@ -1515,10 +1686,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         <div id={LETTERHEAD_SENTINEL_ID} aria-hidden />
 
         {/* THE TICKET — the document's map, mounted by the DOCUMENT rather
-            than the section, so project, install and care read identically
-            (B1). Between the letterhead and the guide/red-letter zone on the
-            paper that has no table; above the table where one stands, which is
-            the position `TableFrame` prints it in below. */}
+            than the section, so all seven spreads read identically (B1, B2).
+            Between the letterhead and the guide/red-letter zone on the paper
+            that has no table; above the table where one stands, which is the
+            position `TableFrame` prints it in below. */}
         {!table && jobTicket}
 
         {/* The red letter replaces the guide only where it can actually speak

@@ -54,6 +54,10 @@ const ITEMS = [
 ];
 
 jest.mock('@patina/supabase', () => ({
+  /* B2 — the ticket now stands on the proposal spread too, and its Money row
+     runs the ladder against an empty read. */
+  computeArAging: jest.requireActual('@patina/supabase').computeArAging,
+  invoiceDaysOverdue: jest.requireActual('@patina/supabase').invoiceDaysOverdue,
   useProjectRoomScans: () => ({ data: [] }),
   useGeneratedRoomFilesByScan: () => ({ data: new Map() }),
   /* the page's own reads */

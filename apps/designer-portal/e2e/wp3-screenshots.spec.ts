@@ -209,7 +209,7 @@ test('margin handoff — folded, unfolded, and overdue', async ({
   });
 });
 
-test('Desk folio and the one Pulse sentence', async ({
+test('Desk roster — one line per job, and the one aggregate sentence', async ({
   authenticatedPage: page,
 }) => {
   for (const [name, viewport] of [
@@ -219,6 +219,9 @@ test('Desk folio and the one Pulse sentence', async ({
     await page.setViewportSize(viewport);
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
 
+    // B2 — the folio grid and The studio today are one roster now. The first
+    // job line still carries the `desk-folio` tour anchor, so the walkthrough's
+    // fourth stop lands where it always did.
     const folios = page.locator('[data-tour-anchor="desk-folio"]');
     await expect(folios.first()).toBeVisible({ timeout: 30_000 });
     await folios.first().scrollIntoViewIfNeeded();
@@ -226,14 +229,27 @@ test('Desk folio and the one Pulse sentence', async ({
       path: `${SHOT_DIR}/desk-folio-${name}.png`,
     });
 
-    // Ruling VI: exactly one aggregate sentence, and it states gates only.
-    const pulse = page.getByTestId('studio-pulse-gate-sentence');
-    await expect(pulse).toBeVisible({ timeout: 30_000 });
-    await expect(pulse).toHaveCount(1);
-    const pulseSection = page.locator('section:has(#studio-pulse)').last();
-    await pulseSection.scrollIntoViewIfNeeded();
-    await pulseSection.screenshot({
-      path: `${SHOT_DIR}/desk-pulse-sentence-${name}.png`,
+    const roster = page.getByTestId('desk-roster');
+    await expect(roster).toHaveCount(1, { timeout: 30_000 });
+
+    // The density rule is the whole design: one line per job, never a card,
+    // and nothing folded on first paint — no line hides behind a disclosure.
+    const lines = roster.locator('[data-roster-line]');
+    await expect(lines.first()).toBeVisible({ timeout: 30_000 });
+    await expect(roster.locator('[aria-expanded]')).toHaveCount(0);
+    await expect(roster.locator('[hidden]')).toHaveCount(0);
+
+    // Stage headings, printed with their counts and never folded.
+    await expect(roster.locator('h3').first()).toBeVisible();
+
+    // Ruling VI: exactly one aggregate sentence, and it states gates only —
+    // The studio today's two live facts, absorbed into the roster's own header
+    // (`Every job · n live · m overdue`) and the Inter line under it.
+    await expect(roster.locator('#every-job')).toHaveCount(1);
+    await expect(roster.locator('#every-job')).toContainText(/live/i);
+    await roster.scrollIntoViewIfNeeded();
+    await roster.screenshot({
+      path: `${SHOT_DIR}/desk-roster-${name}.png`,
     });
   }
 });

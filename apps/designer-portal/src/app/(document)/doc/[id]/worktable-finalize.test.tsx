@@ -565,19 +565,42 @@ describe('the Finalize table (W4a)', () => {
     expect(container.querySelector('[data-terms-body-editor]')).toBeNull();
   });
 
-  it('shelves the client’s copy, and opens it as a leaf', () => {
+  it('prints the client’s copy as the ticket’s NINTH row, and opens it as a leaf', () => {
     const { container } = renderPage();
 
-    const row = container.querySelector('[data-shelf-trigger="clientcopy"]') as HTMLElement;
-    expect(row).not.toBeNull();
-    // It is the proposal document's ONLY shelf — no project rows here.
-    expect(container.querySelectorAll('[data-shelf-trigger]')).toHaveLength(1);
+    // B2 — the proposal's one shelf is a ticket row now, so the copy is
+    // reached the way this document reaches everything else. The spine's
+    // shelves block, and the transitional row that stood in for it, are gone.
+    expect(container.querySelector('[data-shelf-trigger]')).toBeNull();
+
+    const rows = Array.from(
+      container.querySelectorAll('[data-job-ticket] [data-ticket-row]'),
+    ).map((el) => el.getAttribute('data-ticket-row'));
+    expect(rows).toEqual([
+      'rooms', 'pieces', 'drawings', 'spec', 'boards', 'money', 'dates', 'people',
+      'clientcopy',
+    ]);
+
+    const row = container.querySelector(
+      '[data-ticket-row="clientcopy"] button',
+    ) as HTMLElement;
+    // The fixture's proposal carries a `sent_at`, so the row says so.
+    expect(row.textContent).toContain('The client’s copy · as sent, live');
 
     fireEvent.click(row);
     expect(container.querySelector('[data-shelf-leaf="clientcopy"]')).not.toBeNull();
     expect(
       container.querySelector('[data-client-copy-rail="proposal-live-1"]'),
     ).not.toBeNull();
+  });
+
+  it('says the copy has not gone out when the proposal has no sent day', () => {
+    mockProposal = { ...mockProposal, sent_at: null };
+    const { container } = renderPage();
+
+    expect(
+      container.querySelector('[data-ticket-row="clientcopy"]')?.textContent,
+    ).toContain('The client’s copy · not sent yet');
   });
 
   it('mounts none of it with the flag off — parity', () => {
@@ -588,7 +611,10 @@ describe('the Finalize table (W4a)', () => {
     expect(container.querySelector('[data-table]')).toBeNull();
     expect(container.querySelector('[data-finalize-head]')).toBeNull();
     expect(container.querySelector('[data-offer-facets]')).toBeNull();
-    expect(container.querySelector('[data-shelf-trigger]')).toBeNull();
+    // The ticket still stands off the flag — it is the DOCUMENT's map, not the
+    // table's — but with no Finalize table there is no ninth row on it.
+    expect(container.querySelector('[data-job-ticket]')).not.toBeNull();
+    expect(container.querySelector('[data-ticket-row="clientcopy"]')).toBeNull();
     expect(container.querySelector('[data-action-variant="inked"]')).toBeNull();
     // The whisper is back where it has always been.
     const whisper = screen.getByText('2 of 2 approved');
@@ -613,6 +639,7 @@ describe('the Finalize table (W4a)', () => {
     );
     expect(container.querySelector('[data-finalize-head]')).toBeNull();
     expect(container.querySelector('[data-offer-facets]')).toBeNull();
-    expect(container.querySelector('[data-shelf-trigger]')).toBeNull();
+    // Eight rows, never nine: the ninth row's subject gates it, not a flag.
+    expect(container.querySelector('[data-ticket-row="clientcopy"]')).toBeNull();
   });
 });

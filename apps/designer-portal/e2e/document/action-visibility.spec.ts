@@ -11,8 +11,13 @@ const SENT_PROPOSAL_ID = 'b0000000-0000-0000-0000-000000000002';
  */
 const DRAFT_PROPOSAL_ID = 'd0c10000-0000-0000-0000-0000000000b2';
 
-const FOLIO_ACTION =
-  /Review decisions|Send reminder|Open the project|Follow up|Revise proposal|Review flagged lines|Continue the introduction|Review the claim|Inspect the delivery|Resolve the schedule|Open the task|Review the purchase order|Follow up with the maker|Review and send/;
+/**
+ * The act at the right of a roster line: the job's own need act where it has
+ * one, `Open the job` where it has none (B2's Desk roster — the same act on
+ * every job, width and section).
+ */
+const ROSTER_ACTION =
+  /Open the job|Review decisions|Send reminder|Open the project|Follow up|Revise proposal|Review flagged lines|Continue the introduction|Review the claim|Inspect the delivery|Resolve the schedule|Open the task|Review the purchase order|Follow up with the maker|Review and send/;
 
 test.describe.configure({ mode: 'serial' });
 
@@ -152,22 +157,32 @@ test.describe('Inked Instruments action visibility', () => {
     await expectInlinePrimary(page, 'desk-head', 'Capture a lead');
     await expect(page.getByTestId('mobile-bar')).toBeHidden();
 
-    const folioAction = page
-      .locator(
-        '[data-tour-anchor="desk-folio"] [data-action-region="needs-your-hand"][data-action-variant="primary"]',
-      )
-      .first();
-    await expect(folioAction).toBeVisible({ timeout: COLD });
-    // A1 follow-up: the pick-up Link is a full-bleed sibling BEHIND
-    // FolderFace, so the act's legible label prints in the face, not inside
-    // this Link — its own textContent is empty and its accessible name names
-    // the folio and its need, not the act. Assert the label on the card the
-    // primary belongs to; "one legible primary per region" is unchanged, only
-    // which node in the card carries the words.
-    await expect(folioAction.locator('xpath=..')).toContainText(FOLIO_ACTION, {
-      timeout: COLD,
-    });
-    await expectMinTarget(folioAction);
+    // B2 — the four-up folio grid is ONE roster of every live job now, grouped
+    // by stage. Its acts are one region, and that region elects no leader: the
+    // Desk's single inked act is the head's `Capture a lead`, asserted above.
+    // C7 is kept honest in both directions — a roster that grew a leader back
+    // would put two primaries on one screen.
+    const roster = page.getByTestId('desk-roster');
+    await expect(roster).toBeVisible({ timeout: COLD });
+    const rosterActs = page.locator(
+      '[role="group"][data-action-region="every-job"]',
+    );
+    await expect(rosterActs).toHaveCount(1, { timeout: COLD });
+    await expect(
+      rosterActs.locator(
+        '[data-action-variant="primary"], [data-action-variant="inked"]',
+      ),
+    ).toHaveCount(0);
+
+    // One line per job, under a stage heading, and every line carries its own
+    // act at a real 44px target.
+    await expect(roster.locator('h3').first()).toBeVisible({ timeout: COLD });
+    const firstLine = roster.locator('[data-roster-line]').first();
+    await expect(firstLine).toBeVisible({ timeout: COLD });
+    const rosterAction = firstLine.locator('[data-action-key^="roster-"]');
+    await expect(rosterAction).toHaveCount(1, { timeout: COLD });
+    await expect(rosterAction).toContainText(ROSTER_ACTION, { timeout: COLD });
+    await expectMinTarget(rosterAction);
 
     await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {
       waitUntil: 'domcontentloaded',

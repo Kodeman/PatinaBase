@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import DocumentPage from './page';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
@@ -86,6 +86,8 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
 }));
 
+let mockInvoices: Record<string, unknown>[] = [];
+
 jest.mock('@patina/supabase', () => ({
   /* B1 — the job ticket's own reads. The ticket is mounted by every
      project-kind document now, so every suite that renders one pays for
@@ -93,7 +95,7 @@ jest.mock('@patina/supabase', () => ({
   usePlanRoom: () => ({ data: { sheets: [] }, isLoading: false }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   useProjectBoards: () => ({ data: [], isLoading: false }),
-  useProjectInvoices: () => ({ isLoading: false, error: null, data: [] }),
+  useProjectInvoices: () => ({ isLoading: false, error: null, data: mockInvoices }),
   usePurchaseOrders: () => ({ isLoading: false, error: null, data: [] }),
   computeArAging: jest.requireActual('@patina/supabase').computeArAging,
   invoiceDaysOverdue: jest.requireActual('@patina/supabase').invoiceDaysOverdue,
@@ -469,6 +471,7 @@ describe('DocumentPage guide activation', () => {
     mockResolvedSchedule = NO_RESOLVED_SCHEDULE;
     mockContextualHandoffsQuery = { data: [], isError: false };
     mockDeskData = { folders: [], chips: [], composed: {} };
+    mockInvoices = [];
     mockDeskLoading = false;
     mockDeskError = false;
     mockRetryDesk.mockReset();
@@ -1259,13 +1262,38 @@ describe('DocumentPage guide activation', () => {
       },
     );
 
-    it('stands on no document that is not a project engagement', () => {
-      // The outer beforeEach's row is a lead (Brief) document — the ticket has
-      // no job to name there, and mounting it would run the money ladder's two
-      // un-`enabled` reads on a document with no project behind them.
+    it('prints the same eight rows on a document with no project (B2)', () => {
+      // The outer beforeEach's row is a lead (Brief) document. It has no
+      // project, so the ticket that stands on it reads NOTHING — every row is
+      // the honest empty `deriveTicket` holds for the four stages before the
+      // work starts, and the money ladder's two un-`enabled` reads are never
+      // fired at a document with no project behind them.
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(document.querySelector(TICKET)).toBeNull();
+      expect(document.querySelector(TICKET)).not.toBeNull();
+      expect(ticketRowKeys()).toEqual([
+        'rooms', 'pieces', 'drawings', 'spec', 'boards', 'money', 'dates', 'people',
+      ]);
+      const value = (key: string) =>
+        document
+          .querySelector(`[data-ticket-row="${key}"] span:nth-child(2)`)
+          ?.textContent;
+      expect(value('rooms')).toBe('No rooms yet');
+      expect(value('pieces')).toBe('No pieces yet');
+      expect(value('money')).toBe('Nothing moving yet');
+      // Not `No install date yet` — a paper with no project has never had an
+      // install to be missing.
+      expect(value('dates')).toBe('No dates yet');
+    });
+
+    it('mounts exactly one ticket on a document, project or not', () => {
+      render(<DocumentPage params={fulfilledParams} />);
+      expect(document.querySelectorAll(TICKET)).toHaveLength(1);
+
+      cleanup();
+      asProjectDocument();
+      render(<DocumentPage params={fulfilledParams} />);
+      expect(document.querySelectorAll(TICKET)).toHaveLength(1);
     });
 
     it('sets the letterhead sentinel between the letterhead and the ticket', () => {
@@ -1463,6 +1491,52 @@ describe('DocumentPage guide activation', () => {
       expect(mockSelectOperationalNeeds).toHaveReturnedWith(undefined);
       expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
       expect(document.getElementById('document-next-up')).not.toBeNull();
+    });
+
+    it('B2 — elects the guide’s sentence from the ticket’s own rows', () => {
+      asProjectDocument();
+      mockDeskData = {
+        folders: [{ row: { engagement_id: 'someone-else' }, need: null, needs: [] }],
+        chips: [],
+        composed: { 'someone-else': true },
+      };
+      // One overdue receivable — the only thing wrong on this paper. The
+      // ticket's Money row states it, and the guide's sixth rung quotes the
+      // row rather than reaching for the stage's shrug.
+      mockInvoices = [
+        {
+          id: 'invoice-1',
+          status: 'sent',
+          total_cents: 1_750_000,
+          amount_paid_cents: 0,
+          due_date: '2026-01-05',
+        },
+      ];
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const money = document.querySelector('[data-ticket-row="money"]')!;
+      expect(money.textContent).toContain('$17,500 owed you');
+      expect(document.getElementById('document-next-up')!.textContent).toContain(
+        'Money · $17,500 owed you',
+      );
+    });
+
+    it('B2 — stops naming a row once its data is gone', () => {
+      asProjectDocument();
+      mockDeskData = {
+        folders: [{ row: { engagement_id: 'someone-else' }, need: null, needs: [] }],
+        chips: [],
+        composed: { 'someone-else': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const guide = document.getElementById('document-next-up')!;
+      expect(guide.textContent).not.toContain('owed you');
+      expect(document.querySelector('[data-ticket-row="money"]')!.textContent).toContain(
+        'Nothing moving yet',
+      );
     });
 
     it('keeps the guide — and its retry — on a project whose Desk read failed', () => {
