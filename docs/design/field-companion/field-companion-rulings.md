@@ -837,6 +837,10 @@ middle of a walk-through, which is exactly where a consent control must not add 
 moment the end is reaped**, not idle-adjusted. That is the same arithmetic the four tapped
 sites already use, and it is the number a completion-rate dashboard should divide by.
 
+**FC-R21 known gap (N-2):** `CaptureSessionContextPolicy.resolve`'s 4-hour window can
+replace a still-live same-day visit on W1's stale-prompt Resume with no `visit.end`; fix =
+persisted pending-end slot or reap inside `current()`; scheduled Wave 4 Task 0.
+
 ### FC-R22 · Store auto-reset on open failure (F-16)
 
 **Ruled: KEEP AS BUILT** (Kody, 2026-08-26). The SwiftData set-aside-and-fresh-store on

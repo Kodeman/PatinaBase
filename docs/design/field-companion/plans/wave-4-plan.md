@@ -328,6 +328,12 @@ git add docs/design/field-companion/plans/wave-4-preflight.md
 git commit -m "docs(field-companion): wave-4 pre-flight — waves 1-3 re-verified against the repo"
 ```
 
+- [ ] **0.7 FC-R21 known gap (N-2)** — `CaptureSessionContextPolicy.resolve`'s 4-hour
+      window can replace a still-live same-day visit on W1's stale-prompt Resume with no
+      `visit.end`; fix = persisted pending-end slot or reap inside `current()`. Confirm
+      the gap still exists against whatever landed on `main` and either schedule the fix
+      as a task in this wave or record it forward again.
+
 ---
 
 ### Task 1 — The margin migration, and a note that arrives whole
