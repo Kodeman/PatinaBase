@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The red letter — every need the document is carrying, printed once, in one
@@ -9,8 +9,36 @@
  * screen reader mid-sentence the way role="alert" would.
  */
 
-import type { NeedKind } from '@/lib/document/desk-derivation';
-import { DocumentAction, DocumentActionGroup } from './document-action';
+import type { NeedKind } from "@/lib/document/desk-derivation";
+import { DocumentAction, DocumentActionGroup } from "./document-action";
+
+// SP-20/F41: every need kind already carries a stamp colour at its point of
+// derivation (desk-derivation.ts's STAMP palette, read at NeedLine.stamp.color)
+// — these are the SAME tokens, copied here only because desk-derivation.ts's
+// per-rule stamp objects aren't exported as a kind-keyed lookup. Token VALUES
+// are B3's to change; this map only decides which existing token each row's
+// folio dot wears, never invents a new one.
+const NEED_KIND_STAMP_COLOR: Record<NeedKind, string> = {
+  overdue_decision: "var(--color-terracotta)",
+  overdue_invoice: "var(--color-terracotta)",
+  proposal_signed: "var(--color-sage)",
+  damage_claim: "var(--color-terracotta)",
+  proposal_declined: "var(--color-terracotta)",
+  proposal_expired: "var(--color-terracotta)",
+  lines_flagged: "var(--color-clay)",
+  new_lead: "var(--color-clay)",
+  ceremony_pending: "var(--color-clay)",
+  reconnect_due: "var(--color-dusty-blue)",
+  hesitating_proposal: "var(--color-dusty-blue)",
+  awaiting_inspection: "var(--color-sage)",
+  schedule_conflict: "var(--color-terracotta)",
+  schedule_proposal: "var(--color-clay)",
+  task_due: "var(--color-clay)",
+  schedule_unconfigured: "var(--color-clay)",
+  po_unsent: "var(--color-clay)",
+  po_unacknowledged: "var(--color-dusty-blue)",
+  pulse_due: "var(--color-sage)",
+};
 
 export interface RedLetterRow {
   key: string;
@@ -48,13 +76,21 @@ export function RedLetterZone({ rows }: { rows: readonly RedLetterRow[] }) {
               data-need-urgent={row.urgent || undefined}
               className="grid grid-cols-[1fr_auto] items-center gap-x-3 border-b border-dashed border-[rgba(139,115,85,0.14)] py-1 last:border-b-0"
             >
-              {/* Urgency is carried by weight alone — no second colour in a
-                  zone that is already terracotta-ruled. */}
+              {/* Urgency is carried by weight alone — this dot never grows a
+                  count, a label, or a second urgency tier (C4); it only
+                  tells a setup chore from a dated overdue need at a glance. */}
               <p
                 className={`font-heading text-[14px] text-[var(--color-charcoal)] ${
-                  row.urgent ? 'font-medium' : 'font-normal'
+                  row.urgent ? "font-medium" : "font-normal"
                 }`}
               >
+                <span
+                  aria-hidden="true"
+                  data-need-stamp
+                  data-stamp-color={NEED_KIND_STAMP_COLOR[row.kind]}
+                  className="mr-2 inline-block h-[7px] w-[7px] rounded-full align-middle"
+                  style={{ backgroundColor: NEED_KIND_STAMP_COLOR[row.kind] }}
+                />
                 {row.text}
               </p>
               {row.actionLabel && (

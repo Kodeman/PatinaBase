@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { RedLetterZone, type RedLetterRow } from '../red-letter-zone';
+import { fireEvent, render, screen } from "@testing-library/react";
+import { RedLetterZone, type RedLetterRow } from "../red-letter-zone";
 
-jest.mock('@/lib/analytics/document-events', () => ({
+jest.mock("@/lib/analytics/document-events", () => ({
   documentEvents: {
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
@@ -12,94 +12,118 @@ const onAct = jest.fn();
 
 const rows: RedLetterRow[] = [
   {
-    key: 'r1',
-    kind: 'overdue_decision',
-    text: '2 decisions overdue',
-    actionLabel: 'Resolve decisions',
+    key: "r1",
+    kind: "overdue_decision",
+    text: "2 decisions overdue",
+    actionLabel: "Resolve decisions",
     onAct,
     urgent: true,
   },
   {
-    key: 'r2',
-    kind: 'overdue_invoice',
-    text: 'Invoice 004 overdue',
-    actionLabel: 'Send a reminder',
+    key: "r2",
+    kind: "overdue_invoice",
+    text: "Invoice 004 overdue",
+    actionLabel: "Send a reminder",
     onAct: jest.fn(),
     urgent: false,
   },
   {
-    key: 'r3',
-    kind: 'task_due',
-    text: 'Task due — confirm the fabric',
+    key: "r3",
+    kind: "task_due",
+    text: "Task due — confirm the fabric",
     actionLabel: null,
     onAct: jest.fn(),
     urgent: false,
   },
 ];
 
-describe('RedLetterZone', () => {
+describe("RedLetterZone", () => {
   beforeEach(() => onAct.mockClear());
 
-  it('renders nothing when there is nothing to attend to', () => {
+  it("renders nothing when there is nothing to attend to", () => {
     const { container } = render(<RedLetterZone rows={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('prints one row per need, in the given order', () => {
+  it("prints one row per need, in the given order", () => {
     render(<RedLetterZone rows={rows} />);
-    const items = screen.getAllByRole('listitem');
+    const items = screen.getAllByRole("listitem");
     expect(items).toHaveLength(3);
     expect(items.map((item) => item.textContent)).toEqual([
-      '2 decisions overdueResolve decisions',
-      'Invoice 004 overdueSend a reminder',
-      'Task due — confirm the fabric',
+      "2 decisions overdueResolve decisions",
+      "Invoice 004 overdueSend a reminder",
+      "Task due — confirm the fabric",
     ]);
   });
 
-  it('is a named region, never an alert', () => {
+  it("is a named region, never an alert", () => {
     render(<RedLetterZone rows={rows} />);
-    const region = screen.getByRole('region', { name: 'Needs attention' });
+    const region = screen.getByRole("region", { name: "Needs attention" });
     expect(region).toBeInTheDocument();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it('fires the row action', () => {
+  it("fires the row action", () => {
     render(<RedLetterZone rows={rows} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Resolve decisions' }));
+    fireEvent.click(screen.getByRole("button", { name: "Resolve decisions" }));
     expect(onAct).toHaveBeenCalledTimes(1);
   });
 
-  it('omits the act where a need names none', () => {
+  it("omits the act where a need names none", () => {
     render(<RedLetterZone rows={rows} />);
-    expect(screen.getAllByRole('button')).toHaveLength(2);
+    expect(screen.getAllByRole("button")).toHaveLength(2);
   });
 
-  it('gathers every act into ONE named group, not one group per row', () => {
+  it("gathers every act into ONE named group, not one group per row", () => {
     render(<RedLetterZone rows={rows} />);
-    const groups = screen.getAllByRole('group');
+    const groups = screen.getAllByRole("group");
     expect(groups).toHaveLength(1);
-    expect(groups[0]).toHaveAccessibleName('Needs attention actions');
+    expect(groups[0]).toHaveAccessibleName("Needs attention actions");
   });
 
-  it('keys each act to its own row, so two needs of a kind stay distinct', () => {
+  it("keys each act to its own row, so two needs of a kind stay distinct", () => {
     const twoOfAKind: RedLetterRow[] = [
-      { ...rows[0], key: 'a' },
-      { ...rows[0], key: 'b', onAct: jest.fn() },
+      { ...rows[0], key: "a" },
+      { ...rows[0], key: "b", onAct: jest.fn() },
     ];
     render(<RedLetterZone rows={twoOfAKind} />);
     const keys = screen
-      .getAllByRole('button')
-      .map((button) => button.getAttribute('data-action-key'));
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("data-action-key"));
     expect(keys).toEqual([
-      'red-letter-overdue_decision-0',
-      'red-letter-overdue_decision-1',
+      "red-letter-overdue_decision-0",
+      "red-letter-overdue_decision-1",
     ]);
   });
 
-  it('weights an urgent need heavier, and only by weight', () => {
+  it("weights an urgent need heavier, and only by weight", () => {
     render(<RedLetterZone rows={rows} />);
-    const [urgent, ordinary] = screen.getAllByRole('listitem');
-    expect(urgent.querySelector('p')).toHaveClass('font-medium');
-    expect(ordinary.querySelector('p')).toHaveClass('font-normal');
+    const [urgent, ordinary] = screen.getAllByRole("listitem");
+    expect(urgent.querySelector("p")).toHaveClass("font-medium");
+    expect(ordinary.querySelector("p")).toHaveClass("font-normal");
+  });
+
+  it("wears a different stamp colour per need kind (SP-20)", () => {
+    const { container } = render(<RedLetterZone rows={rows} />);
+    const stamps = container.querySelectorAll("[data-need-stamp]");
+    expect(stamps).toHaveLength(3);
+    const colors = Array.from(stamps).map((stamp) =>
+      stamp.getAttribute("data-stamp-color"),
+    );
+    // r1 = overdue_decision, r2 = overdue_invoice (same terracotta token —
+    // both read PAST DUE / DECISION DUE off the same STAMP entry upstream),
+    // r3 = task_due, a different token from either.
+    expect(colors[0]).toBe(colors[1]);
+    expect(colors[2]).not.toBe(colors[0]);
+  });
+
+  it("emits no count and no badge alongside the stamp dot", () => {
+    const { container } = render(<RedLetterZone rows={rows} />);
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(container.querySelector('[class*="badge"]')).toBeNull();
+    // the stamp dot itself carries no text — never a count in disguise.
+    container.querySelectorAll("[data-need-stamp]").forEach((stamp) => {
+      expect(stamp.textContent).toBe("");
+    });
   });
 });
