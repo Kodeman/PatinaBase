@@ -103,6 +103,13 @@ interface DeriveDocumentGuideInput {
   /** The nearest open gate on this project (Ruling V). `undefined` means the
    *  gate read has not answered; `null` means it answered that none is open. */
   gate?: WorkflowGate | null;
+  /** A3-L7 — the care band's own closure gate (`closureReady`,
+   *  closure-derivation.ts:275): every checklist item ticked AND the
+   *  operational closeout readiness (contract balance collected, etc.)
+   *  clear. `undefined` (the read has not answered) reads the same as
+   *  `false` — the care rest state never claims a book is closed on an
+   *  absent answer. */
+  closureReady?: boolean;
 }
 
 const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
@@ -160,6 +167,79 @@ const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput
     action: { key: 'review-closeout', label: 'Run the closeout checklist', destination: { kind: 'anchor', section: 'care' } },
   },
 };
+
+/**
+ * A3-L7 (direction-b §3.3) — a named sentence and act for the quiet case,
+ * so no stage shrugs even when nothing is wrong. `stageCopy` above already
+ * covers `project`'s quiet case (`on_track`); this table covers the other
+ * six, plus restates `project` and `install` for the one table `stage` reads
+ * both from.
+ *
+ * `actionLabel: null` (`brief` only) means the rest state prints no act —
+ * "Nothing to decide yet." asks for nothing. Every other row is a verb and
+ * an object; `Review` — the word F18 retired from the top of the paper —
+ * appears nowhere here.
+ *
+ * `install`'s headline is a placeholder: `installGuideHeadline` (below)
+ * still supplies the real, dated sentence when the schedule facts carry a
+ * committed or record-fidelity date, and `deriveDocumentGuide` only reaches
+ * for this row's `headline` when that function returns `null` — so a
+ * project without a known install day never states one.
+ */
+export const restCopy: Record<SectionKey, { headline: string; actionLabel: string | null }> = {
+  brief: { headline: 'Nothing to decide yet.', actionLabel: null },
+  discovery: { headline: 'Discovery is complete. Shape the direction.', actionLabel: 'Begin the direction' },
+  direction: { headline: 'The direction is written. Send it.', actionLabel: 'Send the agreement' },
+  proposal: { headline: 'Signed. Open the project.', actionLabel: 'Open the project' },
+  project: { headline: 'Everything ordered is moving.', actionLabel: 'Release the next room' },
+  install: { headline: 'Install day is {Weekday}, {Month d}.', actionLabel: 'Hold the window' },
+  care: { headline: 'Everything is settled.', actionLabel: 'Close the book' },
+};
+
+/**
+ * A3-L7's predicate: is this stage's base-fallback branch (no need, no gate,
+ * not paused — `deriveDocumentGuide` has already ruled those out by the time
+ * this runs) ALSO the quiet case for the stage itself, or is there still
+ * something the stage's own default copy should name?
+ *
+ *   brief      — reaching here at all means no `new_lead` (or any other) need
+ *                fired, so there is nothing left to decide. Always quiet.
+ *   discovery  — quiet once every discovery input is answered; `inputFacts`
+ *                (the checklist row-source) is the same list `withInputs`
+ *                already reads, so an empty/absent list IS the "five things
+ *                missing" list going to zero.
+ *   direction  — quiet once the direction has a proposal drafted
+ *                (`row.proposal_id`) AND every direction input is answered
+ *                (the same `inputFacts` emptiness `discovery` reads): a
+ *                proposal record existing while `phases & fees` is still
+ *                outstanding is a draft in progress, not a written direction
+ *                ready to send.
+ *   project    — reaching here means no operational need fired. Always quiet.
+ *   install    — reaching here means no operational need (a carrier window,
+ *                a missing arrival) fired. Always quiet.
+ *   care       — quiet only once the closure gate answers true; an unread or
+ *                incomplete closure never claims the book is settled.
+ */
+export function isRestState(
+  stage: SectionKey,
+  row: DocumentStateRow,
+  inputFacts: readonly DocumentGuideInputFact[] | undefined,
+  closureReady: boolean | undefined,
+): boolean {
+  switch (stage) {
+    case 'brief': return true;
+    case 'discovery': return !inputFacts || inputFacts.length === 0;
+    case 'direction': return Boolean(row.proposal_id) && (!inputFacts || inputFacts.length === 0);
+    case 'project': return true;
+    case 'install': return true;
+    case 'care': return closureReady === true;
+    // 'proposal' never reaches this predicate — it is answered by
+    // `proposalGuide` before the base fallback runs (see
+    // `deriveDocumentGuide`). `restCopy.proposal` still carries the rest
+    // sentence for direct testing and for a future wiring pass.
+    case 'proposal': return false;
+  }
+}
 
 /** `ffe-section.tsx` — the FF&E region heading, the project act's landing. */
 const ffeRegionAnchorId = (projectId: string) => `ffe-region-heading-${projectId}`;
@@ -515,6 +595,7 @@ export function deriveDocumentGuide({
   operationalNeed,
   inputFacts,
   gate,
+  closureReady,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
   const stage = row.active_section;
   if (availability === 'unavailable') {
@@ -605,13 +686,40 @@ export function deriveDocumentGuide({
         ? { kind: 'anchor', section: stage, focusId: CLOSING_THE_BOOK_ANCHOR_ID }
         : null;
   const action = destination ? { ...base.action!, destination } : base.action;
+  const installHeadline = stage === 'install' ? installGuideHeadline(schedule, now) : null;
+
+  // A3-L7 (direction-b §3.3) — the quiet case gets its own named sentence
+  // and act rather than reusing the always-actionable default above.
+  // `install` is the one stage whose rest sentence itself carries a fact (the
+  // date): it is only "at rest" once that fact is known, so it reads
+  // `installHeadline` — the same ⌥ template `installGuideHeadline` builds for
+  // the non-rest branch — rather than the literal placeholder in `restCopy`.
+  const restActive =
+    stage === 'install' ? installHeadline !== null : isRestState(stage, row, inputFacts, closureReady);
+  if (restActive) {
+    const rest = restCopy[stage];
+    const restAction: DocumentGuideAction | null =
+      rest.actionLabel === null
+        ? null
+        : {
+            key: `rest-${stage}`,
+            label: rest.actionLabel,
+            // The same landing the active-state act would use — a rest state
+            // changes what the strip SAYS, never where its act goes.
+            destination: action?.destination ?? stageCopy[stage].action!.destination,
+          };
+    return withInputs({
+      ...base,
+      stage,
+      headline: stage === 'install' ? installHeadline! : rest.headline,
+      action: restAction,
+    }, inputFacts);
+  }
+
   return withInputs({
     ...base,
     stage,
-    headline:
-      stage === 'install'
-        ? installGuideHeadline(schedule, now) ?? base.headline
-        : base.headline,
+    headline: stage === 'install' ? installHeadline ?? base.headline : base.headline,
     action,
   }, inputFacts);
 }

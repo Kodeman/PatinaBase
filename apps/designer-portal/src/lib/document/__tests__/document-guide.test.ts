@@ -61,16 +61,20 @@ const row = (activeSection: SectionKey, overrides: Partial<DocumentStateRow> = {
   }) as DocumentStateRow;
 
 describe('deriveDocumentGuide', () => {
-  // F18 — the seven sentences, each a verb and an object (direction A §3).
+  // A3-L7 (direction-b §3.3) — every `row(section)` fixture below is quiet:
+  // no need fires, no inputFacts are missing, so each stage prints its own
+  // named rest sentence and act instead of the old always-on default (F18's
+  // "seven sentences, each a verb and an object" — `brief` alone states no
+  // act, because "Nothing to decide yet" asks for nothing).
   it.each([
-    ['brief', 'Decide on this inquiry', 'Accept and begin', 'brief'],
-    ['discovery', 'Finish what you need to know', 'Add scope & rooms', 'discovery'],
-    ['direction', 'Draw up the direction', 'Open the Drafting Room', '/drafting/proposal-1'],
+    ['brief', 'Nothing to decide yet.', undefined, null],
+    ['discovery', 'Discovery is complete. Shape the direction.', 'Begin the direction', 'discovery'],
+    ['direction', 'The direction is written. Send it.', 'Send the agreement', '/drafting/proposal-1'],
     ['proposal', 'Wait for the client’s signature', 'Review signing controls', 'proposal'],
-    ['project', 'The work is in motion — nothing is waiting on you', 'Open the FF&E schedule', 'project'],
+    ['project', 'Everything ordered is moving.', 'Release the next room', 'project'],
     ['install', 'Complete the installation', "Check what's arriving", 'install'],
     ['care', 'Close the book on this one', 'Run the closeout checklist', 'care'],
-  ] as const)('gives %s a useful lifecycle action', (section, headline, label, destination) => {
+  ] as const)('gives %s its rest-state sentence and act', (section, headline, label, destination) => {
     const guide = deriveDocumentGuide({ row: row(section), now: new Date('2026-08-10T12:00:00Z') });
 
     expect(guide.headline).toBe(headline);
@@ -165,7 +169,10 @@ describe('deriveDocumentGuide', () => {
     });
 
     expect(dated.headline).toBe('Install is three weeks out — Tuesday, September 15');
-    expect(dated.action?.label).toBe("Check what's arriving");
+    // A3-L7 — a known install day with no need firing IS the install rest
+    // state ("Install day is {date}." / "Hold the window"), so the act
+    // changes even though the dated headline template itself does not.
+    expect(dated.action?.label).toBe('Hold the window');
   });
 
   it.each([
@@ -530,7 +537,7 @@ describe('deriveDocumentGuide', () => {
 
     expect(deriveDocumentGuide({ row: overdue, now }).headline).toContain('2 decisions overdue');
     expect(deriveDocumentGuide({ row: overdue, now, operationalNeed: null }).headline).toBe(
-      'The work is in motion — nothing is waiting on you',
+      'Everything ordered is moving.',
     );
   });
 
@@ -741,7 +748,7 @@ describe('the guide surfaces the gate (Ruling V)', () => {
   it('leaves the strip whole when the gate read has not answered', () => {
     const guide = deriveDocumentGuide({ row: row('project'), gate: undefined });
     expect(guide.state).not.toBe('unavailable');
-    expect(guide.headline).toBe('The work is in motion — nothing is waiting on you');
+    expect(guide.headline).toBe('Everything ordered is moving.');
   });
 
   it('keeps withInputs from displacing the gate act', () => {
