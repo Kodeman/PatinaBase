@@ -1,8 +1,10 @@
 //  VisitContextTests.swift
 //  CaptureTests
 //
-//  The visit spine (Field Companion wave 3, packages 3-2). Patina Field is not
-//  live anywhere, so there is deliberately NO legacy-decode test here.
+//  The visit spine (Field Companion wave 3, packages 3-2). TestFlight build 2
+//  reached pilots on 2026-08-25, so the "Field is not live anywhere" premise
+//  this file was written under is retired: the build-2 decode test below is
+//  what an installed base costs.
 
 import Foundation
 import Testing
@@ -338,6 +340,65 @@ struct VisitContextTests {
         #expect(specimen.visitStartedAt == nil)
         #expect(specimen.visitEndedAt == nil)
         #expect(specimen.venue?.projectId == nil)
+    }
+
+    // MARK: - F-15: a build-2 blob must still decode
+
+    /// `CaptureSessionContext` is persisted to UserDefaults under an UNCHANGED
+    /// key (`capture.session-context.v1`), so a phone upgrading from TestFlight
+    /// build 2 hands wave 3's decoder a blob written before `projectsInMind`
+    /// existed. Both read sites `try?` the decode away, so a throw here is
+    /// SILENT: her routing memory disappears and nothing says why. A
+    /// non-optional array with no declaration default makes the synthesized
+    /// decoder throw `keyNotFound`; a default makes it absent-tolerant.
+    @Test func aBuildTwoBlobWithoutProjectsInMindStillDecodes() throws {
+        let context = CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            routing: CaptureRoutingMemory(destination: .inbox, projectID: "p1",
+                                          projectName: "Maple St", room: "Living"),
+            kind: .site, kit: .walkThrough, label: "Maple St")
+        let encoded = try JSONEncoder().encode(context)
+        var blob = try #require(try JSONSerialization.jsonObject(with: encoded)
+                                as? [String: Any])
+        // The build-2 shape: the key was not written because it did not exist.
+        blob.removeValue(forKey: "projectsInMind")
+        #expect(blob["projectsInMind"] == nil)
+        let buildTwo = try JSONSerialization.data(withJSONObject: blob)
+
+        let decoded = try JSONDecoder().decode(CaptureSessionContext.self, from: buildTwo)
+
+        #expect(decoded.projectsInMind.isEmpty)
+        #expect(decoded.routing.projectID == "p1")
+        #expect(decoded.routing.room == "Living")
+        #expect(decoded.kind == .site)
+        #expect(decoded.kit == .walkThrough)
+        #expect(decoded.visitID == context.visitID)
+    }
+
+    /// The whole build-2 shape, not just the one key: wave 3 added `kind`,
+    /// `kit`, `label` and `scanRoomID` as well. Those are Optional and the
+    /// synthesized decoder already tolerated them; this pins that the
+    /// hand-written one still does, so nobody re-derives it and drops an arm.
+    @Test func aBuildTwoBlobWithNoVisitFieldsAtAllStillDecodes() throws {
+        let context = CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            routing: CaptureRoutingMemory(destination: .inbox, projectID: "p1"))
+        let encoded = try JSONEncoder().encode(context)
+        var blob = try #require(try JSONSerialization.jsonObject(with: encoded)
+                                as? [String: Any])
+        for key in ["projectsInMind", "kind", "kit", "label", "scanRoomID", "endedAt"] {
+            blob.removeValue(forKey: key)
+        }
+        let buildTwo = try JSONSerialization.data(withJSONObject: blob)
+
+        let decoded = try JSONDecoder().decode(CaptureSessionContext.self, from: buildTwo)
+
+        #expect(decoded.projectsInMind.isEmpty)
+        #expect(decoded.kind == nil)
+        #expect(decoded.kit == nil)
+        #expect(decoded.endedAt == nil)
+        #expect(decoded.routing.projectID == "p1")
+        #expect(!decoded.isVisit)
     }
 
     // MARK: - F-17 / FC-R21: ONE placement predicate, whatever the route

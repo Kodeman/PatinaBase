@@ -62,7 +62,8 @@ public struct CaptureSessionContext: Codable, Equatable, Sendable {
     /// FC-R5 SCAN lane only: a `public.rooms` id. NEVER stamped into
     /// `field_captures.project_room_id` — that is `routing.projectRoomID`.
     public var scanRoomID: String?
-    /// Sourcing only, capped at `maxProjectsInMind`.
+    /// Sourcing only, capped at `maxProjectsInMind`. Absent from a build-2 blob
+    /// — see `init(from:)`.
     public var projectsInMind: [String]
     public var endedAt: Date?
 
@@ -95,6 +96,42 @@ public struct CaptureSessionContext: Codable, Equatable, Sendable {
     public var isVisit: Bool { kind != nil && endedAt == nil }
 
     public static let maxProjectsInMind = 4
+
+    /// Hand-written because this type is PERSISTED — to UserDefaults under an
+    /// unchanged key (`capture.session-context.v1`) — so a phone upgrading from
+    /// TestFlight build 2 hands wave 3's decoder a blob written before
+    /// `projectsInMind`, `kind`, `kit`, `label` and `scanRoomID` existed. Both
+    /// read sites `try?` the decode away, so a throw is SILENT: her routing
+    /// memory disappears and nothing says why.
+    ///
+    /// A declaration default does NOT reach the synthesized decoder — Swift's
+    /// synthesis calls `decode(_:forKey:)` for every non-Optional property
+    /// whatever its default, so `projectsInMind: [String] = []` still throws
+    /// `keyNotFound` against a build-2 blob. `decodeIfPresent` is the only thing
+    /// that makes an added non-Optional property absent-tolerant. Every property
+    /// that has a default in the memberwise initialiser gets one here, so the
+    /// NEXT added field is tolerant by the same rule rather than by memory.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        visitID = try container.decode(UUID.self, forKey: .visitID)
+        identity = try container.decode(CaptureSessionIdentity.self, forKey: .identity)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        lastActivityAt = try container.decode(Date.self, forKey: .lastActivityAt)
+        routing = try container.decodeIfPresent(CaptureRoutingMemory.self,
+                                                forKey: .routing) ?? .empty
+        kind = try container.decodeIfPresent(FieldVisitKind.self, forKey: .kind)
+        kit = try container.decodeIfPresent(FieldVisitKit.self, forKey: .kit)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        scanRoomID = try container.decodeIfPresent(String.self, forKey: .scanRoomID)
+        // NOT capped here, unlike the memberwise initialiser: an over-cap stored
+        // blob decodes long and `FieldVisitDoorModel` truncates on open, which is
+        // what `VisitDoorTests.anOverCapProjectsInMindArrivesLongAndOpensTruncated`
+        // pins. This initialiser exists to tolerate an ABSENT key and to change
+        // nothing else.
+        projectsInMind = try container.decodeIfPresent([String].self,
+                                                       forKey: .projectsInMind) ?? []
+        endedAt = try container.decodeIfPresent(Date.self, forKey: .endedAt)
+    }
 }
 
 public enum CaptureSessionContextPolicy {
