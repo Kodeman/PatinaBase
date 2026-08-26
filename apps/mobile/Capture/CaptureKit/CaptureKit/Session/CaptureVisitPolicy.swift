@@ -93,6 +93,29 @@ public extension CaptureSessionContextPolicy {
         return idle > staleConfirmWindow ? .stale(context) : .active(context)
     }
 
+    /// WHY an open visit stopped being live without a tap. `visitState` answers
+    /// "is it live"; this answers "what closed it", which is the half §14 needs
+    /// and the half that was computed and thrown away — the three conditions
+    /// below write nothing and emitted nothing, so `visit.start` and `visit.end`
+    /// did not pair.
+    ///
+    /// Nil for anything that is not an OPEN visit (a kindless context, an
+    /// already-ended one, no context at all) and nil while the visit is still
+    /// live. Kept in lockstep with `visitState` by construction: every arm that
+    /// returns `.none` there for a live-visit input has a reason here.
+    static func expiry(for context: CaptureSessionContext?,
+                       now: Date,
+                       calendar: Calendar) -> FieldVisitEndReason? {
+        guard let context, context.kind != nil, context.endedAt == nil else { return nil }
+        // A backwards clock is an auto-end, not its own reason: R3-1 already
+        // treats it as the same act (drop the visit rather than resume it), and
+        // a fourth name would split one dashboard row for no decision.
+        guard now >= context.lastActivityAt else { return .auto }
+        guard now.timeIntervalSince(context.lastActivityAt) <= autoEndWindow else { return .auto }
+        guard calendar.isDate(context.startedAt, inSameDayAs: now) else { return .rollover }
+        return nil
+    }
+
     static func started(_ draft: CaptureVisitDraft,
                         identity: CaptureSessionIdentity,
                         now: Date) -> CaptureSessionContext {

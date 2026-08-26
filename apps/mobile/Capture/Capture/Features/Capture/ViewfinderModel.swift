@@ -75,6 +75,14 @@ final class ViewfinderModel {
     }
 
     func refreshVisit(now: Date = Date()) {
+        // FC-R21 part 3: this is the seam the foreground hook already re-reads
+        // through, and the 12-hour rule, a backwards clock and the calendar
+        // rollover all expire a visit with nobody tapping anything. Reap BEFORE
+        // reading, so the chip and the event agree, and only the first noticer
+        // of a given expiry emits.
+        FieldVisitEndEmitter(store: store, analytics: analytics,
+                             userID: session.userID,
+                             workspaceID: session.workspaceID).reapExpired(now: now)
         visitState = sessionContext.visitState(
             identity: CaptureSessionIdentity(userID: session.userID,
                                              workspaceID: session.workspaceID),
@@ -411,7 +419,8 @@ final class ViewfinderModel {
                 specimen.placementEventEmitted = true
                 try? store.save()
                 analytics.emit(FieldVisitTelemetry.placement(
-                    specimen, basis: visitState.isVisit ? "visit" : "manual"))
+                    specimen, basis: visitState.isVisit ? "visit" : "manual",
+                    source: .capture))
                 try await sync.route(id, to: specimen.destination)
                 coordinator.present(specimen.destination == .library
                     ? .savedTerminal(id)

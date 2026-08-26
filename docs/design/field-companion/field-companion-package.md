@@ -1753,13 +1753,37 @@ New events (all on the existing `CaptureAnalytics.event` seam):
 | `voice.interrupted` | `reason` | how often a site visit interrupts a note |
 | `voice.audio_write_failed` | `reason` | F1 rate |
 | `voice.empty_transcript` | `had_audio` | **the honesty repair's own metric** — how often the old code would have silently discarded |
-| `capture.placed` | `basis` (visit/manual/suggested), `has_room` | the program's headline metric |
-| `capture.unplaced` | — | the roving hole's size |
+| `capture.placed` | `basis` (visit/manual/suggested), `has_room`, `source` (capture/tray) | the program's headline metric |
+| `capture.unplaced` | `source` (capture/tray) | the roving hole's size |
 | `visit.start` | `kind`, `kit`, `offline` | wave 3 |
-| `visit.end` | `duration_min`, `captures`, `notes`, `scans`, `unplaced` | wave 3 |
+| `visit.end` | `duration_min`, `captures`, `notes`, `scans`, `unplaced`, `reason` (explicit/auto/rollover/change) | wave 3 |
 | `visit.stale_prompt` | `answer` | the mis-stamp mitigation's own metric |
 | `suggestion.shown` / `suggestion.accepted` | `basis` | whether suggestions earn their keep |
 | `note.made_task` / `note.made_punch` | `outcome` | wave 4 — **and the evidence gate for wave 6** |
+
+**The placed/unplaced pair has ONE predicate (FC-R21).** Which of the two fires is
+`Specimen.isUnplaced` **after the action** — a destination that owes a project and lacks one —
+regardless of which route emits it. `venue.project_id != null` is NOT that predicate and no emitter
+reads it: a Library capture owes no project, so it is *placed* even with no project id. `source`
+says which route: `capture` for the at-capture emission (C3's card commit, S3's destination choice),
+`tray` for a capture born unplaced and filed later from V1. A later tray filing is a **second,
+deliberate event** about the same capture — the transition is what is counted — so the at-capture
+dedupe flag does not suppress it.
+
+**`visit.end` fires on EVERY close, with a `reason` (FC-R21).** `explicit` = one of the four
+End-visit taps; `auto` = the 12-hour idle rule or a backwards clock; `rollover` = the calendar-day
+rule; `change` = a new visit started at the door over an open one. Exactly one fires per close: the
+computed ends stamp `ended_at` when they are reaped, so a second reader of the same expiry finds
+nothing to close. `duration_min` is **wall time** from `started_at` to the close, never
+idle-adjusted, whatever the reason.
+
+⚠ **Known until wave 3 — do not read older data as if the pair held.**
+Before wave 3's fix set, `visit.end` was emitted only from the four End-visit taps: the 12-hour
+auto-end, the calendar rollover and the Change-visit path all closed a visit silently, so
+`visit.start` and `visit.end` did **not** pair and any completion rate computed from data before
+that is understated — wrong in the common case, not the rare one. Over the same period
+`capture.placed`/`capture.unplaced` used two different predicates depending on route, and a capture
+filed later from the tray emitted neither.
 
 **Wave 6's gate is these numbers, not a hunch:** measured device-transcript quality from wave 1–3's
 corpus, and the measured tap-cost of wave 4's manual verbs.

@@ -187,6 +187,17 @@ public enum CaptureSessionContextPolicy {
     }
 }
 
+/// What `reapExpiredVisit` found: the visit as it stood OPEN, and why it closed.
+public struct FieldVisitEndNotice: Equatable, Sendable {
+    public let context: CaptureSessionContext
+    public let reason: FieldVisitEndReason
+
+    public init(context: CaptureSessionContext, reason: FieldVisitEndReason) {
+        self.context = context
+        self.reason = reason
+    }
+}
+
 @MainActor
 public final class CaptureSessionContextStore {
     public static let shared = CaptureSessionContextStore()
@@ -290,6 +301,36 @@ public final class CaptureSessionContextStore {
         persist(closed)
         NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
         return closed
+    }
+
+    /// FC-R21 part 3: close a visit that expired without a tap, EXACTLY ONCE.
+    ///
+    /// The three computed ends (`CaptureSessionContextPolicy.expiry`) are
+    /// functions of time: they write nothing and post nothing, so a visit could
+    /// die in her pocket and no `visit.end` ever fired. This is what turns one
+    /// into a real close — it stamps `endedAt`, so the second caller to notice
+    /// the same expiry (another screen refreshing, a second foreground) gets
+    /// `nil` and cannot double-emit.
+    ///
+    /// Returns the still-OPEN context, not the closed one: the caller reads the
+    /// visit's own §14 counts from it, and `endedAt` would only tell it what it
+    /// already knows.
+    @discardableResult
+    public func reapExpiredVisit(
+        identity: CaptureSessionIdentity,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> FieldVisitEndNotice? {
+        let stored = defaults.data(forKey: key).flatMap {
+            try? decoder.decode(CaptureSessionContext.self, from: $0)
+        }
+        guard let open = stored, open.identity == identity,
+              let reason = CaptureSessionContextPolicy.expiry(for: open, now: now,
+                                                              calendar: calendar)
+        else { return nil }
+        persist(CaptureSessionContextPolicy.ended(open, now: now))
+        NotificationCenter.default.post(name: Self.visitDidChange, object: nil)
+        return FieldVisitEndNotice(context: open, reason: reason)
     }
 
     public func reset() {

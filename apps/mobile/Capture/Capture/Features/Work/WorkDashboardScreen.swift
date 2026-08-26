@@ -66,15 +66,7 @@ struct WorkDashboardScreen: View {
                         // `endVisit` closes the context — afterwards
                         // `visitState` reads `.none` and the counts are gone.
                         if let context = model.visitState.context {
-                            let counts = FieldVisitEndCounts.compute(
-                                context: context, store: store,
-                                runsRealServices: AppConfiguration.runsRealServices,
-                                userID: session.userID,
-                                workspaceID: session.workspaceID)
-                            analytics.emit(FieldVisitTelemetry.visitEnd(
-                                duration: counts.duration, captures: counts.captures,
-                                notes: counts.notes, scans: counts.scans,
-                                unplaced: counts.unplaced))
+                            visitEndEmitter.emit(.explicit, context: context)
                         }
                         _ = CaptureSessionContextStore.shared.endVisit(identity: identity)
                         model.refreshVisit()
@@ -119,6 +111,11 @@ struct WorkDashboardScreen: View {
         }
         .task {
             analytics.screen(CaptureScreenID.w1Work.rawValue)
+            // FC-R21 part 3: W1 is where she lands when Today is home, so it is
+            // often the first surface to see a visit that expired overnight.
+            // Only the first noticer emits — the reap stamps `endedAt`.
+            visitEndEmitter.reapExpired()
+            model.refreshVisit()
             await model.loadAll()
             updateCompanionHint()
         }
@@ -130,6 +127,11 @@ struct WorkDashboardScreen: View {
             value: contentRevision
         )
         .accessibilityIdentifier(CaptureScreenID.w1Work.rawValue)
+    }
+
+    private var visitEndEmitter: FieldVisitEndEmitter {
+        FieldVisitEndEmitter(store: store, analytics: analytics,
+                             userID: session.userID, workspaceID: session.workspaceID)
     }
 
     private var identity: CaptureSessionIdentity {

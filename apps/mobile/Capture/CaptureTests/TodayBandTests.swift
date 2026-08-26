@@ -441,11 +441,13 @@ struct TodayBandTests {
         #expect(start.name == "visit.start")
         #expect(start.properties == ["kind": "site", "kit": "walk_through", "offline": "true"])
 
-        let end = FieldVisitTelemetry.visitEnd(duration: 3600, captures: 12, notes: 3,
-                                               scans: 1, unplaced: 2)
+        let end = FieldVisitTelemetry.visitEnd(
+            FieldVisitCounts(duration: 3600, captures: 12, notes: 3, scans: 1, unplaced: 2),
+            reason: .explicit)
         #expect(end.name == "visit.end")
         #expect(end.properties == ["duration_min": "60", "captures": "12",
-                                   "notes": "3", "scans": "1", "unplaced": "2"])
+                                   "notes": "3", "scans": "1", "unplaced": "2",
+                                   "reason": "explicit"])
 
         #expect(FieldVisitTelemetry.stalePrompt(answer: "resume")
                 == ("visit.stale_prompt", ["answer": "resume"]))
@@ -458,10 +460,50 @@ struct TodayBandTests {
         #expect(shown.properties == ["basis": "proximity"])
         #expect(FieldVisitTelemetry.suggestionAccepted(suggestion).name == "suggestion.accepted")
 
-        let placed = FieldVisitTelemetry.capturePlaced(basis: "visit", hasRoom: true)
+        let placed = FieldVisitTelemetry.capturePlaced(basis: "visit", hasRoom: true,
+                                                      source: .capture)
         #expect(placed.name == "capture.placed")
-        #expect(placed.properties == ["basis": "visit", "has_room": "true"])
-        #expect(FieldVisitTelemetry.captureUnplaced == ("capture.unplaced", [:]))
+        #expect(placed.properties == ["basis": "visit", "has_room": "true",
+                                      "source": "capture"])
+        #expect(FieldVisitTelemetry.captureUnplaced(source: .capture)
+                == ("capture.unplaced", ["source": "capture"]))
+    }
+
+    /// FC-R21 part 3: every close names itself, and the four reasons are the
+    /// whole vocabulary — a dashboard dividing ends by starts needs to know
+    /// which ends she chose.
+    @Test func everyCloseReasonReachesTheEvent() {
+        for reason in FieldVisitEndReason.allCases {
+            let end = FieldVisitTelemetry.visitEnd(
+                FieldVisitCounts(duration: 0, captures: 0, notes: 0, scans: 0, unplaced: 0),
+                reason: reason)
+            #expect(end.properties["reason"] == reason.rawValue)
+        }
+        #expect(Set(FieldVisitEndReason.allCases.map(\.rawValue))
+                == ["explicit", "auto", "rollover", "change"])
+    }
+
+    /// FC-R21 part 2: a capture born unplaced and filed LATER from the tray is
+    /// the flow the visit spine exists to enable, and it emitted nothing. The
+    /// route is now a property, so the placed/unplaced ratio can be read per
+    /// route instead of being biased against the one that matters.
+    @MainActor
+    @Test func aCaptureFiledFromTheTrayIsPlacedFromTheTray() throws {
+        let store = try CaptureStore.inMemory()
+        let specimen = store.newDraft()
+        specimen.destination = .inbox
+        try store.save()
+        #expect(specimen.isUnplaced)
+
+        specimen.place(projectID: "p1", projectRoomID: "pr1", room: nil)
+        try store.save()
+
+        let event = FieldVisitTelemetry.placement(specimen, basis: "suggested",
+                                                  source: .tray)
+        #expect(event.name == "capture.placed")
+        #expect(event.properties["source"] == "tray")
+        #expect(event.properties["basis"] == "suggested")
+        #expect(event.properties["has_room"] == "true")
     }
 
     @Test func theConfidenceNumberNeverLeavesTheDevice() {

@@ -192,7 +192,7 @@ private struct S3Content: View {
                     // capture with no project UNPLACED while its sibling
                     // emitter called the same capture placed.
                     analytics.emit(FieldVisitTelemetry.placement(
-                        specimen, basis: placementBasis))
+                        specimen, basis: placementBasis, source: .capture))
                     try? store.save()
                 }
                 routing = nil

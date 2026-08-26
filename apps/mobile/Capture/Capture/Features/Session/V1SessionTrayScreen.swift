@@ -217,6 +217,16 @@ struct V1SessionTrayScreen: View {
         if let basis = specimen.suggestionBasis {
             analytics.emit(FieldVisitTelemetry.suggestionAccepted(basis: basis))
         }
+        // FC-R21 part 2: filing from the tray is the flow the visit spine exists
+        // to enable, and it emitted nothing — so the placed/unplaced ratio was
+        // biased against exactly it. `placementEventEmitted` deliberately does
+        // NOT gate this: that flag dedupes the CAPTURE-time pair, and this is a
+        // second, deliberate event about the same capture, marked `source: tray`
+        // so the two are never confused. Emitted AFTER `place(…)`, because the
+        // predicate is `isUnplaced` as it stands after the action.
+        analytics.emit(FieldVisitTelemetry.placement(
+            specimen, basis: specimen.suggestionBasis?.rawValue ?? "manual",
+            source: .tray))
         placedJustNow.insert(specimen.id)
         reload()
         // §13.5: filing works offline. The local record is written now; the
@@ -389,17 +399,16 @@ struct V1SessionTrayScreen: View {
         // visit's own unplaced rows excluded for display, so the count comes
         // fresh from the store instead of undercounting them.
         if let context = sessionContext.visitState(identity: identity).context {
-            let counts = FieldVisitEndCounts.compute(
-                context: context, store: store,
-                runsRealServices: AppConfiguration.runsRealServices,
-                userID: session.userID, workspaceID: session.workspaceID)
-            analytics.emit(FieldVisitTelemetry.visitEnd(
-                duration: counts.duration, captures: counts.captures,
-                notes: counts.notes, scans: counts.scans, unplaced: counts.unplaced))
+            visitEndEmitter.emit(.explicit, context: context)
         }
         _ = sessionContext.endVisit(identity: identity)
         reload()
         coordinator.popToRoot()
+    }
+
+    private var visitEndEmitter: FieldVisitEndEmitter {
+        FieldVisitEndEmitter(store: store, analytics: analytics,
+                             userID: session.userID, workspaceID: session.workspaceID)
     }
 
     private var identity: CaptureSessionIdentity {

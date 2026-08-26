@@ -226,6 +226,107 @@ struct VisitContextTests {
         #expect(resolved.lastActivityAt == now)
     }
 
+    // MARK: - R269 / FC-R21: visit.end on EVERY close, with a reason
+
+    @Test func theThreeComputedEndsEachNameThemselves() {
+        let open = CaptureSessionContextPolicy.started(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
+            identity: identity, now: now)
+
+        // Live: nothing to close.
+        #expect(CaptureSessionContextPolicy.expiry(for: open, now: now.addingTimeInterval(60),
+                                          calendar: calendar) == nil)
+        // 12-hour idle.
+        #expect(CaptureSessionContextPolicy.expiry(for: open,
+                                          now: now.addingTimeInterval(13 * 3600),
+                                          calendar: calendar) == .auto)
+        // A backwards clock closes rather than resumes (R3-1).
+        #expect(CaptureSessionContextPolicy.expiry(for: open, now: now.addingTimeInterval(-60),
+                                          calendar: calendar) == .auto)
+    }
+
+    @Test func aVisitThatCrossesMidnightEndsByRollover() {
+        var components = DateComponents()
+        components.year = 2026; components.month = 8; components.day = 25
+        components.hour = 23; components.minute = 40
+        let evening = calendar.date(from: components)!
+        let open = CaptureSessionContextPolicy.started(
+            CaptureVisitDraft(kind: .site, kit: .install, label: "Maple St"),
+            identity: identity, now: evening)
+
+        // 30 minutes later is well inside the idle window and STILL a different
+        // calendar day — the rule the 12-hour arm cannot express.
+        let afterMidnight = evening.addingTimeInterval(30 * 60)
+        #expect(CaptureSessionContextPolicy.expiry(for: open, now: afterMidnight,
+                                          calendar: calendar) == .rollover)
+    }
+
+    @Test func nothingExpiresWhatIsNotAnOpenVisit() {
+        let kindless = CaptureSessionContext(identity: identity, startedAt: now,
+                                             lastActivityAt: now)
+        #expect(CaptureSessionContextPolicy.expiry(for: kindless,
+                                          now: now.addingTimeInterval(13 * 3600),
+                                          calendar: calendar) == nil)
+        #expect(CaptureSessionContextPolicy.expiry(for: nil, now: now, calendar: calendar) == nil)
+
+        let closed = CaptureSessionContextPolicy.ended(
+            CaptureSessionContextPolicy.started(
+                CaptureVisitDraft(kind: .site, label: "Maple St"),
+                identity: identity, now: now),
+            now: now.addingTimeInterval(60))
+        #expect(CaptureSessionContextPolicy.expiry(for: closed,
+                                          now: now.addingTimeInterval(13 * 3600),
+                                          calendar: calendar) == nil)
+    }
+
+    /// FC-R21: exactly ONE `visit.end` per close. The reap stamps `endedAt`, so
+    /// a second reader of the same expiry — another screen refreshing, the app
+    /// foregrounding twice — finds nothing left to close and emits nothing.
+    @Test @MainActor func anExpiredVisitIsReapedExactlyOnce() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        let open = store.startVisit(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
+            identity: identity, now: now)
+        let late = now.addingTimeInterval(13 * 3600)
+
+        let first = try #require(store.reapExpiredVisit(identity: identity, now: late,
+                                                        calendar: calendar))
+        #expect(first.reason == .auto)
+        // The OPEN context, so the caller can still read the visit's own counts.
+        #expect(first.context.visitID == open.visitID)
+        #expect(first.context.endedAt == nil)
+
+        #expect(store.reapExpiredVisit(identity: identity, now: late,
+                                       calendar: calendar) == nil)
+        #expect(store.visitState(identity: identity, now: late, calendar: calendar) == .none)
+    }
+
+    @Test @MainActor func aLiveVisitIsNeverReaped() throws {
+        let suite = "visit-context-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CaptureSessionContextStore(defaults: defaults, key: "context")
+
+        let open = store.startVisit(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St"),
+            identity: identity, now: now)
+        let soon = now.addingTimeInterval(60)
+
+        #expect(store.reapExpiredVisit(identity: identity, now: soon,
+                                       calendar: calendar) == nil)
+        #expect(store.visitState(identity: identity, now: soon,
+                                 calendar: calendar) == .active(open))
+        // A stranger's device reaps nothing of hers either.
+        let stranger = CaptureSessionIdentity(userID: "u2", workspaceID: "w1")
+        #expect(store.reapExpiredVisit(identity: stranger,
+                                       now: now.addingTimeInterval(13 * 3600),
+                                       calendar: calendar) == nil)
+    }
+
     // MARK: - the store, on CaptureLifecycleTests' UserDefaults-injection pattern
 
     @Test @MainActor func endVisitClosesTheSameVisitRatherThanReplacingIt() throws {
@@ -420,7 +521,7 @@ struct VisitContextTests {
         #expect(!library.isUnplaced)
         #expect(library.venue?.projectId == nil)
 
-        let event = FieldVisitTelemetry.placement(library, basis: "manual")
+        let event = FieldVisitTelemetry.placement(library, basis: "manual", source: .capture)
         #expect(event.name == "capture.placed")
         #expect(event.properties["has_room"] == "false")
     }
@@ -433,7 +534,7 @@ struct VisitContextTests {
         try store.save()
 
         #expect(inbox.isUnplaced)
-        #expect(FieldVisitTelemetry.placement(inbox, basis: "manual").name
+        #expect(FieldVisitTelemetry.placement(inbox, basis: "manual", source: .capture).name
                 == "capture.unplaced")
     }
 
@@ -447,7 +548,7 @@ struct VisitContextTests {
         placed.venue?.projectRoomId = "pr1"
         try store.save()
 
-        let event = FieldVisitTelemetry.placement(placed, basis: "visit")
+        let event = FieldVisitTelemetry.placement(placed, basis: "visit", source: .capture)
         #expect(event.name == "capture.placed")
         #expect(event.properties["basis"] == "visit")
         #expect(event.properties["has_room"] == "true")

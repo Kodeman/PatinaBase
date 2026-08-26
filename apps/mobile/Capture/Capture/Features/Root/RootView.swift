@@ -253,14 +253,11 @@ struct RootView: View {
             let identity = CaptureSessionIdentity(userID: container.session.userID,
                                                   workspaceID: container.session.workspaceID)
             if let context = CaptureSessionContextStore.shared.visitState(identity: identity).context {
-                let counts = FieldVisitEndCounts.compute(
-                    context: context, store: container.store,
-                    runsRealServices: AppConfiguration.runsRealServices,
-                    userID: container.session.userID,
-                    workspaceID: container.session.workspaceID)
-                container.analytics.emit(FieldVisitTelemetry.visitEnd(
-                    duration: counts.duration, captures: counts.captures,
-                    notes: counts.notes, scans: counts.scans, unplaced: counts.unplaced))
+                FieldVisitEndEmitter(store: container.store,
+                                     analytics: container.analytics,
+                                     userID: container.session.userID,
+                                     workspaceID: container.session.workspaceID)
+                    .emit(.explicit, context: context)
             }
             // A visit started later mints a NEW visitID by design; this does not
             // re-attribute anything already captured under the closed one.
@@ -481,6 +478,41 @@ private enum FieldCompanionPlacement: Equatable {
     case collapsed(FieldRealm, CaptureRoute?)
 }
 
+/// FC-R21 part 3: the ONE place `visit.end` is emitted, so no close can be
+/// added without a reason and no close can fire twice. The four tapped sites
+/// call `emit(.explicit, …)`; the Change path calls `emit(.change, …)`; the
+/// three computed ends go through `reapExpired`, which emits only if the reap
+/// actually closed something.
+@MainActor
+struct FieldVisitEndEmitter {
+    let store: CaptureStore
+    let analytics: any CaptureAnalytics
+    let userID: String?
+    let workspaceID: String?
+
+    func emit(_ reason: FieldVisitEndReason,
+              context: CaptureSessionContext,
+              now: Date = Date()) {
+        analytics.emit(FieldVisitTelemetry.visitEnd(
+            FieldVisitEndCounts.compute(
+                context: context, store: store,
+                runsRealServices: AppConfiguration.runsRealServices,
+                userID: userID, workspaceID: workspaceID, now: now),
+            reason: reason))
+    }
+
+    /// The 12-hour idle rule, a backwards clock and the calendar rollover all
+    /// close a visit without anyone tapping anything. Safe to call from every
+    /// surface that re-reads the visit: the reap stamps `endedAt`, so only the
+    /// first caller to notice a given expiry emits.
+    func reapExpired(now: Date = Date()) {
+        let identity = CaptureSessionIdentity(userID: userID, workspaceID: workspaceID)
+        guard let notice = CaptureSessionContextStore.shared.reapExpiredVisit(
+            identity: identity, now: now) else { return }
+        emit(notice.reason, context: notice.context, now: now)
+    }
+}
+
 /// Task 31: the exact five counts `FieldVisitTelemetry.visitEnd` needs, read
 /// from the OPEN visit's own context. Shared by all FOUR end-visit call sites
 /// (V0's door, V1's tray, this companion-strip action, and W1's stale prompt)
@@ -490,13 +522,7 @@ private enum FieldCompanionPlacement: Equatable {
 /// `SupabaseSiteScanService.pendingUploads()` reports (it is a thin wrapper over
 /// `store.scanUploadRecords(owner:)`), read straight from the store since none
 /// of these four call sites hold a live `SiteScanService`.
-struct FieldVisitEndCounts {
-    let duration: TimeInterval
-    let captures: Int
-    let notes: Int
-    let scans: Int
-    let unplaced: Int
-
+enum FieldVisitEndCounts {
     @MainActor
     static func compute(
         context: CaptureSessionContext,
@@ -505,7 +531,7 @@ struct FieldVisitEndCounts {
         userID: String?,
         workspaceID: String?,
         now: Date = Date()
-    ) -> FieldVisitEndCounts {
+    ) -> FieldVisitCounts {
         let visitCaptures: [Specimen]
         let allUnfiled: [Specimen]
         let pendingScans: Int
@@ -532,7 +558,7 @@ struct FieldVisitEndCounts {
                 && ((specimen.voiceTranscript?.isEmpty == false)
                     || specimen.voiceAudioFilename?.isEmpty == false)
         }.count
-        return FieldVisitEndCounts(
+        return FieldVisitCounts(
             duration: now.timeIntervalSince(context.startedAt),
             captures: max(0, visitCaptures.count - notes),
             notes: notes,

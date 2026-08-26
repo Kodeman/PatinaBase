@@ -325,8 +325,21 @@ struct V0VisitSheet: View {
         }
     }
 
+    private var visitEndEmitter: FieldVisitEndEmitter {
+        FieldVisitEndEmitter(store: container.store, analytics: container.analytics,
+                             userID: container.session.userID,
+                             workspaceID: container.session.workspaceID)
+    }
+
     private func start(_ model: FieldVisitDoorModel) {
         guard let draft = model.draft(), let owner = container.session.ownerIdentity else { return }
+        // FC-R21 part 3: Change REPLACES an open visit, which is a close — and
+        // it emitted nothing, so a designer who changes visits all day produced
+        // one `visit.end` for a dozen `visit.start`s. Read the counts BEFORE
+        // `startVisit` overwrites the context; afterwards they are unrecoverable.
+        if let closing = contextStore.visitState(identity: identity).context {
+            visitEndEmitter.emit(.change, context: closing)
+        }
         contextStore.startVisit(draft, identity: identity)
         if let projectID = draft.projectID {
             container.projectCache.recordVisit(projectID: projectID, owner: owner)
@@ -344,14 +357,7 @@ struct V0VisitSheet: View {
         // closes the context — afterwards `visitState` reads `.none` and they
         // are unrecoverable.
         if let context = contextStore.visitState(identity: identity).context {
-            let counts = FieldVisitEndCounts.compute(
-                context: context, store: container.store,
-                runsRealServices: AppConfiguration.runsRealServices,
-                userID: container.session.userID,
-                workspaceID: container.session.workspaceID)
-            container.analytics.emit(FieldVisitTelemetry.visitEnd(
-                duration: counts.duration, captures: counts.captures,
-                notes: counts.notes, scans: counts.scans, unplaced: counts.unplaced))
+            visitEndEmitter.emit(.explicit, context: context)
         }
         contextStore.endVisit(identity: identity)
         coordinator.dismissSheet()

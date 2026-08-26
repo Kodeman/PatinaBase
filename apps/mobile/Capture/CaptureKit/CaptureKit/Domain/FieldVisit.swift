@@ -27,6 +27,19 @@ public enum FieldNoteSetting: String, Codable, CaseIterable, Sendable {
     case conversation
 }
 
+/// FC-R21 part 3: why a visit closed. §14's `visit.end` carries exactly these
+/// four and no others — `explicit` is one of the four End-visit taps, `auto` is
+/// the 12-hour idle rule or a backwards clock, `rollover` is the calendar-day
+/// rule, and `change` is a new visit started at the door over an open one.
+/// Without it `visit.start` and `visit.end` do not pair and a completion rate
+/// read from §14 is wrong in the common case.
+public enum FieldVisitEndReason: String, Codable, CaseIterable, Sendable {
+    case explicit
+    case auto
+    case rollover
+    case change
+}
+
 /// §9.3 `suggestion_basis`. Waves 1–3 produce only `visit`, `venue` and `proximity`.
 public enum FieldSuggestionBasis: String, Codable, CaseIterable, Sendable {
     case visit, scan, proximity, venue, calendar, transcript
