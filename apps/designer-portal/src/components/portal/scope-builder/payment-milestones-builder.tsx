@@ -189,7 +189,7 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
             <span
               className="font-mono text-[0.68rem]"
               style={{
-                color: isBalanced ? 'var(--color-sage)' : 'var(--color-terracotta)',
+                color: isBalanced ? 'var(--color-sage)' : 'var(--color-terracotta-ink)',
               }}
             >
               {totalPercentage}% allocated
@@ -392,7 +392,7 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
           <span
             className="text-right font-mono text-[0.82rem] font-semibold"
             style={{
-              color: isBalanced ? 'var(--color-sage)' : 'var(--color-terracotta)',
+              color: isBalanced ? 'var(--color-sage)' : 'var(--color-terracotta-ink)',
             }}
           >
             {totalPercentage}%

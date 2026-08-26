@@ -250,7 +250,12 @@ export function GhostAddLine({
         {compute && (
           <div
             className="mt-[0.45rem] font-mono text-[0.6rem] uppercase tracking-[0.07em]"
-            style={{ color: compute.tone === 'terracotta' ? 'var(--color-terracotta)' : 'var(--color-clay)' }}
+            style={{
+              color:
+                compute.tone === 'terracotta'
+                  ? 'var(--color-terracotta-ink)'
+                  : 'var(--color-clay-ink)',
+            }}
           >
             {compute.text}
           </div>

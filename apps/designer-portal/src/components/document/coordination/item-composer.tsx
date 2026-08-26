@@ -546,7 +546,7 @@ export function ItemComposer({
                       ? 'var(--color-clay)'
                       : 'var(--color-pearl)',
                     background: on ? 'rgba(196,165,123,0.1)' : 'transparent',
-                    color: on ? 'var(--color-clay)' : 'var(--color-aged-oak)',
+                    color: on ? 'var(--color-clay-ink)' : 'var(--color-aged-oak)',
                   }}
                 >
                   {t.label}

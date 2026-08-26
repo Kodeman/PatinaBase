@@ -74,7 +74,7 @@ export function MilestoneRow({ milestone, today, highlighted = false, onUnpinAnc
       {milestone.anchored && <AnchorChip date={milestone.date} className="flex-none" onUnpin={onUnpinAnchor} />}
       <span
         className="ml-auto whitespace-nowrap pl-3 font-mono text-[0.58rem] uppercase tracking-[0.06em]"
-        style={{ color: stamp.late ? 'var(--color-terracotta)' : 'var(--color-aged-oak)' }}
+        style={{ color: stamp.late ? 'var(--color-terracotta-ink)' : 'var(--color-aged-oak)' }}
       >
         {stamp.text}
       </span>

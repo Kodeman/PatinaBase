@@ -1292,6 +1292,62 @@ describe('DocumentPage guide activation', () => {
       expect(value('dates')).toBe('No dates yet');
     });
 
+    // ── B3 · the People row's two absences, at the PAGE's grain. The
+    // derivation distinguishes them (`ticket-derivation.test.ts`); what is
+    // proven here is that the page hands it the fact it needs — `project` is
+    // read off THIS document's own row (`engagement_kind === 'project' &&
+    // project_id`), not assumed. Wired wrong — hard-true, or dropped — a lead
+    // document would tell the reader their studio has the call sheet switched
+    // off, which is a claim about the studio and false in the same session its
+    // project documents open theirs. The flag is off in this file's mocks and
+    // the roster is empty, so the two cases differ ONLY by that one fact. ──
+    const peopleValue = () =>
+      document
+        .querySelector('[data-ticket-row="people"] span:nth-child(2)')
+        ?.textContent;
+
+    it('says the roster is missing, not switched off, on a document with no project', () => {
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(peopleValue()).toBe('No roster yet');
+    });
+
+    it('reads the leaf-mount predicate, not merely the presence of a project id', () => {
+      // The one row that separates `Boolean(project_id)` from the predicate the
+      // call sheet actually mounts on (`:1487`). A proposal engagement can
+      // carry a project id, and the ticket mounted on it IS the job ticket —
+      // but its call sheet is not on the page, so the row must not offer a door
+      // to it, and must not blame the studio for the roster it cannot show.
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: {
+          kind: 'engagement',
+          row: {
+            ...current,
+            engagement_kind: 'proposal',
+            active_section: 'proposal',
+            project_id: 'project-1',
+          },
+        },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(peopleValue()).toBe('No roster yet');
+      expect(
+        document.querySelector('[data-ticket-row="people"] button'),
+      ).toBeNull();
+    });
+
+    it('names the studio switch only once a project is behind the paper', () => {
+      asProjectDocument();
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(peopleValue()).toBe("the call sheet isn't turned on for this studio");
+    });
+
     it('mounts exactly one ticket on a document, project or not', () => {
       render(<DocumentPage params={fulfilledParams} />);
       expect(document.querySelectorAll(TICKET)).toHaveLength(1);
