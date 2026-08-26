@@ -1,7 +1,9 @@
 'use client';
 
 /**
- * "In this document" — the running index. The four Project regions that carry
+ * "On this paper" — the running index, and from B1 the spine's ONE block. The
+ * product's own metaphor (D12), and it stops colliding with the ticket's
+ * `The job`. The four Project regions that carry
  * a real inline surface, each with the one thing it currently says, and a
  * reading line that rides down the list as the paper scrolls.
  *
@@ -64,7 +66,7 @@ export function SpineRunningIndex({
         id="doc-running-index-label"
         className="mb-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
       >
-        In this document
+        On this paper
       </p>
       <div
         role="group"
