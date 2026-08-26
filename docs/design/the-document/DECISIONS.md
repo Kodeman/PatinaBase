@@ -9937,3 +9937,43 @@ verification found no placeholder values in the chunks actually served.
 Signed-in walk owed to Kody; Deploy B follows B3 (I151).
 
 *Entries add: I150-deploy · last id = I150*
+
+### I151 · Wave B3 — the contrast pass and one status word — 2026-08-26
+
+F56 lands at Kody's repo-wide scope: `--color-clay` and `--color-terracotta` stay material pigments for
+fills, borders, rules, pools and stamp outlines, and two new text-grade companions —
+`--color-clay-ink` (`#7C5E30`, 5.75:1 paper · 5.61:1 off-white · 6.00:1 white) and `--color-terracotta-ink`
+(`#9C5340`, 5.41:1 paper · 5.28:1 off-white · 5.64:1 white) — carry the same hue wherever the pigment is
+read as text, registered in both `globals.css :root` and `tailwind.config.ts` so `text-[var(--color-clay-ink)]`
+and `text-patina-clay-ink` both resolve; `--color-terracotta-ink` also supersedes the old `#C4836F`
+"terracotta ink" literal at 24 sites (several named `TERRACOTTA_INK`), and F73's scored-ink controls move
+onto the same companion tokens. A new `lib/document/__tests__/contrast.test.ts` parses `globals.css` and
+computes the WCAG ratio of every `-ink` token against both paper backgrounds, failing under 4.5:1 — a
+guard against regression, not a one-time fix — and the rendered verification confirms `NEEDS ATTENTION`,
+every `OVERDUE`, every scored-ink act and every DM Mono label now clears AA against the paper with fills
+and rules visually unchanged. F58 lands per Kody's ruling, R125 item 4(c), Option 3 of
+`build/f58-options.md`: `lineStampLabel` joins `deriveLineStamp` in `stamp-derivation.ts` as the single
+source of the word a line's lifecycle prints, and both `ffe-section.tsx` and the spine's `spec-book-leaf.tsx`
+now read it instead of the leaf's old raw-enum `prettyStatus` — one line reads one word at every width,
+across **DELIVERED** (arrived, awaiting inspection — the word the paper used to spend on `RECEIVED`),
+**RECEIVED** (inspected in full), **PARTIAL** (inspected short, R18) and **DAMAGED** (an open claim,
+00196); the FF&E board's own stage dropdown is deliberately left reading `Received` for `status =
+'delivered'`, since it names a column value a line moves to, not the document's richer inspection-aware
+stamp, exactly as Option 3 specifies. The roster's receivable figure and the ticket's People row
+distinction were both found already correct from B2's own review pass (B2-03's overdue-invoice need line
+already carries the dollar figure and age onto the folder card that the roster reads verbatim; B2-06's
+`peopleRow` already checks `hasProject` before `callSheetEnabled`, so a no-project paper reads "No roster
+yet" regardless of the studio's `call-sheet` flag) — this wave adds the tests that prove both end to end
+(single/multiple/zero-balance/absent-signal need-line coverage, a roster-line test tracing a real
+`overdue_invoice` need's `$` figure and age unmodified into `RosterLine.overdueText`, and the missing
+fourth project×flag combination on the people row) rather than re-implementing what B2 already shipped.
+Shipped unflagged per R125 item 2, like every other wave in this program. Gate on `main` after the merge:
+`pnpm type-check` clean (30/30 workspaces); `pnpm --filter @patina/designer-portal test -- --ci` — 449
+suites / 5045 tests passed, all green, no SIGSEGVs on this run; `pnpm --filter @patina/designer-portal
+lint` — the same 2 pre-existing errors (`piece-room-save-gate.test.tsx:159:1` `import/first`,
+`use-commercial-documents.test.ts:930:8` `react-hooks/rules-of-hooks`, neither file touched by this wave)
+plus pre-existing warnings, no new lint regressions. Owed: Kody's signed-in walk of Wave A and Wave B; the
+I114 session; the O10/O11 items; the four e2e fixture defects already fixed at spec level in this wave's
+integration lane. The deploy record follows as I152/I153.
+
+*Entries add: I151 · last id = I151*
