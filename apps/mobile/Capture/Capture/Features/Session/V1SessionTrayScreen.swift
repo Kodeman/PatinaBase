@@ -17,6 +17,7 @@ struct V1SessionTrayScreen: View {
     let coordinator: CaptureCoordinator
 
     @State private var items: [Specimen] = []
+    @State private var scope: FieldTrayScope = .unplacedOnly
     @State private var player = VoiceSegmentPlayer()
     @State private var playingSpecimenID: UUID?
     private let sessionContext = CaptureSessionContextStore.shared
@@ -39,7 +40,7 @@ struct V1SessionTrayScreen: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
-                        Text("This visit")
+                        Text(scope.title)
                             .font(CaptureType.display)
                             .foregroundStyle(CaptureColor.ink)
                             .padding(.top, 4)
@@ -185,12 +186,15 @@ struct V1SessionTrayScreen: View {
             RouteActionButton("Review each", systemImage: "rectangle.stack", kind: .secondary) {
                 coordinator.present(.cullDeck)
             }
-            // "Route all N" presented the picker for exactly ONE record. Until the
-            // visit spine lands, say what the button actually does: it places the
-            // next unplaced capture, one at a time.
-            RouteActionButton(placeButtonTitle, systemImage: "arrow.up.forward", kind: .primary) {
-                if let next = items.first(where: { $0.venue?.projectId == nil }) ?? items.first {
-                    coordinator.present(.assignVenue(next.id))
+            // Task 25: the primary follows the tray's scope, not a placement
+            // count — a visit in progress is finished by ending it, and an
+            // unplaced-only tray is cleared by opening a visit to place into.
+            RouteActionButton(scope.footerPrimary, systemImage: primaryIcon, kind: .primary) {
+                switch scope {
+                case .visit:
+                    endVisit()
+                case .unplacedOnly:
+                    coordinator.present(.visit)
                 }
             }
         }
@@ -200,24 +204,39 @@ struct V1SessionTrayScreen: View {
         .background(.ultraThinMaterial)
     }
 
-    private var placeButtonTitle: String {
-        let unplaced = items.filter { $0.venue?.projectId == nil }.count
-        return unplaced > 0 ? "Place \(unplaced)" : "Review placement"
+    private var primaryIcon: String {
+        switch scope {
+        case .visit: return "checkmark.circle"
+        case .unplacedOnly: return "mappin.and.ellipse"
+        }
     }
 
     private var emptyState: some View {
-        PatinaEmptyState(icon: "tray",
-                         title: "Nothing captured yet",
-                         message: "Captures from this visit gather here.")
+        let message: String
+        switch scope {
+        case .visit:
+            message = "Captures from this visit gather here."
+        case .unplacedOnly:
+            message = "Captures not yet placed gather here."
+        }
+        return PatinaEmptyState(icon: "tray",
+                                title: "Nothing captured yet",
+                                message: message)
     }
 
     private func reload() {
-        let context = sessionContext.current(identity: identity)
+        // Read-only: `.current` would resolve/persist a fresh context even with
+        // no visit open, which is exactly the state this scope must tell apart
+        // from a real one. `visitState` reports without minting anything.
+        let visitState = sessionContext.visitState(identity: identity)
+        scope = FieldTrayScopeBuilder.scope(for: visitState)
         switch localListScope {
         case .globalFixtures:
-            items = store.session(visitID: context.visitID)
+            items = visitState.context.map { store.session(visitID: $0.visitID) }
+                ?? store.unfiled()
         case .owner(let owner):
-            items = store.session(visitID: context.visitID, owner: owner)
+            items = visitState.context.map { store.session(visitID: $0.visitID, owner: owner) }
+                ?? store.unfiled(owner: owner)
         case .unavailable:
             items = []
         }

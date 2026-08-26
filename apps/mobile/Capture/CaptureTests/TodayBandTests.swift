@@ -382,4 +382,29 @@ struct TodayBandTests {
         #expect(hint?.action.id == "visit.open")
         #expect(hint?.action.label == "Start a visit")
     }
+
+    // MARK: - FieldTrayScope (Task 25 — the tray becomes the unplaced tray)
+
+    @Test func theTrayNamesTheVisitWhenOneIsOpen() {
+        let scope = FieldTrayScopeBuilder.scope(
+            for: .active(openVisit(startedAt: now, lastActivityAt: now)))
+        #expect(scope == .visit(label: "Maple St · Living"))
+        #expect(scope.title == "Maple St · Living")
+        #expect(scope.footerPrimary == "End visit")
+    }
+
+    @Test func withNoVisitTheTrayIsTheUnplacedTray() {
+        let scope = FieldTrayScopeBuilder.scope(for: .none)
+        #expect(scope == .unplacedOnly)
+        #expect(scope.title == "Not placed yet")
+        #expect(scope.footerPrimary == "Start a visit")
+        #expect(!scope.title.lowercased().contains("inbox"))
+    }
+
+    @Test func aStaleVisitStillNamesItselfInTheTray() {
+        let last = now.addingTimeInterval(-(CaptureSessionContextPolicy.staleConfirmWindow + 60))
+        let scope = FieldTrayScopeBuilder.scope(
+            for: .stale(openVisit(startedAt: last, lastActivityAt: last)))
+        #expect(scope == .visit(label: "Maple St · Living"))
+    }
 }
