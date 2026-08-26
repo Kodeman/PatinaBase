@@ -1,8 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import {
-  JobTicket,
-  LETTERHEAD_SENTINEL_ID,
-} from '@/components/document/job-ticket';
+import { JobTicket } from '@/components/document/job-ticket';
 import { RoomLensProvider } from '@/components/document/room-lens-context';
 import {
   deriveTicket,
@@ -190,7 +187,6 @@ function renderTicket(props: Partial<Parameters<typeof JobTicket>[0]> = {}) {
   const onOpenCallSheet = jest.fn();
   const view = render(
     <RoomLensProvider>
-      <div id={LETTERHEAD_SENTINEL_ID} />
       <JobTicket
         rows={ROWS}
         seam={SEAM}

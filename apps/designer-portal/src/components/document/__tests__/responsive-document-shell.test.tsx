@@ -17,7 +17,7 @@ import {
 } from '../mobile/mobile-shell';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocLetterhead } from '../doc-letterhead';
-import { JobTicket, LETTERHEAD_SENTINEL_ID } from '../job-ticket';
+import { JobTicket } from '../job-ticket';
 import { RoomLensProvider, useRoomLens } from '../room-lens-context';
 import type { SpineSection } from '@/lib/document/section-derivation';
 import type { SectionKey } from '@/lib/document/desk-derivation';
@@ -625,7 +625,6 @@ function TicketPaper({ section }: { section: SectionKey }) {
         inHandRoomName={heldRoomName}
         onReleaseRoom={heldRoomId ? () => toggleRoom(heldRoomId) : null}
       />
-      <div id={LETTERHEAD_SENTINEL_ID} aria-hidden />
       <JobTicket
         rows={rows}
         seam={deriveTicketSeam(rows, deriveTicketIdentity(input))}
