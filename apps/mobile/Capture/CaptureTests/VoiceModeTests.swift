@@ -36,6 +36,11 @@ struct VoiceModeTests {
                 == "We'll write this up when it lands.")
     }
 
+    @Test func recordingSaysExactlyThat() {
+        #expect(FieldVoiceModeCopy.line(for: .recording(elapsed: 1))
+                == "Recording. Tap to stop.")
+    }
+
     @Test func theCapStopsVisiblyAndNeverSilently() {
         #expect(FieldVoiceModeCopy.capReached
                 == "This note reached twenty minutes and stopped. Start another when you're ready.")
@@ -53,6 +58,14 @@ struct VoiceModeTests {
                                            segments: 3) == .capped)
         #expect(FieldVoiceModeMachine.next(recording, elapsed: 60,
                                            segments: VoiceRecordingPolicy.maxSegments) == .capped)
+    }
+
+    @Test func theMachinePreservesEveryOtherArmBelowTheCap() {
+        #expect(FieldVoiceModeMachine.next(.idle, elapsed: 5, segments: 0) == .idle)
+        #expect(FieldVoiceModeMachine.next(.capped, elapsed: 5, segments: 0) == .capped)
+        #expect(FieldVoiceModeMachine.next(.interrupted, elapsed: 5, segments: 0) == .interrupted)
+        #expect(FieldVoiceModeMachine.next(.transcriptUnavailable(elapsed: 3), elapsed: 5, segments: 0)
+                == .transcriptUnavailable(elapsed: 5))
     }
 
     @Test func theSegmentCountIsDerivedFromElapsedAndTheTwoCapsCoincide() {
@@ -75,6 +88,8 @@ struct VoiceModeTests {
         let lines = [
             FieldVoiceModeCopy.idleLine(visitLabel: nil),
             FieldVoiceModeCopy.idleLine(visitLabel: "Maple St"),
+            FieldVoiceModeCopy.line(for: .idle),
+            FieldVoiceModeCopy.line(for: .recording(elapsed: 1)),
             FieldVoiceModeCopy.line(for: .interrupted),
             FieldVoiceModeCopy.line(for: .transcriptUnavailable(elapsed: 1)),
             FieldVoiceModeCopy.capReached

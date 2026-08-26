@@ -19,7 +19,7 @@ public enum FieldVoiceModeState: Equatable, Sendable {
 
 public enum FieldVoiceModeCopy {
     public static func idleLine(visitLabel: String?) -> String {
-        guard let visitLabel, !visitLabel.isEmpty else {
+        guard let visitLabel, !visitLabel.trimmingCharacters(in: .whitespaces).isEmpty else {
             return "Tap to talk. It waits on Today until you place it."
         }
         return "Tap to talk. It lands on \(visitLabel)."
@@ -34,7 +34,7 @@ public enum FieldVoiceModeCopy {
         case .interrupted:
             return "Paused — your note is saved. Tap to keep going."
         case .transcriptUnavailable:
-            return "We'll write this up when it lands."
+            return VoiceNoteCopy.recognitionUnavailable
         case .capped:
             return capReached
         }
@@ -43,12 +43,11 @@ public enum FieldVoiceModeCopy {
     /// Elapsed only. A segment is an implementation detail she has no model for
     /// and no action to take about; the count lives in telemetry instead.
     public static func elapsed(_ seconds: TimeInterval) -> String {
-        let total = max(0, Int(seconds.rounded(.down)))
-        return String(format: "%d:%02d", total / 60, total % 60)
+        let total = seconds.isFinite ? max(0, Int(seconds.rounded(.down))) : 0
+        return String(format: "%ld:%02ld", total / 60, total % 60)
     }
 
-    public static let capReached =
-        "This note reached twenty minutes and stopped. Start another when you're ready."
+    public static let capReached = VoiceNoteCopy.capReached
 }
 
 public enum FieldVoiceModeMachine {
@@ -58,7 +57,7 @@ public enum FieldVoiceModeMachine {
     /// `capReached`'s "reached twenty minutes" literally true. Counting OPENED
     /// segments would cap the note at 19:10 under copy that promises 20:00.
     public static func segments(forElapsed elapsed: TimeInterval) -> Int {
-        guard elapsed > 0 else { return 0 }
+        guard elapsed > 0, elapsed.isFinite else { return 0 }
         return Int(elapsed / VoiceRecordingPolicy.segmentRotationSeconds)
     }
 
