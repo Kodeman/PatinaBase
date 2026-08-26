@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The Plan Room — the drawings get a room, and the paper keeps its calm.
@@ -13,30 +13,29 @@
  * dragover guard checks for real files before it claims the event.
  */
 
-import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { usePlanRoom, type FilePlanPrintsResult } from '@patina/supabase';
-import { useDocumentEngagement } from '@/hooks/use-document-state';
-import { folderTab } from '@/lib/document/desk-derivation';
-import { fmtDay } from '@/lib/document/format';
-import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
-import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
-import { planRoomEvents } from '@/lib/analytics/plan-room-events';
-import { deriveHolders, type LightTableProposal } from '@/lib/plans/model';
-import { DocumentAction, DocumentActionRow } from '../document-action';
-import { LightTable, type StagedTable } from './light-table';
-import { PlanConfirmStrip } from './plan-confirm-strip';
-import { PlanIssueCeremony } from './plan-issue-ceremony';
-import { PlanRoomSet } from './plan-room-set';
-import { PlanSheetDetail } from './plan-sheet-detail';
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { usePlanRoom, type FilePlanPrintsResult } from "@patina/supabase";
+import { useDocumentEngagement } from "@/hooks/use-document-state";
+import { fmtDay } from "@/lib/document/format";
+import { DOCUMENT_SURFACE_KEYS } from "@/lib/help-system/document-surface-keys";
+import { useDocumentSurface } from "@/lib/help-system/use-document-surface";
+import { planRoomEvents } from "@/lib/analytics/plan-room-events";
+import { deriveHolders, type LightTableProposal } from "@/lib/plans/model";
+import { DocumentAction, DocumentActionRow } from "../document-action";
+import { LightTable, type StagedTable } from "./light-table";
+import { PlanConfirmStrip } from "./plan-confirm-strip";
+import { PlanIssueCeremony } from "./plan-issue-ceremony";
+import { PlanRoomSet } from "./plan-room-set";
+import { PlanSheetDetail } from "./plan-sheet-detail";
 
-type PlanView = 'set' | 'light-table' | 'sheet' | 'issue';
+type PlanView = "set" | "light-table" | "sheet" | "issue";
 
 const VIEW_TABS: Array<[PlanView, string]> = [
-  ['set', 'The set'],
-  ['light-table', 'The light table'],
-  ['issue', 'Issue'],
+  ["set", "The set"],
+  ["light-table", "The light table"],
+  ["issue", "Issue"],
 ];
 
 export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
@@ -44,7 +43,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
   const router = useRouter();
   const engagement = useDocumentEngagement(routeId);
 
-  const [view, setView] = useState<PlanView>('set');
+  const [view, setView] = useState<PlanView>("set");
   const [selectedSheetId, setSelectedSheetId] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const [staged, setStaged] = useState<StagedTable | null>(null);
@@ -54,19 +53,19 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
   const openedFor = useRef<string | null>(null);
 
   const resolution = engagement.data;
-  const row = resolution?.kind === 'engagement' ? resolution.row : null;
+  const row = resolution?.kind === "engagement" ? resolution.row : null;
   const projectId =
-    row?.engagement_kind === 'project' ? (row.project_id ?? null) : null;
+    row?.engagement_kind === "project" ? (row.project_id ?? null) : null;
 
   useEffect(() => {
-    if (resolution?.kind === 'redirect') {
+    if (resolution?.kind === "redirect") {
       router.replace(`/doc/${resolution.projectId}/plans`);
     }
   }, [resolution, router]);
 
   // One query, one derivation. Holders come from the bundle everywhere in this
   // room (band, set, ceremony) so no two surfaces can disagree mid-load.
-  const room = usePlanRoom(projectId ?? '');
+  const room = usePlanRoom(projectId ?? "");
   const bundle = room.data;
 
   useEffect(() => {
@@ -95,7 +94,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
     );
   }
 
-  if (resolution?.kind === 'redirect') return null;
+  if (resolution?.kind === "redirect") return null;
 
   if (!projectId) {
     return (
@@ -113,18 +112,21 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
     );
   }
 
-  const projectName = row ? folderTab(row) : 'Project';
+  // SP-14/F100 — the return link names the full project, matching the spec
+  // book's leaf (not the folder tab's short surname), so the two leaves
+  // agree with each other.
+  const projectName = row?.title || "Project";
 
   const stageFiles = (files: File[]) => {
     const pdfs = files.filter(
-      (file) => file.type === 'application/pdf' || /\.pdf$/i.test(file.name),
+      (file) => file.type === "application/pdf" || /\.pdf$/i.test(file.name),
     );
     if (pdfs.length === 0) return;
     setReadError(null);
     // A new drop replaces the staged table wholesale, key included.
     setStaged(null);
     setPendingFiles(pdfs);
-    setView('light-table');
+    setView("light-table");
   };
 
   // The newest print's created_at — "last filed", not "flipped". A flip is a
@@ -138,7 +140,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
   const onCommitted = (_result: FilePlanPrintsResult) => {
     setStaged(null);
     setPendingFiles(null);
-    setView('set');
+    setView("set");
   };
 
   return (
@@ -147,16 +149,17 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
       onDragOver={(event) => {
         // Claim the event only for real files, so a drag inside the room (a
         // text selection, an image) still behaves normally.
-        if (!event.dataTransfer?.types?.includes('Files')) return;
+        if (!event.dataTransfer?.types?.includes("Files")) return;
         event.preventDefault();
         setDragging(true);
       }}
       onDragLeave={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        if (event.currentTarget.contains(event.relatedTarget as Node | null))
+          return;
         setDragging(false);
       }}
       onDrop={(event) => {
-        if (!event.dataTransfer?.types?.includes('Files')) return;
+        if (!event.dataTransfer?.types?.includes("Files")) return;
         event.preventDefault();
         setDragging(false);
         stageFiles(Array.from(event.dataTransfer.files ?? []));
@@ -173,11 +176,11 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-heading text-xl">The plan room</h1>
             <p className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-              {bundle?.sheets.length ?? 0}{' '}
-              {(bundle?.sheets.length ?? 0) === 1 ? 'sheet' : 'sheets'}
-              {lastFiledAt ? ` · last filed ${fmtDay(lastFiledAt)}` : ''} ·{' '}
-              {bundle?.issues.length ?? 0}{' '}
-              {(bundle?.issues.length ?? 0) === 1 ? 'issue' : 'issues'} to date
+              {bundle?.sheets.length ?? 0}{" "}
+              {(bundle?.sheets.length ?? 0) === 1 ? "sheet" : "sheets"}
+              {lastFiledAt ? ` · last filed ${fmtDay(lastFiledAt)}` : ""} ·{" "}
+              {bundle?.issues.length ?? 0}{" "}
+              {(bundle?.issues.length ?? 0) === 1 ? "issue" : "issues"} to date
             </p>
           </div>
           <nav aria-label="Plan room" className="flex items-center gap-1">
@@ -186,18 +189,21 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
                 key={id}
                 type="button"
                 onClick={() => setView(id)}
-                aria-current={view === id ? 'page' : undefined}
+                aria-current={view === id ? "page" : undefined}
                 className={`min-h-[44px] px-3 py-2 font-mono text-[9px] uppercase tracking-[0.08em] ${
                   view === id
-                    ? 'border-b border-[var(--color-clay)] text-[var(--color-charcoal)]'
-                    : 'text-[var(--text-muted)]'
+                    ? "border-b border-[var(--color-clay)] text-[var(--color-charcoal)]"
+                    : "text-[var(--text-muted)]"
                 }`}
               >
                 {label}
               </button>
             ))}
           </nav>
-          <DocumentActionRow surfaceKey="plan-room" regionKey="plan-room-intake">
+          <DocumentActionRow
+            surfaceKey="plan-room"
+            regionKey="plan-room-intake"
+          >
             <DocumentAction
               actionKey="choose-plan-pdf"
               variant="secondary"
@@ -214,7 +220,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
             className="hidden"
             onChange={(event) => {
               stageFiles(Array.from(event.target.files ?? []));
-              event.target.value = '';
+              event.target.value = "";
             }}
           />
         </div>
@@ -225,7 +231,8 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
           role="status"
           className="border-b border-[var(--color-golden-hour)] bg-[var(--color-off-white)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] md:px-8"
         >
-          Let it go — the table will split the set and propose where each page belongs
+          Let it go — the table will split the set and propose where each page
+          belongs
         </p>
       )}
 
@@ -235,8 +242,8 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
           className="mx-4 mt-4 border-l-2 border-[var(--color-terracotta)] bg-[var(--color-off-white)] px-3 py-2.5 md:mx-8"
         >
           <p className="text-[0.82rem] text-[var(--color-charcoal)]">
-            The drawing log could not be read.{' '}
-            {room.error instanceof Error ? room.error.message : ''}
+            The drawing log could not be read.{" "}
+            {room.error instanceof Error ? room.error.message : ""}
           </p>
           <DocumentActionRow surfaceKey="plan-room" regionKey="plan-room-error">
             <DocumentAction
@@ -257,25 +264,30 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
           role="alert"
           className="mx-4 mt-4 border-l-2 border-[var(--color-terracotta)] bg-[var(--color-off-white)] px-3 py-2.5 md:mx-8"
         >
-          <p className="text-[0.82rem] text-[var(--color-charcoal)]">{readError}</p>
+          <p className="text-[0.82rem] text-[var(--color-charcoal)]">
+            {readError}
+          </p>
         </div>
       )}
 
-      {bundle && view === 'set' && (
+      {bundle && view === "set" && (
         <PlanRoomSet
           projectId={projectId}
           bundle={bundle}
           onOpenSheet={(sheetId) => {
-            planRoomEvents.sheetOpened({ project_id: projectId, sheet_id: sheetId });
+            planRoomEvents.sheetOpened({
+              project_id: projectId,
+              sheet_id: sheetId,
+            });
             setSelectedSheetId(sheetId);
-            setView('sheet');
+            setView("sheet");
           }}
-          onIssue={() => setView('issue')}
+          onIssue={() => setView("issue")}
           onChooseFile={() => fileInput.current?.click()}
         />
       )}
 
-      {bundle && view === 'light-table' && (
+      {bundle && view === "light-table" && (
         <>
           <LightTable
             projectId={projectId}
@@ -296,45 +308,51 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
             onThumbnail={(pageIndex, thumbnail) =>
               setStaged((prev) =>
                 prev
-                  ? { ...prev, thumbnails: { ...prev.thumbnails, [pageIndex]: thumbnail } }
+                  ? {
+                      ...prev,
+                      thumbnails: {
+                        ...prev.thumbnails,
+                        [pageIndex]: thumbnail,
+                      },
+                    }
                   : prev,
               )
             }
             onReadFailed={(message) => {
               setReadError(message);
               setPendingFiles(null);
-              setView('set');
+              setView("set");
             }}
           />
           <PlanConfirmStrip
             session={staged?.session ?? null}
             proposals={staged?.proposals ?? []}
-            onSaveForLater={() => setView('set')}
+            onSaveForLater={() => setView("set")}
             onRevert={() => {
               setStaged(null);
               setPendingFiles(null);
-              setView('set');
+              setView("set");
             }}
             onCommitted={onCommitted}
           />
         </>
       )}
 
-      {bundle && view === 'sheet' && selectedSheetId && (
+      {bundle && view === "sheet" && selectedSheetId && (
         <PlanSheetDetail
           projectId={projectId}
           bundle={bundle}
           sheetId={selectedSheetId}
-          onBack={() => setView('set')}
-          onIssue={() => setView('issue')}
+          onBack={() => setView("set")}
+          onIssue={() => setView("issue")}
         />
       )}
 
-      {bundle && view === 'issue' && (
+      {bundle && view === "issue" && (
         <PlanIssueCeremony
           projectId={projectId}
           bundle={bundle}
-          onBack={() => setView('set')}
+          onBack={() => setView("set")}
         />
       )}
     </main>
