@@ -108,4 +108,34 @@ struct VoiceModeTests {
         ]
         for line in lines { #expect(!line.lowercased().contains("inbox")) }
     }
+
+    @Test func voiceIsAModeThatProducesNoPhotoAndNoCard() {
+        #expect(CameraMode.allCases.map(\.rawValue).contains("voice"))
+        // Wave 2 held .voice off the selector so it would not ship a dead pill.
+        // Wave 3 builds C6, so the pill earns its place.
+        #expect(CameraMode.viewfinderSelectable == [.photo, .tag, .measure, .scan, .voice])
+        #expect(!SpecimenCapturePolicy.producesPhoto(.voice))
+        for mode in CameraMode.allCases where mode != .voice {
+            #expect(SpecimenCapturePolicy.producesPhoto(mode))
+        }
+    }
+
+    @MainActor
+    @Test func aMediaLessVoiceNoteCommitsThroughTheExistingOutbox() throws {
+        // ContextCaptureService already proves a media-less specimen commits
+        // cleanly (ContextCaptureTests); C6 is that pattern at viewfinder scale.
+        let store = try CaptureStore.inMemory()
+        let owner = try #require(CaptureOwnerIdentity(userID: "u1", workspaceID: "w1"))
+        let service = ContextCaptureService(store: store, owner: owner)
+        let created = service.enqueueVoice(
+            transcript: "the alcove on the north wall is about forty-two and three quarters",
+            audioFilename: "note-0.m4a",
+            durationSeconds: 134,
+            provenance: ContextCaptureProvenance(scanSessionId: nil, projectId: "p1",
+                                                 projectRoomId: nil, cameraPoseRowMajor: nil,
+                                                 capturedAt: "2026-08-25T14:14:00Z"))
+        #expect(created.photos.isEmpty)
+        #expect(created.status == .ready)
+        #expect(store.outbox(owner: owner).contains { $0.id == created.id })
+    }
 }

@@ -303,6 +303,9 @@ final class ViewfinderModel {
     // MARK: Single frame → C3 card
 
     private func captureSingle() async {
+        // VOICE has no frame. This guard — not `nextStep(for:)`'s mapping — is
+        // what keeps the shutter honest now that `.voice` is a selectable pill.
+        guard SpecimenCapturePolicy.producesPhoto(mode) else { return }
         guard cardSpecimen == nil, !capturing, !isHolding else { return }
         capturing = true
         defer { capturing = false }
@@ -332,6 +335,7 @@ final class ViewfinderModel {
     // MARK: Multi-shot (C4) → C5 sheet on release
 
     private func beginMultiShot() async {
+        guard SpecimenCapturePolicy.producesPhoto(mode) else { return }
         guard !isHolding, cardSpecimen == nil else { return }
         guard let draft = makeDraft() else { return }
 

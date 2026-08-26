@@ -28,3 +28,9 @@ public enum SpecimenCapturePolicy {
         }
     }
 }
+
+public extension SpecimenCapturePolicy {
+    /// VOICE (C6) is the one mode with no frame: it never reaches the C3 card
+    /// and never opens an enrichment sheet.
+    static func producesPhoto(_ mode: CameraMode) -> Bool { mode != .voice }
+}

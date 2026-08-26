@@ -83,7 +83,9 @@ enum CaptureDeepLink {
         switch id {
         case .c1Viewfinder, .c2Framing, .c3Specimen, .c4MultiShot,
              .e1AppIcon, .e2SystemEntry, .r1LowLight,
-             // Reserved ids: C6 is wave 3, V4 is wave 4. They have no
+             // C6 is a camera MODE of C1, not a route or a sheet, so there is
+             // nothing to present for it — `ViewfinderScreen` reads the harness
+             // argument itself and selects `.voice`. V4 is wave 4 and has no
              // destination yet, so the harness stays on C1 rather than
              // screenshotting a screen that does not exist.
              .c6Voice, .v4VisitReview:

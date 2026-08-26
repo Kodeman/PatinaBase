@@ -23,10 +23,13 @@ struct ViewfinderScreen: View {
     @State private var affirmed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let coordinator: CaptureCoordinator
+    /// C6 is a mode of this screen, so it is built here rather than routed to.
+    private let container: AppContainer
 
     init(container: AppContainer, coordinator: CaptureCoordinator) {
         _model = State(wrappedValue: ViewfinderModel(container: container, coordinator: coordinator))
         self.coordinator = coordinator
+        self.container = container
     }
 
     var body: some View {
@@ -49,7 +52,15 @@ struct ViewfinderScreen: View {
                     OfflineQueueBanner(queuedCount: model.outboxDepth)
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                Spacer()
+                // C6 is a MODE of this screen — not a sheet and not a route —
+                // so it takes the space the shutter's breathing room occupied
+                // and inherits the chip, the banner and the selector unchanged.
+                if model.mode == .voice {
+                    C6VoiceScreen(container: container, coordinator: coordinator,
+                                  chip: model.visitChip, visit: model.visitState)
+                } else {
+                    Spacer()
+                }
                 bottomControls
             }
             .padding(.horizontal, 18)
@@ -94,6 +105,14 @@ struct ViewfinderScreen: View {
         .animation(cardAnimation, value: model.isHolding)
         .task {
             await model.start()
+            // C6 is a camera MODE, not a route, so `CaptureDeepLink.drive` has
+            // no destination to present for it — without this hop the sweep
+            // would file a PNG of C1 under `screen.C6.voice`.
+            if AppConfiguration.initialScreenRaw.map({
+                CaptureScreenID.c6Voice.rawValue.hasSuffix($0)
+            }) == true {
+                await model.select(.voice)
+            }
             reachability.start {
                 Task { @MainActor in
                     await model.drainOnReconnect()
@@ -170,23 +189,32 @@ struct ViewfinderScreen: View {
             ViewfinderModeSelector(mode: model.mode) { newMode in
                 Task { await model.select(newMode) }
             }
-            ZStack {
-                HStack(alignment: .center) {
-                    ViewfinderControlCluster(
-                        torchOn: model.torchOn, gridOn: model.gridOn,
-                        onTorch: model.toggleTorch, onGrid: model.toggleGrid
-                    )
-                    Spacer()
-                    ViewfinderSessionHandle(count: model.sessionCount, action: model.openSessionTray)
-                }
-                ViewfinderShutter(
-                    isHolding: model.isHolding, count: model.holdCount, capturing: model.capturing
-                )
-                .gesture(shutterPress)
+            // VOICE produces no frame, so C6 owns the shutter's place: a live
+            // shutter under a voice control, or a line promising a capture the
+            // guard in `captureSingle()` refuses, would be a new lie.
+            if model.mode != .voice {
+                shutterRow
+                Text("Tap to capture · hold for multi-shot")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.paper.opacity(0.55))
             }
-            Text("Tap to capture · hold for multi-shot")
-                .font(CaptureType.footnote)
-                .foregroundStyle(CaptureColor.paper.opacity(0.55))
+        }
+    }
+
+    private var shutterRow: some View {
+        ZStack {
+            HStack(alignment: .center) {
+                ViewfinderControlCluster(
+                    torchOn: model.torchOn, gridOn: model.gridOn,
+                    onTorch: model.toggleTorch, onGrid: model.toggleGrid
+                )
+                Spacer()
+                ViewfinderSessionHandle(count: model.sessionCount, action: model.openSessionTray)
+            }
+            ViewfinderShutter(
+                isHolding: model.isHolding, count: model.holdCount, capturing: model.capturing
+            )
+            .gesture(shutterPress)
         }
     }
 
