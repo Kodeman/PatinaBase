@@ -153,8 +153,16 @@ final class ViewfinderModel {
 
     func start() async {
         analytics.screen(CaptureScreenID.c1Viewfinder.rawValue)
-        visitID = currentSessionContext().visitID
+        // N-1: reap BEFORE resolving `currentSessionContext()`. `current()` is
+        // the destructive `resolve` path — on a cold launch straight into C1
+        // (deep-linked `field://capture`, or `todayIsHome = false`), this is
+        // the first thing that runs and `.onChange(of: scenePhase)` never fires
+        // for the initial value, so nothing else reaps first. Reaping here
+        // first means an overnight-expired visit closes with a real
+        // `visit.end` before `current()` can silently replace it with a fresh
+        // kindless context.
         refreshVisit()
+        visitID = currentSessionContext().visitID
         refreshSessionCount()
         mode = camera.currentMode
         isLowLight = camera.isLowLight
