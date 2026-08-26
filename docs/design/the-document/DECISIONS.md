@@ -9904,4 +9904,36 @@ this run; `pnpm --filter @patina/designer-portal lint` — the same 2 pre-existi
 no new lint regressions. Deferred to B3, per R125 item 4: F58's Option 3 stamp-label unification and F56's
 repo-wide `-ink` contrast tokens.
 
-*Entries add: I150 · last id = I150*
+### I150-deploy · Waves A–B2 live on app.patina.cloud — 2026-08-26
+
+`build/deploy-a.sh` shipped Waves A1–A3 + the A hotfix + B1 + B2 to production. New live version
+**afe63619-002d-4ea2-90b6-244c41a86c81** (`wrangler deployments list` bottom row: Created
+2026-08-26T21:45:59.637Z, Version(s) afe63619-002d-4ea2-90b6-244c41a86c81, Created
+2026-08-26T21:45:57.109Z). Live now: seven stage sentences and the phase cell on every document spread;
+`spine-rooms-block.tsx`/`spine-shelves-block.tsx` deleted (no flag), replaced by the eight-row job ticket
+(`job-ticket.tsx`) on install/care and now on every phase via `deriveTicket`'s
+brief/discovery/direction/proposal cases, with the client's-copy shelf folded into the ticket as its ninth
+row on proposals; the Money ladder; the ⌘K palette's "Where the work stands" group and "Find a document or
+a ledger" placeholder; the Desk's stage-grouped roster (`desk-roster.tsx`) replacing the four-up folio
+grid, Studio Pulse, and Recent Boards strip; `deriveTicketLeader` driving the document guide's headline.
+Shipped unflagged per R125 item 2, except the Worktable ticket mount which stays behind the pre-existing
+`worktable` flag (untouched by this program).
+
+Verification (independent, read-only, unauthenticated): `wrangler deployments list` bottom row confirmed
+above. Probes — `GET /desk` → 307 to `/auth/signin?callbackUrl=%2Fdesk`; `GET /auth/signin` → 200; zero
+5xx. Shipped-chunk evidence — `Find a document or a ledger` and `Where the work stands` found in
+`/_next/static/chunks/7383-69cf0bbd0f9106f7.js`; `On this paper` and `Nobody on it yet` found in
+`/_next/static/chunks/app/(document)/doc/[id]/page-b6c5bf79c16b65a9.js`; the `wrangler.jsonc value`
+placeholder marker found in 0 of 43 chunks checked. Full detail in
+`artifacts/document-wayfinding-directions-2026-08-25/build/deploy-1.md`.
+
+Incident note: at 2026-08-26T19:49:14Z a prior deploy, version 0d66c4a2-0c2b-472c-a2fe-e57ae6014068,
+inlined a placeholder `NEXT_PUBLIC_SUPABASE_ANON_KEY` and was rolled back at 19:50:51Z to
+d9a307bd-11ee-4c32-99a3-268e6cb11388 (the version this deploy's pre-deploy capture recorded as its own
+rollback target). `deploy-a.sh`'s guard — pre-deploy version capture plus a post-deploy shipped-chunk
+placeholder check — is what this deploy ran under; both the script's own check and this independent
+verification found no placeholder values in the chunks actually served.
+
+Signed-in walk owed to Kody; Deploy B follows B3 (I151).
+
+*Entries add: I150-deploy · last id = I150*
