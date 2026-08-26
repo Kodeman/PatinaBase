@@ -8,8 +8,49 @@ import {
 } from '@testing-library/react';
 import { DocSpine } from '../doc-spine';
 import { ResponsiveMarginRail } from '../margin-rail';
+import { MobileBar } from '../mobile/mobile-bar';
+import {
+  MobileShellProvider,
+  useMobileActiveDoc,
+  useMobilePrimaryAction,
+  type MobileActiveDoc,
+} from '../mobile/mobile-shell';
 import { DocSheet } from '../overlays/doc-sheet';
 import type { SpineSection } from '@/lib/document/section-derivation';
+
+jest.mock('next/navigation', () => ({
+  usePathname: () => '/doc/proj-1',
+}));
+
+// Only the bar's three counters are stubbed; every other export stays real so
+// the margin rail below still reads the hooks it actually uses.
+jest.mock('@patina/supabase', () => ({
+  ...jest.requireActual('@patina/supabase'),
+  useUnreadInboxCount: () => ({ data: 0 }),
+  useProcurementUnreadCount: () => ({ data: 0 }),
+  useUnseenShipped: () => ({ data: [] }),
+}));
+
+jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
+
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: true }),
+}));
+
+jest.mock('@/hooks/document-time-provider', () => ({
+  useDocumentTime: () => ({
+    inHandToday: 0,
+    running: false,
+    paused: false,
+    elapsedSeconds: 0,
+    offer: null,
+  }),
+}));
+
+jest.mock('../overlays/post-sheet', () => ({ openPost: jest.fn() }));
+jest.mock('../feedback/feedback-sheet', () => ({
+  openFeedbackSheet: jest.fn(),
+}));
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -394,5 +435,61 @@ describe('quiet responsive document shell', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(nested).not.toBeInTheDocument());
     expect(document.body.style.overflow).toBe('scroll');
+  });
+});
+
+/**
+ * 390 — the thumb edge carries three things and no more: where she is, the one
+ * elected act, and More. A fourth 44x44 target is what made the act truncate.
+ */
+describe('the 390 bar', () => {
+  const held: MobileActiveDoc = {
+    projectId: 'proj-1',
+    proposalId: null,
+    clientName: 'Vandersteen',
+    title: 'Vandersteen residence',
+    sections: [
+      {
+        key: 'project',
+        label: 'Project',
+        state: 'active',
+        sub: 'In the project',
+      },
+    ],
+  };
+
+  function Bar() {
+    useMobileActiveDoc(held);
+    useMobilePrimaryAction({
+      actionKey: 'pick-the-fabric',
+      surfaceKey: 'open-document',
+      regionKey: 'red-letter',
+      label: 'Pick the fabric for the Okonkwo sofa',
+      target: { kind: 'press', onPress: jest.fn() },
+    });
+    return <MobileBar />;
+  }
+
+  it('carries the context, the elected act and More — nothing else', () => {
+    render(
+      <MobileShellProvider>
+        <Bar />
+      </MobileShellProvider>,
+    );
+
+    const bar = screen.getByTestId('mobile-bar');
+    expect(bar).toHaveClass('min-[1180px]:hidden');
+    const controls = Array.from(bar.querySelectorAll('button, a'));
+    expect(controls).toHaveLength(3);
+
+    const [context, act, more] = controls;
+    expect(context).toHaveAccessibleName(
+      'Open sections, current section Project',
+    );
+    expect(act).toHaveAttribute('data-action-key', 'pick-the-fabric');
+    expect(act.querySelector('.da-label')?.textContent).toBe(
+      'Pick the fabric for the Okonkwo sofa',
+    );
+    expect(more).toHaveAccessibleName('More studio actions');
   });
 });

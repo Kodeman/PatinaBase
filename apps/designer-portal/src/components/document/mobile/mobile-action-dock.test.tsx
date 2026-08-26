@@ -39,6 +39,10 @@ jest.mock('@/hooks/use-hydrated', () => ({
   useHydrated: () => true,
 }));
 
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: false }),
+}));
+
 jest.mock('@/hooks/document-time-provider', () => ({
   useDocumentTime: () => mockTimeState,
 }));
@@ -218,14 +222,17 @@ describe('unified mobile edge owner', () => {
     expect(
       screen.getByRole('group', { name: 'More studio actions' }),
     ).toBeInTheDocument();
-    const time = screen.getByRole('button', { name: /Time in hand/i });
-    expect(time).toHaveFocus();
+    // F49 — the register leads the menu, so it is what opening More lands on.
+    expect(
+      screen.getByText('Find anything').closest('button'),
+    ).toHaveFocus();
+    expect(
+      screen.getByRole('button', { name: /Time in hand/i }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /The Post/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Studio books' }),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Ledgers')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Leave a note' }));
     expect(openFeedbackSheet).toHaveBeenCalledTimes(1);
@@ -249,9 +256,7 @@ describe('unified mobile edge owner', () => {
     expect(post).toHaveTextContent('New');
     expect(post).not.toHaveTextContent(/\d+\s*new/i);
     // The group closes around The Post alone: the drawer row is not mail.
-    expect(
-      within(mail).queryByRole('button', { name: 'Studio books' }),
-    ).not.toBeInTheDocument();
+    expect(within(mail).queryByText('Ledgers')).not.toBeInTheDocument();
   });
 
   it('registers and removes a surface-owned secondary action in More', () => {
@@ -277,7 +282,7 @@ describe('unified mobile edge owner', () => {
       'data-mobile-secondary-key',
       'share-proposal',
     );
-    expect(secondary).toHaveFocus();
+    expect(screen.getByText('Find anything').closest('button')).toHaveFocus();
     fireEvent.click(secondary);
     expect(share).toHaveBeenCalledTimes(1);
     expect(more).toHaveFocus();

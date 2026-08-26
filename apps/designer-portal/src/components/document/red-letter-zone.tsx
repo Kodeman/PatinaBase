@@ -11,6 +11,8 @@
 
 import type { NeedKind } from '@/lib/document/desk-derivation';
 import { DocumentAction, DocumentActionGroup } from './document-action';
+import { MOBILE_ACTION_PRIORITY } from './mobile/lifecycle-mobile-action';
+import { useMobilePrimaryAction } from './mobile/mobile-shell';
 
 // SP-20/F41 — every need kind already carries a stamp colour at its point of
 // derivation (desk-derivation.ts's STAMP palette, read at NeedLine.stamp.color);
@@ -57,6 +59,26 @@ export interface RedLetterRow {
 }
 
 export function RedLetterZone({ rows }: { rows: readonly RedLetterRow[] }) {
+  // F07 — the phone's one primary act is this zone's FIRST row, the most
+  // urgent thing the paper is carrying. The zone stands in the guide's place
+  // rather than beside it (page.tsx's guide-or-zone ternary), so it registers
+  // at the guide's rank: the two can never both be published.
+  const first = rows[0];
+  useMobilePrimaryAction(
+    first?.actionLabel
+      ? {
+          // The same identity the row's own act carries, so one need is one
+          // act in telemetry whether it was pressed on the paper or the bar.
+          actionKey: `red-letter-${first.kind}-0`,
+          surfaceKey: 'open-document',
+          regionKey: 'red-letter',
+          label: first.actionLabel,
+          target: { kind: 'press', onPress: first.onAct },
+        }
+      : null,
+    { priority: MOBILE_ACTION_PRIORITY.guide },
+  );
+
   if (rows.length === 0) return null;
 
   return (

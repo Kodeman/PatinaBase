@@ -1,8 +1,52 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fireEvent, render, screen } from '@testing-library/react';
+import {
+  fireEvent,
+  render as rtlRender,
+  screen,
+  within,
+} from '@testing-library/react';
+import type { ReactElement } from 'react';
 import type { NeedKind } from '@/lib/document/desk-derivation';
+import { MobileBar } from '../mobile/mobile-bar';
+import { MobileShellProvider } from '../mobile/mobile-shell';
 import { RedLetterZone, type RedLetterRow } from '../red-letter-zone';
+
+jest.mock('next/navigation', () => ({
+  usePathname: () => '/doc/proj-1',
+}));
+
+jest.mock('@patina/supabase', () => ({
+  useUnreadInboxCount: () => ({ data: 0 }),
+  useProcurementUnreadCount: () => ({ data: 0 }),
+  useUnseenShipped: () => ({ data: [] }),
+}));
+
+jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
+
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: false }),
+}));
+
+jest.mock('@/hooks/document-time-provider', () => ({
+  useDocumentTime: () => ({
+    inHandToday: 0,
+    running: false,
+    paused: false,
+    elapsedSeconds: 0,
+    offer: null,
+  }),
+}));
+
+jest.mock('../overlays/post-sheet', () => ({ openPost: jest.fn() }));
+jest.mock('../feedback/feedback-sheet', () => ({
+  openFeedbackSheet: jest.fn(),
+}));
+
+/** The zone publishes the phone's primary act, so it only ever stands inside
+ *  the mobile shell — as it does on the document. */
+const render = (ui: ReactElement) =>
+  rtlRender(<MobileShellProvider>{ui}</MobileShellProvider>);
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -138,6 +182,40 @@ describe('RedLetterZone', () => {
       expect(stamp).toHaveAttribute('aria-hidden', 'true');
       expect(stamp.textContent).toBe('');
     }
+  });
+
+  it('F07 — registers the FIRST row as the phone\u2019s one primary act', () => {
+    rtlRender(
+      <MobileShellProvider>
+        <RedLetterZone rows={rows} />
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    const bar = within(screen.getByTestId('mobile-bar'));
+    const primary = bar.getByRole('button', { name: 'Resolve decisions' });
+    expect(primary).toHaveAttribute(
+      'data-action-key',
+      'red-letter-overdue_decision-0',
+    );
+    expect(
+      bar.queryByRole('button', { name: 'Send a reminder' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(primary);
+    expect(onAct).toHaveBeenCalledTimes(1);
+  });
+
+  it('F07 — publishes nothing when the first need names no act', () => {
+    rtlRender(
+      <MobileShellProvider>
+        <RedLetterZone rows={[rows[2]]} />
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    const bar = within(screen.getByTestId('mobile-bar'));
+    expect(bar.getByText('Hands free')).toBeInTheDocument();
   });
 
   it('weights an urgent need heavier, and only by weight', () => {
