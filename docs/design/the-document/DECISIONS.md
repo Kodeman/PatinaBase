@@ -9701,3 +9701,56 @@ with B1; I136's never-filters clause is untouched.
 Nothing built; build order = program (A waves, then B behind `job-ticket`).
 
 *Entries add: R124 · last id = R124*
+
+### R125 · The Wayfinding Review — build rulings — 2026-08-25
+
+**Ruled by Kody**, after `program-plan.md`'s build sections (§§3–7, completing the plan R124 already
+amended) were reviewed. Program folder: `artifacts/document-wayfinding-directions-2026-08-25/` (plan:
+`build/program-plan.md`; F58's options: `build/f58-options.md`; F56's inventory: `build/f56-plan.md`; the
+Moved-rung read: `build/moved-plan.md`). These are rulings on how the program builds and ships; R124
+already settled what it contains, its sequence, and the ten design questions.
+
+1. **One program, one shipment.** The entire program — Direction A's three waves and Direction B's three
+   waves — is built and shipped to production as ONE program, A then B, never concurrent. R124 item 1
+   already ruled this for the build; this extends it through shipping: nothing of A goes live while any of
+   B is still mid-build, and nothing of B goes live before all of A is live. No lane, no exception.
+
+2. **No feature flags anywhere.** R124's `job-ticket` flag — *"B follows, built on top of A's mount fix,
+   behind the fail-closed flag `job-ticket`"* — is **waived**. The B1 amendment's own condition, *"the
+   deletion must be built as a flag branch, not an unconditional delete, so the flag genuinely restores
+   [the spine's rooms and shelves blocks]"* (R124's B1 amendment-ledger entry), no longer applies: there is
+   no flag, so B1-L2 deletes both blocks outright. The **B1 sticky-seam review gate is waived**: R124 item
+   4's *"Kody reviews the redraw himself; no P1/P3 stand-in walk"* is superseded — the sticky seam ships on
+   the wave's own rendered-walk acceptance (program-plan.md §3) like every other lane, with no separate
+   pre-ship checkpoint. **B ships GA directly**, end to end, no flag anywhere in it. Rollback for any part
+   of the program is a **revert commit** (program-plan.md §4.4), never a toggle. The **pre-existing
+   `worktable` and `call-sheet` flags are untouched** — this program neither reads nor writes either one,
+   and R124 item 2's narrow C14 reading stands exactly as ruled: it binds the `worktable` guard only, so
+   B2-L4's Worktable composition still lands behind `worktable` precisely as program-plan.md §2 (Wave B2)
+   already describes, unaffected by this item.
+
+3. **Two production deploys.** DEPLOY A once A3 merges to `main`; DEPLOY B once B3 merges to `main`.
+   Nothing else ships to production in between, before, or immediately after, per item 1.
+
+4. **Full scope**, stated once: (a) Direction A's three waves in full — A1, A2, A3; (b) Direction B in
+   full, not a first slice — the ticket on all seven document sections (B1 and B2-L1), the stage-grouped
+   Desk roster (B2-L2), `deriveTicketLeader` (B2-L3), and the Worktable composition (B2-L4); (c) F58 per
+   **Option 3** of `build/f58-options.md` — one shared derivation, one word per state: **DELIVERED**
+   (arrived, awaiting inspection) · **RECEIVED** (inspected, full count) · **PARTIAL** (inspected, short) ·
+   **DAMAGED** (an open claim on the line); the FF&E board's own stage dropdown keeps reading `Received`
+   for `status = 'delivered'`, because it names a column value a line can move to, not the document's
+   richer inspection-aware stamp; (d) F56, repo-wide — new `-ink` companion tokens carry AA text contrast,
+   the existing clay/terracotta tokens stay untouched for rules and fills; (e) F55, the skip link; (f) F21
+   and F11, the two focus-restore defects; (g) `Moved` on the money ladder computed as ordered minus vendor
+   payouts — `authorized − sum(po_payments.amount_cents where po_payments.state = 'paid')` per project,
+   reading data `usePurchaseOrders` already selects, with **no migration**.
+
+5. **The record.** The I-entries at `program-plan.md` §6 (I146–I153) are this build's ledger, written by
+   each wave's own integration lane as it lands. Nothing else in R124 — the ten questions, the I136
+   amendment ledger, the Thumb Index note, the I114 agenda item, the four unowned defect tickets not named
+   in item 4 above (the `/room/<id>` PostgREST error stays Room View's) — changes.
+
+Nothing built yet by this entry; build order = program (A's three waves, then B's three waves, no flags,
+two deploys, per items 1–3 above).
+
+*Entries add: R125 · last id = R125*
