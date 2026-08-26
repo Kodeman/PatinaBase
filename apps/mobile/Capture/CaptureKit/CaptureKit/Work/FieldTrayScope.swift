@@ -43,3 +43,17 @@ public enum FieldTrayScopeBuilder {
         }
     }
 }
+
+/// Task 25/spec §7.8: the tray reads `store.unfiled(owner:)` (or `unfiled()`
+/// for the ownerless fixture path) AND the visit's own captures, and those two
+/// lists overlap — a capture taken THIS visit and not yet placed is unplaced
+/// too, so it would otherwise render twice: once under the visit and once
+/// under "Not placed yet". The pure set-difference lives here, not on the
+/// screen, so it's testable without a SwiftUI host — CaptureTests links
+/// CaptureKit only, no app target.
+public enum FieldTrayUnplacedFilter {
+    public static func excluding(_ unplaced: [Specimen], visibleIn items: [Specimen]) -> [Specimen] {
+        let shown = Set(items.map(\.id))
+        return unplaced.filter { !shown.contains($0.id) }
+    }
+}

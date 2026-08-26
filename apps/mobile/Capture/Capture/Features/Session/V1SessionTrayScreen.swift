@@ -19,7 +19,9 @@ struct V1SessionTrayScreen: View {
     let sync: any CaptureSyncService
 
     @State private var items: [Specimen] = []
+    @State private var unplaced: [Specimen] = []
     @State private var scope: FieldTrayScope = .unplacedOnly
+    @State private var placedJustNow: Set<UUID> = []
     @State private var player = VoiceSegmentPlayer()
     @State private var playingSpecimenID: UUID?
     private let sessionContext = CaptureSessionContextStore.shared
@@ -36,22 +38,34 @@ struct V1SessionTrayScreen: View {
             }
     }
 
-    /// The unplaced tray leads with the strongest question — the confidence
-    /// decides the sequence and is never shown. A visit tray stays newest-first:
-    /// its records are placed, and `place(…)` leaves `suggested_*` standing, so
-    /// a leftover question must not be allowed to reorder answered work.
+    /// `items` is always this visit's own captures now (Task 25 stopped it
+    /// doubling as the unplaced list), so it stays newest-first: its records
+    /// are answered, and `place(…)` leaves `suggested_*` standing, so a
+    /// leftover question must not be allowed to reorder answered work. The
+    /// unplaced section below carries its own FieldTraySuggestionOrder.
     private func ordered(_ specimens: [Specimen]) -> [Specimen] {
-        switch scope {
-        case .unplacedOnly: return FieldTraySuggestionOrder.ordered(specimens)
-        case .visit:        return specimens.sorted { $0.createdAt > $1.createdAt }
+        specimens.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// The unplaced tray leads with the strongest question — the confidence
+    /// decides the sequence and is never shown (Task 27).
+    private var unplacedGroups: [(venue: String, items: [Specimen])] {
+        let grouped = Dictionary(grouping: unplaced) { specimen in
+            specimen.venue?.placemarkName ?? "This visit"
         }
+        return grouped
+            .map { (venue: $0.key, items: FieldTraySuggestionOrder.ordered($0.value)) }
+            .sorted {
+                ($0.items.map(\.createdAt).max() ?? .distantPast)
+                    > ($1.items.map(\.createdAt).max() ?? .distantPast)
+            }
     }
 
     var body: some View {
         ZStack {
             CaptureColor.paper3.ignoresSafeArea()
 
-            if items.isEmpty {
+            if items.isEmpty && unplaced.isEmpty {
                 emptyState
             } else {
                 ScrollView {
@@ -64,6 +78,10 @@ struct V1SessionTrayScreen: View {
                         ForEach(groups, id: \.venue) { group in
                             venueSection(group.venue, group.items)
                         }
+
+                        if !unplaced.isEmpty {
+                            unplacedSection
+                        }
                     }
                     .padding(20)
                     .padding(.bottom, 96)
@@ -71,7 +89,7 @@ struct V1SessionTrayScreen: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            if !items.isEmpty { footer }
+            if !(items.isEmpty && unplaced.isEmpty) { footer }
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -94,6 +112,26 @@ struct V1SessionTrayScreen: View {
         .accessibilityIdentifier(CaptureScreenID.v1SessionTray.rawValue)
         .onAppear(perform: reload)
         .onDisappear { player.stop() }
+    }
+
+    /// Spec §7.8: while a visit is open, an older unplaced capture stays
+    /// visible underneath it instead of going invisible. Its own header is
+    /// only shown when it trails a visit section — when there is no visit
+    /// open, `scope.title` above already reads "Not placed yet" and this
+    /// list is the whole tray, so a second identical heading would just
+    /// repeat itself.
+    @ViewBuilder
+    private var unplacedSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if !items.isEmpty {
+                Text("Not placed yet")
+                    .font(CaptureType.title2)
+                    .foregroundStyle(CaptureColor.ink)
+            }
+            ForEach(unplacedGroups, id: \.venue) { group in
+                venueSection(group.venue, group.items)
+            }
+        }
     }
 
     private func venueSection(_ venue: String, _ specimens: [Specimen]) -> some View {
@@ -124,7 +162,23 @@ struct V1SessionTrayScreen: View {
     private func row(_ specimen: Specimen) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             rowBody(specimen)
+            placedSyncingLine(specimen)
             suggestionRow(specimen)
+        }
+    }
+
+    /// §13.5: a suggestion accepted on a capture that already committed needs
+    /// the server to learn the project on the next drain. `placedJustNow`
+    /// marks that gap so it reads as "placed · syncing" instead of looking
+    /// stuck — and clears itself the moment `reload()` finds the record
+    /// complete (Task 27's placement call site is where it's raised).
+    @ViewBuilder
+    private func placedSyncingLine(_ specimen: Specimen) -> some View {
+        if placedJustNow.contains(specimen.id), specimen.transferState.phase != .complete {
+            Text("placed · syncing")
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.inkSoft)
+                .padding(.bottom, 8)
         }
     }
 
@@ -162,6 +216,7 @@ struct V1SessionTrayScreen: View {
         try? store.save()
         analytics.event("suggestion.accepted",
                         ["basis": specimen.suggestionBasisRaw ?? "unknown"])
+        placedJustNow.insert(specimen.id)
         reload()
         // §13.5: filing works offline. The local record is written now; the
         // EXISTING outbox carries the project to the server on the next drain.
@@ -285,17 +340,13 @@ struct V1SessionTrayScreen: View {
         }
     }
 
+    /// True only once fix 1 lands below: a committed-but-unplaced capture
+    /// keeps showing under "Not placed yet" until she files it, so the tray
+    /// is only ever truly empty when nothing is waiting on her at all.
     private var emptyState: some View {
-        let message: String
-        switch scope {
-        case .visit:
-            message = "Captures from this visit gather here."
-        case .unplacedOnly:
-            message = "Captures not yet placed gather here."
-        }
-        return PatinaEmptyState(icon: "tray",
-                                title: "Nothing captured yet",
-                                message: message)
+        PatinaEmptyState(icon: "tray",
+                        title: "Nothing waiting",
+                        message: "Everything you've captured is placed.")
     }
 
     private func reload() {
@@ -304,21 +355,35 @@ struct V1SessionTrayScreen: View {
         // from a real one. `visitState` reports without minting anything.
         let visitState = sessionContext.visitState(identity: identity)
         scope = FieldTrayScopeBuilder.scope(for: visitState)
+        // Spec §7.8: the tray WIDENS rather than swaps. `items` stays this
+        // visit's own captures; `unplaced` is `unfiled(owner:)` — which
+        // INCLUDES `.committed` rows on purpose (Ruling 3, Task 15): the
+        // tray empties on placement, not on sync — minus anything already
+        // showing under the visit, so a capture from this visit never
+        // renders twice.
+        let allUnfiled: [Specimen]
         switch localListScope {
         case .globalFixtures:
-            items = visitState.context.map { store.session(visitID: $0.visitID) }
-                ?? store.unfiled()
+            items = visitState.context.map { store.session(visitID: $0.visitID) } ?? []
+            allUnfiled = store.unfiled()
         case .owner(let owner):
-            items = visitState.context.map { store.session(visitID: $0.visitID, owner: owner) }
-                ?? store.unfiled(owner: owner)
+            items = visitState.context.map { store.session(visitID: $0.visitID, owner: owner) } ?? []
+            allUnfiled = store.unfiled(owner: owner)
         case .unavailable:
             items = []
+            allUnfiled = []
+        }
+        unplaced = FieldTrayUnplacedFilter.excluding(allUnfiled, visibleIn: items)
+        // A `placedJustNow` mark clears once the record it names is complete.
+        placedJustNow = placedJustNow.filter { id in
+            guard let match = (items + unplaced).first(where: { $0.id == id }) else { return false }
+            return match.transferState.phase != .complete
         }
     }
 
     private func endVisit() {
         _ = sessionContext.endVisit(identity: identity)
-        items = []
+        reload()
         coordinator.popToRoot()
     }
 

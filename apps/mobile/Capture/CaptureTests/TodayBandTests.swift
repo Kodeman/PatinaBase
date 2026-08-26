@@ -407,4 +407,30 @@ struct TodayBandTests {
             for: .stale(openVisit(startedAt: last, lastActivityAt: last)))
         #expect(scope == .visit(label: "Maple St · Living"))
     }
+
+    // MARK: - FieldTrayUnplacedFilter (Task 25 fix round — both lists, not one)
+
+    @MainActor
+    @Test func unplacedExcludesWhatIsAlreadyShownUnderTheVisit() throws {
+        let store = try CaptureStore.inMemory()
+        let inVisit = store.newDraft()
+        let elsewhere = store.newDraft()
+        try store.save()
+
+        let filtered = FieldTrayUnplacedFilter.excluding([inVisit, elsewhere], visibleIn: [inVisit])
+        #expect(filtered.map(\.id) == [elsewhere.id])
+    }
+
+    @MainActor
+    @Test func unplacedIsUntouchedWithNoVisitOpen() throws {
+        let store = try CaptureStore.inMemory()
+        let a = store.newDraft()
+        let b = store.newDraft()
+        try store.save()
+
+        // No visit open means `items` is empty (Task 25 fix 1), so nothing is
+        // excluded — the tray-wide unplaced list is exactly `unfiled(owner:)`.
+        let filtered = FieldTrayUnplacedFilter.excluding([a, b], visibleIn: [])
+        #expect(Set(filtered.map(\.id)) == Set([a.id, b.id]))
+    }
 }
