@@ -69,6 +69,9 @@ final class LocalCaptureSyncService: CaptureSyncService {
     private let session: (any SessionProviding)?
     /// When present, commits do real upload + RPC; nil leaves records queued.
     private let remote: SupabaseCaptureGateway?
+    /// Where a filing is remembered (§2.2), so proximity can offer the project
+    /// back next visit. Fed only from a capture the server has accepted.
+    private let projectCache: CaptureProjectCache?
     private let stream: AsyncStream<SyncSnapshot>
     private let continuation: AsyncStream<SyncSnapshot>.Continuation
     /// One drain task per authenticated identity. Re-entrant callers await the
@@ -80,12 +83,14 @@ final class LocalCaptureSyncService: CaptureSyncService {
          analytics: (any CaptureAnalytics)? = nil,
          liveActivity: CaptureLiveActivityController? = nil,
          session: (any SessionProviding)? = nil,
-         remote: SupabaseCaptureGateway? = nil) {
+         remote: SupabaseCaptureGateway? = nil,
+         projectCache: CaptureProjectCache? = nil) {
         self.store = store
         self.analytics = analytics
         self.liveActivity = liveActivity
         self.session = session
         self.remote = remote
+        self.projectCache = projectCache
         var cont: AsyncStream<SyncSnapshot>.Continuation!
         self.stream = AsyncStream(bufferingPolicy: .bufferingNewest(8)) { cont = $0 }
         self.continuation = cont
@@ -365,11 +370,25 @@ final class LocalCaptureSyncService: CaptureSyncService {
         )
         try requireActiveOwner(owner)
         let receipt = try applyCommitResult(result, to: specimen)
+        rememberFiling(specimen, owner: owner)
         if specimen.reconcilePlacementReplay(sentProjectID: sentProjectID,
                                              sentProjectRoomID: sentProjectRoomID) {
             try? store.save()
         }
         return receipt
+    }
+
+    /// §2.2: a capture the server accepted teaches the cache where its project
+    /// physically is, so standing here again next visit can offer that project
+    /// back. Only a FILED capture counts — `venue.projectId` is the fact she
+    /// stated, never `suggested_*`, which nothing reads as truth.
+    private func rememberFiling(_ specimen: Specimen, owner: CaptureOwnerIdentity) {
+        guard let projectID = specimen.venue?.projectId, !projectID.isEmpty else { return }
+        let coordinate = specimen.venue.flatMap { stamp -> CaptureCoordinate? in
+            guard let lat = stamp.latitude, let lng = stamp.longitude else { return nil }
+            return CaptureCoordinate(latitude: lat, longitude: lng)
+        }
+        projectCache?.recordFiling(projectID: projectID, at: coordinate, owner: owner)
     }
 
     /// FC-R6: `canReuseConfirmedReceipt` is `hasConfirmedCaptureReceipt` MINUS a

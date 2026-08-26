@@ -154,6 +154,12 @@ public final class Specimen {
     public var suggestionBasisRaw: String?
     /// Orders the tray. NEVER RENDERED (Principle 4).
     public var suggestionConfidence: Double?
+    /// The basis in WORDS — the only suggestion value a designer ever sees.
+    /// DEVICE-ONLY ON PURPOSE: the unplaced tray is device-side SwiftData, so the
+    /// sentence is composed here and rendered here. `FieldCapturePayload` omits it
+    /// and migration 00532 has no column for it; neither is an oversight, and
+    /// neither should be "fixed" to carry it.
+    public var suggestionReasonRaw: String?
     /// FC-R6: placed AFTER the capture committed, so the routing the server
     /// already stored is stale until the outbox re-runs `commit_field_capture`.
     public var placementReplayPending: Bool?

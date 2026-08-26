@@ -287,6 +287,21 @@ public extension Specimen {
         set { suggestionBasisRaw = newValue?.rawValue }
     }
 
+    /// The basis in WORDS. Never a number, never a mechanism.
+    var suggestionReason: String? { suggestionReasonRaw }
+
+    /// Write a SUGGESTION — WE THINK SO, never SHE SAID SO. This function must
+    /// never write `venue.projectId` / `venue.projectRoomId`: that is the fact,
+    /// and only `place(…)` may set it. Passing nil clears the question and
+    /// leaves the fact exactly as it stood.
+    func apply(_ suggestion: CaptureSuggestion?) {
+        suggestedProjectID = suggestion?.projectID
+        suggestedProjectRoomID = suggestion?.projectRoomID
+        suggestionBasis = suggestion?.basis
+        suggestionConfidence = suggestion?.confidence
+        suggestionReasonRaw = suggestion?.reason
+    }
+
     /// Whether this capture's destination is one that OWES a project.
     /// Spec Flow 6: an un-chipped market find filed to the Library shelf is
     /// DONE — only a chipped one takes `place_product_in_project` — so a
@@ -379,6 +394,23 @@ public extension Specimen {
         visitEndedAt = context.endedAt
         if noteSettingRaw == nil, let kind = context.kind {
             noteSetting = CaptureVisitDraft(kind: kind, kit: context.kit).defaultNoteSetting
+        }
+    }
+}
+
+/// Orders a tray so the strongest suggestions surface first. The CONFIDENCE
+/// NEVER LEAVES THIS TYPE: it decides sequence and is never handed to a view,
+/// which is the whole of Principle 4's "orders, never renders". A record with no
+/// suggestion sorts below every record that has one, and ties fall back to the
+/// tray's ordinary newest-first order so the sequence is total and stable.
+public enum FieldTraySuggestionOrder {
+    @MainActor
+    public static func ordered(_ specimens: [Specimen]) -> [Specimen] {
+        specimens.sorted { lhs, rhs in
+            let left = lhs.suggestionConfidence ?? -1
+            let right = rhs.suggestionConfidence ?? -1
+            if left != right { return left > right }
+            return lhs.createdAt > rhs.createdAt
         }
     }
 }

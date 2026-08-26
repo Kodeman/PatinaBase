@@ -15,6 +15,8 @@ struct V1SessionTrayScreen: View {
     let store: CaptureStore
     let session: any SessionProviding
     let coordinator: CaptureCoordinator
+    let analytics: any CaptureAnalytics
+    let sync: any CaptureSyncService
 
     @State private var items: [Specimen] = []
     @State private var scope: FieldTrayScope = .unplacedOnly
@@ -27,8 +29,22 @@ struct V1SessionTrayScreen: View {
             specimen.venue?.placemarkName ?? "This visit"
         }
         return grouped
-            .map { (venue: $0.key, items: $0.value.sorted { $0.createdAt > $1.createdAt }) }
-            .sorted { ($0.items.first?.createdAt ?? .distantPast) > ($1.items.first?.createdAt ?? .distantPast) }
+            .map { (venue: $0.key, items: ordered($0.value)) }
+            .sorted {
+                ($0.items.map(\.createdAt).max() ?? .distantPast)
+                    > ($1.items.map(\.createdAt).max() ?? .distantPast)
+            }
+    }
+
+    /// The unplaced tray leads with the strongest question — the confidence
+    /// decides the sequence and is never shown. A visit tray stays newest-first:
+    /// its records are placed, and `place(…)` leaves `suggested_*` standing, so
+    /// a leftover question must not be allowed to reorder answered work.
+    private func ordered(_ specimens: [Specimen]) -> [Specimen] {
+        switch scope {
+        case .unplacedOnly: return FieldTraySuggestionOrder.ordered(specimens)
+        case .visit:        return specimens.sorted { $0.createdAt > $1.createdAt }
+        }
     }
 
     var body: some View {
@@ -106,6 +122,55 @@ struct V1SessionTrayScreen: View {
     }
 
     private func row(_ specimen: Specimen) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            rowBody(specimen)
+            suggestionRow(specimen)
+        }
+    }
+
+    /// The suggestion is ASKED, never asserted, and its basis is always in words.
+    /// Only an unplaced capture is ever asked — a placed one has her answer.
+    @ViewBuilder
+    private func suggestionRow(_ specimen: Specimen) -> some View {
+        if specimen.isUnplaced,
+           let reason = specimen.suggestionReason,
+           let projectID = specimen.suggestedProjectID {
+            Button {
+                accept(specimen, projectID: projectID)
+            } label: {
+                Text("\(reason). Place it here?")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.verdigrisInk)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(minHeight: 44)
+            .padding(.bottom, 10)
+            .accessibilityIdentifier("tray.suggestion")
+        }
+    }
+
+    /// She answered the question, so the answer becomes the FACT.
+    /// NEVER `route_field_capture`: that RPC hardcodes destination 'library'
+    /// (00235:332) and would mint a product out of a damaged baseboard.
+    private func accept(_ specimen: Specimen, projectID: String) {
+        specimen.place(projectID: projectID,
+                       projectRoomID: specimen.suggestedProjectRoomID,
+                       room: nil)
+        try? store.save()
+        analytics.event("suggestion.accepted",
+                        ["basis": specimen.suggestionBasisRaw ?? "unknown"])
+        reload()
+        // §13.5: filing works offline. The local record is written now; the
+        // EXISTING outbox carries the project to the server on the next drain.
+        // No second queue — and for a capture that has not committed yet this
+        // is the same outbox entry its first commit would use anyway.
+        Task { await sync.enqueue(specimen.id) }
+    }
+
+    private func rowBody(_ specimen: Specimen) -> some View {
         let playable = playableSegments(specimen)
         return HStack(spacing: 12) {
             Button {
@@ -279,7 +344,9 @@ import CaptureKitMocks
     return NavigationStack {
         V1SessionTrayScreen(
             store: demo.store, session: MockSessionProviding(),
-            coordinator: CaptureCoordinator())
+            coordinator: CaptureCoordinator(),
+            analytics: MockCaptureAnalytics(),
+            sync: InMemoryCaptureSyncService())
     }
 }
 #endif

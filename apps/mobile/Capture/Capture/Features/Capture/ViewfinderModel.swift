@@ -25,6 +25,8 @@ final class ViewfinderModel {
     private let smartGuess: any SmartGuessService
     private let voice: any VoiceNoteService
     private let featureFlags: CaptureFeatureFlags
+    /// The learned filing places a suggestion is computed against, on device.
+    private let projectCache: CaptureProjectCache
     private var visitID: UUID?
     /// R119: the Companion strip ends a visit INLINE, with no sheet, so the
     /// `.onChange(of: coordinator.sheet)` hook never fires and the chip goes on
@@ -117,6 +119,7 @@ final class ViewfinderModel {
         self.companion = container.companion
         self.smartGuess = container.smartGuess
         self.featureFlags = container.featureFlags
+        self.projectCache = container.projectCache
         self.voice = SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
                                             analytics: container.analytics,
                                             surface: "c3")
@@ -560,6 +563,23 @@ final class ViewfinderModel {
             for: CaptureSessionContextPolicy.visitState(
                 for: context, now: Date(), calendar: .current))
         draft.inherit(context)
+        // No visit open ⇒ the capture is born carrying a QUESTION. `apply` writes
+        // `suggested_*` only; the fact stays empty until she answers it in the tray.
+        if draft.isUnplaced, let owner = session.ownerIdentity {
+            let coordinate = venueStamp.flatMap { stamp -> CaptureCoordinate? in
+                guard let lat = stamp.latitude, let lng = stamp.longitude else { return nil }
+                return CaptureCoordinate(latitude: lat, longitude: lng)
+            }
+            let suggestion = CaptureSuggestionEngine.suggest(
+                coordinate: coordinate,
+                venueLabel: venueStamp?.placemarkName,
+                projects: projectCache.snapshots(owner: owner),
+                now: Date())
+            draft.apply(suggestion)
+            if let suggestion {
+                analytics.event("suggestion.shown", ["basis": suggestion.basis.rawValue])
+            }
+        }
         return draft
     }
 

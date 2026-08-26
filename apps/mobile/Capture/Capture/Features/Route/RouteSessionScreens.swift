@@ -32,8 +32,8 @@ enum RouteSessionScreens {
         }
 
         r.registerRoute(CaptureRoute.session.registryKey) { _ in
-            AnyView(V1SessionTrayScreen(
-                store: store, session: session, coordinator: coordinator))
+            AnyView(V1SessionTrayScreen(store: store, session: session,
+                                        coordinator: coordinator, analytics: analytics, sync: sync))
         }
         r.registerRoute(CaptureRoute.specimen(UUID()).registryKey) { route in
             guard case let .specimen(id) = route else { return AnyView(EmptyView()) }

@@ -91,17 +91,11 @@ public final class AppContainer {
             self.session = session
             self.authorizer = SupabaseWorkspaceAuthorizer(session: session)
 
-            let liveActivity = CaptureLiveActivityController()
-            let gateway = SupabaseCaptureGateway(client: client,
-                                                 bucket: AppConfiguration.captureMediaBucket)
-            self.sync = LocalCaptureSyncService(store: store, analytics: analytics,
-                                                liveActivity: liveActivity,
-                                                session: session, remote: gateway)
-            self.projectCreator = SupabaseProjectCreator(client: client, session: session)
-
             // Phase 2 seams — each flow owns a `<Flow>ServiceFactory.make(deps:)`,
             // and all eight now hand back a real Supabase service. Mock mode never
             // reaches this branch; it wires the CaptureKitMocks conformers below.
+            // Built BEFORE sync: the cache the sync service teaches is built on
+            // `projects`, so the order here is a dependency, not a preference.
             let work = Self.makeWorkServices(deps: WorkServiceDependencies(
                 client: client, session: session, store: store))
             self.projects = work.projects; self.leads = work.leads; self.decisions = work.decisions
@@ -109,6 +103,15 @@ public final class AppContainer {
             self.portalAuth = work.portalAuth; self.siteScan = work.siteScan
             self.siteRequests = work.siteRequests; self.guestSiteRequests = work.siteRequests
             self.siteRequestOutboxDrainer = work.drainer
+
+            let cache = CaptureProjectCache(store: store, projects: work.projects); self.projectCache = cache
+            let liveActivity = CaptureLiveActivityController()
+            let gateway = SupabaseCaptureGateway(client: client,
+                                                 bucket: AppConfiguration.captureMediaBucket)
+            self.sync = LocalCaptureSyncService(store: store, analytics: analytics,
+                                                liveActivity: liveActivity,
+                                                session: session, remote: gateway, projectCache: cache)
+            self.projectCreator = SupabaseProjectCreator(client: client, session: session)
 
             #if targetEnvironment(simulator)
             self.camera = MockCameraService()
@@ -145,8 +148,8 @@ public final class AppContainer {
             self.siteRequests = siteRequests
             self.guestSiteRequests = siteRequests
             self.siteRequestOutboxDrainer = SiteRequestOutboxDrainer(store: store, remote: siteRequests)
+            self.projectCache = CaptureProjectCache(store: store, projects: projects)
         }
-        projectCache = CaptureProjectCache(store: store, projects: projects)
     }
 
     /// Every protocol-typed Work dependency the app wires in real mode, bundled
