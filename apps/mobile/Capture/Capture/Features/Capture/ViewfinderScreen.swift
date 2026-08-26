@@ -148,8 +148,14 @@ struct ViewfinderScreen: View {
         // `.background` and NOT `!= .active`, for C6's reason: Control Center,
         // the app switcher and a screenshot all produce `.inactive` and must
         // not end a note.
+        // `.active` re-reads the visit: `CaptureVisitPolicy.visitState` is a
+        // function of TIME (12-hour idle, day rollover), and time expiring
+        // writes nothing and posts no `visitDidChange`. Without this the chip
+        // and C6's idle line keep naming a visit that ended while the phone was
+        // in her pocket — the same lie this wave removed from the model half.
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { model.endCardNote() }
+            if phase == .active { model.refreshVisit() }
         }
         .onDisappear { model.stop() }
         .statusBarHidden(true)
