@@ -1,0 +1,1792 @@
+<title>Patina Field &#183; The Visit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap">
+
+<style>
+/* -------------------------------------------------------------
+   Patina Field . The Visit
+   Palette = PatinaDesignKit R28 clay set.
+   Light palette is complete on bare :root; dark redefines tokens only.
+   ------------------------------------------------------------- */
+:root{
+  --ground:#FAF7F2;
+  --raise:#F5F2ED;
+  --sink:#EFEBE3;
+  --rule:#E5E2DD;
+  --rule-2:#D6CFC3;
+  --ink:#2C2926;
+  --ink-2:#5C4A3C;
+  --ink-3:#8B7355;
+  --accent:#C4A57B;
+  --accent-ink:#9F7E48;
+  --accent-wash:rgba(196,165,123,.14);
+  --ok:#7A9B76;
+  --warn:#D4A574;
+  --bad:#C77B6E;
+  --terracotta:#D4A090;
+  --gold:#E8C547;
+  --sage:#A8B5A0;
+  --blue:#8B9CAD;
+  --shadow:0 1px 2px rgba(44,41,38,.07), 0 10px 30px rgba(44,41,38,.06);
+
+  /* App chrome, deliberately identical in both themes - these are the
+     device's own colours, not the page's. */
+  --dev-ink:#211E1B;
+  --dev-ink-2:#2C2926;
+  --dev-paper:#FAF7F2;
+  --dev-paper-2:#F5F2ED;
+  --dev-text:#F2EDE6;
+  --dev-text-2:#B5A487;
+  --dev-bezel:#CFC8BD;
+
+  --f-display:"Playfair Display",Georgia,"Times New Roman",serif;
+  --f-body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --f-mono:"DM Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#211E1B;
+    --raise:#2C2926;
+    --sink:#262320;
+    --rule:#3B352E;
+    --rule-2:#4C453B;
+    --ink:#F2EDE6;
+    --ink-2:#D8C9B4;
+    --ink-3:#B5A487;
+    --accent:#C4A57B;
+    --accent-ink:#D9BC8C;
+    --accent-wash:rgba(196,165,123,.13);
+    --ok:#93B18E;
+    --warn:#DCB68C;
+    --bad:#D69A8E;
+    --terracotta:#D4A090;
+    --sage:#A8B5A0;
+    --blue:#9DAEBE;
+    --shadow:0 1px 2px rgba(0,0,0,.30), 0 12px 34px rgba(0,0,0,.28);
+    --dev-bezel:#4C453B;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#211E1B;
+  --raise:#2C2926;
+  --sink:#262320;
+  --rule:#3B352E;
+  --rule-2:#4C453B;
+  --ink:#F2EDE6;
+  --ink-2:#D8C9B4;
+  --ink-3:#B5A487;
+  --accent:#C4A57B;
+  --accent-ink:#D9BC8C;
+  --accent-wash:rgba(196,165,123,.13);
+  --ok:#93B18E;
+  --warn:#DCB68C;
+  --bad:#D69A8E;
+  --terracotta:#D4A090;
+  --sage:#A8B5A0;
+  --blue:#9DAEBE;
+  --shadow:0 1px 2px rgba(0,0,0,.30), 0 12px 34px rgba(0,0,0,.28);
+  --dev-bezel:#4C453B;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;
+}
+::selection{background:var(--accent-wash)}
+a{color:var(--accent-ink);text-underline-offset:3px;text-decoration-thickness:1px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent-ink);outline-offset:3px;border-radius:2px}
+
+/* -- shell ----------------------------------------------- */
+.wrap{max-width:78rem;margin-inline:auto;padding-inline:clamp(1.1rem,4vw,3.25rem)}
+.col{max-width:37rem}
+.col.wide{max-width:48rem}
+
+nav.mini{
+  position:sticky;top:0;z-index:40;
+  background:var(--ground);
+  border-bottom:1px solid var(--rule);
+}
+nav.mini .inner{display:flex;align-items:center;gap:1.25rem;height:3.1rem;overflow:hidden}
+nav.mini .mark{
+  font-family:var(--f-mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-3);white-space:nowrap;flex:0 0 auto
+}
+nav.mini ol{
+  list-style:none;margin:0;padding:0;display:flex;gap:.15rem;
+  overflow-x:auto;scrollbar-width:none;flex:1 1 auto;min-width:0
+}
+nav.mini ol::-webkit-scrollbar{display:none}
+nav.mini a{
+  display:block;white-space:nowrap;text-decoration:none;color:var(--ink-3);
+  font-size:12.5px;padding:.28rem .55rem;border-radius:3px;
+}
+nav.mini a:hover{color:var(--ink)}
+nav.mini a[aria-current="true"]{color:var(--ink);background:var(--accent-wash)}
+
+/* -- sections -------------------------------------------- */
+section{padding-block:clamp(3.2rem,6vw,5.4rem);border-top:1px solid var(--rule)}
+section:first-of-type{border-top:0}
+.sec-grid{display:grid;grid-template-columns:5.5rem minmax(0,1fr);gap:clamp(1rem,3vw,2.75rem)}
+@media (max-width:880px){.sec-grid{grid-template-columns:minmax(0,1fr)}}
+.rail{font-family:var(--f-mono);font-size:11px;line-height:1.5;color:var(--ink-3);letter-spacing:.06em}
+.rail b{display:block;color:var(--accent-ink);font-weight:500;font-size:15px;letter-spacing:.02em}
+@media (max-width:880px){.rail{display:flex;gap:.6rem;align-items:baseline;margin-bottom:.4rem}.rail b{display:inline}}
+
+h1,h2,h3,h4{font-family:var(--f-display);font-weight:600;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,5.6vw,3.9rem);line-height:1.06;letter-spacing:-.015em;font-weight:500}
+h1 em{font-style:italic;font-weight:500}
+h2{font-size:clamp(1.7rem,3.2vw,2.35rem);line-height:1.14;letter-spacing:-.01em;margin-bottom:.75rem}
+h3{font-size:1.16rem;line-height:1.3;margin-bottom:.35rem}
+h4{font-family:var(--f-body);font-size:.83rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:.5rem}
+p{margin:0 0 1.05rem}
+.lede{font-size:1.2rem;line-height:1.55;color:var(--ink-2)}
+.eyebrow{
+  font-family:var(--f-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 .85rem
+}
+.kicker{font-family:var(--f-display);font-style:italic;font-size:1.05rem;color:var(--ink-2)}
+code,.mono{font-family:var(--f-mono);font-size:.86em;color:var(--ink-2);word-break:break-word}
+strong{font-weight:600;color:var(--ink)}
+hr.hair{border:0;border-top:1px solid var(--rule);margin:2rem 0}
+
+ul.plain{list-style:none;margin:0 0 1.05rem;padding:0;display:grid;gap:.55rem}
+ul.plain>li{padding-left:1.1rem;position:relative}
+ul.plain>li::before{content:"";position:absolute;left:0;top:.72em;width:5px;height:1px;background:var(--accent)}
+ol.steps{margin:0 0 1.05rem;padding-left:1.35rem;display:grid;gap:.5rem}
+ol.steps li::marker{font-family:var(--f-mono);font-size:.8em;color:var(--ink-3)}
+
+/* -- typographic furniture ------------------------------- */
+.note{
+  border-left:2px solid var(--accent);background:var(--accent-wash);
+  padding:.85rem 1.1rem;margin:1.4rem 0;font-size:.95rem;color:var(--ink-2)
+}
+.note strong{color:var(--ink)}
+.caution{border-left-color:var(--bad);background:rgba(199,123,110,.10)}
+.figcap{font-size:.83rem;color:var(--ink-3);margin-top:.7rem;max-width:44rem}
+
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(17rem,1fr));gap:1.5rem}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1.25rem}
+
+.card{background:var(--raise);border:1px solid var(--rule);padding:1.15rem 1.25rem}
+.card h3{margin-bottom:.4rem}
+.card p:last-child{margin-bottom:0}
+
+.scroller{overflow-x:auto;padding-bottom:.4rem}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:34rem}
+th,td{text-align:left;vertical-align:top;padding:.6rem .75rem;border-bottom:1px solid var(--rule)}
+th{
+  font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:400;border-bottom-color:var(--rule-2)
+}
+td:first-child,th:first-child{padding-left:0}
+tbody tr:last-child td{border-bottom:0}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.tag{
+  display:inline-block;font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;padding:.14rem .42rem;border:1px solid var(--rule-2);
+  color:var(--ink-3);line-height:1.5;max-width:100%
+}
+.tag.ok{color:var(--ok);border-color:var(--ok)}
+.tag.part{color:var(--warn);border-color:var(--warn)}
+.tag.miss{color:var(--bad);border-color:var(--bad)}
+.tag.accent{color:var(--accent-ink);border-color:var(--accent)}
+
+/* -- cover ----------------------------------------------- */
+.cover{padding-top:clamp(2.6rem,7vw,5rem)}
+.cover h1{margin-bottom:1.4rem;max-width:20ch}
+.stat-row{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));
+  gap:1px;background:var(--rule);border-block:1px solid var(--rule);margin:2.4rem 0
+}
+.stat{background:var(--ground);padding:1rem 1.15rem 1.1rem}
+.stat .v{font-family:var(--f-display);font-size:1.9rem;line-height:1;color:var(--ink);display:block;margin-bottom:.35rem}
+.stat .v small{font-family:var(--f-body);font-size:.9rem;color:var(--ink-3)}
+.stat .k{font-size:.82rem;color:var(--ink-3);line-height:1.4;display:block}
+
+/* -- status ledger --------------------------------------- */
+.ledger{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.ledger .row{
+  background:var(--ground);display:grid;
+  grid-template-columns:5.5rem minmax(0,1.15fr) minmax(0,1fr);
+  gap:.85rem;padding:.7rem .85rem;align-items:baseline
+}
+.ledger .row.head{background:var(--raise)}
+.ledger .row.head span{font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.ledger .what{font-size:.92rem}
+.ledger .ev{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);line-height:1.45;word-break:break-word}
+@media (max-width:720px){
+  .ledger .row{grid-template-columns:minmax(0,1fr);gap:.3rem}
+}
+
+/* -- flow chains ----------------------------------------- */
+.flow{border-top:1px solid var(--rule);padding-top:1.4rem;margin-top:2.2rem}
+.flow.headline{border-top:2px solid var(--accent);background:var(--accent-wash);padding:1.4rem 1.25rem 1.25rem;margin-inline:-1.25rem}
+.flow-head{display:flex;flex-wrap:wrap;gap:.35rem 1rem;align-items:baseline;margin-bottom:.55rem}
+.flow-head .n{font-family:var(--f-mono);font-size:11px;color:var(--accent-ink);letter-spacing:.1em}
+.flow-head h3{margin:0}
+.targets{display:flex;flex-wrap:wrap;gap:.4rem .9rem;font-size:.84rem;color:var(--ink-3);margin-bottom:1rem}
+.targets b{color:var(--ink);font-weight:600}
+.targets .then{color:var(--bad)}
+.chain{display:flex;flex-wrap:wrap;align-items:stretch;gap:.4rem;margin-bottom:.9rem}
+.chain .step{
+  flex:1 1 8.5rem;min-width:8.5rem;background:var(--raise);border:1px solid var(--rule);
+  padding:.55rem .7rem;font-size:.84rem;line-height:1.4;position:relative
+}
+.chain .step .i{font-family:var(--f-mono);font-size:10px;color:var(--accent-ink);display:block;margin-bottom:.15rem}
+.chain .step.hold{border-style:dashed;border-color:var(--accent)}
+.chain .arrow{align-self:center;color:var(--ink-3);font-size:.9rem;flex:0 0 auto}
+@media (max-width:640px){.chain .arrow{display:none}}
+.lands{font-size:.88rem;color:var(--ink-2);border-left:2px solid var(--rule-2);padding-left:.85rem}
+.lands b{font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);display:block;font-weight:400}
+
+/* -- phone frames ---------------------------------------- */
+.frames{display:flex;flex-wrap:wrap;gap:2.4rem 2rem;margin-top:2rem}
+.frame{flex:0 0 auto;width:300px;max-width:100%}
+.frame > h3{font-size:1rem;margin-bottom:.15rem}
+.frame .sub{font-size:.8rem;color:var(--ink-3);margin-bottom:.7rem;min-height:2.4em}
+.device{
+  width:300px;max-width:100%;min-height:626px;border-radius:34px;padding:7px;
+  background:var(--dev-bezel);box-shadow:var(--shadow);display:flex
+}
+.scr{
+  flex:1 1 auto;min-height:612px;border-radius:27px;overflow:hidden;
+  display:flex;flex-direction:column;
+  font-family:var(--f-body);font-size:10.5px;line-height:1.38
+}
+.scr.dark{background:var(--dev-ink);color:var(--dev-text)}
+.scr.paper{background:var(--dev-paper);color:#2C2926}
+.scr .bar{display:flex;justify-content:space-between;padding:.5rem .8rem .1rem;font-size:9px;opacity:.6;font-family:var(--f-mono)}
+.scr .pad{padding:.55rem .8rem}
+.scr .grow{flex:1 1 auto}
+.cal{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:14px;height:14px;border-radius:50%;background:var(--accent);color:#211E1B;
+  font-family:var(--f-mono);font-size:9px;line-height:1;flex:0 0 auto;margin-left:.3rem
+}
+.legend{margin:.75rem 0 0;padding-left:1.15rem;font-size:.8rem;line-height:1.5;color:var(--ink-2);display:grid;gap:.25rem}
+.legend li::marker{font-family:var(--f-mono);font-size:.85em;color:var(--accent-ink)}
+.states{margin-top:.9rem;display:grid;gap:.4rem}
+.state{border:1px dashed var(--rule-2);padding:.45rem .6rem;font-size:.78rem;color:var(--ink-2)}
+.state b{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:400;display:block}
+
+/* device-internal furniture */
+.d-eyebrow{font-family:var(--f-mono);font-size:8px;letter-spacing:.16em;text-transform:uppercase;opacity:.65}
+.d-title{font-family:var(--f-display);font-size:15px;line-height:1.2;margin:.15rem 0 .1rem}
+.d-band{border:1px solid rgba(139,115,85,.35);border-radius:9px;overflow:hidden;margin:.5rem 0}
+.d-band .r{display:flex;gap:.4rem;align-items:center;padding:.45rem .55rem;border-bottom:1px solid rgba(139,115,85,.22)}
+.d-band .r:last-child{border-bottom:0}
+.d-band .r.lit{background:rgba(196,165,123,.16)}
+.d-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:0 0 auto}
+.d-btn{border:1px solid rgba(139,115,85,.55);border-radius:6px;padding:.16rem .45rem;font-size:9px;white-space:nowrap}
+.d-btn.solid{background:#2C2926;color:#F2EDE6;border-color:#2C2926}
+.d-btn.wide{display:block;text-align:center;padding:.42rem;font-size:10.5px}
+.d-muted{opacity:.62}
+.d-chip{display:inline-block;border:1px solid rgba(242,237,230,.35);border-radius:999px;padding:.12rem .5rem;font-size:9px}
+.scr.paper .d-chip{border-color:rgba(92,74,60,.35)}
+.d-chip.on{background:var(--accent);color:#211E1B;border-color:var(--accent)}
+.d-chip.warn{color:#D4A090;border-color:#D4A090}
+.d-off{background:rgba(212,165,116,.18);color:#D4A574;padding:.22rem .6rem;font-size:9px;display:flex;justify-content:space-between}
+.d-view{flex:1 1 auto;min-height:130px;background:linear-gradient(160deg,#33302B,#211E1B 60%);position:relative}
+.d-modes{display:flex;gap:.55rem;justify-content:center;font-size:9px;letter-spacing:.08em;padding:.5rem 0 .3rem;opacity:.75}
+.d-modes .on{opacity:1;color:var(--accent)}
+.d-shutter{width:44px;height:44px;border-radius:50%;border:2px solid rgba(242,237,230,.8);margin:.25rem auto .7rem}
+.d-shutter.rec{border-color:var(--bad);background:rgba(199,123,110,.25)}
+.d-wave{display:flex;align-items:flex-end;justify-content:center;gap:2px;height:26px;margin:.4rem 0}
+.d-wave i{width:3px;background:var(--accent);opacity:.8;border-radius:1px}
+.d-thumb{width:34px;height:34px;border-radius:4px;background:linear-gradient(140deg,#8B7355,#5C4A3C);flex:0 0 auto}
+.d-strip{display:flex;gap:3px;margin-top:.3rem}
+.d-strip i{width:26px;height:26px;border-radius:3px;background:linear-gradient(140deg,#A8956F,#5C4A3C);display:block}
+.d-rule{height:1px;background:rgba(139,115,85,.28);margin:.45rem 0}
+.d-play{width:20px;height:20px;border-radius:50%;background:var(--accent);color:#211E1B;display:inline-flex;align-items:center;justify-content:center;font-size:8px;flex:0 0 auto}
+
+/* portal frame */
+.portal{
+  width:100%;max-width:420px;border:1px solid var(--rule-2);border-radius:8px;overflow:hidden;
+  background:var(--dev-paper);color:#2C2926;font-size:11px;line-height:1.45;box-shadow:var(--shadow)
+}
+.portal .top{background:var(--dev-paper-2);border-bottom:1px solid rgba(139,115,85,.22);padding:.45rem .7rem;font-family:var(--f-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#8B7355}
+.portal .body{padding:.8rem .85rem}
+.portal .item{border-left:2px solid #8B7355;padding-left:.7rem}
+
+/* -- figures --------------------------------------------- */
+figure{margin:2rem 0}
+figure svg{max-width:100%;height:auto;color:var(--ink)}
+.svg-scroll{overflow-x:auto}
+.svg-scroll svg{min-width:52rem}
+.svg-scroll.narrow svg{min-width:38rem}
+
+/* -- roadmap --------------------------------------------- */
+.wave{
+  display:grid;grid-template-columns:6.5rem minmax(0,1fr);gap:1.1rem;
+  padding:1.15rem 0;border-top:1px solid var(--rule)
+}
+.wave:last-child{border-bottom:1px solid var(--rule)}
+.wave .w-n{font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.08em}
+.wave .w-n b{display:block;font-family:var(--f-display);font-size:1.7rem;color:var(--accent-ink);font-weight:500;letter-spacing:0;line-height:1.1}
+.wave h3{margin-bottom:.3rem}
+.wave .meta{display:flex;flex-wrap:wrap;gap:.3rem .5rem;margin:.55rem 0}
+.wave p{margin-bottom:.5rem;font-size:.93rem}
+.wave .rev{font-size:.83rem;color:var(--ink-3)}
+.wave.held{opacity:.92}
+.wave.held .w-n b{color:var(--ink-3)}
+@media (max-width:640px){.wave{grid-template-columns:minmax(0,1fr);gap:.4rem}}
+
+/* -- ruling sheet ---------------------------------------- */
+.ruling{
+  display:grid;grid-template-columns:6rem minmax(0,1fr);gap:1rem;
+  padding:1rem 0;border-top:1px solid var(--rule)
+}
+.ruling:last-of-type{border-bottom:1px solid var(--rule)}
+.ruling .id{font-family:var(--f-mono);font-size:12.5px;color:var(--accent-ink);letter-spacing:.04em}
+.ruling .id small{display:block;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-top:.15rem}
+.ruling .q{font-weight:600;margin-bottom:.3rem}
+.ruling .d{font-size:.92rem;color:var(--ink-2);margin-bottom:.3rem}
+.ruling .d b{color:var(--ink)}
+.ruling .bl{font-size:.82rem;color:var(--ink-3)}
+.ruling .bl b{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:400}
+.ruling.first{background:var(--accent-wash);padding-inline:1rem;margin-inline:-1rem}
+@media (max-width:640px){.ruling{grid-template-columns:minmax(0,1fr);gap:.35rem}}
+
+.tick{display:inline-block;width:14px;height:14px;border:1px solid var(--rule-2);margin-right:.45rem;vertical-align:-2px}
+
+footer{border-top:1px solid var(--rule);padding-block:2.5rem 4rem;font-size:.84rem;color:var(--ink-3)}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;scroll-behavior:auto !important}
+}
+@media (prefers-reduced-motion: no-preference){html{scroll-behavior:smooth}}
+</style>
+
+<nav class="mini" aria-label="Sections">
+  <div class="wrap inner">
+    <span class="mark">Patina Field &#183; The Visit</span>
+    <ol>
+      <li><a href="#thesis">Thesis</a></li>
+      <li><a href="#today">Field today</a></li>
+      <li><a href="#moments">Moments</a></li>
+      <li><a href="#chose">How we chose</a></li>
+      <li><a href="#shape">The shape</a></li>
+      <li><a href="#flows">Flows</a></li>
+      <li><a href="#screens">Screens</a></li>
+      <li><a href="#voice">Voice</a></li>
+      <li><a href="#data">Server &amp; data</a></li>
+      <li><a href="#lands">Where it lands</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="#rulings">Rulings</a></li>
+      <li><a href="#risks">Risks</a></li>
+      <li><a href="#package">The package</a></li>
+    </ol>
+  </div>
+</nav>
+
+<main>
+
+<!-- &#9552;&#9552; 01 &#183; THESIS &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="thesis" class="cover">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>01</b>Thesis</div>
+    <div>
+      <p class="eyebrow">Patina Field &#183; build package &#8220;The Visit&#8221; &#183; issued 2026-08-24</p>
+      <h1>Ask <em>where are you?</em> once, at the door &#8212; and never again.</h1>
+      <p class="lede col wide">Patina Field asks <em>&#8220;what did you capture?&#8221;</em> twenty times an hour and never asks <em>&#8220;where does it go?&#8221;</em>. Every photo, every spoken note, every scan is born unattached. The plumbing underneath is excellent; the context is missing and the material has nowhere to land.</p>
+
+      <div class="stat-row">
+        <div class="stat"><span class="v">~7<small> taps</small></span><span class="k">plus a press-and-hold, for one photo with a spoken note &#8212; and the record still carries no project.</span></div>
+        <div class="stat"><span class="v">0 <small>of 9</small></span><span class="k">measurable field-companion outcomes pass today. One is partial.</span></div>
+        <div class="stat"><span class="v">0 <small>rows</small></span><span class="k">of analytics from Patina Field in 180 days, against 6,017 from the client app. Nothing here is measurable yet.</span></div>
+        <div class="stat"><span class="v">1 <small>reader</small></span><span class="k">of <span class="mono">field_captures</span> anywhere in the web tree &#8212; scan-scoped, behind a fail-closed flag.</span></div>
+      </div>
+
+      <div class="col wide">
+        <h2>Two live defects sit underneath all of it</h2>
+        <div class="grid-2">
+          <div class="card">
+            <p class="eyebrow" style="margin-bottom:.4rem">Defect one</p>
+            <h3>No audio has ever left a Field device.</h3>
+            <p style="font-size:.93rem"><span class="mono">SpeechVoiceNoteService.swift:22-23</span> declares <span class="mono">mediaDirectory</span> (stored, never read) and <span class="mono">audioFilename</span> (read once at <span class="mono">:107</span>, assigned nowhere). A repo-wide search for <span class="mono">AVAudioFile</span> or <span class="mono">AVAudioRecorder</span> returns zero hits. The file&#8217;s own header &#8212; <em>&#8220;The raw audio file is always kept alongside the text&#8221;</em> &#8212; is false, and it is why two discovery reports got this wrong.</p>
+            <p style="font-size:.93rem;margin-bottom:0">Consequence: a note that transcribes to nothing on a noisy site is discarded with the toast <em>&#8220;Nothing recorded.&#8221;</em> She spoke; nothing was kept.</p>
+          </div>
+          <div class="card">
+            <p class="eyebrow" style="margin-bottom:.4rem">Defect two</p>
+            <h3>A note cannot carry a project even when she sets one.</h3>
+            <p style="font-size:.93rem"><span class="mono">commit_field_capture</span>&#8217;s inbox branch sets only <span class="mono">status</span>; <span class="mono">project_id</span>, <span class="mono">project_room_id</span> and <span class="mono">shelf</span> are written <strong>only</strong> in the library branch. Every note-shaped capture takes the inbox path.</p>
+            <p style="font-size:.93rem;margin-bottom:0">And <span class="mono">ViewfinderModel.makeDraft()</span> copies four of five routing fields &#8212; <span class="mono">projectRoomId</span> is never assigned, so <span class="mono">CaptureRoutingMemory.projectRoomID</span> is write-only and every capture after the first silently loses the room.</p>
+          </div>
+        </div>
+
+        <h2 style="margin-top:2.6rem">The bet</h2>
+        <p>Ask <em>&#8220;where are you?&#8221;</em> once, at the door, and never ask again &#8212; the <strong>Project Spine</strong> &#8212; with three grafts that make it safe to forget:</p>
+        <ul class="plain">
+          <li><strong>The suggested/confirmed split, enforced in the schema.</strong> <span class="mono">suggested_project_id</span> is never <span class="mono">project_id</span>. Nothing reads a suggestion as truth, and the basis is always shown in words &#8212; <em>&#8220;Suggested from where you were&#8221;</em> &#8212; never as a number.</li>
+          <li><strong>The unfiled tray.</strong> A shipped screen&#8217;s query scope widens from this-visit to unfiled, so the drive-home thought has a durable place to wait.</li>
+          <li><strong>The kit, and the close as output.</strong> The visit&#8217;s kind tunes what is one tap away; ending the visit <em>produces</em> a row on the project spread &#8212; <em>&#8220;Tuesday at Maple Street &#183; 12 photos &#183; 3 notes &#183; 1 scan &#183; Living + Dining.&#8221;</em></li>
+        </ul>
+        <p>Everything captured inside a visit inherits its project and room and lands in surfaces the portal already has: the margin, the Room-files block, the FF&amp;E line, the Library shelf, the coordination courts. <strong>There is no inbox in the portal, no triage queue, and no card to clear.</strong></p>
+
+        <div class="note">
+          <strong>&#8776;12.5 engineer-weeks of build</strong> to the program&#8217;s stated goal &#8212; wave 1 &#8804;2 &#183; wave 1P &#8776;1 (parallel) &#183; wave 2 &#8776;1 &#183; wave 3 &#8776;5 &#183; wave 4 &#8776;3.5 &#8212; plus distribution (size M) and slack. Call it <strong>13&#8211;15 calendar weeks of one engineer</strong>, not 13&#8211;15 weeks of build. Wave 6 is specified in full and split: transcription is deterministic and cheap; structuring stays evidence-gated.
+        </div>
+
+        <h2 style="margin-top:2.6rem">What wave 1 makes a designer feel</h2>
+        <p class="kicker" style="margin-bottom:1rem">Two weeks. No flag on the IA, nothing new to learn, and nothing in the portal looks different yet.</p>
+        <ol class="steps">
+          <li>She holds the mic on a loud job site, the words don&#8217;t come through, and <strong>the recording is still there</strong> &#8212; with an honest line instead of &#8220;Nothing recorded.&#8221; On both voice surfaces, including the specimen sheet where most notes are actually taken.</li>
+          <li>She can <strong>play the recording back</strong>, on the sheet and in the tray. &#8220;The audio is here&#8221; becomes something she can check rather than something the app asserts.</li>
+          <li>A note longer than a minute no longer silently truncates.</li>
+          <li>From the card after the shutter: <strong>Not placed &#8594; project &#8594; room &#8594; Done</strong>, and she lands back on the camera. Every capture in that session inherits both the project and the room &#8212; which it does not today.</li>
+          <li>When she is offline the camera says so, and when signal returns the queue drains by itself.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 02 &#183; FIELD TODAY &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="today">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>02</b>Field today</div>
+    <div>
+      <h2>What discovery found</h2>
+      <p class="col wide">242 Swift files, ~47,842 lines. <strong>71 screens</strong> frozen in one enum (whose own header still says 51). Two independent navigation realms &#8212; camera and work &#8212; driven by one coordinator, one sheet on the root, no tab bar. Real Supabase concretes behind all eight work flows; the &#8220;these still return mocks&#8221; comment in the container is stale.</p>
+
+      <div class="grid-2 col wide" style="margin:1.8rem 0 2.4rem">
+        <div class="card">
+          <h4>Do not simplify any of this</h4>
+          <ul class="plain" style="font-size:.9rem;margin-bottom:0">
+            <li>The site-scan rig &#8212; one shared <span class="mono">ARSession</span>, four recorders, a parametric coverage coach.</li>
+            <li>The scan-upload chain &#8212; container-independent durable keys, background <span class="mono">URLSession</span>, orphan-completion replay, and a confirm policy that tells a 4xx from an unreachable server.</li>
+            <li>The capture outbox &#8212; device-stable <span class="mono">clientToken</span>, upsert-idempotent media, receipt-gated completion, deferrable-vs-rejected failure taxonomy.</li>
+            <li>Owner scoping &#8212; 935 lines of lifecycle tests guard it.</li>
+            <li>The library safe-harbor, the SMS rail, the Site Request guest loop, the private owner-scoped media bucket, and the frozen wire contracts.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>The honest ledger</h4>
+          <p style="font-size:.9rem">Every failure below is <em>contextual</em> or <em>terminal</em> &#8212; nothing knows where she is, and the material has nowhere to land. None of them is a reliability failure. That is the whole reason this program is cheap.</p>
+          <p style="font-size:.9rem;margin-bottom:0">There are no <span class="mono">TODO</span> or <span class="mono">FIXME</span> markers anywhere in the app. The placeholder debt is marked <span class="mono">ESCALATE</span>, and nine files of it sit on exactly the surfaces this program touches.</p>
+        </div>
+      </div>
+
+      <div class="ledger">
+        <div class="row head"><span>State</span><span>What</span><span>Evidence</span></div>
+        <div class="row"><span class="tag part">Partial</span><div class="what"><strong>Voice.</strong> The transcript ships; the audio file is never written or uploaded. The MIME map&#8217;s audio branches and the bucket&#8217;s audio allow-list are dead code that has never executed.</div><div class="ev">SpeechVoiceNoteService.swift:22-23,:107 &#183; LocalCaptureSyncService.mimeType &#183; 00234:27-30</div></div>
+        <div class="row"><span class="tag miss">Missing</span><div class="what"><strong>No project picker in the fast path.</strong> S1 &#8212; the only screen that sets a project &#8212; is unreachable from the card and the specimen sheet. Its three presenters are the tray, the create-project screen and the deep-link harness.</div><div class="ev">S1AssignVenueScreen.swift &#183; V1SessionTrayScreen.swift:126 &#183; S2CreateProjectScreen.swift:172</div></div>
+        <div class="row"><span class="tag part">Partial</span><div class="what"><strong><span class="mono">applySmartGuess</span> is a literal.</strong> Every photo is stamped <span class="mono">seating</span>@0.72 and <span class="mono">&#8220;Oak / boucl&#233;&#8221;</span>@0.6 into shipped provenance &#8212; which also makes <span class="mono">hasUnconfirmedGuess</span> always true, so the destination screen recommends Inbox for every capture ever taken.</div><div class="ev">ViewfinderModel.swift:413-423 &#183; S3DestinationScreen.swift:52-57</div></div>
+        <div class="row"><span class="tag miss">Missing</span><div class="what"><strong>Empty targets.</strong> <span class="mono">CaptureShareExtension/</span>, <span class="mono">CaptureWidgets/</span> and <span class="mono">CaptureUITests/</span> are empty directories with no target-generation code. Four targets exist. There are no UI tests, and the Live-Activity controller is built and driven but cannot display.</div><div class="ev">scripts/generate_project.rb:28-30,:129 &#183; CaptureSyncAttributes.swift</div></div>
+        <div class="row"><span class="tag miss">Missing</span><div class="what"><strong>Dead offline chrome.</strong> <span class="mono">OfflineQueueBanner</span> is referenced only inside its own preview, and there is no <span class="mono">NWPathMonitor</span> anywhere in the tree &#8212; regained connectivity has never auto-drained.</div><div class="ev">OfflineQueueBanner.swift:83-84 &#183; zero NWPathMonitor hits</div></div>
+        <div class="row"><span class="tag miss">Missing</span><div class="what"><strong>Zero telemetry, zero flags.</strong> A 64-event taxonomy and 75 call sites have never emitted a byte, because the analytics key ships nil. <span class="mono">CaptureAnalytics</span> has no feature-flag method at all.</div><div class="ev">Secrets.example.swift:16 &#183; AppConfiguration.swift:130-132</div></div>
+        <div class="row"><span class="tag miss">Missing</span><div class="what"><strong>One portal reader.</strong> <span class="mono">field_captures</span> is read in exactly one place in the entire web tree &#8212; scan-scoped, inside a view gated by the fail-closed <span class="mono">room-file</span> flag. No web code has ever signed a URL from the <span class="mono">capture-media</span> bucket.</div><div class="ev">use-room-files.ts:385 (fn at :370) &#183; room-file-view.tsx:29,:63</div></div>
+        <div class="row"><span class="tag ok">Exists</span><div class="what"><strong>Everything else, and it is good.</strong> Auth, workspace hydration, owner-scoped local store, capture &#8594; bucket &#8594; commit, route and re-route, FF&amp;E placement, the full scan rig and 11-artifact bundle, posed photos, all eight work flows, the guest site-request loop.</div><div class="ev">research/01-field-app-map.md &#167;6</div></div>
+      </div>
+      <p class="figcap">Two more things already work and nobody can see them: iOS has been writing <span class="mono">receiving_inspections.photo_asset_ids</span> into production rows that the web drawer hard-codes to <span class="mono">[]</span>, and <span class="mono">products.capture_source</span> carries provenance no portal surface reads.</p>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 03 &#183; MOMENTS &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="moments">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>03</b>Moments</div>
+    <div>
+      <h2>Seven field moments, today and after</h2>
+      <p class="col wide">Leah is a working interior designer &#8212; mobile, busy, one-handed, phone-out reflex. She is the standing pilot subject, and <strong>it is not confirmed she has ever held Patina Field on a real site.</strong></p>
+      <div class="scroller">
+        <table>
+          <thead><tr><th style="width:4rem">#</th><th style="width:26%">Moment</th><th>Today</th><th>After wave 4</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">M1</td><td><strong>Site visit.</strong> Two hours, one address, three rooms.</td><td>~7 taps and a hold per capture. No project, no room.</td><td>3 taps at the door; 2 taps and a hold per capture, project <em>and</em> room attached, offline.</td></tr>
+            <tr><td class="mono">M2</td><td><strong>Client walk-through.</strong> Someone else is talking.</td><td>Voice only through a specimen round-trip. The audio is discarded.</td><td>A voice kit; hold-to-talk on the card or a bare voice mode; the consent posture armed by the kit; the audio is kept.</td></tr>
+            <tr><td class="mono">M3</td><td><strong>Market or showroom.</strong> 30 pieces, one afternoon. The app&#8217;s founding moment.</td><td>1 tap per specimen, ~6 more to place one.</td><td>1 tap per specimen behind a flight toast, 2 to tag one to a project in mind, and a <strong>Field</strong> provenance chip on the Library card.</td></tr>
+            <tr><td class="mono">M4</td><td><strong>Trade walk.</strong> Defects, and whose court they are in.</td><td>Impossible from Field. Photoless on the web.</td><td>Punch kit: shutter, hold, two taps &#8212; into the general contractor&#8217;s court with the photo back-referenced. <span class="tag miss">FC-R7 open</span></td></tr>
+            <tr><td class="mono">M5</td><td><strong>Install and receiving day.</strong></td><td>iOS already writes the inspection photos and <em>no web surface has ever rendered them</em>. A live defect, not a gap.</td><td>Live camera beside the photo picker; the portal finally renders the column.</td></tr>
+            <tr><td class="mono">M6</td><td><strong>Roving.</strong> The drive-home thought; a light fixture on a wall.</td><td>Commits, then is unattached forever.</td><td>Commits with a <em>suggestion</em>, never a fact; waits on Today, in her hand; filed in one tap. <span class="tag part">Weakest cell</span></td></tr>
+            <tr><td class="mono">M7</td><td><strong>Back at the desk.</strong></td><td>Field material is invisible in the Document.</td><td>Room-files block mounted; a Visits block on the project spread; audio playback and a photo strip on the margin note. No card to clear.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note caution">
+        <strong>Two honest asterisks.</strong> M1 and M7 &#8220;after wave 4&#8221; assume the existing <span class="mono">room-file</span> flag is <em>on</em> &#8212; it is fail-closed by house rule and it gates the destination of every Room-files row. Enabling it for the pilot cohort is a wave-4 prerequisite with a named owner, not a follow-up. And M6 is the moment the brief names literally: under the recommended ruling a roving capture never reaches the portal until she files it, and the only prompt to file is a band she must open the app to see.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 04 &#183; HOW WE CHOSE &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="chose">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>04</b>How we chose</div>
+    <div>
+      <h2>Three directions, two judge panels, one decisive axis</h2>
+      <p class="col wide">Three full directions were written and scored independently by a designer-workflow panel and an engineering panel, five dimensions each, fifty points available. Both panels put the Project Spine first, and both put it there for the same reason.</p>
+
+      <div class="grid-3" style="margin:2rem 0 1.4rem">
+        <div class="card">
+          <p class="eyebrow" style="margin-bottom:.4rem">Direction A &#183; chosen</p>
+          <h3>The Project Spine</h3>
+          <p style="font-size:.92rem">A visit is a bound, named, visible work session. Answer the project once at the door; everything captured inside it inherits project and room.</p>
+          <p style="font-size:.92rem;margin-bottom:0"><span class="tag accent">Designer 40 / 50</span> <span class="tag accent">Engineering 39 / 50</span></p>
+        </div>
+        <div class="card">
+          <p class="eyebrow" style="margin-bottom:.4rem">Direction B</p>
+          <h3>Capture first, file later</h3>
+          <p style="font-size:.92rem">Shoot at full speed, file afterwards from a tray, with suggestions doing the work the door would otherwise do.</p>
+          <p style="font-size:.92rem;margin-bottom:0"><span class="tag">Designer 35 / 50</span> <span class="tag">Engineering 35 / 50</span></p>
+        </div>
+        <div class="card">
+          <p class="eyebrow" style="margin-bottom:.4rem">Direction C</p>
+          <h3>Moments as modes</h3>
+          <p style="font-size:.92rem">Five named modes &#8212; site, walk-through, market, trade, install &#8212; each tuning the instrument, each closing with an output.</p>
+          <p style="font-size:.92rem;margin-bottom:0"><span class="tag">Designer 32 / 50</span> <span class="tag">Engineering 32 / 50</span></p>
+        </div>
+      </div>
+
+      <p class="col wide">The decisive axis was <span class="mono">feasibility_repo_fit</span>, where A scored 9 &#8212; the highest either panel gave anything. A&#8217;s entire shipping server footprint is <strong>one migration plus one <span class="mono">CREATE OR REPLACE</span></strong>, because Leah&#8217;s own phone can already write the portal&#8217;s real tables. Verified: the margin-note policy is <span class="mono">FOR ALL TO authenticated USING (designer_id = auth.uid())</span>, and <span class="mono">create_client_decision</span> grants execute to <span class="mono">authenticated</span>. The service-role wall around field signal was built for a texting general contractor &#8212; <strong>it was never the wall for Leah.</strong> That single fact demotes an entire server pipeline from foundation to optional, evidence-gated enrichment.</p>
+
+      <h3 style="margin-top:2.2rem">What was grafted, and from where</h3>
+      <div class="scroller">
+        <table>
+          <thead><tr><th style="width:5.5rem">From</th><th style="width:34%">Graft</th><th>Why it earned its place</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">B</td><td><strong>Suggested vs confirmed, enforced in the schema</strong></td><td>The best honesty mechanism produced anywhere in the set, and exactly what makes a spine safe to <em>forget</em>. Five nullable columns in a migration already being written. Both judges said graft unconditionally.</td></tr>
+            <tr><td class="mono">B</td><td><strong>Tray scope = unfiled, not this-visit</strong></td><td>The session context expires after four hours, so a thought captured on the drive home has nowhere to appear. One query-scope change turns a shipped screen into a durable holding place.</td></tr>
+            <tr><td class="mono">B</td><td><strong>The learned centroid</strong></td><td>Remember each <em>filed</em> capture&#8217;s coordinate against its project on device; next visit, proximity suggests. Free, offline, explainable, and it needs no schema on <span class="mono">projects</span>. It replaces a later location entitlement entirely &#8212; no App Review conversation.</td></tr>
+            <tr><td class="mono">B</td><td><strong>&#8220;Still at Maple St?&#8221;</strong></td><td>The four-hour window becomes a prompt rather than a silent reset. Yes / New / Not pinned. Mitigates the systematic mis-stamp risk better than a timer does.</td></tr>
+            <tr><td class="mono">B</td><td><strong>The flight toast</strong></td><td>Thirty shutter presses on a market run should not each raise a confirm card. The card stays a confirm surface on a site visit and auto-dismisses to a ~1.2 s toast on a sourcing visit.</td></tr>
+            <tr><td class="mono">B</td><td><strong>The voice failure ladder</strong></td><td>The best-written artifact across the three documents. Lifted close to verbatim as this package&#8217;s copy source.</td></tr>
+            <tr><td class="mono">C</td><td><strong>The kit</strong></td><td>The visit&#8217;s <em>kind</em> tunes what is one tap away. It is what makes a trade walk feel like a different instrument from a market run without being a different app &#8212; and a shipped pill row is already the prototype.</td></tr>
+            <tr><td class="mono">C</td><td><strong>The close as <em>output</em>, not triage</strong></td><td>&#8220;A shareable site-visit artifact without retyping&#8221; is an outright fail today and only C addresses it. Even with no model at all: <em>&#8220;Tuesday at Maple Street &#183; 12 photos &#183; 3 notes &#183; 1 scan &#183; Living + Dining.&#8221;</em></td></tr>
+            <tr><td class="mono">C</td><td><strong>Mode-conditioned framing and consent default</strong></td><td>A walk-through kit arms the conversation posture; site and market default to solo. The door question does consent work too &#8212; the one place where the shape buys an ethical improvement rather than just fewer taps.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <strong>Not grafted, deliberately.</strong> B&#8217;s new terminal <span class="mono">status</span> value &#8212; the studio-read policy keys on <span class="mono">status = 'inbox'</span>, so a &#8220;filed&#8221; status would silently revoke studio read on exactly the rows a co-member was meant to help with. This package introduces <em>no new status value at all</em>; filed is <span class="mono">project_id IS NOT NULL</span>. And C&#8217;s five modes at once, its server-side visits table, and its double adoption gate &#8212; she must start <em>and</em> she must close &#8212; which both panels scored as C&#8217;s fatal shape.
+      </div>
+
+      <h3 style="margin-top:2.2rem">Five decisions that define the package</h3>
+      <ol class="steps col wide">
+        <li><strong>Two visit kinds, not three or five.</strong> <span class="mono">site</span> and <span class="mono">sourcing</span>. &#8220;Roving&#8221; is not a kind, it is the <em>absence</em> of one &#8212; a null kind whose captures carry the suggestion columns and appear in the unfiled tray. That deletes a code path from the door, the chip, the card and the tray. <span class="tag part">Overrules the designer judge, who recommended three &#8212; both arguments are on the table in FC-R2</span></li>
+        <li><strong>The voice fix ships first, before any change to the information architecture.</strong> Both panels overruled every direction&#8217;s effort table on this point. One file, an entire downstream chain already built and waiting, a ruled honesty violation repaired, and the only slice walkable on a device with no schema, no portal work and no flag.</li>
+        <li><strong>Nothing infers a project into a fact.</strong> A suggestion is written to <span class="mono">suggested_project_id</span> and rendered as a question with its basis in words. <span class="mono">project_id</span> means <em>she said so</em>.</li>
+        <li><strong>No new server surface in waves 1&#8211;5.</strong> One reserved migration band, one <span class="mono">CREATE OR REPLACE</span>, zero edge functions, zero crons, zero queue kinds, zero new tables, zero new RPCs.</li>
+        <li><strong>Wave 6 is designed and unscheduled.</strong> When it lands it lands behind the <em>same two verbs</em> wave 4 ships. The model pre-fills a sheet she was already tapping; the interface does not change when it arrives.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 05 &#183; THE SHAPE &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="shape">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>05</b>The shape</div>
+    <div>
+      <h2>Where things live</h2>
+      <div class="grid-2 col wide" style="margin-bottom:1.6rem">
+        <div class="card">
+          <h3>Two realms, unchanged</h3>
+          <p style="font-size:.93rem;margin-bottom:0">Two independent navigation stacks driven by one coordinator, one sheet on the root, no tabs. <strong>No new realm, no tab bar.</strong> The frozen navigation seams are edited exactly once, in one commit, with one named owner, at the top of wave 2.</p>
+        </div>
+        <div class="card">
+          <h3>The work dashboard becomes <em>Today</em></h3>
+          <p style="font-size:.93rem;margin-bottom:0">Not a new screen. The 669-line dashboard already renders a day heading, three attention sections and a browse grid. One band is inserted above the first section: the open visit, the unfiled count, and <em>+ Start a visit</em>.</p>
+        </div>
+      </div>
+
+      <h3>The launch table &#8212; the whole concession to the camera-first inversion</h3>
+      <p class="col wide">The app&#8217;s own README opens <em>&#8220;Patina Field is a standalone camera-first iOS app.&#8221;</em> Making the day the home is a product identity change, and it is a ruling. The mitigation is that the camera-first muscle memory survives <em>inside</em> a visit, which is exactly when it is right.</p>
+      <div class="scroller">
+        <table style="min-width:28rem">
+          <thead><tr><th style="width:45%">State on launch</th><th>Lands on</th></tr></thead>
+          <tbody>
+            <tr><td>A visit is open and active within the last 30 minutes</td><td><strong>The viewfinder</strong>, visit chip lit &#8212; today&#8217;s rhythm, unchanged</td></tr>
+            <tr><td>A visit is open but idle more than 30 minutes</td><td><strong>Today</strong>, visit row at the head, <em>&#8220;Still at Maple St?&#8221;</em> &#183; Resume &#183; End</td></tr>
+            <tr><td>No visit open</td><td><strong>Today</strong></td></tr>
+            <tr><td>Deep link <span class="mono">field://capture</span></td><td>The viewfinder, using the open visit; if none, the viewfinder with an <strong>unplaced</strong> chip</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="figcap">The concession is smaller than it reads: the dashboard already renders a <em>Camera</em> control in its header, in both the standard and the accessibility layout. Even with no visit open, the camera is one tap from Today <em>today</em>. And if the ruling comes back no, the camera stays home, Today becomes a strip behind the existing pill, and nothing else in the package changes.</p>
+
+      <div class="note" style="margin-top:2rem">
+        <p class="eyebrow" style="margin-bottom:.5rem">Invariant V</p>
+        <p style="font-size:1.05rem;font-family:var(--f-display);line-height:1.4;margin-bottom:.7rem;color:var(--ink)">On every screen where a capture can be created, the visit&#8217;s project and room are legible without a tap &#8212; and changing them is exactly one tap away.</p>
+        <p style="margin-bottom:0;font-size:.9rem">Carried by: the viewfinder&#8217;s venue chip, promoted to a two-line visit chip &#183; the card&#8217;s placement line, <span class="mono">Maple St &#183; Living &#8964;</span> or <em>Not placed &#8212; tap to place</em> &#183; the specimen sheet, inherited and read-only with a <em>Change</em> link &#183; the collapsed Companion strip on every non-camera screen &#183; the scan setup screen, pre-answered and collapsed to one line &#183; and, in wave 5, the Lock Screen.</p>
+      </div>
+
+      <h3 style="margin-top:2.2rem">Four commitments about shape</h3>
+      <ul class="plain col wide">
+        <li><strong>No inbox anywhere in the portal.</strong> No desk population, no need kind, no state column, no new room, ledger or verb in the registry, no third capture inbox, no new portal flag, <strong>no card to clear</strong>. A triage queue is the scar tissue of a missing spine; if captures keep arriving unfiled, fix the door. The <em>concept</em> survives on the device &#8212; the unplaced tray is a filing queue and is named as one, on Today, in her hand.</li>
+          <li><strong>A field note is a note.</strong> One nullable back-reference column on <span class="mono">margin_notes</span> and two extra facts on the <em>existing</em> note branch of the margin view &#8212; <strong>not</strong> a new margin kind. Same author, same studio privacy, same aged-oak lane, same escalation ladder. Both panels called this the best single design judgement in the set.</li>
+        <li><strong>No visits table on the server.</strong> The visit is an opaque, device-minted grouping column on the capture row. A server row would be a second lifecycle to keep in sync for no read the portal needs.</li>
+        <li><strong>The device writes through the outbox that already exists.</strong> Not a second queue. Enqueue never touches the network; drains are per-owner serialized; media upload is upsert-idempotent; the commit is idempotent on the client capture id.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 06 &#183; FLOWS &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="flows">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>06</b>Flows</div>
+    <div>
+      <h2>Eight flows, counted honestly</h2>
+      <p class="col wide">Tap counts exclude gestures; a press-and-hold is counted separately. Each target is stated as the <em>real</em> case &#8212; including the optional kit chip, the confirming tap on a sheet, and the placement detour where one exists &#8212; because that is the only count a designer experiences. Timing targets are proposals for Kody to rule, and none of them is measurable until Field emits its first analytics event.</p>
+
+      <div class="col wide">
+
+        <div class="flow">
+          <div class="flow-head"><span class="n">FLOW 1</span><h3>Arrive on site &#8212; start the visit</h3></div>
+          <div class="targets"><span><b>3 taps</b> best case &#183; <b>4 with a kit</b></span><span>&#8804;8 s from cold launch</span><span>must work offline</span><span class="then">Today: no such act exists</span></div>
+          <div class="chain">
+            <div class="step"><span class="i">1</span>Open Field, cold &#8594; <b>Today</b></div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">2</span>Tap <b>+ Start a visit</b></div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">3</span>Tap a project &#8212; recent first, text filter, from the local cache</div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">4</span>Tap a room, or <b>Whole house</b>. Optionally tap a kit.</div>
+          </div>
+          <p class="lands"><b>Lands</b>Nowhere yet &#8212; a visit is device-local until its first capture, so an abandoned visit leaves no server rows. On the first capture the row carries the visit id. Offline the door <em>must</em> work: a cache miss shows the cached list plus an honest line &#8212; <em>&#8220;12 projects on this phone. Others need signal.&#8221;</em> Never an empty list, never a spinner, never a disabled control.</p>
+        </div>
+
+        <div class="flow headline">
+          <div class="flow-head"><span class="n">FLOW 2 &#183; THE HEADLINE</span><h3>Photo and spoken note, inside a visit</h3></div>
+          <div class="targets"><span><b>2 taps + 1 hold</b></span><span>&#8804;10 s</span><span>fully offline</span><span class="then">Today: ~7 taps + 1 hold, and no project at all</span></div>
+          <div class="chain">
+            <div class="step"><span class="i">1</span>Tap the shutter &#8594; the quick-confirm card</div><span class="arrow">&#8594;</span>
+            <div class="step hold"><span class="i">hold</span>Press and hold the card&#8217;s mic, speak, release &#8212; inline, no sheet, no specimen round-trip</div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">2</span>Tap <b>Save</b>. The destination step does not fire inside a visit, so it is skipped.</div>
+          </div>
+          <p style="font-size:.9rem;color:var(--ink-2)">Today, reaching voice at all costs <em>Add detail</em> &#8594; specimen sheet &#8594; <em>Voice</em> &#8594; the voice sheet &#8594; <em>Attach note</em> &#8594; back to the sheet. That round-trip is what the inline mic deletes.</p>
+          <div class="scroller">
+            <table style="min-width:30rem">
+              <thead><tr><th style="width:6rem">Lands, exactly</th><th></th></tr></thead>
+              <tbody>
+                <tr><td class="mono">device</td><td>A specimen with the project, <strong>the project room</strong> (the write-only bug fixed), the room label, the visit id, one HEIC in the app group, the transcript, the duration &#8212; and <strong>the audio filename and its segments</strong>.</td></tr>
+                <tr><td class="mono">outbox</td><td>Enqueue never touches the network &#8594; per-owner serialized drain &#8594; upsert-idempotent upload to <span class="mono">capture-media/&lt;uid&gt;/&lt;clientToken&gt;/</span> &#8594; commit.</td></tr>
+                <tr><td class="mono">server</td><td>A capture row with <span class="mono">project_id</span> and <span class="mono">project_room_id</span> <strong>now persisted on the inbox path</strong>.</td></tr>
+                <tr><td class="mono">portal &#183; w4</td><td>A margin note written by the device &#8212; body = the transcript, anchored to the letterhead, back-referenced to the capture. It appears in the margin rail of the document through the existing note branch, aged-oak accent, <strong>no new margin kind</strong>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="flow">
+          <div class="flow-head"><span class="n">FLOW 3</span><h3>Walk and talk &#8212; a note with no photo</h3></div>
+          <div class="targets"><span><b>1 tap to enter, 1 to start, 1 to stop</b></span><span>1 press from the Lock Screen in wave 5</span><span class="then">Today: impossible</span></div>
+          <div class="chain">
+            <div class="step"><span class="i">1</span>Swipe the mode selector to <b>VOICE</b> &#8212; or press the Action Button (wave 5)</div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">2</span>Tap the mic. Live transcript rides up the screen.</div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">3</span>Tap <b>Stop</b>. It saves itself.</div>
+          </div>
+          <p style="font-size:.9rem;color:var(--ink-2)">Impossible today because every enrichment sheet is keyed to a specimen id &#8212; a specimen must exist before a voice note can. The only sheet-free voice entry in the app is inside a running scan. <strong>Tap to start, tap to stop, not press-and-hold:</strong> the target is a twenty-minute client walk-through, one-handed, while pointing at a room. Nobody holds a button for that, and a slipped finger would end the note. The correct interaction already ships one screen away, as a toggle.</p>
+          <p class="lands"><b>Lands</b>A media-less specimen through the existing outbox &#8212; a pattern the in-scan context capture already proves commits cleanly, with tests.</p>
+        </div>
+
+        <div class="flow">
+          <div class="flow-head"><span class="n">FLOW 4</span><h3>Scan a room inside a visit</h3></div>
+          <div class="targets"><span><b>1 tap</b> to start scanning</span><span class="then">Today: 3 taps and a project fetch</span></div>
+          <div class="chain">
+            <div class="step"><span class="i">1</span>Scan setup opens with project and room filled from the visit, collapsed to one line: <em>&#8220;Maple St &#183; Living &#8212; change&#8221;</em></div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">guard</span>If the visit&#8217;s project is not ownable, the screen <b>expands and says so</b> &#8212; never silently start a scan that will fail at upload</div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">2</span>Scan</div>
+          </div>
+          <p class="lands"><b>Lands</b><span class="mono">room_scans</span> &#8594; <span class="mono">room_files</span> &#8594; the rooms pages, the room file, and the portal&#8217;s newly-mounted <strong>Room files</strong> block on the project spread.</p>
+        </div>
+
+        <div class="flow">
+          <div class="flow-head"><span class="n">FLOW 5</span><h3>A punch item on a trade walk</h3></div>
+          <div class="targets"><span><b>4 taps + 1 hold</b></span><span class="then">Today: impossible from Field, photoless on the web</span></div>
+          <div class="chain">
+            <div class="step"><span class="i">1</span>Tap the shutter &#8212; photograph the defect</div><span class="arrow">&#8594;</span>
+            <div class="step hold"><span class="i">hold</span>The mic: <em>&#8220;the base cabinet&#8217;s scribe is short on the left return&#8221;</em></div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">2&#8211;3</span><b>&#8943; &#8594; Make it a punch item</b></div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">4</span>Confirm the court and tap <b>Add</b></div>
+          </div>
+          <div class="note caution" style="margin-top:.6rem">
+            <strong>This verb is not briefable yet.</strong> A draft coordination item does not appear in the court bar, the margin&#8217;s decision branch, or the Desk &#8212; it lands in a collapsed <em>&#8220;Drafts &#183; N&#8221;</em> fold in the margin rail, which is the triage queue this package refuses, relocated to the portal. And publishing it later raises on exactly the projects the ruling worries about, days after the fact, while <em>notifying the homeowner</em> about a defect in the contractor&#8217;s court. Three gates were also under-reported: the client link is mandatory and absent from Field&#8217;s project payload; authorization runs through the proposal-author check; and the pending status raises without a registered client. <strong>FC-R7 is re-opened, with a fourth option on the table: a Field punch may not be a decision row at all, but a task owned by the contractor plus the already-live, party-anchored SMS rail.</strong>
+          </div>
+        </div>
+
+        <div class="flow">
+          <div class="flow-head"><span class="n">FLOW 6</span><h3>A market day &#8212; the sourcing visit</h3></div>
+          <div class="targets"><span><b>1 tap</b> per piece &#183; <b>2</b> to tag one</span><span class="then">Today: 1 tap, or ~6 to place</span></div>
+          <div class="chain">
+            <div class="step"><span class="i">1</span>Today &#8594; <b>Start a visit &#8594; Sourcing</b> &#8594; venue name, prefilled from location &#8594; optionally tap up to four <em>projects in mind</em></div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">2</span>Per piece: tap the shutter &#8594; <b>flight toast</b>, ~1.2 s, no gate &#8594; destination Library, inherited</div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">+1</span>For a piece that belongs to a project: tap its chip before the toast expires</div>
+          </div>
+          <p class="lands"><b>Lands</b>Unchanged &#8212; the library branch mints a personal-layer product on the My Library shelf, carrying its field provenance. A chipped piece additionally takes the placement step the orchestrator already implements. Two fixes ride along: the hardcoded guess is replaced by the real classifier that already exists, and provenance becomes legible as one chip on the Library card &#8212; <em>&#8220;Field &#183; High Point, Mar 2026.&#8221;</em></p>
+        </div>
+
+        <div class="flow">
+          <div class="flow-head"><span class="n">FLOW 7</span><h3>End the visit &#8212; the close as output</h3></div>
+          <div class="targets"><span><b>2 taps</b></span><span class="then">Today: no such act exists</span></div>
+          <div class="chain">
+            <div class="step"><span class="i">1</span>Today &#8594; the open visit row &#8594; <b>End visit</b></div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">2</span>Skim what the visit produced &#8594; <b>Done</b></div>
+          </div>
+          <p style="font-size:.9rem;color:var(--ink-2)"><em>End visit</em> is already wired and <strong>does not end anything</strong> &#8212; it replaces the context with a fresh one. There is no ended state and no record a visit occurred. Wave 3 changes that contract and the persisted shape with it, which means a legacy-decode path or the first launch after upgrade silently loses the open context.</p>
+          <p class="lands"><b>Lands</b>A row in the <strong>Visits</strong> block on the project spread &#8212; <em>&#8220;Tue Aug 25 &#183; Living, Dining &#183; 12 photos &#183; 3 notes &#183; 1 scan&#8221;</em> &#8212; and, in one tap, a <strong>completed</strong> time entry, never a running timer. If anything is unplaced, Done is captioned <em>&#8220;3 captures still unplaced &#8212; they&#8217;ll wait on Today.&#8221;</em> Honest, non-blocking. The visit&#8217;s span is derived from its captures, because a saved capture is immutable the moment it commits and can never receive an end stamp.</p>
+        </div>
+
+        <div class="flow">
+          <div class="flow-head"><span class="n">FLOW 8</span><h3>She opens the portal</h3></div>
+          <div class="targets"><span><b>Zero triage acts</b></span><span class="then">Today: nothing she captured is visible at all</span></div>
+          <div class="chain">
+            <div class="step"><span class="i">1</span>She opens the document</div><span class="arrow">&#8594;</span>
+            <div class="step"><span class="i">&#8212;</span>Everything is already where she would have filed it</div>
+          </div>
+          <p class="lands"><b>Lands</b>Six surfaces, all of which already exist. The table is in <a href="#lands">&#167;10</a>.</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 07 &#183; SCREENS &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="screens">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>07</b>Screens</div>
+    <div>
+      <h2>Six surfaces and one document</h2>
+      <p class="col wide">Every screen below is either a modification of something already shipped or a fifth case on an enum. The copy is the spec&#8217;s copy. Numbered markers on each frame map to the legend beneath it.</p>
+
+      <div class="frames">
+
+        <!-- &#9472;&#9472; Today &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+        <div class="frame">
+          <h3>Today</h3>
+          <p class="sub">The 669-line work dashboard, with one band inserted above <em>Needs you</em>. <span class="tag part">MOD &#183; wave 3</span></p>
+          <div class="device"><div class="scr paper">
+            <div class="bar"><span>9:41</span><span>&#9646;&#9646;&#9646;</span></div>
+            <div class="pad">
+              <div class="d-eyebrow">Middle West Studio</div>
+              <div class="d-title">Good morning, Leah</div>
+              <div class="d-muted" style="font-size:9.5px">Tuesday, August 25</div>
+
+              <div class="d-eyebrow" style="margin-top:.8rem">Today <span class="cal">1</span></div>
+              <div class="d-band">
+                <div class="r lit">
+                  <span class="d-dot"></span>
+                  <div style="flex:1 1 auto">
+                    <div><strong>Maple St</strong> &#183; Living + Dining</div>
+                    <div class="d-muted" style="font-size:9px">started 9:14am &#183; 12 captures &#183; 1 scan &#183; 3 notes</div>
+                  </div>
+                  <span class="d-btn">Camera<span class="cal">2</span></span>
+                </div>
+                <div class="r"><div style="flex:1 1 auto">4 captures not placed yet</div><span class="d-muted">&#8250;</span><span class="cal">3</span></div>
+                <div class="r"><div style="flex:1 1 auto"><strong>+ Start a visit</strong></div><span class="cal">4</span></div>
+              </div>
+
+              <div class="d-eyebrow" style="margin-top:.9rem">Needs you</div>
+              <div class="d-muted" style="font-size:9.5px">Kippley residence &#183; a decision is waiting on the client</div>
+              <div class="d-rule"></div>
+              <div class="d-eyebrow">Waiting on others</div>
+              <div class="d-muted" style="font-size:9.5px">Harbor loft &#183; scribe detail with the millworker</div>
+              <div class="d-rule"></div>
+              <div class="d-eyebrow">Moving today</div>
+              <div class="d-muted" style="font-size:9.5px">2 purchase orders acknowledged</div>
+              <div class="d-rule"></div>
+              <div class="d-eyebrow">Browse</div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:.3rem">
+                <span class="d-btn" style="text-align:center">Projects</span><span class="d-btn" style="text-align:center">Library</span><span class="d-btn" style="text-align:center">Orders</span>
+                <span class="d-btn" style="text-align:center">Rooms</span><span class="d-btn" style="text-align:center">People</span><span class="d-btn" style="text-align:center">Requests</span>
+              </div>
+            </div>
+            <div class="grow"></div>
+          </div></div>
+          <ol class="legend">
+            <li>The band, and nothing else on the screen, is new.</li>
+            <li>Not new chrome &#8212; a <em>Camera</em> control already sits in this header in both layouts.</li>
+            <li>The unfiled tray, named as what it is. It appears only when the count is non-zero.</li>
+            <li>Always last, always present.</li>
+          </ol>
+          <div class="states">
+            <div class="state"><b>Empty</b>Header, <em>Start a visit</em>, and the three existing empty attention lines. Never a blank screen.</div>
+            <div class="state"><b>Offline</b>Renders from cache with a hairline line &#8212; <em>&#8220;Showing what&#8217;s on this phone.&#8221;</em></div>
+            <div class="state"><b>Stale visit</b>The subtitle swaps for <em>&#8220;Still at Maple St?&#8221;</em> with <strong>Resume</strong> and <strong>End visit</strong>.</div>
+          </div>
+        </div>
+
+        <!-- &#9472;&#9472; C1 viewfinder &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+        <div class="frame">
+          <h3>The viewfinder</h3>
+          <p class="sub">The venue chip becomes the visit chip; the dead offline banner is finally rendered. <span class="tag part">MOD &#183; waves 1&#8211;3</span></p>
+          <div class="device"><div class="scr dark">
+            <div class="bar"><span>9:52</span><span>&#9646;&#9646;&#9647;</span></div>
+            <div class="pad" style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:.35rem">
+              <span class="d-btn">TODAY<span class="cal">1</span></span>
+              <div style="text-align:right">
+                <div style="font-size:10.5px"><strong>Maple St</strong></div>
+                <div class="d-muted mono" style="font-size:9px">Living</div>
+              </div>
+              <span class="cal">2</span>
+            </div>
+            <div class="d-off"><span>No signal &#183; saving on this phone</span><span class="mono">7 queued</span></div>
+            <div class="d-view">
+              <div style="position:absolute;left:10px;top:10px" class="d-chip">Night</div>
+              <div style="position:absolute;right:10px;top:10px" class="d-chip">Torch</div>
+              <div style="position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:9px;opacity:.55">Hold steady &#8212; low light</div>
+            </div>
+            <div class="d-modes"><span>PHOTO</span><span>TAG</span><span>MEASURE</span><span>SCAN</span><span class="on">VOICE</span><span class="cal">3</span></div>
+            <div class="d-shutter"></div>
+          </div></div>
+          <ol class="legend">
+            <li>The <em>WORK</em> pill relabels to <em>TODAY</em>. The accessibility id is unchanged, so the screenshot harness and analytics keep working.</li>
+            <li>Two lines, tappable, straight to the visit door. This is Invariant V on the surface that matters most.</li>
+            <li><em>VOICE</em> is a fifth camera mode, not a sheet &#8212; so it inherits the visit chip, the offline strip and the mode selector.</li>
+          </ol>
+          <div class="states">
+            <div class="state"><b>Offline</b>The strip above shows the <em>outbox depth</em>, not the session count, driven by a real connectivity observer whose recovery also drains the queue.</div>
+            <div class="state"><b>No visit</b>The chip reads <span class="d-chip warn" style="font-size:8.5px">Not placed</span> over <em>Tap to place</em>, in terracotta.</div>
+            <div class="state"><b>Non-LiDAR phone</b>The <em>Scan</em> pill becomes <em>Reference</em>, and its output is never labelled a scan.</div>
+          </div>
+        </div>
+
+        <!-- &#9472;&#9472; V0 the door &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+        <div class="frame">
+          <h3>The visit door</h3>
+          <p class="sub">A new sheet at large detent, matching the existing assign-venue chrome. <span class="tag ok">NEW &#183; wave 3</span></p>
+          <div class="device"><div class="scr paper">
+            <div class="bar"><span>9:12</span><span>&#9646;&#9646;&#9646;</span></div>
+            <div class="pad">
+              <div style="display:flex;justify-content:space-between"><span class="d-eyebrow">Visit</span><span class="d-muted">&#10005;</span></div>
+              <div class="d-title" style="font-size:17px">Where are you today?</div>
+              <div style="display:flex;gap:5px;margin:.6rem 0"><span class="d-chip on">Site visit</span><span class="d-chip">Sourcing</span><span class="cal">1</span></div>
+              <div class="d-btn wide d-muted" style="text-align:left">Search projects&#8230;</div>
+              <div class="d-band" style="margin-top:.5rem">
+                <div class="r lit"><span class="d-dot"></span><div style="flex:1 1 auto"><strong>Maple St residence</strong></div><span class="d-muted" style="font-size:9px">last visit Fri</span></div>
+                <div class="r"><div style="flex:1 1 auto">Kippley residence</div><span class="d-muted" style="font-size:9px">3 rooms</span></div>
+                <div class="r"><div style="flex:1 1 auto">Harbor loft</div><span class="d-muted" style="font-size:9px">on this phone</span><span class="cal">2</span></div>
+                <div class="r"><div style="flex:1 1 auto">+ New project</div></div>
+              </div>
+              <div class="d-eyebrow" style="margin-top:.6rem">Room <span class="cal">3</span></div>
+              <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:.3rem">
+                <span class="d-chip">Whole house</span><span class="d-chip on">Living</span><span class="d-chip">Dining</span><span class="d-chip">Kitchen</span><span class="d-chip">Primary bath</span>
+              </div>
+              <div class="d-eyebrow" style="margin-top:.7rem">Kit <span class="cal">4</span></div>
+              <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:.3rem">
+                <span class="d-chip">Walk-through</span><span class="d-chip">Trade walk</span><span class="d-chip">Install day</span>
+              </div>
+              <div class="d-btn solid wide" style="margin-top:.9rem">Start visit</div>
+              <div class="d-muted" style="font-size:9px;text-align:center;margin-top:.35rem">12 projects on this phone. Others need signal.<span class="cal">5</span></div>
+            </div>
+            <div class="grow"></div>
+          </div></div>
+          <ol class="legend">
+            <li>Two kinds, not three or five. &#8220;Roving&#8221; is the absence of a kind, not a third code path. <span class="tag part">FC-R2</span></li>
+            <li>Cached, not refreshed &#8212; said in words, on the row.</li>
+            <li>One picker over two id lanes, merged by trimmed name from a call the app already makes. Each entry carries up to two ids and stamps only the one legal for its lane &#8212; never cross-assigned. <span class="tag part">FC-R5</span></li>
+            <li>The kit sets the consent posture and the pill row. In wave 3 it ships the solo/conversation distinction only; the four-way chooser lands in wave 4 beside the verbs it tunes.</li>
+            <li>The offline line, specified rather than improvised.</li>
+          </ol>
+          <div class="states">
+            <div class="state"><b>Sourcing</b>The project list is replaced by a venue field, prefilled from location, plus <em>Projects in mind</em>, capped at four.</div>
+            <div class="state"><b>Already open</b>The primary becomes <strong>Change</strong> and a destructive <strong>End visit</strong> appears in the footer.</div>
+          </div>
+        </div>
+
+        <!-- &#9472;&#9472; C3 card &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+        <div class="frame">
+          <h3>The quick-confirm card</h3>
+          <p class="sub">Where the placement line lands in wave 1 and the inline mic lands in wave 3. <span class="tag part">MOD &#183; waves 1, 3, 4</span></p>
+          <div class="device"><div class="scr dark">
+            <div class="bar"><span>10:04</span><span>&#9646;&#9646;&#9646;</span></div>
+            <div class="pad" style="display:flex;justify-content:space-between;padding-bottom:.35rem">
+              <span class="d-btn">TODAY</span>
+              <div style="text-align:right"><div style="font-size:10.5px"><strong>Maple St</strong></div><div class="d-muted mono" style="font-size:9px">Living</div></div>
+            </div>
+            <div class="d-view"></div>
+            <div style="background:var(--dev-ink-2);border-top:1px solid rgba(139,115,85,.3);padding:.6rem .8rem">
+              <div style="display:flex;gap:.5rem;align-items:flex-start">
+                <span class="d-thumb"></span>
+                <div style="flex:1 1 auto">
+                  <div>Seating &#183; <span class="mono">72%</span></div>
+                  <div class="d-muted">Oak / boucl&#233; &#183; <span class="mono">60%</span></div>
+                </div>
+                <span class="cal">1</span>
+              </div>
+              <div class="d-rule"></div>
+              <div style="display:flex;align-items:center"><div style="flex:1 1 auto">Maple St &#183; Living</div><span class="d-muted">&#8964;</span><span class="cal">2</span></div>
+              <div class="d-rule"></div>
+              <div style="display:flex;align-items:center;gap:.45rem">
+                <span class="d-play" style="background:var(--bad);color:#F2EDE6">&#9679;</span>
+                <div style="flex:1 1 auto">hold to add a note</div>
+                <span class="cal">3</span>
+              </div>
+              <div style="display:flex;gap:5px;margin-top:.6rem;align-items:center">
+                <span class="d-btn solid" style="background:#F2EDE6;color:#211E1B;border-color:#F2EDE6">Save</span>
+                <span class="d-btn">Add detail</span>
+                <span class="d-muted" style="font-size:9px;margin-left:auto">swipe to dismiss</span>
+              </div>
+            </div>
+          </div></div>
+          <ol class="legend">
+            <li>The guess, from the real classifier &#8212; wave 2 deletes the two literals that stamp every photo <span class="mono">seating</span> / <span class="mono">Oak / boucl&#233;</span> into shipped provenance.</li>
+            <li>The placement line. In wave 1 it presents the existing assign-venue sheet with a new <strong>Done</strong> that persists routing and returns to the camera &#8212; three taps after the shutter. In wave 3 it retargets to the visit door.</li>
+            <li>The inline mic &#8212; a press-and-hold, which is the right gesture for a ten-second remark and the wrong one for a twenty-minute walk-through. This is what collapses the headline flow from seven taps to two.</li>
+          </ol>
+          <div class="states">
+            <div class="state"><b>Not placed</b>The line reads <em>Not placed &#8212; tap to place</em> in terracotta.</div>
+            <div class="state"><b>Sourcing visit</b>The card auto-dismisses to a ~1.2 s flight toast and the placement line becomes the projects-in-mind chips.</div>
+          </div>
+        </div>
+
+        <!-- &#9472;&#9472; C6 voice &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+        <div class="frame">
+          <h3>Voice mode</h3>
+          <p class="sub">A full-bleed mode of the viewfinder, not a sheet. <span class="tag ok">NEW &#183; wave 3</span></p>
+          <div class="device"><div class="scr dark">
+            <div class="bar"><span>10:22</span><span>&#9646;&#9646;&#9646;</span></div>
+            <div class="pad" style="display:flex;justify-content:space-between;padding-bottom:.35rem">
+              <span class="d-btn">TODAY</span>
+              <div style="text-align:right"><div style="font-size:10.5px"><strong>Maple St</strong></div><div class="d-muted mono" style="font-size:9px">Living</div></div>
+            </div>
+            <div class="grow" style="display:flex;flex-direction:column;justify-content:center;padding:0 .8rem">
+              <div style="border:1px solid rgba(196,165,123,.4);border-radius:9px;padding:.6rem .65rem;font-size:11px;line-height:1.5">
+                &#8220;the alcove on the north wall is about forty-two and three quarters &#8212; check the return before we spec the bookcase&#8230;&#8221;
+                <span class="cal">1</span>
+              </div>
+              <div class="d-wave" aria-hidden="true">
+                <i style="height:5px"></i><i style="height:11px"></i><i style="height:18px"></i><i style="height:24px"></i><i style="height:16px"></i><i style="height:9px"></i><i style="height:14px"></i><i style="height:22px"></i><i style="height:26px"></i><i style="height:17px"></i><i style="height:8px"></i><i style="height:13px"></i><i style="height:20px"></i><i style="height:25px"></i><i style="height:15px"></i><i style="height:7px"></i><i style="height:12px"></i><i style="height:19px"></i>
+              </div>
+              <div class="mono" style="text-align:center;font-size:12px">2:14<span class="cal">2</span></div>
+              <div style="text-align:center;font-size:9.5px;opacity:.6;margin-top:.5rem">Recording &#183; everyone here knows<span class="cal">3</span></div>
+            </div>
+            <div class="d-modes"><span>PHOTO</span><span>TAG</span><span>MEASURE</span><span>SCAN</span><span class="on">VOICE</span></div>
+            <div class="d-shutter rec"></div>
+            <div style="text-align:center;font-size:9.5px;opacity:.7;padding-bottom:.6rem">Tap to stop<span class="cal">4</span></div>
+          </div></div>
+          <ol class="legend">
+            <li>Live transcript, rising, six lines maximum.</li>
+            <li>Elapsed time only. <em>&#8220;seg 3&#8221;</em> is deleted from the chrome &#8212; a segment is an implementation detail she has no model for and no action to take about. The count lives in telemetry.</li>
+            <li>The conversation affirmation, armed by the kit. A nudge, not legal advice &#8212; but it converts an invisible act into a deliberate one.</li>
+            <li>Shutter-sized, shutter-placed, and a toggle. Before she speaks, the idle line reads: <em>&#8220;Hold to talk. It lands on Maple St &#183; Living.&#8221;</em> &#8212; the promise stated first.</li>
+          </ol>
+          <div class="states">
+            <div class="state"><b>Interrupted</b><em>&#8220;Paused &#8212; your note is saved. Tap to keep going.&#8221;</em> A resume opens audio segment N+1.</div>
+            <div class="state"><b>Recognizer denied</b>Falls to the typed editor <strong>and the audio still records</strong> &#8212; the inversion of today&#8217;s all-or-nothing behaviour, and the single most important honesty fix in the package.</div>
+            <div class="state"><b>Cap reached</b><em>&#8220;This note reached twenty minutes and stopped. Start another when you&#8217;re ready.&#8221;</em> Never a silent stop.</div>
+          </div>
+        </div>
+
+        <!-- &#9472;&#9472; V4 review &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+        <div class="frame">
+          <h3>Visit review</h3>
+          <p class="sub">A receipt that produces something. Every row is already filed. <span class="tag ok">NEW &#183; wave 4</span></p>
+          <div class="device"><div class="scr paper">
+            <div class="bar"><span>11:48</span><span>&#9646;&#9646;&#9646;</span></div>
+            <div class="pad">
+              <div class="d-eyebrow">Visit &#183; Tue Aug 25</div>
+              <div class="d-title" style="font-size:16px">Maple St &#183; Living, Dining</div>
+              <div class="d-muted" style="font-size:9.5px">9:14am &#8211; 11:46am &#183; 12 photos &#183; 3 notes &#183; 1 scan</div>
+
+              <div class="d-eyebrow" style="margin-top:.8rem">Notes <span class="cal">1</span></div>
+              <div class="d-band">
+                <div class="r"><span class="d-play">&#9654;</span><div style="flex:1 1 auto"><div>&#8220;the alcove on the north wall is about&#8230;&#8221;</div><div class="d-muted" style="font-size:9px">Living &#183; 2:14 &#183; synced</div></div></div>
+                <div class="r"><span class="d-play">&#9654;</span><div style="flex:1 1 auto"><div>&#8220;scribe short on the left return&#8221;</div><div class="d-muted" style="font-size:9px">Dining &#183; 0:11 &#183; synced</div></div></div>
+              </div>
+              <div class="d-eyebrow">Captures</div>
+              <div class="d-strip"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="d-eyebrow" style="margin-top:.7rem">Scans</div>
+              <div class="d-muted" style="font-size:9.5px">Living &#183; uploaded &#183; drawings ready</div>
+              <div class="d-eyebrow" style="margin-top:.7rem">Unplaced <span class="cal">2</span></div>
+              <div class="d-band"><div class="r"><span class="d-thumb" style="width:22px;height:22px"></span><div style="flex:1 1 auto">Wall sconce, hallway</div><span class="d-btn">Place</span></div></div>
+
+              <div class="d-rule" style="margin-top:.8rem"></div>
+              <div style="display:flex;align-items:center;gap:.4rem"><span class="tick"></span><div style="flex:1 1 auto;font-size:9.5px">Log 2h 32m as a site visit<span class="cal">3</span></div></div>
+              <div class="d-btn solid wide" style="margin-top:.6rem">Done</div>
+              <div class="d-muted" style="font-size:9px;text-align:center;margin-top:.3rem">1 capture still unplaced &#8212; it&#8217;ll wait on Today.<span class="cal">4</span></div>
+            </div>
+            <div class="grow"></div>
+          </div></div>
+          <ol class="legend">
+            <li>Grouped: captures, notes, scans, unplaced. Acts are only <em>Change room</em>, <em>Place</em> and <em>Play</em>.</li>
+            <li>The one row that still needs her &#8212; and it is never blocking.</li>
+            <li>A <strong>completed</strong> time entry, offered in one tap. Never a running timer: a partial unique index enforces one running timer per user and it belongs to the portal.</li>
+            <li>Honest, non-blocking. Done always works.</li>
+          </ol>
+          <div class="states">
+            <div class="state"><b>Empty</b><em>&#8220;Nothing captured on this visit.&#8221;</em> plus <strong>End anyway</strong>.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- &#9472;&#9472; portal &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+      <h3 style="margin-top:3rem">And back at the desk &#8212; the margin note</h3>
+      <p class="col wide">The <em>existing</em> note case in the margin rail, rendering three extra facts when the capture back-reference is present. No new margin kind, no new branch in the view&#8217;s union, no new accent.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:2rem;align-items:flex-start;margin-top:1.2rem">
+        <div class="portal">
+          <div class="top">Margin &#183; Maple St residence</div>
+          <div class="body">
+            <div class="item">
+              <div style="display:flex;justify-content:space-between;font-size:9.5px;color:#8B7355;font-family:var(--f-mono);letter-spacing:.08em;text-transform:uppercase">
+                <span>Note &#183; Leah</span><span>Tue 25 Aug</span>
+              </div>
+              <p style="margin:.4rem 0 .5rem">&#8220;The alcove on the north wall is about forty-two and three quarters &#8212; check the return before we spec the bookcase. And the radiator behind the drapes has to be dealt with either way.&#8221; <span class="cal">1</span></p>
+              <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.45rem">
+                <span class="d-play">&#9654;</span><span style="font-size:10px;color:#5C4A3C">2:14</span><span class="cal">2</span>
+              </div>
+              <div class="d-strip"><i></i><i></i><i></i><span class="cal">3</span></div>
+              <p style="font-style:italic;color:#8B7355;font-size:10px;margin:.55rem 0 .5rem">A first reading. The recording is here.<span class="cal">4</span></p>
+              <div style="display:flex;gap:5px">
+                <span class="d-btn">Make it a task</span><span class="d-btn">Make it a punch item</span><span class="d-btn">Raise a decision</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:1 1 18rem;min-width:16rem;max-width:26rem">
+          <ol class="legend" style="margin-top:0">
+            <li><strong>The full body.</strong> Today the note branch emits the first eighty characters as a title with an empty detail, and the body component never renders a body at all &#8212; so a one-minute transcript would appear as its first eighty characters, and escalating it would produce a decision made of those eighty characters. Wave 4&#8217;s view replace must carry the whole text and the escalation hooks must receive it. That is the difference between &#8220;works for free&#8221; and &#8220;works&#8221;.</li>
+            <li>Playback, through a batched signed-URL hook the portal does not have yet. Two in-repo precedents; nothing downstream is anything but cosmetic without it.</li>
+            <li>The photos the note was taken with.</li>
+            <li>The transcript is labelled a draft exactly once, where she reads it. No mechanism talk.</li>
+          </ol>
+          <div class="note caution" style="margin-top:.9rem">
+            <strong>One case to rule before the view is written.</strong> The margin view runs under the reader&#8217;s own row-level security, and a studio co-member can read the note but not the capture &#8212; so she would get a note with no play button and no explanation. Either render an honest line, or fold the case into the access ruling. Silent absence is what this package exists to stop.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 08 &#183; VOICE &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="voice">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>08</b>Voice</div>
+    <div>
+      <h2>The audio is the record. The transcript is a reading of it.</h2>
+      <p class="col wide">That is a house rule, not a preference, and today the app breaks it in the most expensive way available: it keeps the reading and throws away the record. Everything downstream of the writer is already built &#8212; the wire key, the model field, the required-media rule, the MIME map, the bucket allow-list, the commit function&#8217;s reader. <strong>All of it is dead code that becomes live and correct the moment the writer lands.</strong></p>
+
+      <figure>
+        <div class="svg-scroll">
+        <svg viewBox="0 0 1120 620" role="img" aria-label="The voice note pipeline: a tap-to-start recording writes an AAC file from the existing audio engine tap, an on-device draft transcript rides alongside it, both go through the capture outbox to the capture-media bucket and the commit function, and become a margin note in wave 4; wave 6A adds a cron-swept server transcription that never overwrites the device transcript, and wave 6B adds structuring into drafts that land behind the same two verbs.">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <g font-family="Inter, sans-serif" font-size="12" fill="currentColor">
+
+            <!-- row 1 -->
+            <text x="40" y="34" font-family="DM Mono, monospace" font-size="10.5" letter-spacing="1.4" opacity=".62">ON THE PHONE &#8212; WAVE 1 WRITES THE FILE, WAVE 3 ADDS THE VOICE MODE</text>
+            <rect x="40" y="44" width="200" height="78" fill="none" stroke="currentColor" stroke-opacity=".38"/>
+            <text x="56" y="70">Tap to start,</text><text x="56" y="88">tap to stop</text><text x="56" y="106" opacity=".62">(a hold, on the card)</text>
+            <rect x="280" y="44" width="240" height="78" fill="none" stroke="#C4A57B" stroke-width="1.6"/>
+            <text x="296" y="70" font-weight="600">AAC-LC .m4a, mono, 32 kbps</text><text x="296" y="88">written from the existing</text><text x="296" y="106">AVAudioEngine input tap</text>
+            <rect x="560" y="44" width="220" height="78" fill="none" stroke="currentColor" stroke-opacity=".38"/>
+            <text x="576" y="70">On-device draft transcript</text><text x="576" y="88">recognizer rotates at ~50 s</text><text x="576" y="106" opacity=".62">on-device recognition set</text>
+            <rect x="820" y="44" width="240" height="78" fill="none" stroke="currentColor" stroke-opacity=".38"/>
+            <text x="836" y="70">The capture outbox</text><text x="836" y="88" opacity=".62">enqueue() never touches</text><text x="836" y="106" opacity=".62">the network</text>
+            <line x1="240" y1="83" x2="274" y2="83" stroke="currentColor" stroke-opacity=".55" marker-end="url(#ar)"/>
+            <line x1="520" y1="83" x2="554" y2="83" stroke="currentColor" stroke-opacity=".55" marker-end="url(#ar)"/>
+            <line x1="780" y1="83" x2="814" y2="83" stroke="currentColor" stroke-opacity=".55" marker-end="url(#ar)"/>
+            <text x="40" y="142" font-size="11" opacity=".6">One continuous file per segment &#183; an interruption finalizes the segment and opens N+1 &#183; 20 minutes or 24 segments, ended visibly, never silently</text>
+
+            <!-- row 1 &#8594; row 2 -->
+            <polyline points="940,122 940,166 180,166 180,206" fill="none" stroke="currentColor" stroke-opacity=".55" marker-end="url(#ar)"/>
+            <text x="600" y="182" font-size="11" opacity=".62">drain &#183; per owner &#183; serialized &#183; receipt-gated</text>
+
+            <!-- row 2 -->
+            <text x="40" y="196" font-family="DM Mono, monospace" font-size="10.5" letter-spacing="1.4" opacity=".62">THE SERVER, TODAY&#8217;S SHAPE &#8212; WAVE 1, THEN WAVE 4</text>
+            <rect x="40" y="206" width="280" height="78" fill="none" stroke="#C4A57B" stroke-width="1.6"/>
+            <text x="56" y="232" font-family="DM Mono, monospace" font-size="11">capture-media/&lt;uid&gt;/&lt;clientToken&gt;/</text>
+            <text x="56" y="250" font-family="DM Mono, monospace" font-size="11">voice-&lt;noteID&gt;-000.m4a</text>
+            <text x="56" y="268" opacity=".62">upsert PUT &#8212; replay is free</text>
+            <rect x="360" y="206" width="200" height="78" fill="none" stroke="currentColor" stroke-opacity=".38"/>
+            <text x="376" y="232" font-family="DM Mono, monospace" font-size="11">commit_field_capture</text><text x="376" y="250" opacity=".62">idempotent on</text><text x="376" y="268" opacity=".62">client_capture_id</text>
+            <rect x="600" y="206" width="200" height="78" fill="none" stroke="currentColor" stroke-opacity=".38"/>
+            <text x="616" y="232">A field capture row</text><text x="616" y="250" font-family="DM Mono, monospace" font-size="11">voice_audio_segments</text><text x="616" y="268" font-family="DM Mono, monospace" font-size="11">capture_kind = 'note'</text>
+            <rect x="840" y="206" width="220" height="78" fill="none" stroke="currentColor" stroke-opacity=".38"/>
+            <text x="856" y="232">Wave 4 &#8212; a margin note</text><text x="856" y="250" opacity=".62">full body, play button,</text><text x="856" y="268" opacity=".62">photo strip</text>
+            <line x1="320" y1="245" x2="354" y2="245" stroke="currentColor" stroke-opacity=".55" marker-end="url(#ar)"/>
+            <line x1="560" y1="245" x2="594" y2="245" stroke="currentColor" stroke-opacity=".55" marker-end="url(#ar)"/>
+            <line x1="800" y1="245" x2="834" y2="245" stroke="currentColor" stroke-opacity=".55" marker-end="url(#ar)"/>
+
+            <!-- row 2 &#8594; row 3 -->
+            <polyline points="700,284 700,318 140,318 140,358" fill="none" stroke="currentColor" stroke-opacity=".4" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+            <text x="400" y="334" font-size="11" opacity=".62">swept once the audio has landed</text>
+
+            <!-- row 3 -->
+            <text x="40" y="348" font-family="DM Mono, monospace" font-size="10.5" letter-spacing="1.4" opacity=".62">WAVE 6A &#183; SERVER TRANSCRIPTION &#8212; DETERMINISTIC, &#8776;$1.15/MO, SHAPE SUBJECT TO FC-R18</text>
+            <rect x="40" y="358" width="200" height="78" fill="none" stroke="currentColor" stroke-opacity=".38" stroke-dasharray="5 4"/>
+            <text x="56" y="384">pg_cron, every 2 min</text><text x="56" y="402" opacity=".62">invoke_edge_function</text><text x="56" y="420" opacity=".62">billing guard first</text>
+            <rect x="280" y="358" width="240" height="78" fill="none" stroke="currentColor" stroke-opacity=".38" stroke-dasharray="5 4"/>
+            <text x="296" y="384" font-family="DM Mono, monospace" font-size="11">transcribe-field-note</text><text x="296" y="402" opacity=".62">under 5 attempts, then parked</text><text x="296" y="420" opacity=".62">one job-run row per call</text>
+            <rect x="560" y="358" width="240" height="78" fill="none" stroke="currentColor" stroke-opacity=".38" stroke-dasharray="5 4"/>
+            <text x="576" y="384">Cloudflare Workers</text><text x="576" y="402" font-family="DM Mono, monospace" font-size="11">whisper-large-v3-turbo</text><text x="576" y="420" opacity=".62">no new subprocessor</text>
+            <rect x="840" y="358" width="220" height="78" fill="none" stroke="currentColor" stroke-opacity=".38" stroke-dasharray="5 4"/>
+            <text x="856" y="384" font-family="DM Mono, monospace" font-size="11">server_transcript</text><text x="856" y="402">the device transcript is</text><text x="856" y="420" font-weight="600">never overwritten</text>
+            <line x1="240" y1="397" x2="274" y2="397" stroke="currentColor" stroke-opacity=".45" marker-end="url(#ar)"/>
+            <line x1="520" y1="397" x2="554" y2="397" stroke="currentColor" stroke-opacity=".45" marker-end="url(#ar)"/>
+            <line x1="800" y1="397" x2="834" y2="397" stroke="currentColor" stroke-opacity=".45" marker-end="url(#ar)"/>
+
+            <!-- row 3 &#8594; row 4 -->
+            <polyline points="950,436 950,470 140,470 140,510" fill="none" stroke="currentColor" stroke-opacity=".4" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+
+            <!-- row 4 -->
+            <text x="40" y="500" font-family="DM Mono, monospace" font-size="10.5" letter-spacing="1.4" opacity=".62">WAVE 6B &#183; DESIGNER-TAUGHT STRUCTURING &#8212; DESIGNED, UNSCHEDULED, EVIDENCE-GATED</text>
+            <rect x="40" y="510" width="200" height="78" fill="none" stroke="currentColor" stroke-opacity=".38" stroke-dasharray="5 4"/>
+            <text x="56" y="536">A queue kind,</text><text x="56" y="554" font-family="DM Mono, monospace" font-size="11">field_note.structure</text><text x="56" y="572" opacity=".62">no CHECK &#8212; zero DDL</text>
+            <rect x="280" y="510" width="240" height="78" fill="none" stroke="currentColor" stroke-opacity=".38" stroke-dasharray="5 4"/>
+            <text x="296" y="536" font-family="DM Mono, monospace" font-size="11">claude-haiku-4-5</text><text x="296" y="554">forced tool call</text><text x="296" y="572">five mechanical rules</text>
+            <rect x="560" y="510" width="200" height="78" fill="none" stroke="currentColor" stroke-opacity=".38" stroke-dasharray="5 4"/>
+            <text x="576" y="536" font-family="DM Mono, monospace" font-size="11">field_note_drafts</text><text x="576" y="554">proposed &#8212; nothing</text><text x="576" y="572" font-weight="600">auto-applies</text>
+            <rect x="800" y="510" width="260" height="78" fill="none" stroke="currentColor" stroke-opacity=".38" stroke-dasharray="5 4"/>
+            <text x="816" y="536">The same two verbs wave 4 ships:</text><text x="816" y="554">Make it a task &#183; Make it a punch item</text><text x="816" y="572" opacity=".62">confirm RPC &#8212; her edits win</text>
+            <line x1="240" y1="549" x2="274" y2="549" stroke="currentColor" stroke-opacity=".45" marker-end="url(#ar)"/>
+            <line x1="520" y1="549" x2="554" y2="549" stroke="currentColor" stroke-opacity=".45" marker-end="url(#ar)"/>
+            <line x1="760" y1="549" x2="794" y2="549" stroke="currentColor" stroke-opacity=".45" marker-end="url(#ar)"/>
+
+            <text x="1060" y="612" text-anchor="end" font-size="11" opacity=".6">solid = ships in waves 1&#8211;4 &#183; dashed = designed and unscheduled</text>
+          </g>
+        </svg>
+        </div>
+        <figcaption class="figcap">The whole pipeline. Waves 1&#8211;4 are one file writer, one storage path that already exists, and one function replacement; everything below the second fold is optional and reversible. The interface does not change when the model arrives, because it lands behind verbs the designer is already tapping.</figcaption>
+      </figure>
+
+      <div class="col wide">
+        <h3>What the recorder must actually do</h3>
+        <ul class="plain">
+          <li><strong>Write from the existing input tap.</strong> No second audio session, no separate recorder. AAC-LC in <span class="mono">.m4a</span>, mono, 32 kbps &#8776; 240 KB per minute &#8212; a five-minute note is ~1.2 MB, a thirty-minute walk-through ~7 MB, well inside the bucket&#8217;s object limit.</li>
+          <li><strong>Rotate the recognizer, never the file.</strong> The speech recognizer caps at roughly one minute of audio per request, and today one request covers the whole session &#8212; so <em>any note over a minute silently truncates</em>. Restart the request every ~50 s and append each finalized transcription. Boundary word-loss is acceptable, because the audio is the record.</li>
+          <li><strong>Derive the format from the tap; never hardcode the channel count.</strong> A USB or Bluetooth route can yield more than one channel, and the file-write assertion that follows is not a Swift error &#8212; the process traps. Connect and disconnect AirPods mid-note is a device-pass step.</li>
+          <li><strong>Handle interruptions properly.</strong> Nothing observes audio interruptions today. On a call or Siri: finalize the segment, keep everything written, say <em>&#8220;Paused &#8212; your note is saved.&#8221;</em> On resume, reactivate the session, restart the engine, reinstall the tap, <em>then</em> open segment N+1 &#8212; iOS stops the engine on interruption, so a handler that guards on &#8220;is the engine running&#8221; can never fire.</li>
+          <li><strong>Reset every per-note field at the start.</strong> One recorder instance serves arbitrarily many notes; today it resets only the transcript and the start time, so note two inherits note one&#8217;s audio.</li>
+          <li><strong>Keep the tap block honest.</strong> The callback runs on the real-time render thread and may do exactly two things: append to the recognition request and write to the file. Rotation state and its round-trip must be posted to a serial queue. The compiler was silenced here; the race was not.</li>
+          <li><strong>Set on-device recognition explicitly.</strong> It is never assigned anywhere in the file, so despite a shipped permission string promising on-device transcription, recognition may be going to Apple&#8217;s servers. Set it, and record which path actually ran.</li>
+          <li><strong>Never let audio block a note.</strong> A failed file open is non-fatal and ships transcript-only. A missing local segment is <em>dropped</em>, the row is marked, and the note still commits &#8212; mirroring the photo rule, because the required-media rule as it stands would let one unreadable segment permanently block a note that today syncs fine. Device pass: fill the disk, record, confirm the note still lands.</li>
+        </ul>
+
+        <h3 style="margin-top:2rem">The failure ladder</h3>
+        <p>Specified, not improvised. This table is the copy source.</p>
+      </div>
+      <div class="scroller">
+        <table>
+          <thead><tr><th style="width:26%">Failure</th><th style="width:32%">Today</th><th>After wave 1</th></tr></thead>
+          <tbody>
+            <tr><td>Transcription returns nothing</td><td><strong>Silently discarded</strong> &#8212; toast <em>&#8220;Nothing recorded&#8221;</em></td><td>The audio is kept, and the row reads <em>&#8220;We couldn&#8217;t make out the words &#8212; the audio is here.&#8221;</em></td></tr>
+            <tr><td>Recognizer unavailable or denied</td><td>Typed-note fallback, <strong>no recording</strong></td><td><strong>Recording still starts.</strong> The transcript pane says <em>&#8220;We&#8217;ll write this up when it lands.&#8221;</em></td></tr>
+            <tr><td>The audio file won&#8217;t open &#8212; disk full, no app group</td><td>&#8212;</td><td>Recording continues transcript-only, the failure is counted, nothing is blocked.</td></tr>
+            <tr><td>A note runs past one minute</td><td>Silently truncates or errors</td><td>Segments rotate; the file stays continuous.</td></tr>
+            <tr><td>A note hits the twenty-minute cap</td><td>&#8212;</td><td><em>&#8220;This note reached twenty minutes and stopped. Start another when you&#8217;re ready.&#8221;</em> Never a silent stop.</td></tr>
+            <tr><td>Audio recorded, no words &#8212; on the specimen sheet</td><td><em>&#8220;Attach note&#8221;</em> is <strong>disabled</strong>; the only enabled control discards, without writing anything</td><td>The primary is enabled whenever there are segments, and it reads <strong>&#8220;Keep the recording.&#8221;</strong></td></tr>
+            <tr><td>Offline</td><td>Commits when signal returns &#8212; already good</td><td>Unchanged, plus auto-drain on reconnect and a banner that is finally rendered.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note caution">
+        <strong>The ladder applies to every voice surface, not only the one the headline names.</strong> The defect everyone quotes lives on the in-scan context screen, which is reachable only while running a LiDAR scan. The specimen voice sheet &#8212; where most voice notes are actually taken &#8212; fails differently and must be fixed in the same wave. And <em>&#8220;the audio is here&#8221;</em> has to be checkable: nothing in Patina Field can play a recording today, so wave 1 adds a play control on the sheet and on the tray row. A day of work that turns an assertion into something she can hear.
+      </div>
+
+      <div class="col wide">
+        <h3 style="margin-top:2rem">Five mechanical rules, if structuring is ever ruled in</h3>
+        <p>Each one is checkable in code without a second model call.</p>
+        <ol class="steps">
+          <li><strong>Every quoted source must be a literal substring of the transcript</strong> after whitespace normalization. If it is not, the item is dropped and the drop is counted for calibration.</li>
+          <li><strong>It may never emit an id.</strong> Room and project come back as <em>text hints</em>; resolution happens in Postgres at confirm time, against rows the caller can actually see.</li>
+          <li><strong>Every measurement needs confirmation.</strong> And a spoken measurement never becomes a measured record &#8212; the applier refuses to touch the measurement tables outright.</li>
+          <li><strong>Flag, don&#8217;t fill.</strong> No owner and no date come back as null, not as a confidently assigned task.</li>
+          <li><strong>Whole transcript in one call.</strong> A twenty-minute note is roughly four thousand tokens; chunking loses the reference resolution that makes extraction useful at all.</li>
+        </ol>
+        <p>Confidence orders the list and pre-selects. <strong>It never commits</strong> &#8212; a deliberate divergence from the SMS rail, where a third party reports a fact against a bounded set of open items the model was shown. A voice note is open-ended authoring inside the designer&#8217;s own document.</p>
+
+        <h3 style="margin-top:2rem">What it costs</h3>
+        <p>Pilot assumption, by inference because no telemetry exists: five designers &#215; six notes a day &#215; 2.5 minutes &#8776; 2,250 audio-minutes a month.</p>
+      </div>
+      <div class="scroller">
+        <table style="min-width:32rem">
+          <thead><tr><th>Line</th><th>Rate</th><th class="num">2,250 min/mo</th><th class="num">20,000 min/mo</th></tr></thead>
+          <tbody>
+            <tr><td>Cloudflare Workers &#183; <span class="mono">whisper-large-v3-turbo</span></td><td class="num">$0.00051 / audio-min</td><td class="num"><strong>$1.15</strong></td><td class="num">$10.20</td></tr>
+            <tr><td>Structuring &#183; <span class="mono">claude-haiku-4-5</span> (~1.5k in / 0.6k out per note)</td><td class="num">$1 / $5 per MTok</td><td class="num"><strong>$4.05</strong></td><td class="num">$36.00</td></tr>
+            <tr><td>Storage (32 kbps &#8776; 240 KB/min)</td><td class="num">~$0.021 / GB-mo</td><td class="num"><strong>$0.01</strong></td><td class="num">$0.10</td></tr>
+            <tr><td><strong>Total</strong></td><td></td><td class="num"><strong>&#8776; $5.25 / mo</strong></td><td class="num"><strong>&#8776; $46 / mo</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="figcap">Chosen on custody, not on price: the audio never leaves an account Patina already controls, so there is no new subprocessor. The faster alternative costs ~30% more per minute and adds one. Apple&#8217;s new speech stack needs iOS 26 and Field&#8217;s floor is 18.0; an on-device Whisper build was excluded deliberately &#8212; a 547&#8211;955 MB model gated to recent hardware, a new package dependency and a first-run download, all to improve a transcript that server re-transcription supersedes anyway.</p>
+      <div class="note">
+        <strong>The mechanism above is not settled.</strong> A second lane already owns a ledger, a transactional outbox, an atomic claim and a queue consumer <em>for these same rows</em>, and the standing house rule is never a parallel queue. If that ledger wins, wave 6A collapses to a transcript-shaped suggestion key and a consumer branch &#8212; not a new edge function, a new cron and a new sweep predicate. <strong>Build the shape above only if Kody rules that voice is a separate lane, and say why in the spec if so.</strong> That is FC-R18, and it is first.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 09 &#183; SERVER & DATA &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="data">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>09</b>Server &amp; data</div>
+    <div>
+      <h2>No new server surface in waves 1&#8211;5</h2>
+      <p class="col wide">One reserved migration band. One <span class="mono">CREATE OR REPLACE</span>. Additive columns with defaults. <strong>Zero edge functions, zero crons, zero queue kinds, zero new tables, zero new RPCs.</strong> That is the point of the direction, and it is what both judge panels scored highest.</p>
+
+      <div class="stat-row">
+        <div class="stat"><span class="v">00530&#8211;35</span><span class="k">One band, reserved <em>symbolically</em>, confirmed against the two other live lanes on 2026-08-24 &#8212; and drawn only at landing.</span></div>
+        <div class="stat"><span class="v">1</span><span class="k">function replacement, same signature: the routing fix plus four new payload reads.</span></div>
+        <div class="stat"><span class="v">0</span><span class="k">new status values, new tables, new RPCs, edge functions or crons before wave 6.</span></div>
+        <div class="stat"><span class="v">22 <small>/ 122</small></span><span class="k">documented known failures in the SQL suite; the runner exits 0 when only those fail, so a new failure is a real regression.</span></div>
+      </div>
+
+      <figure>
+        <div class="svg-scroll narrow">
+        <svg viewBox="0 0 1000 316" role="img" aria-label="Before and after of the commit function: today the inbox branch sets only status and drops the project, room and shelf, which every note-shaped capture takes; after the wave 1 replacement the inbox branch persists routing inside its own exception safe harbor, and the library branch is unchanged.">
+          <defs>
+            <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <g font-family="Inter, sans-serif" font-size="12" fill="currentColor">
+            <text x="0" y="18" font-family="DM Mono, monospace" font-size="10.5" letter-spacing="1.4" opacity=".62">TODAY</text>
+            <text x="520" y="18" font-family="DM Mono, monospace" font-size="10.5" letter-spacing="1.4" opacity=".62">AFTER THE WAVE-1 REPLACEMENT</text>
+            <line x1="500" y1="6" x2="500" y2="300" stroke="currentColor" stroke-opacity=".18"/>
+
+            <!-- panel A -->
+            <rect x="140" y="34" width="200" height="38" fill="none" stroke="currentColor" stroke-opacity=".38"/>
+            <text x="240" y="58" text-anchor="middle" font-family="DM Mono, monospace" font-size="11">commit_field_capture</text>
+            <line x1="220" y1="72" x2="120" y2="116" stroke="currentColor" stroke-opacity=".5" marker-end="url(#ar2)"/>
+            <line x1="260" y1="72" x2="360" y2="116" stroke="currentColor" stroke-opacity=".5" marker-end="url(#ar2)"/>
+            <text x="150" y="96" text-anchor="end" font-size="11" opacity=".7">= 'inbox'</text>
+            <text x="330" y="96" text-anchor="start" font-size="11" opacity=".7">= 'library'</text>
+
+            <rect x="10" y="120" width="215" height="120" fill="none" stroke="#C77B6E" stroke-width="1.6"/>
+            <text x="26" y="144" font-weight="600">The inbox branch</text>
+            <text x="26" y="164" font-family="DM Mono, monospace" font-size="11">SET status = 'inbox'</text>
+            <text x="26" y="186" fill="#C77B6E">project_id &#8212; not written</text>
+            <text x="26" y="204" fill="#C77B6E">project_room_id &#8212; not written</text>
+            <text x="26" y="222" fill="#C77B6E">shelf &#8212; not written</text>
+
+            <rect x="260" y="120" width="215" height="120" fill="none" stroke="currentColor" stroke-opacity=".38"/>
+            <text x="276" y="144" font-weight="600">The library branch</text>
+            <text x="276" y="164">writes project, room, shelf</text>
+            <text x="276" y="186" opacity=".62">inside EXCEPTION WHEN OTHERS</text>
+            <text x="276" y="204" opacity=".62">&#8212; a deliberate safe harbor,</text>
+            <text x="276" y="222" opacity=".62">documented in the function</text>
+            <text x="10" y="268" font-size="11" fill="#C77B6E">Every note-shaped capture takes the left path, so it arrives with no project column at all.</text>
+            <text x="10" y="288" font-size="11" opacity=".62">And the routing memory drops the room after the first capture &#8212; a second, device-side defect.</text>
+
+            <!-- panel B -->
+            <rect x="660" y="34" width="200" height="38" fill="none" stroke="currentColor" stroke-opacity=".38"/>
+            <text x="760" y="58" text-anchor="middle" font-family="DM Mono, monospace" font-size="11">commit_field_capture</text>
+            <line x1="740" y1="72" x2="640" y2="116" stroke="currentColor" stroke-opacity=".5" marker-end="url(#ar2)"/>
+            <line x1="780" y1="72" x2="880" y2="116" stroke="currentColor" stroke-opacity=".5" marker-end="url(#ar2)"/>
+            <text x="670" y="96" text-anchor="end" font-size="11" opacity=".7">= 'inbox'</text>
+            <text x="850" y="96" text-anchor="start" font-size="11" opacity=".7">= 'library'</text>
+
+            <rect x="530" y="120" width="215" height="120" fill="none" stroke="#C4A57B" stroke-width="1.6"/>
+            <text x="546" y="144" font-weight="600">The inbox branch</text>
+            <text x="546" y="164" font-family="DM Mono, monospace" font-size="11">SET status, project_id,</text>
+            <text x="546" y="182" font-family="DM Mono, monospace" font-size="11">project_room_id, shelf</text>
+            <text x="546" y="204">inside <tspan font-weight="600">its own</tspan> exception</text>
+            <text x="546" y="222">safe harbor &#8212; parks, never aborts</text>
+
+            <rect x="780" y="120" width="215" height="120" fill="none" stroke="currentColor" stroke-opacity=".38"/>
+            <text x="796" y="144" font-weight="600">The library branch</text>
+            <text x="796" y="164" opacity=".62">unchanged, byte for byte</text>
+            <text x="796" y="192" opacity=".62">Signature unchanged.</text>
+            <text x="796" y="210" opacity=".62">Un-placing is a payload key,</text>
+            <text x="796" y="228" opacity=".62">never a new parameter.</text>
+            <text x="520" y="268" font-size="11" opacity=".72">A bad route still parks with the conflict stashed on the row, so she can re-route by hand.</text>
+            <text x="520" y="288" font-size="11" opacity=".62">Without the harbor a stale project would hard-fail the sync and retry on every drain, forever.</text>
+          </g>
+        </svg>
+        </div>
+        <figcaption class="figcap">The one behavioural change wave 1 makes on the server. The deferral in today&#8217;s code is deliberate &#8212; the library branch is wrapped so a bad route can be safe-harbored instead of hard-failing the whole sync &#8212; so the fix has to carry its own harbor, or a documented safety valve becomes a hard abort that retries forever.</figcaption>
+      </figure>
+
+      <div class="col wide">
+        <h3>What the migrations add, and nothing more</h3>
+        <ul class="plain">
+          <li><strong>The wave-1 migration.</strong> The note and audio lane on the capture row &#8212; a capture kind, the audio segment array, a transcript source, a note setting, a retention field and its purge stamp &#8212; all additive, all named CHECKs so a later wave can widen them cheaply. Plus the containment index carried unbuilt since two earlier rulings, and a restatement of all five row-level-security policies as <span class="mono">TO authenticated</span> (they default to public today: harmless, because the caller is null for anonymous, but against house convention after the mood-board incident). Predicates byte-identical. <strong>Restate, do not widen.</strong></li>
+          <li><strong>The visit and suggestion migration.</strong> The visit id, kind, kit, label and timestamps; and the suggestion lane, always distinct from the fact &#8212; suggested project, suggested room, the basis, and a confidence that <em>orders the tray and is never rendered</em>. The column exists so the tray can sort; a surface that shows it is a bug.</li>
+          <li><strong>The margin migration.</strong> One nullable back-reference on the note table, one index, and a view replace that recreates the prior body verbatim and changes exactly the note branch. No new kind, no widened anchor CHECK, no new union member in the portal&#8217;s derivation.</li>
+          <li><strong>Reserved but unwritten:</strong> the time-entry migration (one CHECK line), the punch back-reference (a column, a widened payload allow-list, and one security-definer replacement &#8212; <em>not</em> zero DDL, and wave 4 must absorb the difference), and the wave-6 lane, whose shape depends on the first ruling.</li>
+        </ul>
+
+        <h3 style="margin-top:2rem">Three disciplines that are not optional</h3>
+        <div class="grid-2" style="margin-bottom:1.4rem">
+          <div class="card">
+            <h4>Numbers live in one place</h4>
+            <p style="font-size:.92rem">The band is <strong>00530&#8211;00535</strong>, reserved <em>symbolically</em> and confirmed on 2026-08-24 with both concurrent lanes &#8212; one stays at or below 00529, the other holds 00514&#8211;00520 &#8212; so nothing either is carrying can collide with it. Nothing is minted until Kody approves the build; where a file name is unavoidable it is written <span class="mono">005NN_&lt;slug&gt;.sql</span>, with the address drawn at landing and re-confirmed against the ledger <em>and</em> the live migration list before every push.</p>
+            <p style="font-size:.92rem;margin-bottom:0">Twenty hard-coded numbers across a spec, a plan, a pull-request body and six commit messages is a merge hazard, not a plan &#8212; so this program names its migrations symbolically throughout, and the unscheduled structuring wave draws its number <em>outside</em> the band, because an unscheduled wave does not hold a number hostage.</p>
+          </div>
+          <div class="card">
+            <h4>One function, two authors</h4>
+            <p style="font-size:.92rem;margin-bottom:0">A neighbouring lane is doing the <em>same</em> <span class="mono">CREATE OR REPLACE</span> on the same function this week. <strong>Whichever lands second silently reverts the other</strong> &#8212; no error, no failed migration. Either author from the other lane&#8217;s body with it declared a hard prerequisite, or fold the routing fix into it and drop it from this band. That is the first ruling for a reason.</p>
+          </div>
+          <div class="card">
+            <h4>Access is one decision, not four</h4>
+            <p style="font-size:.92rem;margin-bottom:0">Captures, margin notes, tasks and the media bucket disagree today about per-designer versus per-studio, and the margin view joins as a fifth. Recommended: <strong>per-designer in v1</strong>, detecting the constraint and degrading honestly. Per-studio buys a platform-admin storage migration and a wider blast radius for a user who does not exist yet.</p>
+          </div>
+          <div class="card">
+            <h4>Green is not proof</h4>
+            <p style="font-size:.92rem;margin-bottom:0">The SQL suite is usable: <strong>22 documented known failures across 122 files</strong>, and the runner exits 0 when only those fail. Every wave runs the named test <em>and</em> the full suite and reports both. But the runner connects as superuser, so caller-shaped assertions run with row-level security bypassed &#8212; <strong>no wave report may claim access control was verified on their strength.</strong></p>
+          </div>
+        </div>
+
+        <p><strong>Storage is unchanged.</strong> Same private, owner-scoped, uid-foldered bucket; the path is built in the one place that builds it, both segments lowercased, with its own test. Upsert-idempotent replay is preserved. The audio deliberately does <em>not</em> route through the media registry another lane is still moving &#8212; becoming its second consumer would freeze a moving object for no benefit here.</p>
+        <p style="margin-bottom:0"><strong>Filed is <span class="mono">project_id IS NOT NULL</span>.</strong> Not a new status. The studio-read policy keys on the inbox status, so a terminal value would silently revoke studio read on exactly the rows a co-member was meant to help with &#8212; a defect nobody caught in the direction that proposed it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 10 &#183; WHERE IT LANDS &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="lands">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>10</b>Where it lands</div>
+    <div>
+      <h2>Six surfaces she already reads</h2>
+      <p class="col wide">There is no seventh. Every row below is a place the portal already has, and every portal change is a <em>read of data that only exists if a Field build wrote it</em> &#8212; which is why they ship unflagged.</p>
+      <div class="scroller">
+        <table>
+          <thead><tr><th style="width:28%">What she captured</th><th>Where it already is</th></tr></thead>
+          <tbody>
+            <tr><td>A room scan</td><td>The <strong>Room files</strong> block on the project spread, plus the rooms pages and the room file itself</td></tr>
+            <tr><td>A voice note</td><td>The <strong>margin rail</strong>, as a note item with a play button and a photo strip</td></tr>
+            <tr><td>A site photo</td><td>On the note it was taken with, and on the room&#8217;s card in the Visits block</td></tr>
+            <tr><td>A punch item</td><td>The coordination band&#8217;s contractor court and the decision branch of the margin <span class="tag miss">contested &#8212; FC-R7</span></td></tr>
+            <tr><td>A market find</td><td>The Library, My Library shelf, with a <strong>Field</strong> provenance chip</td></tr>
+            <tr><td>A piece placed to a room</td><td>The FF&amp;E schedule, through the placement step that already exists</td></tr>
+            <tr><td>The visit itself</td><td>The <strong>Visits</strong> block on the project spread</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid-2 col wide" style="margin-top:2rem">
+        <div class="card">
+          <h3>Two live defects fixed en route</h3>
+          <p style="font-size:.93rem">Receiving photos taken on a loading dock are landing in production rows <strong>right now</strong>, and the web drawer hard-codes an empty array where they should render. That is a defect, not a feature.</p>
+          <p style="font-size:.93rem;margin-bottom:0">And a designer <strong>literally cannot attach her own site scan to her own project&#8217;s document</strong> &#8212; both attach points filter to client-owned scans. Unioning them changes what a client-provenance instrument <em>means</em>, so the union is a named ruling line, and the row keeps the provenance visible: <em>yours</em> versus <em>from your client</em>.</p>
+        </div>
+        <div class="card">
+          <h3>The split that keeps the rail readable</h3>
+          <p style="font-size:.93rem">One visit can produce twelve photos, three notes and a scan; a project can accumulate six visits. The margin rail is a flat list with no visit dimension, built for a five-second typed note &#8212; forty transcripts would drown it.</p>
+          <p style="font-size:.93rem;margin-bottom:0"><strong>The Visits block is the record of a visit; the margin carries the notes she promoted.</strong> That decision is made before wave 4, not during it.</p>
+        </div>
+      </div>
+
+      <div class="note caution">
+        <strong>The flag that matters is the one that already exists.</strong> Every Room-files row links to a view gated by the fail-closed <span class="mono">room-file</span> flag, and the portal&#8217;s only capture reader lives inside it. Mounting the block unflagged would ship a block of rows whose every destination is dark. <strong>Enabling that flag for the pilot cohort, with the flag-on walk as a completion criterion, is a wave-4 prerequisite with a named owner.</strong> Refusing a third dark flag is right; leaving the second one dark and calling the wave delivered is not.
+      </div>
+
+      <div class="col wide">
+        <h3>Wave 1P &#8212; the portal work that can run beside wave 1</h3>
+        <p>Four pieces need no Field build at all and act on data already in production. Together &#8776;1 engineer-week, reversible with a portal revert, and the cheapest available answer to <em>&#8220;does field material in the Document change how she works?&#8221;</em> &#8212; which is this program&#8217;s own headline risk. Sitting them behind ten weeks of iOS work and a distribution pipeline that does not exist is the wrong order.</p>
+        <ul class="plain">
+          <li><strong>The signed-URL hook</strong> for the capture bucket. Two in-repo precedents. Nothing downstream is anything but cosmetic without it, and it lights up an existing thumbnail component as a free side effect.</li>
+          <li><strong>Mount the Room-files block.</strong> Complete, tested, referenced by nothing but its own file, and it returns nothing when a project has no scans. Field has been able to write a scan&#8217;s project link for many migrations.</li>
+          <li><strong>Render the receiving photos.</strong> A live defect. Those photos are in production now.</li>
+          <li><strong>The Library provenance chip.</strong> The column already carries data and no portal surface reads it.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 11 &#183; ROADMAP &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="roadmap">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>11</b>Roadmap</div>
+    <div>
+      <h2>Seven waves, and every one of them reversible</h2>
+      <p class="col wide">Sizes are one engineer: <strong>S</strong> &#8776; up to three days, <strong>M</strong> &#8776; one to two weeks, <strong>L</strong> &#8776; three weeks or more. Wave 1 carries a full bite-sized implementation plan today; <strong>every later wave gets its own at wave start</strong>, because a plan written six weeks early is a plan written against a repository that no longer exists.</p>
+
+      <div class="wave">
+        <div class="w-n"><b>0.5</b>size M &#183; parallel</div>
+        <div>
+          <h3>Distribution</h3>
+          <p>Not a wave &#8212; a dependency with an owner. There is <em>no</em> distribution pipeline for Patina Field: no lane file, no archive step in CI, no confirmed store record. Signing is pre-baked, so a device build works out of any project regeneration; what is missing is everything between &#8220;builds on Kody&#8217;s Mac&#8221; and &#8220;appears on Leah&#8217;s phone.&#8221;</p>
+          <div class="meta"><span class="tag part">Gated &#183; FC-R14</span><span class="tag">Pair with a build-time analytics key or the archive it produces is blind</span></div>
+          <p class="rev">Reversible: nothing ships to a designer that is not also installable by hand.</p>
+        </div>
+      </div>
+
+      <div class="wave">
+        <div class="w-n"><b>1</b>&#8804;2 weeks</div>
+        <div>
+          <h3>The note survives</h3>
+          <p>&#8776;12 iOS engineer-days plus &#8776;1.5 database days, run in parallel with two owners. <strong>Eighteen work packages</strong>, of which exactly four are perceptible to a designer: audio survival on <em>both</em> voice surfaces, playback, the offline banner with auto-drain, and the placement line. The bite-sized plan breaks them into eighteen tasks with test-first steps and explicit commits.</p>
+          <p>The rest is truth-telling infrastructure: reserve the band and repair the reservations doc first; set the analytics key through a <em>build-time</em> path and confirm rows actually appear; add a fail-closed feature-flag method to the analytics seam and gate the recorder behind it; move the MIME map into the testable framework; make the rotation policy a pure type that is actually <em>called</em>; fix the write-only room field; emit the wave&#8217;s own voice telemetry; and give the phone a media-retention rule, since nothing prunes the app group today.</p>
+          <div class="meta"><span class="tag miss">Blocked by FC-R18, FC-R17, FC-R11, FC-R19</span><span class="tag">No flag on the IA</span><span class="tag ok">Device pass required</span></div>
+          <p style="font-size:.9rem"><strong>Device pass &#8212; eleven steps, on a physical LiDAR iPhone with a signed build.</strong> Never the simulator compile gate, which builds with signing disabled. Quiet-room note and play it back &#183; three minutes with a radio on &#183; two notes back to back &#183; an incoming call mid-note &#183; AirPods connected and disconnected mid-note &#183; a loud room from the specimen sheet &#183; a full disk &#183; airplane mode and back &#183; Speech permission denied &#183; place from the card and take two more captures &#183; turn the recorder&#8217;s flag off and relaunch.</p>
+          <p class="rev">Reversible: the migration is additive plus one replacement &#8212; roll back by re-applying the prior body. Old builds keep working, because every new wire key is optional and every new column is defaulted.</p>
+        </div>
+      </div>
+
+      <div class="wave">
+        <div class="w-n"><b>1P</b>&#8776;1 week &#183; parallel</div>
+        <div>
+          <h3>The portal half, run beside wave 1</h3>
+          <p>The four pieces in <a href="#lands">&#167;10</a> that need no Field build, plus the flag decision that makes the first two visible, plus the brand-voice pass on the Room File strings.</p>
+          <div class="meta"><span class="tag part">Gated &#183; FC-R10</span></div>
+          <p class="rev">Reversible: a portal revert.</p>
+        </div>
+      </div>
+
+      <div class="wave">
+        <div class="w-n"><b>2</b>&#8776;1 week</div>
+        <div>
+          <h3>Nothing the app says about a capture is a lie</h3>
+          <p>Remove the last three places the app asserts something false, and pay the frozen-seam debt in one commit while it is still free. The seam commit adds the visit sheet case, the fifth camera mode, three screen ids and the orphan that has never appeared in a screenshot sweep, two container dependencies, and the three Live-Activity fields that are <strong>free only until a widget target exists</strong>. Then the real classifier replaces the hardcoded guess &#8212; and because removing the lie flips the destination default toward Library, wave 2 holds the recommendation at inbox until visit kinds exist. The device pass photographs a wall defect and confirms it is not recommended as a product.</p>
+          <div class="meta"><span class="tag">No flag</span><span class="tag">No portal work</span><span class="tag ok">Device pass: four objects, four categories</span></div>
+          <p class="rev">Reversible: the prior build.</p>
+        </div>
+      </div>
+
+      <div class="wave">
+        <div class="w-n"><b>3</b>&#8776;5 weeks</div>
+        <div>
+          <h3>The visit spine</h3>
+          <p><strong>The direction.</strong> She answers &#8220;where are you?&#8221; once at the door, and everything she captures for the next two hours lands on the right project and room &#8212; offline &#8212; with the visit legible on every capture surface. Twelve packages: the offline project and room cache first, because it is the long pole and it sits on the critical path; then the visit model and its legacy-decode path; the door; the Today band and the launch table; the visit chip and the inline mic; voice mode; the tray&#8217;s widened scope; the suggestion lane; the scan-setup collapse and its honest guard; and the copy pass that finally takes the word &#8220;inbox&#8221; out of the app&#8217;s vocabulary &#8212; ten strings, not one.</p>
+          <div class="meta"><span class="tag part">Gated &#183; FC-R1 &#183; FC-R2 &#183; FC-R3 &#183; FC-R5 &#183; FC-R6</span><span class="tag ok">Device pass: a real eight-minute walk at a real address, half of it in airplane mode</span></div>
+          <p style="font-size:.9rem"><strong>The wave&#8217;s own headline risk:</strong> a wrong visit is a <em>systematic</em> error. Yesterday&#8217;s visit silently stamping today&#8217;s twenty captures is worse than today&#8217;s twenty unattached ones. Mitigations: the thirty-minute confirm, the twelve-hour auto-end, never crossing a calendar day, Invariant V &#8212; and, strongest of them, the suggested/confirmed split, so anything not set at the door is a question.</p>
+          <p class="rev">Reversible: the prior build; the migration is additive and inert without a Field build that writes it.</p>
+        </div>
+      </div>
+
+      <div class="wave">
+        <div class="w-n"><b>4</b>&#8776;3.5 weeks</div>
+        <div>
+          <h3>It lands in the Document</h3>
+          <p>The signed-URL hook; the device writing margin notes through the same outbox; the view replace that finally carries the full body; the play button, photo strip and draft line on the existing note case; the Room-files mount and the designer-scan union; the Visits block; the two verbs; the punch photo back-reference; the visit review that writes the Visits row and offers a completed time entry; the receiving-photo fix and a live camera on the loading dock; and the Library provenance chip.</p>
+          <div class="meta"><span class="tag part">Gated &#183; FC-R4 &#183; FC-R7 &#183; FC-R8 &#183; FC-R10 &#183; FC-R15</span><span class="tag miss">Prerequisite: turn the existing room-file flag on for the pilot cohort</span></div>
+          <p style="font-size:.9rem"><strong>Acceptance includes a negative:</strong> the Visits block and the margin payload must render <em>nothing</em> on a project with no field data &#8212; verified in the browser, because the whole unflagged posture rests on it. One of those three claims is verified in code; two are asserted.</p>
+          <p class="rev">Reversible: revert the portal deploy; the migrations are additive and the view replace is undone by re-applying the prior body.</p>
+        </div>
+      </div>
+
+      <div class="wave">
+        <div class="w-n"><b>5</b>&#8776;3.5 weeks</div>
+        <div>
+          <h3>Hands full</h3>
+          <p>App Intents in the app target &#8212; which buys Siri, Shortcuts, Spotlight and the Action Button with no new target at the current deployment floor, and pays off an onboarding screen that already <em>teaches</em> a button the app does not implement. Then new project-generation code for a widget target that does not exist, which pays three debts at once: a Control Center control, a Lock Screen widget, and the Live Activity renderer the app has been driving into nothing. Plus one soft Desk line for a visit open more than twelve hours &#8212; no new population, no new need kind.</p>
+          <div class="meta"><span class="tag part">Gated &#183; FC-R9</span><span class="tag">Calendar and visit-detection suggestions are themselves gated &#8212; do the learned centroid first and see whether they are needed at all</span></div>
+          <p class="rev">Reversible: the prior build. The device pass is the only meaningful gate here &#8212; none of it renders in the simulator.</p>
+        </div>
+      </div>
+
+      <div class="wave held">
+        <div class="w-n"><b>6A</b>schedulable</div>
+        <div>
+          <h3>Server transcription</h3>
+          <p>Deterministic, &#8776;$1.15 a month at pilot volume, with an exact in-repo precedent &#8212; and it is the brief&#8217;s literal ask. It is also what makes a one-minute transcript readable in the margin at all. <strong>Schedulable with or immediately after wave 4</strong>, in whatever shape the first ruling leaves standing.</p>
+          <p style="font-size:.9rem">Gating it on &#8220;is the device transcript good enough?&#8221; is circular: the device transcript is <em>specified</em> as lossy at every fifty-second boundary by design. The answer is knowable before the measurement.</p>
+          <div class="meta"><span class="tag part">Shape subject to FC-R18</span><span class="tag">The device transcript is never overwritten</span></div>
+          <p class="rev">Reversible: the sweep is a cron and a column; stop the cron.</p>
+        </div>
+      </div>
+
+      <div class="wave held">
+        <div class="w-n"><b>6B</b>unscheduled</div>
+        <div>
+          <h3>Designer-Taught structuring</h3>
+          <p><strong>Evidence-gated on two numbers from waves 1&#8211;4&#8217;s own telemetry:</strong> measured device-transcript quality on a real corpus &#8212; the empty-transcript rate, boundary loss at rotations, and how often she edits &#8212; and the measured tap-cost of wave 4&#8217;s manual verbs, their volume and their abandonment.</p>
+          <p>If the notes are already good enough and she rarely uses the verbs, <strong>do not build this.</strong> If she uses them constantly and the transcripts need repair, build it &#8212; behind the same two verbs, so the interface does not change when it arrives.</p>
+          <div class="meta"><span class="tag part">Gated &#183; FC-R12 &#183; FC-R16 &#183; and the two telemetry numbers</span></div>
+          <p class="rev">Reversible: nothing auto-applies, so nothing has to be un-applied.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 12 &#183; RULINGS &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="rulings">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>12</b>Rulings</div>
+    <div>
+      <h2>Nineteen rulings, in the order they should be taken</h2>
+      <p class="col wide">Nothing has been appended to the decisions ledger. Kody rules first; the append-ready block is drafted afterwards. <strong>Wave 1 needs the first five</strong> &#8212; and the sixth if the build has to reach Leah rather than stopping at Kody&#8217;s device. Everything else can be ruled while wave 1 is in flight.</p>
+      <p class="kicker col wide" style="margin-bottom:2rem">Ruling order: FC-R18 &#8594; FC-R8 &#8594; FC-R17 &#8594; FC-R11 / FC-R19 &#8594; FC-R14 &#8594; everything else.</p>
+
+      <div class="ruling first">
+        <div class="id">FC-R18<small>First</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>Does this program <em>own</em> capture enrichment, share it with the neighbouring lane, or defer to it?</p>
+          <p class="d"><b>Recommended: share the ledger.</b> Author the W1 replacement from the MERGED, post-fix 00516 body, landing after 00516, and enqueue only via the <span class="mono">enqueue_capture_enrichment_for_producer</span> wrapper.</p>
+          <p class="bl"><b>Blocks</b> Wave 1&#8217;s migration, literally &#8212; it decides whose body the replacement is authored from &#8212; and wave 6&#8217;s entire shape. <strong>Cost of being wrong: a production regression with no error and no failed migration.</strong> Either the neighbouring lane stops enriching field captures, or every note-shaped capture goes back to arriving with no project column. Both are invisible until someone notices data missing.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R8<small>Second</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>Per-designer or per-studio &#8212; ruled <em>once</em>, for the whole family?</p>
+          <p class="d"><b>Recommended: per-designer in v1</b>, detecting the constraint and degrading honestly. Five surfaces disagree today and the margin view joins as a fifth in wave 4. Three facts to price: there is no organisation-scoped update policy on captures at all, so any caller-rights filing function no-ops for an assistant; a co-member branch on the media bucket is a platform-admin storage migration, not an ordinary one; and a co-member already sees a scan&#8217;s drawings beside an <em>empty</em> capture list.</p>
+          <p class="bl"><b>Blocks</b> Any schema work in the program. Per-studio buys a wider blast radius for a user who does not exist yet; per-designer and later reversing means re-opening every policy.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R17<small>Third</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>Which migration band?</p>
+          <p class="d"><b>Recommended: repair first, then reserve.</b> The reservations doc is demonstrably incomplete &#8212; repairing it is worth more than the reservation, because the next lane&#8217;s census will fail for the same reason this one did. Then draw the next verified-free band above the true head, census widened to the filesystem, every ref and sibling worktrees. <strong>The band is 00530&#8211;00535, reserved symbolically and confirmed with the two other live lanes on 2026-08-24 &#8212; and drawn only at landing.</strong></p>
+          <p class="bl"><b>Blocks</b> Every migration in the program.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R11<small>Fourth</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>What is the recording-consent posture, and what is the jurisdiction rule?</p>
+          <p class="d"><b>Recommended: kit-defaulted solo/conversation, an affirmation chip, unmissable chrome, never ambient &#8212; plus a lawyer&#8217;s read before any designer other than Kody records a client.</b> Fourteen all-party-consent states make surreptitious recording of a private conversation a criminal matter; Wisconsin is one-party and Leah&#8217;s clients are not guaranteed to be in Wisconsin. No recording-consent policy exists anywhere in the docs today.</p>
+          <p class="bl"><b>Blocks</b> <strong>Wave 1</strong> &#8212; that is when third-party audio first leaves a phone, and both wave-1-reachable voice surfaces record other people by construction. Every designed mitigation is wave 3 or later, so wave 1 carries the one it can: the recorder sits behind the fail-closed flag seam, an off-switch that needs no build and no store round-trip. <em>Not an engineering decision, but an engineering blocker.</em></p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R19<small>Fourth</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>What is the <em>phone&#8217;s</em> own retention policy for capture media?</p>
+          <p class="d"><b>Recommended: delete a segment once its commit receipt lands, delete on discard, plus a size-capped sweep</b> &#8212; in wave 1, alongside the writer that creates the problem. There is no local media lifecycle at all today; the uploader never clears a file after a successful commit and discarding a recorded note abandons it on disk.</p>
+          <p class="bl"><b>Blocks</b> Wave 1&#8217;s recorder and its discard path. Cost of being wrong: the app quietly becomes the largest thing on her phone, and the first person to notice is her, in Settings.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R14<small>Fifth</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>Is TestFlight a dependency, or does wave 1 end at Kody&#8217;s device?</p>
+          <p class="d"><b>Recommended: yes, stand up an archive and TestFlight path alongside wave 1</b> &#8212; paired with a build-time analytics key. The environment fallback is read at runtime and only an Xcode scheme&#8217;s run action injects it, never a device install, never TestFlight, never CI; and the secrets file is gitignored with a known trap that drops it on a project regeneration. A key set the obvious way makes the telemetry gate pass on exactly one Mac and fail silently on the very build this ruling exists to produce.</p>
+          <p class="bl"><b>Blocks</b> Whether wave 1 ends at Kody&#8217;s device or Leah&#8217;s. Without distribution the wedge question cannot be answered and every number in the plan stays unfalsifiable.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R1<small>Wave 3</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>Does Field stop being camera-first?</p>
+          <p class="d"><b>Recommended: yes, with the launch table</b> &#8212; a visit active within thirty minutes still lands straight on the viewfinder. And the concession is smaller than it reads: a Camera control already sits in the dashboard header in both layouts, so the camera is one tap from Today <em>today</em>.</p>
+          <p class="bl"><b>Blocks</b> Wave 3&#8217;s shape. Nothing in waves 1&#8211;2 &#8212; the plan is written so a &#8220;no&#8221; re-shapes the door without re-planning the wave. Cost of being wrong: a designer who opens the app to shoot and lands on a list will feel it every single time.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R2<small>Wave 3</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>Two visit kinds and three kits, or something else?</p>
+          <p class="d"><b>Recommended: two kinds</b> &#8212; a null kind <em>deletes</em> a code path rather than adding one. <strong>This overrules the designer panel</strong>, which recommended three, on the argument that &#8220;roving&#8221; is the moment the brief names literally and a nameless state is easy to under-serve. Both arguments belong on the table. Either way the vocabulary must stop naming one thing twice: kits are the three that are <em>not</em> kinds.</p>
+          <p class="bl"><b>Blocks</b> The door&#8217;s entire shape, and therefore wave 3&#8217;s cost. Settle it before the door is designed &#8212; the door is the direction&#8217;s whole expense.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R3<small>Wave 3</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>The names: <em>Today</em> &#183; <em>a visit</em> &#183; <em>Visits</em> &#183; <em>unplaced</em>.</p>
+          <p class="d"><b>Recommended: adopt all four</b> &#8212; checked against the live collisions. &#8220;Capture inbox&#8221; is doubly taken; &#8220;request&#8221; has three live senses and is never used unqualified; &#8220;field kit&#8221; is already a set of form-field primitives. And name the relationship while you are here: one close act writes a <em>Visits</em> row on the project spread and a <em>Site visit</em> row in the hours ledger. Proposed: the Visits block is the record, the hours entry is its billing shadow.</p>
+          <p class="bl"><b>Blocks</b> Wave 3&#8217;s copy and wave 4&#8217;s portal block. Cost of being wrong: a renamed surface after it has shipped into the Document.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R5<small>Wave 3</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>May one picker merge the two room lists by trimmed name?</p>
+          <p class="d"><b>Recommended: yes, never cross-assigning.</b> Both lists already come back from one call the app already makes; each merged entry carries up to two ids and stamps only the one legal for its lane. It is the only proposal in the set that unblocks a unified &#8220;put this in this room&#8221; affordance without a schema ruling first. <strong>And price the silent degradation:</strong> on a project with no registered client the second list comes back empty without a query, so the picker quietly becomes one-lane and a scan started at the door has no room to attach to at all. Say that out loud, in the honest expansion.</p>
+          <p class="bl"><b>Blocks</b> The door&#8217;s room step and every placement affordance downstream.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R6<small>Wave 3</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>What <em>is</em> an unplaced note?</p>
+          <p class="d"><b>Recommended: a capture row with a suggestion, waiting on Today, filed in one tap</b> &#8212; with a fourth option now available at zero schema cost: the engagement constraint is an inclusive OR with a third arm, so a note that knows the <em>client</em> but not yet the project can already be a margin note today. <strong>The recommended shape is missing its mechanism:</strong> a roving capture never reaches the portal until she files it, and the only prompt is a band she must open the app to see. Give it one cheap mechanism, or name it in the non-goals in the brief&#8217;s own words.</p>
+          <p class="bl"><b>Blocks</b> Wave 3&#8217;s tray. Decide it before the wave, not during it. Cost of being wrong: the landfill the alternative direction named as its own worst failure mode, arrived at by accident.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R4<small>Wave 4</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>May Patina Field write business tables directly from the device?</p>
+          <p class="d"><b>Recommended: yes.</b> The distinction that matters is <em>who is speaking</em>. The service-role applier exists because a texting contractor&#8217;s parsed claim is a third party asserting a fact about someone else&#8217;s project. A field note is the designer&#8217;s own authored note, and the existing policy already contemplates exactly this author. <strong>But it is only worth having if the note is readable</strong> &#8212; see the margin caveat in <a href="#screens">&#167;07</a>.</p>
+          <p class="bl"><b>Blocks</b> Wave 4&#8217;s entire landing. &#177;2 engineer-weeks either way.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R7<small>Wave 4</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>What status does a Field-raised punch item take?</p>
+          <p class="d"><b>Re-opened, with two facts the first pass missed.</b> A draft lands nowhere the package originally claimed &#8212; not the court bar, not the decision branch, not the Desk &#8212; only a collapsed <em>&#8220;Drafts &#183; N&#8221;</em> fold, which is the triage queue this program refuses, relocated to the portal. And a draft does not avoid the registered-client failure, it defers it onto a worse surface: publishing raises days later, with an error about notification recipients, and where it succeeds the <strong>homeowner is notified about a defect in the contractor&#8217;s court</strong>. Prefer branching on whether the client is registered, or the fourth option: a Field punch may not be a decision row at all, but a task owned by the contractor plus the already-live, party-anchored SMS rail. Decide the court&#8217;s <em>party</em> here too.</p>
+          <p class="bl"><b>Blocks</b> Wave 4&#8217;s punch verb. <strong>Do not brief that verb without this decided.</strong></p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R10<small>Wave 4</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>Ship the portal changes unflagged?</p>
+          <p class="d"><b>Recommended: yes for a <em>new</em> flag</b> &#8212; every change is a read of data that only exists if a Field build wrote it &#8212; <b>and turn the existing room-file flag on for the pilot cohort</b>, with the flag-on walk as a completion criterion and a named owner. Rule the designer-scan union in the same breath, and keep the provenance visible in the row.</p>
+          <p class="bl"><b>Blocks</b> Wave 4&#8217;s rollout, and whether wave 4 has a payoff a designer can see.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R15<small>Wave 4</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>Where does a punch photo live?</p>
+          <p class="d"><b>Recommended: the punch item back-references the capture row</b> and the portal signs the media &#8212; no new media tables, correct provenance, and the punch photo <em>is</em> the visit photo. Both panels preferred it. <strong>Say out loud that a project-general media table is still owed</strong> &#8212; this defers that debt, it does not pay it. And it is <em>not</em> zero DDL: a column, a widened payload allow-list, and one security-definer replacement.</p>
+          <p class="bl"><b>Blocks</b> Wave 4&#8217;s punch verb, and the install, receiving and sample moments generally.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R9<small>Wave 5</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>Background audio?</p>
+          <p class="d"><b>Recommended: no in v1</b>, with an honest &#8220;recording paused&#8221; on lock. It is a real store-review conversation plus a battery and privacy surface, and iOS forbids <em>starting</em> a recording from the background regardless. <strong>Fix the gesture before the background mode:</strong> tap-to-start and tap-to-stop is worth more to the phone-into-pocket moment than the entitlement is.</p>
+          <p class="bl"><b>Blocks</b> Wave 5.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R12<small>Wave 6B</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>Does anything ever auto-apply?</p>
+          <p class="d"><b>Recommended: no, at any confidence.</b> <strong>But this is no longer this program&#8217;s ruling to make alone</strong> &#8212; a neighbouring lane already writes model output straight into five columns on the same row with no review step. Confirm-gating a spoken note while silently accepting a model-written vendor name on the same row is not a coherent posture. Rule the family, with the first ruling&#8217;s owner in the room.</p>
+          <p class="bl"><b>Blocks</b> Wave 6B&#8217;s design. Sequenced behind FC-R18.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R13<small>Wave 6A</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>What is the audio retention default?</p>
+          <p class="d"><b>Recommended: ninety days as the <em>policy</em></b>, per-note overridable, purged by a daily job mirroring one that already ships. <strong>The column itself ships set to &#8220;keep&#8221; until that job exists</strong> &#8212; a default asserting a retention policy nothing implements is exactly the unverifiable claim the honesty law forbids, written into the schema. Flip it in the migration that ships the purge, and say plainly until then that retention is unenforced.</p>
+          <p class="bl"><b>Blocks</b> A column default in wave 1, a job in wave 6A, and what a client&#8217;s lawyer sees on discovery.</p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <div class="id">FC-R16<small>Wave 6B</small></div>
+        <div>
+          <p class="q"><span class="tick"></span>Can a spoken measurement ever become a measured record?</p>
+          <p class="d"><b>Recommended: no.</b> It becomes a note that <em>says</em> the number, tagged as spoken, needing confirmation. The applier must refuse to touch the measurement tables outright. If this program generates the &#8220;field evidence of transcription friction&#8221; that the earlier ruling named as its own re-open trigger, cite that ruling and raise it again &#8212; do not quietly widen the applier.</p>
+          <p class="bl"><b>Blocks</b> Wave 6B&#8217;s applier, and any future laser-measure conversation. Cost of being wrong: the accuracy contract <em>is</em> the product. A spoken number wearing a measured badge would end it.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 13 &#183; RISKS &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="risks">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>13</b>Risks</div>
+    <div>
+      <h2>What could go wrong, and what we are refusing</h2>
+      <div class="scroller">
+        <table>
+          <thead><tr><th style="width:4rem">#</th><th style="width:32%">Risk</th><th style="width:5rem">Sev</th><th>Mitigation</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">P-1</td><td><strong>The wedge is unconfirmed.</strong> Leah Session 05 has not run; its findings template is blank; it ranks capture and memory against three other candidates.</td><td><span class="tag miss">High</span></td><td>Waves 1&#8211;2 are overwhelmingly bug-fixes and wiring &#8212; a cheap, reversible bet worth making regardless. Hold wave 6 for the answer.</td></tr>
+            <tr><td class="mono">P-2</td><td><strong>Nothing is measurable today.</strong> Zero events in 180 days; no feature-flag mechanism at all.</td><td><span class="tag miss">High</span></td><td>Two wave-1 packages, with &#8220;rows actually appeared&#8221; as a named gate rather than a checkbox.</td></tr>
+            <tr><td class="mono">P-3</td><td><strong>Nothing reaches Leah today.</strong> No archive path, no confirmed store record.</td><td><span class="tag miss">High</span></td><td>FC-R14 and wave 0.5.</td></tr>
+            <tr><td class="mono">P-4</td><td><strong>A wrong visit is systematic.</strong> Yesterday&#8217;s visit stamping today&#8217;s twenty captures.</td><td><span class="tag miss">High</span></td><td>The thirty-minute confirm, the twelve-hour auto-end, never crossing a calendar day, Invariant V, and the suggested/confirmed split.</td></tr>
+            <tr><td class="mono">P-5</td><td><strong>The access family disagrees</strong> across four surfaces, soon five.</td><td><span class="tag part">Med-High</span></td><td>FC-R8, ruled once for the whole family, before any schema work.</td></tr>
+            <tr><td class="mono">P-6</td><td><strong>Consent has no policy anywhere in the docs.</strong></td><td><span class="tag part">Med-High</span></td><td>FC-R11 plus a lawyer&#8217;s read. Not an engineering decision; an engineering blocker.</td></tr>
+            <tr><td class="mono">P-7</td><td><strong>Migration numbering has moved twice this week</strong>, and one live number was never recorded.</td><td><span class="tag part">Med</span></td><td>Symbolic names throughout, a repaired reservations doc, a widened census, and a band drawn only at landing.</td></tr>
+            <tr><td class="mono">P-8</td><td><strong>The SQL suite cannot certify access-control work.</strong> It is usable &#8212; 22 documented known failures across 122 files, and the runner exits 0 when only those fail &#8212; but it connects as superuser, so caller-shaped assertions run with row-level security bypassed.</td><td><span class="tag part">Med</span></td><td>Run the named test and the full suite, report both, and never claim access control was verified on their strength.</td></tr>
+            <tr><td class="mono">P-9</td><td><strong>Frozen-seam churn</strong> across four seams.</td><td><span class="tag part">Med</span></td><td>One commit, one named owner, at the top of wave 2 &#8212; including the Live-Activity shape change, which is free only until a widget target exists.</td></tr>
+            <tr><td class="mono">P-10</td><td><strong>Copy debt is inside the blast radius.</strong> Nine files of placeholder strings sit on exactly the surfaces the site kit uses, and one of them becomes a lie under a spine with no inbox.</td><td><span class="tag part">Med</span></td><td>A brand-voice pass with Kody, budgeted as line items in waves 2 and 3, plus the portal&#8217;s Room File strings in wave 4.</td></tr>
+            <tr><td class="mono">P-11</td><td><strong>No UI tests, and CI that may or may not block.</strong> The iOS jobs are named advisory and set no failure policy, so whether they gate is not determinable from the repository.</td><td><span class="tag part">Med</span></td><td>Device walks are the real gate. Ask Kody to confirm branch protection.</td></tr>
+            <tr><td class="mono">P-12</td><td><strong>The decision RPC is narrower than it looks.</strong></td><td><span class="tag part">Med</span></td><td>FC-R7, re-opened, with all four options priced.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin-top:2.4rem">What this program refuses</h3>
+      <p class="col wide">Stated as commitments, because half the value of a direction is the work it declines.</p>
+      <div class="grid-3" style="margin-bottom:1.4rem">
+        <div class="card"><p style="font-size:.92rem;margin-bottom:0"><strong>No inbox, triage queue or review card in the portal.</strong> No desk population, no need kind, no state column, no new room, ledger or verb, no card to clear. On the device the concept remains and the unplaced tray is a filing queue &#8212; named as one.</p></div>
+        <div class="card"><p style="font-size:.92rem;margin-bottom:0"><strong>No structuring, drafts table or queue kind in waves 1&#8211;5</strong>, and no server transcription there either. Wave 1 writes the <em>audio</em>, which is the honesty obligation; re-transcription is wave 6, and its corpus is a free byproduct of wave 1.</p></div>
+        <div class="card"><p style="font-size:.92rem;margin-bottom:0"><strong>No spoken measurement ever becomes a measured record.</strong> No client-facing surface. No ambient or always-on recording, and no background auto-start.</p></div>
+        <div class="card"><p style="font-size:.92rem;margin-bottom:0"><strong>No new capture status, no visits table, no new registry room or verb, no new service or worker.</strong> No on-device Whisper build, no deployment-target bump, no diarization.</p></div>
+        <div class="card"><p style="font-size:.92rem;margin-bottom:0"><strong>No share extension</strong> &#8212; that directory stays empty. It solves importing from other apps, which no field moment here describes. <strong>No plan markup, no video, no mood-board editing from the field.</strong></p></div>
+        <div class="card"><p style="font-size:.92rem;margin-bottom:0"><strong>Two refusals that are owed, not free.</strong> No reminder for an unplaced capture beyond the Today band in waves 1&#8211;4. And no path from Field to the brief or discovery &#8212; so a client walk-through&#8217;s real output, a preference or a selection, has no destination in any wave. Named, refused, and owed.</p></div>
+      </div>
+
+      <div class="note caution">
+        <p class="eyebrow" style="margin-bottom:.5rem">The one live input this program does not control</p>
+        <p style="margin-bottom:.7rem"><strong>Leah Session 05 has not been run.</strong> Its prep doc is dated 2026-08-18, its findings template is still blank, and its second block ranks capture and memory against three other candidates for the wedge. Nor is there any confirmation that Leah has <em>ever</em> held Patina Field on a real site &#8212; that device-pilot gate was deferred at an earlier ruling and is still listed as owed.</p>
+        <p style="margin-bottom:0">The plan is shaped so this does not have to be answered first. <strong>Waves 1 and 2 are overwhelmingly bug-fixes and the wiring of parts that already exist</strong> &#8212; a spoken note that survives, a recording she can play back, a capture that carries its project, a camera that admits it is offline. Those are worth having whatever the session says, and they cost about three weeks. Wave 6 is held for the answer.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- &#9552;&#9552; 14 &#183; THE PACKAGE &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552; -->
+<section id="package">
+  <div class="wrap sec-grid">
+    <div class="rail"><b>14</b>The package</div>
+    <div>
+      <h2>What is written down, and what each file is for</h2>
+      <p class="col wide">All of it lives in <span class="mono">docs/design/field-companion/</span>. Where the package and a research document conflict, <strong>the package wins for the build</strong>; where the package and the plan conflict, the package wins for design and the plan wins for build order.</p>
+
+      <div class="ledger" style="margin-top:1.6rem">
+        <div class="row head"><span>File</span><span>What it is</span><span>Use it for</span></div>
+        <div class="row"><span class="tag accent">Spec</span><div class="what"><span class="mono">field-companion-package.md</span> &#8212; eighteen sections: the summary, the chosen direction and its grafts, the principles, the persona and moments, the information architecture, the eight flows, the screen catalogue, the voice pipeline, the data model, edge functions and jobs, portal surfaces, entry points, offline semantics, telemetry, privacy and consent, non-goals, the migration path, and the rulings register.</div><div class="ev">the design authority &#183; every wireframe and every copy string</div></div>
+        <div class="row"><span class="tag accent">Plan</span><div class="what"><span class="mono">field-companion-plan.md</span> &#8212; waves 0.5 through 6 as work packages: goal, files, interfaces, acceptance, tests, gates, device pass, flags, rollout and rollback, dependencies, owner model, estimate. Plus the standing constraints every wave inherits and the program risk register.</div><div class="ev">build order &#183; &#167;8 is wave 1 in eighteen bite-sized tasks, ready for subagent-driven execution. Later waves get theirs at wave start</div></div>
+        <div class="row"><span class="tag accent">Rulings</span><div class="what"><span class="mono">field-companion-rulings.md</span> &#8212; nineteen rulings grouped by the wave they block, each with the question, the options, a recommended default, what it blocks, and what it costs to be wrong.</div><div class="ev">Kody&#8217;s decision sheet &#183; nothing has been appended to the decisions ledger yet</div></div>
+        <div class="row"><span class="tag">Discovery</span><div class="what"><span class="mono">research/01</span> the iOS deep map &#183; <span class="mono">02</span> the backend contract &#183; <span class="mono">03</span> the portal&#8217;s project flow &#183; <span class="mono">04</span> stated intent and the constraint ledger &#183; <span class="mono">05</span> the shared iOS substrate &#183; <span class="mono">06</span> external research, including the transcription options matrix &#183; <span class="mono">07</span> gates, CI, device passes, analytics and flags.</div><div class="ev">the evidence base &#183; every file:line citation traces here</div></div>
+        <div class="row"><span class="tag">Synthesis</span><div class="what"><span class="mono">research/10</span> the gap analysis &#8212; nine measurable outcomes, seven moments, the top twelve frictions ranked by designer impact, and the ten things that must not break &#183; <span class="mono">research/11</span> the technical architecture study.</div><div class="ev">why this program exists, and what it must not touch</div></div>
+        <div class="row"><span class="tag">Directions</span><div class="what"><span class="mono">research/20-direction-A</span> the Project Spine &#183; <span class="mono">20-direction-B</span> capture first, file later &#183; <span class="mono">20-direction-C</span> moments as modes.</div><div class="ev">the three full alternatives, written to be chosen between</div></div>
+        <div class="row"><span class="tag">Judgement</span><div class="what"><span class="mono">research/30-judge-designer-workflow</span> (A 40 &#183; B 35 &#183; C 32) &#183; <span class="mono">30-judge-engineering</span> (A 39 &#183; B 35 &#183; C 32) &#183; <span class="mono">40-review-product-ux</span> and <span class="mono">40-review-repo-correctness</span>, the adversarial passes over the synthesis.</div><div class="ev">the scores, the dissents, and the corrections that re-opened three rulings</div></div>
+      </div>
+
+      <p class="figcap">Every correction the review passes produced is folded into the spec rather than filed beside it &#8212; which is why several sections above carry a caution about a claim an earlier draft made and could not support. That is the intended shape: the package is the thing that gets built from, so the package is where the truth has to live.</p>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <p style="margin-bottom:.4rem">Patina Field &#183; build package &#8220;The Visit&#8221; &#183; issued 2026-08-24 &#183; read-only design pass.</p>
+  <p style="margin-bottom:0">Migrations are named symbolically throughout; the band is <strong>00530&#8211;00535</strong>, reserved symbolically, confirmed with the two other live lanes on 2026-08-24, and drawn only at landing.</p>
+</footer>
+</main>
+
+<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.mini a'));
+  var map = {};
+  links.forEach(function (a) {
+    var id = a.getAttribute('href').slice(1);
+    var el = document.getElementById(id);
+    if (el) { map[id] = a; }
+  });
+  var ids = Object.keys(map);
+  if (!ids.length || !('IntersectionObserver' in window)) { return; }
+  var visible = {};
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { visible[e.target.id] = e.isIntersecting ? e.intersectionRatio : 0; });
+    var best = null, bestVal = 0;
+    ids.forEach(function (id) { if ((visible[id] || 0) > bestVal) { bestVal = visible[id]; best = id; } });
+    links.forEach(function (a) { a.removeAttribute('aria-current'); });
+    if (best) {
+      map[best].setAttribute('aria-current', 'true');
+      var nav = map[best].parentNode.parentNode;
+      var r = map[best].getBoundingClientRect(), nr = nav.getBoundingClientRect();
+      if (r.left < nr.left || r.right > nr.right) {
+        nav.scrollLeft += r.left - nr.left - 24;
+      }
+    }
+  }, { rootMargin: '-20% 0px -55% 0px', threshold: [0, 0.05, 0.25, 0.6, 1] });
+  ids.forEach(function (id) { obs.observe(document.getElementById(id)); });
+})();
+</script>
