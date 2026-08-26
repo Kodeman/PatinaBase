@@ -35,6 +35,7 @@ import {
   PenLine,
   FileText,
   Hammer,
+  Ruler,
 } from 'lucide-react';
 
 export type StudioSurfaceKind = 'room' | 'ledger' | 'verb';
@@ -337,6 +338,28 @@ export const ALL_STUDIO_SURFACES: StudioSurface[] = [
 ];
 
 /**
+ * SP-16/F50 — the plan room. It is a route, not a drawer sheet
+ * (command-bar.tsx builds its own "This surface" row for it, pre-addressed
+ * with the in-hand engagement's id), so it deliberately stays out of
+ * `ALL_STUDIO_SURFACES`: that list's every entry is required to carry a help
+ * doorway (surface-key-parity.test.ts) and feeds the Desk Contents / Studio
+ * Drawer doorway lists this surface has no place in. `matchSurfaces()` below
+ * still folds it into the typed-query table so a typed `plan`/`floor plan`
+ * resolves the same surface the empty-query branch already offers — closing
+ * the registry gap without opening a second door.
+ */
+const PLAN_ROOM_SURFACE: StudioSurface = {
+  key: 'plan-room',
+  kind: 'room',
+  label: 'The plan room',
+  subLabel: 'this project · the current set',
+  aliases: ['plan', 'plan room', 'floor plan', 'plans', 'drawings'],
+  icon: Ruler,
+  weight: 'room',
+  scope: 'document',
+};
+
+/**
  * Case-insensitive prefix/substring match over a surface's label and
  * aliases. Empty/whitespace-only queries match nothing (callers show the
  * unfiltered list themselves rather than treating "everything" as a match).
@@ -344,7 +367,7 @@ export const ALL_STUDIO_SURFACES: StudioSurface[] = [
 export function matchSurfaces(query: string): StudioSurface[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  return ALL_STUDIO_SURFACES.filter((surface) => {
+  return [...ALL_STUDIO_SURFACES, PLAN_ROOM_SURFACE].filter((surface) => {
     if (surface.label.toLowerCase().includes(q)) return true;
     return surface.aliases.some((alias) => alias.toLowerCase().includes(q));
   });

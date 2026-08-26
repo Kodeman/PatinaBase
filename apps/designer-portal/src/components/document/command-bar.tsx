@@ -202,6 +202,8 @@ export function CommandBar() {
   // "Recent" group reflects where the designer has actually been.
   const [recent, setRecent] = useState<RecentDocumentInHand[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  // F21 — the element that had focus when ⌘K opened, restored on close.
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
   // R97 — skip the mount emission so we only announce real open/close transitions.
   const didMountRef = useRef(false);
 
@@ -233,14 +235,33 @@ export function CommandBar() {
     };
   }, [open, asking]);
 
+  // F21 — restore focus to whatever opened ⌘K when it closes. Captured here
+  // (not read fresh on close) because by close time the palette's own last
+  // focused row/input is `document.activeElement`, not the opener.
+  // <body>-avoiding: a capture of `document.activeElement === document.body`
+  // (nothing was meaningfully focused — e.g. the hotkey fired with focus
+  // already nowhere) restores to nothing rather than parking focus back on
+  // the page root. Matches margin-rail.tsx / overlays/doc-sheet.tsx.
   useEffect(() => {
     if (open) {
+      const activeElement = document.activeElement;
+      restoreFocusRef.current =
+        activeElement instanceof HTMLElement && activeElement !== document.body
+          ? activeElement
+          : null;
       setQuery('');
       setActive(0);
       setAsking(null);
       setRecent(readRecentDocumentsInHand());
       requestAnimationFrame(() => inputRef.current?.focus());
+      return;
     }
+    const focusTarget = restoreFocusRef.current;
+    restoreFocusRef.current = null;
+    if (!focusTarget?.isConnected) return;
+    requestAnimationFrame(() => {
+      if (focusTarget.isConnected) focusTarget.focus();
+    });
   }, [open]);
 
   // R97 — announce the palette's open state so the Desk Walkthrough can pause
@@ -373,6 +394,12 @@ export function CommandBar() {
             draftingProposalId
               ? router.push(`/drafting/${draftingProposalId}`)
               : openDraftProposalPicker();
+        case 'plan-room':
+          // SP-16/F50 — same destination as the empty-query "This surface"
+          // row above; isSurfaceReachable already gates this on a project
+          // document in hand before it can be chosen.
+          return () =>
+            inHandRow ? router.push(`/doc/${inHandRow.row.engagement_id}/plans`) : undefined;
         default:
           return () => openLedger(s.key);
       }

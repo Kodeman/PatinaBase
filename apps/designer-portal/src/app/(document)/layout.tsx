@@ -21,6 +21,7 @@ import { MobileActionDock } from '@/components/document/mobile/mobile-action-doc
 import { MobileSheets } from '@/components/document/mobile/mobile-sheets';
 import { DocumentTimeProvider } from '@/hooks/document-time-provider';
 import { DocumentRouteBoundary } from '@/components/document/document-route-boundary';
+import { SkipToPaper } from '@/components/document/skip-to-paper';
 
 export const metadata: Metadata = {
   title: 'The Desk · Patina',
@@ -46,7 +47,11 @@ export default function DocumentLayout({
   children: React.ReactNode;
 }) {
   return (
-    <DocumentRouteBoundary bare={children}>
+    <>
+      {/* F55 — the skip link, first focusable node in the tree, ahead of the
+          route boundary so it survives even the bare /board/* render. */}
+      <SkipToPaper />
+      <DocumentRouteBoundary bare={children}>
       <div className="document-route-shell min-h-screen bg-[var(--bg-primary)]">
       {/* One time system above the Desk and every document (R4): the
           log-offer strip rides across navigation inside the provider. */}
@@ -108,5 +113,6 @@ export default function DocumentLayout({
       </DocumentTimeProvider>
       </div>
     </DocumentRouteBoundary>
+    </>
   );
 }
