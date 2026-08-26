@@ -302,3 +302,30 @@ UI-state proof (the gated copy renders correctly), not a flag-evaluation proof.
   hardening item (not fixed here — out of this task's scope), since a
   three-screen sweep run cold, exactly as instructed, produced two false
   "unreachable" results that were not real regressions.
+
+## Post-review fixes (2026-08-26)
+
+Landed after the independent merge-readiness review
+(`docs/design/field-companion/plans/wave-3-merge-readiness-review.md`), against
+its §7 "what I would land before merging" list plus F-11, F-20, D-1 and R269.
+Gate re-run clean after the last of them: **build · tests · lint --strict ·
+fc-r3 both arms · principle-4, EXIT=0**, with **573 / 573 / 0** from the
+xcresult bundle — the 559 baseline plus exactly 14 new tests.
+
+| Commit | Finding | What changed |
+|---|---|---|
+| `ad6e163ab` | **D-1** | The spec, rulings, plans, reviews, `plans/sql/` and `research/` are now tracked on the branch (41 files). Merging wave 3 versions the authorities it was built to. |
+| `3e1bb427d` | **F-1**, **F-2**, rulings | `FieldVoiceTake` in CaptureKit pins the take's visit and note setting at `start()`; `C6VoiceModel` is forced through it. Mutation-proved. `FieldAffirmationPolicy`'s comment stops claiming FC-R11 coverage it does not have. Adds the FC-R20 / FC-R21 / FC-R22 rulings section. |
+| `aeba0fab6` | **F-17** | `FieldVisitTelemetry.placement(_:basis:)` is the one predicate (`Specimen.isUnplaced`); both emitters call it, neither chooses. |
+| `b84756c8c` | **F-15** | Hand-written `CaptureSessionContext.init(from:)`. The review's one-character fix does not work — Swift's synthesized decoder ignores declaration defaults. |
+| `e47b266aa` | **F-11** | F2's scan-context control reads `FieldVoiceModeCopy.toggleLabel`/`toggleGlyph` instead of its own copy, so the test that claims to guard it does. |
+| `c6bf962a7` | **F-20** | `FieldScanSetupState.expanded` carries a `Tone`; the no-visit-yet instruction renders in `inkSoft`, the two real cautions stay in `warning`. |
+| `b71443f07` | **R269 / FC-R21** | `visit.end` on every close with a `reason`; `capture.placed`/`unplaced` carry `source`; the tray's later filing emits. Spec §14 updated with both properties, the one-predicate rule and the known-gap note. |
+| `4e5bcf100` | add-on | `CURRENT_PROJECT_VERSION` 1 → 3, so the device pass can tell this build from TestFlight build 2. |
+
+**F-3 needed no code change** — FC-R20 rules affirmation per session, which is
+what C6 already does; C3's stricter per-card reset stays as built.
+**F-16 needed no code change** — FC-R22 keeps the store auto-reset as built.
+
+Full detail, including the red/green quotes and the mutation proof, is in
+`.superpowers/sdd/wave-3-plan/post-review-fixes-report.md`.
