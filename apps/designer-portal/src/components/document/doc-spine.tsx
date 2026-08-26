@@ -48,7 +48,7 @@ export function DocSpine({
         className="group mb-3 inline-flex min-h-11 w-full min-w-11 items-center justify-center rounded-[3px] font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1440px]:mb-4 min-[1440px]:justify-start min-[1440px]:gap-1 min-[1440px]:px-1.5"
       >
         <span aria-hidden>←</span>
-        <span className="da-score-hover hidden group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 min-[1440px]:inline">
+        <span className="da-score-hover hidden group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 min-[1180px]:inline">
           Put down
         </span>
       </Link>
@@ -119,7 +119,7 @@ export function DocSpine({
       </ul>
 
       {activeSection && (
-        <p className="mt-2.5 hidden min-[1440px]:block">
+        <p className="mt-2.5 hidden min-[1180px]:block">
           <span className="block text-[12px] font-semibold leading-tight text-[var(--color-charcoal)]">
             {activeSection.label}
           </span>
