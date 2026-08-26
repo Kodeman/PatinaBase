@@ -242,9 +242,9 @@ struct RootView: View {
             coordinator.switchRealm(.work)
         case "realm.camera":
             coordinator.switchRealm(.camera)
-        case "visit.open":
+        case FieldCompanionActionID.openVisit.rawValue:
             coordinator.present(.visit)
-        case "visit.end":
+        case FieldCompanionActionID.endVisit.rawValue:
             // Site 3 of 3 (spec §14) — the one reachable from every non-camera
             // screen via the collapsed Companion strip, and the one it's
             // cheapest for her to miss counting. Read the visit's own counts

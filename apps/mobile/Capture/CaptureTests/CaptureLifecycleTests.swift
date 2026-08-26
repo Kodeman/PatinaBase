@@ -951,6 +951,16 @@ struct DurableScanTransferTests {
         notOurs.inherit(context)
         try store.save()
 
+        // What `inherit(_:)` actually writes (Specimen+Accessors.swift) — a
+        // no-op on any of these fields must redden this test, since they are
+        // the whole point of a specimen inheriting its visit.
+        #expect(ours.visitKind == context.kind)
+        #expect(ours.visitKit == context.kit)
+        #expect(ours.visitLabel == context.label)
+        #expect(ours.visitStartedAt == context.startedAt)
+        #expect(ours.visitEndedAt == context.endedAt)
+        #expect(ours.noteSetting != nil)
+
         let scoped = store.session(visitID: context.visitID, owner: mine)
         #expect(scoped.map(\.id) == [ours.id])
         #expect(store.unfiled(owner: mine).isEmpty == false)

@@ -124,17 +124,18 @@ public extension FieldTodayBand {
         case .none:
             return CompanionHint(
                 text: "No visit open",
-                action: FieldCompanionAction(id: "visit.open", label: "Start a visit"))
+                action: FieldCompanionAction(id: FieldCompanionActionID.openVisit.rawValue,
+                                             label: "Start a visit"))
         case .open(let label, _, _, _, _):
             return CompanionHint(
                 text: label,
-                action: FieldCompanionAction(id: "visit.end", label: "End visit",
-                                             role: .secondary))
+                action: FieldCompanionAction(id: FieldCompanionActionID.endVisit.rawValue,
+                                             label: "End visit", role: .secondary))
         case .stale(let label, _):
             return CompanionHint(
                 text: "Still at \(label)?",
-                action: FieldCompanionAction(id: "visit.end", label: "End visit",
-                                             role: .secondary))
+                action: FieldCompanionAction(id: FieldCompanionActionID.endVisit.rawValue,
+                                             label: "End visit", role: .secondary))
         }
     }
 }
