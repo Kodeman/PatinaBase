@@ -286,6 +286,17 @@ export function MobileBar() {
               </span>
             </span>
           </button>
+          {/* SP-11/F83 — a connecting group label so a first-time reader can
+              infer The Post is kin to the letterhead's "Message {Family}"
+              act, without merging the two doors or renaming The Post itself. */}
+          <div
+            aria-hidden
+            className="border-b border-[rgba(250,247,242,0.1)] px-3 pt-2"
+          >
+            <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[rgba(250,247,242,0.5)]">
+              Mail & messages
+            </span>
+          </div>
           <button
             type="button"
             onClick={() => closeThen(openPost)}
@@ -297,9 +308,11 @@ export function MobileBar() {
               aria-hidden
             />
             <span className="min-w-0 flex-1 text-[14px]">{THE_POST.label}</span>
+            {/* SP-15/F47 — state-only, matching the drawer's unlabelled dot;
+                C4 forbids a badge/count here. */}
             {unread > 0 && (
               <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay)]">
-                {unread} new
+                New
               </span>
             )}
           </button>

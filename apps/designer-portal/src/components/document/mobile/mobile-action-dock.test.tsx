@@ -232,6 +232,26 @@ describe('unified mobile edge owner', () => {
     expect(screen.queryByRole('group')).not.toBeInTheDocument();
   });
 
+  it('SP-11/SP-15 — The Post reads a connecting group label and a state-only NEW, never a count', () => {
+    render(
+      <MobileShellProvider>
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'More studio actions' }));
+
+    const menu = screen.getByRole('group', { name: 'More studio actions' });
+    const post = within(menu).getByRole('button', { name: /The Post/i });
+    expect(post).toHaveTextContent('The Post');
+    // State-only, matching the drawer's dot (C4) — never a literal count.
+    expect(post).toHaveTextContent('New');
+    expect(post).not.toHaveTextContent(/\d+\s*new/i);
+
+    // The connecting group label (F83) reads adjacent to The Post row.
+    expect(within(menu).getByText('Mail & messages')).toBeInTheDocument();
+  });
+
   it('registers and removes a surface-owned secondary action in More', () => {
     const share = jest.fn();
     const action: MobileSecondaryAction = {

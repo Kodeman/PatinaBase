@@ -522,6 +522,15 @@ export function StudioDrawer() {
           open?.key === 'accounts' ||
           open?.key === 'hours'
         }
+        // SP-13/F46 — Orders and Accounts already render their own,
+        // dialog-owned DocSheetHead (with a working close button); DocSheet
+        // must not also print an outer "Put back · Esc". Hours and Feedback
+        // render a head with no onClose, so DocSheet's own close stays theirs.
+        headOwnedByChild={open?.key === 'orders' || open?.key === 'accounts'}
+        // F11 — the Orders/Accounts/Hours trigger can be a `Studio books`
+        // menu row that unmounts on open; restore focus to the still-mounted
+        // books toggle when the original trigger is gone.
+        fallbackFocusRef={booksButtonRef}
       >
         {open?.key === 'orders' && (
           <OrdersLedger

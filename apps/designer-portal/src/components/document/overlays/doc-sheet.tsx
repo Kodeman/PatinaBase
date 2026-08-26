@@ -208,6 +208,8 @@ export function DocSheet({
   icon,
   pageLabel,
   helpKey,
+  headOwnedByChild = false,
+  fallbackFocusRef,
 }: {
   open: boolean;
   onClose: () => void;
@@ -225,6 +227,15 @@ export function DocSheet({
   pageLabel?: string;
   /** Forwarded to the standard head's `?` doorway (help-desk Wave 1). */
   helpKey?: string;
+  /** SP-13/F46 — set when the child already renders its own
+   *  {@link DocSheetHead} (as every Studio-books ledger does). DocSheet then
+   *  contributes only the sr-only, aria-labelledby-connected title — never a
+   *  second visible "Put back · Esc" stacked above the dialog-owned one. */
+  headOwnedByChild?: boolean;
+  /** F11 — when the element that opened this sheet can unmount while the
+   *  sheet is open (e.g. a disclosure row), focus restores here instead of
+   *  silently dropping to `<body>`. */
+  fallbackFocusRef?: React.RefObject<HTMLElement | null>;
 }) {
   const restoreRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -255,20 +266,28 @@ export function DocSheet({
     const focusFrame = window.requestAnimationFrame(() => {
       panelRef.current?.focus({ preventScroll: true });
     });
+    // F11 — snapshot the fallback now, not inside the cleanup below: if it
+    // points at a React-rendered node, that node can unmount before close.
+    const fallback = fallbackFocusRef?.current ?? null;
 
     return () => {
       window.cancelAnimationFrame(focusFrame);
       unlockBodyScroll();
-      const focusTarget = restoreRef.current;
+      const originalTrigger = restoreRef.current;
       restoreRef.current = null;
-      if (!focusTarget?.isConnected) return;
+      const focusTarget = originalTrigger?.isConnected
+        ? originalTrigger
+        : fallback?.isConnected
+          ? fallback
+          : null;
+      if (!focusTarget) return;
       window.requestAnimationFrame(() => {
         if (focusTarget.isConnected && isElementRendered(focusTarget)) {
           focusTarget.focus({ preventScroll: true });
         }
       });
     };
-  }, [open, origin]);
+  }, [open, origin, fallbackFocusRef]);
 
   // Keep keyboard focus on the laid sheet and let Escape put it back.
   useEffect(() => {
@@ -359,6 +378,13 @@ export function DocSheet({
             helpKey={helpKey}
             titleId={titleId}
           />
+        ) : headOwnedByChild ? (
+          // SP-13/F46 — the child renders its own DocSheetHead (the
+          // dialog-owned "Put back · Esc"); this sr-only title only wires
+          // aria-labelledby, so the sheet doesn't also print an outer one.
+          <h2 id={titleId} className="sr-only">
+            {title}
+          </h2>
         ) : (
           <div className="mb-4 flex items-center justify-between">
             <h2 id={titleId} className="sr-only">
