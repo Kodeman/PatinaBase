@@ -9782,3 +9782,32 @@ election and 390 wrap rule; the mobile bar's single primary act and `In this doc
 direction B graft of seven rest-state sentences into A — all per program-plan.md §6's I147/I148 scope.
 
 *Entries add: I146 · last id = I146*
+
+### I147 · Wave A2 — the remaining planks and the small a11y fixes — 2026-08-26
+
+Wave A2 of "The Wayfinding Review" build shipped. The ten planks SP-02, 10, 11, 13, 14, 15, 16, 17, 19, 20
+land; SP-03/04/05 are deliberately deferred into A3-L1's money-ladder lane rather than landed twice. Two
+accessibility defects close: F55 (a new `skip-to-paper.tsx`, the first focusable element in
+`(document)/layout.tsx`, targeting `data-document-paper`) and F21/F11 (⌘K and the ledger sheet both now
+capture and restore `document.activeElement` on open/close, with a `fallbackFocusRef` for F11's
+disconnected-trigger case). F41/SP-20 gives setup chores and dated overdue needs visibly distinct stamp
+colours by need kind, with no new count or badge (C4 held). Two A1 e2e follow-ups land alongside: the folio
+pick-up act's assertion in `action-visibility.spec.ts` now checks the accessible label on the card the
+primary belongs to rather than the Link's own (empty) textContent — FolderFace prints the legible label as
+a full-bleed sibling in front of the Link, not inside it, so "one legible primary per region" holds but the
+node carrying the words differs from what A1's test assumed; and the workflow stage-line assertion accounts
+for its wrap behaviour at the 320px viewport.
+
+Ships unflagged, per Kody's 2026-08-25 ruling (R125): no flags, two deploys total for this program — DEPLOY
+A once A3 merges, DEPLOY B once B3 merges — nothing ships to production from this merge alone. Gate on
+`main` after the merge: `pnpm --filter @patina/designer-portal type-check` clean; `pnpm --filter
+@patina/designer-portal test -- --ci` — 432 suites / 4635 tests passed (baseline before this wave was 428
+suites / 4601 tests; this wave added 4 suites / 34 tests), all green.
+
+Deferred to A3: SP-03/04/05 (the money-ladder lane, A3-L1); the six-rung money ladder and
+`vendor-payouts.ts`; the `Design authority` → `Money` rename; ⌘K's `WHERE THE WORK STANDS` group and `This
+surface` group; the FF&E spread's single-leader election and 390 wrap rule; the mobile bar's single primary
+act and `In this document` menu group; and the direction B graft of seven rest-state sentences into A — all
+per program-plan.md §6's I148 scope.
+
+*Entries add: I147 · last id = I147*
