@@ -11,6 +11,7 @@
 
 import { useLead } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
+import { formatBudgetRange, formatTimeline } from '@/lib/document/brief-chips';
 import { TriageBar } from './triage-bar';
 import { BriefScanStrip } from './brief-scan-strip';
 import { SectionLoadingLine } from './section-loading-line';
@@ -94,8 +95,8 @@ export function BriefSection({ leadId }: { leadId: string }) {
 
       <div className="mb-3.5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {lead.match_score != null && <Stat label="Match" value={String(lead.match_score)} />}
-        {lead.budget_range && <Stat label="Budget" value={lead.budget_range} />}
-        {lead.timeline && <Stat label="Timeline" value={pretty(lead.timeline)} />}
+        {lead.budget_range && <Stat label="Budget" value={formatBudgetRange(lead.budget_range)} />}
+        {lead.timeline && <Stat label="Timeline" value={formatTimeline(lead.timeline)} />}
       </div>
 
       {lead.project_description && (
