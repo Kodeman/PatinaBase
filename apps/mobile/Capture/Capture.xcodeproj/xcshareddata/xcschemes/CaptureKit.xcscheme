@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "FCFBFF69D573475E73F3303D539AC532"
+               BlueprintIdentifier = "C6DDE825AB3C5819486D74AC5104103C"
                BuildableName = "CaptureKit.framework"
                BlueprintName = "CaptureKit"
                ReferencedContainer = "container:Capture.xcodeproj">
@@ -32,7 +32,7 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E90E088CBC7391ECE22FE20F16CC5870"
+               BlueprintIdentifier = "EBCB4EA4AF5D9975C52BEB08C7D5D7C3"
                BuildableName = "CaptureTests.xctest"
                BlueprintName = "CaptureTests"
                ReferencedContainer = "container:Capture.xcodeproj">
