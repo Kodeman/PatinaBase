@@ -67,6 +67,15 @@ public extension FieldVoiceModeCopy {
     static func toggleGlyph(isRecording: Bool) -> String {
         isRecording ? "stop.circle.fill" : "mic.fill"
     }
+
+    /// N4's status readout above the recorder, shown only while NOT recording
+    /// (the recording case reads "RECORDING · <elapsed>" from a TimelineView
+    /// instead). Task 24 replaced "HOLD TO TALK" with this inline in the view
+    /// while landing toggleLabel/toggleGlyph above in the same commit —
+    /// centralized here to match, so a copy change is one edit.
+    static func statusLine(hasTranscript: Bool) -> String {
+        hasTranscript ? "TAKE READY" : "TAP TO TALK"
+    }
 }
 
 public enum FieldVoiceModeMachine {

@@ -60,10 +60,19 @@ struct V1SessionTrayScreen: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("End visit", action: endVisit)
-                    .font(CaptureType.callout)
-                    .foregroundStyle(CaptureColor.inkSoft)
+            // Task 25 made the tray itself honest about whether a visit is
+            // open; this button was the one place left that still offered to
+            // end one regardless. Hidden rather than reworded in the
+            // unplaced-only scope — the footer already carries "Start a
+            // visit" as its primary action there, so a second entry point in
+            // the corner would just duplicate it instead of promising
+            // anything the footer doesn't.
+            if case .visit = scope {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("End visit", action: endVisit)
+                        .font(CaptureType.callout)
+                        .foregroundStyle(CaptureColor.inkSoft)
+                }
             }
         }
         .accessibilityIdentifier(CaptureScreenID.v1SessionTray.rawValue)

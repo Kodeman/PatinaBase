@@ -152,7 +152,7 @@ struct VoiceNoteSheet: View {
                         .foregroundStyle(CaptureColor.error)
                 }
             } else {
-                Text(transcript.isEmpty ? "TAP TO TALK" : "TAKE READY")
+                Text(FieldVoiceModeCopy.statusLine(hasTranscript: !transcript.isEmpty))
                     .font(CaptureType.monoSmall)
                     .foregroundStyle(CaptureColor.inkSoft)
             }
@@ -182,6 +182,13 @@ struct VoiceNoteSheet: View {
         }
     }
 
+    /// §7.4: which gesture THIS surface uses is decided once, here, by the
+    /// same rule C3/C6/F2 answer to — not assumed. If `.voiceSheet` ever
+    /// stopped resolving to `.tapToStartTapToStop` (the surfaces drifting
+    /// apart, or N4 folding into C3's quick-confirm family), this is what
+    /// would make the control become a hold instead of silently staying a tap.
+    private var voiceGesture: FieldVoiceGesture { FieldVoiceGesture.forSurface(.voiceSheet) }
+
     /// Tap to start, tap to stop (§7.4, matching C6 and F2). The cap can end a
     /// take on its own — end() clears isRecording synchronously but leaves
     /// isFinishing set until voice.finish() resolves `result` — so the button
@@ -193,25 +200,46 @@ struct VoiceNoteSheet: View {
     /// touch) — a tap resolves once, synchronously flips isRecording, and a
     /// fast second tap simply sees the new value and takes the other branch.
     private var micButton: some View {
-        Button {
-            toggleVoice()
-        } label: {
-            VStack(spacing: 8) {
-                Image(systemName: FieldVoiceModeCopy.toggleGlyph(isRecording: isRecording))
-                    .font(CaptureType.title)
-                    .foregroundStyle(CaptureColor.paper3)
-                    .frame(width: 76, height: 76)
-                    .background(Circle().fill(isRecording ? CaptureColor.error : CaptureColor.verdigris))
-                    .scaleEffect(isRecording ? 1.08 : 1)
-                // The hold gesture needed no caption - the finger already knew
-                // what it was doing. A tap needs the word said, and recording
-                // needs it said LARGE: this is the only stop control on screen.
-                Text(FieldVoiceModeCopy.toggleLabel(isRecording: isRecording))
-                    .font(isRecording ? CaptureType.title : CaptureType.footnote)
-                    .foregroundStyle(isRecording ? CaptureColor.error : CaptureColor.inkSoft)
+        let dial = VStack(spacing: 8) {
+            Image(systemName: FieldVoiceModeCopy.toggleGlyph(isRecording: isRecording))
+                .font(CaptureType.title)
+                .foregroundStyle(CaptureColor.paper3)
+                .frame(width: 76, height: 76)
+                .background(Circle().fill(isRecording ? CaptureColor.error : CaptureColor.verdigris))
+                .scaleEffect(isRecording ? 1.08 : 1)
+            // The hold gesture needed no caption - the finger already knew
+            // what it was doing. A tap needs the word said, and recording
+            // needs it said LARGE: this is the only stop control on screen.
+            Text(FieldVoiceModeCopy.toggleLabel(isRecording: isRecording))
+                .font(isRecording ? CaptureType.title : CaptureType.footnote)
+                .foregroundStyle(isRecording ? CaptureColor.error : CaptureColor.inkSoft)
+        }
+
+        return Group {
+            switch voiceGesture {
+            case .tapToStartTapToStop:
+                Button {
+                    toggleVoice()
+                } label: {
+                    dial
+                }
+                .buttonStyle(.plain)
+            case .pressAndHold:
+                // Dormant on this surface today (voiceSheet always resolves to
+                // .tapToStartTapToStop above) but real: mirrors C3's own hold
+                // (CaptureCardOverlay's DragGesture at minimumDistance: 0), and
+                // guards the isFinishing window exactly like toggleVoice() does
+                // for the tap, so a press landing there can't start a second
+                // take over an unresolved one.
+                dial
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in if !isFinishing && !isRecording { begin() } }
+                            .onEnded { _ in if !isFinishing && isRecording { end() } }
+                    )
             }
         }
-        .buttonStyle(.plain)
         .disabled(isFinishing)
         .animation(.spring(duration: 0.2), value: isRecording)
         .accessibilityLabel(FieldVoiceModeCopy.toggleLabel(isRecording: isRecording))

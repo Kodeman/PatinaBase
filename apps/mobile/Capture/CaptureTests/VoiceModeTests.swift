@@ -167,4 +167,10 @@ struct VoiceModeTests {
         #expect(FieldVoiceModeCopy.toggleGlyph(isRecording: false) == "mic.fill")
         #expect(FieldVoiceModeCopy.toggleGlyph(isRecording: true) == "stop.circle.fill")
     }
+
+    @Test func theStatusLineSaysTapNotHold() {
+        #expect(FieldVoiceModeCopy.statusLine(hasTranscript: false) == "TAP TO TALK")
+        #expect(FieldVoiceModeCopy.statusLine(hasTranscript: true) == "TAKE READY")
+        #expect(!FieldVoiceModeCopy.statusLine(hasTranscript: false).contains("HOLD"))
+    }
 }
