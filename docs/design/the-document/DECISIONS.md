@@ -9848,4 +9848,34 @@ recorded separately once it happens, at I153. Deferred to B, in full per R125 it
 the pre-existing `worktable` flag (B2-L4, untouched by this program), F58's Option 3 stamp-label unification
 (B3), and F56's repo-wide `-ink` contrast tokens (B3).
 
-*Entries add: I148 · last id = I148*
+### I149 · Wave B1 — the ticket — 2026-08-26
+
+B1/B2's amendments to I136 execute as ratified in R124 and with R125's no-flag ruling, unconditionally, GA
+on merge: the spine's rooms and shelves blocks — `spine-rooms-block.tsx` and `spine-shelves-block.tsx` —
+are deleted outright rather than hidden behind a flag, R124's own amendment condition having depended on a
+flag R125 waives (rollback, if ever needed, is a `git revert` of this merge, not a flag flip). A new organ,
+`job-ticket.tsx`, backed by a pure `ticket-derivation.ts`, mounts on every `project`/`install`/`care`
+document: eight rows, always in that order (`Rooms · Pieces · Drawings · Spec · Boards · Money · Dates ·
+People`), honest empties rather than an invented figure, collapsing to a sticky two-line seam once the
+letterhead scrolls past, at every width per R124 item 4's redraw — shipped without the review gate that
+redraw's own ruling required, R125 item 2 waiving it. Shelves gain a route mode below 1440 (no longer a
+≥1440-only leaf); the room lens's below-1440 auto-release is removed (I136's B2 amendment, R124 item 2),
+with the ticket's room chip and the letterhead both now offering a put-down control (F25). A new boards
+index route, `/doc/[id]/boards`, closes J-01 and collapses `Boards`/`Mood boards`/`moodboards` to one name,
+`Boards`, everywhere, including a single Boards door in ⌘K (F62). The integration lane also corrected
+several e2e fixtures whose seed data no longer matched what the deleted spine blocks and the new ticket
+require, so the suite asserts against seed truth rather than a stale fixture shape.
+
+Gate on `main` after the merge: `pnpm --filter @patina/designer-portal type-check` clean (0 errors); `pnpm
+--filter @patina/designer-portal test -- --ci` — 442 suites / 4832 tests passed (baseline before this wave
+was 437 suites / 4753 tests; this wave added 5 suites / 79 tests), all green (two suites hit a jest-worker
+SIGSEGV on the first `--ci` run — infra flake, not a regression; both pass 11/11 in isolation under
+`--runInBand`); `pnpm --filter @patina/designer-portal lint` — the same 2 pre-existing errors
+(`piece-room-save-gate.test.tsx:159:1` `import/first`, `use-commercial-documents.test.ts:930:8`
+`react-hooks/rules-of-hooks`, both untouched by this wave) + 200 pre-existing warnings, no new lint
+regressions. Deferred to B2, per R125 item 4: `deriveTicket` growing cases for
+`brief`/`discovery`/`direction`/`proposal`, the Finalize table's `The client's copy` shelf becoming the
+ticket's ninth row on proposal documents, the Desk's stage-grouped roster and `deriveTicketLeader`, and the
+Worktable composition behind the pre-existing `worktable` flag (B2-L4, untouched by this program).
+
+*Entries add: I149 · last id = I149*
