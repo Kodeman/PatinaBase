@@ -60,13 +60,6 @@ const ALL_SHELVES: readonly ShelfDefinition[] = [
     subject: 'project',
   },
   {
-    key: 'knowledge',
-    title: 'Knowledge',
-    eyebrow: 'Studio library · Cross-project',
-    kind: 'leaf',
-    subject: 'project',
-  },
-  {
     key: 'clientcopy',
     title: 'The client’s copy',
     eyebrow: 'The client’s copy · Live',

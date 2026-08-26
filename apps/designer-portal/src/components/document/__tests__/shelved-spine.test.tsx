@@ -12,14 +12,32 @@ import {
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
 
-/** The blocks' four reads; none of them is this file's subject. */
-jest.mock('@patina/supabase', () => ({
-  __esModule: true,
-  useProjectFFEItems: () => ({ data: [] }),
-  useProjectBoards: () => ({ data: [] }),
-  useProjectOwnedBoards: () => ({ data: [] }),
-  usePlanRoom: () => ({ data: { sheets: [] } }),
-}));
+/** The blocks' reads; none of them is this file's subject except where the
+ *  ladder's live rung is what a test is checking. */
+const mockInvoiceRows: unknown[] = [];
+const mockPurchaseOrderRows: unknown[] = [];
+jest.mock('@patina/supabase', () => {
+  const actual = jest.requireActual('@patina/supabase');
+  return {
+    __esModule: true,
+    useProjectFFEItems: () => ({ data: [] }),
+    useProjectBoards: () => ({ data: [] }),
+    useProjectOwnedBoards: () => ({ data: [] }),
+    usePlanRoom: () => ({ data: { sheets: [] } }),
+    useProjectInvoices: () => ({
+      isLoading: false,
+      error: null,
+      data: mockInvoiceRows,
+    }),
+    usePurchaseOrders: () => ({
+      isLoading: false,
+      error: null,
+      data: mockPurchaseOrderRows,
+    }),
+    computeArAging: actual.computeArAging,
+    invoiceDaysOverdue: actual.invoiceDaysOverdue,
+  };
+});
 jest.mock('@/hooks/use-commercial-documents', () => ({
   __esModule: true,
   useProjectBillingAuthority: () => ({
@@ -27,6 +45,9 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
     error: null,
     data: { authorizedCents: 0 },
   }),
+  useWorkingBudget: () => ({ isLoading: false, error: null, data: null }),
+  useProjectInstruments: () => ({ isLoading: false, error: null, data: [] }),
+  useTradeScopes: () => ({ isLoading: false, error: null, data: [] }),
 }));
 
 const mockRunningIndexCalls: DocumentIndexKey[][] = [];
@@ -42,7 +63,7 @@ const VALUES: Record<DocumentIndexKey, string> = {
   schedule: 'Week 1 of 14',
   approvals: '3 in the log',
   ffe: '10 pieces · 5 rooms',
-  money: '$24,000 authority',
+  money: '$24,000 owed',
 };
 
 /** Built FROM the canonical order, so this fixture cannot quietly go on
@@ -61,14 +82,14 @@ describe('the running index', () => {
     );
 
     expect(
-      screen.getByRole('button', { name: /Project · FF&E/ }),
+      screen.getByRole('button', { name: /Pieces/ }),
     ).toHaveAttribute('aria-current', 'true');
     expect(screen.getByRole('button', { name: /Schedule/ })).toHaveAttribute(
       'aria-current',
       'false',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Design authority/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Money/ }));
     expect(onJump).toHaveBeenCalledWith('money');
   });
 
@@ -83,8 +104,8 @@ describe('the running index', () => {
     ).toEqual([
       'Client approvals',
       'Schedule',
-      'Project · FF&E',
-      'Design authority',
+      'Pieces',
+      'Money',
     ]);
   });
 
@@ -131,6 +152,17 @@ describe('the rooms block', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /Entry/ }));
     expect(onToggleRoom).toHaveBeenCalledWith('r2');
+  });
+
+  it('prints the heading and placeholder rather than nothing at zero rooms (F72)', () => {
+    render(
+      <SpineRoomsBlock rooms={[]} heldRoomId={null} onToggleRoom={jest.fn()} />,
+    );
+    expect(screen.getByText('Rooms')).toBeInTheDocument();
+    expect(
+      screen.getByText('Take a room in hand · nothing hides'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
 
@@ -410,7 +442,7 @@ describe('the shelved blocks', () => {
       );
       const rows = indexRows().map((b) => b.querySelector('span')?.textContent);
       expect(rows).toHaveLength(2);
-      expect(rows).not.toContain('Design authority');
+      expect(rows).not.toContain('Money');
       expect(rows).not.toContain('Schedule');
       unmount();
     }
@@ -424,5 +456,66 @@ describe('the shelved blocks', () => {
       />,
     );
     expect(mockRunningIndexCalls[0]).toEqual(['approvals', 'ffe']);
+  });
+
+  it('reports the live money rung instead of the one empty tier (F09/F61)', () => {
+    mockInvoiceRows.length = 0;
+    mockInvoiceRows.push({
+      id: 'inv-1',
+      invoice_number: '2026-114',
+      status: 'sent',
+      due_date: '2020-01-01',
+      total_cents: 1_750_000,
+      amount_paid_cents: 0,
+      ar_flagged_at: null,
+    });
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    const moneyRow = screen.getByRole('button', { name: /Money/ });
+    expect(moneyRow).toHaveTextContent('$17,500 owed');
+    mockInvoiceRows.length = 0;
+  });
+
+  it('offers no Knowledge row among the shelves (F12)', () => {
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', { name: /Knowledge/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('names the plan room shelf with its drawing-set gloss (F17)', () => {
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: /Plan room/ }),
+    ).toHaveTextContent('the drawing set');
+  });
+
+  it('prints the Rooms heading and placeholder even at zero rooms (F72)', () => {
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        rooms={[]}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    expect(screen.getByText('Rooms')).toBeInTheDocument();
+    expect(
+      screen.getByText('Take a room in hand · nothing hides'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Rooms' })).not.toBeInTheDocument();
   });
 });
