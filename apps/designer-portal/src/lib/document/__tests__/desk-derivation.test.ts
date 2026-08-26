@@ -387,6 +387,59 @@ describe('deriveNeed', () => {
   });
 });
 
+// B2-03 (roster receivable figure, B3-L3 re-verification): the folder card's
+// need line is the ONE place `ReceivableSignal.totalBalanceCents` is in
+// scope (desk-roster-derivation.ts reads `need.text`, not the raw signal),
+// so the dollar figure has to land here or it never reaches the Desk roster.
+describe('deriveNeed — overdue_invoice carries the receivable figure (B2-03)', () => {
+  it('a single overdue invoice states its dollar figure', () => {
+    const need = deriveNeed(mkRow({}), NOW, null, {
+      count: 1,
+      oldestDue: daysAgo(22),
+      totalBalanceCents: 1_750_000,
+      invoiceId: 'inv-1',
+      invoiceLabel: 'Invoice 0418',
+    });
+    expect(need).not.toBeNull();
+    expect(need!.kind).toBe('overdue_invoice');
+    expect(need!.text).toContain('$17,500');
+    expect(need!.text).toBe(
+      'Invoice 0418 · $17,500 overdue — oldest due ' +
+        new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+          new Date(daysAgo(22)),
+        ) +
+        ' — send a reminder',
+    );
+  });
+
+  it('multiple overdue invoices state the combined figure', () => {
+    const need = deriveNeed(mkRow({}), NOW, null, {
+      count: 3,
+      oldestDue: daysAgo(10),
+      totalBalanceCents: 425_000,
+      invoiceId: 'inv-9',
+      invoiceLabel: 'Invoice 0501',
+    });
+    expect(need!.text).toContain('$4,250');
+    expect(need!.text).toContain('3 invoices');
+  });
+
+  it('a zero-balance receivable signal prints no figure', () => {
+    const need = deriveNeed(mkRow({}), NOW, null, {
+      count: 1,
+      oldestDue: daysAgo(5),
+      totalBalanceCents: 0,
+      invoiceId: 'inv-2',
+      invoiceLabel: 'Invoice 0099',
+    });
+    expect(need!.text).not.toMatch(/\$/);
+  });
+
+  it('no receivable signal means no overdue_invoice need', () => {
+    expect(deriveNeed(mkRow({}), NOW, null, null)).toBeNull();
+  });
+});
+
 describe('R18 send-weave need lines (FINAL 1d thresholds, L3)', () => {
   it('drafted PO unsent ≥1d → UNSENT need with the PO label', () => {
     const need = deriveNeed(
