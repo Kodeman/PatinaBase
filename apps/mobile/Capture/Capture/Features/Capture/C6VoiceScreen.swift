@@ -118,7 +118,12 @@ final class C6VoiceModel {
         let wasCapped = state == .capped
         if !wasCapped { state = .idle }
         Task { @MainActor [weak self] in
-            guard let self, let owner = self.owner else { return }
+            guard let self else { return }
+            // FC-R9: `finish()` is what tears the engine and the audio session
+            // down, so it is awaited BEFORE any early return. The owner guard
+            // used to sit in front of it, which left a signed-out or mock
+            // session recording after she tapped Stop — the same hole
+            // `ViewfinderModel.endCardNote()` documents having closed for C3.
             let result = await self.voice.finish()
             let text = result.transcript.isEmpty ? partial : result.transcript
             let hasAudio = result.audioFilename != nil || !result.audioSegments.isEmpty
@@ -129,6 +134,7 @@ final class C6VoiceModel {
             if text.isEmpty {
                 self.analytics.event("voice.empty_transcript", ["had_audio": "true"])
             }
+            guard let owner = self.owner else { return }
             await self.commit(result, text: text, owner: owner)
         }
     }
