@@ -30,9 +30,9 @@ const INVOICE_STAMP: Record<
   partially_paid: {
     label: 'part paid',
     color: 'var(--color-golden-hour)',
-    ink: '#B89A2E',
+    ink: 'var(--color-golden-hour-ink)',
   },
-  paid: { label: 'paid', color: 'var(--color-sage)', ink: '#85947C' },
+  paid: { label: 'paid', color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' },
   void: { label: 'void', color: 'var(--color-terracotta)', ink: 'var(--color-terracotta-ink)' },
 };
 

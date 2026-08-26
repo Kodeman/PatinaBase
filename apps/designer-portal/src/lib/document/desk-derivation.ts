@@ -460,7 +460,7 @@ const STAMP = {
   terracotta: { color: 'var(--color-terracotta)', ink: 'var(--color-terracotta-ink)' },
   clay: { color: 'var(--color-clay)', ink: 'var(--color-clay-ink)' },
   dustyBlue: { color: 'var(--color-dusty-blue)' },
-  sage: { color: 'var(--color-sage)', ink: '#85947C' },
+  sage: { color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' },
 } as const;
 
 // Bare DATE columns (e.g. an invoice due_date 'YYYY-MM-DD') must parse as LOCAL
@@ -668,7 +668,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
             ? `1 line flagged on ${flagged.docTitle}`
             : `${n} lines flagged on ${flagged.docTitle}`,
         actionLabel: NEED_ACTION_LABELS.lines_flagged,
-        stamp: { label: 'FLAGGED', color: 'var(--color-clay)' },
+        stamp: { label: 'FLAGGED', ...STAMP.clay },
         urgent: false,
         deepLink: `/drafting/${flagged.proposalId}?flagged=1`,
       });

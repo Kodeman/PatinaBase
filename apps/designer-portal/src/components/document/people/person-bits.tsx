@@ -60,7 +60,7 @@ const BADGE: Record<PartyRole, { color: string; border: string }> = {
   team: { color: 'var(--color-clay-ink)', border: 'var(--color-clay)' },
   lead: { color: 'var(--color-terracotta-ink)', border: 'var(--color-terracotta)' },
   sub: { color: 'var(--color-mocha)', border: 'var(--color-mocha)' },
-  installer: { color: '#B89A2E', border: 'var(--color-golden-hour)' },
+  installer: { color: 'var(--color-golden-hour-ink)', border: 'var(--color-golden-hour)' },
   receiver: { color: 'var(--color-terracotta-ink)', border: 'var(--color-terracotta)' },
   // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds — same tints as
   // AVATAR_BG above (architect beside the GC's dusty-blue; photographer/

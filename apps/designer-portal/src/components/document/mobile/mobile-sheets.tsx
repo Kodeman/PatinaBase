@@ -371,7 +371,7 @@ export function MobileSheets() {
         />
         <h2 className="mt-3 font-heading text-[1.05rem] text-[var(--color-pearl)]">
           The drawer{' '}
-          <em className="italic text-[var(--color-clay-ink)]">· six books</em>
+          <em className="italic text-[var(--color-clay)]">· six books</em>
         </h2>
         <p className="mt-0.5 text-[14px] text-[rgba(250,247,242,0.58)]">
           Pulled over whatever you&apos;re holding. Put back when done.
@@ -410,7 +410,7 @@ export function MobileSheets() {
                     {l.weight === 'room' && (
                       <span
                         aria-hidden
-                        className="ml-1.5 font-mono text-[12px] text-[var(--color-clay-ink)] opacity-70"
+                        className="ml-1.5 font-mono text-[12px] text-[var(--color-clay)] opacity-70"
                       >
                         ↗
                       </span>

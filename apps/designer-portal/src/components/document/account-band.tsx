@@ -30,7 +30,7 @@ import { DocumentAction, DocumentActionGroup } from './document-action';
 import { AccountsQueryFailure } from './accounts/accounts-query-failure';
 import { SectionLoadingLine } from './section-loading-line';
 
-const SAGE_INK = '#85947C';
+const SAGE_INK = 'var(--color-sage-ink)';
 const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
 
 const TRIGGER_LABELS: Record<string, string> = {

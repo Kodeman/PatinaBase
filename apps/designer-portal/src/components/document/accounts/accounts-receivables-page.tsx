@@ -182,7 +182,7 @@ function ReceivableRow({
           <p
             className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.05em]"
             style={{
-              color: note.startsWith('Could not') ? 'var(--color-terracotta-ink)' : '#85947C',
+              color: note.startsWith('Could not') ? 'var(--color-terracotta-ink)' : 'var(--color-sage-ink)',
             }}
           >
             {note}

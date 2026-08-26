@@ -34,7 +34,7 @@ import { ScheduleThreadPanel } from './schedule-thread-panel';
 const GATE_STAMP = {
   label: 'Gate',
   color: 'var(--color-golden-hour)',
-  ink: '#B89A2E',
+  ink: 'var(--color-golden-hour-ink)',
 } as const;
 // The .gate row treatment: a faint golden wash over a golden top rule.
 const GATE_ROW =

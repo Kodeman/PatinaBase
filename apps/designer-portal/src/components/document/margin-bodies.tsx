@@ -285,7 +285,7 @@ export function DecisionBody({
                       </span>
                     )}
                     {o.selected && (
-                      <span className="font-mono text-[8px] uppercase text-[#85947C]">
+                      <span className="font-mono text-[8px] uppercase text-[var(--color-sage-ink)]">
                         chosen
                       </span>
                     )}
@@ -373,7 +373,7 @@ export function DecisionBody({
               style={{
                 color: extendNote.startsWith("Couldn't")
                   ? 'var(--color-terracotta-ink)'
-                  : '#85947C',
+                  : 'var(--color-sage-ink)',
               }}
             >
               {extendNote}

@@ -358,7 +358,7 @@ export function LightTable({
                     {proposal.sheetTitle ? ` · ${proposal.sheetTitle}` : ''}
                   </span>
                   {state === 'sent' ? (
-                    <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#85947C]">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-sage-ink)]">
                       In the Folio
                     </span>
                   ) : (

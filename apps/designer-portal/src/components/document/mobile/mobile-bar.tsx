@@ -268,7 +268,7 @@ export function MobileBar() {
             <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.58)]">
               {running && !paused ? 'In hand' : 'Today'}
             </span>
-            <span className="block truncate font-heading text-[14px] italic text-[var(--color-clay-ink)]">
+            <span className="block truncate font-heading text-[14px] italic text-[var(--color-clay)]">
               {running || paused
                 ? fmtElapsedQuiet(elapsedSeconds)
                 : inHandToday > 0
@@ -317,7 +317,7 @@ export function MobileBar() {
                   <>
                     <span
                       aria-hidden
-                      className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay-ink)]"
+                      className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay)]"
                     >
                       →
                     </span>
@@ -361,7 +361,7 @@ export function MobileBar() {
             className={MENU_ITEM}
           >
             <Search
-              className="h-4 w-4 text-[var(--color-clay-ink)]"
+              className="h-4 w-4 text-[var(--color-clay)]"
               strokeWidth={1.5}
               aria-hidden
             />
@@ -383,7 +383,7 @@ export function MobileBar() {
             >
               <span
                 aria-hidden
-                className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay-ink)]"
+                className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay)]"
               >
                 ↗
               </span>
@@ -399,7 +399,7 @@ export function MobileBar() {
             className={MENU_ITEM}
           >
             <TimerReset
-              className="h-4 w-4 text-[var(--color-clay-ink)]"
+              className="h-4 w-4 text-[var(--color-clay)]"
               strokeWidth={1.5}
               aria-hidden
             />
@@ -430,7 +430,7 @@ export function MobileBar() {
               className={MENU_ITEM}
             >
               <THE_POST.icon
-                className="h-4 w-4 text-[var(--color-clay-ink)]"
+                className="h-4 w-4 text-[var(--color-clay)]"
                 strokeWidth={1.5}
                 aria-hidden
               />
@@ -440,7 +440,7 @@ export function MobileBar() {
               {/* SP-15/F47 — state-only, matching the drawer's unlabelled dot;
                   C4 forbids a badge/count here. */}
               {unread > 0 && (
-                <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
+                <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay)]">
                   New
                 </span>
               )}
@@ -467,13 +467,13 @@ export function MobileBar() {
             className={MENU_ITEM}
           >
             <MessageSquareText
-              className="h-4 w-4 text-[var(--color-clay-ink)]"
+              className="h-4 w-4 text-[var(--color-clay)]"
               strokeWidth={1.5}
               aria-hidden
             />
             <span className="text-[14px]">Leave a note</span>
             {hasUnseenFeedback && (
-              <span className="ml-auto font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
+              <span className="ml-auto font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay)]">
                 Shipped
               </span>
             )}

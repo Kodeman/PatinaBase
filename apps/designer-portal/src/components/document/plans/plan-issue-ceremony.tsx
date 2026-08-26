@@ -501,7 +501,7 @@ export function PlanIssueCeremony({
                   {name}
                 </p>
                 {finalized ? (
-                  <Stamp label="ISSUED" color="var(--color-sage)" ink="#85947C" />
+                  <Stamp label="ISSUED" color="var(--color-sage)" ink="var(--color-sage-ink)" />
                 ) : (
                   <StatusChip label="Not yet minted" color="var(--color-aged-oak)" />
                 )}

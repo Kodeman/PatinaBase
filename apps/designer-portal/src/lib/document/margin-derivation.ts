@@ -35,16 +35,16 @@ export interface MarginItemRow {
 /** Kind accent (2.5px left border) + label ink, per the prototype palette.
  *  Warm hues darken their label ink for contrast on paper. */
 const ACCENT: Record<MarginKind, { border: string; label: string }> = {
-  decision: { border: 'var(--color-golden-hour)', label: '#B89A2E' },
+  decision: { border: 'var(--color-golden-hour)', label: 'var(--color-golden-hour-ink)' },
   message: { border: 'var(--color-dusty-blue)', label: 'var(--color-dusty-blue)' },
   invoice: { border: 'var(--color-clay)', label: 'var(--color-clay-ink)' },
-  pulse: { border: 'var(--color-sage)', label: '#85947C' },
+  pulse: { border: 'var(--color-sage)', label: 'var(--color-sage-ink)' },
   time: { border: 'var(--color-mocha)', label: 'var(--color-mocha)' },
   // R14: Mocha-adjacent, distinct from time — Aged Oak.
   note: { border: 'var(--color-aged-oak)', label: 'var(--color-aged-oak)' },
   // Field Coordination: the field-triage accent (golden-hour) — a needs_review
   // text reads with the same warm urgency the Desk triage card wears.
-  field_sms: { border: 'var(--color-golden-hour)', label: '#B89A2E' },
+  field_sms: { border: 'var(--color-golden-hour)', label: 'var(--color-golden-hour-ink)' },
 };
 
 export function marginAccent(kind: MarginKind): { border: string; label: string } {

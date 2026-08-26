@@ -2237,12 +2237,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           );
           const stamp =
             s.key === 'proposal' && seal
-              ? { label: `Signed · ${seal.date}`, color: 'var(--color-sage)', ink: '#85947C' }
+              ? { label: `Signed · ${seal.date}`, color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' }
               : approvedGate
                 ? {
                     label: `Approved${approvedGate.responded_at ? ` · ${fmtDay(approvedGate.responded_at)}` : ''}`,
                     color: 'var(--color-sage)',
-                    ink: '#85947C',
+                    ink: 'var(--color-sage-ink)',
                   }
                 : undefined;
 

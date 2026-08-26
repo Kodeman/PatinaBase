@@ -45,7 +45,7 @@ import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
 import { useReconcileInvoiceCheckout } from '@/hooks/use-invoice-checkout-reconciliation';
 import { AccountsQueryFailure } from './accounts-query-failure';
 
-const SAGE_INK = '#85947C';
+const SAGE_INK = 'var(--color-sage-ink)';
 const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
 
 /** Paper-ink stamp palette (the ledger page's dark palette re-inked for cream). */
@@ -55,7 +55,7 @@ const FOLIO_STAMP: Record<string, { label: string; color: string; ink?: string }
   partially_paid: {
     label: 'part paid',
     color: 'var(--color-golden-hour)',
-    ink: '#B89A2E',
+    ink: 'var(--color-golden-hour-ink)',
   },
   paid: { label: 'paid', color: 'var(--color-sage)', ink: SAGE_INK },
   void: {

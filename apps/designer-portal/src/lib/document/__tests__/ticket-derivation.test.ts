@@ -52,6 +52,7 @@ function emptyInput(section: TicketInput['section'] = 'project'): TicketInput {
   return {
     section,
     phase: null,
+    project: true,
     rooms: { settled: true, list: [] },
     pieces: { settled: true, lines: [] },
     drawings: { settled: true, sheetCount: 0 },

@@ -113,10 +113,10 @@ import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
   approved: 'var(--color-clay-ink)',
-  production: '#B89A2E',
-  shipped: '#B89A2E',
-  delivered: '#85947C',
-  installed: '#85947C',
+  production: 'var(--color-golden-hour-ink)',
+  shipped: 'var(--color-golden-hour-ink)',
+  delivered: 'var(--color-sage-ink)',
+  installed: 'var(--color-sage-ink)',
 };
 
 /** The authority states that can still put work in front of a client. */
@@ -141,11 +141,11 @@ function stampProps(stamp: LineStamp): {
     case 'trade_engaged':
       return { label, color: 'var(--color-aged-oak)', ink: '#8B7355' };
     case 'trade_in_progress':
-      return { label, color: 'var(--color-golden-hour)', ink: '#B89A2E' };
+      return { label, color: 'var(--color-golden-hour)', ink: 'var(--color-golden-hour-ink)' };
     case 'trade_substantially_complete':
       return { label, color: 'var(--color-clay)', ink: 'var(--color-clay-ink)' };
     case 'trade_accepted':
-      return { label, color: 'var(--color-sage)', ink: '#85947C' };
+      return { label, color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' };
     // Never actually rendered — the line below skips <Stamp> entirely for
     // this kind, so a line whose real progress is not yet known stays quiet
     // rather than guessing. Kept exhaustive/safe rather than falling into
@@ -162,13 +162,13 @@ function stampProps(stamp: LineStamp): {
     // Arrived, awaiting inspection — its own word, not STAGE_CONFIG's
     // dropdown word, which would print RECEIVED over an unopened pallet.
     case 'delivered':
-      return { label, color: 'var(--color-sage)', ink: '#85947C' };
+      return { label, color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' };
     case 'received':
-      return { label, color: 'var(--color-sage)', ink: '#85947C' };
+      return { label, color: 'var(--color-sage)', ink: 'var(--color-sage-ink)' };
     case 'partial':
       // R18: the W5-T2 short receipt, surfaced — golden hour like the
       // inspection outcome it derives from.
-      return { label, color: 'var(--color-golden-hour)', ink: '#B89A2E' };
+      return { label, color: 'var(--color-golden-hour)', ink: 'var(--color-golden-hour-ink)' };
     case 'damaged':
       // Item-grain truth only (00196): an open claim attributed to THIS line.
       return {
@@ -240,7 +240,7 @@ function TradeAuthorizationStamp({ hold }: { hold: TradeLineHold }) {
       <Stamp
         label={hold.number ? `On trade scope · TS${hold.number}` : 'On trade scope'}
         color="var(--color-sage)"
-        ink="#85947C"
+        ink="var(--color-sage-ink)"
       />
     </span>
   );
@@ -253,7 +253,7 @@ function coverageNote(
   coverage: FfeItemCoverage | undefined,
 ): { text: string; color: string } | null {
   if (coverage && coverage.coverage === 'paid')
-    return { text: 'paid', color: '#85947C' };
+    return { text: 'paid', color: 'var(--color-sage-ink)' };
   if (coverage && coverage.coverage === 'invoiced')
     return {
       text: coverage.invoiceNumber

@@ -35,13 +35,13 @@ export function authorizationStampFace(
       return {
         label: `Awaiting signature · A${auth.number}`,
         color: 'var(--color-golden-hour)',
-        ink: '#B89A2E',
+        ink: 'var(--color-golden-hour-ink)',
       };
     case 'authorized':
       return {
         label: `Authorized · A${auth.number}`,
         color: 'var(--color-sage)',
-        ink: '#85947C',
+        ink: 'var(--color-sage-ink)',
       };
     default:
       return null;
