@@ -8,17 +8,23 @@
  *
  * Its target is resolved at activation time by attribute/tag rather than an
  * id: the paper `<main data-document-paper>` on `/doc/[id]`
- * (page.tsx:1070–1075) carries the attribute; `/desk`, `/doc/[id]/plans` and
+ * (page.tsx:1126) carries the attribute; `/desk`, `/doc/[id]/plans` and
  * `/doc/[id]/spec-book` each render a plain `<main>` with none. page.tsx
  * belongs to no A2 lane, so this link does the finding rather than the page
  * growing an id it doesn't otherwise need.
  */
 
-const PAPER_SELECTOR = '[data-document-paper], main';
+// Two lookups, not one selector list: `querySelector('a, b')` returns the
+// first node matching EITHER in document order, which is not the same as
+// preferring the paper's own attribute over any earlier `<main>`.
+const PAPER_ATTRIBUTE_SELECTOR = '[data-document-paper]';
+const PAPER_FALLBACK_SELECTOR = 'main';
 
 function skipToPaper(event: React.MouseEvent | React.KeyboardEvent) {
   event.preventDefault();
-  const paper = document.querySelector<HTMLElement>(PAPER_SELECTOR);
+  const paper =
+    document.querySelector<HTMLElement>(PAPER_ATTRIBUTE_SELECTOR) ??
+    document.querySelector<HTMLElement>(PAPER_FALLBACK_SELECTOR);
   if (!paper) return;
   if (!paper.hasAttribute('tabindex')) paper.setAttribute('tabindex', '-1');
   paper.focus({ preventScroll: false });

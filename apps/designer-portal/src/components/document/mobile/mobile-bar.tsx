@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * The phone's single thumb-edge owner. Context sits at the left, the current
@@ -6,22 +6,22 @@
  * A time-log offer temporarily replaces this bar instead of stacking above it.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { Ellipsis, MessageSquareText, TimerReset } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from 'react';
+import { Ellipsis, MessageSquareText, TimerReset } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import {
   useUnreadInboxCount,
   useProcurementUnreadCount,
   useUnseenShipped,
-} from "@patina/supabase";
-import { ALL_STUDIO_SURFACES } from "@/lib/document/registry";
-import { useDocumentTime } from "@/hooks/document-time-provider";
-import { fmtElapsedQuiet, fmtMinutes } from "@/lib/document/time-derivation";
-import { DocumentAction } from "../document-action";
-import { openFeedbackSheet } from "../feedback/feedback-sheet";
-import { openPost } from "../overlays/post-sheet";
-import { useMobileShell } from "./mobile-shell";
-import { useHydrated } from "@/hooks/use-hydrated";
+} from '@patina/supabase';
+import { ALL_STUDIO_SURFACES } from '@/lib/document/registry';
+import { useDocumentTime } from '@/hooks/document-time-provider';
+import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
+import { DocumentAction } from '../document-action';
+import { openFeedbackSheet } from '../feedback/feedback-sheet';
+import { openPost } from '../overlays/post-sheet';
+import { useMobileShell } from './mobile-shell';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 function findSurface(key: string) {
   const surface = ALL_STUDIO_SURFACES.find((s) => s.key === key);
@@ -29,7 +29,7 @@ function findSurface(key: string) {
   return surface;
 }
 
-const THE_POST = findSurface("the-post");
+const THE_POST = findSurface('the-post');
 
 const STRATA = (
   <span aria-hidden className="inline-flex shrink-0 flex-col gap-[2px]">
@@ -40,18 +40,20 @@ const STRATA = (
 );
 
 function surfaceLabel(pathname: string | null): string {
-  if (!pathname || pathname === "/desk") return "The Desk";
-  if (pathname.startsWith("/library")) return "The Library";
-  if (pathname.startsWith("/people")) return "The People Room";
-  if (pathname.startsWith("/rooms") || pathname.startsWith("/room/"))
-    return "The Rooms";
-  if (pathname.startsWith("/drafting")) return "Drafting";
-  if (pathname.startsWith("/compose")) return "Composing";
-  return "The Studio";
+  if (!pathname || pathname === '/desk') return 'The Desk';
+  if (pathname.startsWith('/library')) return 'The Library';
+  if (pathname.startsWith('/people')) return 'The People Room';
+  if (pathname.startsWith('/rooms') || pathname.startsWith('/room/'))
+    return 'The Rooms';
+  if (pathname.startsWith('/drafting')) return 'Drafting';
+  if (pathname.startsWith('/compose')) return 'Composing';
+  return 'The Studio';
 }
 
+const MAIL_GROUP_LABEL_ID = 'mobile-more-mail-group';
+
 const MENU_ITEM =
-  "flex min-h-11 w-full items-center gap-3 border-b border-[rgba(250,247,242,0.1)] px-3 py-2 text-left text-[var(--color-pearl)] last:border-b-0 hover:bg-[rgba(250,247,242,0.06)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-50";
+  'flex min-h-11 w-full items-center gap-3 border-b border-[rgba(250,247,242,0.1)] px-3 py-2 text-left text-[var(--color-pearl)] last:border-b-0 hover:bg-[rgba(250,247,242,0.06)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-50';
 
 export function MobileBar() {
   const pathname = usePathname();
@@ -78,10 +80,10 @@ export function MobileBar() {
   const menuRef = useRef<HTMLDivElement>(null);
   const firstMenuItemRef = useRef<HTMLButtonElement>(null);
 
-  const inDocument = pathname?.startsWith("/doc/") && activeDoc !== null;
-  const activeSection = activeDoc?.sections.find((s) => s.state === "active");
+  const inDocument = pathname?.startsWith('/doc/') && activeDoc !== null;
+  const activeSection = activeDoc?.sections.find((s) => s.state === 'active');
   const context = inDocument
-    ? (activeSection?.label ?? "Document")
+    ? (activeSection?.label ?? 'Document')
     : surfaceLabel(pathname);
 
   useEffect(() => {
@@ -98,17 +100,17 @@ export function MobileBar() {
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== 'Escape') return;
       event.preventDefault();
       setMoreOpen(false);
       moreButtonRef.current?.focus();
     };
 
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
     };
   }, [moreOpen]);
 
@@ -132,15 +134,15 @@ export function MobileBar() {
         actionKey: primaryAction.actionKey,
         surfaceKey: primaryAction.surfaceKey,
         regionKey: primaryAction.regionKey,
-        variant: "primary" as const,
-        presentation: "mobile_dock" as const,
+        variant: 'primary' as const,
+        presentation: 'mobile_dock' as const,
         disabled: primaryAction.disabled,
         loading: primaryAction.loading,
         loadingLabel: primaryAction.loading
           ? `${primaryAction.label}…`
           : undefined,
         className:
-          "min-h-11 w-full min-w-0 !text-[var(--color-off-white)] [&_.da-label]:max-w-[9rem] [&_.da-label]:truncate",
+          'min-h-11 w-full min-w-0 !text-[var(--color-off-white)] [&_.da-label]:max-w-[9rem] [&_.da-label]:truncate',
         children: primaryAction.label,
       }
     : null;
@@ -188,7 +190,7 @@ export function MobileBar() {
 
       <div className="flex min-w-0 flex-[1.15_1_0] items-center justify-center">
         {primaryAction && primaryShared ? (
-          primaryAction.target.kind === "href" ? (
+          primaryAction.target.kind === 'href' ? (
             <DocumentAction
               {...primaryShared}
               href={primaryAction.target.href}
@@ -199,22 +201,21 @@ export function MobileBar() {
               {...primaryShared}
               onClick={() => {
                 primaryAction.onSelected?.();
-                primaryAction.target.kind === "press" &&
-                  primaryAction.target.onPress();
+                primaryAction.target.kind === 'press' && primaryAction.target.onPress();
               }}
             />
           )
         ) : (
           <span className="min-w-0 text-center">
             <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.58)]">
-              {running && !paused ? "In hand" : "Today"}
+              {running && !paused ? 'In hand' : 'Today'}
             </span>
             <span className="block truncate font-heading text-[14px] italic text-[var(--color-clay)]">
               {running || paused
                 ? fmtElapsedQuiet(elapsedSeconds)
                 : inHandToday > 0
                   ? fmtMinutes(inHandToday)
-                  : "Hands free"}
+                  : 'Hands free'}
             </span>
           </span>
         )}
@@ -263,7 +264,7 @@ export function MobileBar() {
               </span>
               <span className="min-w-0 flex-1 text-[14px]">
                 {action.label}
-                {action.loading ? "…" : ""}
+                {action.loading ? '…' : ''}
               </span>
             </button>
           ))}
@@ -288,35 +289,41 @@ export function MobileBar() {
             </span>
           </button>
           {/* SP-11/F83 — a connecting group label so a first-time reader can
-              infer The Post is kin to the letterhead's "Message {Family}"
-              act, without merging the two doors or renaming The Post itself. */}
-          <div
-            aria-hidden
-            className="border-b border-[rgba(250,247,242,0.1)] px-3 pt-2"
-          >
-            <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[rgba(250,247,242,0.5)]">
-              Mail & messages
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => closeThen(openPost)}
-            className={MENU_ITEM}
-          >
-            <THE_POST.icon
-              className="h-4 w-4 text-[var(--color-clay)]"
-              strokeWidth={1.5}
-              aria-hidden
-            />
-            <span className="min-w-0 flex-1 text-[14px]">{THE_POST.label}</span>
-            {/* SP-15/F47 — state-only, matching the drawer's unlabelled dot;
-                C4 forbids a badge/count here. */}
-            {unread > 0 && (
-              <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay)]">
-                New
+              infer The Post is kin to the letterhead's "Message {Family}" act,
+              without merging the two doors or renaming The Post itself. The
+              group closes around The Post alone: the rows below it (Studio
+              books, Leave a note) are not mail. */}
+          <div role="group" aria-labelledby={MAIL_GROUP_LABEL_ID}>
+            <div className="border-b border-[rgba(250,247,242,0.1)] px-3 pt-2">
+              <span
+                id={MAIL_GROUP_LABEL_ID}
+                className="font-mono text-[11px] uppercase tracking-[0.1em] text-[rgba(250,247,242,0.5)]"
+              >
+                Mail &amp; messages
               </span>
-            )}
-          </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => closeThen(openPost)}
+              className={MENU_ITEM}
+            >
+              <THE_POST.icon
+                className="h-4 w-4 text-[var(--color-clay)]"
+                strokeWidth={1.5}
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1 text-[14px]">
+                {THE_POST.label}
+              </span>
+              {/* SP-15/F47 — state-only, matching the drawer's unlabelled dot;
+                  C4 forbids a badge/count here. */}
+              {unread > 0 && (
+                <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--color-clay)]">
+                  New
+                </span>
+              )}
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => closeThen(openDrawer)}

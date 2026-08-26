@@ -26,7 +26,7 @@ jest.mock('@patina/supabase', () => ({
   useFfeInvoiceCoverage: () => ({ data: {} }),
 }));
 
-jest.mock('../add-to-project-sheet', () => ({
+jest.mock('../schedule/add-to-project-sheet', () => ({
   AddToProjectSheet: () => null,
   openAddToProject: jest.fn(),
 }));
@@ -61,21 +61,21 @@ jest.mock('@/components/portal/ffe/stages', () => ({
   ),
 }));
 
-jest.mock('../../accounts/invoice-overlays', () => ({
+jest.mock('../accounts/invoice-overlays', () => ({
   openInvoiceComposer: jest.fn(),
 }));
-jest.mock('../../mobile/mobile-margin-chips', () => ({
+jest.mock('../mobile/mobile-margin-chips', () => ({
   MobileMarginChips: () => null,
 }));
-jest.mock('../../work-block', () => ({ WorkBlock: () => null }));
-jest.mock('../../folio-strip', () => ({ FolioStrip: () => null }));
-jest.mock('../../strata-mark', () => ({ StrataMark: () => null }));
-jest.mock('../../strata-mini-rule', () => ({ StrataMiniRule: () => null }));
+jest.mock('../work-block', () => ({ WorkBlock: () => null }));
+jest.mock('../folio-strip', () => ({ FolioStrip: () => null }));
+jest.mock('../strata-mark', () => ({ StrataMark: () => null }));
+jest.mock('../strata-mini-rule', () => ({ StrataMiniRule: () => null }));
 // LineUnfold itself is out of this lane's ownership; stubbed so the test
 // exercises only what ffe-section.tsx renders around it.
-jest.mock('../../line-unfold', () => ({ LineUnfold: () => null }));
+jest.mock('../line-unfold', () => ({ LineUnfold: () => null }));
 
-import { FFESection } from '../../ffe-section';
+import { FFESection } from '../ffe-section';
 
 const renderSection = () =>
   render(<FFESection projectId="project-1" projectName="Ellsworth" mode="project" />);

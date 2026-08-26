@@ -41,6 +41,10 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { openAccount } from './account/account-sheet';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { openPost } from './overlays/post-sheet';
+import {
+  isElementRendered,
+  topActiveModalDialog,
+} from './overlays/active-dialog';
 import { openFeedbackSheet } from './feedback/feedback-sheet';
 import { openHelp } from '@/lib/help-system/open-help';
 import { openDraftProposalPicker } from './rooms/drafting/draft-proposal-opener';
@@ -260,7 +264,16 @@ export function CommandBar() {
     restoreFocusRef.current = null;
     if (!focusTarget?.isConnected) return;
     requestAnimationFrame(() => {
-      if (focusTarget.isConnected) focusTarget.focus();
+      // A chosen row closes the palette and runs its act in one handler, so a
+      // sheet the row opened has already taken focus by the time this frame
+      // runs — restoring here would pull focus back out of an open modal.
+      // margin-rail.tsx:141 gates its own focus move the same way.
+      if (topActiveModalDialog()) return;
+      // Connected is not enough: a display:none opener (a shelf button after
+      // the shelf force-closes below 1440) swallows focus() to <body>.
+      if (focusTarget.isConnected && isElementRendered(focusTarget)) {
+        focusTarget.focus();
+      }
     });
   }, [open]);
 

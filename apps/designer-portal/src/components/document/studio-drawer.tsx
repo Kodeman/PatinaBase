@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * The Studio Drawer (D8, spec v1.2 §8; Desk light restyle): a quiet fixed strip
@@ -17,31 +17,31 @@
  * for free.
  */
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { BookOpenText, MessageSquareText, type LucideIcon } from "lucide-react";
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { BookOpenText, MessageSquareText, type LucideIcon } from 'lucide-react';
 import {
   useUnreadInboxCount,
   useProcurementUnreadCount,
   useUnseenShipped,
-} from "@patina/supabase";
-import { ALL_STUDIO_SURFACES } from "@/lib/document/registry";
-import { useSheetSurfaceKey } from "@/lib/help-system/use-sheet-surface-key";
-import { documentEvents } from "@/lib/analytics/document-events";
-import { DocSheet } from "./overlays/doc-sheet";
-import { PostSheet, openPost } from "./overlays/post-sheet";
-import { OrdersLedger } from "./orders-ledger";
-import { AccountsBook } from "./accounts/accounts-book";
-import { HoursLedger } from "./hours-ledger";
-import { FeedbackLedger } from "./feedback/feedback-ledger";
-import { openFeedbackSheet } from "./feedback/feedback-sheet";
-import { useDocumentTime } from "@/hooks/document-time-provider";
-import { fmtMinutes } from "@/lib/document/time-derivation";
-import { rememberRoomOrigin } from "@/lib/document/room-origin";
-import { AccountNameplate } from "./account/account-nameplate";
-import type { OpenLedgerContext } from "./command-bar";
-import { useHydrated } from "@/hooks/use-hydrated";
+} from '@patina/supabase';
+import { ALL_STUDIO_SURFACES } from '@/lib/document/registry';
+import { useSheetSurfaceKey } from '@/lib/help-system/use-sheet-surface-key';
+import { documentEvents } from '@/lib/analytics/document-events';
+import { DocSheet } from './overlays/doc-sheet';
+import { PostSheet, openPost } from './overlays/post-sheet';
+import { OrdersLedger } from './orders-ledger';
+import { AccountsBook } from './accounts/accounts-book';
+import { HoursLedger } from './hours-ledger';
+import { FeedbackLedger } from './feedback/feedback-ledger';
+import { openFeedbackSheet } from './feedback/feedback-sheet';
+import { useDocumentTime } from '@/hooks/document-time-provider';
+import { fmtMinutes } from '@/lib/document/time-derivation';
+import { rememberRoomOrigin } from '@/lib/document/room-origin';
+import { AccountNameplate } from './account/account-nameplate';
+import type { OpenLedgerContext } from './command-bar';
+import { useHydrated } from '@/hooks/use-hydrated';
 
 /** R93/R107 — the six doors, sourced from the Studio Surface Registry: label,
  *  icon, and weight all come from one place now, so a rename or re-icon
@@ -56,71 +56,71 @@ function findSurface(key: string) {
 }
 
 type LedgerKey =
-  | "library"
-  | "orders"
-  | "accounts"
-  | "people"
-  | "rooms"
-  | "hours";
+  | 'library'
+  | 'orders'
+  | 'accounts'
+  | 'people'
+  | 'rooms'
+  | 'hours';
 
 interface Ledger {
   key: LedgerKey;
   name: string;
   icon: LucideIcon;
-  weight: "room" | "sheet";
+  weight: 'room' | 'sheet';
   href?: string;
 }
 
 // Room-weight doors need a route; the registry doesn't carry one on purpose.
 const DOOR_HREF: Partial<Record<LedgerKey, string>> = {
-  library: "/library",
-  people: "/people",
-  rooms: "/rooms",
+  library: '/library',
+  people: '/people',
+  rooms: '/rooms',
 };
 
 const LEDGERS: Ledger[] = (
-  ["library", "orders", "accounts", "people", "rooms", "hours"] as const
+  ['library', 'orders', 'accounts', 'people', 'rooms', 'hours'] as const
 ).map((key) => {
   const surface = findSurface(key);
   return {
     key,
     name: surface.label,
     icon: surface.icon,
-    weight: surface.weight === "room" ? "room" : ("sheet" as const),
+    weight: surface.weight === 'room' ? 'room' : ('sheet' as const),
     href: DOOR_HREF[key],
   };
 });
 
 // The Post (F6) shares the registry's canonical name + icon even though the
 // bell isn't a door in the row — the two can never drift apart this way.
-const THE_POST = findSurface("the-post");
+const THE_POST = findSurface('the-post');
 
 // Feedback isn't a Studio Surface (R93/R95 — it's a reachable sheet, not a
 // labelled doorway): it keeps its own small meta for the sheet title/variant,
 // exactly as it did before the registry existed.
 const FEEDBACK_SHEET = {
-  key: "feedback" as const,
-  name: "Feedback",
-  weight: "sheet" as const,
+  key: 'feedback' as const,
+  name: 'Feedback',
+  weight: 'sheet' as const,
 };
 
 type SheetKey = LedgerKey | typeof FEEDBACK_SHEET.key;
 
-const ROOM_DOORS = LEDGERS.filter((ledger) => ledger.weight === "room");
-const STUDIO_BOOKS = LEDGERS.filter((ledger) => ledger.weight === "sheet");
-const RECENT_BOOK_KEY = "patina.document.recentStudioBook";
+const ROOM_DOORS = LEDGERS.filter((ledger) => ledger.weight === 'room');
+const STUDIO_BOOKS = LEDGERS.filter((ledger) => ledger.weight === 'sheet');
+const RECENT_BOOK_KEY = 'patina.document.recentStudioBook';
 
 /** A quiet breadcrumb for the current surface; the Desk needs none — the
  *  wordmark is the home affordance. */
 function breadcrumbFor(pathname: string | null): string | null {
-  if (!pathname || pathname === "/desk") return null;
-  if (pathname.startsWith("/library")) return "Library";
-  if (pathname.startsWith("/people")) return "People";
-  if (pathname.startsWith("/rooms") || pathname.startsWith("/room/"))
-    return "Rooms";
-  if (pathname.startsWith("/drafting") || pathname.startsWith("/compose"))
-    return "Drafting";
-  if (pathname.startsWith("/doc")) return "Document";
+  if (!pathname || pathname === '/desk') return null;
+  if (pathname.startsWith('/library')) return 'Library';
+  if (pathname.startsWith('/people')) return 'People';
+  if (pathname.startsWith('/rooms') || pathname.startsWith('/room/'))
+    return 'Rooms';
+  if (pathname.startsWith('/drafting') || pathname.startsWith('/compose'))
+    return 'Drafting';
+  if (pathname.startsWith('/doc')) return 'Document';
   return null;
 }
 
@@ -131,6 +131,10 @@ export function StudioDrawer() {
   const [openLedger, setOpenLedger] = useState<SheetKey | null>(null);
   const [booksOpen, setBooksOpen] = useState(false);
   const [recentBook, setRecentBook] = useState<SheetKey | null>(null);
+  // F11 — only a sheet opened from the books menu may restore focus to the
+  // books toggle; one opened by ⌘K, the margin rail, the mobile dock or the
+  // /desk?book= doorway must not drag focus down into the drawer.
+  const [openedFromBooksMenu, setOpenedFromBooksMenu] = useState(false);
   const booksButtonRef = useRef<HTMLButtonElement>(null);
   const booksMenuRef = useRef<HTMLDivElement>(null);
   const firstBookRef = useRef<HTMLButtonElement>(null);
@@ -150,7 +154,7 @@ export function StudioDrawer() {
   const unread = unreadInbox + unreadProcurement;
   const hasUnseenFeedback = hydrated && (unseenFeedback?.length ?? 0) > 0;
   const breadcrumb = breadcrumbFor(pathname);
-  const holding = (pathname ?? "").startsWith("/doc/");
+  const holding = (pathname ?? '').startsWith('/doc/');
   const orderedBooks = recentBook
     ? [
         ...STUDIO_BOOKS.filter((book) => book.key === recentBook),
@@ -190,17 +194,17 @@ export function StudioDrawer() {
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== 'Escape') return;
       event.preventDefault();
       setBooksOpen(false);
       booksButtonRef.current?.focus();
     };
 
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
     };
   }, [booksOpen]);
 
@@ -216,10 +220,12 @@ export function StudioDrawer() {
   const openBook = (
     key: SheetKey,
     context: OpenLedgerContext | null = null,
+    { fromBooksMenu = false }: { fromBooksMenu?: boolean } = {},
   ) => {
     setBooksOpen(false);
     setSheetContext(context);
     setOpenLedger(key);
+    setOpenedFromBooksMenu(fromBooksMenu);
     rememberBook(key);
   };
 
@@ -230,7 +236,7 @@ export function StudioDrawer() {
    *  generic open-ledger event below is shared with ⌘K and other surfaces that
    *  don't (yet) carry their own source through the event, so it stays silent
    *  rather than mislabeling their opens as the drawer's. */
-  const enterRoom = (href: string, key: string, source?: "drawer") => {
+  const enterRoom = (href: string, key: string, source?: 'drawer') => {
     if (pathname === href) return;
     if (source) documentEvents.wayfinding.roomEntered({ key, source });
     rememberRoomOrigin(pathname);
@@ -245,25 +251,26 @@ export function StudioDrawer() {
       const detail = (
         e as CustomEvent<string | { name: string; context?: OpenLedgerContext }>
       ).detail;
-      const name = typeof detail === "string" ? detail : detail.name;
+      const name = typeof detail === 'string' ? detail : detail.name;
       const context =
-        typeof detail === "string" ? null : (detail.context ?? null);
+        typeof detail === 'string' ? null : (detail.context ?? null);
       if (name === FEEDBACK_SHEET.key) {
         setBooksOpen(false);
         setSheetContext(context);
         setOpenLedger(FEEDBACK_SHEET.key);
+        setOpenedFromBooksMenu(false);
         return;
       }
       const match = LEDGERS.find((l) => l.key === name);
       if (!match) return;
-      if (match.weight === "room") {
+      if (match.weight === 'room') {
         enterRoom(match.href!, match.key);
         return;
       }
       openBook(match.key, context);
     };
-    window.addEventListener("document:open-ledger", onOpen);
-    return () => window.removeEventListener("document:open-ledger", onOpen);
+    window.addEventListener('document:open-ledger', onOpen);
+    return () => window.removeEventListener('document:open-ledger', onOpen);
     // enterRoom closes over pathname/router; re-bind when the surface changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
@@ -301,26 +308,26 @@ export function StudioDrawer() {
           {ROOM_DOORS.map((ledger) => {
             const Icon = ledger.icon;
             const here =
-              (pathname ?? "") === ledger.href ||
-              (pathname ?? "").startsWith(`${ledger.href}/`) ||
-              (ledger.key === "rooms" && (pathname ?? "").startsWith("/room/"));
+              (pathname ?? '') === ledger.href ||
+              (pathname ?? '').startsWith(`${ledger.href}/`) ||
+              (ledger.key === 'rooms' && (pathname ?? '').startsWith('/room/'));
             return (
               <button
                 key={ledger.key}
                 type="button"
-                aria-current={here ? "page" : undefined}
+                aria-current={here ? 'page' : undefined}
                 onClick={() => {
                   documentEvents.wayfinding.doorOpened({
                     key: ledger.key,
-                    weight: "room",
-                    source: "drawer",
+                    weight: 'room',
+                    source: 'drawer',
                   });
-                  enterRoom(ledger.href!, ledger.key, "drawer");
+                  enterRoom(ledger.href!, ledger.key, 'drawer');
                 }}
                 className={`relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)] ${
                   here
-                    ? "text-[var(--text-primary)]"
-                    : "text-[var(--text-body)] hover:bg-[var(--bg-hover)]"
+                    ? 'text-[var(--text-primary)]'
+                    : 'text-[var(--text-body)] hover:bg-[var(--bg-hover)]'
                 }`}
               >
                 <Icon
@@ -349,8 +356,8 @@ export function StudioDrawer() {
               onClick={() => setBooksOpen((open) => !open)}
               className={`relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)] ${
                 openLedger
-                  ? "text-[var(--text-primary)]"
-                  : "text-[var(--text-body)] hover:bg-[var(--bg-hover)]"
+                  ? 'text-[var(--text-primary)]'
+                  : 'text-[var(--text-body)] hover:bg-[var(--bg-hover)]'
               }`}
             >
               <BookOpenText
@@ -363,7 +370,7 @@ export function StudioDrawer() {
                 aria-hidden
                 className="font-mono text-[12px] text-[var(--text-muted)]"
               >
-                {booksOpen ? "↓" : "↑"}
+                {booksOpen ? '↓' : '↑'}
               </span>
               {openLedger && (
                 <span
@@ -395,14 +402,14 @@ export function StudioDrawer() {
                       ref={index === 0 ? firstBookRef : undefined}
                       key={book.key}
                       type="button"
-                      aria-current={here ? "page" : undefined}
+                      aria-current={here ? 'page' : undefined}
                       onClick={() => {
                         documentEvents.wayfinding.doorOpened({
                           key: book.key,
-                          weight: "sheet",
-                          source: "drawer",
+                          weight: 'sheet',
+                          source: 'drawer',
                         });
-                        openBook(book.key);
+                        openBook(book.key, null, { fromBooksMenu: true });
                       }}
                       className="flex min-h-11 w-full items-center gap-3 border-b border-[var(--border-default)] px-3 py-2 text-left text-[var(--text-body)] last:border-b-0 hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)]"
                     >
@@ -476,8 +483,8 @@ export function StudioDrawer() {
             onClick={() => {
               documentEvents.wayfinding.doorOpened({
                 key: THE_POST.key,
-                weight: THE_POST.weight === "room" ? "room" : "sheet",
-                source: "drawer",
+                weight: THE_POST.weight === 'room' ? 'room' : 'sheet',
+                source: 'drawer',
               });
               openPost();
             }}
@@ -513,39 +520,38 @@ export function StudioDrawer() {
       {/* Sheet-weight ledgers only — room-weight doors (Library, People, Rooms)
           never open here. */}
       <DocSheet
-        open={open !== null && open.weight === "sheet"}
+        open={open !== null && open.weight === 'sheet'}
         onClose={() => setOpenLedger(null)}
-        title={open?.name ?? ""}
-        variant={open?.key === "feedback" ? "center" : "sheet"}
+        title={open?.name ?? ''}
+        variant={open?.key === 'feedback' ? 'center' : 'sheet'}
         wide={
-          open?.key === "orders" ||
-          open?.key === "accounts" ||
-          open?.key === "hours"
+          open?.key === 'orders' ||
+          open?.key === 'accounts' ||
+          open?.key === 'hours'
         }
-        // SP-13/F46 — Orders and Accounts already render their own,
-        // dialog-owned DocSheetHead (with a working close button); DocSheet
-        // must not also print an outer "Put back · Esc". Hours and Feedback
-        // render a head with no onClose, so DocSheet's own close stays theirs.
-        headOwnedByChild={open?.key === "orders" || open?.key === "accounts"}
-        // F11 — the Orders/Accounts/Hours trigger can be a `Studio books`
-        // menu row that unmounts on open; restore focus to the still-mounted
-        // books toggle when the original trigger is gone.
-        fallbackFocusRef={booksButtonRef}
+        // SP-13/F46 — Orders and Accounts render their own dialog-owned
+        // DocSheetHead with a working close; DocSheet must not print a second
+        // one above it. Hours and Feedback pass no onClose to their heads, so
+        // DocSheet's own close is the single copy for those two.
+        headOwnedByChild={open?.key === 'orders' || open?.key === 'accounts'}
+        // F11 — a books-menu row unmounts the moment it opens a sheet, so the
+        // still-mounted books toggle is where focus belongs on close.
+        fallbackFocusRef={openedFromBooksMenu ? booksButtonRef : undefined}
       >
-        {open?.key === "orders" && (
+        {open?.key === 'orders' && (
           <OrdersLedger
             onClose={() => setOpenLedger(null)}
             initialContext={sheetContext}
           />
         )}
-        {open?.key === "accounts" && (
+        {open?.key === 'accounts' && (
           <AccountsBook
             onClose={() => setOpenLedger(null)}
             initialContext={sheetContext}
           />
         )}
-        {open?.key === "hours" && <HoursLedger initialContext={sheetContext} />}
-        {open?.key === "feedback" && <FeedbackLedger />}
+        {open?.key === 'hours' && <HoursLedger initialContext={sheetContext} />}
+        {open?.key === 'feedback' && <FeedbackLedger />}
         {/* All sheet-weight ledgers (orders/accounts/hours) are bound; People
             and Rooms are Rooms (R50/R107), so no generic placeholder branch
             remains. */}

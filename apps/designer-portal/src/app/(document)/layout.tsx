@@ -52,67 +52,67 @@ export default function DocumentLayout({
           route boundary so it survives even the bare /board/* render. */}
       <SkipToPaper />
       <DocumentRouteBoundary bare={children}>
-      <div className="document-route-shell min-h-screen bg-[var(--bg-primary)]">
-      {/* One time system above the Desk and every document (R4): the
-          log-offer strip rides across navigation inside the provider. */}
-      <DocumentTimeProvider>
-        {/* D13: compact document physics live in the shell below 1180px. */}
-        <MobileShellProvider>
-          {/* R97 — the Supabase help-state backend (tour/announcement records,
-              cross-device via profiles.help_state) is re-homed to the desk
-              world here, wrapping the help region. Renders only its children. */}
-          <HelpStateProvider>
-            {/* R89 — the help affordance's only home (no utility bar): a
-                SurfaceKeyProvider seeded from the pathname wraps the shell, and
-                the ContextualHelpPanel mounts once inside it. Additive provider
-                wrap; children/siblings keep their order. */}
-            <DocumentHelpProvider>
-              {/* R97 — the Desk Walkthrough publishes first-touch suppression +
-                  offer eligibility to desk/page through this provider. */}
-              <DeskWalkthroughProvider>
-                {children}
-                <LogStrip />
-                <StudioDrawer />
-                {/* Global "g then l/p/o/a/h/t" doorway shortcuts (R93) — reads
-                    the same registry the Studio Drawer does; renders nothing. */}
-                <RegistryShortcuts />
-                {/* ⌘K from anywhere in the document model (spec §3). */}
-                <CommandBar />
-                {/* D2 break-through rules — opened from ⌘K, ships all-off. */}
-                <InterruptionSettings />
-                {/* R5 — the Account sheet: identity, status, settings, sign out.
-                    Opened from the Studio Drawer nameplate, the mobile drawer, ⌘K. */}
-                <AccountSheet />
-                {/* R74 — the Invoice folio + composer, openable from any surface
-                    (Accounts rows, Account band, margin, Hours, FF&E, ⌘K). */}
-                <InvoiceOverlays />
-                {/* R85 — the ⌘K "draft a proposal" household-picker cold start. */}
-                <DraftProposalOverlay />
-                <MobileActionDock />
-                <MobileBar />
-                <MobileSheets />
-                {/* The feedback layer (docs/ledger/patina-feedback-layer-prd.md):
-                    a persistent capture button + sheet on its own layer, on every
-                    Desk screen. Mounted last so it sits above the rest of the
-                    chrome. */}
-                <FeedbackLayer />
-                {/* R97 — the desk-first intro tour (WelcomeModal + six coachmarks).
-                    Self-guards to /desk; renders nothing elsewhere. */}
-                <DeskWalkthrough />
-                {/* R21 dissolve — the /desk?book= / ?account= doorways. LAST
-                    on purpose: React runs effects in mount order, so the
-                    drawer's open-ledger listener, the Post sheet's, and the
-                    Account sheet's must all be attached before this fires.
-                    Renders nothing; self-wraps its useSearchParams read in a
-                    Suspense boundary. */}
-                <DeskDoorway />
-              </DeskWalkthroughProvider>
-            </DocumentHelpProvider>
-          </HelpStateProvider>
-        </MobileShellProvider>
-      </DocumentTimeProvider>
-      </div>
-    </DocumentRouteBoundary>
+        <div className="document-route-shell min-h-screen bg-[var(--bg-primary)]">
+        {/* One time system above the Desk and every document (R4): the
+            log-offer strip rides across navigation inside the provider. */}
+        <DocumentTimeProvider>
+          {/* D13: compact document physics live in the shell below 1180px. */}
+          <MobileShellProvider>
+            {/* R97 — the Supabase help-state backend (tour/announcement records,
+                cross-device via profiles.help_state) is re-homed to the desk
+                world here, wrapping the help region. Renders only its children. */}
+            <HelpStateProvider>
+              {/* R89 — the help affordance's only home (no utility bar): a
+                  SurfaceKeyProvider seeded from the pathname wraps the shell, and
+                  the ContextualHelpPanel mounts once inside it. Additive provider
+                  wrap; children/siblings keep their order. */}
+              <DocumentHelpProvider>
+                {/* R97 — the Desk Walkthrough publishes first-touch suppression +
+                    offer eligibility to desk/page through this provider. */}
+                <DeskWalkthroughProvider>
+                  {children}
+                  <LogStrip />
+                  <StudioDrawer />
+                  {/* Global "g then l/p/o/a/h/t" doorway shortcuts (R93) — reads
+                      the same registry the Studio Drawer does; renders nothing. */}
+                  <RegistryShortcuts />
+                  {/* ⌘K from anywhere in the document model (spec §3). */}
+                  <CommandBar />
+                  {/* D2 break-through rules — opened from ⌘K, ships all-off. */}
+                  <InterruptionSettings />
+                  {/* R5 — the Account sheet: identity, status, settings, sign out.
+                      Opened from the Studio Drawer nameplate, the mobile drawer, ⌘K. */}
+                  <AccountSheet />
+                  {/* R74 — the Invoice folio + composer, openable from any surface
+                      (Accounts rows, Account band, margin, Hours, FF&E, ⌘K). */}
+                  <InvoiceOverlays />
+                  {/* R85 — the ⌘K "draft a proposal" household-picker cold start. */}
+                  <DraftProposalOverlay />
+                  <MobileActionDock />
+                  <MobileBar />
+                  <MobileSheets />
+                  {/* The feedback layer (docs/ledger/patina-feedback-layer-prd.md):
+                      a persistent capture button + sheet on its own layer, on every
+                      Desk screen. Mounted last so it sits above the rest of the
+                      chrome. */}
+                  <FeedbackLayer />
+                  {/* R97 — the desk-first intro tour (WelcomeModal + six coachmarks).
+                      Self-guards to /desk; renders nothing elsewhere. */}
+                  <DeskWalkthrough />
+                  {/* R21 dissolve — the /desk?book= / ?account= doorways. LAST
+                      on purpose: React runs effects in mount order, so the
+                      drawer's open-ledger listener, the Post sheet's, and the
+                      Account sheet's must all be attached before this fires.
+                      Renders nothing; self-wraps its useSearchParams read in a
+                      Suspense boundary. */}
+                  <DeskDoorway />
+                </DeskWalkthroughProvider>
+              </DocumentHelpProvider>
+            </HelpStateProvider>
+          </MobileShellProvider>
+        </DocumentTimeProvider>
+        </div>
+      </DocumentRouteBoundary>
     </>
   );
 }

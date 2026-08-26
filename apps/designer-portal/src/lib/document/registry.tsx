@@ -341,14 +341,15 @@ export const ALL_STUDIO_SURFACES: StudioSurface[] = [
  * SP-16/F50 — the plan room. It is a route, not a drawer sheet
  * (command-bar.tsx builds its own "This surface" row for it, pre-addressed
  * with the in-hand engagement's id), so it deliberately stays out of
- * `ALL_STUDIO_SURFACES`: that list's every entry is required to carry a help
- * doorway (surface-key-parity.test.ts) and feeds the Desk Contents / Studio
- * Drawer doorway lists this surface has no place in. `matchSurfaces()` below
- * still folds it into the typed-query table so a typed `plan`/`floor plan`
- * resolves the same surface the empty-query branch already offers — closing
- * the registry gap without opening a second door.
+ * `ALL_STUDIO_SURFACES`: that list feeds the Desk Contents / Studio Drawer
+ * doorway lists, which this surface has no place in. It still carries the
+ * `help` doorway every registry entry owes (pinned by command-bar.test.tsx,
+ * since surface-key-parity.test.ts can only see `ALL_STUDIO_SURFACES`).
+ * `matchSurfaces()` below folds it into the typed-query table so a typed
+ * `plan`/`floor plan` resolves the same surface the empty-query branch
+ * already offers — closing the registry gap without opening a second door.
  */
-const PLAN_ROOM_SURFACE: StudioSurface = {
+export const PLAN_ROOM_SURFACE: StudioSurface = {
   key: 'plan-room',
   kind: 'room',
   label: 'The plan room',
@@ -357,6 +358,14 @@ const PLAN_ROOM_SURFACE: StudioSurface = {
   icon: Ruler,
   weight: 'room',
   scope: 'document',
+  // The same canonical key the plan room itself declares
+  // (plan-room-workspace.tsx → DOCUMENT_SURFACE_KEYS.plans): staying out of
+  // ALL_STUDIO_SURFACES keeps this row out of the drawer and Desk Contents,
+  // it does not exempt it from carrying a help doorway.
+  help: {
+    surfaceKey: 'designer-portal/document/plans',
+    blurb: 'The current set, the light table, and every issue to date.',
+  },
 };
 
 /**

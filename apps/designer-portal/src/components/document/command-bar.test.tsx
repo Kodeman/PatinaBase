@@ -50,6 +50,8 @@ jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 
 import { CommandBar, openCommandBar } from './command-bar';
 import { DocumentAction } from './document-action';
+import { PLAN_ROOM_SURFACE } from '@/lib/document/registry';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 
 // A minimal document_state row — only the fields command-bar.tsx's own code
 // paths read (folderTab, fillStateForDesk's active_section, the
@@ -225,6 +227,15 @@ describe('SP-16 — ⌘K typed search finds the plan room', () => {
 
     expect(mockPush).toHaveBeenCalledWith('/doc/eng-1/plans');
   });
+
+  it('carries the help doorway every registry entry owes', () => {
+    // surface-key-parity.test.ts can only audit ALL_STUDIO_SURFACES, which
+    // this row deliberately sits outside of; the same contract is pinned here
+    // so staying out of that list is not a way out of the audit.
+    expect(PLAN_ROOM_SURFACE.help?.surfaceKey).toBe(DOCUMENT_SURFACE_KEYS.plans);
+    expect(PLAN_ROOM_SURFACE.help?.blurb.trim().length).toBeGreaterThan(0);
+    expect(PLAN_ROOM_SURFACE.help?.blurb).not.toContain('\n');
+  });
 });
 
 // ============================================================================
@@ -251,5 +262,44 @@ describe('F21 — ⌘K restores focus to the opener on close', () => {
       expect(screen.queryByRole('dialog', { name: 'Command bar' })).not.toBeInTheDocument(),
     );
     await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('yields to a modal the chosen row opened instead of pulling focus out of it', async () => {
+    render(
+      <>
+        <FindAnythingButton />
+        <CommandBar />
+      </>,
+    );
+    const opener = screen.getByRole('button', { name: /find anything/i });
+    opener.focus();
+    fireEvent.click(opener);
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Find anything' })).toHaveFocus(),
+    );
+
+    // A chosen ledger row closes the palette and opens a sheet in the same
+    // handler, so the sheet is already mounted and focused when the restore
+    // frame runs.
+    const sheet = document.createElement('div');
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    const insideSheet = document.createElement('button');
+    sheet.appendChild(insideSheet);
+    document.body.appendChild(sheet);
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    insideSheet.focus();
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Command bar' }),
+      ).not.toBeInTheDocument(),
+    );
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+
+    expect(insideSheet).toHaveFocus();
+    expect(opener).not.toHaveFocus();
+    sheet.remove();
   });
 });

@@ -78,8 +78,15 @@ describe('the schedule frame region', () => {
         <ScheduleRuleRegion {...props} />
       </ScheduleNavProvider>,
     );
+    // Folded: the seam is the only name on show, and it is not `Schedule`.
     expect(screen.getByText('Schedule dates')).toBeInTheDocument();
-    expect(screen.queryByText('Schedule', { selector: 'span' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Schedule$/)).not.toBeInTheDocument();
+
+    // Unfolded: the ledger region head keeps the bare `Schedule` (the running
+    // index still points at it), and the seam name is gone with the seam.
+    fireEvent.click(screen.getByRole('button', { name: /Schedule dates/ }));
+    expect(screen.getByText(/^Schedule$/)).toBeInTheDocument();
+    expect(screen.queryByText('Schedule dates')).not.toBeInTheDocument();
   });
 
   it('keeps the phase-advance control visible while the schedule is folded', () => {
