@@ -40,6 +40,13 @@ import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { ProjectAuthorityBandForProject } from './project-authority-band';
 import { ProjectCommerceSection } from './project-commerce-section';
 
+/** The ticket's Money row is this region's index: it unfolds the region and
+ *  scrolls to it. The ticket rides the top of the paper as a sticky seam, so
+ *  a landing at `block: 'start'` would put the money under the map that sent
+ *  the reader here. The seam publishes its own height while it is pinned;
+ *  nothing pinned reads 0. */
+const SEAM_CLEARANCE = { scrollMarginTop: 'var(--doc-seam-height, 0px)' };
+
 const HEADING_ID = 'money-region-heading';
 const BODY_ID = 'money-region-body';
 
@@ -217,7 +224,12 @@ export function MoneyRegion({
 
   if (folded) {
     return (
-      <section aria-label="Money" data-index-region="money" className="mb-5">
+      <section
+        aria-label="Money"
+        data-index-region="money"
+        className="mb-5"
+        style={SEAM_CLEARANCE}
+      >
         <RegionRule />
         <FoldSeam
           headingId={HEADING_ID}
@@ -233,7 +245,12 @@ export function MoneyRegion({
   }
 
   return (
-    <section aria-label="Money" data-index-region="money" className="mb-5">
+    <section
+      aria-label="Money"
+      data-index-region="money"
+      className="mb-5"
+      style={SEAM_CLEARANCE}
+    >
       <RegionRule />
       <RegionHead
         headingId={HEADING_ID}

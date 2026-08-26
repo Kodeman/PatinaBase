@@ -66,7 +66,10 @@ test.describe('Desk — whole-desk error state', () => {
     // No half-desk: none of the healthy/quiet-desk surfaces coexist with the
     // error banner — this is exactly the bug the whole-desk error state fixes.
     await expect(page.getByText('Nothing needs your hand.')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Needs your hand' })).toHaveCount(0);
+    // B2 — `Needs your hand` is `Every job · n live · m overdue` now: one
+    // roster of every live job, grouped by stage.
+    await expect(page.getByTestId('desk-roster')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: /Every job/ })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'In motion' })).toHaveCount(0);
     await expect(page.getByText('This is your Desk.')).toHaveCount(0);
 
@@ -77,7 +80,7 @@ test.describe('Desk — whole-desk error state', () => {
     await retry.click();
 
     await expect(errorState).toHaveCount(0, { timeout: 20_000 });
-    await expect(page.getByRole('heading', { name: 'Needs your hand' })).toBeVisible({
+    await expect(page.getByRole('heading', { name: /Every job/ })).toBeVisible({
       timeout: 20_000,
     });
 
@@ -91,37 +94,39 @@ test.describe('Desk — whole-desk error state', () => {
     for (let i = 1; i <= RUNS; i++) {
       await page.goto('/desk', { waitUntil: 'domcontentloaded' });
 
-      // Every load resolves to exactly one of: the folders grid, or the
+      // Every load resolves to exactly one of: the roster's job lines, or the
       // empty-state line — never neither, never both, and never the error
       // surface (this loop runs against the real local stack, no interception).
-      const needsHand = page.getByRole('heading', { name: 'Needs your hand' });
-      await expect(needsHand).toBeVisible({ timeout: 20_000 });
+      const everyJob = page.getByRole('heading', { name: /Every job/ });
+      await expect(everyJob).toBeVisible({ timeout: 20_000 });
 
       const emptyLine = page.getByText('Nothing needs your hand. The work is in motion.');
-      const folderCards = page.locator('[data-tour-anchor="desk-folio"]');
+      const jobLines = page.locator('[data-roster-line]');
 
       // Poll past the transient loading-skeleton window rather than snapshot
       // immediately after domcontentloaded — the read is async.
       await expect(async () => {
         const hasEmptyLine = (await emptyLine.count()) > 0;
-        const hasFolders = (await folderCards.count()) > 0;
+        const hasLines = (await jobLines.count()) > 0;
         expect(
-          hasEmptyLine !== hasFolders,
-          `run ${i}: expected exactly one of [empty-state line, folder cards], got empty=${hasEmptyLine} folders=${hasFolders}`,
+          hasEmptyLine !== hasLines,
+          `run ${i}: expected exactly one of [empty-state line, job lines], got empty=${hasEmptyLine} lines=${hasLines}`,
         ).toBe(true);
       }).toPass({ timeout: 20_000 });
 
       // No half-state: the error surface must never appear on an unforced load.
       await expect(page.getByTestId('desk-error-state')).toHaveCount(0);
 
-      // When there ARE chips, In motion must render too (never silently
-      // dropped) — when there are none, the section is simply absent, which
-      // is not itself a half-state.
-      const inMotionHeading = page.getByRole('heading', { name: 'In motion' });
-      const chipItems = page.locator('section[aria-labelledby="in-motion"] li');
-      if ((await inMotionHeading.count()) > 0) {
-        await expect(chipItems.first()).toBeVisible();
-      }
+      // B2 — `In motion` is no longer a section of its own. A job that is
+      // moving says so on its own line, in the line's state text, so the
+      // roster is the one place the Desk keeps a job. A second section here
+      // would be the split the roster exists to close.
+      await expect(
+        page.getByRole('heading', { name: 'In motion' }),
+      ).toHaveCount(0);
+      await expect(
+        page.locator('section[aria-labelledby="in-motion"]'),
+      ).toHaveCount(0);
     }
   });
 });

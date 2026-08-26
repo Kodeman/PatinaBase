@@ -1,5 +1,6 @@
 import { deriveDocumentGuide, needGuideAction } from '../document-guide';
 import type { DocumentStateRow, NeedKind, SectionKey } from '../desk-derivation';
+import type { TicketException, TicketRow, TicketRowKey } from '../ticket-derivation';
 import { deriveGate } from '../workflow-gate';
 import type { ProjectContextualHandoff } from '@patina/supabase';
 
@@ -779,5 +780,212 @@ describe('the guide surfaces the gate (Ruling V)', () => {
 
     expect(spoken).not.toContain('c'.repeat(8));
     expect(spoken).not.toMatch(/exact phase|source domain|reminder sent/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B2-L3 — the sixth rung derives from the ticket
+// ---------------------------------------------------------------------------
+
+const ticketRow = (
+  key: TicketRowKey,
+  label: string,
+  exception: TicketException | null,
+): TicketRow => ({
+  key,
+  label,
+  value: 'Nothing to report',
+  emphasis: exception?.phrase ?? null,
+  door: { kind: 'none' },
+  exception,
+});
+
+const OWED: TicketException = {
+  rank: 'promise-past-due',
+  phrase: '$17,500 owed you',
+  standingSince: '2026-08-01',
+};
+
+const UNSPECIFIED: TicketException = {
+  rank: 'piece-stuck',
+  phrase: '2 unspecified',
+  standingSince: '2026-07-01',
+};
+
+/** The eight rows, always eight, always in order. */
+const ticketRows = (exceptions: Partial<Record<TicketRowKey, TicketException>> = {}) =>
+  (['rooms', 'pieces', 'drawings', 'spec', 'boards', 'money', 'dates', 'people'] as const).map(
+    (key) =>
+      ticketRow(key, `${key[0].toUpperCase()}${key.slice(1)}`, exceptions[key] ?? null),
+  );
+
+describe('the sixth rung derives from the ticket (B2-L3)', () => {
+  const NOW = new Date('2026-08-10T12:00:00Z');
+
+  it('names the ticket row the tie-break elects rather than the stage table', () => {
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      ticketRows: ticketRows({ money: OWED }),
+    });
+
+    expect(guide.headline).toBe('Money · $17,500 owed you');
+    expect(guide.action).toEqual({
+      key: 'review-project-work',
+      label: 'Open the FF&E schedule',
+      destination: {
+        kind: 'anchor',
+        section: 'project',
+        focusId: 'ffe-region-heading-project-1',
+      },
+    });
+  });
+
+  // J2's contradiction: direction-b §3.3's project example elects the rank
+  // three row over rank two. The tie-break wins.
+  it('leads with the dated promise over the piece that cannot move', () => {
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      ticketRows: ticketRows({ pieces: UNSPECIFIED, money: OWED }),
+    });
+
+    expect(guide.headline).toBe('Money · $17,500 owed you');
+  });
+
+  it('leads with the exception rather than the install spread’s dated sentence', () => {
+    const guide = deriveDocumentGuide({
+      row: row('install'),
+      now: NOW,
+      schedule: { install: { date: '2026-09-15', fidelity: 'committed' } } as never,
+      ticketRows: ticketRows({ pieces: UNSPECIFIED }),
+    });
+
+    expect(guide.headline).toBe('Pieces · 2 unspecified');
+  });
+
+  it('speaks the exception in the actionable register, not the stage’s calm one', () => {
+    // Rung four does exactly this for the Desk's operational need. A strip
+    // carrying `Money · $17,500 owed you` under `state: on_track` and the plain
+    // `Project · active work` eyebrow prints an urgent sentence in a calm voice.
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      ticketRows: ticketRows({ money: OWED }),
+    });
+
+    expect(guide.state).toBe('actionable');
+    expect(guide.eyebrow).toBe('Project · active work · needs attention');
+    expect(guide.reason).toBe('The job ticket is showing something unresolved.');
+  });
+
+  it('takes the leader’s rest sentence too, so both halves are wired', () => {
+    // The rest half used to be unreachable: the caller pre-filtered to only
+    // call the leader where an exception already stood, so seven of the
+    // fourteen states were computed by a path the ticket never touched.
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      ticketRows: ticketRows(),
+    });
+
+    expect(guide.headline).toBe('Everything ordered is moving.');
+    // And it keeps the landing the working act had already resolved, which the
+    // leader alone does not hold.
+    expect(guide.action?.destination).toEqual({
+      kind: 'anchor',
+      section: 'project',
+      focusId: 'ffe-region-heading-project-1',
+    });
+  });
+
+  it('keeps the stage path when the ticket shows nothing unclear', () => {
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      ticketRows: ticketRows(),
+    });
+
+    expect(guide.headline).toBe('Everything ordered is moving.');
+    expect(guide.action?.label).toBe('Release the next room');
+  });
+
+  it('keeps the stage path when no rows are passed at all', () => {
+    expect(deriveDocumentGuide({ row: row('project'), now: NOW }).headline).toBe(
+      'Everything ordered is moving.',
+    );
+    expect(
+      deriveDocumentGuide({ row: row('project'), now: NOW, ticketRows: null }).headline,
+    ).toBe('Everything ordered is moving.');
+  });
+
+  it('leaves the care spread’s closure gate to the branch that holds it', () => {
+    const guide = deriveDocumentGuide({
+      row: row('care'),
+      now: NOW,
+      closureReady: false,
+      ticketRows: ticketRows(),
+    });
+
+    expect(guide.headline).toBe('Close the book on this one');
+  });
+
+  it('leaves rung one — unavailable — standing', () => {
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      availability: 'unavailable',
+      ticketRows: ticketRows({ money: OWED }),
+    });
+
+    expect(guide.headline).toBe('Guidance is unavailable');
+  });
+
+  it('leaves rung two — paused — standing', () => {
+    const guide = deriveDocumentGuide({
+      row: row('project', { is_paused: true }),
+      now: NOW,
+      ticketRows: ticketRows({ money: OWED }),
+    });
+
+    expect(guide.headline).toBe('This project is paused');
+  });
+
+  it('leaves rung three — the gate — standing', () => {
+    const gate = deriveGate(handoff(), GATE_NOW, 'Marta');
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      gate,
+      ticketRows: ticketRows({ money: OWED }),
+    });
+
+    expect(guide.headline).toBe("Marta's Direction approval has waited 6 days.");
+  });
+
+  it('leaves rung four — the operational need — standing', () => {
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      now: NOW,
+      operationalNeed: {
+        kind: 'overdue_decision',
+        text: 'Two approvals are overdue',
+        actionLabel: null,
+        stamp: { label: 'OVERDUE', color: 'var(--color-clay)' },
+        urgent: true,
+      },
+      ticketRows: ticketRows({ money: OWED }),
+    });
+
+    expect(guide.headline).toBe('Two approvals are overdue');
+  });
+
+  it('leaves rung five — the proposal lifecycle — standing', () => {
+    const guide = deriveDocumentGuide({
+      row: row('proposal'),
+      now: NOW,
+      ticketRows: ticketRows({ money: OWED }),
+    });
+
+    expect(guide.headline).toBe('Wait for the client’s signature');
   });
 });

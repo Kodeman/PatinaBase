@@ -29,7 +29,7 @@ jest.mock('@patina/supabase', () => ({
 
 jest.mock('@/hooks/use-desk-engagements', () => ({
   useDeskEngagements: () => ({
-    data: { folders: [], chips: [] },
+    data: { folders: [], chips: [], live: [] },
     isLoading: false,
     isError: false,
     refetch: jest.fn(),
@@ -63,11 +63,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
     actionSelected: jest.fn(),
   },
 }));
-jest.mock('@/components/document/folder-card', () => ({
-  NeedsYourHandFolios: () => null,
-}));
 jest.mock('@/components/document/desk-contents', () => ({ DeskContents: () => null }));
-jest.mock('@/components/document/studio-pulse', () => ({ StudioPulse: () => null }));
 jest.mock('@/components/document/margin-note', () => ({ MarginNote: () => null }));
 jest.mock('@/components/document/help/desk-walkthrough', () => ({
   START_DESK_WALKTHROUGH_EVENT: 'document:start-desk-walkthrough',
@@ -82,9 +78,6 @@ jest.mock('@/components/document/overlays/open-project-sheet', () => ({
 }));
 jest.mock('@/lib/help-system/use-document-surface', () => ({
   useDocumentSurface: jest.fn(),
-}));
-jest.mock('@/components/document/recent-boards-strip', () => ({
-  RecentBoardsStrip: () => null,
 }));
 jest.mock('@/components/document/account/account-sheet', () => ({
   openAccountPage: jest.fn(),
@@ -173,5 +166,25 @@ describe('Desk — header acts print their sub-labels (F24)', () => {
     render(<DeskPage />);
     expect(screen.getByText('begin a Brief')).toBeInTheDocument();
     expect(screen.getByText('no proposal needed')).toBeInTheDocument();
+  });
+});
+
+describe('Desk — the roster is the Desk’s one population (B2-L2)', () => {
+  it('prints the stage-grouped roster', () => {
+    render(<DeskPage />);
+    expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
+    expect(
+      screen.getByText('Every job · 0 live · 0 overdue'),
+    ).toBeInTheDocument();
+  });
+
+  it('no longer prints the four-up folio grid, The studio today, or Recent boards', () => {
+    const { container } = render(<DeskPage />);
+    expect(container.querySelector('#needs-your-hand-folios')).toBeNull();
+    expect(screen.queryByText('Needs your hand')).not.toBeInTheDocument();
+    expect(screen.queryByText('The studio today')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recent boards')).not.toBeInTheDocument();
+    expect(container.querySelector('#studio-pulse')).toBeNull();
+    expect(container.querySelector('#recent-mood-boards')).toBeNull();
   });
 });

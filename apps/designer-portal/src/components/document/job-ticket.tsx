@@ -5,16 +5,21 @@
  * every width, every project-kind section. A rule above, a rule below: no box,
  * no fill, no shadow (C2/D4). Labels DM Mono, values Inter, `→` is the door.
  *
- * THE STICKY SEAM (R124). While the letterhead is on screen the ticket prints
- * its eight rows. Once the letterhead scrolls past, the ticket collapses in
- * place to its two-line form and sticks — at every width, so the map rides
- * with the reader the way the spine's blocks used to. The pin is an
- * IntersectionObserver on a sentinel the page renders beside the letterhead;
- * a scroll listener would run on every frame to learn the same one bit.
+ * THE STICKY SEAM (R124). While the paper above the ticket is on screen the
+ * ticket prints its eight rows. Once that paper scrolls past, the ticket
+ * collapses in place to its two-line form and sticks — at every width, so the
+ * map rides with the reader the way the spine's blocks used to. The pin is an
+ * IntersectionObserver on a sentinel; a scroll listener would run on every
+ * frame to learn the same one bit.
  *
- * The sentinel is addressed by DOM id rather than a ref object: the letterhead
- * mounts above this component and a ref's `.current` landing later would not
- * re-run the observer effect, so the pin would silently never engage.
+ * THE SENTINEL IS THE TICKET'S OWN, rendered immediately above the sticky
+ * element in this component's own tree. The ticket stands in one of two
+ * positions — under the letterhead on a paper with no table, inside
+ * `TableFrame` above the table where one stands — and a sentinel fixed beside
+ * the letterhead would, in the second position, flip the pin (collapsing the
+ * rows, discarding the reader's fold, and publishing a `--doc-seam-height` for
+ * an element nothing is sticking) while the ticket was still far below the
+ * viewport top.
  *
  * Below 1180 the ticket opens AT REST as the seam and unfolds to the eight
  * rows; at or above it opens unfolded. Either way the reader's own fold is
@@ -41,11 +46,14 @@ import type {
   TicketHead,
   TicketRow,
   TicketSeam,
+  TicketSlotKey,
 } from '@/lib/document/ticket-derivation';
 import { useRoomLens } from './room-lens-context';
 
-/** The id the page gives the element it renders directly under the letterhead. */
-export const LETTERHEAD_SENTINEL_ID = 'doc-letterhead-sentinel';
+/** The id of the sentinel the ticket renders directly above itself. Exported
+ *  for the suites that drive the pin; there is exactly one ticket per document
+ *  (`page.tsx`), so there is exactly one of these. */
+export const TICKET_SENTINEL_ID = 'doc-ticket-sentinel';
 
 /** How far down the paper the schedule's pinned glance stands while the seam
  *  holds the top. Read by `globals.css`; cleared when the seam is not pinned. */
@@ -73,8 +81,6 @@ export interface JobTicketProps {
   /** `requestRegionUnfold` plus the scroll the caller already owns. */
   onUnfoldRegion: (region: DocumentIndexKey) => void;
   onOpenCallSheet: () => void;
-  /** The letterhead's sentinel element id. */
-  letterheadSentinel?: string;
 }
 
 const ROW_CLASS =
@@ -127,6 +133,31 @@ function useMediaMatch(query: string, whenUnknown: boolean): boolean {
   return useSyncExternalStore(subscribe, read, server);
 }
 
+/**
+ * Land on a tool the pinned composition already stands on this paper — the
+ * Speccing table's rooms rail, its boards strip. `table-slots.tsx` owns the
+ * `data-table-slot` address; nothing is scrolled where the slot is unfilled, so
+ * a row whose subject is not on the paper simply does not move the reader.
+ */
+function goToSlot(slot: TicketSlotKey): void {
+  const reduceMotion = window.matchMedia?.(
+    '(prefers-reduced-motion: reduce)',
+  ).matches;
+  const target = document.querySelector<HTMLElement>(
+    `[data-table-slot="${slot}"]`,
+  );
+  if (!target) return;
+  target.scrollIntoView({
+    block: 'start',
+    behavior: reduceMotion ? 'auto' : 'smooth',
+  });
+  const landing =
+    target.querySelector<HTMLElement>(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) ?? target;
+  landing.focus?.({ preventScroll: true });
+}
+
 /** The row's sentence, with the clause that carries what is wrong given the
  *  weight M2 gives it (`.b-tk-value .b-x`) — the census keeps ledger order. */
 function RowValue({ row }: { row: TicketRow }) {
@@ -143,10 +174,7 @@ function RowValue({ row }: { row: TicketRow }) {
   );
 }
 
-function RowBody({ row }: { row: TicketRow }) {
-  const hasDoor =
-    row.door.kind !== 'none' &&
-    (row.door.kind !== 'overlay' || row.door.available);
+function RowBody({ row, hasDoor }: { row: TicketRow; hasDoor: boolean }) {
   return (
     <>
       <span className={LABEL_CLASS}>{row.label}</span>
@@ -168,7 +196,6 @@ export function JobTicket({
   routes,
   onUnfoldRegion,
   onOpenCallSheet,
-  letterheadSentinel = LETTERHEAD_SENTINEL_ID,
 }: JobTicketProps) {
   const { heldRoomId, toggleRoom } = useRoomLens();
   const wide = useMediaMatch(LEAF_QUERY, true);
@@ -177,6 +204,7 @@ export function JobTicket({
   const [fold, setFold] = useState<boolean | null>(null);
   const [roomsOpen, setRoomsOpen] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const foldRef = useRef<HTMLButtonElement>(null);
   // Whether the reader is standing inside the ticket. Read on the fold, not
   // asked of `document.activeElement`: by the time the effect runs the row
@@ -188,9 +216,8 @@ export function JobTicket({
   const chipsId = `${ids}-rooms`;
 
   useEffect(() => {
-    if (typeof document === 'undefined') return;
     if (typeof IntersectionObserver === 'undefined') return;
-    const sentinel = document.getElementById(letterheadSentinel);
+    const sentinel = sentinelRef.current;
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       ([entry]) => setPinned(!entry.isIntersecting),
@@ -198,7 +225,7 @@ export function JobTicket({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [letterheadSentinel]);
+  }, []);
 
   // The reader's own fold is theirs until the letterhead crosses the edge —
   // then the ticket collapses in place, and unfolding again is a fresh choice.
@@ -233,7 +260,16 @@ export function JobTicket({
 
   const renderRow = (row: TicketRow): ReactNode => {
     const door = row.door;
-    const body = <RowBody row={row} />;
+    // The leaf stands beside the spine only from 1440px. Below that a shelf
+    // with no page of its own has nowhere to send the reader, so the row prints
+    // no `→` and does not press — a button that fires an unfold nobody hears is
+    // a worse answer than a row that plainly does not open.
+    const deadLeaf = door.kind === 'leaf' && !wide && !routes[door.shelf];
+    const hasDoor =
+      door.kind !== 'none' &&
+      !deadLeaf &&
+      (door.kind !== 'overlay' || door.available);
+    const body = <RowBody row={row} hasDoor={hasDoor} />;
 
     switch (door.kind) {
       case 'route':
@@ -244,6 +280,7 @@ export function JobTicket({
         );
       case 'leaf': {
         const href = routes[door.shelf];
+        if (deadLeaf) return <div className={ROW_CLASS}>{body}</div>;
         return !wide && href ? (
           <a href={href} className={ROW_CLASS}>
             {body}
@@ -258,6 +295,16 @@ export function JobTicket({
           </button>
         );
       }
+      case 'slot':
+        return (
+          <button
+            type="button"
+            onClick={() => goToSlot(door.slot)}
+            className={ROW_CLASS}
+          >
+            {body}
+          </button>
+        );
       case 'unfold-region':
         return (
           <button
@@ -294,7 +341,11 @@ export function JobTicket({
   };
 
   return (
-    <section
+    <>
+      {/* The pin's one bit of input, in flow directly above the sticky element:
+          it leaves the viewport exactly when the ticket would begin to stick. */}
+      <div ref={sentinelRef} id={TICKET_SENTINEL_ID} aria-hidden />
+      <section
       ref={sectionRef}
       aria-label="The job"
       data-job-ticket=""
@@ -406,6 +457,7 @@ export function JobTicket({
           ))}
         </div>
       )}
-    </section>
+      </section>
+    </>
   );
 }

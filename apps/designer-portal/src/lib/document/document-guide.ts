@@ -8,6 +8,8 @@ import {
 import type { CommercialDocumentKind, CommercialState } from './commercial-documents';
 import type { SectionScheduleFacts } from './section-derivation';
 import type { SendWallLine } from './proposal-watch-derivation';
+import type { TicketRow } from './ticket-derivation';
+import { deriveTicketLeader, leadTicketException } from './ticket-leader';
 import {
   gateActionLabel,
   gateSentence,
@@ -115,9 +117,15 @@ interface DeriveDocumentGuideInput {
    *  a read that answered "nothing outstanding", and only the second may rest.
    *  Omitted (the caller does not track it) reads as answered. */
   inputsPending?: boolean;
+  /** B2-L3 — the eight ticket rows this spread prints, which the sixth rung
+   *  elects its sentence from. Absent or `null` (a document whose spread does
+   *  not derive a ticket yet, or a read that failed) falls back to the
+   *  `stageCopy`/`restCopy` path below, so a spread without a map is guided
+   *  exactly as it was. */
+  ticketRows?: readonly TicketRow[] | null;
 }
 
-const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
+export const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
   brief: {
     state: 'actionable',
     eyebrow: 'Brief · decide the fit',
@@ -607,6 +615,7 @@ export function deriveDocumentGuide({
   gate,
   closureReady,
   inputsPending = false,
+  ticketRows,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
   const stage = row.active_section;
   if (availability === 'unavailable') {
@@ -699,6 +708,34 @@ export function deriveDocumentGuide({
   const action = destination ? { ...base.action!, destination } : base.action;
   const installHeadline = stage === 'install' ? installGuideHeadline(schedule, now) : null;
 
+  // B2-L3 — with the ticket on the spread, the sixth rung stops reading a
+  // table keyed by the stage alone and names the exception the map is already
+  // printing, in direction-b §3.2's order. Only the leader's exception-led
+  // sentence is taken here: its rest sentence is the same `restCopy` row the
+  // branch below prints, and that branch also holds the facts the leader is
+  // not passed — the closure gate, the discovery inputs, the day the install
+  // sentence states.
+  const lead = ticketRows ? leadTicketException(ticketRows) : null;
+  if (ticketRows && lead) {
+    const leader = deriveTicketLeader(ticketRows, stage);
+    return withInputs({
+      ...base,
+      stage,
+      // The stage's own `state`/`reason`/`eyebrow` are the CALM register, and
+      // the sentence this branch prints is an exception the map is standing on.
+      // Rung 4 says the same thing the same way for the Desk's operational
+      // need; a strip cannot carry `Money · $17,500 owed you` in the voice it
+      // uses for `Everything ordered is moving.`
+      state: 'actionable',
+      eyebrow: `${base.eyebrow} · needs attention`,
+      reason: 'The job ticket is showing something unresolved.',
+      headline: leader.headline,
+      action: leader.action
+        ? { ...leader.action, destination: destination ?? leader.action.destination }
+        : null,
+    }, inputFacts);
+  }
+
   // A3-L7 (direction-b §3.3) — the quiet case gets its own named sentence
   // and act rather than reusing the always-actionable default above.
   // `install` is the one stage whose rest sentence itself carries a fact (the
@@ -711,6 +748,13 @@ export function deriveDocumentGuide({
       : isRestState(stage, row, inputFacts, closureReady, inputsPending);
   if (restActive) {
     const rest = restCopy[stage];
+    // The leader's other seven states. With no row unclear it returns this
+    // stage's `restCopy` row, so routing the rest half through it too is what
+    // makes "fourteen states, all derived from the ticket" true of the wired
+    // path rather than only of the module's own tests. The two facts the leader
+    // is not passed stay this branch's: `install`'s dated sentence, and the
+    // landing each stage's working act already resolved.
+    const leader = ticketRows ? deriveTicketLeader(ticketRows, stage) : null;
     // A rest state changes what the strip SAYS, and its act keeps the working
     // landing — with one exception: `discovery`'s rest act names the DIRECTION,
     // and landing `Begin the direction` back on the discovery checklist it has
@@ -720,8 +764,11 @@ export function deriveDocumentGuide({
       stage === 'discovery'
         ? stageCopy.direction.action!.destination
         : (action?.destination ?? stageCopy[stage].action!.destination);
-    const restAction: DocumentGuideAction | null =
-      rest.actionLabel === null
+    const restAction: DocumentGuideAction | null = leader
+      ? leader.action
+        ? { ...leader.action, destination: restDestination }
+        : null
+      : rest.actionLabel === null
         ? null
         : {
             key: `rest-${stage}`,
@@ -731,7 +778,10 @@ export function deriveDocumentGuide({
     return withInputs({
       ...base,
       stage,
-      headline: stage === 'install' ? installHeadline! : rest.headline,
+      headline:
+        stage === 'install'
+          ? installHeadline!
+          : (leader?.headline ?? rest.headline),
       action: restAction,
     }, inputFacts);
   }

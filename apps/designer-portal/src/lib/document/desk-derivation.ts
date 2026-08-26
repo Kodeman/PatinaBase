@@ -471,6 +471,16 @@ const fmtDay = (iso: string) =>
     new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso),
   );
 
+/** Whole dollars, the register the Desk states money in. Local rather than
+ *  `project-commerce.ts`'s `money`, for the same reason every other helper
+ *  here is: this module stays dependency-free. */
+const fmtMoney = (cents: number) =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(Math.round(cents / 100));
+
 const daysBetween = (earlierIso: string, now: Date) =>
   Math.floor((now.getTime() - new Date(earlierIso).getTime()) / DAY_MS);
 
@@ -584,12 +594,20 @@ const needOverdueInvoice: NeedRule = ({ receivable }) => {
       ? ` — oldest due ${fmtDay(receivable.oldestDue)}`
       : '';
     const n = receivable.count;
+    // The FIGURE is what makes this need weigh anything — direction-b's M1
+    // reads `$17,500 out 22 days` — and it is already on the signal. Without it
+    // the folio card and the Desk roster both printed an overdue invoice with
+    // no amount on it.
+    const figure =
+      receivable.totalBalanceCents > 0
+        ? ` · ${fmtMoney(receivable.totalBalanceCents)}`
+        : '';
     return {
       kind: 'overdue_invoice',
       text:
         n === 1
-          ? `${receivable.invoiceLabel} overdue${oldest} — send a reminder`
-          : `${n} invoices overdue${oldest} — send a reminder`,
+          ? `${receivable.invoiceLabel}${figure} overdue${oldest} — send a reminder`
+          : `${n} invoices${figure} overdue${oldest} — send a reminder`,
       actionLabel: NEED_ACTION_LABELS.overdue_invoice,
       stamp: { label: 'PAST DUE', ...STAMP.terracotta },
       urgent: false,

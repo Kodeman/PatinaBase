@@ -32,6 +32,12 @@ jest.mock('@patina/supabase', () => ({
      these; none of them is this suite's subject. */
   usePlanRoom: () => ({ data: { sheets: [] }, isLoading: false }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
+  // The ticket reads the PROPOSAL's own three populations on a paper with no
+  // project (B2). All three are `enabled` on a proposal id, so a document
+  // without one runs none of them.
+  useProposalScopeRooms: () => ({ data: [], isLoading: false }),
+  useProposalScheduleItems: () => ({ data: [], isLoading: false }),
+  useBoards: () => ({ data: [], isLoading: false, isError: false }),
   useProjectBoards: () => ({ data: [], isLoading: false }),
   useProjectInvoices: () => ({ isLoading: false, error: null, data: [] }),
   usePurchaseOrders: () => ({ isLoading: false, error: null, data: [] }),

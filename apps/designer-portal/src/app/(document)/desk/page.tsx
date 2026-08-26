@@ -2,12 +2,12 @@
 
 /**
  * The Desk (spec v1.1 §7) — read-only in Slice 1.
- * Date + the ⌘K affordance are the only chrome. Needs-your-hand keeps four
- * folios in reach; the secondary workstreams share one folded Studio Pulse.
+ * Date + the ⌘K affordance are the only chrome. One roster of every live job,
+ * grouped by stage, carries the whole studio; nothing folds on first paint.
  * No metric tiles, badges, feeds, or dashboard furniture.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   useProfile,
   useOrganizations,
@@ -25,10 +25,9 @@ import {
   openProjectPending,
 } from '@/components/document/command-bar';
 import { documentEvents } from '@/lib/analytics/document-events';
-import { NeedsYourHandFolios } from '@/components/document/folder-card';
-import { SectionEyebrow } from '@/components/document/section-eyebrow';
+import { DeskRoster } from '@/components/document/desk-roster';
+import { deriveDeskRoster } from '@/lib/document/desk-roster-derivation';
 import { DeskContents } from '@/components/document/desk-contents';
-import { StudioPulse } from '@/components/document/studio-pulse';
 import { MarginNote } from '@/components/document/margin-note';
 import { StudioSetupWhisper } from '@/components/document/account/studio-setup-whisper';
 import { deriveSetupSteps } from '@/lib/document/studio-setup';
@@ -45,7 +44,6 @@ import {
 } from '@/components/document/document-action';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
-import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
 import { STUDIO_VERBS } from '@/lib/document/registry';
 
 // F24 — the two header acts print their registry sub-labels; the registry
@@ -177,11 +175,25 @@ export default function DeskPage() {
   // plainly ("Good morning.") rather than the old "Good morning, there".
   const firstName = name?.trim().split(/\s+/)[0] || null;
 
-  // A quiet Desk (no folders, no chips) lets the Studio index rise to fill the
+  // The roster is the Desk's one population — every live job, grouped by
+  // stage, in the paper's own section order.
+  const roster = useMemo(
+    () =>
+      deriveDeskRoster(
+        {
+          folders: data?.folders ?? [],
+          chips: data?.chips ?? [],
+          live: data?.live ?? [],
+        },
+        new Date(),
+      ),
+    [data],
+  );
+
+  // A quiet Desk (no live jobs at all) lets the Studio index rise to fill the
   // space — larger, and earlier in the composition — rather than sitting as
   // bottom front matter. Only known once the read resolves.
-  const deskEmpty =
-    !!data && data.folders.length === 0 && data.chips.length === 0;
+  const deskEmpty = !!data && roster.liveCount === 0;
 
   return (
     <main className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14">
@@ -357,55 +369,22 @@ export default function DeskPage() {
             />
           )}
 
-          <section
-            aria-labelledby="needs-your-hand"
-            data-tour-anchor="desk-needs-your-hand"
-          >
-            <SectionEyebrow count={data?.folders.length}>
-              <span id="needs-your-hand">Needs your hand</span>
-            </SectionEyebrow>
-
-            {isLoading && (
-              <div
-                className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2"
-                aria-hidden
-              >
-                {[0, 1].map((i) => (
-                  <div
-                    key={i}
-                    className="mt-[26px] h-32 rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--bg-surface)]"
-                  />
-                ))}
-              </div>
-            )}
-
-            {data && data.folders.length === 0 && (
-              // R97 desk-folio anchor (empty-state placement) — exactly one of this
-              // element and the first FolderCard exists post-load.
-              <p
-                data-tour-anchor="desk-folio"
-                className="font-heading text-[15px] italic text-[var(--text-muted)]"
-              >
-                Nothing needs your hand. The work is in motion.
-              </p>
-            )}
-
-            {data && data.folders.length > 0 && (
-              <NeedsYourHandFolios folders={data.folders} />
-            )}
-          </section>
-
-          {/* The secondary register: each population keeps its own data owner,
-              actions, flags, errors, and deep links; Pulse only folds their
-              presentation and states the known count before anything is hidden. */}
-          <StudioPulse
-            chips={data?.chips ?? []}
-            folders={data?.folders ?? []}
-            live={data?.live ?? []}
-            engagementsResolved={Boolean(data) && !isLoading}
-          />
-
-          <RecentBoardsStrip />
+          {isLoading && !data ? (
+            <div
+              className="space-y-3"
+              aria-hidden
+              data-tour-anchor="desk-needs-your-hand"
+            >
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="h-6 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+                />
+              ))}
+            </div>
+          ) : (
+            <DeskRoster roster={roster} />
+          )}
 
           {/* R95 — on a quiet Desk the Studio index rises here, at full weight, to
               fill the space the folders would occupy. */}
@@ -413,7 +392,7 @@ export default function DeskPage() {
 
           {/* R95 — the Studio Contents page: book-style front matter (Rooms /
               Ledgers / Begin), labels + doorways only. On a working Desk it sits
-              here as quiet front matter after Studio Pulse; on a quiet Desk it
+              here as quiet front matter after the roster; on a quiet Desk it
               has already risen above (deskEmpty), so it renders in exactly one place. */}
           {!deskEmpty && <DeskContents />}
         </>
