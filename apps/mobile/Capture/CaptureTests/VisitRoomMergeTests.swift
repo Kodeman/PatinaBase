@@ -169,7 +169,8 @@ extension VisitRoomMergeTests {
             visitState: siteVisit(projectID: "p1", project: "Maple St", room: "Living"),
             ownableProjectIDs: ["p9"], scanRoomIsAvailable: true)
         #expect(state == .expanded(
-            reason: "Maple St isn't a project you can attach a scan to — choose another."))
+            reason: "Maple St isn't a project you can attach a scan to — choose another.",
+            tone: .caution))
     }
 
     @Test func f1ExpandsWhenTheProjectHasNoClientRoomsYet() {
@@ -177,13 +178,18 @@ extension VisitRoomMergeTests {
             visitState: siteVisit(projectID: "p1", project: "Maple St", room: "Living"),
             ownableProjectIDs: ["p1"], scanRoomIsAvailable: false)
         #expect(state == .expanded(
-            reason: "No client rooms on this project yet — a scan has nothing to attach to."))
+            reason: "No client rooms on this project yet — a scan has nothing to attach to.",
+            tone: .caution))
     }
 
     @Test func withNoVisitF1StaysTheFullForm() {
         let state = FieldScanSetupPolicy.state(
             visitState: .none, ownableProjectIDs: ["p1"], scanRoomIsAvailable: true)
-        #expect(state == .expanded(reason: "Choose a project for this scan."))
+        // F-20: an INSTRUCTION, not a caution. This is what every user without
+        // a site visit sees, every time, and waves 1-2 showed no header here at
+        // all — a warning's colour would read as an error she caused.
+        #expect(state == .expanded(reason: "Choose a project for this scan.",
+                                   tone: .instruction))
     }
 
     @Test func aSourcingVisitNeverCollapsesF1() {
@@ -193,6 +199,7 @@ extension VisitRoomMergeTests {
             kind: .sourcing, label: "High Point 214"))
         let state = FieldScanSetupPolicy.state(
             visitState: sourcing, ownableProjectIDs: ["p1"], scanRoomIsAvailable: true)
-        #expect(state == .expanded(reason: "Choose a project for this scan."))
+        #expect(state == .expanded(reason: "Choose a project for this scan.",
+                                   tone: .instruction))
     }
 }

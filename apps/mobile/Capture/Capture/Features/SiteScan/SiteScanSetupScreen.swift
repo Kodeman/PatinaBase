@@ -159,10 +159,12 @@ struct SiteScanSetupScreen: View {
                     switch model.setupState {
                     case .collapsed(let summary):
                         collapsedScanLane(summary: summary)
-                    case .expanded(let reason):
+                    case .expanded(let reason, let tone):
                         Text(reason)
                             .font(CaptureType.footnote)
-                            .foregroundStyle(CaptureColor.warning)
+                            .foregroundStyle(tone == .caution
+                                             ? CaptureColor.warning
+                                             : CaptureColor.inkSoft)
                         projectSection
                         if model.selectedProjectID != nil { roomSection }
                     }
