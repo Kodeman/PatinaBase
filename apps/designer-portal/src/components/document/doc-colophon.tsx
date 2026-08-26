@@ -161,7 +161,7 @@ export function DocColophon({
               );
             }}
           >
-            Team…
+            Add to the team
           </DocumentAction>
         </DocumentActionGroup>
       </div>
