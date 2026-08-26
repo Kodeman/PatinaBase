@@ -5,18 +5,18 @@
  * the top of every list that HAS a room dimension, on the paper and on the
  * shelves at once, and washes it. It never filters: nothing hides.
  *
- * Always mounted (the letterhead reads it at every width) but only the ≥1440px
- * spine writes it — which is why the hold releases when the window drops below
- * that: there is no put-down affordance under the full spine, so a held room
- * carried down to a narrow window would strand its "IN HAND" line with nothing
- * on screen able to clear it.
+ * B2 (R124) — the hold survives every width. It used to release on dropping
+ * below 1440px, and I136 named the reason: the only writer was the ≥1440 spine
+ * block, so a hold carried down stranded its "IN HAND" line with nothing on
+ * screen able to clear it. The ticket's room chip and the letterhead's own
+ * release are that affordance now, at every width, so the release is gone and
+ * a lift taken at 1440 still reads at 390.
  */
 
 import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -31,29 +31,12 @@ const INERT: RoomLensValue = { heldRoomId: null, toggleRoom: () => {} };
 
 const RoomLensContext = createContext<RoomLensValue | null>(null);
 
-/** The width at which the spine grows the Rooms block — the only writer. */
-const LENS_WIDTH = '(min-width: 1440px)';
-
 export function RoomLensProvider({ children }: { children: ReactNode }) {
   const [heldRoomId, setHeldRoomId] = useState<string | null>(null);
 
   const toggleRoom = useCallback((roomId: string) => {
     setHeldRoomId((current) => (current === roomId ? null : roomId));
   }, []);
-
-  useEffect(() => {
-    if (heldRoomId == null || typeof window === 'undefined') return;
-    const query = window.matchMedia?.(LENS_WIDTH);
-    if (!query) return;
-    // Only on an actual change: a mount-time read would clear the hold wherever
-    // matchMedia cannot answer, and the hold can only be taken at this width
-    // in the first place.
-    const release = () => {
-      if (!query.matches) setHeldRoomId(null);
-    };
-    query.addEventListener('change', release);
-    return () => query.removeEventListener('change', release);
-  }, [heldRoomId]);
 
   const value = useMemo<RoomLensValue>(
     () => ({ heldRoomId, toggleRoom }),

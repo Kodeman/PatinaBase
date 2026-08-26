@@ -16,7 +16,19 @@ import {
   type MobileActiveDoc,
 } from '../mobile/mobile-shell';
 import { DocSheet } from '../overlays/doc-sheet';
+import { DocLetterhead } from '../doc-letterhead';
+import { JobTicket, LETTERHEAD_SENTINEL_ID } from '../job-ticket';
+import { RoomLensProvider, useRoomLens } from '../room-lens-context';
 import type { SpineSection } from '@/lib/document/section-derivation';
+import type { SectionKey } from '@/lib/document/desk-derivation';
+import type { MoneyLadder, MoneyRung } from '@/lib/document/money-ladder';
+import {
+  deriveTicket,
+  deriveTicketIdentity,
+  deriveTicketSeam,
+  type TicketInput,
+  type TicketLine,
+} from '@/lib/document/ticket-derivation';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/doc/proj-1',
@@ -491,5 +503,246 @@ describe('the 390 bar', () => {
       'Pick the fabric for the Okonkwo sofa',
     );
     expect(more).toHaveAccessibleName('More studio actions');
+  });
+});
+
+/**
+ * B1 — the ticket is mounted by the DOCUMENT, so project, install and care read
+ * identically; and the room lens now survives every width (B2), which makes the
+ * put-down affordance the thing that has to be proved. A hold taken at 1440 and
+ * carried to 390 must be releasable from the ticket's expanded Rooms row AND
+ * from the letterhead — I136's released-on-resize clause was written to prevent
+ * a hold with nothing on screen able to clear it, and this is what replaces it.
+ *
+ * The composition below is page.tsx's own, element for element: letterhead,
+ * the sentinel the sticky seam observes, then the ticket.
+ */
+type WidthListener = (event: MediaQueryListEvent) => void;
+
+/** A matchMedia that answers min-/max-width against one real number, so a
+ *  resize can be simulated in both directions the ticket reads. */
+function installWidthMatchMedia(initialWidth: number) {
+  let width = initialWidth;
+  const listeners = new Set<{ query: string; listener: WidthListener }>();
+  const test = (query: string) => {
+    const min = /min-width:\s*(\d+)px/.exec(query);
+    const max = /max-width:\s*(\d+)px/.exec(query);
+    if (min && width < Number(min[1])) return false;
+    if (max && width > Number(max[1])) return false;
+    return true;
+  };
+  window.matchMedia = jest.fn(
+    (query: string) =>
+      ({
+        get matches() {
+          return test(query);
+        },
+        media: query,
+        onchange: null,
+        addEventListener: (_type: string, listener: WidthListener) => {
+          listeners.add({ query, listener });
+        },
+        removeEventListener: (_type: string, listener: WidthListener) => {
+          for (const entry of listeners) {
+            if (entry.listener === listener) listeners.delete(entry);
+          }
+        },
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+        dispatchEvent: jest.fn(),
+      }) as unknown as MediaQueryList,
+  );
+  return {
+    resizeTo(next: number) {
+      width = next;
+      listeners.forEach(({ query, listener }) =>
+        listener({ matches: test(query) } as MediaQueryListEvent),
+      );
+    },
+  };
+}
+
+const TICKET_ROOMS = [
+  { id: 'living', name: 'Living room' },
+  { id: 'dining', name: 'Dining room' },
+];
+
+const ticketRung = (
+  cents: number | null,
+  note: string,
+  word: string,
+): MoneyRung => ({ cents, note, word });
+
+const ticketLadder = (): MoneyLadder => ({
+  budget: ticketRung(null, 'nothing approved yet', 'budget'),
+  plan: ticketRung(null, 'no working budget yet', 'plan'),
+  authorized: ticketRung(null, 'nothing executed yet', 'authorized'),
+  moved: ticketRung(null, 'nothing in motion yet', 'moved'),
+  owed: ticketRung(null, 'nothing owed yet', 'owed'),
+  notDrawn: ticketRung(null, 'nothing standing undrawn', 'not drawn'),
+});
+
+const TICKET_LINES: TicketLine[] = [
+  { stamp: 'ordered', roomId: 'living', specified: true },
+  { stamp: 'ordered', roomId: 'living', specified: true },
+  { stamp: 'delivered', roomId: 'dining', specified: true },
+];
+
+function ticketInputFor(section: SectionKey): TicketInput {
+  return {
+    section,
+    phase: null,
+    rooms: { settled: true, list: TICKET_ROOMS },
+    pieces: { settled: true, lines: TICKET_LINES },
+    drawings: { settled: true, sheetCount: 0 },
+    boards: { settled: true, count: 0 },
+    money: {
+      settled: true,
+      failed: false,
+      ladder: ticketLadder(),
+      owedDays: null,
+      undrawnKind: null,
+    },
+    dates: { settled: true, schedule: null },
+    people: { settled: true, callSheetEnabled: true, rosterCount: 0 },
+  };
+}
+
+function TicketPaper({ section }: { section: SectionKey }) {
+  const { heldRoomId, toggleRoom } = useRoomLens();
+  const input = ticketInputFor(section);
+  const rows = deriveTicket(input);
+  const heldRoomName =
+    TICKET_ROOMS.find((room) => room.id === heldRoomId)?.name ?? null;
+
+  return (
+    <>
+      <DocLetterhead
+        title="Vandersteen residence"
+        vitals="Procurement & Orders"
+        inHandRoomName={heldRoomName}
+        onReleaseRoom={heldRoomId ? () => toggleRoom(heldRoomId) : null}
+      />
+      <div id={LETTERHEAD_SENTINEL_ID} aria-hidden />
+      <JobTicket
+        rows={rows}
+        seam={deriveTicketSeam(rows, deriveTicketIdentity(input))}
+        onOpenLeaf={jest.fn()}
+        routes={{}}
+        onUnfoldRegion={jest.fn()}
+        onOpenCallSheet={jest.fn()}
+      />
+    </>
+  );
+}
+
+function renderTicketPaper(section: SectionKey) {
+  return render(
+    <RoomLensProvider>
+      <TicketPaper section={section} />
+    </RoomLensProvider>,
+  );
+}
+
+const ticketRow = (key: string) =>
+  document.querySelector<HTMLElement>(`[data-ticket-row="${key}"]`);
+
+const roomChip = (id: string) =>
+  document.querySelector<HTMLButtonElement>(`[data-room-chip="${id}"]`);
+
+describe('the ticket, mounted by the document', () => {
+  beforeEach(() => {
+    installWidthMatchMedia(1440);
+  });
+
+  it.each([
+    ['project' as const, 'The job · Project'],
+    ['install' as const, 'The job · Install'],
+    ['care' as const, 'The job · Care'],
+  ])('mounts on a %s spread with the same eight rows', (section, identity) => {
+    renderTicketPaper(section);
+
+    const ticket = document.querySelector('[data-job-ticket]');
+    expect(ticket).not.toBeNull();
+    expect(ticket).toHaveAttribute('data-unfolded', 'true');
+    expect(document.querySelectorAll('[data-ticket-row]')).toHaveLength(8);
+    expect(
+      Array.from(document.querySelectorAll('[data-ticket-row]')).map((row) =>
+        row.getAttribute('data-ticket-row'),
+      ),
+    ).toEqual([
+      'rooms',
+      'pieces',
+      'drawings',
+      'spec',
+      'boards',
+      'money',
+      'dates',
+      'people',
+    ]);
+    expect(screen.getByText(identity)).toBeInTheDocument();
+    // The document's own facts, not the Project spread's: install and care read
+    // the same three lines this specimen carries.
+    expect(ticketRow('pieces')).toHaveTextContent('2 ordered · 1 delivered');
+  });
+});
+
+describe('a room in hand, carried down the widths', () => {
+  it('survives 1440 → 1280 → 390 with a release reachable at each', () => {
+    const media = installWidthMatchMedia(1440);
+    renderTicketPaper('project');
+
+    fireEvent.click(ticketRow('rooms')!.querySelector('button')!);
+    fireEvent.click(roomChip('living')!);
+
+    // 1440 — the letterhead names it, and both controls are on screen.
+    expect(roomChip('living')).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByRole('button', { name: 'Put down Living room' }),
+    ).toBeInTheDocument();
+
+    // 1280 — the width that used to drop the hold on the floor.
+    act(() => media.resizeTo(1280));
+    expect(
+      screen.getByRole('button', { name: 'Put down Living room' }),
+    ).toBeInTheDocument();
+    expect(roomChip('living')).toHaveAttribute('aria-pressed', 'true');
+
+    // 390 — the ticket rests as the seam, so the letterhead is the release
+    // that is already on screen; unfolding brings the chip back.
+    act(() => media.resizeTo(390));
+    expect(document.querySelector('[data-job-ticket]')).not.toHaveAttribute(
+      'data-unfolded',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Put down Living room' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unfold ↓' }));
+    expect(roomChip('living')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('puts the room down from the ticket, and from the letterhead', () => {
+    const media = installWidthMatchMedia(1440);
+    renderTicketPaper('project');
+
+    fireEvent.click(ticketRow('rooms')!.querySelector('button')!);
+    fireEvent.click(roomChip('living')!);
+    fireEvent.click(roomChip('living')!);
+    expect(roomChip('living')).toHaveAttribute('aria-pressed', 'false');
+    expect(
+      screen.queryByRole('button', { name: 'Put down Living room' }),
+    ).not.toBeInTheDocument();
+
+    // Taken again and carried to the phone: the letterhead alone puts it down.
+    fireEvent.click(roomChip('living')!);
+    act(() => media.resizeTo(390));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Put down Living room' }),
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Put down Living room' }),
+    ).not.toBeInTheDocument();
+    expect(document.querySelector('[data-in-hand-room]')).toBeNull();
   });
 });
