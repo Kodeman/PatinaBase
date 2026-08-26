@@ -152,4 +152,19 @@ struct VoiceModeTests {
         #expect(created.status == .ready)
         #expect(store.outbox(owner: owner).contains { $0.id == created.id })
     }
+
+    @Test func everyLongFormVoiceSurfaceUsesTheToggle() {
+        for surface in [FieldVoiceGesture.Surface.voiceMode,
+                        .voiceSheet, .scanContext] {
+            #expect(FieldVoiceGesture.forSurface(surface) == .tapToStartTapToStop)
+        }
+        #expect(FieldVoiceGesture.forSurface(.quickConfirmCard) == .pressAndHold)
+    }
+
+    @Test func theToggleLabelsMatchTheShippedScanContextControl() {
+        #expect(FieldVoiceModeCopy.toggleLabel(isRecording: false) == "Note")
+        #expect(FieldVoiceModeCopy.toggleLabel(isRecording: true) == "Stop")
+        #expect(FieldVoiceModeCopy.toggleGlyph(isRecording: false) == "mic.fill")
+        #expect(FieldVoiceModeCopy.toggleGlyph(isRecording: true) == "stop.circle.fill")
+    }
 }

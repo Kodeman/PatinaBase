@@ -1,11 +1,14 @@
 //  VoiceNoteSheet.swift
 //  Capture
 //
-//  N4 · Voice note — live transcribe. Hold to talk and the note transcribes on
+//  N4 · Voice note — live transcribe. Tap to start, tap to stop (matching
+//  every other long-form voice surface — §7.4), and the note transcribes on
 //  device in real time ("oak base, the warmer bouclé — rep is Dana"). "Attach
 //  note" saves transcript + audio to the specimen (source .voice); "Discard"
-//  drops the take AND deletes its audio segments from the media directory. If
-//  the recogniser is unavailable (no mic permission, or the simulator), the
+//  drops the take AND deletes its audio segments from the media directory —
+//  including any segments a PRIOR attach() already persisted to this specimen,
+//  since this sheet is re-openable on one that already carries audio (FC-R19).
+//  If the recogniser is unavailable (no mic permission, or the simulator), the
 //  sheet falls to a typed-note entry — the raw audio is always kept alongside
 //  the text when there is one. §15.4: when the RECOGNIZER is what is
 //  unavailable the note still records, the transcript pane carries the honest
@@ -36,9 +39,6 @@ struct VoiceNoteSheet: View {
     /// so without this the primary re-enables in the gap and attach() labels a
     /// genuine recording as hand-typed with no filename.
     @State private var isFinishing = false
-    /// One gesture, one take. The cap clears isRecording mid-hold, so a gate on
-    /// isRecording would let a still-down finger begin a SECOND note.
-    @State private var gestureHeld = false
     @State private var player = VoiceSegmentPlayer()
     /// §15.4: the note is recording but nothing will transcribe it. Distinct
     /// from manualFallback, which also covers "no microphone at all".
@@ -61,10 +61,6 @@ struct VoiceNoteSheet: View {
         .accessibilityIdentifier(CaptureScreenID.n4Voice.rawValue)
         .onDisappear {
             player.stop()
-            // SwiftUI does not call onEnded for a CANCELLED drag - a system edge
-            // swipe or the sheet's interactive-dismiss pan stealing the touch -
-            // and a latch left set means no later press can begin() at all.
-            gestureHeld = false
         }
         .task {
             analytics.screen("N4.voice")
@@ -156,7 +152,7 @@ struct VoiceNoteSheet: View {
                         .foregroundStyle(CaptureColor.error)
                 }
             } else {
-                Text(transcript.isEmpty ? "HOLD TO TALK" : "TAKE READY")
+                Text(transcript.isEmpty ? "TAP TO TALK" : "TAKE READY")
                     .font(CaptureType.monoSmall)
                     .foregroundStyle(CaptureColor.inkSoft)
             }
@@ -186,21 +182,40 @@ struct VoiceNoteSheet: View {
         }
     }
 
+    /// Tap to start, tap to stop (§7.4, matching C6 and F2). The cap can end a
+    /// take on its own — end() clears isRecording synchronously but leaves
+    /// isFinishing set until voice.finish() resolves `result` — so the button
+    /// stays disabled through that window: without it, a tap landing there
+    /// would read isRecording as false and call begin() a second time against
+    /// the SAME draft, wiping the prior take's result before it lands. A
+    /// Button doesn't have the DragGesture.onChanged problem the old
+    /// gestureHeld latch guarded against (repeated firing across one held
+    /// touch) — a tap resolves once, synchronously flips isRecording, and a
+    /// fast second tap simply sees the new value and takes the other branch.
     private var micButton: some View {
-        Image(systemName: isRecording ? "waveform" : "mic.fill")
-            .font(CaptureType.title)
-            .foregroundStyle(CaptureColor.paper3)
-            .frame(width: 76, height: 76)
-            .background(Circle().fill(isRecording ? CaptureColor.error : CaptureColor.verdigris))
-            .scaleEffect(isRecording ? 1.08 : 1)
-            .animation(.spring(duration: 0.2), value: isRecording)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in if !gestureHeld { gestureHeld = true; begin() } }
-                    .onEnded { _ in gestureHeld = false; end() }
-            )
-            .accessibilityLabel("Hold to talk")
-            .accessibilityAddTraits(.startsMediaSession)
+        Button {
+            toggleVoice()
+        } label: {
+            VStack(spacing: 8) {
+                Image(systemName: FieldVoiceModeCopy.toggleGlyph(isRecording: isRecording))
+                    .font(CaptureType.title)
+                    .foregroundStyle(CaptureColor.paper3)
+                    .frame(width: 76, height: 76)
+                    .background(Circle().fill(isRecording ? CaptureColor.error : CaptureColor.verdigris))
+                    .scaleEffect(isRecording ? 1.08 : 1)
+                // The hold gesture needed no caption - the finger already knew
+                // what it was doing. A tap needs the word said, and recording
+                // needs it said LARGE: this is the only stop control on screen.
+                Text(FieldVoiceModeCopy.toggleLabel(isRecording: isRecording))
+                    .font(isRecording ? CaptureType.title : CaptureType.footnote)
+                    .foregroundStyle(isRecording ? CaptureColor.error : CaptureColor.inkSoft)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isFinishing)
+        .animation(.spring(duration: 0.2), value: isRecording)
+        .accessibilityLabel(FieldVoiceModeCopy.toggleLabel(isRecording: isRecording))
+        .accessibilityAddTraits(.startsMediaSession)
     }
 
     // MARK: - Manual fallback
@@ -263,10 +278,16 @@ struct VoiceNoteSheet: View {
 
     // MARK: - Recording lifecycle
 
+    /// The mic button's single action. Disabled (see micButton) for the whole
+    /// isFinishing window, so this never fires while a prior take's
+    /// voice.finish() is still resolving.
+    private func toggleVoice() {
+        if isRecording { end() } else { begin() }
+    }
+
     private func begin() {
         guard authorized != false else {
             manualFallback = true
-            gestureHeld = false
             return
         }
         // Without these, the instant take 2 starts the sheet prints the ladder
@@ -319,7 +340,6 @@ struct VoiceNoteSheet: View {
         } catch {
             manualFallback = true
             isRecording = false
-            gestureHeld = false
         }
     }
 
@@ -360,7 +380,26 @@ struct VoiceNoteSheet: View {
             for name in abandoned.audioSegments {
                 try? FileManager.default.removeItem(at: store.mediaURL(for: name))
             }
-            await MainActor.run { coordinator?.dismissSheet() }
+            await MainActor.run {
+                // FC-R19: `abandoned` above is only THIS session's take. This
+                // sheet is re-openable on a specimen that already carries
+                // audio from an EARLIER attach() (see attach()'s comment
+                // below) — with the flag off it opens straight into the typed
+                // editor with no take in hand at all. Without this, discarding
+                // a re-opened note left that prior session's segments (and its
+                // voiceAudioFilename) on the phone forever: nothing else ever
+                // deletes them.
+                if let specimen = currentSpecimen() {
+                    for filename in (specimen.voiceAudioSegmentsRaw ?? [])
+                        + [specimen.voiceAudioFilename].compactMap({ $0 }) {
+                        try? FileManager.default.removeItem(at: store.mediaURL(for: filename))
+                    }
+                    specimen.voiceAudioFilename = nil
+                    specimen.voiceAudioSegmentsRaw = nil
+                    try? store.save()
+                }
+                coordinator?.dismissSheet()
+            }
         }
     }
 

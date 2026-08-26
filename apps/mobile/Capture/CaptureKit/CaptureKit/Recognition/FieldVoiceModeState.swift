@@ -59,6 +59,16 @@ public enum FieldVoiceModeCopy {
         "Voice notes aren't ready yet. Pick another mode to keep capturing."
 }
 
+/// N4's toggle (Task 24, §7.4 parity with C6/F2). Matches the shipped control
+/// at SiteScanContextCapture's SiteScanContextControls exactly, so N4 does not
+/// invent its own mic/stop vocabulary.
+public extension FieldVoiceModeCopy {
+    static func toggleLabel(isRecording: Bool) -> String { isRecording ? "Stop" : "Note" }
+    static func toggleGlyph(isRecording: Bool) -> String {
+        isRecording ? "stop.circle.fill" : "mic.fill"
+    }
+}
+
 public enum FieldVoiceModeMachine {
     /// COMPLETED rotations. `maxSegments` (24) × `segmentRotationSeconds` (50)
     /// is exactly `maxNoteSeconds` (1200), so counting completed rotations makes
