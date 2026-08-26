@@ -158,7 +158,7 @@ export function WorkBlock({
   if (tasksQuery.isError || gatesQuery.isError) {
     return (
       <div className="mb-1 mt-4 border-y border-[var(--color-pearl)] py-3">
-        <p role="alert" className="text-[11.5px] text-[var(--color-terracotta)]">
+        <p role="alert" className="text-[11.5px] text-[var(--color-terracotta-ink)]">
           The work could not be read.
         </p>
         <DocumentAction
@@ -239,7 +239,7 @@ export function WorkBlock({
                 </span>
                 <span
                   className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.05em]"
-                  style={{ color: overdue ? '#C4836F' : 'var(--text-muted)' }}
+                  style={{ color: overdue ? 'var(--color-terracotta-ink)' : 'var(--text-muted)' }}
                 >
                   {done
                     ? t.completed_at
@@ -326,7 +326,7 @@ export function WorkBlock({
                         <button
                           type="button"
                           onClick={() => setFolioMode('thread')}
-                          className="mt-1 block font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-aged-oak)]"
+                          className="mt-1 block font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-aged-oak)]"
                         >
                           Place it in the schedule
                         </button>
@@ -402,7 +402,7 @@ export function WorkBlock({
           )}
           {gateState(gate) === 'declined' && (
             <>
-              <span className="text-[11px] italic" style={{ color: '#C4836F' }}>
+              <span className="text-[11px] italic" style={{ color: 'var(--color-terracotta-ink)' }}>
                 Changes requested
                 {gate.options.find((o) => o.selected)?.client_note
                   ? ` — “${gate.options.find((o) => o.selected)?.client_note}”`

@@ -58,7 +58,7 @@ export function FoldSeam({
       <span className="truncate font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
         {summary}
       </span>
-      <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+      <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
         unfold ↓
       </span>
     </button>

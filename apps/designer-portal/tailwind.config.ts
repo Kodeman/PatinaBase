@@ -32,6 +32,10 @@ const config: Config = {
           'dusty-blue': '#8B9CAD',
           terracotta: '#D4A090',
           'golden-hour': '#E8C547',
+          // F56 — text-grade companions to clay/terracotta. Mirrors the
+          // --color-*-ink custom properties in globals.css; keep both in step.
+          'clay-ink': '#7C5E30',
+          'terracotta-ink': '#9C5340',
         },
         border: 'oklch(var(--border))',
         input: 'oklch(var(--input))',

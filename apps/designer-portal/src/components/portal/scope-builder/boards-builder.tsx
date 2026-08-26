@@ -274,7 +274,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
       )}
 
       {error && (
-        <p role="alert" className="text-[12px] text-[var(--color-clay)]">
+        <p role="alert" className="text-[12px] text-[var(--color-clay-ink)]">
           {error}
         </p>
       )}
@@ -303,7 +303,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
                   <span className="block font-heading text-[14px] text-[var(--text-primary)]">Blank board</span>
                   <span className="mt-1 block text-[11px] text-[var(--text-muted)]">A clean, flexible canvas.</span>
                 </span>
-                <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+                <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
                   {pendingKey === 'blank' ? 'Creating…' : 'Choose'}
                 </span>
               </button>
@@ -313,7 +313,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
               <p className="text-[12px] text-[var(--text-muted)]">Loading templates…</p>
             )}
             {templatesQuery.isError && (
-              <p role="alert" className="text-[12px] text-[var(--color-clay)]">
+              <p role="alert" className="text-[12px] text-[var(--color-clay-ink)]">
                 Templates could not be loaded. You can still start blank.
               </p>
             )}

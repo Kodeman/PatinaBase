@@ -189,11 +189,11 @@ export function DraftingEstimateFlow({ proposalId }: { proposalId: string }) {
           </p>
           <div id="drafting-estimate-status" className="mt-2 min-h-5" aria-live="polite">
             {parsed.error ? (
-              <p role="alert" className="text-xs text-[var(--color-terracotta)]">
+              <p role="alert" className="text-xs text-[var(--color-terracotta-ink)]">
                 {parsed.error}
               </p>
             ) : autosave.state === 'error' ? (
-              <p role="alert" className="text-xs text-[var(--color-terracotta)]">
+              <p role="alert" className="text-xs text-[var(--color-terracotta-ink)]">
                 {autosave.error ?? 'The time estimate could not be saved.'}
               </p>
             ) : (

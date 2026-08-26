@@ -217,7 +217,7 @@ export function PaymentMilestonesBuilder({ proposalId, totalCents }: PaymentMile
           </p>
         )}
         {saveState === 'error' && (
-          <p role="alert" className="font-mono text-[0.68rem] text-[var(--color-terracotta)]">
+          <p role="alert" className="font-mono text-[0.68rem] text-[var(--color-terracotta-ink)]">
             {saveError ?? 'Could not save the payment schedule.'} Your client preview was not updated.
           </p>
         )}

@@ -112,7 +112,7 @@ function PaletteBuilderState({ proposalId }: PaletteBuilderProps) {
     return (
       <div
         role="alert"
-        className="rounded-[3px] border border-[var(--color-terracotta)] px-3 py-3 text-sm text-[var(--color-terracotta)]"
+        className="rounded-[3px] border border-[var(--color-terracotta)] px-3 py-3 text-sm text-[var(--color-terracotta-ink)]"
       >
         <p>The palette could not be loaded. Editing is paused to protect this proposal.</p>
         <button

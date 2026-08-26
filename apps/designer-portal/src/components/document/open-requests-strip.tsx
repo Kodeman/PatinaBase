@@ -191,7 +191,7 @@ function RequestCard({
             ) : (
               <div className="flex items-center gap-2.5">
                 {otherError && (
-                  <span className="doc-type-meta text-[var(--color-terracotta)]">
+                  <span className="doc-type-meta text-[var(--color-terracotta-ink)]">
                     Couldn’t claim — try again.
                   </span>
                 )}

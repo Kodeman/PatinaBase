@@ -61,7 +61,7 @@ const PO_STAMP: Record<string, { color: string; ink?: string }> = {
   in_production: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
   shipped: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
   delivered: { color: 'var(--color-sage)' },
-  cancelled: { color: 'var(--color-terracotta)' },
+  cancelled: { color: 'var(--color-terracotta)', ink: 'var(--color-terracotta-ink)' },
 };
 
 const termsLabel = (vendor: AnyRecord): string =>
@@ -404,7 +404,7 @@ function BriefComposer({
         </DocumentAction>
       </DocumentActionRow>
       {error && (
-        <p className="doc-type-body mt-1 text-[var(--color-terracotta)]">
+        <p className="doc-type-body mt-1 text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}

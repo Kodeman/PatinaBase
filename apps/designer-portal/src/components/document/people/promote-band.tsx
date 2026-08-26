@@ -70,7 +70,7 @@ export function PromoteBand({
         Add to the rolodex
       </DocumentAction>
       {promote.isError && (
-        <p className="w-full text-[0.68rem] text-[var(--color-terracotta)]">
+        <p className="w-full text-[0.68rem] text-[var(--color-terracotta-ink)]">
           {promote.error instanceof Error
             ? promote.error.message
             : 'Could not add them to the rolodex just now.'}

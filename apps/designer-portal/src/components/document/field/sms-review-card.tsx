@@ -129,7 +129,7 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
             </span>
           )}
           {review.isError && (
-            <span className="text-[11px] text-[var(--color-terracotta)]">
+            <span className="text-[11px] text-[var(--color-terracotta-ink)]">
               Couldn’t save — try again.
             </span>
           )}

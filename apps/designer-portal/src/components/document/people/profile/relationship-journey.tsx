@@ -47,7 +47,7 @@ function JourneyRow({
         className="absolute left-[-1.4rem] top-[0.6rem] h-[11px] w-[11px] rounded-full border-2 border-white"
         style={{ background: DOT[event.type] }}
       />
-      <span className="font-mono text-[0.42rem] font-semibold uppercase tracking-[0.05em] text-[var(--color-clay)]">
+      <span className="font-mono text-[0.42rem] font-semibold uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
         {event.label}
       </span>
       <span className="block font-mono text-[0.5rem] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">

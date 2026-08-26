@@ -172,7 +172,7 @@ export function BoardShareDialog({
           {isLoading ? (
             <p className="mt-2 text-[12px] text-[var(--text-muted)]">Loading links…</p>
           ) : isError ? (
-            <p role="alert" className="mt-2 text-[12px] text-[var(--color-clay)]">Links could not be read.</p>
+            <p role="alert" className="mt-2 text-[12px] text-[var(--color-clay-ink)]">Links could not be read.</p>
           ) : activeShares.length === 0 ? (
             <p className="mt-2 text-[12px] italic text-[var(--text-muted)]">No active links.</p>
           ) : (

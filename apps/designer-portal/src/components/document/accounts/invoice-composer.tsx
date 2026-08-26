@@ -50,7 +50,7 @@ import {
 import { fmtDay } from '@/lib/document/format';
 import type { InvoiceComposerContext } from './invoice-overlays';
 
-const TERRACOTTA_INK = '#C4836F';
+const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
 
 const LABEL =
   'font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
@@ -393,7 +393,7 @@ export function InvoiceComposer({
                         : new Set(unbilledEntries.map((e) => e.id)),
                     )
                   }
-                  className="ml-2 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+                  className="ml-2 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] hover:opacity-80"
                 >
                   {tickedTimeIds.size === unbilledEntries.length
                     ? 'clear all'
@@ -570,7 +570,7 @@ export function InvoiceComposer({
                   onClick={() =>
                     setAdhoc((prev) => prev.filter((_, j) => j !== i))
                   }
-                  className="text-[13px] text-[var(--text-muted)] hover:text-[#C4836F]"
+                  className="text-[13px] text-[var(--text-muted)] hover:text-[var(--color-terracotta-ink)]"
                 >
                   ×
                 </button>

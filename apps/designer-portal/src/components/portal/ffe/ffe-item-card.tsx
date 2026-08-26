@@ -167,7 +167,7 @@ export function FFEItemCard({
       {/* Body */}
       <div className="flex flex-1 flex-col gap-1.5 p-2.5">
         {docCode && (
-          <span className="font-mono text-[0.58rem] uppercase tracking-[0.08em] text-[var(--color-clay)]">
+          <span className="font-mono text-[0.58rem] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
             {docCode}
           </span>
         )}
@@ -185,7 +185,7 @@ export function FFEItemCard({
         {blocked && (
           <div
             className="type-meta-small uppercase tracking-wider"
-            style={{ color: 'var(--color-terracotta, #D4A090)' }}
+            style={{ color: 'var(--color-terracotta-ink)' }}
             title={blockedReason ?? undefined}
           >
             ⚠ Blocked

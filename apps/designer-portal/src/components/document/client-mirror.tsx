@@ -120,7 +120,7 @@ export function ClientMirror({
         <button
           type="button"
           onClick={onClose}
-          className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+          className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:opacity-80"
         >
           ← Back to your copy
         </button>

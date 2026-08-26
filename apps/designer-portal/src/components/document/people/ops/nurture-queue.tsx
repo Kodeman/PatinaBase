@@ -35,7 +35,7 @@ export function NurtureQueueRow({
         </div>
         <div
           className={`mt-[0.1rem] text-[0.68rem] ${
-            due ? 'font-medium text-[var(--color-terracotta)]' : 'text-[var(--color-aged-oak)]'
+            due ? 'font-medium text-[var(--color-terracotta-ink)]' : 'text-[var(--color-aged-oak)]'
           }`}
         >
           {reason}

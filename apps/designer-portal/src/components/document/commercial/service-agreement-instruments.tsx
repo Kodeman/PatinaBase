@@ -120,7 +120,7 @@ export function ServiceAgreementInstruments({
   }
   if (bundle.error || !bundle.data) {
     return (
-      <p className="mt-2 text-[11.5px] text-[var(--color-terracotta)]">
+      <p className="mt-2 text-[11.5px] text-[var(--color-terracotta-ink)]">
         Agreement status unavailable.
       </p>
     );

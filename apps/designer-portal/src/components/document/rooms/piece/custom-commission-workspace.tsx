@@ -112,7 +112,7 @@ function FieldLabel({
       </span>
       {children}
       {error && (
-        <span className="mt-1 block text-[11px] text-[var(--color-terracotta)]">
+        <span className="mt-1 block text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
         </span>
       )}
@@ -490,7 +490,7 @@ export function CustomCommissionWorkspace({
       title={`Custom commission · ${productName}`}
     >
       <header className="border-b border-[var(--color-pearl)] pb-4">
-        <p className="doc-type-meta uppercase tracking-[0.12em] text-[var(--color-clay)]">
+        <p className="doc-type-meta uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
           Made to measure
         </p>
         <h2 className="mt-1 font-heading text-[1.55rem] leading-tight text-[var(--color-charcoal)]">
@@ -892,7 +892,7 @@ export function CustomCommissionWorkspace({
             {(feedback || error) && (
               <p
                 role={error ? "alert" : "status"}
-                className={`text-[12px] ${error ? "text-[var(--color-terracotta)]" : "text-[var(--text-muted)]"}`}
+                className={`text-[12px] ${error ? "text-[var(--color-terracotta-ink)]" : "text-[var(--text-muted)]"}`}
               >
                 {error ?? feedback}
               </p>

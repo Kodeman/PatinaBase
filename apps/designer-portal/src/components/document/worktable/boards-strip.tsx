@@ -195,7 +195,7 @@ export function BoardsStrip({ proposalId, roomFilter }: BoardsStripProps) {
           <span className="truncate font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
             {countLabel}
           </span>
-          <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+          <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
             {expanded ? "fold ↑" : "unfold ↓"}
           </span>
         </button>
@@ -215,7 +215,7 @@ export function BoardsStrip({ proposalId, roomFilter }: BoardsStripProps) {
       </div>
 
       {error && (
-        <p role="alert" className="mt-1 text-[12px] text-[var(--color-clay)]">
+        <p role="alert" className="mt-1 text-[12px] text-[var(--color-clay-ink)]">
           {error}
         </p>
       )}

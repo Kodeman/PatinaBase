@@ -106,7 +106,7 @@ export function DateTextInput({
                 onValidityChange?.(true);
                 onChange(null);
               }}
-              className="font-mono text-[10px] text-[var(--text-muted)] hover:text-[var(--color-terracotta)]"
+              className="font-mono text-[10px] text-[var(--text-muted)] hover:text-[var(--color-terracotta-ink)]"
             >
               ×
             </span>
@@ -143,7 +143,7 @@ export function DateTextInput({
         <span
           id={errorId}
           role="alert"
-          className="mt-1 block text-[10px] text-[var(--color-terracotta)]"
+          className="mt-1 block text-[10px] text-[var(--color-terracotta-ink)]"
         >
           Choose a valid calendar date.
         </span>

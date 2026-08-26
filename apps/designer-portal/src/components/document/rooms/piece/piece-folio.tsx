@@ -281,7 +281,7 @@ export function PieceFolio({
         />
       </DocumentActionRow>
       {err && (
-        <p className="mt-2 text-[0.7rem] text-[var(--color-terracotta)]">
+        <p className="mt-2 text-[0.7rem] text-[var(--color-terracotta-ink)]">
           {err}
         </p>
       )}

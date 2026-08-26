@@ -22,7 +22,7 @@ export function SectionEyebrow({
       </span>
       {children}
       {typeof count === 'number' && count > 0 && (
-        <span className="text-[var(--color-clay)]">{count}</span>
+        <span className="text-[var(--color-clay-ink)]">{count}</span>
       )}
     </h2>
   );

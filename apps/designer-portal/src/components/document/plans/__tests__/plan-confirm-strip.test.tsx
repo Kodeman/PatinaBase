@@ -200,7 +200,7 @@ describe('PlanConfirmStrip', () => {
     const failure = await screen.findByRole('alert');
     expect(failure).toHaveTextContent(/Moving the pointers — one transaction failed/);
     expect(failure).toHaveTextContent(/sheet ID-401 is named twice/);
-    expect(failure.className).toContain('text-[var(--color-terracotta)]');
+    expect(failure.className).toContain('text-[var(--color-terracotta-ink)]');
     // The staged table is still there and the primary is live again.
     expect(onCommitted).not.toHaveBeenCalled();
     expect(document.querySelector('[data-plan-confirm-strip]')).toBeInTheDocument();

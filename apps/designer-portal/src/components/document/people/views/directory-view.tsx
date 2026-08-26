@@ -407,7 +407,7 @@ export function DirectoryView({
               window.dispatchEvent(new Event('document:open-rolodex-seed-review'));
               setSeedSheetOpen(true);
             }}
-            className="da-score-hover inline-flex min-h-11 items-center underline decoration-1 underline-offset-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="da-score-hover inline-flex min-h-11 items-center underline decoration-1 underline-offset-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             review what seeded
           </button>
@@ -430,7 +430,7 @@ export function DirectoryView({
               aria-current={makerLens === key ? 'true' : undefined}
               className={`font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors ${
                 makerLens === key
-                  ? 'text-[var(--color-clay)]'
+                  ? 'text-[var(--color-clay-ink)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
               }`}
             >

@@ -374,7 +374,7 @@ export function AccountStudioPage() {
         {createOrg.isError && (
           <p
             role="alert"
-            className="mt-3 border-l-2 border-[var(--color-terracotta)] pl-3 text-[12px] text-[var(--color-terracotta)]"
+            className="mt-3 border-l-2 border-[var(--color-terracotta)] pl-3 text-[12px] text-[var(--color-terracotta-ink)]"
           >
             {createOrg.error instanceof Error
               ? createOrg.error.message
@@ -522,7 +522,7 @@ export function AccountStudioPage() {
         {isRenaming && updateOrg.isError && (
           <p
             role="alert"
-            className="mt-2 text-[12px] text-[var(--color-terracotta)]"
+            className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]"
           >
             {updateOrg.error instanceof Error
               ? updateOrg.error.message
@@ -690,7 +690,7 @@ export function AccountStudioPage() {
             {!isRenaming && updateOrg.isError && (
               <p
                 role="alert"
-                className="mt-2 text-[12px] text-[var(--color-terracotta)]"
+                className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]"
               >
                 {friendlyStudioError(
                   updateOrg.error,
@@ -769,7 +769,7 @@ export function AccountStudioPage() {
               {billingBps === null ? (
                 <p
                   role="alert"
-                  className="mt-1 text-[12px] text-[var(--color-terracotta)]"
+                  className="mt-1 text-[12px] text-[var(--color-terracotta-ink)]"
                 >
                   Enter a card fee between 0 and 3 percent. Enter 0 if your
                   studio absorbs card processing.
@@ -826,7 +826,7 @@ export function AccountStudioPage() {
             {updateBilling.isError && (
               <p
                 role="alert"
-                className="mt-2 text-[12px] text-[var(--color-terracotta)]"
+                className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]"
               >
                 {friendlyStudioError(
                   updateBilling.error,
@@ -975,7 +975,7 @@ export function AccountStudioPage() {
                       variant="tertiary"
                       onClick={() => handleRemove(m.id, label)}
                       disabled={removeMember.isPending}
-                      className="text-[var(--color-terracotta)]"
+                      className="text-[var(--color-terracotta-ink)]"
                     >
                       Remove
                     </DocumentAction>
@@ -990,7 +990,7 @@ export function AccountStudioPage() {
       {transferOwner.isError && (
         <p
           role="alert"
-          className="mt-3 text-[12px] text-[var(--color-terracotta)]"
+          className="mt-3 text-[12px] text-[var(--color-terracotta-ink)]"
         >
           {friendlyStudioError(
             transferOwner.error,
@@ -1015,7 +1015,7 @@ export function AccountStudioPage() {
             disabled={leaveOrg.isPending}
             loading={leaveOrg.isPending}
             loadingLabel="Leaving…"
-            className="text-[var(--color-terracotta)]"
+            className="text-[var(--color-terracotta-ink)]"
           >
             Leave studio
           </DocumentAction>
@@ -1023,7 +1023,7 @@ export function AccountStudioPage() {
         {myRole !== 'owner' && leaveOrg.isError && (
           <p
             role="alert"
-            className="mt-2 text-[12px] text-[var(--color-terracotta)]"
+            className="mt-2 text-[12px] text-[var(--color-terracotta-ink)]"
           >
             {friendlyStudioError(leaveOrg.error, 'Failed to leave the studio.')}
           </p>

@@ -33,7 +33,7 @@ const INVOICE_STAMP: Record<
     ink: '#B89A2E',
   },
   paid: { label: 'paid', color: 'var(--color-sage)', ink: '#85947C' },
-  void: { label: 'void', color: 'var(--color-terracotta)', ink: '#C4836F' },
+  void: { label: 'void', color: 'var(--color-terracotta)', ink: 'var(--color-terracotta-ink)' },
 };
 
 export function AccountsLedgerPage({
@@ -122,7 +122,7 @@ function InvoiceRows({
                 {inv.invoice_number
                   ? `Invoice ${inv.invoice_number}`
                   : 'Draft invoice'}
-                <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+                <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
                   folio →
                 </span>
               </p>
@@ -143,7 +143,7 @@ function InvoiceRows({
             <button
               type="button"
               onClick={() => onOpenDocument(inv.project_id)}
-              className="whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline"
+              className="whitespace-nowrap text-[10.5px] text-[var(--color-clay-ink)] hover:underline"
             >
               document ↗
             </button>

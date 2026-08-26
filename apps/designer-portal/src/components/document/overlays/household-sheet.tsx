@@ -194,7 +194,7 @@ export function HouseholdSheet({
                   disabled={attach.isPending}
                 />
                 {attach.isError && (
-                  <p className="mt-2 text-[12px] text-[var(--color-clay)]">
+                  <p className="mt-2 text-[12px] text-[var(--color-clay-ink)]">
                     {attach.error instanceof Error
                       ? attach.error.message
                       : 'Could not update the client.'}

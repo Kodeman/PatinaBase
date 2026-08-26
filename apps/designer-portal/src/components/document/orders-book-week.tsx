@@ -261,7 +261,7 @@ export function WeekBookPage() {
         {hasConflicts && (
           <>
             {' · '}
-            <span className="text-[var(--color-terracotta)]">
+            <span className="text-[var(--color-terracotta-ink)]">
               conflict — also on your Desk
             </span>
           </>

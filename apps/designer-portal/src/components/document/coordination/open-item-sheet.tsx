@@ -270,7 +270,7 @@ export function OpenItemSheet({
         {/* "⊘ This is blocking" list */}
         {(blockedTasks.length > 0 || blocksFallback) && (
           <div className="my-3 rounded-[7px] border border-[rgba(212,160,144,0.4)] bg-[rgba(212,160,144,0.05)] px-3.5 py-3">
-            <div className="mb-1.5 font-mono text-[0.46rem] font-semibold uppercase tracking-[0.08em] text-[#C4836F]">
+            <div className="mb-1.5 font-mono text-[0.46rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               ⊘ This is blocking
             </div>
             {blockedTasks.length > 0 ? (
@@ -289,7 +289,7 @@ export function OpenItemSheet({
                       key={t.id}
                       className="flex items-center gap-1.5 py-[0.2rem] text-[0.74rem] text-[var(--color-mocha)]"
                     >
-                      <span className="text-[#C4836F]">→</span>
+                      <span className="text-[var(--color-terracotta-ink)]">→</span>
                       <span className="min-w-0 flex-1 truncate">{t.title}</span>
                       <span className="ml-auto inline-flex items-center gap-1 whitespace-nowrap font-mono text-[0.46rem] uppercase tracking-[0.04em] text-[var(--text-muted)]">
                         <span
@@ -305,7 +305,7 @@ export function OpenItemSheet({
               </ul>
             ) : (
               <div className="flex items-center gap-1.5 py-[0.2rem] text-[0.74rem] text-[var(--color-mocha)]">
-                <span className="text-[#C4836F]">→</span>
+                <span className="text-[var(--color-terracotta-ink)]">→</span>
                 {blocksFallback}
               </div>
             )}
@@ -505,7 +505,7 @@ function Thread({
           {busy ? 'Posting…' : 'Post'}
         </ResolveButton>
       </div>
-      {error && <p className="mt-1.5 text-[0.68rem] text-[#C4836F]">{error}</p>}
+      {error && <p className="mt-1.5 text-[0.68rem] text-[var(--color-terracotta-ink)]">{error}</p>}
     </div>
   );
 }

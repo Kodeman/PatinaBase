@@ -119,7 +119,7 @@ function Bubble({ message }: { message: PartySmsMessage }) {
             <span className="opacity-80">· dry run</span>
           )}
           {message.needs_review && (
-            <span className="text-[var(--color-clay)]">· needs review</span>
+            <span className="text-[var(--color-clay-ink)]">· needs review</span>
           )}
         </div>
       </div>
@@ -349,7 +349,7 @@ export function PartyProfileSheet({
               onClick={() => void revoke()}
               loading={revokeLink.isPending}
               loadingLabel="Revoking…"
-              className="text-[var(--color-terracotta)] decoration-[var(--color-terracotta)]"
+              className="text-[var(--color-terracotta-ink)] decoration-[var(--color-terracotta)]"
             >
               Revoke
             </DocumentAction>
@@ -389,7 +389,7 @@ export function PartyProfileSheet({
             : 'Copy field link'}
         </DocumentAction>
         {linkError && (
-          <p className="mt-1.5 text-[0.7rem] text-[var(--color-terracotta)]">
+          <p className="mt-1.5 text-[0.7rem] text-[var(--color-terracotta-ink)]">
             {linkError}
           </p>
         )}
@@ -445,7 +445,7 @@ export function PartyProfileSheet({
                 Send text
               </DocumentAction>
               {send.isError && (
-                <span className="text-[0.7rem] text-[var(--color-terracotta)]">
+                <span className="text-[0.7rem] text-[var(--color-terracotta-ink)]">
                   {send.error instanceof Error
                     ? send.error.message
                     : 'Send failed'}
@@ -533,7 +533,7 @@ export function PartyProfileSheet({
             {inviteError && (
               <p
                 role="alert"
-                className="mt-2 text-[0.7rem] text-[var(--color-terracotta)]"
+                className="mt-2 text-[0.7rem] text-[var(--color-terracotta-ink)]"
               >
                 {inviteError}
               </p>

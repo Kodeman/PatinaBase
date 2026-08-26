@@ -140,7 +140,7 @@ function StageSentence({
           {index > 0 && ' · '}
           <button
             type="button"
-            className="not-italic underline decoration-dotted decoration-1 underline-offset-4 transition-colors hover:text-[var(--color-clay)] hover:decoration-solid motion-reduce:transition-none"
+            className="not-italic underline decoration-dotted decoration-1 underline-offset-4 transition-colors hover:text-[var(--color-clay-ink)] hover:decoration-solid motion-reduce:transition-none"
             onClick={() => openStageInCommandBar(part.stage)}
           >
             {index === 0 ? capitalize(part.text) : part.text}

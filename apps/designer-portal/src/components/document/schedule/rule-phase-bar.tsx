@@ -403,7 +403,7 @@ export function RulePhaseBar({
 
         {!pinned && previewing && startIso && endIso && (
           <span
-            className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]"
+            className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]"
             style={{ left: 0, top: g.tipTop - g.top }}
           >
             {fmtDay(startIso)} — {fmtDay(endIso)} · {value.durationDays}d

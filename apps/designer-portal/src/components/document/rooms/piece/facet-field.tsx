@@ -71,7 +71,7 @@ function FacetLabel({ children, needed }: { children: React.ReactNode; needed?: 
     <span className="mb-1.5 flex items-center gap-1.5 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
       {children}
       {needed && (
-        <span className="rounded-[3px] bg-[rgba(196,165,123,0.14)] px-1 py-px text-[0.42rem] tracking-[0.06em] text-[var(--color-clay)]">
+        <span className="rounded-[3px] bg-[rgba(196,165,123,0.14)] px-1 py-px text-[0.42rem] tracking-[0.06em] text-[var(--color-clay-ink)]">
           studio needs
         </span>
       )}
@@ -86,7 +86,7 @@ function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | nul
       role="status"
       aria-live="polite"
       className={`ml-2 inline-flex items-center gap-1 font-mono text-[0.5rem] uppercase tracking-[0.06em] ${
-        state === 'error' ? 'text-[var(--color-terracotta)]' : 'text-[var(--color-sage)]'
+        state === 'error' ? 'text-[var(--color-terracotta-ink)]' : 'text-[var(--color-sage)]'
       }`}
     >
       {state === 'saving' && '· saving…'}
@@ -557,7 +557,7 @@ export function FacetChips({
               type="button"
               aria-label={`Remove ${v}`}
               onClick={() => remove(v)}
-              className="text-[var(--color-aged-oak)] hover:text-[var(--color-terracotta)]"
+              className="text-[var(--color-aged-oak)] hover:text-[var(--color-terracotta-ink)]"
             >
               ✕
             </button>
@@ -900,14 +900,14 @@ export function FacetVendorPicker({
                 setOpen(true);
                 setActive(0);
               }}
-              className="font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] hover:text-[var(--color-aged-oak)]"
+              className="font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)] hover:text-[var(--color-aged-oak)]"
             >
               Change
             </button>
             <button
               type="button"
               onClick={clear}
-              className="font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-terracotta)]"
+              className="font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-terracotta-ink)]"
             >
               Clear
             </button>

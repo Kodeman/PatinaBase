@@ -81,7 +81,7 @@ export function OpenItemRow({ item, tasks, onOpen, court }: OpenItemRowProps) {
           {blocks && (
             <span className="mt-[1px] flex items-center gap-1.5 text-[10px] text-[var(--color-aged-oak)]">
               {blocked && (
-                <span aria-hidden className="font-mono" style={{ color: '#C4836F' }}>
+                <span aria-hidden className="font-mono" style={{ color: 'var(--color-terracotta-ink)' }}>
                   ⊘
                 </span>
               )}
@@ -100,7 +100,7 @@ export function OpenItemRow({ item, tasks, onOpen, court }: OpenItemRowProps) {
         {courtToken && (
           <span
             className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.04em]"
-            style={{ color: courtLate ? '#C4836F' : 'var(--color-aged-oak)' }}
+            style={{ color: courtLate ? 'var(--color-terracotta-ink)' : 'var(--color-aged-oak)' }}
           >
             <span
               aria-hidden
@@ -115,7 +115,7 @@ export function OpenItemRow({ item, tasks, onOpen, court }: OpenItemRowProps) {
         {due && (
           <span
             className="flex-shrink-0 whitespace-nowrap text-right font-mono text-[9px] uppercase tracking-[0.04em]"
-            style={{ color: soon ? '#C4836F' : 'var(--color-aged-oak)' }}
+            style={{ color: soon ? 'var(--color-terracotta-ink)' : 'var(--color-aged-oak)' }}
           >
             {soon ? `due ${fmtDay(due)}` : fmtDay(due)}
           </span>

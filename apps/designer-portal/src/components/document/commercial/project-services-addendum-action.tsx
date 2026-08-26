@@ -53,7 +53,7 @@ export function ProjectServicesAddendumAction({
       {error && (
         <p
           role="alert"
-          className="basis-full text-[11px] text-[var(--color-terracotta)]"
+          className="basis-full text-[11px] text-[var(--color-terracotta-ink)]"
         >
           {error}
         </p>

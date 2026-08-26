@@ -43,17 +43,17 @@ export function HouseholdChip({
         aria-label="View or change the client this document is for"
       >
         {hasHousehold ? (
-          <span className="font-heading text-[1.15rem] italic leading-tight text-[var(--color-aged-oak)] transition-colors group-hover:text-[var(--color-clay)]">
+          <span className="font-heading text-[1.15rem] italic leading-tight text-[var(--color-aged-oak)] transition-colors group-hover:text-[var(--color-clay-ink)]">
             for {familyLabel(clientName)}
             <span
               aria-hidden
-              className="ml-1.5 align-baseline font-mono text-[11px] not-italic text-[var(--color-clay)] opacity-60 transition-opacity group-hover:opacity-100"
+              className="ml-1.5 align-baseline font-mono text-[11px] not-italic text-[var(--color-clay-ink)] opacity-60 transition-opacity group-hover:opacity-100"
             >
               ↗
             </span>
           </span>
         ) : (
-          <span className="font-heading text-[1.15rem] italic leading-tight text-[var(--color-clay)]">
+          <span className="font-heading text-[1.15rem] italic leading-tight text-[var(--color-clay-ink)]">
             No client linked — attach one
             <span aria-hidden className="ml-1.5 align-baseline font-mono text-[11px] not-italic opacity-70">
               ↗

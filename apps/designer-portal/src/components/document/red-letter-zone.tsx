@@ -86,7 +86,7 @@ export function RedLetterZone({ rows }: { rows: readonly RedLetterRow[] }) {
       aria-label="Needs attention"
       className="rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.08)] px-3.5 py-2.5"
     >
-      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[#C4836F]">
+      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
         Needs attention · in one place
       </p>
       {/* ONE group for the whole zone: the rows are one ledger of acts, not N

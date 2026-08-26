@@ -128,7 +128,7 @@ export default function JudgmentsPage() {
             {writeError && (
               <p
                 role="alert"
-                className="mb-4 max-w-[560px] text-[11px] leading-snug text-[var(--color-terracotta)]"
+                className="mb-4 max-w-[560px] text-[11px] leading-snug text-[var(--color-terracotta-ink)]"
               >
                 {writeError}{' '}
                 <span className="opacity-80">

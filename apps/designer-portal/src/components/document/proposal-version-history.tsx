@@ -56,7 +56,7 @@ export function ProposalVersionHistory({ proposalId }: { proposalId: string }) {
             return (
               <span
                 key={v.id}
-                className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)]"
+                className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
               >
                 v{v.version} · {label}
               </span>

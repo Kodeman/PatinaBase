@@ -469,7 +469,7 @@ export function ClientPicker({
                         <div
                           role="alert"
                           data-testid={`client-picker-invite-error-${dc.id}`}
-                          className="px-2 pb-1 pt-0.5 text-[0.7rem] leading-snug text-[var(--color-terracotta)]"
+                          className="px-2 pb-1 pt-0.5 text-[0.7rem] leading-snug text-[var(--color-terracotta-ink)]"
                         >
                           {inviteError.message}
                           <span className="opacity-80">
@@ -507,7 +507,7 @@ export function ClientPicker({
                   </span>
                 </button>
                 {addError && (
-                  <div className="px-2 pb-1 pt-0.5 text-[0.7rem] text-[var(--color-terracotta)]">
+                  <div className="px-2 pb-1 pt-0.5 text-[0.7rem] text-[var(--color-terracotta-ink)]">
                     {addError}
                   </div>
                 )}

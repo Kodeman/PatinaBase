@@ -336,7 +336,7 @@ function FolderFace({
                 </span>
                 <span
                   aria-hidden
-                  className="text-[14px] text-[var(--color-clay)]"
+                  className="text-[14px] text-[var(--color-clay-ink)]"
                 >
                   →
                 </span>
@@ -348,7 +348,7 @@ function FolderFace({
                 </span>
                 <span
                   aria-hidden
-                  className="text-[14px] text-[var(--color-clay)]"
+                  className="text-[14px] text-[var(--color-clay-ink)]"
                 >
                   →
                 </span>

@@ -207,7 +207,7 @@ function PhaseActionRow({
           <div
             role="note"
             aria-label={`Open blockers for ${action.phase.name}`}
-            className="mt-1 text-[11px] leading-relaxed text-[var(--color-terracotta)]"
+            className="mt-1 text-[11px] leading-relaxed text-[var(--color-terracotta-ink)]"
           >
             <b>Open phase blockers ·</b>{' '}
             {action.blockers.map((blocker) => blocker.title).join(' · ')}
@@ -254,7 +254,7 @@ function PhaseActionRow({
           aria-live={notice.kind === 'success' ? 'polite' : undefined}
           className={`basis-full text-[11px] ${
             notice.kind === 'error'
-              ? 'text-[var(--color-terracotta)]'
+              ? 'text-[var(--color-terracotta-ink)]'
               : 'text-[var(--color-sage)]'
           }`}
         >

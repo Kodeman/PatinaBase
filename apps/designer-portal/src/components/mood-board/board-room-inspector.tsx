@@ -484,7 +484,7 @@ export function BoardRoomInspector({
             )}
 
           {promotionError && (
-            <p role="alert" className="text-[10px] text-[var(--color-clay)]">{promotionError}</p>
+            <p role="alert" className="text-[10px] text-[var(--color-clay-ink)]">{promotionError}</p>
           )}
 
           {onOpenProduct && lead.productId && (lead.type === 'product' || lead.type === 'capture') && (
@@ -504,7 +504,7 @@ export function BoardRoomInspector({
               href={sourceUrl}
               target="_blank"
               rel="noreferrer"
-              className="block truncate text-[11px] text-[var(--color-clay)] underline underline-offset-2"
+              className="block truncate text-[11px] text-[var(--color-clay-ink)] underline underline-offset-2"
             >
               Open source
             </a>

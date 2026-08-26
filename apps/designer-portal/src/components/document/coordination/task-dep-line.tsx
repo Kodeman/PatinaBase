@@ -15,8 +15,9 @@
  * sheet (the prototype's `blockedClick` → `openItem`).
  *
  * Zero shadows (D4): depth is the dot's value contrast + the mono ink color.
- * Mono "ink" literals (#C4836F due-soon/blocked, #7E8F76 dep-ready) are the
- * pre-approved prototype colors already used in item-type.ts / work-block.tsx.
+ * The due-soon/blocked ink is --color-terracotta-ink (F56); #7E8F76 dep-ready
+ * is still the pre-approved prototype literal used in item-type.ts /
+ * work-block.tsx.
  */
 
 import { isBlocked } from '@/lib/document/coordination-derivation';
@@ -25,9 +26,8 @@ import { courtToken } from './party';
 import type { CoordinationItem, ProjectParty } from '@patina/supabase';
 import type { SectionTask } from '@/hooks/use-section-work';
 
-// Prototype literal inks (NOT brand vars — pre-approved, already in-repo):
-//   .dep-blocked #c4836f  ·  .dep-ready #7e8f76  ·  .dep-seq uses aged-oak.
-const DEP_BLOCKED_INK = '#C4836F';
+//   .dep-ready #7e8f76 is a prototype literal  ·  .dep-seq uses aged-oak.
+const DEP_BLOCKED_INK = 'var(--color-terracotta-ink)';
 const DEP_READY_INK = '#7E8F76';
 
 export interface TaskDepLineProps {

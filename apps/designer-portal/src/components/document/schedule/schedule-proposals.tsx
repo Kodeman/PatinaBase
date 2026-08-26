@@ -149,7 +149,7 @@ export function ScheduleProposals({
                   : ' — proposes releasing the anchor'}
               </p>
               {contradicts ? (
-                <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--color-terracotta)]">
+                <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--color-terracotta-ink)]">
                   {committedDate
                     ? `This contradicts the anchor committed for ${formatCalendarDate(committedDate)}. Nothing moved.`
                     : 'This contradicts an anchor already committed. Nothing moved.'}
@@ -223,7 +223,7 @@ export function ScheduleProposals({
               {failedId === row.id && (
                 <p
                   role="status"
-                  className="mt-2 text-[11.5px] text-[var(--color-terracotta)]"
+                  className="mt-2 text-[11.5px] text-[var(--color-terracotta-ink)]"
                 >
                   That did not save — nothing was changed.
                 </p>

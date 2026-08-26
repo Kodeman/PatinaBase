@@ -96,7 +96,7 @@ export function LogStrip() {
             </strong>{' '}
             · {fmtMinutes(offer.suggestedMinutes)} in hand
           </p>
-          <span className="shrink-0 font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-clay)] min-[1180px]:hidden">
+          <span className="shrink-0 font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] min-[1180px]:hidden">
             {idleAnnotation(offer.idleSeconds) ??
               (adjusted
                 ? `Was ${fmtMinutes(offer.suggestedMinutes)}`

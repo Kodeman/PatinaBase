@@ -186,12 +186,12 @@ export function AuthorizationsLedger({
 
       {isLoading && <SectionLoadingLine label="Loading authorizations" className="mt-3" />}
       {Boolean(instrumentsQuery.error) && (
-        <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta)]">
+        <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta-ink)]">
           Authorizations are unavailable.
         </p>
       )}
       {Boolean(tradeScopesQuery.error) && (
-        <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta)]">
+        <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta-ink)]">
           Trade scopes are unavailable.
         </p>
       )}

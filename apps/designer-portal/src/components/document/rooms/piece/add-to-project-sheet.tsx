@@ -166,7 +166,7 @@ export function AddToProjectSheet({
         </ul>
       )}
       {err && (
-        <p className="mt-3 text-[0.74rem] text-[var(--color-terracotta)]">
+        <p className="mt-3 text-[0.74rem] text-[var(--color-terracotta-ink)]">
           {err}
         </p>
       )}

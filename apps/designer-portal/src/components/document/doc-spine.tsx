@@ -46,7 +46,7 @@ export function DocSpine({
       <Link
         href="/desk"
         aria-label="Put down document"
-        className="group mb-3 inline-flex min-h-11 w-full min-w-11 items-center justify-center rounded-[3px] font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1440px]:mb-4 min-[1440px]:justify-start min-[1440px]:gap-1 min-[1440px]:px-1.5"
+        className="group mb-3 inline-flex min-h-11 w-full min-w-11 items-center justify-center rounded-[3px] font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] min-[1440px]:mb-4 min-[1440px]:justify-start min-[1440px]:gap-1 min-[1440px]:px-1.5"
       >
         <span aria-hidden>←</span>
         <span className="da-score-hover hidden group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100 min-[1180px]:inline">
@@ -129,7 +129,7 @@ export function DocSpine({
           <span className="block break-words text-[10.5px] font-semibold leading-tight text-[var(--color-charcoal)] min-[1440px]:text-[12px]">
             {activeSection.label}
           </span>
-          <span className="mt-px block break-words font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--color-clay)] min-[1440px]:text-[12px]">
+          <span className="mt-px block break-words font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] min-[1440px]:text-[12px]">
             {activeSection.sub}
           </span>
         </p>

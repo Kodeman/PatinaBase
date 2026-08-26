@@ -120,7 +120,7 @@ export function ScheduleBirth({
       </div>
 
       {errorText && (
-        <div className="mt-[0.6rem] font-mono text-[0.6rem] uppercase tracking-[0.07em] text-[var(--color-terracotta)]">
+        <div className="mt-[0.6rem] font-mono text-[0.6rem] uppercase tracking-[0.07em] text-[var(--color-terracotta-ink)]">
           {errorText}
         </div>
       )}
@@ -133,7 +133,7 @@ export function ScheduleBirth({
             disabled={busy}
             className="grid w-full grid-cols-[30px_minmax(0,1fr)_auto] items-baseline gap-x-[1.1rem] py-[1rem] text-left disabled:opacity-50"
           >
-            <span className="font-heading text-[1.4rem] font-light leading-none text-[var(--color-clay)]">
+            <span className="font-heading text-[1.4rem] font-light leading-none text-[var(--color-clay-ink)]">
               {row.numeral}
             </span>
             <span className="min-w-0">
@@ -144,7 +144,7 @@ export function ScheduleBirth({
                 {row.body}
               </span>
             </span>
-            <span className="whitespace-nowrap font-mono text-[0.56rem] uppercase tracking-[0.08em] text-[var(--color-clay)]">
+            <span className="whitespace-nowrap font-mono text-[0.56rem] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
               {row.tag}
             </span>
           </button>

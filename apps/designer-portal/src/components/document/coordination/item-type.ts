@@ -96,7 +96,7 @@ export const ITEM_TYPE_TOKENS: Record<CoordinationKind, ItemTypeToken> = {
     resolveKind: 'verify',
     colors: {
       border: 'var(--color-terracotta)',
-      ink: '#C4836F',
+      ink: 'var(--color-terracotta-ink)',
       tint: 'rgba(212, 160, 144, 0.08)',
     },
   },

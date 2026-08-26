@@ -935,7 +935,7 @@ function BoardRoomSurface({
       </header>
 
       {(surfaceError || api.persistenceError) && (
-        <div role="alert" className="relative z-40 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--color-clay)]">
+        <div role="alert" className="relative z-40 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--color-clay-ink)]">
           <span>{surfaceError ?? api.persistenceError}</span>
           <button
             type="button"
@@ -965,7 +965,7 @@ function BoardRoomSurface({
       )}
 
       {unpreparedReviewMediaCount > 0 && !surfaceError && !api.persistenceError && (
-        <div role="status" className="relative z-40 shrink-0 border-b border-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--color-clay)]">
+        <div role="status" className="relative z-40 shrink-0 border-b border-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--color-clay-ink)]">
           {unpreparedReviewMediaCount} visual {unpreparedReviewMediaCount === 1 ? 'reference needs' : 'references need'} review-media preparation before this board can be published.
         </div>
       )}

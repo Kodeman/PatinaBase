@@ -162,7 +162,7 @@ function OpenClaimRow({
           color={
             drafted ? 'var(--color-terracotta)' : 'var(--color-golden-hour)'
           }
-          ink={drafted ? undefined : '#D8BE56'}
+          ink={drafted ? 'var(--color-terracotta-ink)' : '#D8BE56'}
         />
         <div className="flex flex-wrap items-center gap-x-3">
           <DocumentAction
@@ -249,7 +249,7 @@ function OpenClaimRow({
         // R83: inline at the act — the reason and a retry.
         <div
           role="alert"
-          className="doc-type-body mt-1.5 text-[var(--color-terracotta)]"
+          className="doc-type-body mt-1.5 text-[var(--color-terracotta-ink)]"
         >
           <p>{error}</p>
           <DocumentActionGroup

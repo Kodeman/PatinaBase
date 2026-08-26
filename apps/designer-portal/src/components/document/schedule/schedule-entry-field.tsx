@@ -194,7 +194,7 @@ export function ScheduleEntryField({
         className="rounded-[3px] border border-[var(--color-pearl)] bg-[var(--color-off-white)] px-[0.6rem] py-[0.3rem] font-mono text-[0.72rem] text-[var(--color-charcoal)] placeholder:italic placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)] focus:outline-none"
       />
       {error && (
-        <span className="mt-[0.25rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
+        <span className="mt-[0.25rem] font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
           {error}
         </span>
       )}

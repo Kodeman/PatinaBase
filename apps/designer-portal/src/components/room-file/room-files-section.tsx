@@ -68,11 +68,11 @@ export function RoomFilesSection({ projectId }: RoomFilesSectionProps) {
                 className="group flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3.5 transition-colors"
               >
                 <span className="flex items-baseline gap-3">
-                  <span className="text-[15px] text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-clay)]">
+                  <span className="text-[15px] text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-clay-ink)]">
                     {scan.name || 'Room'}
                   </span>
                   {rf?.unverified && (
-                    <span className="rounded-[2px] border border-[var(--color-clay)] px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-[0.14em] text-[var(--color-clay)]">
+                    <span className="rounded-[2px] border border-[var(--color-clay)] px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
                       {C.unverifiedBadge}
                     </span>
                   )}
@@ -82,7 +82,7 @@ export function RoomFilesSection({ projectId }: RoomFilesSectionProps) {
                   <span>
                     {sheetCount} {sheetCount === 1 ? 'sheet' : 'sheets'}
                   </span>
-                  <span className="text-[var(--color-clay)] opacity-0 transition-opacity group-hover:opacity-100">
+                  <span className="text-[var(--color-clay-ink)] opacity-0 transition-opacity group-hover:opacity-100">
                     {C.roomViewDoorLabel}
                   </span>
                 </span>

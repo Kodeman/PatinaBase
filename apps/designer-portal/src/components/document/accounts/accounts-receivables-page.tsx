@@ -50,7 +50,7 @@ export function AccountsReceivablesPage({
     <div>
       {/* Aging buckets — quiet mono pairs, never a chart. */}
       <div className="mb-4 flex flex-wrap items-baseline gap-x-5 gap-y-1 border-b border-[var(--color-pearl)] pb-2.5">
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)]">
+        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
           {fmtUsd(totalBalanceCents)} owed
         </span>
         {buckets
@@ -161,7 +161,7 @@ function ReceivableRow({
           <span className="ml-2 font-mono text-[10px] font-medium text-[var(--color-charcoal)]">
             {fmtUsd(balance)}
           </span>
-          <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+          <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
             folio →
           </span>
         </button>
@@ -182,7 +182,7 @@ function ReceivableRow({
           <p
             className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.05em]"
             style={{
-              color: note.startsWith('Could not') ? '#C4836F' : '#85947C',
+              color: note.startsWith('Could not') ? 'var(--color-terracotta-ink)' : '#85947C',
             }}
           >
             {note}
@@ -213,7 +213,7 @@ function ReceivableRow({
       <button
         type="button"
         onClick={() => onOpenDocument(invoice.project_id)}
-        className="min-h-11 whitespace-nowrap rounded-[3px] text-[10.5px] text-[var(--color-clay)] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="min-h-11 whitespace-nowrap rounded-[3px] text-[10.5px] text-[var(--color-clay-ink)] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
         document ↗
       </button>

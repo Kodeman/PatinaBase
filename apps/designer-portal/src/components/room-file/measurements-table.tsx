@@ -56,7 +56,7 @@ export function MeasurementsTable({ measurements }: MeasurementsTableProps) {
                       )}
                     </td>
                     <td className="whitespace-nowrap py-2.5 text-right text-[14px] tabular-nums text-[var(--color-charcoal)]">
-                      {badge.glyph && <span className="mr-1 text-[var(--color-clay)]">{badge.glyph}</span>}
+                      {badge.glyph && <span className="mr-1 text-[var(--color-clay-ink)]">{badge.glyph}</span>}
                       {badge.value}
                     </td>
                     <td className="whitespace-nowrap py-2.5 text-right font-mono text-[11px] tabular-nums text-[var(--text-muted)]">
@@ -82,7 +82,7 @@ function ClassPill({ cls }: { cls: 'verified' | 'measured' | 'estimated' }) {
   const glyph = cls === 'verified' ? '✓' : cls === 'estimated' ? '~' : '±';
   return (
     <span className="inline-flex items-baseline gap-1.5 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-mocha)]">
-      <span className="text-[var(--color-clay)]">{glyph}</span>
+      <span className="text-[var(--color-clay-ink)]">{glyph}</span>
       {toleranceClassLabel(cls)}
     </span>
   );

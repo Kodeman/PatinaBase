@@ -500,7 +500,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
         </div>
 
         {phaseCreateError && phases.length > 0 ? (
-          <p role="alert" className="mb-4 text-sm text-[var(--color-terracotta)]">
+          <p role="alert" className="mb-4 text-sm text-[var(--color-terracotta-ink)]">
             {phaseCreateError}
           </p>
         ) : null}
@@ -526,7 +526,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
           {phaseAutosave.state === 'error' && (
             <p
               role="alert"
-              className="font-mono text-[0.68rem] text-[var(--color-terracotta)]"
+              className="font-mono text-[0.68rem] text-[var(--color-terracotta-ink)]"
             >
               {phaseAutosave.error ?? 'Could not save the phase changes.'} Your
               client preview was not updated.

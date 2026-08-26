@@ -273,7 +273,7 @@ export function EngineResults({
       </ul>
 
       {placeError && (
-        <p className="mt-2 text-[11px] text-[var(--color-terracotta)]">
+        <p className="mt-2 text-[11px] text-[var(--color-terracotta-ink)]">
           {placeError}
         </p>
       )}

@@ -146,7 +146,7 @@ export function StudioLogoUploadField({
               actionKey="remove-studio-logo"
               variant="tertiary"
               onClick={handleRemove}
-              className="text-[var(--color-terracotta)]"
+              className="text-[var(--color-terracotta-ink)]"
               data-testid="studio-logo-remove"
             >
               Remove
@@ -159,7 +159,7 @@ export function StudioLogoUploadField({
         </p>
         {error && (
           <p
-            className="text-[11px] text-[var(--color-terracotta)]"
+            className="text-[11px] text-[var(--color-terracotta-ink)]"
             role="alert"
           >
             {error}

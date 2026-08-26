@@ -221,7 +221,7 @@ export function DeliverablesEditor({
           </p>
         )}
         {deliverableAutosave.state === 'error' && (
-          <p role="alert" className="type-meta-small text-[var(--color-terracotta)]">
+          <p role="alert" className="type-meta-small text-[var(--color-terracotta-ink)]">
             {deliverableAutosave.error ?? 'Could not save the deliverable.'}
           </p>
         )}

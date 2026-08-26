@@ -94,7 +94,7 @@ export function AccountsEarningsPage({
         <EarnLine label="Via-Patina commissions" value={bySource.product_commission} />
         {otherCents > 0 && <EarnLine label="Other" value={otherCents} sub="referral · bonus · adjustment" />}
         <div className="flex items-baseline justify-between gap-3 pt-2">
-          <span className="font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-clay)]">
+          <span className="font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
             client work, all time
           </span>
           <span className="font-heading text-[16px] text-[var(--color-charcoal)]">
@@ -155,7 +155,7 @@ export function AccountsEarningsPage({
                   </span>
                   <span className="flex items-baseline justify-between gap-2 rounded-[3px] border border-[rgba(196,165,123,0.3)] px-2 py-1">
                     <span className="flex flex-col">
-                      <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+                      <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
                         given to the commons
                       </span>
                       {COMMONS_MATCH_PROVISIONAL && COMMONS_MATCH_RATE != null && (

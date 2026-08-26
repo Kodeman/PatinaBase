@@ -507,7 +507,7 @@ function InstallWindowSheet({
 
           <GatePartBlock part="confirmation">
             {error && (
-              <p className="mb-4 text-[12px] text-[var(--color-terracotta)]" role="alert">
+              <p className="mb-4 text-[12px] text-[var(--color-terracotta-ink)]" role="alert">
                 {error}
               </p>
             )}

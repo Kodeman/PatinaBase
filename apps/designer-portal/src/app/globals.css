@@ -16,6 +16,16 @@
   /* Quiet Ink carries small explanatory copy at 6.3:1+ on Patina paper.
      Aged Oak and Clay remain material pigments for rules, washes, and marks. */
   --color-quiet-ink: #65594E;
+  /* F56 — text-grade companions. Clay and Terracotta stay material pigments
+     for fills, borders, rules, pools and stamp outlines; when the same pigment
+     is asked to also be READ, it takes the -ink value. Same hue (within 2°),
+     dark enough to clear WCAG 2.2 AA 4.5:1 on all three grounds the surface
+     paints behind text — --doc-paper, --color-off-white and white. No site
+     using these qualifies as large text (the mono eyebrows are 9–12px), so
+     4.5:1 is the floor, not 3:1. --color-terracotta-ink also supersedes the
+     old #C4836F "terracotta ink" literal, which was the same hue at 2.9:1. */
+  --color-clay-ink: #7C5E30; /* 5.75:1 paper · 5.61:1 off-white · 6.00:1 white */
+  --color-terracotta-ink: #9C5340; /* 5.41:1 paper · 5.28:1 off-white · 5.64:1 white */
 
   /* — Extended Palette — */
   --color-sage: #A8B5A0;
@@ -359,7 +369,7 @@
 }
 .da-primary .da-leading,
 .da-primary .da-trailing {
-  color: var(--color-clay);
+  color: var(--color-clay-ink);
 }
 
 /* ── SECONDARY · one score, held back; the ink only warms the paper ──────── */

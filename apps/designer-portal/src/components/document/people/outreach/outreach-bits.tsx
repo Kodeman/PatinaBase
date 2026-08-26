@@ -112,7 +112,7 @@ const BADGE_TONE: Record<string, { color: string; border: string }> = {
     color: 'var(--color-dusty-blue)',
     border: 'var(--color-dusty-blue)',
   },
-  sending: { color: 'var(--color-clay)', border: 'var(--color-clay)' },
+  sending: { color: 'var(--color-clay-ink)', border: 'var(--color-clay)' },
   cancelled: { color: 'var(--color-aged-oak)', border: 'var(--color-pearl)' },
   archived: { color: 'var(--color-aged-oak)', border: 'var(--color-pearl)' },
 };

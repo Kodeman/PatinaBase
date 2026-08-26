@@ -72,7 +72,7 @@ export function ServiceAgreementPreview({
       className={compact ? "space-y-5" : "mx-auto max-w-[720px] space-y-7"}
     >
       <header className="border-b border-[var(--doc-ink-border)] pb-4">
-        <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay)]">
+        <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
           Design services agreement · v{preview.version}
         </p>
         <h2 className="mt-1 font-heading text-[1.65rem] leading-tight text-[var(--color-charcoal)]">

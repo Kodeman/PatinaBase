@@ -141,7 +141,7 @@ export function CustomCommissionFulfillment({
 
   return (
     <section className="mt-6 border-t border-[var(--color-pearl)] pt-5">
-      <p className="doc-type-meta uppercase tracking-[0.1em] text-[var(--color-clay)]">
+      <p className="doc-type-meta uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
         Workshop to field
       </p>
       <h3 className="mt-1 font-heading text-[17px] text-[var(--color-charcoal)]">

@@ -173,7 +173,7 @@ export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
             </span>
           ))}
           {sentence.conflictClause && (
-            <span className="text-[var(--color-terracotta)]">
+            <span className="text-[var(--color-terracotta-ink)]">
               {' · '}
               {sentence.conflictClause}
             </span>
@@ -198,7 +198,7 @@ export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
           className="mt-1 w-full max-w-[32rem] border-b border-[var(--color-pearl)] bg-transparent py-0.5 font-mono text-[0.62rem] tracking-[0.02em] text-[var(--color-charcoal)] placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-50"
         />
         {commit.isError && (
-          <p className="mt-1 font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
+          <p className="mt-1 font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
             Commit failed — nothing was saved; your preview is kept
           </p>
         )}

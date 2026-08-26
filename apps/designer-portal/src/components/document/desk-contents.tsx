@@ -133,7 +133,7 @@ function ContentsRow({
           {variant === 'room' && (
             <span
               aria-hidden
-              className="shrink-0 self-center font-mono text-[13px] text-[var(--text-muted)] transition-colors group-hover:text-[var(--color-clay)] motion-reduce:transition-none"
+              className="shrink-0 self-center font-mono text-[13px] text-[var(--text-muted)] transition-colors group-hover:text-[var(--color-clay-ink)] motion-reduce:transition-none"
             >
               ↗
             </span>

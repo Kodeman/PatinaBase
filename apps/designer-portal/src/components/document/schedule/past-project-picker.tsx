@@ -58,7 +58,7 @@ export function PastProjectPicker({ projects, onPick, isLoading = false, busy = 
             <span className="min-w-0 truncate font-heading text-[1rem] text-[var(--color-charcoal)]">
               {p.name}
             </span>
-            <span className="flex-none font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-clay)]">
+            <span className="flex-none font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
               {p.phaseCount} phase{p.phaseCount === 1 ? '' : 's'}
             </span>
           </button>

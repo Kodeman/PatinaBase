@@ -110,7 +110,7 @@ const PO_STAMP: Record<string, { color: string; ink?: string }> = {
   in_production: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
   shipped: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
   delivered: { color: 'var(--color-sage)' },
-  cancelled: { color: 'var(--color-terracotta)' },
+  cancelled: { color: 'var(--color-terracotta)', ink: 'var(--color-terracotta-ink)' },
 };
 
 export function OrdersLedger({
