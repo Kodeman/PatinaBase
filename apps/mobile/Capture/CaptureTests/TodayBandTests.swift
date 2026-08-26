@@ -433,4 +433,44 @@ struct TodayBandTests {
         let filtered = FieldTrayUnplacedFilter.excluding([a, b], visibleIn: [])
         #expect(Set(filtered.map(\.id)) == Set([a.id, b.id]))
     }
+
+    // MARK: - Task 31: wave-3 telemetry (spec §14)
+
+    @Test func waveThreeEmitsExactlyTheSpecifiedEvents() {
+        let start = FieldVisitTelemetry.visitStart(kind: .site, kit: .walkThrough, offline: true)
+        #expect(start.name == "visit.start")
+        #expect(start.properties == ["kind": "site", "kit": "walk_through", "offline": "true"])
+
+        let end = FieldVisitTelemetry.visitEnd(duration: 3600, captures: 12, notes: 3,
+                                               scans: 1, unplaced: 2)
+        #expect(end.name == "visit.end")
+        #expect(end.properties == ["duration_min": "60", "captures": "12",
+                                   "notes": "3", "scans": "1", "unplaced": "2"])
+
+        #expect(FieldVisitTelemetry.stalePrompt(answer: "resume")
+                == ("visit.stale_prompt", ["answer": "resume"]))
+
+        let suggestion = CaptureSuggestion(projectID: "p1", projectRoomID: nil,
+                                           basis: .proximity, confidence: 0.72,
+                                           reason: "You filed 9 captures to Maple St from right here")
+        let shown = FieldVisitTelemetry.suggestionShown(suggestion)
+        #expect(shown.name == "suggestion.shown")
+        #expect(shown.properties == ["basis": "proximity"])
+        #expect(FieldVisitTelemetry.suggestionAccepted(suggestion).name == "suggestion.accepted")
+
+        let placed = FieldVisitTelemetry.capturePlaced(basis: "visit", hasRoom: true)
+        #expect(placed.name == "capture.placed")
+        #expect(placed.properties == ["basis": "visit", "has_room": "true"])
+        #expect(FieldVisitTelemetry.captureUnplaced == ("capture.unplaced", [:]))
+    }
+
+    @Test func theConfidenceNumberNeverLeavesTheDevice() {
+        let suggestion = CaptureSuggestion(projectID: "p1", projectRoomID: nil,
+                                           basis: .proximity, confidence: 0.72, reason: "x")
+        for event in [FieldVisitTelemetry.suggestionShown(suggestion),
+                      FieldVisitTelemetry.suggestionAccepted(suggestion)] {
+            #expect(event.properties["confidence"] == nil)
+            #expect(!event.properties.values.contains { $0.contains("0.72") })
+        }
+    }
 }

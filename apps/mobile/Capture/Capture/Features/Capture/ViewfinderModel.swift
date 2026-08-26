@@ -400,15 +400,23 @@ final class ViewfinderModel {
                 // The program's headline metric, read BEFORE the route: placement
                 // and sync are different axes (FC-R6), so whether this capture
                 // landed on a project does not wait on the server to answer.
-                // KNOWN, and owned by Task 31: when `route` throws we hand off to
-                // S3, whose `choose(_:)` emits its own event — so a failed route
-                // double-counts one capture. `has_room` is the ID lane (FC-R5):
-                // `project_rooms.id` is what reaches `field_captures
-                // .project_room_id`, and a typed room name can exist with no id.
-                analytics.event(specimen.isUnplaced ? "capture.unplaced" : "capture.placed", [
-                    "basis": visitState.isVisit ? "visit" : "manual",
-                    "has_room": String(specimen.venue?.projectRoomId != nil)
-                ])
+                // `has_room` is the ID lane (FC-R5): `project_rooms.id` is what
+                // reaches `field_captures.project_room_id`, and a typed room name
+                // can exist with no id.
+                //
+                // Task 31 dedupe: `placementEventEmitted` is set here so that when
+                // `route` throws below and hands off to S3, S3's `choose(_:)`
+                // sees the flag and skips its own emission instead of double-
+                // counting this one capture.
+                specimen.placementEventEmitted = true
+                try? store.save()
+                if specimen.isUnplaced {
+                    analytics.emit(FieldVisitTelemetry.captureUnplaced)
+                } else {
+                    analytics.emit(FieldVisitTelemetry.capturePlaced(
+                        basis: visitState.isVisit ? "visit" : "manual",
+                        hasRoom: specimen.venue?.projectRoomId != nil))
+                }
                 try await sync.route(id, to: specimen.destination)
                 coordinator.present(specimen.destination == .library
                     ? .savedTerminal(id)
@@ -577,7 +585,7 @@ final class ViewfinderModel {
                 now: Date())
             draft.apply(suggestion)
             if let suggestion {
-                analytics.event("suggestion.shown", ["basis": suggestion.basis.rawValue])
+                analytics.emit(FieldVisitTelemetry.suggestionShown(suggestion))
             }
         }
         return draft

@@ -331,19 +331,29 @@ struct V0VisitSheet: View {
         if let projectID = draft.projectID {
             container.projectCache.recordVisit(projectID: projectID, owner: owner)
         }
-        container.analytics.event("visit.start", [
-            "kind": draft.kind.rawValue,
-            "kit": draft.kit?.rawValue ?? "none",
-            "offline": model.offlineCaption == nil ? "false" : "true"
-        ])
+        container.analytics.emit(FieldVisitTelemetry.visitStart(
+            kind: draft.kind, kit: draft.kit,
+            offline: model.offlineCaption != nil))
         CaptureHaptics.success()
         coordinator.dismissSheet()
         coordinator.switchRealm(.camera)
     }
 
     private func endVisit() {
+        // Site 1 of 3 (spec §14): read the visit's own counts BEFORE `endVisit`
+        // closes the context — afterwards `visitState` reads `.none` and they
+        // are unrecoverable.
+        if let context = contextStore.visitState(identity: identity).context {
+            let counts = FieldVisitEndCounts.compute(
+                context: context, store: container.store,
+                runsRealServices: AppConfiguration.runsRealServices,
+                userID: container.session.userID,
+                workspaceID: container.session.workspaceID)
+            container.analytics.emit(FieldVisitTelemetry.visitEnd(
+                duration: counts.duration, captures: counts.captures,
+                notes: counts.notes, scans: counts.scans, unplaced: counts.unplaced))
+        }
         contextStore.endVisit(identity: identity)
-        container.analytics.event("visit.end", ["reason": "door"])
         coordinator.dismissSheet()
     }
 

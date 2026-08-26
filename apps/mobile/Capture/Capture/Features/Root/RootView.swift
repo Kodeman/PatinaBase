@@ -245,11 +245,26 @@ struct RootView: View {
         case "visit.open":
             coordinator.present(.visit)
         case "visit.end":
+            // Site 3 of 3 (spec §14) — the one reachable from every non-camera
+            // screen via the collapsed Companion strip, and the one it's
+            // cheapest for her to miss counting. Read the visit's own counts
+            // BEFORE `endVisit` closes the context: afterwards `visitState`
+            // reads `.none` and they are unrecoverable.
+            let identity = CaptureSessionIdentity(userID: container.session.userID,
+                                                  workspaceID: container.session.workspaceID)
+            if let context = CaptureSessionContextStore.shared.visitState(identity: identity).context {
+                let counts = FieldVisitEndCounts.compute(
+                    context: context, store: container.store,
+                    runsRealServices: AppConfiguration.runsRealServices,
+                    userID: container.session.userID,
+                    workspaceID: container.session.workspaceID)
+                container.analytics.emit(FieldVisitTelemetry.visitEnd(
+                    duration: counts.duration, captures: counts.captures,
+                    notes: counts.notes, scans: counts.scans, unplaced: counts.unplaced))
+            }
             // A visit started later mints a NEW visitID by design; this does not
             // re-attribute anything already captured under the closed one.
-            _ = CaptureSessionContextStore.shared.endVisit(
-                identity: CaptureSessionIdentity(userID: container.session.userID,
-                                                 workspaceID: container.session.workspaceID))
+            _ = CaptureSessionContextStore.shared.endVisit(identity: identity)
         default:
             break
         }
@@ -464,4 +479,65 @@ private enum FieldCompanionPlacement: Equatable {
     case hidden(FieldCompanionHiddenReason)
     case featureOwned
     case collapsed(FieldRealm, CaptureRoute?)
+}
+
+/// Task 31: the exact five counts `FieldVisitTelemetry.visitEnd` needs, read
+/// from the OPEN visit's own context. Shared by all three end-visit call sites
+/// (V0's door, V1's tray, this companion-strip action) so `notes` vs `captures`
+/// splits the same way `FieldTodayBandBuilder` already does, and `unplaced`
+/// reads the true tray-wide `unfiled(owner:)` count rather than any one
+/// screen's display-deduped projection of it. `scans` mirrors what
+/// `SupabaseSiteScanService.pendingUploads()` reports (it is a thin wrapper over
+/// `store.scanUploadRecords(owner:)`), read straight from the store since none
+/// of these three call sites hold a live `SiteScanService`.
+struct FieldVisitEndCounts {
+    let duration: TimeInterval
+    let captures: Int
+    let notes: Int
+    let scans: Int
+    let unplaced: Int
+
+    @MainActor
+    static func compute(
+        context: CaptureSessionContext,
+        store: CaptureStore,
+        runsRealServices: Bool,
+        userID: String?,
+        workspaceID: String?,
+        now: Date = Date()
+    ) -> FieldVisitEndCounts {
+        let visitCaptures: [Specimen]
+        let allUnfiled: [Specimen]
+        let pendingScans: Int
+        switch CaptureOwnerProjectionPolicy.resolve(
+            runsRealServices: runsRealServices, userID: userID, workspaceID: workspaceID
+        ) {
+        case .globalFixtures:
+            visitCaptures = store.session(visitID: context.visitID)
+            allUnfiled = store.unfiled()
+            pendingScans = store.scanUploadRecords().count
+        case .owner(let owner):
+            visitCaptures = store.session(visitID: context.visitID, owner: owner)
+            allUnfiled = store.unfiled(owner: owner)
+            pendingScans = store.scanUploadRecords(owner: owner).count
+        case .unavailable:
+            visitCaptures = []
+            allUnfiled = []
+            pendingScans = 0
+        }
+        // Same split as `FieldTodayBandBuilder`: a "note" is a capture with a
+        // transcript or audio and no photo; a "capture" is everything else.
+        let notes = visitCaptures.filter { specimen in
+            specimen.photos.isEmpty
+                && ((specimen.voiceTranscript?.isEmpty == false)
+                    || specimen.voiceAudioFilename?.isEmpty == false)
+        }.count
+        return FieldVisitEndCounts(
+            duration: now.timeIntervalSince(context.startedAt),
+            captures: max(0, visitCaptures.count - notes),
+            notes: notes,
+            scans: pendingScans,
+            unplaced: allUnfiled.count
+        )
+    }
 }

@@ -67,6 +67,23 @@ private struct S3Content: View {
             hasUnconfirmedGuess: specimen.hasUnconfirmedGuess)
     }
 
+    /// Task 31 fix: this was hardcoded `"manual"`. The real basis is whichever
+    /// fact actually decided the project on `specimen.venue` — an accepted
+    /// suggestion (the tray's `accept(_:projectID:)` writes `venue.projectId`
+    /// from `suggestedProjectID` but never clears the suggestion fields), an
+    /// open visit's own routing, or a genuinely manual pick — checked in that
+    /// order and matching `ViewfinderModel:409`'s visit/manual shape otherwise.
+    private var placementBasis: String {
+        if let suggestedProjectID = specimen.suggestedProjectID,
+           suggestedProjectID == specimen.venue?.projectId,
+           let basis = specimen.suggestionBasis {
+            return basis.rawValue
+        }
+        let identity = CaptureSessionIdentity(userID: session.userID,
+                                              workspaceID: session.workspaceID)
+        return sessionContext.visitState(identity: identity).isVisit ? "visit" : "manual"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             RouteSheetHeader(
@@ -162,11 +179,20 @@ private struct S3Content: View {
                 // (ViewfinderModel.saveFromCard() is the first): whether this
                 // capture actually landed on a project, via S1's persisted
                 // routing on `specimen.venue`, or is committing roving.
-                if let venue = specimen.venue, venue.projectId != nil {
-                    analytics.event("capture.placed", ["basis": "manual",
-                                                        "has_room": String(venue.projectRoomId != nil)])
-                } else {
-                    analytics.event("capture.unplaced", [:])
+                //
+                // Task 31 dedupe: when `saveFromCard()`'s pre-route emission
+                // already counted this capture and its `route` call then threw,
+                // it hands off here — `placementEventEmitted` is already true,
+                // so this success (the RETRY succeeding) must not count it again.
+                if specimen.placementEventEmitted != true {
+                    specimen.placementEventEmitted = true
+                    if let venue = specimen.venue, venue.projectId != nil {
+                        analytics.emit(FieldVisitTelemetry.capturePlaced(
+                            basis: placementBasis, hasRoom: venue.projectRoomId != nil))
+                    } else {
+                        analytics.emit(FieldVisitTelemetry.captureUnplaced)
+                    }
+                    try? store.save()
                 }
                 routing = nil
                 coordinator.present(destination == .library

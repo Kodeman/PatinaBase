@@ -214,8 +214,14 @@ struct V1SessionTrayScreen: View {
                        projectRoomID: specimen.suggestedProjectRoomID,
                        room: nil)
         try? store.save()
-        analytics.event("suggestion.accepted",
-                        ["basis": specimen.suggestionBasisRaw ?? "unknown"])
+        if let basis = specimen.suggestionBasis {
+            analytics.emit(FieldVisitTelemetry.suggestionAccepted(CaptureSuggestion(
+                projectID: projectID,
+                projectRoomID: specimen.suggestedProjectRoomID,
+                basis: basis,
+                confidence: specimen.suggestionConfidence ?? 0,
+                reason: specimen.suggestionReason ?? "")))
+        }
         placedJustNow.insert(specimen.id)
         reload()
         // §13.5: filing works offline. The local record is written now; the
@@ -382,6 +388,20 @@ struct V1SessionTrayScreen: View {
     }
 
     private func endVisit() {
+        // Site 2 of 3 (spec §14): read the visit's own counts BEFORE `endVisit`
+        // closes the context — afterwards `visitState` reads `.none` and they
+        // are unrecoverable. `unplaced` (the @State array) has already had this
+        // visit's own unplaced rows excluded for display, so the count comes
+        // fresh from the store instead of undercounting them.
+        if let context = sessionContext.visitState(identity: identity).context {
+            let counts = FieldVisitEndCounts.compute(
+                context: context, store: store,
+                runsRealServices: AppConfiguration.runsRealServices,
+                userID: session.userID, workspaceID: session.workspaceID)
+            analytics.emit(FieldVisitTelemetry.visitEnd(
+                duration: counts.duration, captures: counts.captures,
+                notes: counts.notes, scans: counts.scans, unplaced: counts.unplaced))
+        }
         _ = sessionContext.endVisit(identity: identity)
         reload()
         coordinator.popToRoot()

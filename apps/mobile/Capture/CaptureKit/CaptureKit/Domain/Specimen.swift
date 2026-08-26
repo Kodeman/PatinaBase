@@ -163,6 +163,15 @@ public final class Specimen {
     /// FC-R6: placed AFTER the capture committed, so the routing the server
     /// already stored is stale until the outbox re-runs `commit_field_capture`.
     public var placementReplayPending: Bool?
+    /// Task 31: set the moment EITHER emitter — `ViewfinderModel.saveFromCard()`'s
+    /// pre-route emission or `S3DestinationScreen`'s post-route one — counts this
+    /// capture toward `capture.placed` / `capture.unplaced`. The pre-route
+    /// emission must fire before `sync.route` (FC-R6: placement doesn't wait on
+    /// the server), so when that route throws and hands off to S3, S3 checks this
+    /// flag rather than re-counting a capture that was already counted. Also
+    /// protects a later deliberate re-file (V3) from minting a second event for
+    /// a capture that already has one.
+    public var placementEventEmitted: Bool?
 
     public init(
         id: UUID = UUID(),

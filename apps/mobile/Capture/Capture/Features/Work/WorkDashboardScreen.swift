@@ -41,13 +41,32 @@ struct WorkDashboardScreen: View {
                     },
                     onStartVisit: { coordinator.present(.visit) },
                     onResume: {
-                        analytics.event("visit.stale_prompt", ["answer": "resume"])
+                        analytics.emit(FieldVisitTelemetry.stalePrompt(answer: "resume"))
                         _ = CaptureSessionContextStore.shared.remember(
                             model.visitState.context?.routing ?? .empty, identity: identity)
                         model.refreshVisit()
                     },
                     onEndVisit: {
-                        analytics.event("visit.stale_prompt", ["answer": "end"])
+                        analytics.emit(FieldVisitTelemetry.stalePrompt(answer: "end"))
+                        // The stale-prompt "End visit" is the same act as sites
+                        // 1–3 (spec §14) and does not route through either of
+                        // them, so it emits `visit.end` here too. `model`
+                        // already holds this visit's own captures/unplaced —
+                        // read BEFORE `endVisit` closes the context, since
+                        // `refreshVisit()` right after empties them.
+                        if let context = model.visitState.context {
+                            let notes = model.visitCaptures.filter { specimen in
+                                specimen.photos.isEmpty
+                                    && ((specimen.voiceTranscript?.isEmpty == false)
+                                        || specimen.voiceAudioFilename?.isEmpty == false)
+                            }.count
+                            analytics.emit(FieldVisitTelemetry.visitEnd(
+                                duration: Date().timeIntervalSince(context.startedAt),
+                                captures: max(0, model.visitCaptures.count - notes),
+                                notes: notes,
+                                scans: model.scanUploads.count,
+                                unplaced: model.unplaced.count))
+                        }
                         _ = CaptureSessionContextStore.shared.endVisit(identity: identity)
                         model.refreshVisit()
                     },
