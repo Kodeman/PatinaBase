@@ -102,6 +102,53 @@ describe('RegionHead', () => {
     ).toHaveClass('justify-start', 'min-[1180px]:justify-end');
   });
 
+  // jsdom evaluates no media queries, so "at every width" is asserted
+  // structurally rather than by resizing: the ledger's action region rides ONE
+  // element, that element carries the whole contract unconditionally, and
+  // nothing on the path from the head to it is gated on a breakpoint — the
+  // only width-conditional classes are layout (grid tracks, justification).
+  it('keeps the ledger action region at <1180 and >=1180 alike', () => {
+    renderHead();
+    const head = document.querySelector('[data-region-head="approvals"]')!;
+    const group = document.querySelector(
+      '[role="group"][data-action-region="approvals"]',
+    )!;
+
+    // The three attributes the contract is made of, on the queried element.
+    expect(group).toHaveAttribute('role', 'group');
+    expect(group).toHaveAttribute('data-action-region', 'approvals');
+    expect(group).toHaveAttribute('aria-label', 'Approvals actions');
+    expect(group).toContainElement(
+      screen.getByRole('button', { name: 'Approve' }),
+    );
+
+    // <1180 — the stacked head. >=1180 — the two-track grid. Same element.
+    expect(head).toHaveClass('grid-cols-1');
+    expect(group).toHaveClass('justify-start');
+    expect(head).toHaveClass('min-[1180px]:grid-cols-[1fr_auto]');
+    expect(group).toHaveClass('min-[1180px]:justify-end');
+
+    // No class on either the head or the ledger removes the region at a width.
+    for (const element of [head, group]) {
+      expect(
+        Array.from(element.classList).filter((name) =>
+          /(?:^|:)hidden$/.test(name),
+        ),
+      ).toEqual([]);
+    }
+  });
+
+  it('names the ledger after the region even when the head only folds', () => {
+    renderHead({
+      actions: [],
+      bodyId: 'region-approvals-body',
+      onFold: jest.fn(),
+    });
+    expect(
+      document.querySelector('[role="group"][data-action-region="approvals"]'),
+    ).toHaveAttribute('aria-label', 'Approvals actions');
+  });
+
   it('wraps a long status instead of truncating it (F87)', () => {
     const status =
       'Client approvals — 2 awaiting · the Vandersteens · sent Tuesday, August 25';

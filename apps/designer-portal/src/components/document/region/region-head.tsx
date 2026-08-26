@@ -17,6 +17,11 @@
  * carries direction-b's wrap discipline: line one is identity and never
  * elides; line two is the worst two exceptions in tie-break order; a third is
  * dropped whole, never abbreviated; nothing cuts mid-word.
+ *
+ * What the breakpoint moves is LAYOUT only. The ledger's action region —
+ * role="group" + an accessible name + data-action-region — is the contract
+ * `action-visibility.spec.ts` and DocumentActionGroup's one-leader guard
+ * query, and it rides the same element at every width, stacked or two-track.
  */
 
 import type { ReactNode } from 'react';
@@ -78,6 +83,14 @@ export function RegionHead({
 }: RegionHeadProps) {
   const showFold = Boolean(bodyId && onFold);
   const printedExceptions = exceptions.slice(0, 2);
+  // The ledger is a NAMED action region, not an anonymous box. The Room heads
+  // that predate this primitive name theirs by hand ("Library actions",
+  // "People actions", "Drafting actions"); a RegionHead's ledger carried
+  // role="group" and data-action-region with no accessible name at all, so a
+  // screen reader announced an unnamed group and every one of them sounded
+  // alike. `name` is the region's own word, so the name follows it.
+  const ledgerLabel =
+    typeof name === 'string' ? `${name} actions` : undefined;
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
@@ -136,6 +149,7 @@ export function RegionHead({
         <DocumentActionGroup
           surfaceKey={surfaceKey}
           regionKey={regionKey}
+          aria-label={ledgerLabel}
           className="justify-start min-[1180px]:justify-end"
         >
           {actions.map((entry, index) => {

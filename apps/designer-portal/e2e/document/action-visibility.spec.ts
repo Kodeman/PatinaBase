@@ -86,6 +86,36 @@ async function expectInlinePrimary(
   return primary;
 }
 
+/**
+ * A head whose sole act is a quiet doorway rather than a leader. The action
+ * REGION contract is identical — role=group + data-action-region on the same
+ * element, one act, a 44px target — but no primary is claimed, because the
+ * ruling that retired the act left nothing to elect. Asserting `toHaveCount(0)`
+ * on the leader variants keeps C7 honest in both directions: a head that must
+ * not lead cannot quietly grow a leader back.
+ */
+async function expectInlineQuietAct(
+  page: AuthenticatedPage,
+  regionKey: string,
+  actionKey: string,
+  label: string | RegExp,
+) {
+  const group = page
+    .locator(`[role="group"][data-action-region="${regionKey}"]`)
+    .first();
+  await expect(group).toBeVisible({ timeout: COLD });
+  const act = group.locator(`[data-action-key="${actionKey}"]`);
+  await expect(act).toHaveCount(1, { timeout: COLD });
+  await expect(
+    group.locator(
+      '[data-action-variant="primary"], [data-action-variant="inked"]',
+    ),
+  ).toHaveCount(0);
+  await expect(act).toContainText(label);
+  await expectMinTarget(act);
+  return act;
+}
+
 async function expectMobileBar(
   page: AuthenticatedPage,
   actionKey: string,
@@ -140,10 +170,19 @@ test.describe('Inked Instruments action visibility', () => {
     await page.goto('/people', { waitUntil: 'domcontentloaded' });
     await expectInlinePrimary(page, 'room-head', 'Add person');
 
+    // The Drafting Room claims no primary, and has not since f74e20b88
+    // ("legacy send retirement"): a project-bound furnishing draft now reaches
+    // the client as a named authorization released from the schedule, so this
+    // Room stays for facet editing only (drafting-room.tsx:360-372) and its
+    // sole head act is the quiet `Share…` doorway
+    // (proposal-share-instrument.tsx:50-56, a tertiary). This line asserted
+    // `/^Send/` against markup that stopped rendering it two waves earlier —
+    // the ACT moved by ruling; role=group and data-action-region never did,
+    // which is why the assertion below still queries the same region.
     await page.goto(`/drafting/${SENT_PROPOSAL_ID}`, {
       waitUntil: 'domcontentloaded',
     });
-    await expectInlinePrimary(page, 'room-head', /^Send/);
+    await expectInlineQuietAct(page, 'room-head', 'share-proposal', 'Share');
   });
 
   test('390px surfaces place context, primary, and More in one edge owner', async ({
@@ -197,9 +236,12 @@ test.describe('Inked Instruments action visibility', () => {
     await page.goto('/people', { waitUntil: 'domcontentloaded' });
     await expectMobileBar(page, 'add-person', 'Add person');
 
-    await page.goto(`/drafting/${SENT_PROPOSAL_ID}`, {
-      waitUntil: 'domcontentloaded',
-    });
-    await expectMobileBar(page, 'send-proposal', /^Send/);
+    // The Drafting Room is deliberately absent from this walk. Since f74e20b88
+    // it registers `useMobilePrimaryAction(null)` — no act is promoted to the
+    // edge — and its one doorway is published into More as a SECONDARY
+    // (proposal-share-instrument.tsx:17-24). This step asserted a
+    // `send-proposal` primary the same ruling retired. The mobile contract that
+    // replaced it is held at unit level by drafting-room.test.tsx's "publishes
+    // Share to mobile More even at 0% when Send is absent".
   });
 });

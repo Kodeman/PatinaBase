@@ -151,17 +151,21 @@ describe('the Money seam, on the Delivery table', () => {
   });
 
   it('states no figure before its reads settle — the declaration waits', () => {
-    // The authority is still in flight. A seam that stood now would print
-    // "$0 committed · no authority yet" and then flip to the truth, which is
-    // the same lie the region's own tiers refuse to tell.
+    // The budget read is still in flight. A seam that stood now would print
+    // "$0 authorized · no budget yet" and then flip to the truth, which is the
+    // same lie the region's own tiers refuse to tell.
     mockAuthority = { data: undefined, isLoading: true, error: null };
 
     render(<MoneyRegion projectId="project-1" tableSeam />);
 
     expect(screen.queryByRole('button', { name: /unfold/i })).toBeNull();
     // The seam's own sentence, in the shape it would have had: never printed.
+    // This asserted "$0 committed · no authority yet" until the A hotfix — a
+    // sentence SP-03 had already made unproducible, so the guard was green by
+    // construction rather than by verification. It now names what
+    // money-region.tsx:180-186 would actually emit in this state.
     expect(
-      screen.queryByText('$0 committed · no authority yet'),
+      screen.queryByText('$0 authorized · no budget yet'),
     ).not.toBeInTheDocument();
     // The region stands as it does anywhere unsettled: each rung printing its
     // name and no figure.

@@ -466,6 +466,11 @@ export function StudioDrawer() {
           <button
             type="button"
             onClick={() => openCommandBar()}
+            /* The Desk header carries its own "Find anything" tertiary act, so
+               on /desk two controls stood in the tree under one accessible
+               name. The words on the paper are the ruled ones and do not move;
+               the name says which door this is. */
+            aria-label="Find anything (⌘K), from the studio drawer"
             className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
           >
             <Search className="h-[15px] w-[15px] shrink-0" strokeWidth={1.5} aria-hidden />
