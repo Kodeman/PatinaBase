@@ -7,7 +7,8 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Ellipsis, MessageSquareText, TimerReset } from 'lucide-react';
+import { Ellipsis, MessageSquareText, Search, TimerReset } from 'lucide-react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   useUnreadInboxCount,
@@ -16,6 +17,7 @@ import {
 } from '@patina/supabase';
 import { ALL_STUDIO_SURFACES } from '@/lib/document/registry';
 import { useDocumentTime } from '@/hooks/document-time-provider';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
 import { DocumentAction } from '../document-action';
 import { openFeedbackSheet } from '../feedback/feedback-sheet';
@@ -51,6 +53,28 @@ function surfaceLabel(pathname: string | null): string {
 }
 
 const MAIL_GROUP_LABEL_ID = 'mobile-more-mail-group';
+const IN_DOCUMENT_GROUP_LABEL_ID = 'mobile-more-in-document-group';
+
+/** A shelf the spine offers at 1440, as a door the phone can reach: either a
+ *  route of its own, or the doorway event the surface already listens on. */
+type DocumentDoor =
+  | { key: string; label: string; href: string }
+  | { key: string; label: string; open: () => void };
+
+// The roster sheet is mounted on the document and listens on the window — the
+// same wire the spine's shelf row, the letterhead instrument and the kickoff
+// band send on.
+function openCallSheet() {
+  window.dispatchEvent(
+    new CustomEvent('document:open-call-sheet', { detail: { mode: 'sheet' } }),
+  );
+}
+
+// The register listens on the window too (`openCommandBar`); dispatching keeps
+// the whole command bar out of this bar's module graph.
+function openRegister() {
+  window.dispatchEvent(new CustomEvent('document:open-command-bar'));
+}
 
 const MENU_ITEM =
   'flex min-h-11 w-full items-center gap-3 border-b border-[rgba(250,247,242,0.1)] px-3 py-2 text-left text-[var(--color-pearl)] last:border-b-0 hover:bg-[rgba(250,247,242,0.06)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-50';
@@ -72,19 +96,47 @@ export function MobileBar() {
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
   const { data: unreadProcurement = 0 } = useProcurementUnreadCount();
   const { data: unseenFeedback } = useUnseenShipped();
+  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const unread = unreadInbox + unreadProcurement;
   const hasUnseenFeedback = hydrated && (unseenFeedback?.length ?? 0) > 0;
 
   const [moreOpen, setMoreOpen] = useState(false);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const firstMenuItemRef = useRef<HTMLButtonElement>(null);
+  // A menu row is a button or a link, so the ref is taken by callback.
+  const firstMenuItemRef = useRef<HTMLElement | null>(null);
+  const setFirstMenuItem = (node: HTMLElement | null) => {
+    firstMenuItemRef.current = node;
+  };
 
   const inDocument = pathname?.startsWith('/doc/') && activeDoc !== null;
   const activeSection = activeDoc?.sections.find((s) => s.state === 'active');
   const context = inDocument
     ? (activeSection?.label ?? 'Document')
     : surfaceLabel(pathname);
+
+  // F49 — the shelves the spine prints at 1440, as doors a phone can reach.
+  // Mood boards is absent on purpose: its list exists only inside the ≥1440
+  // shelf leaf, which is force-closed below 1440, so there is no destination
+  // to offer here until one is built.
+  const documentProjectId = inDocument ? (activeDoc?.projectId ?? null) : null;
+  const inThisDocument: DocumentDoor[] = documentProjectId
+    ? [
+        {
+          key: 'planroom',
+          label: 'Plan room',
+          href: `/doc/${documentProjectId}/plans`,
+        },
+        {
+          key: 'specbook',
+          label: 'Spec book',
+          href: `/doc/${documentProjectId}/spec-book`,
+        },
+        ...(callSheetOn
+          ? [{ key: 'callsheet', label: 'Call sheet', open: openCallSheet }]
+          : []),
+      ]
+    : [];
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -141,8 +193,10 @@ export function MobileBar() {
         loadingLabel: primaryAction.loading
           ? `${primaryAction.label}…`
           : undefined,
+        // The act is shortened at its source, never clipped here: the label
+        // wraps inside the 44px control rather than losing its last word.
         className:
-          'min-h-11 w-full min-w-0 !text-[var(--color-off-white)] [&_.da-label]:max-w-[9rem] [&_.da-label]:truncate',
+          'min-h-11 w-full min-w-0 !text-[var(--color-off-white)] [&_.da-label]:whitespace-normal [&_.da-label]:text-center [&_.da-label]:leading-[15px]',
         children: primaryAction.label,
       }
     : null;
@@ -244,10 +298,77 @@ export function MobileBar() {
           aria-label="More studio actions"
           className="absolute bottom-[calc(100%+8px)] right-3 w-[min(19rem,calc(100vw-1.5rem))] overflow-hidden rounded-[6px] border border-[rgba(250,247,242,0.2)] bg-[var(--color-charcoal)]"
         >
-          {menuSecondaryActions.map((action, index) => (
+          {inThisDocument.length > 0 && (
+            <div role="group" aria-labelledby={IN_DOCUMENT_GROUP_LABEL_ID}>
+              <div className="border-b border-[rgba(250,247,242,0.1)] px-3 pt-2">
+                <span
+                  id={IN_DOCUMENT_GROUP_LABEL_ID}
+                  className="font-mono text-[11px] uppercase tracking-[0.1em] text-[rgba(250,247,242,0.5)]"
+                >
+                  In this document
+                </span>
+              </div>
+              {inThisDocument.map((door, index) => {
+                const inner = (
+                  <>
+                    <span
+                      aria-hidden
+                      className="inline-flex w-4 items-center justify-center font-mono text-[14px] text-[var(--color-clay)]"
+                    >
+                      →
+                    </span>
+                    <span className="min-w-0 flex-1 text-[14px]">
+                      {door.label}
+                    </span>
+                  </>
+                );
+                const takeRef = index === 0 ? setFirstMenuItem : undefined;
+                return 'href' in door ? (
+                  <Link
+                    key={door.key}
+                    ref={takeRef}
+                    href={door.href}
+                    data-mobile-document-door={door.key}
+                    onClick={() => setMoreOpen(false)}
+                    className={MENU_ITEM}
+                  >
+                    {inner}
+                  </Link>
+                ) : (
+                  <button
+                    key={door.key}
+                    ref={takeRef}
+                    type="button"
+                    data-mobile-document-door={door.key}
+                    onClick={() => closeThen(door.open)}
+                    className={MENU_ITEM}
+                  >
+                    {inner}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <button
+            ref={inThisDocument.length === 0 ? setFirstMenuItem : undefined}
+            type="button"
+            data-mobile-find-anything
+            onClick={() => closeThen(openRegister)}
+            className={MENU_ITEM}
+          >
+            <Search
+              className="h-4 w-4 text-[var(--color-clay)]"
+              strokeWidth={1.5}
+              aria-hidden
+            />
+            <span className="min-w-0 flex-1 text-[14px]">Find anything</span>
+            <span className="font-mono text-[12px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.58)]">
+              ⌘K
+            </span>
+          </button>
+          {menuSecondaryActions.map((action) => (
             <button
               key={action.actionKey}
-              ref={index === 0 ? firstMenuItemRef : undefined}
               type="button"
               data-mobile-secondary-action
               data-mobile-secondary-key={action.actionKey}
@@ -269,9 +390,6 @@ export function MobileBar() {
             </button>
           ))}
           <button
-            ref={
-              menuSecondaryActions.length === 0 ? firstMenuItemRef : undefined
-            }
             type="button"
             onClick={() => closeThen(openTimer)}
             className={MENU_ITEM}
@@ -291,8 +409,8 @@ export function MobileBar() {
           {/* SP-11/F83 — a connecting group label so a first-time reader can
               infer The Post is kin to the letterhead's "Message {Family}" act,
               without merging the two doors or renaming The Post itself. The
-              group closes around The Post alone: the rows below it (Studio
-              books, Leave a note) are not mail. */}
+              group closes around The Post alone: the rows below it (Ledgers,
+              Leave a note) are not mail. */}
           <div role="group" aria-labelledby={MAIL_GROUP_LABEL_ID}>
             <div className="border-b border-[rgba(250,247,242,0.1)] px-3 pt-2">
               <span
@@ -337,7 +455,7 @@ export function MobileBar() {
               <i className="h-4 w-[2px] rounded-[1px] bg-[var(--color-dusty-blue)]" />
               <i className="h-4 w-[2px] rounded-[1px] bg-[var(--color-sage)]" />
             </span>
-            <span className="text-[14px]">Studio books</span>
+            <span className="text-[14px]">Ledgers</span>
           </button>
           <button
             type="button"
