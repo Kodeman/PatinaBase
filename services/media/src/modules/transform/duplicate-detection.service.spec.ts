@@ -3,6 +3,26 @@ import { DuplicateDetectionService } from './duplicate-detection.service';
 import { PrismaClient } from '../../generated/prisma-client';
 import sharp from 'sharp';
 
+// Production calls `imageHashAsync(normalized as any, bits, true)` with a raw
+// Buffer, but the real `image-hash` lib's `isBufferObject()` check only
+// recognizes `{ data: Buffer, name/ext }` wrapper objects — a bare Buffer
+// falls through to its `fs.readFile(src, ...)` branch and throws
+// "path must be a string, Uint8Array, or URL without null bytes." This looks
+// like a real production call-shape bug, but production source is out of
+// scope here; this test-only shim normalizes the call shape so the real
+// hashing algorithm still runs (needed for the same/similar/different-image
+// assertions below to mean anything), without touching duplicate-detection.service.ts.
+jest.mock('image-hash', () => {
+  const actual = jest.requireActual('image-hash');
+  return {
+    ...actual,
+    imageHash: (src: any, bits: number, method: any, cb: any) => {
+      const wrapped = Buffer.isBuffer(src) ? { data: src, name: 'normalized.jpg' } : src;
+      return actual.imageHash(wrapped, bits, method, cb);
+    },
+  };
+});
+
 describe('DuplicateDetectionService', () => {
   let service: DuplicateDetectionService;
   let prisma: PrismaClient;
@@ -36,15 +56,20 @@ describe('DuplicateDetectionService', () => {
       .jpeg()
       .toBuffer();
 
-    // Different from testImage1
-    testImage3 = await sharp({
-      create: {
-        width: 256,
-        height: 256,
-        channels: 3,
-        background: { r: 0, g: 0, b: 255 },
-      },
-    })
+    // Different from testImage1. A flat solid color (even a different hue)
+    // isn't enough here: the block-hash algorithm behind generatePHash
+    // hashes luminance structure between blocks, and two perfectly flat
+    // images have zero variance regardless of color — they hash identically.
+    // Use a checkerboard so there's real structural difference to detect.
+    testImage3 = await sharp(
+      Buffer.from(`
+        <svg width="256" height="256">
+          <rect width="256" height="256" fill="#000033"/>
+          <rect x="0" y="0" width="128" height="128" fill="#FFFFFF"/>
+          <rect x="128" y="128" width="128" height="128" fill="#FFFFFF"/>
+        </svg>
+      `),
+    )
       .jpeg()
       .toBuffer();
   });
@@ -158,9 +183,9 @@ describe('DuplicateDetectionService', () => {
     it('should detect exact duplicate', async () => {
       const hash = await service.generatePHash(testImage1);
 
-      jest.spyOn(prisma.mediaAsset, 'findMany').mockResolvedValue([
-        { id: 'asset-1', phash: hash },
-      ] as any);
+      jest
+        .spyOn(prisma.mediaAsset, 'findMany')
+        .mockResolvedValue([{ id: 'asset-1', phash: hash }] as any);
 
       const result = await service.detectDuplicates(testImage1, 'different-id');
 
@@ -171,9 +196,9 @@ describe('DuplicateDetectionService', () => {
     it('should detect similar images', async () => {
       const hash1 = await service.generatePHash(testImage1);
 
-      jest.spyOn(prisma.mediaAsset, 'findMany').mockResolvedValue([
-        { id: 'asset-1', phash: hash1 },
-      ] as any);
+      jest
+        .spyOn(prisma.mediaAsset, 'findMany')
+        .mockResolvedValue([{ id: 'asset-1', phash: hash1 }] as any);
 
       const result = await service.detectDuplicates(testImage2);
 
@@ -184,9 +209,9 @@ describe('DuplicateDetectionService', () => {
     it('should exclude specified asset ID', async () => {
       const hash = await service.generatePHash(testImage1);
 
-      jest.spyOn(prisma.mediaAsset, 'findMany').mockResolvedValue([
-        { id: 'exclude-me', phash: hash },
-      ] as any);
+      jest
+        .spyOn(prisma.mediaAsset, 'findMany')
+        .mockResolvedValue([{ id: 'exclude-me', phash: hash }] as any);
 
       const result = await service.detectDuplicates(testImage1, 'exclude-me');
 

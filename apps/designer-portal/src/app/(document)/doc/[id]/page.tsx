@@ -49,6 +49,12 @@ import {
   type SectionScheduleFacts,
 } from '@/lib/document/section-derivation';
 import { type DocumentStateRow, type SectionKey } from '@/lib/document/desk-derivation';
+import { paperRegionsForSection } from '@/lib/document/document-index';
+import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
+import {
+  deriveProposalWatch,
+  deriveSendWallLine,
+} from '@/lib/document/proposal-watch-derivation';
 import { sectionAnchorId } from '@/lib/document/section-anchor';
 import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
 import { documentResolutionState } from '@/lib/document/document-resolution-state';
@@ -104,7 +110,10 @@ import {
   type DocumentGuideAction,
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
-import { composeDocumentGuideInputs } from '@/lib/document/document-guide-inputs';
+import {
+  composeDocumentGuideInputs,
+  type DocumentGuideReadinessFacts,
+} from '@/lib/document/document-guide-inputs';
 import { deriveGates, nearestOpenGate } from '@/lib/document/workflow-gate';
 import {
   asCommercialDocumentKind,
@@ -117,7 +126,7 @@ import {
   selectOperationalNeedsForDocument,
   useDeskEngagements,
 } from '@/hooks/use-desk-engagements';
-import { openLedger } from '@/components/document/command-bar';
+import { callSheetPending, openLedger } from '@/components/document/command-bar';
 import { RedLetterZone, type RedLetterRow } from '@/components/document/red-letter-zone';
 import {
   RoomLensProvider,
@@ -325,6 +334,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const enrichedOperationalNeed = deskEnrichment
     ? selectOperationalNeedForDocument(enrichedOperationalQuery.data, row?.engagement_id)
     : undefined;
+  // The letterhead's red-letter zone (project documents only): every need this
+  // document is carrying, printed once, instead of the guide's single sentence.
+  // Sourced from the Desk composition ONLY — `undefined` means the composition
+  // has not answered for this document, and the zone stands down in favour of
+  // DocumentGuide rather than printing a local derivation: this page cannot
+  // pass deriveNeeds the invoice/schedule facts the Desk holds, so that
+  // fallback silently printed a SHORT list as if it were the whole list.
+  const enrichedOperationalNeeds = deskEnrichment
+    ? selectOperationalNeedsForDocument(enrichedOperationalQuery.data, row?.engagement_id)
+    : undefined;
   // One clock for the document: the margin's overdue stamp and the guide's
   // sentence read the same instant, so they cannot disagree across a midnight.
   // Re-derived only when the gate read itself changes.
@@ -333,6 +352,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     () => new Date(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [handoffsQuery.dataUpdatedAt],
+  );
+  // The tie-break the red letter prints in and the guide leads with — one
+  // ordering, so the sentence at the top of the paper names the same need the
+  // zone's first row does.
+  const rankedOperationalNeeds = useMemo(
+    () =>
+      enrichedOperationalNeeds
+        ? rankOperationalNeeds(enrichedOperationalNeeds, gateNow)
+        : undefined,
+    [enrichedOperationalNeeds, gateNow],
   );
   // Ruling V: the guide speaks for the nearest open gate. `undefined` while the
   // projection has not answered — the guide then keeps its own derivation
@@ -406,6 +435,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // default; the letterhead instrument and ⌘K's "This surface" row both
   // dispatch document:open-call-sheet rather than holding their own state.
   const [callSheetOpen, setCallSheetOpen] = useState(false);
+  // A3-L7 — the care rest state ("Everything is settled." / CLOSE THE BOOK) is
+  // gated on the closure gate the Care band alone can compute: it is the only
+  // reader of the eight closeout queries AND of the checklist's own state. The
+  // band publishes its answer here rather than the page paying for that read
+  // twice and getting a second answer.
+  const [closureReady, setClosureReady] = useState(false);
   // FIX 2 — the event's optional { mode } detail (default 'sheet'), read off
   // whichever dispatch opened it and forwarded straight through to CallSheet.
   const [callSheetMode, setCallSheetMode] = useState<CallSheetOpenMode>('sheet');
@@ -484,6 +519,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       setCallSheetOpen(true);
     };
     window.addEventListener('document:open-call-sheet', onOpenCallSheet);
+    // A ⌘K row that named a document NOT in hand walked here instead of
+    // dispatching into a page that had no listener yet; the flag is the
+    // intent, read and cleared once on arrival (openCaptureLead's pattern).
+    if (callSheetPending.value) {
+      callSheetPending.value = false;
+      setCallSheetMode('sheet');
+      setCallSheetOpen(true);
+    }
     return () => window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
   }, []);
 
@@ -692,6 +735,35 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         },
       )
     : [];
+  // The wall's own line, for the proposal stage's dated headline and SP-12's
+  // live verb. Built here rather than through `useProposalWatch` because the
+  // engagement aggregate and the raw event log feed only the open count and the
+  // record — no field `deriveSendWallLine` reads — so the two extra reads would
+  // buy nothing and would fire on every document route.
+  const sendWallLine = useMemo(() => {
+    if (!liveProposal) return null;
+    const watch = deriveProposalWatch(
+      {
+        status: liveProposal.status,
+        sentAt: liveProposal.sent_at ?? null,
+        viewedAt: liveProposal.viewed_at ?? null,
+        acceptedAt: liveProposal.accepted_at ?? null,
+        lastNudgedAt: liveProposal.last_nudged_at ?? null,
+        version: liveProposal.version ?? null,
+      },
+      null,
+      null,
+      gateNow,
+    );
+    return deriveSendWallLine(
+      {
+        watch,
+        commercialState: liveProposal.commercial_state ?? null,
+        issuedOnPaper: Boolean(liveProposal.issued_on_paper),
+      },
+      gateNow,
+    );
+  }, [liveProposal, gateNow]);
   const proposalGuideFacts: ProposalGuideFacts | null = liveProposal
     ? {
         status: asLegacyProposalLifecycle(liveProposal.status),
@@ -700,26 +772,32 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         projectId: liveProposal.project_id ?? null,
       }
     : null;
+  const discoveryReadiness: DocumentGuideReadinessFacts['discovery'] = discoveryQuery.isError
+    ? { state: 'error' }
+    : discoveryQuery.isLoading
+      ? { state: 'loading' }
+      : discoveryQuery.data
+        ? { state: 'ready', data: discoveryQuery.data.row ?? discoveryQuery.data.prefill ?? {} }
+        : { state: 'idle' };
+  const draftingReadiness: DocumentGuideReadinessFacts['drafting'] = draftingState.error
+    ? { state: 'error' }
+    : draftingState.isLoading
+      ? { state: 'loading' }
+      : { state: 'ready', data: { gaps: draftingState.gaps } };
   const guideInputs = row
     ? composeDocumentGuideInputs({
         row,
         proposal: proposalGuideFacts,
-        readiness: {
-          discovery: discoveryQuery.isError
-            ? { state: 'error' }
-            : discoveryQuery.isLoading
-              ? { state: 'loading' }
-              : discoveryQuery.data
-                ? { state: 'ready', data: discoveryQuery.data.row ?? discoveryQuery.data.prefill ?? {} }
-                : { state: 'idle' },
-          drafting: draftingState.error
-            ? { state: 'error' }
-            : draftingState.isLoading
-              ? { state: 'loading' }
-              : { state: 'ready', data: { gaps: draftingState.gaps } },
-        },
+        readiness: { discovery: discoveryReadiness, drafting: draftingReadiness },
       })
     : [];
+  // A3-L7's rest states read an empty `guideInputs` as "nothing outstanding".
+  // On these two stages that list is also empty while its own read is still in
+  // flight, so the stage would announce itself finished on a fact nobody has
+  // stated yet. Pending is not quiet.
+  const guideInputsPending =
+    (row?.active_section === 'discovery' && discoveryReadiness.state !== 'ready') ||
+    (row?.active_section === 'direction' && draftingReadiness.state !== 'ready');
   // A failed Desk read only blanks guidance that depended on it. A document its
   // side feeds never key on keeps its own truthful guidance through the outage.
   const deskGuidanceFailed = deskEnrichment && enrichedOperationalQuery.isError;
@@ -740,10 +818,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         row,
         availability: guideUnavailable ? 'unavailable' : 'ready',
         retryAvailable: deskGuidanceFailed,
-        proposal: proposalGuideFacts,
+        proposal: proposalGuideFacts
+          ? { ...proposalGuideFacts, sendWall: sendWallLine }
+          : null,
+        schedule: scheduleFacts,
         inputFacts: guideInputs,
-        operationalNeed: enrichedOperationalNeed,
+        inputsPending: guideInputsPending,
+        operationalNeed: rankedOperationalNeeds?.[0] ?? enrichedOperationalNeed,
         gate: nearestGate,
+        closureReady,
       })
     : null;
   // Split from activateGuide so the red-letter zone's per-need actions (below)
@@ -767,19 +850,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     activateDestination(destination);
   }, [activateDestination, guideModel]);
 
-  // The letterhead's red-letter zone (project documents only, D-something): every
-  // need this document is carrying, printed once, instead of the guide's single
-  // sentence. Sourced from the Desk composition ONLY — `undefined` means the
-  // composition has not answered for this document, and the zone stands down in
-  // favour of DocumentGuide rather than printing a local derivation: this page
-  // cannot pass deriveNeeds the invoice/schedule facts the Desk holds, so that
-  // fallback silently printed a SHORT list as if it were the whole list.
-  const enrichedOperationalNeeds = deskEnrichment
-    ? selectOperationalNeedsForDocument(enrichedOperationalQuery.data, row?.engagement_id)
-    : undefined;
   const redLetterRows: RedLetterRow[] = useMemo(() => {
     if (!row || row.engagement_kind !== 'project') return [];
-    const needs = enrichedOperationalNeeds;
+    const needs = rankedOperationalNeeds;
     if (!needs) return [];
     return needs.map((need, index) => {
       const action = needGuideAction(need, row.active_section, row.project_id ?? null);
@@ -792,7 +865,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         urgent: need.urgent,
       };
     });
-  }, [row, enrichedOperationalNeeds, activateDestination]);
+  }, [row, rankedOperationalNeeds, activateDestination]);
 
   // D13: publish the held document to the mobile shell (bar + spine sheet).
   useMobileActiveDoc(
@@ -929,14 +1002,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   settledCountRef.current = settled.length;
   const heldRoomName =
     (docRooms ?? []).find((r) => r.id === heldRoomId)?.name ?? null;
-  // The shelved spine's blocks stand only where their subjects do: the running
-  // index names Project regions, and the rooms and shelves are project things.
+  // The shelved spine's blocks stand only where their subjects do: the rooms and
+  // the shelves are project things, and the running index names Project
+  // regions — which install and care put on the paper too, minus the money
+  // region (C11: the index is handed the subset THIS spread mounts, never the
+  // fixed four).
   const shelvedSpine =
     row.engagement_kind === 'project' &&
     row.project_id &&
-    row.active_section === 'project' ? (
+    (row.active_section === 'project' ||
+      row.active_section === 'install' ||
+      row.active_section === 'care') ? (
       <DocSpineShelvedBlocks
         projectId={row.project_id}
+        regions={paperRegionsForSection(row.active_section)}
         rooms={docRooms ?? []}
         scheduleValue={scheduleFacts?.positionText ?? 'Not scheduled'}
         approvalsValue={
@@ -1104,13 +1183,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         />
 
         {/* The red letter replaces the guide only where it can actually speak
-            for the document: a composed Desk answer for THIS engagement. With
-            no composition (or a failed Desk read, whose retry lives on the
-            guide) the project document keeps the same guide every other kind
-            gets — silence is not a state this page is allowed to render. */}
+            for the document: a composed Desk answer for THIS engagement that
+            carries at least one row. With no composition, a failed Desk read
+            (whose retry lives on the guide), or a composition that answered
+            "nothing", the project document keeps the same guide every other
+            kind gets — the zone renders null on an empty list, so without the
+            row count this branch printed nothing at all, and silence is not a
+            state this page is allowed to render. */}
         {guideModel &&
           (row.engagement_kind === 'project' &&
           enrichedOperationalNeeds &&
+          redLetterRows.length > 0 &&
           !deskGuidanceFailed ? (
             <RedLetterZone rows={redLetterRows} />
           ) : (
@@ -1369,6 +1452,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     projectId={row.project_id}
                     projectName={row.title}
                     mode="project"
+                    needs={rankedOperationalNeeds}
                     highlightId={highlightLineId}
                     onAddNote={setPendingNoteAnchor}
                     sectionKey="project"
@@ -1400,7 +1484,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   )}
                   {/* R80: the Care band — closure stays reachable from an active
                     project (a quiet folded line until install nears). */}
-                  <CareBand projectId={row.project_id} />
+                  <CareBand projectId={row.project_id} onCloseoutReady={setClosureReady} />
                 </>
               )}
             {spreadSection === 'install' && row.project_id && (
@@ -1409,6 +1493,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   projectId={row.project_id}
                   projectName={row.title}
                   mode="install"
+                  needs={rankedOperationalNeeds}
                   highlightId={highlightLineId}
                   onAddNote={setPendingNoteAnchor}
                   sectionKey="install"
@@ -1423,7 +1508,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 <InstallWindowCeremony projectId={row.project_id} />
                 {/* R80: at install the band opens unfolded — closing out IS the
                     work of this stage. */}
-                <CareBand projectId={row.project_id} />
+                <CareBand projectId={row.project_id} onCloseoutReady={setClosureReady} />
               </>
             )}
             {spreadSection === 'care' && (
@@ -1438,6 +1523,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   <FFESection
                     projectId={row.project_id}
                     mode="install"
+                    needs={rankedOperationalNeeds}
                     highlightId={highlightLineId}
                     sectionKey="care"
                     clientUserId={row.client_profile_id}

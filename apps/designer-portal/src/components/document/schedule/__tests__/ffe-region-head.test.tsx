@@ -5,6 +5,7 @@ let mockRooms: Record<string, unknown>[] = [];
 let mockInstruments: Record<string, unknown>[] = [];
 let mockTradeScopes: Record<string, unknown>[] = [];
 let mockAuthority: { data: unknown } = { data: null };
+let mockCoverage: Record<string, { coverage: string }> = {};
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -38,7 +39,7 @@ jest.mock('@patina/supabase', () => ({
     isError: false,
   }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
-  useFfeInvoiceCoverage: () => ({ data: {} }),
+  useFfeInvoiceCoverage: () => ({ data: mockCoverage }),
 }));
 
 const openAddToProject = jest.fn();
@@ -128,13 +129,69 @@ describe('FF&E project-mode region head', () => {
     mockInstruments = [];
     mockTradeScopes = [];
     mockAuthority = { data: null };
+    mockCoverage = {};
   });
 
-  it('inks exactly one ledger entry — Add to project, when there is no authority to release against', () => {
+  /** A line with a piece behind it, already on an invoice — no exception. */
+  const settled = (over: Record<string, unknown> = {}) =>
+    line({ product_id: 'product-1', ...over });
+
+  it('inks exactly one ledger entry — Add a line, when nothing on the spread is an exception', () => {
+    mockItems = [settled()];
+    mockCoverage = { 'line-1': { coverage: 'invoiced' } };
     renderProject();
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Add to project');
+    expect(inked[0]).toHaveTextContent('Add a line');
+  });
+
+  it('elects the sharpest exception instead — F34, one inked leader still', () => {
+    // The fixture line carries no piece and no invoice: two exceptions, and
+    // the unspecified one is the sharper of the pair.
+    renderProject();
+    const inked = document.querySelectorAll('[data-action-variant="inked"]');
+    expect(inked).toHaveLength(1);
+    expect(inked[0]).toHaveTextContent('Spec the 1 unspecified');
+    expect(
+      screen.getByRole('button', { name: /Bill 1 uninvoiced line/ }),
+    ).toHaveAttribute('data-action-variant', 'secondary');
+  });
+
+  it('elects the damage claim over both, and names the act FILE THE CLAIM', () => {
+    render(
+      <FFESection
+        projectId="project-1"
+        projectName="Ellsworth"
+        mode="project"
+        needs={[
+          {
+            kind: 'damage_claim',
+            text: 'PO-2026-0418 has an open damage claim',
+            actionLabel: 'Review the claim',
+            stamp: { label: 'CLAIM OPEN', color: 'var(--color-terracotta)' },
+            urgent: false,
+          },
+        ]}
+      />,
+    );
+    const inked = document.querySelectorAll('[data-action-variant="inked"]');
+    expect(inked).toHaveLength(1);
+    expect(inked[0]).toHaveTextContent('File the claim');
+  });
+
+  it('reads Pieces, with the FF&E schedule named in its sub-line (C20)', () => {
+    renderProject();
+    expect(screen.getByRole('heading', { name: 'Pieces' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/the FF&E schedule, by room/),
+    ).toBeInTheDocument();
+  });
+
+  it('prints the worst two exceptions on line two, sharpest first', () => {
+    mockItems = [line({ id: 'ffe-1' }), line({ id: 'ffe-2' })];
+    renderProject();
+    const head = document.querySelector('[data-region-head="ffe"]');
+    expect(head).toHaveTextContent('2 unspecified · 2 uninvoiced');
   });
 
   it('inks Release for authorization instead, once canRelease holds', () => {
@@ -143,11 +200,11 @@ describe('FF&E project-mode region head', () => {
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
     expect(inked[0]).toHaveTextContent('Release for authorization');
-    // Add to project survives, demoted rather than dropped.
-    expect(screen.getByRole('button', { name: 'Add to project' })).toHaveAttribute(
-      'data-action-variant',
-      'secondary',
-    );
+    // Add a line survives, demoted rather than dropped. Scoped by action key,
+    // not text — SP-09 gave the per-room add-line act the same words.
+    expect(
+      document.querySelector('[data-action-key="open-add-to-project"]'),
+    ).toHaveAttribute('data-action-variant', 'secondary');
   });
 
   it('renders the fold seam by default when the schedule has settled empty', () => {
@@ -167,7 +224,9 @@ describe('FF&E project-mode region head', () => {
       line({ id: 'ffe-2', project_room_id: null, room: null }),
     ];
     renderProject();
-    expect(screen.getByText('1 group · 2 lines')).toBeInTheDocument();
+    expect(
+      screen.getByText('the FF&E schedule, by room · 1 group · 2 lines'),
+    ).toBeInTheDocument();
   });
 
   it('opens from the seam back to the full head, round-trip', () => {
@@ -175,7 +234,7 @@ describe('FF&E project-mode region head', () => {
     renderProject();
     fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
     expect(
-      screen.getByRole('heading', { name: 'Project · FF&E' }),
+      screen.getByRole('heading', { name: 'Pieces' }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Fold ↑' }),
@@ -183,7 +242,7 @@ describe('FF&E project-mode region head', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Fold ↑' }));
     expect(
-      screen.queryByRole('heading', { name: 'Project · FF&E' }),
+      screen.queryByRole('heading', { name: 'Pieces' }),
     ).not.toBeInTheDocument();
     expect(screen.getByText(/unfold/i)).toBeInTheDocument();
   });

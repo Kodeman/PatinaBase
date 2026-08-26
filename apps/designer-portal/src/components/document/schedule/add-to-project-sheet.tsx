@@ -258,7 +258,7 @@ export function AddToProjectSheet({
 
   return (
     <>
-      <DocSheet open={open} onClose={close} icon={FolderPlus} title="Add to project" pageLabel={projectName}>
+      <DocSheet open={open} onClose={close} icon={FolderPlus} title="Add a line" pageLabel={projectName}>
         {mode === 'sources' && !result && (
           <div className="divide-y divide-[var(--color-pearl)] border-y border-[var(--color-pearl)]">
             {[

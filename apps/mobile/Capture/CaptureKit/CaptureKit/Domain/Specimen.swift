@@ -5,6 +5,12 @@
 //  (C3/C5/V3). FROZEN SCHEMA: this and its children define CaptureStore.schema.
 //  Adding nullable fields is safe; any other change is a versioned, foundation-
 //  owner-only migration (VersionedSchema / SchemaMigrationPlan).
+//
+//  EVERY non-optional stored property here carries an inline default. Without
+//  one, SwiftData cannot lightweight-migrate a store written before the column
+//  existed — it fails the whole container open with NSCocoaErrorDomain 134110
+//  "Cannot migrate store in-place: Validation error missing attribute values on
+//  mandatory destination attribute". CaptureStoreSchemaTests enforces this.
 
 import Foundation
 import SwiftData
@@ -40,12 +46,12 @@ public struct CaptureOwnerIdentity: Sendable, Hashable, Codable {
 
 @Model
 public final class Specimen {
-    @Attribute(.unique) public var id: UUID
+    @Attribute(.unique) public var id: UUID = UUID()
     /// Device-stable idempotency key == backend `client_capture_id`. Set once at
     /// draft creation, NEVER regenerated (dedupes offline replay + share double-enqueue).
-    public var clientToken: UUID
-    public var createdAt: Date
-    public var updatedAt: Date
+    public var clientToken: UUID = UUID()
+    public var createdAt: Date = Date()
+    public var updatedAt: Date = Date()
     /// Immutable creation-time owner stamp. Nil only for legacy/quarantined rows.
     public private(set) var ownerUserID: String?
     public private(set) var ownerWorkspaceID: String?
@@ -62,12 +68,12 @@ public final class Specimen {
     public var currencyCode: String?
     public var sourceURL: String?
     public var note: String?
-    public var categoryRaw: String       // SpecimenCategory.rawValue
+    public var categoryRaw: String = SpecimenCategory.unknown.rawValue
 
     // Tag/array attributes (smart-guess + manual)
-    public var materials: [String]
-    public var colors: [String]
-    public var styleTags: [String]
+    public var materials: [String] = []
+    public var colors: [String] = []
+    public var styleTags: [String] = []
 
     // ── Children (cascade) ──
     @Relationship(deleteRule: .cascade, inverse: \CapturePhoto.specimen)
@@ -103,13 +109,13 @@ public final class Specimen {
     public var voiceDurationSeconds: Double?
 
     // ── Codes (N2) — ["gtin:00123...", "url:https://...", "ean13:..."] ──
-    public var scannedCodes: [String]
+    public var scannedCodes: [String] = []
     public var catalogMatchRemoteId: String?
 
     // ── Per-field provenance: FieldKey.rawValue -> ProvenanceSource.rawValue ──
-    public var provenanceRaw: [String: String]
+    public var provenanceRaw: [String: String] = [:]
     /// Smart-guess metadata: FieldKey.rawValue -> "confidence" (0...1, stored as String).
-    public var guessConfidenceRaw: [String: Double]
+    public var guessConfidenceRaw: [String: Double] = [:]
 
     // ── Venue stamp (S1, F-08/F-09) ──
     public var venue: VenueStamp?
@@ -117,14 +123,14 @@ public final class Specimen {
     // ── Routing + lifecycle + sync bookkeeping ──
     /// Visit-scoped capture grouping. Nil only for records created before Option B.
     public var captureSessionID: UUID?
-    public var destinationRaw: String    // CaptureDestination.rawValue
-    public var statusRaw: String         // CaptureStatus.rawValue
-    public var lifecycleRaw: String      // CaptureLifecycle.State.rawValue
+    public var destinationRaw: String = CaptureDestination.undecided.rawValue
+    public var statusRaw: String = CaptureStatus.draft.rawValue
+    public var lifecycleRaw: String = CaptureLifecycle.State.captured.rawValue
     public var remoteId: String?         // field_captures.id once committed
     public var committedProductId: String?
     public var lastSyncError: String?
-    public var retryCount: Int
-    public var uploadProgress: Int       // 0...100
+    public var retryCount: Int = 0
+    public var uploadProgress: Int = 0 // 0...100
 
     // ── Optional Spec Book / FF&E placement (additive, nullable migration) ──
     // A committed capture and Product remain durable while this independently
@@ -210,18 +216,18 @@ public final class Specimen {
 
 @Model
 public final class CapturePhoto {
-    @Attribute(.unique) public var id: UUID
-    public var filename: String          // HEIC, relative to App Group media dir
+    @Attribute(.unique) public var id: UUID = UUID()
+    public var filename: String = "" // HEIC, relative to App Group media dir
     public var thumbnailFilename: String?
     public var remotePath: String?       // capture-media storage path once uploaded
     public var publicURL: String?        // product-images display copy once uploaded
-    public var width: Int
-    public var height: Int
-    public var isPrimary: Bool
-    public var isDuplicate: Bool
-    public var order: Int
-    public var captureModeRaw: String    // CameraMode.rawValue
-    public var createdAt: Date
+    public var width: Int = 0
+    public var height: Int = 0
+    public var isPrimary: Bool = false
+    public var isDuplicate: Bool = false
+    public var order: Int = 0
+    public var captureModeRaw: String = CameraMode.photo.rawValue
+    public var createdAt: Date = Date()
     public var specimen: Specimen?
 
     public init(
@@ -249,12 +255,15 @@ public final class CapturePhoto {
 
 @Model
 public final class CaptureMeasurement {
-    @Attribute(.unique) public var id: UUID
-    public var axisRaw: String           // MeasurementAxis.rawValue
+    @Attribute(.unique) public var id: UUID = UUID()
+    /// No init default exists for the axis — it is always supplied — so the
+    /// migration default is the one value that behaves exactly like an
+    /// unrecognised raw did: `.custom`, which claims no width/height/depth slot.
+    public var axisRaw: String = MeasurementAxis.custom.rawValue
     public var label: String?
-    public var millimeters: Double
-    public var sourceRaw: String         // MeasureSource.rawValue
-    public var createdAt: Date
+    public var millimeters: Double = 0
+    public var sourceRaw: String = MeasureSource.manual.rawValue
+    public var createdAt: Date = Date()
     public var specimen: Specimen?
 
     public init(
@@ -277,10 +286,10 @@ public final class CaptureMeasurement {
 /// A project created inline (S2) and cached locally until it syncs.
 @Model
 public final class CaptureProjectRef {
-    @Attribute(.unique) public var id: UUID
+    @Attribute(.unique) public var id: UUID = UUID()
     public var remoteId: String?
-    public var name: String
-    public var createdAt: Date
+    public var name: String = ""
+    public var createdAt: Date = Date()
     public private(set) var ownerUserID: String?
     public private(set) var ownerWorkspaceID: String?
 

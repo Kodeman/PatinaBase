@@ -183,7 +183,7 @@ function ScheduleRuleRegionBody({
         <FoldSeam
           headingId={HEADING_ID}
           bodyId={BODY_ID}
-          name="Schedule"
+          name="Schedule dates"
           summary={summary}
           onUnfold={handleUnfold}
           surfaceKey="open-document"

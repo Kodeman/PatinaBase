@@ -364,7 +364,7 @@ describe('the schedule ceremony', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByText('Choose what to release')).not.toBeInTheDocument();
     expect(screen.queryByTestId('composition-bar')).not.toBeInTheDocument();
-    expect(screen.getByText('Project · FF&E')).toBeInTheDocument();
+    expect(screen.getByText('Pieces')).toBeInTheDocument();
   });
 
   it('opens the review sheet from the bar', () => {
@@ -417,9 +417,14 @@ describe('the schedule ceremony', () => {
   });
 
   it('carries a quiet Add a line under every room', () => {
+    // SP-09 gave the region-head ledger act the same words ('Add a line'), so
+    // the per-room add is scoped by its own action key rather than by text.
     renderSection();
-    expect(screen.getAllByRole('button', { name: /add a line/i })).toHaveLength(2);
-    fireEvent.click(screen.getAllByRole('button', { name: /add a line/i })[0]);
+    const roomAddLines = document.querySelectorAll(
+      '[data-action-key="open-add-schedule-line"]',
+    );
+    expect(roomAddLines).toHaveLength(2);
+    fireEvent.click(roomAddLines[0]);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByLabelText('Line name')).toBeInTheDocument();
   });

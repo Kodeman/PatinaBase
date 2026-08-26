@@ -1,5 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { StudioPulseDisclosure, studioPulsePreview } from '../studio-pulse';
+import {
+  StudioPulseDisclosure,
+  studioStageSentenceParts,
+} from '../studio-pulse';
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -27,40 +30,97 @@ jest.mock('@/components/document/field/field-desk', () => ({
   useFieldDeskPopulation: jest.fn(),
 }));
 
-describe('StudioPulseDisclosure', () => {
-  it('states an honest count and preview before disclosing the real work', () => {
-    const counts = {
-      openRequests: 2,
-      inMotion: 3,
-      reconnects: 1,
-      field: 2,
-    };
+const counts = { openRequests: 0, inMotion: 0, reconnects: 0, field: 0 };
 
+describe('StudioPulseDisclosure — "The studio today" (F39/F65)', () => {
+  it('reads The studio today, not Studio pulse', () => {
+    render(
+      <StudioPulseDisclosure counts={counts} isReady hasError={false}>
+        <a href="/real-work">Actionable work</a>
+      </StudioPulseDisclosure>,
+    );
+    expect(screen.getByText('The studio today')).toBeInTheDocument();
+    expect(screen.queryByText('Studio pulse')).not.toBeInTheDocument();
+  });
+
+  it('says nothing has moving-work sentence before the read resolves', () => {
+    render(
+      <StudioPulseDisclosure counts={counts} isReady={false} hasError={false}>
+        <a href="/real-work">Actionable work</a>
+      </StudioPulseDisclosure>,
+    );
+    expect(screen.getByText('Reading the studio…')).toBeInTheDocument();
+  });
+
+  it('names the quiet studio without hiding it behind a zero', () => {
+    render(
+      <StudioPulseDisclosure
+        counts={counts}
+        isReady
+        hasError={false}
+        stageSentenceParts={[]}
+      >
+        <a href="/real-work">Actionable work</a>
+      </StudioPulseDisclosure>,
+    );
+    expect(
+      screen.getByText('Nothing moving in the studio today.'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders each stage phrase as a button, not prose, furthest along first', () => {
+    const onOpenCommandBar = jest.fn();
+    window.addEventListener('document:open-command-bar', onOpenCommandBar);
+
+    render(
+      <StudioPulseDisclosure
+        counts={counts}
+        isReady
+        hasError={false}
+        stageSentenceParts={[
+          { stage: 'install', count: 1, text: 'one in install' },
+          { stage: 'project', count: 1, text: 'one in procurement' },
+          { stage: 'proposal', count: 1, text: 'one letter out' },
+        ]}
+      >
+        <a href="/real-work">Actionable work</a>
+      </StudioPulseDisclosure>,
+    );
+
+    const installButton = screen.getByRole('button', {
+      name: 'One in install',
+    });
+    expect(installButton).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'one in procurement' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'one letter out' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(installButton);
+    expect(onOpenCommandBar).toHaveBeenCalledTimes(1);
+    const event = onOpenCommandBar.mock.calls[0][0] as CustomEvent;
+    expect(event.detail).toEqual({ query: 'install' });
+
+    window.removeEventListener('document:open-command-bar', onOpenCommandBar);
+  });
+
+  it('still discloses the real work behind Open pulse / Fold pulse', () => {
     render(
       <StudioPulseDisclosure counts={counts} isReady hasError={false}>
         <a href="/real-work">Actionable work</a>
       </StudioPulseDisclosure>,
     );
 
-    expect(screen.getByText('8 studio items')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        '2 open requests · 3 moving · 1 reconnecting · 2 field needs',
-      ),
-    ).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Actionable work' }),
     ).not.toBeInTheDocument();
 
     const open = screen.getByRole('button', { name: 'Open pulse' });
     expect(open).toHaveAttribute('aria-expanded', 'false');
-    expect(open).toHaveAttribute('aria-controls');
-
     fireEvent.click(open);
 
-    expect(
-      screen.getByRole('region', { name: 'Studio pulse details' }),
-    ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Actionable work' }),
     ).toBeInTheDocument();
@@ -69,11 +129,11 @@ describe('StudioPulseDisclosure', () => {
 
     fireEvent.click(fold);
     expect(
-      screen.queryByRole('region', { name: 'Studio pulse details' }),
+      screen.queryByRole('link', { name: 'Actionable work' }),
     ).not.toBeInTheDocument();
   });
 
-  it('labels incomplete counts as known and never claims a failed read is quiet', () => {
+  it('states the known-item count and flags unavailable activity honestly', () => {
     render(
       <StudioPulseDisclosure
         counts={{ openRequests: 1, inMotion: 0, reconnects: 0, field: 0 }}
@@ -83,30 +143,35 @@ describe('StudioPulseDisclosure', () => {
         <span>Known work</span>
       </StudioPulseDisclosure>,
     );
-
     expect(screen.getByText('1 known item')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        '1 open request · Field quiet · Some activity unavailable',
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Some activity unavailable.')).toBeInTheDocument();
+  });
+});
+
+describe('studioStageSentenceParts', () => {
+  it('reduces live rows into one entry per stage, furthest along first', () => {
+    // The LIVE population — every document the Desk read — not the derived
+    // folders + chips, which drop a need-free, motion-free document and cap
+    // the chips at six.
+    const rows = [
+      { active_section: 'discovery' as const },
+      { active_section: 'install' as const },
+      { active_section: 'install' as const },
+      { active_section: 'proposal' as const },
+    ];
+    expect(studioStageSentenceParts(rows)).toEqual([
+      { stage: 'install', count: 2, text: '2 in install' },
+      { stage: 'proposal', count: 1, text: 'one letter out' },
+      { stage: 'discovery', count: 1, text: 'one in discovery' },
+    ]);
   });
 
-  it('names the fully quiet state without hiding it behind a zero', () => {
-    expect(
-      studioPulsePreview({
-        openRequests: 0,
-        inMotion: 0,
-        reconnects: 0,
-        field: 0,
-      }),
-    ).toBe('No secondary work needs attention · Field quiet');
+  it('returns nothing for a studio with no live rows', () => {
+    expect(studioStageSentenceParts([])).toEqual([]);
   });
 });
 
 describe('Studio Pulse gains exactly one aggregate sentence (Ruling VI)', () => {
-  const counts = { openRequests: 1, inMotion: 0, reconnects: 0, field: 0 };
-
   it('states the shape of the week in one line', () => {
     render(
       <StudioPulseDisclosure

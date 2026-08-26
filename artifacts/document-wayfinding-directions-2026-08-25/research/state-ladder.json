@@ -1,0 +1,66 @@
+{
+  "designer": {
+    "email": "designer@patina.dev",
+    "id": "a0000000-0000-0000-0000-000000000004"
+  },
+  "states": {
+    "brief": {
+      "id": "6d18a14c-eedd-4f04-a029-34bcc1a3d749",
+      "url": "/doc/6d18a14c-eedd-4f04-a029-34bcc1a3d749",
+      "title": "Full Room",
+      "note": "lead, response_deadline 2026-08-30; pre-existing, no write needed"
+    },
+    "discovery": {
+      "id": "d0c10000-0000-0000-0000-0000000000a2",
+      "url": "/doc/d0c10000-0000-0000-0000-0000000000a2",
+      "title": "The Ashfords (no-login household)",
+      "note": "relationship, discovery branch of document_state v11 (00327); pre-existing, no write needed"
+    },
+    "direction": {
+      "id": "d0c10000-0000-0000-0000-0000000000b2",
+      "url": "/doc/d0c10000-0000-0000-0000-0000000000b2",
+      "title": "Elena Marlowe — Living Room Direction",
+      "note": "DRAFT proposal; pre-existing, no write needed (avoided the two 'Concurrency ...' test-fixture drafts)"
+    },
+    "proposal_sent": {
+      "id": "b0000000-0000-0000-0000-000000000002",
+      "url": "/doc/b0000000-0000-0000-0000-000000000002",
+      "title": "Aspen Loft — Living Room Refresh",
+      "note": "status sent; pre-existing, exactly as specified"
+    },
+    "project_rich": {
+      "id": "67b836e8-9167-4f39-b25d-39270d412a3f",
+      "url": "/doc/67b836e8-9167-4f39-b25d-39270d412a3f",
+      "title": "Chen Residence",
+      "note": "SUBSTITUTED for Whitfield — the-document-local-seed.sql fails on this DB (proposal b0...001 already accepted; guard_proposal_child_draft_only trigger rejects the seed's proposal_items insert). Chen has the richest data among existing active projects (3 project_ffe_items, 4 purchase_orders) after Whitfield, Aspen Loft (install target), and Birch Hollow (care target) were ruled out."
+    },
+    "project_plain": {
+      "id": "b0000000-0000-0000-0000-0000000000d4",
+      "url": "/doc/b0000000-0000-0000-0000-0000000000d4",
+      "title": "Marrow & Vale Residence",
+      "note": "pre-existing, exactly as specified; 0 ffe_items/decisions/invoices/pos/rooms"
+    },
+    "install": {
+      "id": "b0000000-0000-0000-0000-0000000000d1",
+      "url": "/doc/b0000000-0000-0000-0000-0000000000d1",
+      "title": "Aspen Loft Refresh",
+      "note": "advanced via expire_client_decision(c301 signoff blocker) then advance_project_phase(c102) then advance_project_phase(c103); document_state now active_section='install', current_phase='installation'. Full RPC chain and refusal messages in 00-env-and-seeds.md section 5."
+    },
+    "care": {
+      "id": "b0000000-0000-0000-0000-0000000000d3",
+      "url": "/doc/b0000000-0000-0000-0000-0000000000d3",
+      "title": "Birch Hollow",
+      "note": "advance_project_phase(c602), advance_project_phase(c603), then close_project() with all 6 required checklist keys completed; document_state now project_status='completed', active_section='care'."
+    }
+  },
+  "extra": {
+    "board_id": null,
+    "drafting_proposal_id": "d0c10000-0000-0000-0000-0000000000b2",
+    "room_id": "b0000000-0000-0000-0000-0000000d2c0a"
+  },
+  "extra_notes": {
+    "board_id": "null — no rows exist in project_boards or proposal_boards on this local DB (0 rows in both). No mood board could be surfaced without a raw INSERT, which is forbidden.",
+    "drafting_proposal_id": "same id as the 'direction' stage above (Elena Marlowe draft) — the natural /drafting/<id> target since it's already a DRAFT proposal.",
+    "room_id": "project_rooms row 'Dining Room' on Aspen Loft (b0...d1), the install-stage project; the only project with project_rooms rows (2 total: Dining Room, Living Room)."
+  }
+}

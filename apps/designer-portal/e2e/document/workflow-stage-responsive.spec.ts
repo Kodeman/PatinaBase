@@ -14,7 +14,7 @@ async function expectNoHorizontalOverflow(page: AuthenticatedPage) {
     .toBe(true);
 }
 
-test('section stage line reflows at 320px without horizontal overflow', async ({
+test('the project document holds its measure at 320px', async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 320, height: 900 });
@@ -22,21 +22,27 @@ test('section stage line reflows at 320px without horizontal overflow', async ({
     waitUntil: 'domcontentloaded',
   });
 
-  const workflow = page.locator('[data-workflow-document]');
   // The default 5s expect timeout is shorter than a Next dev cold-compile of
-  // the /doc route, so this fails on "Picking up…" whenever the suite runs
-  // alongside other Document specs and the dev server is under load (the same
-  // reason playwright.config.ts lifts the per-test timeout to 60s). The reflow
-  // assertions below are unchanged — this only waits long enough to make them.
-  await expect(workflow).toBeVisible({ timeout: 30_000 });
-  await expect
-    .poll(async () => {
-      const bounds = await workflow.evaluate((element) => ({
-        clientWidth: element.clientWidth,
-        scrollWidth: element.scrollWidth,
-      }));
-      return bounds.scrollWidth <= bounds.clientWidth;
-    })
-    .toBe(true);
+  // the /doc route, so waiting on paint fails on "Picking up…" whenever the
+  // suite runs alongside other Document specs and the dev server is under load
+  // (the same reason playwright.config.ts lifts the per-test timeout to 60s).
+  // Gate on the shell, which always paints.
+  await expect(page.locator('[data-document-shell]')).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // The stage line is asserted as MOUNTED and nothing more, and the test is
+  // named for what it actually holds. The seeded project's phases carry no
+  // `canonical_stage_key` and no `workflow_track`, so every active phase is
+  // unclassified: `deriveSectionStageLine` returns a model with no sub-label,
+  // no track bands and no provenance (R113 — an unclassified band is not an
+  // error), and `SectionStageLine` renders a <section> whose only child is an
+  // sr-only <h3>. A 0×0 box makes every measurement of it trivially true, so
+  // measuring it here would pin a fact about the seed, not about reflow —
+  // proving the stage line's own reflow needs a seeded classified phase, which
+  // this fixture does not have.
+  await expect(page.locator('[data-workflow-document]')).toBeAttached({
+    timeout: 30_000,
+  });
   await expectNoHorizontalOverflow(page);
 });

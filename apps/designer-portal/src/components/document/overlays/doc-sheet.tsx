@@ -172,6 +172,9 @@ export function DocSheetHead({
       </span>
       <span className="flex shrink-0 items-center gap-1 sm:gap-2.5">
         {helpKey ? <HelpGlyph helpKey={helpKey} source="sheet-head" /> : null}
+        {/* SP-13/F46 — a head with no `onClose` prints nothing here. It used
+            to print an inert `Put back · Esc` span, which stacked under the
+            enclosing DocSheet's own working close button (Hours, Feedback). */}
         {onClose ? (
           <button
             type="button"
@@ -186,14 +189,7 @@ export function DocSheetHead({
               Put back · Esc
             </span>
           </button>
-        ) : (
-          <span
-            aria-hidden
-            className="doc-type-meta shrink-0 uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]"
-          >
-            Put back · Esc
-          </span>
-        )}
+        ) : null}
       </span>
     </div>
   );
@@ -208,6 +204,8 @@ export function DocSheet({
   icon,
   pageLabel,
   helpKey,
+  headOwnedByChild = false,
+  fallbackFocusRef,
 }: {
   open: boolean;
   onClose: () => void;
@@ -225,6 +223,15 @@ export function DocSheet({
   pageLabel?: string;
   /** Forwarded to the standard head's `?` doorway (help-desk Wave 1). */
   helpKey?: string;
+  /** SP-13/F46 — set when the child already renders its own
+   *  {@link DocSheetHead} carrying a working close (Orders, Accounts).
+   *  DocSheet then contributes only the sr-only, aria-labelledby-connected
+   *  title, never a second visible `Put back · Esc` above the child's. */
+  headOwnedByChild?: boolean;
+  /** F11 — when the element that opened this sheet can unmount while the
+   *  sheet is open (e.g. a disclosure row), focus restores here instead of
+   *  silently dropping to `<body>`. */
+  fallbackFocusRef?: React.RefObject<HTMLElement | null>;
 }) {
   const restoreRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -259,8 +266,17 @@ export function DocSheet({
     return () => {
       window.cancelAnimationFrame(focusFrame);
       unlockBodyScroll();
-      const focusTarget = restoreRef.current;
+      const originalTrigger = restoreRef.current;
       restoreRef.current = null;
+      // F11 — the fallback is read HERE, not snapshotted at open: a fallback
+      // that remounted while the sheet was open would fail `isConnected` as a
+      // stale snapshot, and one that mounted after open would never be seen.
+      // The lint rule below advises the snapshot this deliberately rejects.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const fallback = fallbackFocusRef?.current ?? null;
+      const focusTarget = originalTrigger?.isConnected
+        ? originalTrigger
+        : fallback;
       if (!focusTarget?.isConnected) return;
       window.requestAnimationFrame(() => {
         if (focusTarget.isConnected && isElementRendered(focusTarget)) {
@@ -268,7 +284,7 @@ export function DocSheet({
         }
       });
     };
-  }, [open, origin]);
+  }, [open, origin, fallbackFocusRef]);
 
   // Keep keyboard focus on the laid sheet and let Escape put it back.
   useEffect(() => {
@@ -359,6 +375,12 @@ export function DocSheet({
             helpKey={helpKey}
             titleId={titleId}
           />
+        ) : headOwnedByChild ? (
+          // SP-13/F46 — the child's own DocSheetHead carries the one visible
+          // `Put back · Esc`; this sr-only title only wires aria-labelledby.
+          <h2 id={titleId} className="sr-only">
+            {title}
+          </h2>
         ) : (
           <div className="mb-4 flex items-center justify-between">
             <h2 id={titleId} className="sr-only">

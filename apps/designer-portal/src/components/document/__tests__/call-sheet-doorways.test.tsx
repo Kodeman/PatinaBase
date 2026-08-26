@@ -39,7 +39,23 @@ jest.mock('next/navigation', () => ({
 //    document_state supabase read. ─────────────────────────────────────
 const mockDeskData = jest.fn(() => ({ folders: [] as unknown[], chips: [] as unknown[] }));
 jest.mock('@/hooks/use-desk-engagements', () => ({
-  useDeskEngagements: () => ({ data: mockDeskData() }),
+  useDeskEngagements: () => {
+    const data = mockDeskData() as unknown as Record<string, unknown[]>;
+    if (!data) return { data };
+    // Production's `live` is every non-archived row the composition saw, need
+    // or no need; a fixture that only states folders and chips is stating the
+    // same population through its two derived halves.
+    return {
+      data: {
+        ...data,
+        live:
+          data.live ??
+          [...(data.folders ?? []), ...(data.chips ?? [])].map(
+            (entry) => (entry as { row: unknown }).row,
+          ),
+      },
+    };
+  },
 }));
 
 // ── @patina/supabase — the union of what command-bar.tsx and
@@ -212,7 +228,7 @@ describe('command-bar — the "This surface" call sheet row', () => {
     render(<CommandBar />);
     await openPalette();
 
-    expect(screen.queryByText('Open the call sheet')).not.toBeInTheDocument();
+    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
   });
 
   it('is absent with a project document in hand when the flag is off', async () => {
@@ -223,7 +239,9 @@ describe('command-bar — the "This surface" call sheet row', () => {
     render(<CommandBar />);
     await openPalette();
 
-    expect(screen.queryByText('Open the call sheet')).not.toBeInTheDocument();
+    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
+    // A3-L3 — its three siblings are not flag-gated and still stand.
+    expect(screen.getByText('Plan room')).toBeInTheDocument();
   });
 
   it('appears in "This surface" with a project document in hand and the flag on', async () => {
@@ -235,7 +253,8 @@ describe('command-bar — the "This surface" call sheet row', () => {
     await openPalette();
 
     expect(screen.getByText('This surface')).toBeInTheDocument();
-    expect(screen.getByText('Open the call sheet')).toBeInTheDocument();
+    expect(screen.getByText('Call sheet')).toBeInTheDocument();
+    expect(screen.getByText('this project · who is on the job')).toBeInTheDocument();
   });
 
   it('never lists the call sheet in the unfiltered "Rooms & ledgers" group', async () => {
@@ -455,7 +474,7 @@ describe('spine shelves — the Call sheet row', () => {
     );
   }
 
-  it('renders the row with the flag on, beside the four leaf shelves', () => {
+  it('renders the row with the flag on, beside the three leaf shelves', () => {
     mockCallSheetFlag = true;
     render(<ShelvesHarness />);
 
@@ -469,9 +488,9 @@ describe('spine shelves — the Call sheet row', () => {
 
     expect(screen.queryByRole('button', { name: /Call sheet/ })).not.toBeInTheDocument();
     expect(baseElement.querySelector('[data-shelf-trigger="callsheet"]')).toBeNull();
-    // The four leaf shelves are untouched by the flag.
+    // The three leaf shelves are untouched by the flag.
     expect(screen.getByRole('button', { name: /Plan room/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Knowledge/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mood boards/ })).toBeInTheDocument();
   });
 
   it('reaches the roster sheet — never a leaf — when pressed', () => {

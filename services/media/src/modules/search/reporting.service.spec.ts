@@ -33,6 +33,7 @@ describe('ReportingService', () => {
   const mockIntelligence = {
     detectMissingAssets: jest.fn(),
     detectDuplicates: jest.fn(),
+    checkCompliance: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -132,6 +133,11 @@ describe('ReportingService', () => {
         { assetId: 'asset-1', score: 0.9, metrics: {} },
       ]);
       mockIntelligence.detectMissingAssets.mockResolvedValue([]);
+      mockIntelligence.checkCompliance.mockResolvedValue({
+        compliant: true,
+        issues: [],
+        warnings: [],
+      });
 
       const result = await service.generatePerformanceDashboard();
 
@@ -278,9 +284,7 @@ describe('ReportingService', () => {
           totalStorage: 10000000,
         },
         breakdown: {
-          byProduct: [
-            { productId: 'p1', productName: 'Sofa', assetCount: 10, views: 500 },
-          ],
+          byProduct: [{ productId: 'p1', productName: 'Sofa', assetCount: 10, views: 500 }],
           byKind: {
             IMAGE: { count: 80, views: 4000, downloads: 800 },
           },

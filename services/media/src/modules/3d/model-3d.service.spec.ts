@@ -8,6 +8,61 @@ import { ARPreparationService } from './ar-preparation.service';
 import { ModelRendererService } from './model-renderer.service';
 import { OCIStorageService } from '../storage/oci-storage.service';
 
+// Model3DService and model-parser.service.ts both import `NodeIO`/`Document`
+// from `@gltf-transform/core` at the top level and construct `new NodeIO()`
+// eagerly (Model3DService's own constructor: `this.io = new
+// NodeIO().registerExtensions(ALL_EXTENSIONS)`). The real package's CJS
+// build requires `property-graph`'s ESM-only build, which Jest can't parse
+// (`SyntaxError: Unexpected token 'export'`) — and since that crash happens
+// while the real module loads, even `jest.mock('@gltf-transform/core')`
+// automocking can't dodge it (automocking still requires the real module to
+// learn its shape). A factory mock skips loading the real module entirely.
+// None of `NodeIO.readBinary`/`writeBinary` are exercised by this spec's
+// test bodies, so a minimal chainable stub is enough.
+jest.mock('@gltf-transform/core', () => ({
+  NodeIO: jest.fn().mockImplementation(() => ({
+    registerExtensions: jest.fn().mockReturnThis(),
+    readBinary: jest.fn(),
+    writeBinary: jest.fn(),
+  })),
+  Document: jest.fn(),
+}));
+jest.mock('@gltf-transform/extensions', () => ({
+  ALL_EXTENSIONS: [],
+}));
+
+// ModelParserService/ModelConverterService/ARPreparationService/
+// ModelRendererService each transitively pull in @gltf-transform/functions,
+// three, three/examples/jsm/loaders/GLTFLoader.js, and/or obj-file-parser —
+// the same ESM-parsing problem as @gltf-transform/core above, several
+// layers deep. Rather than mocking every vendor package one crash at a
+// time, mock these sibling services directly (factory form — automocking
+// would still have to load the real file to learn its shape, hitting the
+// same crash) so their real modules, and everything they import, never
+// load. Only ModelValidatorService is left as the real class below — it
+// has no vendor 3D-library imports, and it's where
+// Model3DService.validate3DModel's real threshold-check logic lives.
+jest.mock('./model-parser.service', () => ({
+  ModelParserService: jest.fn().mockImplementation(() => ({
+    parseModel: jest.fn(),
+  })),
+}));
+jest.mock('./model-converter.service', () => ({
+  ModelConverterService: jest.fn().mockImplementation(() => ({
+    optimizeGLB: jest.fn(),
+    convertToUSDZ: jest.fn(),
+  })),
+}));
+jest.mock('./ar-preparation.service', () => ({
+  ARPreparationService: jest.fn().mockImplementation(() => ({})),
+}));
+jest.mock('./model-renderer.service', () => ({
+  ModelRendererService: jest.fn().mockImplementation(() => ({
+    renderSnapshots: jest.fn(),
+    generateThumbnail: jest.fn(),
+  })),
+}));
+
 describe('Model3DService', () => {
   let service: Model3DService;
   let parserService: ModelParserService;
@@ -34,7 +89,9 @@ describe('Model3DService', () => {
 
   const mockOCIStorage = {
     generate3DKey: jest.fn((assetId, format) => `processed/3d/${assetId}/model.${format}`),
-    generatePreviewKey: jest.fn((assetId, kind, variant) => `previews/3d/${assetId}/${variant}.jpg`),
+    generatePreviewKey: jest.fn(
+      (assetId, kind, variant) => `previews/3d/${assetId}/${variant}.jpg`,
+    ),
     putObject: jest.fn().mockResolvedValue(undefined),
     getObject: jest.fn().mockResolvedValue(Buffer.from('mock-data')),
     deleteObject: jest.fn().mockResolvedValue(undefined),

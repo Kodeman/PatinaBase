@@ -1,0 +1,709 @@
+[
+  {
+    "id": "F01",
+    "verdict": "ruled-against:C8",
+    "reason": "Shelved spine (running index/rooms/shelves) is ratified >=1440px only; D12/I136.",
+    "evidence": "DECISIONS.md:8427ff, :8462-8471",
+    "revised_claim": "Valid gap below 1440. Direction A may not remove the width gate; Direction B must name an amendment to extend below 1440."
+  },
+  {
+    "id": "F02",
+    "verdict": "ruled-against:C8",
+    "reason": "Compact-tier icon rail (<1440) is the ruled width-regime design, not a defect.",
+    "evidence": "DECISIONS.md:8427ff",
+    "revised_claim": "Below 1440 an unlabelled icon rail is intended by C8; labelling/affordance fixes are fine, removing the icon-rail tier is not."
+  },
+  {
+    "id": "F03",
+    "verdict": "open",
+    "reason": "R7 mandates stamps/labels say only true things; a wrong 'Install' header on a care-stage spread violates R7, it is not protected by it.",
+    "evidence": "DECISIONS.md:273-285 (R7)",
+    "revised_claim": "Confirmed bug: fixing the header to read the true stage fulfills R7 rather than contradicting any ruling."
+  },
+  {
+    "id": "F04",
+    "verdict": "known-open:T2/T4",
+    "reason": "T4 (no fleet/phase-wide view) and T2 (install-as-label) are logged open in the canon digest, untouched by any R-entry.",
+    "evidence": "canon digest sec.B; grep for 'fleet|roster tier|install.*mode' returns no R-entry hits",
+    "revised_claim": "Fair game for both lanes; no amendment needed, cite as closing a known-open item."
+  },
+  {
+    "id": "F05",
+    "verdict": "open",
+    "reason": "No canon entry addresses FF&E room-grouping/'Unsorted' bucket behavior.",
+    "evidence": "grep 'Unsorted' DECISIONS.md - no governing rule found",
+    "revised_claim": "Open gap, fair game."
+  },
+  {
+    "id": "F06",
+    "verdict": "open",
+    "reason": "No PO-acknowledgment-state ruling found in DECISIONS.md.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open gap."
+  },
+  {
+    "id": "F07",
+    "verdict": "open",
+    "reason": "C7 mandates exactly one leader per region (satisfied); it says nothing about label truncation.",
+    "evidence": "DECISIONS.md:8386-8393 (I135)",
+    "revised_claim": "Truncation fix does not touch the one-leader rule; open, not blocked."
+  },
+  {
+    "id": "F08",
+    "verdict": "open",
+    "reason": "C7's one-leader-per-region rule is what the finding shows a VIOLATION of (3-4 competing doors); fixing it fulfills C7.",
+    "evidence": "DECISIONS.md:8386-8393",
+    "revised_claim": "Open; consolidating to one leader is compliant with, not contrary to, canon."
+  },
+  {
+    "id": "F09",
+    "verdict": "open",
+    "reason": "No canon entry on 'Design authority' naming or money-scent requirement.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F10",
+    "verdict": "open",
+    "reason": "No canon entry requires g-chords/shortcuts to be printed on screen.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F11",
+    "verdict": "open",
+    "reason": "No canon entry on ledger-sheet focus-restore behavior.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F12",
+    "verdict": "known-open:I136",
+    "reason": "Knowledge shelf naming is explicitly left as an unresolved design question by I136 itself.",
+    "evidence": "DECISIONS.md:8494-8499: 'Open for a design ruling: whether Knowledge should name a surface that does not exist yet, or be renamed to what /library actually holds.'",
+    "revised_claim": "Not a bug to silently fix nor a protected ruling - it is logged as awaiting Kody's ruling; either lane may propose the rename as closing this item."
+  },
+  {
+    "id": "F13",
+    "verdict": "open",
+    "reason": "No canon entry on Recent-list dedup in the kmd palette.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a data/key bug."
+  },
+  {
+    "id": "F14",
+    "verdict": "open",
+    "reason": "C8 ratifies the >=1440 width gate for shelves/rooms/index; it says nothing about a section-type (install/care) gate.",
+    "evidence": "DECISIONS.md:8427ff - no install/care-specific gating language found via grep",
+    "revised_claim": "Real gap: shelves vanishing on install/care documents is not mandated by C8, which only concerns viewport width. Open for both lanes."
+  },
+  {
+    "id": "F15",
+    "verdict": "ruled-against:C8/D3",
+    "reason": "The built mobile spine sheet is deliberately sections + margin summary only ('the seven sections on top, In the margin - N beneath'); rooms/shelves/index are >=1440-gated by C8 and never reach mobile.",
+    "evidence": "DECISIONS.md:774-784 (I21, D3-3 spine sheet)",
+    "revised_claim": "If the observed screen is missing even the margin summary, that is a build regression (open); the absence of rooms/shelves/index specifically is ruled and Direction A may not add them below 1440 without naming C8."
+  },
+  {
+    "id": "F16",
+    "verdict": "known-open:I141",
+    "reason": "'Money doesn't seam on install/care' is logged as an explicit product debt, scoped out of I141, awaiting its own future ruling.",
+    "evidence": "DECISIONS.md:9416-9418 (I143 tail) + I141 body",
+    "revised_claim": "Adjacent, not identical: F16's 'who still owes me' claim may reach beyond install/care into the general document; treat the install/care slice as known-open, the rest as open."
+  },
+  {
+    "id": "F17",
+    "verdict": "open",
+    "reason": "C20 governs the surface-name registry (one name/icon per SURFACE, e.g. Orders, Plan room) consumed by the UI chrome; it does not extend to generic domain nouns like 'room' used differently in FF&E rooms vs. scanned rooms vs. schedule context.",
+    "evidence": "DECISIONS.md:2961 (I54/C20)",
+    "revised_claim": "Open; C20 is adjacent but does not literally rule generic-noun consistency."
+  },
+  {
+    "id": "F18",
+    "verdict": "open",
+    "reason": "No canon entry on default stage-act copy ('Review {X}').",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F19",
+    "verdict": "ruled-against:C13",
+    "reason": "I137 SP3 locates the one send-wall state line at ProposalInstruments, inside the document, explicitly to be the single place 'so neither wall can be silent' - the Desk is not named as a second home.",
+    "evidence": "DECISIONS.md:8657-8663 (I137 SP3)",
+    "revised_claim": "Valid finding; Direction B may still add a Desk-level indicator but must name it as an amendment to SP3's single-home design, quoting the clause."
+  },
+  {
+    "id": "F20",
+    "verdict": "open",
+    "reason": "No canon entry on naming a PO/receiving/claim on the paper.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F21",
+    "verdict": "open",
+    "reason": "No canon entry on kmd focus-restore.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F22",
+    "verdict": "open",
+    "reason": "No canon entry on call-sheet-absent-vs-empty-crew distinction.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F23",
+    "verdict": "open",
+    "reason": "No canon entry on 'NEEDS YOUR HAND' pagination.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F24",
+    "verdict": "open",
+    "reason": "No canon entry on Desk begin-verb sub-labels.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F25",
+    "verdict": "open",
+    "reason": "I136's lens doctrine only defines release-on-width (<1440 auto-releases); it says nothing about visibility of a release control once scrolled away at >=1440.",
+    "evidence": "DECISIONS.md:8462-8471",
+    "revised_claim": "Open; C8 does not cover this specific scroll-persistence gap."
+  },
+  {
+    "id": "F26",
+    "verdict": "open",
+    "reason": "No canon entry on the money-explainer paragraph's content/register.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F27",
+    "verdict": "open",
+    "reason": "No canon entry says the install spread should omit FF&E lines; adjacent to but distinct from the ruled money-doesn't-seam gap (I141).",
+    "evidence": "DECISIONS.md:9416-9418",
+    "revised_claim": "Open - a different surface than money."
+  },
+  {
+    "id": "F28",
+    "verdict": "open",
+    "reason": "No canon entry on 390px ADD TO PROJECT layout collision.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely CSS bug."
+  },
+  {
+    "id": "F29",
+    "verdict": "open",
+    "reason": "R95 rules the Contents Page's FORMAT (labels + doorway glyphs + icons, never counts/tiles/metrics); it does not enumerate which surfaces must or must not appear, so roster's absence from the Desk is not itself mandated.",
+    "evidence": "DECISIONS.md:2951 (R95); roster appears elsewhere as a top-level Studio room (:3773)",
+    "revised_claim": "Open; adding a roster doorway to the Desk's Contents page would not contradict R95's no-metrics format rule."
+  },
+  {
+    "id": "F30",
+    "verdict": "open",
+    "reason": "No canon entry on Mood boards shelf 'start one' affordance.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F31",
+    "verdict": "open",
+    "reason": "No canon entry mandates prose-only date-move previews.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F32",
+    "verdict": "known-open:I138/I139",
+    "reason": "I138 (Worktable Wave 2) explicitly ships 'composition machinery only... no tools'; item-reach/room tools are I139's Wave-3 scope. The Worktable not yet moving an item-reach cell reflects incremental build sequencing, not a permanent design limit.",
+    "evidence": "DECISIONS.md:8738-8746 (I138), I139 summary",
+    "revised_claim": "Known-open as a build-sequencing gap; C14 (Worktable is the destination) still requires either building toward full item-reach coverage or explaining the gap."
+  },
+  {
+    "id": "F33",
+    "verdict": "open",
+    "reason": "No canon entry on kmd placeholder/fallback copy inviting 'ask the Engine'.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F34",
+    "verdict": "open",
+    "reason": "C7 mandates exactly one leader; a head showing three acts at once is a violation the direction may fix without amendment. I141's demotion rule covers only the specific release-lift case, not the general complaint.",
+    "evidence": "DECISIONS.md:8386-8393; I141 (:9035-9112)",
+    "revised_claim": "Open outside the narrow release-lift exception, which stays ruled."
+  },
+  {
+    "id": "F35",
+    "verdict": "open",
+    "reason": "C11 rules that the running INDEX is derived from mount order; it does not address on-screen region LABELS colliding (ScheduleRule vs ScheduleSpine both user-facing 'Schedule'). The fold-key was deliberately renamed (schedule-rule vs schedule) precisely to avoid a STATE collision, but the display lab",
+    "evidence": "DECISIONS.md:8500-8516 (I136)",
+    "revised_claim": "Open; naming the two regions differently on screen does not contradict C11."
+  },
+  {
+    "id": "F36",
+    "verdict": "open",
+    "reason": "C13 governs the send-wall state line at ProposalInstruments only; it does not govern the stage-guide organ's act copy elsewhere on the paper.",
+    "evidence": "DECISIONS.md:8657-8663",
+    "revised_claim": "Open, likely stale/mismatched copy, not a protected ruling."
+  },
+  {
+    "id": "F37",
+    "verdict": "open",
+    "reason": "No canon entry on kmd default-open sections or fold order.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F38",
+    "verdict": "open",
+    "reason": "R95 forbids counts/tiles/metrics on the Contents Page; a static descriptive sub-label is explicitly none of those, so it is not forbidden - but also not required, leaving the finding's gap real.",
+    "evidence": "DECISIONS.md:2951 (R95)",
+    "revised_claim": "Open, as the collator's own parenthetical concludes."
+  },
+  {
+    "id": "F39",
+    "verdict": "open",
+    "reason": "No canon entry on Studio pulse default-fold naming.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F40",
+    "verdict": "open",
+    "reason": "No canon entry distinguishing folded-vs-empty region rendering.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F41",
+    "verdict": "open",
+    "reason": "D8 forbids badges/pulsing counts; it says nothing about reusing the same red-letter hue for two different urgency classes (setup chores vs. dated overdue needs).",
+    "evidence": "DECISIONS.md:19 (D8)",
+    "revised_claim": "Open, D8 does not reach hue semantics."
+  },
+  {
+    "id": "F42",
+    "verdict": "known-open:I114",
+    "reason": "The seven section names vs. 'The Patina Six' is exactly the unresolved section<->stage mapping gap repeatedly flagged as still owed by Kody (I114), referenced in I137/I138/I143.",
+    "evidence": "DECISIONS.md tail (I143), I137 (:8676-8680), I138 (:8846-8848)",
+    "revised_claim": "Both lanes may propose an I114 mapping as a candidate ruling, but the first slice must not depend on it per sec.6."
+  },
+  {
+    "id": "F43",
+    "verdict": "open",
+    "reason": "No canon entry on guide-vs-row verb mismatch.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely stale copy."
+  },
+  {
+    "id": "F44",
+    "verdict": "open",
+    "reason": "No canon entry on raw template-text chips (e.g. '15k_50k').",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a formatting bug."
+  },
+  {
+    "id": "F45",
+    "verdict": "open",
+    "reason": "I136/C1 exempt shelves from D1's split-view ban (non-modal, paper stays live behind); this governs MODALITY, not whether opening a shelf causes the underlying paper to re-flow/lose reading position.",
+    "evidence": "DECISIONS.md:8480-8483 (I136 leaf mechanics)",
+    "revised_claim": "Open; the exemption does not address the re-wrap side effect."
+  },
+  {
+    "id": "F46",
+    "verdict": "open",
+    "reason": "No canon entry on duplicate 'PUT BACK - ESC' captions.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a render bug."
+  },
+  {
+    "id": "F47",
+    "verdict": "open",
+    "reason": "D8/R96 explicitly forbid badges and pulsing counts on the persistent Drawer; a '3 NEW' badge and pulsing dot both appear to violate this outright.",
+    "evidence": "DECISIONS.md:19 (D8), :2955-2959 (R96)",
+    "revised_claim": "Confirmed bug, not a protected ruling: removing the badge/count fulfills D8 rather than contradicting it."
+  },
+  {
+    "id": "F48",
+    "verdict": "open",
+    "reason": "No canon entry gates the spec-book shelf off install/care documents by section type; same gap class as F14 (C8 only covers the >=1440 width gate).",
+    "evidence": "DECISIONS.md:8427ff",
+    "revised_claim": "Open for both lanes."
+  },
+  {
+    "id": "F49",
+    "verdict": "open",
+    "reason": "C8 governs the >=1440 gate for rooms/shelves/running index specifically; it does not address whether kmd (the search palette) has any mobile entry point at all - a distinct, unaddressed surface.",
+    "evidence": "DECISIONS.md:8427ff",
+    "revised_claim": "Open; adding a mobile kmd trigger does not contradict C8's shelved-spine scope."
+  },
+  {
+    "id": "F50",
+    "verdict": "open",
+    "reason": "No canon entry on kmd search-term filtering excluding 'plan'.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a search/alias bug."
+  },
+  {
+    "id": "F51",
+    "verdict": "open",
+    "reason": "No canon entry mandates the Drafting Room's Desk doorway be kmd-only.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F52",
+    "verdict": "open",
+    "reason": "R7 mandates stamps/letterhead say only true things; 'MESSAGE THE CLIENT' on a document with no client attached violates R7, it does not implement it.",
+    "evidence": "DECISIONS.md:273-285",
+    "revised_claim": "Confirmed bug: hiding/relabeling the act on a clientless doc fulfills R7."
+  },
+  {
+    "id": "F53",
+    "verdict": "open",
+    "reason": "No canon entry rules that answering a client question must happen off-document; adjacent to but distinct from the logged 'flagged line on a sent proposal is unanswerable' gap (I140-errata), which is specific to proposal flags, not general client Q&A/messaging.",
+    "evidence": "DECISIONS.md:9412-9414 (I140-errata debt)",
+    "revised_claim": "Open; note the possible overlap with the logged proposal-flag debt for T16 framing, but do not conflate the two."
+  },
+  {
+    "id": "F54",
+    "verdict": "ruled-against:C14",
+    "reason": "The Worktable's typed tables (Intake/Speccing/Finalize/Delivery) are derived purely from active_section and each carries a stage-specific tool set; I139 places the rooms-rail specifically as a Speccing-table tool. A rooms rail on Direction (Speccing) but not on the Delivery/project table matches the",
+    "evidence": "DECISIONS.md:8738-8746 (I138), I139 summary",
+    "revised_claim": "Direction A may not simply copy the rooms-rail onto every table; Direction B must name the amendment if it wants a persistent rooms rail across tables."
+  },
+  {
+    "id": "F55",
+    "verdict": "open",
+    "reason": "No canon entry on a keyboard bypass-blocks control.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely an a11y gap."
+  },
+  {
+    "id": "F56",
+    "verdict": "open",
+    "reason": "No canon entry on terracotta/clay ink contrast ratios; 1.4.3 is a WCAG criterion, not a design-ledger ruling.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, a11y bug fair game for both lanes."
+  },
+  {
+    "id": "F57",
+    "verdict": "open",
+    "reason": "C1/D14 rule the Room-vs-Sheet WEIGHT (which drawer objects are full-screen Rooms vs. overlay Sheets); they do not address the round-trip editing cost of an FF&E line that requires leaving the paper.",
+    "evidence": "DECISIONS.md:985-996 (D14)",
+    "revised_claim": "Open, per the collator's own qualifier."
+  },
+  {
+    "id": "F58",
+    "verdict": "open",
+    "reason": "No canon entry reconciles 'RECEIVED' (paper) vs 'DELIVERED' (spec book) status vocabulary.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a lexicon/data bug - also relevant to R7 truth-device but as a fix target, not a protection."
+  },
+  {
+    "id": "F59",
+    "verdict": "open",
+    "reason": "No canon entry on 'Committed' meaning different dollar figures in different regions.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a real data/derivation bug."
+  },
+  {
+    "id": "F60",
+    "verdict": "ruled-against:C8",
+    "reason": "The room lens is explicitly part of the shelved-spine architecture, gated the same >=1440 the rest of C8 governs ('The hold releases if the window drops below 1440px, where nothing on screen could put it down').",
+    "evidence": "DECISIONS.md:8462-8471",
+    "revised_claim": "Direction A may not add a lens substitute below 1440 without naming an amendment to C8; Direction B may propose one only if it names and prices it."
+  },
+  {
+    "id": "F61",
+    "verdict": "open",
+    "reason": "No canon entry on the index literally printing 'NO AUTHORITY YET' over live dollar amounts.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a stale-read/derivation bug (adjacent to the I141-errata 'never flash $0 before real figure loads' fix, but that fix was for money, not index copy)."
+  },
+  {
+    "id": "F62",
+    "verdict": "ruled-against:C9",
+    "reason": "I139/Q1 ratifies boards existing as BOTH the shelf (everywhere) and the on-paper strip (speccing only) - the multiplicity of doors is the ruled design, not a defect; only the inconsistent NAMING across those doors is unaddressed.",
+    "evidence": "DECISIONS.md:8881-8892 (I139), delivery-plan.md:6 (Q1)",
+    "revised_claim": "Direction may rename the doors to be consistent without amendment; removing the sanctioned duality itself needs a named amendment to C9."
+  },
+  {
+    "id": "F63",
+    "verdict": "ruled-against:C12",
+    "reason": "I137 SP4 specifically rules where the FF&E-list 'add a room' verb lives (in-flow scored-ink line at the foot of the room list, never promoted); other 'add a room' verbs elsewhere in the product are a separate, unruled concept from that one.",
+    "evidence": "DECISIONS.md:8628 (I137 SP4)",
+    "revised_claim": "Direction may still clarify wording across the three verbs; the FF&E one's placement is protected without a named amendment."
+  },
+  {
+    "id": "F64",
+    "verdict": "open",
+    "reason": "No canon entry mandates identical wording for the two entries that open the Drafting Room; I140-errata only says the entries themselves are kept open, not that they must share copy.",
+    "evidence": "DECISIONS.md:9026-9033 (I140-errata carve-outs)",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F65",
+    "verdict": "open",
+    "reason": "No canon entry on a 'what changed while she was gone' Desk organ.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F66",
+    "verdict": "open",
+    "reason": "C2/C6 (no shadows, scored ink) govern the document surface explicitly; whether the Drafting Room (a separate route) is bound by the same visual grammar is not stated either way.",
+    "evidence": "no direct DECISIONS.md text found binding /drafting to C2/C6",
+    "revised_claim": "Open, per the collator's own qualifier."
+  },
+  {
+    "id": "F67",
+    "verdict": "open",
+    "reason": "C4 rules the Drawer's persistence and ledger-sheet presentation; it does not rule whether the Orders ledger is project-scoped or global.",
+    "evidence": "DECISIONS.md:19 (D8)",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F68",
+    "verdict": "open",
+    "reason": "No canon entry on 'CLOSE THE BOOK' visual weight vs. listed blockers.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F69",
+    "verdict": "open",
+    "reason": "No canon entry gates 'BEGIN THE DIRECTION' behind essentials-captured count.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F70",
+    "verdict": "open",
+    "reason": "I135's one-leader rule is explicitly scoped to REGION HEADS (index 0 of a region); the collator's own note confirms it does not govern a same-row trio of equal-weight add-actions.",
+    "evidence": "DECISIONS.md:8386-8393",
+    "revised_claim": "Open, confirmed by the qualifier already in the finding's own annotation."
+  },
+  {
+    "id": "F71",
+    "verdict": "open",
+    "reason": "No canon entry on Intake's 'opens when...' seam copy accuracy.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a stale-copy bug."
+  },
+  {
+    "id": "F72",
+    "verdict": "open",
+    "reason": "No canon entry on the Rooms block's zero-state (no placeholder).",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F73",
+    "verdict": "open",
+    "reason": "C6 (scored ink) forbids boxes/borders/fills on DocumentAction; a boxed control on screen is a VIOLATION of C6, not something C6 protects - fixing it (removing the box) fulfills the rule.",
+    "evidence": "DECISIONS.md:6584 (I107)",
+    "revised_claim": "Confirmed bug, open."
+  },
+  {
+    "id": "F74",
+    "verdict": "open",
+    "reason": "No canon entry on the drawer's visibility breakpoint (1180) or Orders' tap-depth at 390.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F75",
+    "verdict": "open",
+    "reason": "No canon entry on the guide's need-reason voice/register.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F76",
+    "verdict": "open",
+    "reason": "No canon entry defines the money row 'Moved' label.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F77",
+    "verdict": "open",
+    "reason": "No canon entry mandates a guide headline on Care-stage documents.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F78",
+    "verdict": "open",
+    "reason": "D8 forbids badges/pulsing counts generally, but the collator's own qualifier notes a plain numeral on a CLOSED trigger tab was never itself the subject of a ruling - D8's examples are about the persistent Drawer bar, not a margin-rail collapse tab.",
+    "evidence": "DECISIONS.md:19 (D8)",
+    "revised_claim": "Open per the qualifier; a cautious reading of D8's spirit still argues for removing the count, but no clause is being contradicted by leaving it either way."
+  },
+  {
+    "id": "F79",
+    "verdict": "open",
+    "reason": "No canon entry on visual weight for unsent POs vs. routine status.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F80",
+    "verdict": "open",
+    "reason": "No canon entry requires order/PO status inside the spec-book workbench.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F81",
+    "verdict": "open",
+    "reason": "No canon entry addresses a clientless document's effect on money/approvals.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely adjacent to but distinct from the ruled money-doesn't-seam-on-install/care gap."
+  },
+  {
+    "id": "F82",
+    "verdict": "open",
+    "reason": "D1 forbids split views/tabs/peek-hold WITHIN an open document; it says nothing about a Desk-level door that opens a document directly at a given artifact (a normal navigation, not a split view).",
+    "evidence": "DECISIONS.md:12 (D1)",
+    "revised_claim": "Open, per the collator's own qualifier - D1 does not forbid the fix."
+  },
+  {
+    "id": "F83",
+    "verdict": "open",
+    "reason": "No canon entry reconciles 'The Post' vs 'Message {Family}' naming.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a C20-adjacent lexicon gap, but no specific rule cited."
+  },
+  {
+    "id": "F84",
+    "verdict": "ruled-against:C9",
+    "reason": "The on-paper boards strip existing only at the Speccing table is precisely Q1's ratified reversal - 'the speccing stage only... the shelf remains boards' home everywhere else.'",
+    "evidence": "DECISIONS.md:8881-8892 (I139), Q1 (delivery-plan.md:6)",
+    "revised_claim": "This is the documented, intended design; Direction A may not extend the strip to other tables without a named amendment to C9/Q1."
+  },
+  {
+    "id": "F85",
+    "verdict": "open",
+    "reason": "No canon entry forbids a new bordered-card pattern in the Capture Inbox specifically; C2/C6 (no shadows, scored ink, flat stacked edges) are document-surface rules whose reach into a Worktable tool like the Capture Inbox is not explicit.",
+    "evidence": "DECISIONS.md:15 (C2), :6584 (C6)",
+    "revised_claim": "Open; likely a genuine visual-language drift worth flagging, but not clearly contradicting a named rule for this specific surface."
+  },
+  {
+    "id": "F86",
+    "verdict": "open",
+    "reason": "No canon entry on Desk header layout at 390px.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a CSS bug."
+  },
+  {
+    "id": "F87",
+    "verdict": "open",
+    "reason": "No canon entry on region status text truncation at 390px.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a CSS bug."
+  },
+  {
+    "id": "F88",
+    "verdict": "open",
+    "reason": "No canon entry on The Record's footprint before first completion.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F89",
+    "verdict": "open",
+    "reason": "No canon entry explains an unlabeled circular badge overlapping content; if literally a badge/count, D8 would forbid it outright.",
+    "evidence": "DECISIONS.md:19 (D8)",
+    "revised_claim": "Open, and if confirmed as a count/badge this is itself a D8 violation to fix, not a protected behavior."
+  },
+  {
+    "id": "F90",
+    "verdict": "open",
+    "reason": "I137/C10 mandates The Record mounts at the foot of the paper; if it never prints at all, that is a FAILED implementation of C10, not a protected absence - fixing it (making it appear) fulfills the ruling.",
+    "evidence": "DECISIONS.md:8608 (I137)",
+    "revised_claim": "Open - a build gap against a ruling that requires the feature to exist, not evidence the ruling forbids it."
+  },
+  {
+    "id": "F91",
+    "verdict": "open",
+    "reason": "No canon entry on 'Next up' visibility conditions.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F92",
+    "verdict": "open",
+    "reason": "No canon entry reconciles 'Add to project' vs 'Open a project' wording.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a C20-adjacent lexicon gap."
+  },
+  {
+    "id": "F93",
+    "verdict": "open",
+    "reason": "No canon entry on the colophon's 'Team...' act specificity.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F94",
+    "verdict": "ruled-against:R95/C15",
+    "reason": "R95 itself names the Desk's standing front matter 'The Studio' verbatim ('The Desk gains standing front matter, \\\"The Studio\\\": a typographic contents of rooms, ledgers, and begin-verbs'). The on-screen label THE STUDIO is the ruled name; 'Contents Page' is the ledger's own descriptive shorthand for",
+    "evidence": "DECISIONS.md:2951 (R95)",
+    "revised_claim": "Not a naming bug - the on-screen label matches canon. If a direction still wants to rename it, that is an amendment to R95, priced and named."
+  },
+  {
+    "id": "F95",
+    "verdict": "open",
+    "reason": "No canon entry fixes the spine's mark count as constant across documents.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, may be intended variability (different documents have different numbers of phase markers) rather than a bug - needs product judgment, not a canon citation."
+  },
+  {
+    "id": "F96",
+    "verdict": "open",
+    "reason": "No canon entry on the money region's default fold state.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F97",
+    "verdict": "open",
+    "reason": "No canon entry requires a functional closed state for the margin rail at >=1440.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F98",
+    "verdict": "open",
+    "reason": "No canon entry on the Receiving tab's project-scoping.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open - unverified finding, not a canon question."
+  },
+  {
+    "id": "F99",
+    "verdict": "open",
+    "reason": "No canon entry on free-text description typographic register.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open."
+  },
+  {
+    "id": "F100",
+    "verdict": "open",
+    "reason": "No canon entry requires consistent project naming across the two leaf routes' back-navigation.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open, likely a copy/derivation bug."
+  },
+  {
+    "id": "F101",
+    "verdict": "open",
+    "reason": "No canon entry on ledger-sheet scroll-position preservation.",
+    "evidence": "no matching entry",
+    "revised_claim": "Open - unverified finding, not a canon question."
+  }
+]

@@ -52,6 +52,8 @@ import { RegionRule } from './region/region-rule';
 
 const HEADING_ID = 'care-band-heading';
 const BODY_ID = 'care-band-body';
+/** The guide's care act names this checklist (`document-guide.ts`). */
+const CHECKLIST_ID = 'closing-the-book';
 
 type AnyRecord = any;
 
@@ -73,7 +75,17 @@ function closeErrorMessage(error: unknown): string {
   return 'Could not close the book. Try again.';
 }
 
-export function CareBand({ projectId }: { projectId: string }) {
+export function CareBand({
+  projectId,
+  onCloseoutReady,
+}: {
+  projectId: string;
+  /** A3-L7 — the closure gate, published to the page so the guide's care rest
+   *  state can be gated on it. This band is the only reader of both halves
+   *  (the eight closeout queries and the checklist's own state), so it states
+   *  the answer once rather than the page deriving a second one. */
+  onCloseoutReady?: (ready: boolean) => void;
+}) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
   const { user, isLoading: authLoading } = useAuth();
   const phaseQuery = useProjectPhases(projectId);
@@ -167,6 +179,10 @@ export function CareBand({ projectId }: { projectId: string }) {
   );
   const ready = closureReady(effectiveItems, operational);
   const done = effectiveItems.filter((i) => i.completed).length;
+
+  useEffect(() => {
+    onCloseoutReady?.(ready);
+  }, [onCloseoutReady, ready]);
 
   const fold = useRegionFold({
     docId: projectId,
@@ -334,7 +350,13 @@ export function CareBand({ projectId }: { projectId: string }) {
           </ul>
         </div>
       )}
-      <ul className="mt-3 border-t border-[rgba(139,115,85,0.14)] pt-2">
+      {/* The care stage's act lands on the checklist itself, not on the band's
+          first inch. */}
+      <ul
+        id={CHECKLIST_ID}
+        tabIndex={-1}
+        className="mt-3 scroll-mt-16 border-t border-[rgba(139,115,85,0.14)] pt-2"
+      >
         {effectiveItems.map((item) => (
           <li
             key={item.key}

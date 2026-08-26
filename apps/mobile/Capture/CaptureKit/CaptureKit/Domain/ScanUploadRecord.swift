@@ -19,28 +19,28 @@ public final class ScanUploadRecord {
     /// Stable key = the bundle path RELATIVE to Application Support ("SiteScans/site-scan-…",
     /// via `SiteScanBundleHome.relativeKey`). Container-independent so a resume re-resolves
     /// the absolute URL under the CURRENT app container (C2); one record per scan.
-    @Attribute(.unique) public var bundlePath: String
+    @Attribute(.unique) public var bundlePath: String = ""
 
-    public var scanID: String
-    public var roomID: String
+    public var scanID: String = ""
+    public var roomID: String = ""
     /// Immutable creation-time owner stamp. Nil only for legacy/quarantined rows.
     public private(set) var ownerUserID: String?
     public private(set) var ownerWorkspaceID: String?
-    public var name: String
+    public var name: String = ""
     public var projectID: String?
     public var projectRoomID: String?
     /// `room_scans.scan_schema_version` marker (3 = Field P1 instrument bundle).
-    public var scanSchemaVersion: Int
+    public var scanSchemaVersion: Int = 3
     /// Per-artifact upload progress (Codable value array attribute).
-    public var artifacts: [ScanArtifactUploadState]
+    public var artifacts: [ScanArtifactUploadState] = []
     /// CaptureTransferPhase raw value, with legacy `"pending"` accepted as queued.
-    public var statusRaw: String
+    public var statusRaw: String = CaptureTransferPhase.queued.rawValue
     public var lastError: String?
-    public var retryCount: Int
+    public var retryCount: Int = 0
     /// The server-confirmed scan id. Nil until confirmation succeeds.
     public var receiptID: String?
-    public var createdAt: Date
-    public var updatedAt: Date
+    public var createdAt: Date = Date()
+    public var updatedAt: Date = Date()
 
     public init(bundlePath: String, scanID: String, roomID: String, name: String,
                 projectID: String?, projectRoomID: String?, scanSchemaVersion: Int = 3,

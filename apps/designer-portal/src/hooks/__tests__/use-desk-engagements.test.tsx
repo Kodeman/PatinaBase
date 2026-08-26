@@ -129,7 +129,7 @@ describe('useDeskEngagements', () => {
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ folders: [], chips: [], composed: {} });
+    expect(result.current.data).toEqual({ folders: [], chips: [], live: [], composed: {} });
     expect(result.current.isError).toBe(false);
     // A genuinely quiet desk on first load has nothing to compare against —
     // no breadcrumb.
@@ -179,7 +179,7 @@ describe('useDeskEngagements', () => {
       await result.current.refetch();
     });
 
-    await waitFor(() => expect(result.current.data).toEqual({ folders: [], chips: [], composed: {} }));
+    await waitFor(() => expect(result.current.data).toEqual({ folders: [], chips: [], live: [], composed: {} }));
     expect(mockDeskZeroRowRead).toHaveBeenCalledWith({
       previous_folder_count: 1,
       previous_chip_count: 0,

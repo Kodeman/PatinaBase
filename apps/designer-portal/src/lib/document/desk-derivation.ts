@@ -237,6 +237,25 @@ export interface NeedLine {
    *  first words, when she'd started writing before putting it down. Absent
    *  for every other need kind (and for a ceremony still at its blank stub). */
   sub?: string;
+  /** A3-L7 — the ISO date this need is anchored to, when the rule deriving it
+   *  already has one at hand: a decision's oldest-overdue date, an invoice's
+   *  due date, a PO's sent or drafted date, a reconnect date, a lead's
+   *  response deadline. `null`/absent where the rule states no date even in
+   *  its own prose (`schedule_unconfigured`'s setup chore, a claim with no
+   *  per-item date yet). Never invented — read at derivation time only, and
+   *  only where the date is one the need is DUE on: a sent-at or created-at
+   *  stamp is provenance, not a deadline, and `need-tie-break.ts` ranks a
+   *  past `dueOn` as overdue. */
+  dueOn?: string | null;
+  /** A3-L7 — whose hand the need's next move is in, when the rule already
+   *  knows: `'client'` where the studio is waiting on the client (an overdue
+   *  decision, an overdue invoice, a sent-but-unopened or viewed-but-unsigned
+   *  proposal), `'designer'` where the next act is the studio's own pen (a
+   *  signed proposal awaiting activation, a due task, a drafted-but-unsent
+   *  PO, a reconnect, a ceremony draft, a Pulse to send), `'maker'` where the
+   *  studio is waiting on a vendor (a PO sent but not yet acknowledged).
+   *  Absent where the rule has no clear single owner. */
+  owner?: 'designer' | 'client' | 'maker' | null;
 }
 
 export interface DeskFolder {
@@ -546,6 +565,8 @@ const needOverdueDecision: NeedRule = ({ row }) => {
       actionLabel: NEED_ACTION_LABELS.overdue_decision,
       stamp: { label: 'DECISION DUE', ...STAMP.due },
       urgent: true,
+      dueOn: row.earliest_overdue_due,
+      owner: 'client',
     };
   }
   return null;
@@ -576,6 +597,8 @@ const needOverdueInvoice: NeedRule = ({ receivable }) => {
         name: 'accounts',
         context: { page: 'receivables', invoiceId: receivable.invoiceId },
       },
+      dueOn: receivable.oldestDue,
+      owner: 'client',
     };
   }
   return null;
@@ -592,6 +615,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
         actionLabel: NEED_ACTION_LABELS.proposal_signed,
         stamp: { label: 'SIGNED', ...STAMP.sage },
         urgent: false,
+        owner: 'designer',
       });
     }
     if (row.proposal_status === 'declined') {
@@ -646,6 +670,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
           actionLabel: NEED_ACTION_LABELS.hesitating_proposal,
           stamp: { label: 'SENT', ...STAMP.dustyBlue },
           urgent: false,
+          owner: 'client',
         });
       }
     }
@@ -667,6 +692,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
           actionLabel: NEED_ACTION_LABELS.hesitating_proposal,
           stamp: { label: 'VIEWED', ...STAMP.dustyBlue },
           urgent: false,
+          owner: 'client',
         });
       }
     }
@@ -691,6 +717,7 @@ const needLead: NeedRule = ({ row, now, ceremony }) => {
         actionLabel: NEED_ACTION_LABELS.ceremony_pending,
         stamp: { label: 'CLAIMED · CEREMONY WAITING', ...STAMP.clay },
         urgent: false,
+        owner: 'designer',
         deepLink: `/ceremony/${row.lead_id}`,
         sub: draftText
           ? `Your draft is held — "${truncateWords(draftText, 60)}"`
@@ -713,6 +740,8 @@ const needLead: NeedRule = ({ row, now, ceremony }) => {
           actionLabel: NEED_ACTION_LABELS.reconnect_due,
           stamp: { label: 'RECONNECT', ...STAMP.dustyBlue },
           urgent: false,
+          dueOn: reconnectAt,
+          owner: 'designer',
         });
       }
       return seal(null);
@@ -744,6 +773,8 @@ const needLead: NeedRule = ({ row, now, ceremony }) => {
       actionLabel: NEED_ACTION_LABELS.new_lead,
       stamp: { label: 'NEW LEAD', ...STAMP.clay },
       urgent: closing,
+      dueOn: deadline,
+      owner: 'designer',
     });
   }
   return null;
@@ -867,6 +898,8 @@ const needTaskDue: NeedRule = ({ row }) => {
       actionLabel: NEED_ACTION_LABELS.task_due,
       stamp: { label: 'TASK DUE', ...STAMP.clay },
       urgent: false,
+      dueOn: row.earliest_task_due,
+      owner: 'designer',
     };
   }
   return null;
@@ -912,6 +945,7 @@ const needPoUnsent: NeedRule = ({ row, now }) => {
         actionLabel: NEED_ACTION_LABELS.po_unsent,
         stamp: { label: 'UNSENT', ...STAMP.clay },
         urgent: false,
+        owner: 'designer',
       };
     }
   }
@@ -932,6 +966,8 @@ const needPoUnacknowledged: NeedRule = ({ row, now }) => {
         actionLabel: NEED_ACTION_LABELS.po_unacknowledged,
         stamp: { label: 'NO ACK', ...STAMP.dustyBlue },
         urgent: false,
+        dueOn: row.oldest_unacked_sent_at,
+        owner: 'maker',
       };
     }
   }
@@ -950,6 +986,7 @@ const needPulseDue: NeedRule = ({ row, now }) => {
         actionLabel: NEED_ACTION_LABELS.pulse_due,
         stamp: { label: 'PULSE', ...STAMP.sage },
         urgent: false,
+        owner: 'designer',
       };
     }
   }
@@ -1224,9 +1261,20 @@ export function partitionDesk(
   /** R108/R113 — per-project resolver output. `undefined` = the feed degraded;
    *  a project absent from a PRESENT map genuinely has no phases at all. */
   schedules?: ReadonlyMap<string, DeskScheduleInput>,
-): { folders: DeskFolder[]; chips: MotionChip[]; composed: Record<string, true> } {
+): {
+  folders: DeskFolder[];
+  chips: MotionChip[];
+  live: DocumentStateRow[];
+  composed: Record<string, true>;
+} {
   const folders: DeskFolder[] = [];
   const chips: MotionChip[] = [];
+  // Every live row this composition saw, derived need or not. `folders` and
+  // `chips` are the two DERIVED populations — a row with neither a need nor a
+  // motion lands in neither, and `chips` is truncated at MAX_MOTION_CHIPS — so
+  // neither is the studio's live population. A reader counting "how many
+  // documents stand in each stage" must read this.
+  const live: DocumentStateRow[] = [];
   // Every engagement this composition actually put through deriveNeed. A reader
   // asking "does this document have a need?" can only be answered `no` for an
   // engagement that is in here; anything absent — archived rows, rows outside
@@ -1240,6 +1288,7 @@ export function partitionDesk(
   for (const row of rows) {
     if (row.is_archived) continue;
     composed[row.engagement_id] = true;
+    live.push(row);
     const conflict = row.project_id
       ? (conflicts?.get(row.project_id) ?? null)
       : null;
@@ -1296,5 +1345,5 @@ export function partitionDesk(
     return ka[0] - kb[0] || ka[1] - kb[1] || ka[2] - kb[2];
   });
 
-  return { folders, chips: chips.slice(0, MAX_MOTION_CHIPS), composed };
+  return { folders, chips: chips.slice(0, MAX_MOTION_CHIPS), live, composed };
 }

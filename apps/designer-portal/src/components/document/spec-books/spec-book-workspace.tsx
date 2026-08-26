@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
@@ -175,6 +176,11 @@ function ReadinessMark({
   );
 }
 
+/** SP-19/F57 — the id an FF&E line's `Edit spec details →` lands on. */
+function specBookItemDomId(itemId: string) {
+  return `spec-book-item-${itemId}`;
+}
+
 function ItemCard({
   item,
   readiness,
@@ -195,9 +201,11 @@ function ItemCard({
   return (
     <button
       type="button"
+      // SP-19/F57 — the address an `?ffeItemId=` arrival scrolls to.
+      id={specBookItemDomId(item.id)}
       onClick={onSelect}
       aria-pressed={selected}
-      className={`grid w-full grid-cols-[72px_1fr_auto] gap-3 border-b px-2 py-3 text-left transition-colors ${
+      className={`grid w-full scroll-mt-24 grid-cols-[72px_1fr_auto] gap-3 border-b px-2 py-3 text-left transition-colors ${
         selected
           ? "border-[var(--color-clay)] bg-[rgba(196,165,123,0.08)]"
           : "border-[var(--color-pearl)] hover:bg-[rgba(196,165,123,0.04)]"
@@ -739,6 +747,10 @@ function AudiencePreview({
 
 export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   const hydrated = useHydrated();
+  // SP-19/F57 — an FF&E line's `Edit spec details →` addresses one line
+  // (`/doc/{id}/spec-book?ffeItemId=…`). Spec-book items ARE
+  // `project_ffe_items` rows (use-spec-books.ts), so the id matches directly.
+  const requestedItemId = useSearchParams()?.get("ffeItemId") ?? null;
   const workbench = useSpecBookWorkbench(projectId);
   const project = useProjectV2(projectId) as {
     data: { name?: string; title?: string } | undefined;
@@ -846,8 +858,22 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   }, [data, projectId]);
 
   useEffect(() => {
-    if (!selectedItemId && data?.items[0]) setSelectedItemId(data.items[0].id);
-  }, [data?.items, selectedItemId]);
+    if (selectedItemId || !data?.items[0]) return;
+    const requested = requestedItemId
+      ? data.items.find((item) => item.id === requestedItemId)
+      : undefined;
+    setSelectedItemId((requested ?? data.items[0]).id);
+  }, [data?.items, requestedItemId, selectedItemId]);
+
+  const scrolledToRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!requestedItemId || scrolledToRef.current === requestedItemId) return;
+    const row = document.getElementById(specBookItemDomId(requestedItemId));
+    if (!row) return;
+    scrolledToRef.current = requestedItemId;
+    // jsdom has no layout, so the method is absent there.
+    row.scrollIntoView?.({ block: "center" });
+  }, [data?.items, requestedItemId, selectedItemId]);
 
   const toggleAudience = (audience: SpecBookAudience) => {
     setAudiences((current) =>

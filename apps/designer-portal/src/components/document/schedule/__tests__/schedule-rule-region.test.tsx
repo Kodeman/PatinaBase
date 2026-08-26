@@ -71,6 +71,24 @@ describe('the schedule frame region', () => {
     expect(screen.queryByText('the drafting strip')).not.toBeInTheDocument();
   });
 
+  it('names the folded seam "Schedule dates", distinct from the ledger region head', () => {
+    // SP-02/F35 — two regions on one paper stop sharing the name `Schedule`.
+    render(
+      <ScheduleNavProvider>
+        <ScheduleRuleRegion {...props} />
+      </ScheduleNavProvider>,
+    );
+    // Folded: the seam is the only name on show, and it is not `Schedule`.
+    expect(screen.getByText('Schedule dates')).toBeInTheDocument();
+    expect(screen.queryByText(/^Schedule$/)).not.toBeInTheDocument();
+
+    // Unfolded: the ledger region head keeps the bare `Schedule` (the running
+    // index still points at it), and the seam name is gone with the seam.
+    fireEvent.click(screen.getByRole('button', { name: /Schedule dates/ }));
+    expect(screen.getByText(/^Schedule$/)).toBeInTheDocument();
+    expect(screen.queryByText('Schedule dates')).not.toBeInTheDocument();
+  });
+
   it('keeps the phase-advance control visible while the schedule is folded', () => {
     // Advancing the phase is a lifecycle act, not a date edit. Inside a
     // default-folded body it was invisible on every visit — a workflow that

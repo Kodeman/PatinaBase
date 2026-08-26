@@ -14,11 +14,20 @@ process.env.AWS_REGION = 'us-east-1';
 jest.setTimeout(5000);
 
 // Mock external services
-jest.mock('@patina/events', () => ({
-  EventPublisher: jest.fn().mockImplementation(() => ({
-    publish: jest.fn().mockResolvedValue(undefined),
-  })),
-}));
+// `@patina/events` is not (yet) a workspace package — no media source file
+// imports it today — so this factory mock must be declared `virtual` or
+// Jest's module resolver throws "Cannot find module" before it ever gets to
+// use the factory. Kept (rather than deleted) since it's evidently meant to
+// pre-empt a future event-publishing dependency.
+jest.mock(
+  '@patina/events',
+  () => ({
+    EventPublisher: jest.fn().mockImplementation(() => ({
+      publish: jest.fn().mockResolvedValue(undefined),
+    })),
+  }),
+  { virtual: true },
+);
 
 // Mock AWS SDK
 jest.mock('@aws-sdk/client-s3', () => ({

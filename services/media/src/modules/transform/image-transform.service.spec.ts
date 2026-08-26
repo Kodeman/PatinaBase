@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { ImageTransformService, TransformOptions, RenditionSpec } from './image-transform.service';
 import { OCIStorageService } from '../storage/oci-storage.service';
-import * as sharp from 'sharp';
+import sharp from 'sharp';
 
 jest.mock('sharp');
 
@@ -22,6 +22,7 @@ describe('ImageTransformService', () => {
       avif: jest.fn().mockReturnThis(),
       toBuffer: jest.fn(),
       composite: jest.fn().mockReturnThis(),
+      ensureAlpha: jest.fn().mockReturnThis(),
     };
 
     (sharp as any as jest.Mock).mockReturnValue(mockSharp);
@@ -39,8 +40,9 @@ describe('ImageTransformService', () => {
     };
 
     const mockOCIStorage = {
-      generateRenditionKey: jest.fn((assetId, width, height, format) =>
-        `processed/images/${assetId}/${width}x${height}.${format}`
+      generateRenditionKey: jest.fn(
+        (assetId, width, height, format) =>
+          `processed/images/${assetId}/${width}x${height}.${format}`,
       ),
       generatePreviewKey: jest.fn((assetId, kind) => `previews/images/${assetId}/lqip.jpg`),
       putObject: jest.fn(),
@@ -97,7 +99,7 @@ describe('ImageTransformService', () => {
       const renditions = await service.generateRenditions(assetId, sourceBuffer, 'png');
 
       // Should only generate for sizes <= 800 (256, 512, 768)
-      const sizes = [...new Set(renditions.map(r => r.width))];
+      const sizes = [...new Set(renditions.map((r) => r.width))];
       expect(Math.max(...sizes)).toBeLessThanOrEqual(800);
     });
 
@@ -114,7 +116,7 @@ describe('ImageTransformService', () => {
 
       const renditions = await service.generateRenditions(assetId, sourceBuffer, 'jpeg');
 
-      const webpRenditions = renditions.filter(r => r.format === 'webp');
+      const webpRenditions = renditions.filter((r) => r.format === 'webp');
       expect(webpRenditions.length).toBeGreaterThan(0);
     });
 
@@ -131,7 +133,7 @@ describe('ImageTransformService', () => {
 
       const renditions = await service.generateRenditions(assetId, sourceBuffer, 'jpeg');
 
-      const avifRenditions = renditions.filter(r => r.format === 'avif');
+      const avifRenditions = renditions.filter((r) => r.format === 'avif');
       expect(avifRenditions.length).toBeGreaterThan(0);
     });
 
@@ -148,7 +150,7 @@ describe('ImageTransformService', () => {
 
       const renditions = await service.generateRenditions(assetId, sourceBuffer, 'jpeg');
 
-      const jpegRenditions = renditions.filter(r => r.format === 'jpeg');
+      const jpegRenditions = renditions.filter((r) => r.format === 'jpeg');
       expect(jpegRenditions.length).toBeGreaterThan(0);
     });
 
@@ -165,9 +167,9 @@ describe('ImageTransformService', () => {
 
       const renditions = await service.generateRenditions(assetId, sourceBuffer, 'jpeg');
 
-      const thumbs = renditions.filter(r => r.width <= 512 && r.purpose === 'THUMB');
-      const web = renditions.filter(r => r.width > 512 && r.width <= 1024 && r.purpose === 'WEB');
-      const retina = renditions.filter(r => r.width > 1024 && r.purpose === 'RETINA');
+      const thumbs = renditions.filter((r) => r.width <= 512 && r.purpose === 'THUMB');
+      const web = renditions.filter((r) => r.width > 512 && r.width <= 1024 && r.purpose === 'WEB');
+      const retina = renditions.filter((r) => r.width > 1024 && r.purpose === 'RETINA');
 
       expect(thumbs.length).toBeGreaterThan(0);
       expect(web.length).toBeGreaterThan(0);
@@ -377,7 +379,10 @@ describe('ImageTransformService', () => {
         ...mockSharp,
         toBuffer: jest.fn().mockResolvedValue(Buffer.from('watermarked')),
       };
-      (sharp as any).mockReturnValueOnce(mockSharp).mockReturnValueOnce(mockSharp).mockReturnValueOnce(compositeSharp);
+      (sharp as any)
+        .mockReturnValueOnce(mockSharp)
+        .mockReturnValueOnce(mockSharp)
+        .mockReturnValueOnce(compositeSharp);
 
       const result = await service.applyWatermark(sourceBuffer, watermarkBuffer);
 

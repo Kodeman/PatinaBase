@@ -112,6 +112,23 @@ describe('CareBand closeout authority', () => {
     expect(screen.getByRole('button', { name: 'Close the book' })).toBeDisabled();
   });
 
+  // A3-L7 — the care rest state ("Everything is settled." / CLOSE THE BOOK) is
+  // gated on this band's own closure answer; without this wire the page can
+  // never pass `closureReady` and one of the seven rest states is unreachable.
+  it("publishes its closure answer to the page", () => {
+    const onCloseoutReady = jest.fn();
+
+    render(<CareBand projectId="project-1" onCloseoutReady={onCloseoutReady} />);
+
+    expect(onCloseoutReady).toHaveBeenCalledWith(false);
+  });
+
+  it('prints the checklist anchor the guide\'s care act names', () => {
+    const { container } = render(<CareBand projectId="project-1" />);
+
+    expect(container.querySelector('#closing-the-book')).not.toBeNull();
+  });
+
   it('does not ask the owner to fake a pre-close review request', () => {
     render(<CareBand projectId="project-1" />);
 

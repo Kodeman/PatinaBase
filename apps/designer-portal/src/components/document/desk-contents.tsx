@@ -28,7 +28,7 @@
  */
 
 import { useRouter } from 'next/navigation';
-import type { LucideIcon } from 'lucide-react';
+import { PenTool, type LucideIcon } from 'lucide-react';
 import {
   STUDIO_ROOMS,
   STUDIO_LEDGERS,
@@ -44,8 +44,27 @@ import {
 import { openPost } from '@/components/document/overlays/post-sheet';
 import { openInvoiceComposer } from '@/components/document/accounts/invoice-overlays';
 import { openDraftProposalPicker } from '@/components/document/rooms/drafting/draft-proposal-opener';
+import { openDraftingRoom } from '@/lib/document/open-drafting-room';
 
 type RowVariant = 'room' | 'ledger' | 'verb';
+
+// F38 — every row gains a static sub-label naming what is behind the door
+// (R95 permits this: a sub-label is not a count, tile, or metric). Rooms and
+// ledgers carry no sub-label in the registry itself (that field serves other
+// consumers, e.g. `rooms`'s longer drawer gloss) — the Desk Contents' own
+// concise phrasing lives here.
+const ROOM_SUBLABEL: Record<string, string> = {
+  library: 'pieces and makers',
+  people: 'clients, makers, trades',
+  rooms: 'measured rooms',
+};
+
+const LEDGER_SUBLABEL: Record<string, string> = {
+  orders: 'POs, receiving, claims',
+  accounts: 'invoices, receivables, earnings',
+  hours: 'time in hand',
+  'the-post': 'mail and messages',
+};
 
 /** The small DM-mono heading over each column of the contents. */
 function ColumnHead({ children }: { children: React.ReactNode }) {
@@ -62,62 +81,75 @@ function ColumnHead({ children }: { children: React.ReactNode }) {
 function ContentsRow({
   icon: Icon,
   label,
+  subLabel,
   variant,
   prominent,
   onOpen,
 }: {
   icon: LucideIcon;
   label: string;
+  /** F38 — a static sub-label naming what's behind the door. */
+  subLabel?: string;
   variant: RowVariant;
   prominent: boolean;
   onOpen: () => void;
 }) {
   const labelSize = prominent ? 'text-[19px]' : 'text-[17px]';
+  // Sub-label indents to sit under the label, past the icon (and, for verbs,
+  // the em-dash lead too).
+  const subLabelIndent = variant === 'verb' ? 'pl-[34px]' : 'pl-[22px]';
   return (
     <li>
       <button
         type="button"
         onClick={onOpen}
-        className="group flex min-h-11 w-full items-baseline gap-2 rounded-[3px] py-[5px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="group flex min-h-11 w-full flex-col gap-0.5 rounded-[3px] py-[5px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
-        {variant === 'verb' && (
-          <span
+        <span className="flex items-baseline gap-2">
+          {variant === 'verb' && (
+            <span
+              aria-hidden
+              className="self-center font-heading text-[15px] leading-none text-[var(--text-muted)]"
+            >
+              —
+            </span>
+          )}
+          <Icon
+            className="h-[14px] w-[14px] shrink-0 self-center text-[var(--color-aged-oak)]"
+            strokeWidth={1.5}
             aria-hidden
-            className="self-center font-heading text-[15px] leading-none text-[var(--text-muted)]"
-          >
-            —
-          </span>
-        )}
-        <Icon
-          className="h-[14px] w-[14px] shrink-0 self-center text-[var(--color-aged-oak)]"
-          strokeWidth={1.5}
-          aria-hidden
-        />
-        <span
-          className={`shrink-0 font-heading ${labelSize} font-normal leading-tight text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-aged-oak)] motion-reduce:transition-none`}
-        >
-          {label}
-        </span>
-        {variant !== 'verb' && (
-          <span
-            aria-hidden
-            className="flex-1 -translate-y-[0.32em] border-b border-dotted border-[var(--color-pearl)]"
           />
-        )}
-        {variant === 'room' && (
           <span
-            aria-hidden
-            className="shrink-0 self-center font-mono text-[13px] text-[var(--text-muted)] transition-colors group-hover:text-[var(--color-clay)] motion-reduce:transition-none"
+            className={`shrink-0 font-heading ${labelSize} font-normal leading-tight text-[var(--text-primary)] transition-colors group-hover:text-[var(--color-aged-oak)] motion-reduce:transition-none`}
           >
-            ↗
+            {label}
           </span>
-        )}
-        {variant === 'ledger' && (
-          <span
-            aria-hidden
-            className="doc-type-meta shrink-0 self-center uppercase tracking-[0.12em]"
-          >
-            Sheet
+          {variant !== 'verb' && (
+            <span
+              aria-hidden
+              className="flex-1 -translate-y-[0.32em] border-b border-dotted border-[var(--color-pearl)]"
+            />
+          )}
+          {variant === 'room' && (
+            <span
+              aria-hidden
+              className="shrink-0 self-center font-mono text-[13px] text-[var(--text-muted)] transition-colors group-hover:text-[var(--color-clay)] motion-reduce:transition-none"
+            >
+              ↗
+            </span>
+          )}
+          {variant === 'ledger' && (
+            <span
+              aria-hidden
+              className="doc-type-meta shrink-0 self-center uppercase tracking-[0.12em]"
+            >
+              Sheet
+            </span>
+          )}
+        </span>
+        {subLabel && (
+          <span className={`doc-type-meta ${subLabelIndent} text-[var(--text-muted)]`}>
+            {subLabel}
           </span>
         )}
       </button>
@@ -169,6 +201,17 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
     documentEvents.wayfinding.contentsActed({ key, kind: 'verb' });
   };
 
+  // F51 — the Drafting Room joins Begin. Called bare (no id, no router): the
+  // shared opener falls to the household picker doorway (C-AF-01 — an
+  // opener, not a string).
+  const openDraftingRoomRow = () => {
+    openDraftingRoom();
+    documentEvents.wayfinding.contentsActed({
+      key: 'open-drafting-room',
+      kind: 'verb',
+    });
+  };
+
   return (
     <section
       aria-labelledby="the-studio"
@@ -192,6 +235,7 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
                 key={room.key}
                 icon={room.icon}
                 label={room.label}
+                subLabel={ROOM_SUBLABEL[room.key]}
                 variant="room"
                 prominent={prominent}
                 onOpen={openRoom(room.key)}
@@ -208,6 +252,7 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
                 key={ledger.key}
                 icon={ledger.icon}
                 label={ledger.label}
+                subLabel={LEDGER_SUBLABEL[ledger.key]}
                 variant="ledger"
                 prominent={prominent}
                 onOpen={openLedgerRow(ledger.key)}
@@ -227,13 +272,30 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
                 <ContentsRow
                   key={verb.key}
                   icon={verb.icon}
-                  label={verb.label}
+                  // F08 — the Desk's own invoice door names its scope
+                  // (unscoped here: it opens the composer fresh).
+                  label={
+                    verb.key === 'draw-invoice'
+                      ? 'Draw an invoice · new'
+                      : verb.label
+                  }
+                  subLabel={verb.key === 'draw-invoice' ? undefined : verb.subLabel}
                   variant="verb"
                   prominent={prominent}
                   onOpen={openVerb(verb.key)}
                 />
               ),
             )}
+            {/* F51 — the Drafting Room joins Begin, calling the opener A3-L3
+                exports rather than a doorway string (C-AF-01). */}
+            <ContentsRow
+              icon={PenTool}
+              label="Open the Drafting Room"
+              subLabel="facets fill in any order"
+              variant="verb"
+              prominent={prominent}
+              onOpen={openDraftingRoomRow}
+            />
           </ul>
         </div>
       </div>

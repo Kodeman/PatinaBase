@@ -74,6 +74,18 @@ describe('ProjectMoodBoards', () => {
     useProjectReviewAttention.mockReturnValue({ data: [], isLoading: false, isError: false });
   });
 
+  // F30 — inside the shelf leaf the region mounts already unfolded, and its
+  // fold key (`patina:doc-fold:{projectId}:boards`) is the SAME one the paper's
+  // own Mood boards region reads. A fold control there does nothing visible in
+  // the leaf and quietly shuts the region on the paper.
+  it('offers no fold inside the always-unfolded shelf leaf', () => {
+    const { rerender } = render(<ProjectMoodBoards projectId="project-1" />);
+    expect(screen.getByRole('button', { name: /fold/i })).toBeInTheDocument();
+
+    rerender(<ProjectMoodBoards projectId="project-1" alwaysUnfolded />);
+    expect(screen.queryByRole('button', { name: /fold/i })).not.toBeInTheDocument();
+  });
+
   it('renders an id-less frozen snapshot read-only and continues it into the room', async () => {
     mutateAsync.mockResolvedValue('live-board-1');
     render(<ProjectMoodBoards projectId="project-1" />);
@@ -137,7 +149,7 @@ describe('ProjectMoodBoards', () => {
 
     // Boards are empty, so the region defaults folded shut — unfold the seam first.
     fireEvent.click(screen.getByRole('button', { name: /mood boards/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Start a mood board' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Start a board' })[0]);
     expect(screen.getByTestId('boards-builder')).toHaveTextContent('Boards for project-1');
   });
 

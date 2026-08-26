@@ -1,113 +1,93 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { ConflictException, NotFoundException, NotImplementedException } from '@nestjs/common';
 import { JobQueueService, JobPayload } from './job-queue.service';
 import { PrismaClient, JobType } from '../../generated/prisma-client';
-import { Queue, Worker, Job } from 'bullmq';
 
-jest.mock('bullmq');
-jest.mock('ioredis');
-
+// NOTE: JobQueueService used to own BullMQ Queue/Worker pairs backed by
+// Redis (hence the historical `jest.mock('bullmq')` / `jest.mock('ioredis')`
+// here). Per the service's own doc comment, execution moved entirely
+// out-of-process to infra/media-worker (a Cloudflare Queues consumer); the
+// service is now a producer-only shim over the ProcessJob ledger that POSTs
+// to the worker's `/enqueue` route via `fetch`. This spec was rewritten
+// against that current shape — bullmq/ioredis are no longer imported by
+// production code at all.
 describe('JobQueueService', () => {
   let service: JobQueueService;
-  let config: jest.Mocked<ConfigService>;
-  let prisma: jest.Mocked<PrismaClient>;
-  let mockQueue: jest.Mocked<Queue>;
-  let mockWorker: jest.Mocked<Worker>;
+  let prisma: {
+    processJob: {
+      create: jest.Mock;
+      update: jest.Mock;
+      findUnique: jest.Mock;
+      deleteMany: jest.Mock;
+      count: jest.Mock;
+    };
+    mediaAsset: { findUnique: jest.Mock; update: jest.Mock };
+    $transaction: jest.Mock;
+  };
+  let fetchMock: jest.Mock;
+  const originalFetch = global.fetch;
 
   beforeEach(async () => {
-    mockQueue = {
-      add: jest.fn(),
-      getJob: jest.fn(),
-      getWaitingCount: jest.fn(),
-      getActiveCount: jest.fn(),
-      getCompletedCount: jest.fn(),
-      getFailedCount: jest.fn(),
-      close: jest.fn(),
-    } as any;
-
-    mockWorker = {
-      on: jest.fn(),
-      close: jest.fn(),
-    } as any;
-
-    (Queue as any) = jest.fn().mockImplementation(() => mockQueue);
-    (Worker as any) = jest.fn().mockImplementation(() => mockWorker);
+    fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    (global as any).fetch = fetchMock;
 
     const mockConfig = {
-      get: jest.fn((key: string, defaultValue?: any) => {
+      get: jest.fn((key: string) => {
         const values: Record<string, any> = {
-          REDIS_HOST: 'localhost',
-          REDIS_PORT: 6379,
+          MEDIA_WORKER_URL: 'https://media-worker.example.com',
+          MEDIA_WORKER_ENQUEUE_SECRET: 'test-enqueue-secret',
         };
-        return values[key] || defaultValue;
+        return values[key];
       }),
     };
 
-    const mockPrisma = {
+    prisma = {
       processJob: {
-        create: jest.fn() as any,
-        update: jest.fn() as any,
-        findUnique: jest.fn() as any,
-        deleteMany: jest.fn() as any,
+        create: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn(),
+        deleteMany: jest.fn(),
+        count: jest.fn(),
       },
-      $transaction: jest.fn() as any,
-    } as any;
+      mediaAsset: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+      },
+      $transaction: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         JobQueueService,
         { provide: ConfigService, useValue: mockConfig },
-        { provide: PrismaClient, useValue: mockPrisma },
+        { provide: PrismaClient, useValue: prisma },
       ],
     }).compile();
 
     service = module.get<JobQueueService>(JobQueueService);
-    config = module.get(ConfigService) as jest.Mocked<ConfigService>;
-    prisma = module.get(PrismaClient) as jest.Mocked<PrismaClient>;
-
-    // Initialize the service
-    await service.onModuleInit();
   });
 
   afterEach(() => {
     jest.clearAllMocks();
-  });
-
-  describe('onModuleInit', () => {
-    it('should initialize queues for all job types', async () => {
-      const expectedJobTypes = [
-        'IMAGE_PROCESS',
-        'IMAGE_TRANSFORM',
-        'MODEL3D_CONVERT',
-        'MODEL3D_OPTIMIZE',
-        'SNAPSHOT_GENERATE',
-        'VIRUS_SCAN',
-        'METADATA_EXTRACT',
-      ];
-
-      // Queue is called once for each job type
-      expect(Queue).toHaveBeenCalledTimes(expectedJobTypes.length);
-    });
+    (global as any).fetch = originalFetch;
   });
 
   describe('addJob', () => {
-    it('should create job record and add to queue', async () => {
+    it('should create a ledger row and POST the job to the media-worker for a supported type', async () => {
       const payload: JobPayload = {
         assetId: 'asset-123',
         type: 'IMAGE_PROCESS',
         priority: 1,
-        meta: { width: 2048, height: 1536 },
+        meta: { rawKey: 'raw/asset-123.jpg', width: 2048, height: 1536 },
       };
 
-      const mockJobRecord = {
+      prisma.processJob.create.mockResolvedValue({
         id: 'job-123',
         assetId: payload.assetId,
         type: payload.type,
         state: 'QUEUED',
-      };
-
-      (prisma.processJob.create as jest.Mock).mockResolvedValue(mockJobRecord as any);
-      mockQueue.add.mockResolvedValue({ id: 'job-123' } as any);
+      });
 
       const jobId = await service.addJob(payload);
 
@@ -121,92 +101,63 @@ describe('JobQueueService', () => {
         }),
       });
 
-      expect(mockQueue.add).toHaveBeenCalledWith(
-        payload.type,
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://media-worker.example.com/enqueue',
         expect.objectContaining({
-          jobId: 'job-123',
-          assetId: payload.assetId,
-        }),
-        expect.objectContaining({
-          jobId: 'job-123',
-          priority: 1,
+          method: 'POST',
+          headers: expect.objectContaining({ 'x-enqueue-secret': 'test-enqueue-secret' }),
         }),
       );
-    });
-
-    it('should use default priority if not provided', async () => {
-      const payload: JobPayload = {
-        assetId: 'asset-456',
-        type: 'VIRUS_SCAN',
-      };
-
-      (prisma.processJob.create as jest.Mock).mockResolvedValue({ id: 'job-456' } as any);
-      mockQueue.add.mockResolvedValue({ id: 'job-456' } as any);
-
-      await service.addJob(payload);
-
-      expect(prisma.processJob.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          priority: 0,
-        }),
+      const [, requestInit] = fetchMock.mock.calls[0];
+      expect(JSON.parse(requestInit.body)).toMatchObject({
+        jobId: 'job-123',
+        assetId: payload.assetId,
+        type: payload.type,
+        priority: 1,
       });
     });
 
-    it('should throw error for invalid queue type', async () => {
+    it('should use default priority 0 if not provided', async () => {
+      prisma.processJob.create.mockResolvedValue({ id: 'job-456' });
+
+      await service.addJob({
+        assetId: 'asset-456',
+        type: 'IMAGE_TRANSFORM',
+        meta: { rawKey: 'raw/asset-456.jpg' },
+      });
+
+      expect(prisma.processJob.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ priority: 0 }),
+      });
+    });
+
+    it('should mark the job failed and throw for a type with no worker executor', async () => {
       const payload: JobPayload = {
         assetId: 'asset-789',
-        type: 'INVALID_TYPE' as JobType,
+        // Not in WORKER_SUPPORTED_TYPES (IMAGE_PROCESS/IMAGE_TRANSFORM/METADATA_EXTRACT only).
+        type: 'VIRUS_SCAN' as JobType,
       };
 
-      // Clear the queues map to simulate missing queue
-      (service as any).queues.clear();
+      prisma.processJob.create.mockResolvedValue({ id: 'job-789' });
 
-      await expect(service.addJob(payload)).rejects.toThrow('Queue not found');
+      await expect(service.addJob(payload)).rejects.toThrow(NotImplementedException);
+
+      expect(prisma.processJob.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'job-789' },
+          data: expect.objectContaining({ state: 'FAILED' }),
+        }),
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
   describe('registerWorker', () => {
-    it('should register worker with processor', () => {
+    it('should be a deprecated no-op (execution now runs in infra/media-worker)', () => {
       const processor = jest.fn().mockResolvedValue({ success: true });
-      const jobType: JobType = 'IMAGE_PROCESS';
-      const concurrency = 5;
 
-      service.registerWorker(jobType, processor, concurrency);
-
-      expect(Worker).toHaveBeenCalledWith(
-        expect.stringContaining('image_process'),
-        expect.any(Function),
-        expect.objectContaining({
-          concurrency: 5,
-          autorun: true,
-        }),
-      );
-    });
-
-    it('should use default concurrency', () => {
-      const processor = jest.fn().mockResolvedValue({ success: true });
-      const jobType: JobType = 'METADATA_EXTRACT';
-
-      service.registerWorker(jobType, processor);
-
-      expect(Worker).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(Function),
-        expect.objectContaining({
-          concurrency: 5,
-        }),
-      );
-    });
-
-    it('should set up worker event handlers', () => {
-      const processor = jest.fn();
-      const jobType: JobType = 'IMAGE_TRANSFORM';
-
-      service.registerWorker(jobType, processor);
-
-      expect(mockWorker.on).toHaveBeenCalledWith('completed', expect.any(Function));
-      expect(mockWorker.on).toHaveBeenCalledWith('failed', expect.any(Function));
-      expect(mockWorker.on).toHaveBeenCalledWith('error', expect.any(Function));
+      expect(() => service.registerWorker('IMAGE_PROCESS', processor, 5)).not.toThrow();
+      expect(processor).not.toHaveBeenCalled();
     });
   });
 
@@ -225,7 +176,7 @@ describe('JobQueueService', () => {
         },
       };
 
-      (prisma.processJob.findUnique as jest.Mock).mockResolvedValue(mockJob as any);
+      prisma.processJob.findUnique.mockResolvedValue(mockJob);
 
       const status = await service.getJobStatus(jobId);
 
@@ -240,25 +191,13 @@ describe('JobQueueService', () => {
   });
 
   describe('cancelJob', () => {
-    it('should cancel waiting job', async () => {
+    it('should mark a job canceled in the ledger', async () => {
       const jobId = 'job-cancel';
-      const mockJob = {
-        id: jobId,
-        type: 'IMAGE_PROCESS',
-      };
-
-      const mockBullJob = {
-        isWaiting: jest.fn().mockResolvedValue(true),
-        remove: jest.fn(),
-      };
-
-      (prisma.processJob.findUnique as jest.Mock).mockResolvedValue(mockJob as any);
-      mockQueue.getJob.mockResolvedValue(mockBullJob as any);
-      (prisma.processJob.update as jest.Mock).mockResolvedValue({} as any);
+      prisma.processJob.findUnique.mockResolvedValue({ id: jobId, type: 'IMAGE_PROCESS' });
+      prisma.processJob.update.mockResolvedValue({});
 
       await service.cancelJob(jobId);
 
-      expect(mockBullJob.remove).toHaveBeenCalled();
       expect(prisma.processJob.update).toHaveBeenCalledWith({
         where: { id: jobId },
         data: expect.objectContaining({
@@ -267,27 +206,27 @@ describe('JobQueueService', () => {
       });
     });
 
-    it('should throw error if job not found', async () => {
-      (prisma.processJob.findUnique as jest.Mock).mockResolvedValue(null);
+    it('should throw if job not found', async () => {
+      prisma.processJob.findUnique.mockResolvedValue(null);
 
-      await expect(service.cancelJob('missing-job')).rejects.toThrow('Job not found');
+      await expect(service.cancelJob('missing-job')).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('retryJob', () => {
-    it('should retry failed job', async () => {
+    it('should reset the ledger row and re-enqueue a retried job', async () => {
       const jobId = 'job-retry';
       const mockJob = {
         id: jobId,
         assetId: 'asset-123',
         type: 'IMAGE_PROCESS',
         state: 'FAILED',
-        meta: { width: 2048 },
+        priority: 1,
+        meta: { rawKey: 'raw/asset-123.jpg', width: 2048 },
       };
 
-      (prisma.processJob.findUnique as jest.Mock).mockResolvedValue(mockJob as any);
-      (prisma.processJob.update as jest.Mock).mockResolvedValue({} as any);
-      mockQueue.add.mockResolvedValue({} as any);
+      prisma.processJob.findUnique.mockResolvedValue(mockJob);
+      prisma.processJob.update.mockResolvedValue({});
 
       await service.retryJob(jobId);
 
@@ -299,36 +238,45 @@ describe('JobQueueService', () => {
           error: null,
         }),
       });
-
-      expect(mockQueue.add).toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://media-worker.example.com/enqueue',
+        expect.any(Object),
+      );
     });
 
-    it('should throw error if job not found', async () => {
-      (prisma.processJob.findUnique as jest.Mock).mockResolvedValue(null);
+    it('should throw if job not found', async () => {
+      prisma.processJob.findUnique.mockResolvedValue(null);
 
-      await expect(service.retryJob('missing-job')).rejects.toThrow('Job not found');
+      await expect(service.retryJob('missing-job')).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw error if job not in FAILED state', async () => {
-      const mockJob = {
+    it('should throw if job not in FAILED state', async () => {
+      prisma.processJob.findUnique.mockResolvedValue({ id: 'job-123', state: 'RUNNING' });
+
+      await expect(service.retryJob('job-123')).rejects.toThrow(ConflictException);
+    });
+
+    it('should throw for a job type with no worker executor', async () => {
+      prisma.processJob.findUnique.mockResolvedValue({
         id: 'job-123',
-        state: 'RUNNING',
-      };
+        type: 'VIRUS_SCAN',
+        state: 'FAILED',
+      });
 
-      (prisma.processJob.findUnique as jest.Mock).mockResolvedValue(mockJob as any);
-
-      await expect(service.retryJob('job-123')).rejects.toThrow('Only failed jobs can be retried');
+      await expect(service.retryJob('job-123')).rejects.toThrow(NotImplementedException);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
   describe('getQueueStats', () => {
-    it('should return queue statistics', async () => {
+    it('should derive queue statistics from ProcessJob ledger counts', async () => {
       const jobType: JobType = 'IMAGE_PROCESS';
 
-      mockQueue.getWaitingCount.mockResolvedValue(10);
-      mockQueue.getActiveCount.mockResolvedValue(5);
-      mockQueue.getCompletedCount.mockResolvedValue(100);
-      mockQueue.getFailedCount.mockResolvedValue(2);
+      prisma.processJob.count
+        .mockResolvedValueOnce(10) // QUEUED (waiting)
+        .mockResolvedValueOnce(5) // RUNNING (active)
+        .mockResolvedValueOnce(100) // SUCCEEDED (completed)
+        .mockResolvedValueOnce(2); // FAILED (failed)
 
       const stats = await service.getQueueStats(jobType);
 
@@ -338,22 +286,29 @@ describe('JobQueueService', () => {
         active: 5,
         completed: 100,
         failed: 2,
-        total: 15,
+        total: 15, // waiting + active — there is no BullMQ queue to introspect any more
       });
     });
 
-    it('should throw error for invalid queue type', async () => {
-      (service as any).queues.clear();
+    it('should return zero counts for a type with no ledger rows', async () => {
+      prisma.processJob.count.mockResolvedValue(0);
 
-      await expect(service.getQueueStats('INVALID' as JobType)).rejects.toThrow(
-        'Queue not found',
-      );
+      const stats = await service.getQueueStats('METADATA_EXTRACT');
+
+      expect(stats).toEqual({
+        type: 'METADATA_EXTRACT',
+        waiting: 0,
+        active: 0,
+        completed: 0,
+        failed: 0,
+        total: 0,
+      });
     });
   });
 
   describe('cleanupJobs', () => {
     it('should delete old completed and failed jobs', async () => {
-      (prisma.processJob.deleteMany as jest.Mock).mockResolvedValue({ count: 50 } as any);
+      prisma.processJob.deleteMany.mockResolvedValue({ count: 50 });
 
       const deletedCount = await service.cleanupJobs(24);
 
@@ -367,7 +322,7 @@ describe('JobQueueService', () => {
     });
 
     it('should use custom retention period', async () => {
-      (prisma.processJob.deleteMany as jest.Mock).mockResolvedValue({ count: 20 } as any);
+      prisma.processJob.deleteMany.mockResolvedValue({ count: 20 });
 
       await service.cleanupJobs(48);
 
@@ -376,14 +331,8 @@ describe('JobQueueService', () => {
   });
 
   describe('shutdown', () => {
-    it('should close all workers and queues', async () => {
-      const processor = jest.fn();
-      service.registerWorker('IMAGE_PROCESS', processor);
-
-      await service.shutdown();
-
-      expect(mockWorker.close).toHaveBeenCalled();
-      expect(mockQueue.close).toHaveBeenCalled();
+    it('should resolve without error (stateless Cloudflare Queues pipeline, nothing to close)', async () => {
+      await expect(service.shutdown()).resolves.toBeUndefined();
     });
   });
 });

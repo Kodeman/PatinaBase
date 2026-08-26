@@ -21,7 +21,9 @@
 
 import type { LucideIcon } from 'lucide-react';
 import {
+  BookMarked,
   BookOpen,
+  Images,
   Users,
   Scan,
   PenTool,
@@ -35,6 +37,7 @@ import {
   PenLine,
   FileText,
   Hammer,
+  Ruler,
 } from 'lucide-react';
 
 export type StudioSurfaceKind = 'room' | 'ledger' | 'verb';
@@ -69,7 +72,7 @@ export interface StudioSurface {
  * The three Rooms (D14/R39/R50/R107) — places you walk into — plus the
  * Drafting Room, which is room-weight but document-scoped: it only exists
  * once a proposal is in hand, so it never appears as a standalone doorway
- * from the Desk the way Library, People, and The Rooms do.
+ * from the Desk the way Library, People, and The Scans do.
  *
  * Ground truth: these exact icons (BookOpen, Users, Scan) are what the
  * Studio Drawer already imports from lucide-react — do not substitute.
@@ -106,8 +109,9 @@ export const STUDIO_ROOMS: StudioSurface[] = [
   {
     key: 'rooms',
     kind: 'room',
-    label: 'The Rooms',
-    aliases: ['rooms', 'scans', 'room view'],
+    label: 'The Scans',
+    subLabel: 'measured rooms, from the field',
+    aliases: ['rooms', 'the rooms', 'scans', 'room view'],
     icon: Scan,
     weight: 'room',
     shortcut: ['g', 'r'],
@@ -229,7 +233,7 @@ export const STUDIO_LEDGERS: StudioSurface[] = [
     key: 'call-sheet',
     kind: 'ledger',
     label: 'Call sheet',
-    subLabel: 'who is on the job',
+    subLabel: 'this project · who is on the job',
     aliases: ['call sheet', 'roster', 'crew', 'team', 'parties', 'who'],
     icon: ClipboardList,
     weight: 'sheet',
@@ -337,6 +341,89 @@ export const ALL_STUDIO_SURFACES: StudioSurface[] = [
 ];
 
 /**
+ * F29/F48/F50/F82 — the document-scoped surfaces that are pages of the project
+ * rather than drawer sheets: the plan room, the spec book, the boards. They
+ * deliberately stay out of `ALL_STUDIO_SURFACES`: that list feeds the Desk
+ * Contents / Studio Drawer doorway lists, which none of these belong in.
+ * command-bar.tsx builds their rows itself, pre-addressed with the document
+ * they act on — bare in `This surface` with that document in hand, paired with
+ * the most recent one (`Spec book · Vandersteen`) when it is not.
+ *
+ * They still carry the `help` doorway every registry entry owes. The spec book
+ * and the boards have no canonical key of their own, so they scope the panel to
+ * the document key that is their ancestor (the panel shows docs whose key is an
+ * ancestor-or-equal of the current key).
+ *
+ * `matchSurfaces()` below folds all three into the typed-query table so a typed
+ * `plan` / `spec book` / `boards` resolves the same surface the empty-query
+ * branch already offers — closing the registry gap without opening a second door.
+ */
+export const PLAN_ROOM_SURFACE: StudioSurface = {
+  key: 'plan-room',
+  kind: 'room',
+  label: 'Plan room',
+  subLabel: 'this project · the current set',
+  aliases: ['plan', 'plan room', 'floor plan', 'plans', 'drawings'],
+  icon: Ruler,
+  weight: 'room',
+  scope: 'document',
+  // The same canonical key the plan room itself declares
+  // (plan-room-workspace.tsx → DOCUMENT_SURFACE_KEYS.plans).
+  help: {
+    surfaceKey: 'designer-portal/document/plans',
+    blurb: 'The current set, the light table, and every issue to date.',
+  },
+};
+
+export const SPEC_BOOK_SURFACE: StudioSurface = {
+  key: 'spec-book',
+  kind: 'room',
+  label: 'Spec book',
+  subLabel: 'this project · by room',
+  aliases: [
+    'spec book',
+    'specbook',
+    'spec',
+    'specs',
+    'specification',
+    'specifications',
+    'by room',
+  ],
+  icon: BookMarked,
+  weight: 'room',
+  scope: 'document',
+  help: {
+    surfaceKey: 'designer-portal/document/doc',
+    blurb: 'Every specified piece, gathered by the room it lands in.',
+  },
+};
+
+export const MOOD_BOARDS_SURFACE: StudioSurface = {
+  key: 'mood-boards',
+  kind: 'room',
+  label: 'Mood boards',
+  subLabel: 'this project · the boards',
+  aliases: ['mood boards', 'moodboards', 'mood board', 'boards', 'board', 'mood'],
+  icon: Images,
+  weight: 'room',
+  scope: 'document',
+  help: {
+    surfaceKey: 'designer-portal/document/doc',
+    blurb: 'The boards this project is composed from, shared and draft.',
+  },
+};
+
+/** The four surfaces a document scopes, in the order they print. The call
+ *  sheet is the one of the four that is already a `STUDIO_LEDGERS` entry (it is
+ *  a sheet, not a page), so it is read from there rather than declared twice. */
+export const DOCUMENT_SCOPED_SURFACES: StudioSurface[] = [
+  PLAN_ROOM_SURFACE,
+  SPEC_BOOK_SURFACE,
+  MOOD_BOARDS_SURFACE,
+  STUDIO_LEDGERS.find((s) => s.key === 'call-sheet')!,
+];
+
+/**
  * Case-insensitive prefix/substring match over a surface's label and
  * aliases. Empty/whitespace-only queries match nothing (callers show the
  * unfiltered list themselves rather than treating "everything" as a match).
@@ -344,8 +431,15 @@ export const ALL_STUDIO_SURFACES: StudioSurface[] = [
 export function matchSurfaces(query: string): StudioSurface[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  return ALL_STUDIO_SURFACES.filter((surface) => {
-    if (surface.label.toLowerCase().includes(q)) return true;
-    return surface.aliases.some((alias) => alias.toLowerCase().includes(q));
+  // The call sheet is read from STUDIO_LEDGERS into DOCUMENT_SCOPED_SURFACES,
+  // so it stands in both lists — one surface may only ever match once.
+  const seen = new Set<string>();
+  return [...ALL_STUDIO_SURFACES, ...DOCUMENT_SCOPED_SURFACES].filter((surface) => {
+    if (seen.has(surface.key)) return false;
+    const matched =
+      surface.label.toLowerCase().includes(q) ||
+      surface.aliases.some((alias) => alias.toLowerCase().includes(q));
+    if (matched) seen.add(surface.key);
+    return matched;
   });
 }

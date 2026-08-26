@@ -34,7 +34,7 @@ export function PreviousWork({
   if (count === 0) return null;
 
   return (
-    <section className="mb-5 mt-4" aria-label="Previous work">
+    <section className="mb-5 mt-4" aria-label="The record">
       <button
         type="button"
         aria-expanded={open}
@@ -42,7 +42,8 @@ export function PreviousWork({
         onClick={() => setOpen(!open)}
         className="flex min-h-11 w-full items-center justify-between border-y border-[var(--color-pearl)] py-2 text-left font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
-        <span>Previous work · {count} complete</span>
+        {/* F90 — canon names it The Record (I137); the screen now says so. */}
+        <span>The record · {count} complete</span>
         <span aria-hidden>{open ? '−' : '+'}</span>
       </button>
       {approvalsAwaitingPublish !== null &&

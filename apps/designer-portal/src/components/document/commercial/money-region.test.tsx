@@ -5,6 +5,14 @@ let mockBudget: Record<string, unknown>;
 let mockInstruments: Record<string, unknown>;
 let mockTradeScopes: Record<string, unknown>;
 let mockAccount: Record<string, unknown>;
+let mockPurchaseOrders: Record<string, unknown>;
+let mockInvoices: Record<string, unknown>;
+
+jest.mock('@patina/supabase', () => ({
+  ...jest.requireActual('@patina/supabase'),
+  usePurchaseOrders: () => mockPurchaseOrders,
+  useProjectInvoices: () => mockInvoices,
+}));
 
 jest.mock('@/hooks/use-commercial-documents', () => ({
   useProjectBillingAuthority: () => mockAuthority,
@@ -51,6 +59,8 @@ const settledEmpty = {
   instruments: { data: [], isLoading: false, error: null },
   scopes: { data: [], isLoading: false, error: null },
   account: { data: null, isLoading: false, isError: false },
+  purchaseOrders: { data: [], isLoading: false, error: null },
+  invoices: { data: [], isLoading: false, error: null },
 };
 
 /** The fold's derived default only fires once every source has settled; a
@@ -72,10 +82,12 @@ beforeEach(() => {
   mockInstruments = settledEmpty.instruments;
   mockTradeScopes = settledEmpty.scopes;
   mockAccount = settledEmpty.account;
+  mockPurchaseOrders = settledEmpty.purchaseOrders;
+  mockInvoices = settledEmpty.invoices;
 });
 
 describe('MoneyRegion', () => {
-  it('states the four tiers in dependency order from live figures', () => {
+  it('states the six rungs in dependency order from live figures', () => {
     mockAuthority = {
       data: { authorizedCents: 10_000_000, remainingCents: 1_800_000 },
       isLoading: false,
@@ -104,25 +116,110 @@ describe('MoneyRegion', () => {
       isLoading: false,
       error: null,
     };
-    // Deliberately NOT the tier-3 sum: if the two tiers could alias, a swapped
-    // hook would read as correct.
     mockAccount = { data: { committedCents: 900_000 }, isLoading: false, isError: false };
+    // $4,000 paid out to makers, $500 still undrawn against the same order.
+    mockPurchaseOrders = {
+      data: [
+        {
+          id: 'po-1',
+          po_number: 'PO-2026-0418',
+          payments: [
+            { id: 'a', state: 'paid', amount_cents: 400_000, kind: 'deposit' },
+            {
+              id: 'b',
+              state: 'due',
+              amount_cents: 50_000,
+              kind: 'balance',
+              due_date: '2026-09-15',
+              label: '50% at release',
+            },
+          ],
+        },
+      ],
+      isLoading: false,
+      error: null,
+    };
+    mockInvoices = {
+      data: [
+        {
+          id: 'invoice-1',
+          invoice_number: '2026-114',
+          status: 'sent',
+          due_date: '2026-08-03',
+          total_cents: 175_000,
+          amount_paid_cents: 0,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    };
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByRole('heading', { name: 'Design authority' })).toBeVisible();
-    expect(screen.getByText('$18,000 remaining · $13,772 committed')).toBeVisible();
-    expect(screen.getByText('Authority · $100,000 authorized')).toBeVisible();
-    expect(screen.getByText('Plan · $86,540 working budget v2')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+    expect(screen.getByText('$18,000 remaining · $13,772 authorized')).toBeVisible();
+    expect(screen.getByText('Budget · $100,000 approved')).toBeVisible();
+    expect(screen.getByText('Plan · $86,540 specified')).toBeVisible();
+    expect(screen.getByText('Authorized · $13,772 ordered')).toBeVisible();
     expect(
-      screen.getByText(
-        'Committed · $13,772 · 2 instruments executed — authorizations and trade scopes',
-      ),
+      screen.getByText('Moved · $9,772 in motion — ordered $13,772 less $4,000 paid out'),
     ).toBeVisible();
-    expect(screen.getByText('Moved · $9,000 in motion — ordered through installed')).toBeVisible();
     expect(
-      screen.getByText(/The accounts’ committed figure — client value of lines at ordered/),
-    ).toHaveTextContent('not funds disbursed');
+      screen.getByText(/^Owed · \$1,750 out · Invoice 2026-114, \d+ days · \$1,750 billed to date$/),
+    ).toBeVisible();
+    expect(
+      screen.getByText('Not drawn · $500 balance · PO-2026-0418, 50% at release'),
+    ).toBeVisible();
+  });
+
+  it('prints the six rungs in the ladder’s own order, and no other', () => {
+    render(<MoneyRegion projectId="project-1" />);
+    unfoldIfNeeded();
+
+    const rungs = Array.from(document.querySelectorAll('ol > li')).map(
+      (li) => li.querySelector('p')?.textContent?.split(' · ')[0],
+    );
+    expect(rungs).toEqual([
+      'Budget',
+      'Plan',
+      'Authorized',
+      'Moved',
+      'Owed',
+      'Not drawn',
+    ]);
+  });
+
+  // The region's OWN copy only. `ProjectAuthorityBandForProject` is mocked
+  // above, and it is the component that used to print the retired words inside
+  // this body — so the real guard against it lives in that component's own
+  // suite (`project-authority-band.test.tsx`), where nothing is mocked away.
+  it('retires the retired vocabulary from its own head, seam and rungs', () => {
+    const { container } = render(<MoneyRegion projectId="project-1" />);
+    unfoldIfNeeded();
+
+    expect(container).not.toHaveTextContent('Design authority');
+    expect(container).not.toHaveTextContent('Authority ·');
+    expect(container).not.toHaveTextContent('committed');
+  });
+
+  it('states Moved as a different figure from Authorized once anything is paid out', () => {
+    mockInstruments = {
+      data: [{ state: 'executed', totalAmountCents: 1_000_000 }],
+      isLoading: false,
+      error: null,
+    };
+    mockPurchaseOrders = {
+      data: [{ id: 'po-1', payments: [{ state: 'paid', amount_cents: 250_000 }] }],
+      isLoading: false,
+      error: null,
+    };
+
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.getByText('Authorized · $10,000 ordered')).toBeVisible();
+    expect(
+      screen.getByText('Moved · $7,500 in motion — ordered $10,000 less $2,500 paid out'),
+    ).toBeVisible();
   });
 
   it('names a line-less working budget rather than summing it into $0', () => {
@@ -144,38 +241,46 @@ describe('MoneyRegion', () => {
     mockBudget = { data: undefined, isLoading: false, error: new Error('boom') };
     mockInstruments = { data: [], isLoading: false, error: new Error('boom') };
     mockAccount = { data: null, isLoading: false, isError: true };
+    mockPurchaseOrders = { data: undefined, isLoading: false, error: new Error('boom') };
+    mockInvoices = { data: undefined, isLoading: false, error: new Error('boom') };
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByText('Authority · could not be read')).toBeVisible();
+    expect(screen.getByText('Budget · could not be read')).toBeVisible();
     expect(screen.getByText('Plan · could not be read')).toBeVisible();
-    expect(screen.getByText('Committed · could not be read')).toBeVisible();
+    expect(screen.getByText('Authorized · could not be read')).toBeVisible();
     expect(screen.getByText('Moved · could not be read')).toBeVisible();
+    expect(screen.getByText('Owed · could not be read')).toBeVisible();
+    expect(screen.getByText('Not drawn · could not be read')).toBeVisible();
   });
 
   it('degrades every tier to a band-honest line when nothing is recorded', () => {
     const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
 
-    expect(screen.getByText('no authority yet')).toBeVisible();
+    expect(screen.getByText('no budget yet')).toBeVisible();
     expect(screen.queryByText(/remaining/)).not.toBeInTheDocument();
-    expect(screen.getByText('Authority · no design authority recorded yet')).toBeVisible();
+    expect(screen.getByText('Budget · nothing approved yet')).toBeVisible();
     expect(screen.getByText('Plan · no working budget yet')).toBeVisible();
-    expect(screen.getByText('Committed · nothing executed yet')).toBeVisible();
+    expect(screen.getByText('Authorized · nothing executed yet')).toBeVisible();
     expect(screen.getByText('Moved · nothing in motion yet')).toBeVisible();
+    expect(screen.getByText('Owed · nothing owed yet')).toBeVisible();
+    expect(screen.getByText('Not drawn · nothing standing undrawn')).toBeVisible();
     expect(container).not.toHaveTextContent('$0');
   });
 
   it('states no figure at all while a tier’s source has not answered', () => {
     mockBudget = { data: undefined, isLoading: true, error: null };
-    mockAccount = { data: undefined, isLoading: true, isError: false };
+    mockPurchaseOrders = { data: undefined, isLoading: true, error: null };
 
     render(<MoneyRegion projectId="project-1" />);
 
     expect(screen.getByText('Plan')).toBeVisible();
     expect(screen.getByText('Moved')).toBeVisible();
+    expect(screen.getByText('Not drawn')).toBeVisible();
     expect(screen.queryByText(/Plan · /)).not.toBeInTheDocument();
     expect(screen.queryByText(/Moved · /)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Not drawn · /)).not.toBeInTheDocument();
   });
 
   it('carries the four detail surfaces the tiers summarise, accounts included', () => {
@@ -187,16 +292,16 @@ describe('MoneyRegion', () => {
     expect(screen.getByText('Account band')).toBeVisible();
   });
 
-  it('names the moved tier’s derivation so it cannot be read as the owed total', () => {
-    render(<MoneyRegion projectId="project-1" />);
+  it('names the moved rung’s derivation so it cannot be read as the owed total', () => {
+    const { container } = render(<MoneyRegion projectId="project-1" />);
     unfoldIfNeeded();
 
-    const caption = screen.getByText(/Moved is the accounts’ committed figure/);
-    expect(caption).toHaveTextContent('not funds disbursed');
-    expect(caption).toHaveTextContent('not the contractually owed total above it');
+    const caption = screen.getByText(/Moved is what is ordered/);
     expect(caption).toHaveTextContent(
-      'Absorbs today’s four separate bands: design authority, working budget, authorizations & trade scopes, the accounts.',
+      'Budget → plan → authorized → moved. Moved is what is ordered and not yet paid out — not the contractually owed total above it.',
     );
+    // SP-05 — the migration note naming UI that no longer exists is gone.
+    expect(container).not.toHaveTextContent('Absorbs today’s four separate bands');
   });
 
   it('caveats the trade scopes that neither committed nor moved counts', () => {
@@ -211,7 +316,7 @@ describe('MoneyRegion', () => {
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByText(/Moved is the accounts’ committed figure/)).toHaveTextContent(
+    expect(screen.getByText(/Moved is what is ordered/)).toHaveTextContent(
       '1 trade scope still in draft, counted in neither.',
     );
   });
@@ -238,9 +343,9 @@ describe('MoneyRegion', () => {
     render(<MoneyRegion projectId="project-1" />);
 
     expect(
-      screen.queryByRole('heading', { name: 'Design authority' }),
+      screen.queryByRole('heading', { name: 'Money' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('no authority yet · $0 committed')).toBeVisible();
+    expect(screen.getByText('no budget yet · $0 authorized')).toBeVisible();
     expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
   });
 
@@ -266,7 +371,7 @@ describe('MoneyRegion', () => {
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByRole('heading', { name: 'Design authority' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
     expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
   });
 
@@ -311,14 +416,14 @@ describe('MoneyRegion', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
 
-    expect(screen.getByRole('heading', { name: 'Design authority' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
     expect(screen.getByText('Account band')).toBeVisible();
     expect(screen.getByRole('button', { name: /fold/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /fold/i }));
 
     expect(
-      screen.queryByRole('heading', { name: 'Design authority' }),
+      screen.queryByRole('heading', { name: 'Money' }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
   });

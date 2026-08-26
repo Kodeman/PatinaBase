@@ -321,6 +321,16 @@ describe('the gate rendered as a sentence', () => {
     );
   });
 
+  it('names the object even when the gate carries no act (F18 — no `Review now`)', () => {
+    // `nearestOpenGate` filters actless gates out, so this is the label a gate
+    // handed straight to the guide would print. It still states a verb and an
+    // object, in the gate's own register.
+    const gate = { ...deriveGate(siteRequest(), NOW, null), act: null };
+
+    expect(gateActionLabel(gate)).toBe('Resolve the delivery');
+    expect(gateActionLabel(gate)).not.toMatch(/Review now/);
+  });
+
   it('names the same act with the same verb at both scales', () => {
     // The margin prints the verb alone; the guide prints verb + object. A
     // margin reading "Open" beside a guide reading "Nudge" was the drift.

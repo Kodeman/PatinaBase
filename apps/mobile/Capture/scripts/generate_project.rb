@@ -93,6 +93,10 @@ app.build_configurations.each do |c|
   s['INFOPLIST_KEY_UILaunchScreen_Generation'] = 'YES'
   s['INFOPLIST_KEY_UIApplicationSceneManifest_Generation'] = 'YES'
   s['INFOPLIST_KEY_UISupportedInterfaceOrientations'] = 'UIInterfaceOrientationPortrait'
+  # Portrait-only + iPad in TARGETED_DEVICE_FAMILY requires this, or App
+  # Store review rejects with ITMS-90474 ("All interface orientations must
+  # be supported unless the app requires full screen").
+  s['INFOPLIST_KEY_UIRequiresFullScreen'] = 'YES'
   # Just-in-time permission usage strings (Phase 0 sets all).
   s['INFOPLIST_KEY_NSCameraUsageDescription'] =
     'Patina Field uses the camera to photograph products and read their labels, barcodes, and dimensions.'

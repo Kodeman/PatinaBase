@@ -1,7 +1,19 @@
-import { deriveDocumentGuide } from '../document-guide';
-import type { DocumentStateRow, SectionKey } from '../desk-derivation';
+import { deriveDocumentGuide, needGuideAction } from '../document-guide';
+import type { DocumentStateRow, NeedKind, SectionKey } from '../desk-derivation';
 import { deriveGate } from '../workflow-gate';
 import type { ProjectContextualHandoff } from '@patina/supabase';
+
+const SECTIONS: readonly SectionKey[] = [
+  'brief', 'discovery', 'direction', 'proposal', 'project', 'install', 'care',
+];
+
+const NEED_KINDS: readonly NeedKind[] = [
+  'overdue_decision', 'overdue_invoice', 'proposal_signed', 'damage_claim',
+  'proposal_declined', 'proposal_expired', 'lines_flagged', 'new_lead',
+  'ceremony_pending', 'reconnect_due', 'hesitating_proposal',
+  'awaiting_inspection', 'schedule_conflict', 'schedule_proposal', 'task_due',
+  'schedule_unconfigured', 'po_unsent', 'po_unacknowledged', 'pulse_due',
+];
 
 const row = (activeSection: SectionKey, overrides: Partial<DocumentStateRow> = {}) =>
   ({
@@ -49,19 +61,26 @@ const row = (activeSection: SectionKey, overrides: Partial<DocumentStateRow> = {
   }) as DocumentStateRow;
 
 describe('deriveDocumentGuide', () => {
+  // A3-L7 (direction-b §3.3) — every `row(section)` fixture below is quiet:
+  // no need fires, no inputFacts are missing, so each stage prints its own
+  // named rest sentence and act instead of the old always-on default (F18's
+  // "seven sentences, each a verb and an object" — `brief` alone states no
+  // act, because "Nothing to decide yet" asks for nothing).
   it.each([
-    ['brief', 'Review the inquiry', 'brief'],
-    ['discovery', 'Complete Discovery', 'discovery'],
-    ['direction', 'Shape the direction', '/drafting/proposal-1'],
-    ['proposal', 'Wait for the client’s signature', 'proposal'],
-    ['project', 'Move the project forward', 'project'],
-    ['install', 'Complete the installation', 'install'],
-    ['care', 'Close out the project', 'care'],
-  ] as const)('gives %s a useful lifecycle action', (section, headline, destination) => {
+    ['brief', 'Nothing to decide yet.', undefined, null],
+    // The rest act names the DIRECTION, so it lands there — not back on the
+    // discovery checklist it has just called complete (C20).
+    ['discovery', 'Discovery is complete. Shape the direction.', 'Begin the direction', 'direction'],
+    ['direction', 'The direction is written. Send it.', 'Send the agreement', '/drafting/proposal-1'],
+    ['proposal', 'Wait for the client’s signature', 'Review signing controls', 'proposal'],
+    ['project', 'Everything ordered is moving.', 'Release the next room', 'project'],
+    ['install', 'Complete the installation', "Check what's arriving", 'install'],
+    ['care', 'Close the book on this one', 'Run the closeout checklist', 'care'],
+  ] as const)('gives %s its rest-state sentence and act', (section, headline, label, destination) => {
     const guide = deriveDocumentGuide({ row: row(section), now: new Date('2026-08-10T12:00:00Z') });
 
     expect(guide.headline).toBe(headline);
-    expect(guide.action).not.toBeNull();
+    expect(guide.action?.label).toBe(label);
     expect(
       guide.action?.destination.kind === 'href'
         ? guide.action.destination.href
@@ -69,6 +88,236 @@ describe('deriveDocumentGuide', () => {
           ? guide.action.destination.section
           : null,
     ).toBe(destination);
+  });
+
+  it('never leads a stage act with the word Review, except the proposal signing controls SP-12 preserves', () => {
+    const labels = SECTIONS.map(
+      (section) =>
+        deriveDocumentGuide({ row: row(section), now: new Date('2026-08-10T12:00:00Z') }).action?.label ?? '',
+    );
+
+    expect(labels.filter((label) => /\bReview\b/.test(label))).toEqual(['Review signing controls']);
+  });
+
+  // The needs-attention branch outranks the stage default, so the Review sweep
+  // has to cover every kind it can print, not only the seven stages.
+  it.each(NEED_KINDS)('never leads the %s act with the word Review', (kind) => {
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      operationalNeed: {
+        kind,
+        text: 'Something is waiting',
+        // The folio's own copy leads six kinds with `Review`; the document
+        // states the kind's verb instead, so this must not reach the strip.
+        actionLabel: 'Review the thing',
+        stamp: { label: 'X', color: 'var(--color-clay)' },
+        urgent: false,
+      },
+    });
+
+    expect(guide.action?.label).not.toMatch(/\bReview\b/);
+  });
+
+  it('retires Review now as the needs-attention default, naming the kind\'s own verb', () => {
+    const guide = deriveDocumentGuide({
+      row: row('brief'),
+      operationalNeed: {
+        kind: 'new_lead',
+        text: 'New lead — respond',
+        // The one shape that reached the old `Review now`: a need whose card
+        // owns a TriageBar instead of a footer act.
+        actionLabel: null,
+        stamp: { label: 'NEW LEAD', color: 'var(--color-clay)' },
+        urgent: false,
+      },
+    });
+
+    expect(guide.action?.label).toBe('Respond to the inquiry');
+    expect(guide.action?.label).not.toMatch(/\bReview\b/);
+  });
+
+  it('lands each stage act on a body that spread actually prints', () => {
+    const now = new Date('2026-08-10T12:00:00Z');
+    const project = deriveDocumentGuide({ row: row('project'), now });
+    const install = deriveDocumentGuide({ row: row('install'), now });
+    const care = deriveDocumentGuide({ row: row('care'), now });
+
+    // The FF&E region head — project mode's RegionHead carries this id.
+    expect(project.action?.destination).toEqual({
+      kind: 'anchor', section: 'project', focusId: 'ffe-region-heading-project-1',
+    });
+    // The movement column — only the install and care spreads print it, which
+    // is why install may not borrow the project head's id.
+    expect(install.action?.destination).toEqual({
+      kind: 'anchor', section: 'install', focusId: 'ffe-movement-project-1',
+    });
+    expect(care.action?.destination).toEqual({
+      kind: 'anchor', section: 'care', focusId: 'closing-the-book',
+    });
+  });
+
+  // ⌥ the two templated headlines (C-AP-10) — never a date the facts did not carry.
+  it('states the install day only when the schedule carries one', () => {
+    const now = new Date('2026-08-25T12:00:00Z');
+    const dated = deriveDocumentGuide({
+      row: row('install'),
+      now,
+      schedule: {
+        selection: 'primary' as never,
+        fidelity: 'committed',
+        positionText: 'Committed',
+        install: { date: '2026-09-15', fidelity: 'committed' },
+      },
+    });
+
+    expect(dated.headline).toBe('Install is three weeks out — Tuesday, September 15');
+    // A3-L7 — a known install day with no need firing IS the install rest
+    // state ("Install day is {date}." / "Hold the window"), so the act
+    // changes even though the dated headline template itself does not.
+    expect(dated.action?.label).toBe('Hold the window');
+  });
+
+  it.each([
+    ['the schedule has not answered', null],
+    ['the install phase has no date', { install: { date: null, fidelity: 'committed' as const } }],
+    ['the register states no day', { install: { date: '2026-09-15', fidelity: 'band' as const } }],
+    ['the day has already passed', { install: { date: '2026-08-01', fidelity: 'committed' as const } }],
+  ])('keeps the install sentence undated when %s', (_case, overrides) => {
+    const guide = deriveDocumentGuide({
+      row: row('install'),
+      now: new Date('2026-08-25T12:00:00Z'),
+      schedule: overrides
+        ? ({ selection: 'primary', fidelity: 'committed', positionText: null, ...overrides } as never)
+        : null,
+    });
+
+    expect(guide.headline).toBe('Complete the installation');
+    expect(guide.headline).not.toMatch(/September|Tuesday/);
+  });
+
+  it('states the send date and the live nudge when the send wall carries them (SP-12)', () => {
+    const guide = deriveDocumentGuide({
+      row: row('proposal'),
+      now: new Date('2026-08-25T12:00:00Z'),
+      operationalNeed: null,
+      proposal: {
+        status: 'sent', documentKind: 'legacy', commercialState: null, projectId: null,
+        sendWall: { sentText: 'Sent Aug 19', verb: 'nudge', stateWord: null },
+      },
+    });
+
+    // The DAY the row carries, never the wall's relative prose.
+    expect(guide.headline).toBe('Sent Aug 9 · not opened yet');
+    expect(guide.action).toEqual({
+      key: 'nudge-client',
+      label: 'Nudge Avery Stone',
+      destination: { kind: 'anchor', section: 'proposal', focusId: 'proposal-send-wall' },
+    });
+  });
+
+  it('keeps the signing controls where the send wall offers no nudge', () => {
+    const guide = deriveDocumentGuide({
+      row: row('proposal'),
+      now: new Date('2026-08-25T12:00:00Z'),
+      operationalNeed: null,
+      proposal: {
+        status: 'sent', documentKind: 'legacy', commercialState: null, projectId: null,
+        sendWall: { sentText: 'Sent Aug 19', verb: null, stateWord: 'nudged Aug 22' },
+      },
+    });
+
+    expect(guide.headline).toBe('Sent Aug 9 · not opened yet');
+    expect(guide.action?.label).toBe('Review signing controls');
+  });
+
+  it('never claims the proposal is unopened once the client has opened it', () => {
+    const guide = deriveDocumentGuide({
+      row: row('proposal', { proposal_viewed_at: '2026-08-20T12:00:00Z' }),
+      now: new Date('2026-08-25T12:00:00Z'),
+      operationalNeed: null,
+      proposal: {
+        status: 'sent', documentKind: 'legacy', commercialState: null, projectId: null,
+        sendWall: { sentText: 'Sent Aug 19', verb: 'nudge', stateWord: null },
+      },
+    });
+
+    expect(guide.headline).toBe('Wait for the client’s signature');
+  });
+
+  it('keeps the proposal sentence undated when the send wall has not answered', () => {
+    const guide = deriveDocumentGuide({
+      row: row('proposal'),
+      now: new Date('2026-08-25T12:00:00Z'),
+      operationalNeed: null,
+      proposal: { status: 'sent', documentKind: 'legacy', commercialState: null, projectId: null },
+    });
+
+    expect(guide.headline).toBe('Wait for the client’s signature');
+  });
+
+  it('counts the days out until a fortnight, so ten days is never "one week"', () => {
+    const guide = deriveDocumentGuide({
+      row: row('install'),
+      now: new Date('2026-08-25T12:00:00Z'),
+      schedule: {
+        selection: 'primary',
+        fidelity: 'committed',
+        positionText: 'Committed',
+        install: { date: '2026-09-04', fidelity: 'committed' },
+      } as never,
+    });
+
+    expect(guide.headline).toBe('Install is ten days out — Friday, September 4');
+  });
+
+  it('never reports a paper handover as unopened', () => {
+    // 00477's paper door issues without sending, so the row carries no send
+    // date and no open event was ever possible.
+    const guide = deriveDocumentGuide({
+      row: row('proposal', { proposal_sent_at: null }),
+      now: new Date('2026-08-25T12:00:00Z'),
+      operationalNeed: null,
+      proposal: {
+        status: 'sent', documentKind: 'legacy', commercialState: null, projectId: null,
+        sendWall: { sentText: 'Issued on paper', verb: null, stateWord: 'awaiting the client\u2019s signature' },
+      },
+    });
+
+    expect(guide.headline).toBe('Wait for the client\u2019s signature');
+    expect(guide.headline).not.toMatch(/not opened yet/);
+  });
+
+  it('states what needs a decision instead of naming its own signal source (SP-06)', () => {
+    const guide = deriveDocumentGuide({
+      row: row('project', { overdue_decision_count: 1, earliest_overdue_due: '2026-08-01' }),
+      now: new Date('2026-08-10T12:00:00Z'),
+    });
+
+    expect(guide.reason).toBe('Something on this job needs a decision.');
+  });
+
+  it('names the unavailable branch in its own eyebrow (SP-08)', () => {
+    const guide = deriveDocumentGuide({ row: row('project'), availability: 'unavailable' });
+
+    expect(guide.eyebrow).toBe('Guidance is unavailable');
+    expect(guide.eyebrow).not.toBe('Next up');
+  });
+
+  it.each(['po_unacknowledged', 'po_unsent'] as const)('sends %s to the FF&E region, not the Orders ledger (C12 — the line waits on A3)', (kind) => {
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      operationalNeed: {
+        kind,
+        text: 'PO-2026-0418 — fourteen days, no word from Sturdy Oak',
+        actionLabel: 'Follow up with the maker',
+        stamp: { label: 'NO WORD', color: 'var(--color-clay)' },
+        urgent: false,
+      },
+    });
+
+    expect(guide.action?.destination).toEqual({
+      kind: 'anchor', section: 'project', focusId: 'ffe-region-heading-project-1',
+    });
   });
 
   it('puts unavailable and paused states ahead of every other need', () => {
@@ -107,7 +356,7 @@ describe('deriveDocumentGuide', () => {
     });
     expect(guide.state).toBe('actionable');
     expect(guide.headline).toContain('2 decisions overdue');
-    expect(guide.action?.label).toBe('Review decisions');
+    expect(guide.action?.label).toBe('Chase the approval');
   });
 
   it('accepts the enriched need selected from the shared Desk composition', () => {
@@ -246,7 +495,7 @@ describe('deriveDocumentGuide', () => {
     });
     expect(guide.action).toEqual({
       key: 'open-drafting-room',
-      label: 'Open Drafting Room',
+      label: 'Open the Drafting Room',
       destination: { kind: 'href', href: '/drafting/proposal-1' },
     });
     expect(guide.topInput?.label).toBe('phases & fees');
@@ -290,7 +539,7 @@ describe('deriveDocumentGuide', () => {
 
     expect(deriveDocumentGuide({ row: overdue, now }).headline).toContain('2 decisions overdue');
     expect(deriveDocumentGuide({ row: overdue, now, operationalNeed: null }).headline).toBe(
-      'Move the project forward',
+      'Everything ordered is moving.',
     );
   });
 
@@ -323,12 +572,37 @@ describe('deriveDocumentGuide', () => {
     expect(guide.state).toBe('actionable');
     expect(guide.action).toEqual({
       key: 'resolve-overdue_decision',
-      label: 'Review decisions',
+      label: 'Chase the approval',
       destination: {
         kind: 'anchor', section: 'discovery', focusId: 'document-decision-controls', activate: false,
       },
     });
     expect(guide.topInput?.label).toBe('Working budget');
+  });
+
+  it('lands a PO or a claim on the FF&E line once one is carried', () => {
+    const po = needGuideAction(
+      { kind: 'po_unacknowledged', text: 'No word', actionLabel: 'Follow up with the maker', stamp: { label: 'NO WORD', color: 'x' }, urgent: false },
+      'project', 'project-1', 'line-7',
+    );
+    const claim = needGuideAction(
+      { kind: 'damage_claim', text: 'Gouged', actionLabel: 'File the claim', stamp: { label: 'CLAIM', color: 'x' }, urgent: false },
+      'project', 'project-1', 'line-7',
+    );
+
+    expect(po.destination).toEqual({ kind: 'anchor', section: 'project', focusId: 'ffe-selection-line-7' });
+    expect(claim.destination).toEqual({ kind: 'anchor', section: 'project', focusId: 'ffe-selection-line-7' });
+  });
+
+  it('keeps a claim on the receiving page while no line id is carried', () => {
+    const claim = needGuideAction(
+      { kind: 'damage_claim', text: 'Gouged', actionLabel: 'File the claim', stamp: { label: 'CLAIM', color: 'x' }, urgent: false },
+      'project', 'project-1',
+    );
+
+    expect(claim.destination).toEqual({
+      kind: 'ledger', name: 'orders', context: { page: 'receiving', projectId: 'project-1' },
+    });
   });
 
   it('still derives the input act on the needs-input branch', () => {
@@ -404,6 +678,16 @@ describe('the guide surfaces the gate (Ruling V)', () => {
     });
   });
 
+  it('never prints Review now from the branch that outranks every other (F18)', () => {
+    // The gate branch sits above the operational need and the stage default,
+    // so its own fallback label was the last live `Review now` on the paper.
+    const gate = { ...deriveGate(handoff(), GATE_NOW, 'Marta'), act: null };
+    const guide = deriveDocumentGuide({ row: row('project'), gate });
+
+    expect(guide.action?.label).toBe('Resolve the Direction approval');
+    expect(guide.action?.label).not.toMatch(/Review now/);
+  });
+
   it('names the publish act from the gate rather than the stage default', () => {
     // Projection-realistic: confirmations complete addresses the row to the
     // studio, so the sentence must not hand the act to the household.
@@ -466,7 +750,7 @@ describe('the guide surfaces the gate (Ruling V)', () => {
   it('leaves the strip whole when the gate read has not answered', () => {
     const guide = deriveDocumentGuide({ row: row('project'), gate: undefined });
     expect(guide.state).not.toBe('unavailable');
-    expect(guide.headline).toBe('Move the project forward');
+    expect(guide.headline).toBe('Everything ordered is moving.');
   });
 
   it('keeps withInputs from displacing the gate act', () => {

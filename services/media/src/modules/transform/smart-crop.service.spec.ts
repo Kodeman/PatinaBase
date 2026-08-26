@@ -180,6 +180,9 @@ describe('SmartCropService', () => {
   });
 
   describe('entropyCrop', () => {
+    // Real sharp entropy-window scan over the source image; ~3.5s alone and
+    // can crowd the default 5000ms budget when the full media suite runs
+    // its ~39 files across parallel Jest workers under CPU contention.
     it('should perform entropy-based crop', async () => {
       const result = await service.entropyCrop(testImage, {
         width: 800,
@@ -192,7 +195,7 @@ describe('SmartCropService', () => {
       const metadata = await sharp(result.buffer).metadata();
       expect(metadata.width).toBe(800);
       expect(metadata.height).toBe(600);
-    });
+    }, 15000);
   });
 
   describe('artDirectedCrop', () => {

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The plan room, on a shelf — a thin read of the same bundle PlanRoomBand
+ * Plan room, on a shelf — a thin read of the same bundle PlanRoomBand
  * showed: the current set and when it was last filed, with one door to the room
  * itself. No CRUD lives here; the room owns that.
  *
@@ -27,7 +27,7 @@ export function PlanRoomLeaf({
   const bundle = room.data;
 
   if (room.isError) {
-    return <ShelfNote>The plan room could not be read.</ShelfNote>;
+    return <ShelfNote>Plan room could not be read.</ShelfNote>;
   }
   if (!bundle) return <ShelfNote>Reading the plan room…</ShelfNote>;
 

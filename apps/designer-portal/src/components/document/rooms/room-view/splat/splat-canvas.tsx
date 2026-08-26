@@ -56,6 +56,8 @@ import { clipPlanes } from '../model/model-scene';
 import {
   buildSplatScene,
   disposeSplatParts,
+  orientBounds,
+  defaultSplatOrientation,
   CREAM,
   type BuiltSplatScene,
 } from './splat-scene';
@@ -100,6 +102,11 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
     // mount, and taking it as a dependency would tear down and rebuild the whole
     // WebGL context the moment the flag resolved.
     const debugging = splatDebugEnabled(window.location.search);
+
+    // Resolved from `splatUrl` (already a dependency) via `defaultSplatOrientation` —
+    // no caller ever needs to override this, so it stays an internal derivation
+    // rather than a second prop for `splatUrl` to keep in sync with.
+    const meshOrientation = defaultSplatOrientation(splatUrl);
 
     const fail = (stage: SplatFailureStage, err: unknown) => {
       const described = describeSplatFailure(stage, err);
@@ -220,9 +227,27 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
           return;
         }
 
-        built = buildSplatScene(parts, splatMesh!.getBoundingBox());
+        // Orient BEFORE measuring: `getBoundingBox()` returns mesh-LOCAL bounds (the
+        // library never sees the object's own transform), so setting the quaternion
+        // here has no effect on what it returns — the box still has to be rotated by
+        // hand (`orientBounds`) to describe what the mesh will actually look like once
+        // its quaternion is applied at render time. Both must happen: the quaternion
+        // for the visual, `orientBounds` for the framing that measures it.
+        splatMesh!.quaternion.copy(meshOrientation);
+        const localBox = splatMesh!.getBoundingBox();
+        const bounds = orientBounds(localBox, meshOrientation);
+
+        built = buildSplatScene(parts, bounds);
         const { scene, framing } = built;
-        const { near, far } = clipPlanes(framing);
+        const { near: rawNear, far } = clipPlanes(framing);
+        // `clipPlanes` (`model-scene.ts`) already floors `near` at 0.01 regardless of
+        // `minRadius` — that floor, not the raw `minRadius / 100` formula, is what
+        // interior framing's low `minRadius` (as low as 0.15 m) actually produces
+        // here, so `rawNear` is 0.01, not the formula's own ~0.0015. 0.01 still
+        // z-fights against a splat at typical room scale; 0.05 is close enough to
+        // never clip the camera itself at these radii, far enough to leave real
+        // depth precision.
+        const near = Math.max(rawNear, 0.05);
         const camera = new THREE.PerspectiveCamera(FOV_DEG, 16 / 9, near, far);
 
         renderFrame = async () => {
@@ -285,6 +310,9 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
       gl.forceContextLoss?.();
       canvas.remove();
     };
+    // Nothing else in this effect's closure is reactive: `debug` (the hook value)
+    // is read only in the JSX below, never here — `debugging` above is `window`'s
+    // raw, non-reactive read, made once per mount deliberately (see its own comment).
   }, [splatUrl]);
 
   const live = status === 'loading' || status === 'ready';

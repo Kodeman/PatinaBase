@@ -89,7 +89,7 @@ export function ShelfRow({
 
 /**
  * What the room lens found on THIS shelf. Only a shelf that CAN lift reports —
- * a shelf with no room dimension at all (the plan room, knowledge) makes no
+ * a shelf with no room dimension at all (the plan room) makes no
  * claim either way, because "nothing here" would read as an answer.
  */
 export function ShelfLifted({

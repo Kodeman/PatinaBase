@@ -23,12 +23,11 @@ import {
   useProjectOwnedBoards,
   usePlanRoom,
 } from '@patina/supabase';
-import { useProjectBillingAuthority } from '@/hooks/use-commercial-documents';
-import { money } from '@/lib/document/project-commerce';
-import {
-  DOCUMENT_INDEX_KEYS,
-  DOCUMENT_INDEX_LABELS,
-  type DocumentIndexKey,
+import { useMoneyLadder } from '@/hooks/use-money-ladder';
+import { formatLadderRung, selectIndexRung } from '@/lib/document/money-ladder';
+import type {
+  DocumentIndexKey,
+  ProjectPaperRegion,
 } from '@/lib/document/document-index';
 import { roomStateRowFromLine, roomStateWord } from '@/lib/document/room-state';
 import type { LineStampInput } from '@/lib/document/stamp-derivation';
@@ -47,17 +46,12 @@ type SpineFfeRow = LineStampInput & {
   project_room_id: string | null;
 };
 
-export function DocSpineShelvedBlocks({
-  projectId,
-  rooms,
-  scheduleValue,
-  approvalsValue,
-  rosterCount,
-  callSheetEnabled,
-  openShelf,
-  onToggleShelf,
-}: {
+interface SpineShelvedBlocksProps {
   projectId: string;
+  /** The regions THIS spread mounts (`paperRegionsForSection`), already in
+   *  `PROJECT_PAPER_ORDER` order — the index prints them as given so it can
+   *  never offer a line for a region the spread left off the paper. */
+  regions: readonly ProjectPaperRegion[];
   rooms: readonly DocumentRoom[];
   scheduleValue: string;
   approvalsValue: string;
@@ -65,21 +59,57 @@ export function DocSpineShelvedBlocks({
   callSheetEnabled: boolean;
   openShelf: ShelfKey | null;
   onToggleShelf: (key: ShelfKey) => void;
-}) {
-  const { heldRoomId, toggleRoom } = useRoomLens();
-  const { activeKey, jump } = useDocumentRunningIndex(
-    DOCUMENT_INDEX_KEYS,
-    projectId,
+}
+
+export function DocSpineShelvedBlocks(props: SpineShelvedBlocksProps) {
+  // Only the Project spread prints the Money row, so only it mounts the ladder
+  // behind it. Two of the ladder's six reads (`usePurchaseOrders`,
+  // `useProjectInvoices`) carry no `enabled` gate, so the gate has to be a
+  // conditional MOUNT — calling them on install/care and discarding the answer
+  // is two round trips this component alone would pay for.
+  const printsMoneyRow = props.regions.some((region) => region.key === 'money');
+  return printsMoneyRow ? (
+    <SpineBlocksWithMoney {...props} />
+  ) : (
+    <SpineBlocks {...props} moneyIndexValue="" />
   );
+}
+
+/** R108 — the index's money value reads the SAME six-rung ladder MoneyRegion
+ *  derives, through the one hook both call. */
+function SpineBlocksWithMoney(props: SpineShelvedBlocksProps) {
+  const { ladder, settled, failed } = useMoneyLadder(props.projectId);
+  // F09/F61 — the index no longer states the one empty tier ("No authority
+  // yet"); it reports the live rung the ladder settled on.
+  const rung = selectIndexRung(ladder);
+  const moneyIndexValue =
+    (rung && formatLadderRung(rung)) ??
+    (failed ? 'Money unread' : settled ? 'Nothing moving yet' : 'Reading…');
+  return <SpineBlocks {...props} moneyIndexValue={moneyIndexValue} />;
+}
+
+function SpineBlocks({
+  projectId,
+  regions,
+  rooms,
+  scheduleValue,
+  approvalsValue,
+  rosterCount,
+  callSheetEnabled,
+  openShelf,
+  onToggleShelf,
+  moneyIndexValue,
+}: SpineShelvedBlocksProps & { moneyIndexValue: string }) {
+  const { heldRoomId, toggleRoom } = useRoomLens();
+  const indexKeys = useMemo(
+    () => regions.map((region) => region.key),
+    [regions],
+  );
+  const { activeKey, jump } = useDocumentRunningIndex(indexKeys, projectId);
 
   const { data: ffeRows } = useProjectFFEItems(projectId) as {
     data: SpineFfeRow[] | undefined;
   };
-  // R108 — the Design authority line reads the SAME door MoneyRegion states
-  // from (React Query dedupes this one: identical key, identical args). A
-  // second derivation off `projects.total_amount_cents` said a different
-  // number than the region it points at.
-  const authorityQuery = useProjectBillingAuthority(projectId);
   const planRoom = usePlanRoom(projectId);
   const liveBoards = useProjectOwnedBoards(projectId);
   const frozenBoards = useProjectBoards(projectId);
@@ -106,19 +136,13 @@ export function DocSpineShelvedBlocks({
     ffe: `${rows.length} ${rows.length === 1 ? 'piece' : 'pieces'} · ${
       rooms.length
     } ${rooms.length === 1 ? 'room' : 'rooms'}`,
-    money: authorityQuery.isLoading
-      ? 'Reading…'
-      : authorityQuery.error
-        ? 'Authority unread'
-        : authorityQuery.data
-          ? `${money(authorityQuery.data.authorizedCents)} authorized`
-          : 'No authority yet',
+    money: moneyIndexValue,
   };
 
-  const entries = DOCUMENT_INDEX_KEYS.map((key) => ({
-    key,
-    label: DOCUMENT_INDEX_LABELS[key],
-    value: indexValues[key],
+  const entries = regions.map((region) => ({
+    key: region.key,
+    label: region.label,
+    value: indexValues[region.key],
   }));
 
   const sheetCount = planRoom.data?.sheets.length ?? 0;
@@ -127,10 +151,12 @@ export function DocSpineShelvedBlocks({
     (frozenBoards.data ?? []).length;
 
   const shelfStatuses: Record<ShelfKey, string> = {
-    planroom:
+    // F17 — the trade word stays; the gloss names what the room holds.
+    planroom: `the drawing set · ${
       sheetCount === 0
-        ? 'Nothing filed'
-        : `${sheetCount} ${sheetCount === 1 ? 'sheet' : 'sheets'}`,
+        ? 'nothing filed'
+        : `${sheetCount} ${sheetCount === 1 ? 'sheet' : 'sheets'}`
+    }`,
     specbook:
       rows.length === 0
         ? 'Nothing specified'
@@ -143,7 +169,6 @@ export function DocSpineShelvedBlocks({
       rosterCount === 0
         ? 'Nobody on it yet'
         : `${rosterCount} on the roster`,
-    knowledge: 'Studio library',
     // The project's spine never offers this row (shelvesFor filters it out);
     // the status is stated so the record stays total.
     clientcopy: 'As sent · live',

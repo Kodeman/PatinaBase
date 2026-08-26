@@ -9429,3 +9429,423 @@ I141 and its errata on the money seam.
   proposal is still out.
 
 *Entries add: I143 · last id = I143*
+
+### I144 · Splat interior camera — orientation reversal, exterior→interior framing, scale-invariant wheel zoom — 2026-08-25
+
+Not a Document-workstream change — Room View's SPLAT projection
+(`apps/designer-portal/src/components/document/rooms/room-view/{splat,orbit}/`) — but
+recorded here per this file's own convention for a decision that reverses a prior
+entry's stated design and that a designer would notice. Branch
+`fix/splat-interior-camera`, worktree `.codex/worktrees/agent-splatcam`. No merge, no
+deploy — implementation only, against a completed recon.
+
+**What was wrong.** The first Splat render was an inside-out blob, from three
+independent causes:
+
+1. **Orientation.** The `SplatMesh` was added UNROTATED. Spark's own quickstart
+   applies a 180°-about-X flip because a typical COLMAP-trained splat is Y-down; our
+   .spz is nerfstudio-trained from ARKit poses and the pipeline applies its own
+   world-up change of basis (`ARKIT_TO_NERFSTUDIO`, a +90° rotation about X,
+   `services/scan-modal/…/transforms.py:57-77`) BEFORE training, then trains with
+   `--orientation-method none` so nothing further reorients it. An unrotated mesh put
+   the room's height on the wrong axis.
+2. **Framing.** `frameSplat → frameRoom` (`orbit/controls.ts`) was authored for the
+   EXTERIOR Orbit diagram — radius 1.35× the plan diagonal, clamped to
+   `[0.6×, 2.55×]` — which backs a camera OFF a room to frame the whole box from
+   outside it. The entire clamp band sits outside a room's own walls.
+3. **Wheel zoom.** `radius += deltaY × 0.03` is an additive, fixed-WORLD-UNIT step
+   tuned for Orbit's feet-scale room (r ≈ 32) — imperceptible on a metre-scale
+   interior, oversaturated on anything smaller. `deltaMode` (Firefox "lines") was
+   unhandled.
+
+**What changed, file by file.**
+
+- `splat/splat-scene.ts` — exports `SPLAT_ORIENTATION` (the composed quaternion: Spark's
+  180°-about-X ∘ the inverse of `ARKIT_TO_NERFSTUDIO`'s +90°-about-X; both share the X
+  axis, so they commute and collapse to a single 90°-about-X rotation, numerically
+  identical to `ARKIT_TO_NERFSTUDIO` itself — a coincidence of the two corrections
+  sharing an axis, not one constant standing in for the other) and `orientBounds(box,
+  orientation)`, a pure, jsdom-testable rotation of a mesh-local `Box3` via
+  `Box3.applyMatrix4`. `frameSplat` is replaced by `frameSplatInterior(box)`: target =
+  splat centroid at `box.min.y + 1.6 m` (eye height — `cameras.py`'s Modal-side rig
+  uses 1.5 m for a different shot, the two were never required to match); radius =
+  `min(0.35 × half-diagonal, 1.2 m)`, clamped to `[0.15 m, 0.9 × half-diagonal]`;
+  azimuth kept at Orbit's 0.82 (now `export`ed from `controls.ts` as `DEFAULT_AZIMUTH`
+  rather than duplicated); polar flattened to `π/2` (still passes through
+  `createOrbitController`'s shared `[MIN_POLAR, MAX_POLAR]` = `[0.35, 1.45]` clamp, so
+  the live look settles at ~1.45 rad — "flattened to ~π/2", not exactly π/2, and the
+  band was left shared rather than narrowed for Splat alone); an oversize-plan guard
+  (`hypot(size.x, size.z) > 40 m`) falls back to the same unit-room framing the
+  degenerate/non-finite guard already used, for a floater-polluted or non-metric splat.
+  `defaultSplatOrientation(url)` keys identity vs. `SPLAT_ORIENTATION` on the URL
+  (`/fixtures/…` → identity) rather than inferring it from geometry — see the fixture
+  note below. `buildSplatScene`'s header is amended: it still touches neither
+  rotation, position, nor scale; the reversal from "never rotated" happens one layer
+  up, in `splat-canvas.tsx`, before either the mesh or the bounds reach this function.
+- `splat/splat-canvas.tsx` — sets `splatMesh.quaternion` to the resolved orientation
+  and calls `orientBounds` on the measured box BEFORE `buildSplatScene`, because
+  `getBoundingBox()` is mesh-LOCAL and does not reflect the object's own transform (the
+  quaternion fixes the render, `orientBounds` is what makes the camera agree with it).
+  `SplatCanvasProps` gains an optional `orientation` escape hatch; every real caller
+  omits it. `near` (from `clipPlanes`) is clamped to `≥ 0.05` — the interior
+  `minRadius` (0.15 m) drove the raw formula to ~0.0015, a near plane close enough to
+  z-fight against the room.
+- `orbit/controls.ts` — wheel zoom is now multiplicative:
+  `radius = clamp(radius * exp(deltaY_px × 0.0015), minRadius, maxRadius)`, with
+  `deltaMode` (Firefox lines → pixels, ×16) normalized first via the new exported
+  `normalizedWheelDelta`. One mouse notch (deltaY ≈ 100) → ×1.16 (~15%); one trackpad
+  tick (deltaY ≈ 3) → ×1.0045 (~0.5%). Shared by Plan, Orbit, Mesh, and Splat — a feel
+  change on all four, not a Splat-only tweak. `DEFAULT_AZIMUTH`, `MIN_POLAR`, and
+  `MAX_POLAR` are now exported for `splat-scene.ts` to share rather than duplicate.
+
+**The fixture question, reconciled by the orientation-prop route, not by
+regeneration.** `scripts/make-splat-fixture.mjs` builds
+`/fixtures/splat/room-fixture.ply` Y-up by construction — it never passes through the
+ARKit→nerfstudio pipeline, so it needs identity orientation, not `SPLAT_ORIENTATION`.
+The fixture was NOT regenerated. Instead, orientation is a declared property of the
+SOURCE (`defaultSplatOrientation`, keyed on URL, with `SplatCanvasProps.orientation` as
+an explicit override), so the dev fixture keeps passing identity while the real .spz
+path gets `SPLAT_ORIENTATION` — a green fixture render can never stand in for having
+verified the real, rotated path.
+
+**Tests.** `splat/__tests__/splat-scene.test.ts` extended: interior framing (target
+centroid + 1.6 m, radius below the half-diagonal, minRadius/maxRadius inside the
+shell, an absolute-cap case, degenerate + oversize fallbacks), `orientBounds` (a
+worked 90°-about-X rotation, identity passthrough, empty-box passthrough),
+`SPLAT_ORIENTATION`'s own components, and `defaultSplatOrientation`'s per-source
+behavior. `orbit/__tests__/controls.test.ts` (already existed — this program's file
+list said otherwise) gains a `wheel zoom` suite: multiplicative ratio invariant across
+room scales, the exact ~15%/~0.5% ratios, both clamps under repeated zoom, deltaMode
+line normalization (and pixel/line equivalence), and `preventDefault` — plus direct
+`normalizedWheelDelta` unit tests. `splat-chunk-boundary.test.ts` was left untouched
+and still passes: `splat-stage.tsx` was not touched.
+
+**Out of scope, deliberately — geometry plumbing, not this program.** No component
+between the resolved splat URL and `SplatCanvas` (`splat-stage.tsx`,
+`dev-splat-url.ts`, `room-view.tsx`) was touched. `defaultSplatOrientation`'s
+`/fixtures/…`-prefix keying is what makes the real app's actual dev-fixture walk
+correctly resolve identity without any of those files changing — but if the dev
+`?splatUrl=` override is ever pointed at some OTHER non-`/fixtures/` path that also
+happens to be Y-up, it will incorrectly receive `SPLAT_ORIENTATION`. That is accepted:
+the only committed non-pipeline source is the `/fixtures/` fixture, and the override's
+own header already scopes it to same-origin relative paths.
+
+**Also out of scope, per the brief:** Walk mode; any change to `splat-stage.tsx`,
+`dev-splat-url.ts`, or `room-view.tsx`; regenerating the fixture; any new chrome or
+controls UI (D1); shadows of any kind (D4).
+
+*Entries add: I144 · last id = I144*
+
+### I145 · Splat interior camera — I144's orientation sign was INVERTED, corrected + hardened on adversarial review — 2026-08-25
+
+Not a Document-workstream change, recorded here per this file's convention — same
+scope as I144 (branch `fix/splat-interior-camera`, PR #37, worktree
+`.codex/worktrees/agent-splatcam`). This entry does not edit I144; it corrects it.
+
+**The finding.** Adversarial review of I144 proved `SPLAT_ORIENTATION`'s sign backward,
+and an empirical measurement of the REAL prod .spz settled it with certainty rather
+than argument: sha256-verified artifact `88dbefcd…` (29,397,094 bytes, 1,324,278
+gaussians, SPZ v3, fracBits 12); robust per-axis center statistics (300k samples) — X
+p2–p98 span 7.57 m (≈ the room's 7.67 m plan length), Y 6.55 m, **Z 3.27 m ≈ the
+3.30 m wall height exactly, 90% of the mass in a 2.41 m window, strongest density peak
+(16.5% of bin mass) at the LOW end of that window — the floor plane.** That confirms
+the data is nerfstudio Z-up exactly as `transforms.py` implies, with z increasing from
+floor to ceiling. I144's derivation also composed in a Spark-internal "180°-about-X
+flip" that does not exist: `@sparkjsdev/spark@2.1.0`'s own source shows
+`SplatTransformer` consuming a mesh's `matrixWorld` verbatim — the quickstart's flip
+is a per-asset correction for one COLMAP demo splat's own authoring frame, not a
+renderer convention. Composing a nonexistent 180° flip with the real −90°-about-X
+correction (the inverse of `ARKIT_TO_NERFSTUDIO`) landed on `+90°-about-X` instead —
+the ceiling rendered BELOW the floor.
+
+**The fix.** `SPLAT_ORIENTATION` is now `new THREE.Quaternion(-Math.SQRT1_2, 0, 0,
+Math.SQRT1_2)` — `−90°` about X, undoing `ARKIT_TO_NERFSTUDIO`'s `+90°` alone, nothing
+else composed in. `splat-scene.ts`'s header comment is rewritten to derive this
+directly and cite the empirical measurement; `splat/README.md`'s Orientation section
+matches. A new `orientation × framing — physics invariant` suite in
+`splat-scene.test.ts` proves the correction: for a floor-at-z=0 local box,
+`orientBounds(...).min.y ≈ 0` and `.max.y ≈ h` (ceiling above floor), and
+`frameSplatInterior(oriented).target.y ≈ 1.6` (eye above the real floor, not
+underground). Reverting `SPLAT_ORIENTATION` to I144's `+90°` value makes every
+assertion in that suite fail — proved once, by running the new tests against the old
+sign before applying the fix, then again after.
+
+**Merge conditions closed alongside the sign flip.**
+
+- **Vertical/floater guard.** `frameSplatInterior`'s eye height is now `clamp(box.min.y
+  + EYE_HEIGHT_M, box.min.y, box.max.y)`, not a bare sum — a stray floater far below
+  the true floor, or a low/partial scan with under 1.6 m of headroom, can no longer
+  put the eye outside the box the scan itself spans (underground in the first case,
+  above the ceiling in the second). Two new tests cover both shapes.
+- **Polar consistency.** `INTERIOR_POLAR` is now `MAX_POLAR` (1.45 rad) directly,
+  not a bare `Math.PI / 2` that `createOrbitController`'s shared clamp band would
+  silently correct downstream. The `CameraFraming` `frameSplatInterior` returns is now
+  internally consistent: its own `polar` field already equals its own `maxPolar`
+  field, rather than a value outside the range the same object claims as its bounds.
+  The existing polar test was updated to assert `MAX_POLAR` instead of `π/2`.
+- **`orientation` prop dropped, `eslint-disable` removed with it.**
+  `SplatCanvasProps.orientation` — an escape hatch no real caller ever used — is
+  removed; `SplatCanvas` now resolves `defaultSplatOrientation(splatUrl)` internally
+  only. Its removal also let the effect's blanket `eslint-disable-next-line
+  react-hooks/exhaustive-deps` go: with `orientation` gone, the only prior
+  justification for it was `debug`, and `debug` (the hook value) was never actually
+  read inside the effect body to begin with — only in the JSX below it — so the rule
+  has nothing left to flag. `eslint` on the file now reports "Unused eslint-disable
+  directive" with the comment still in place; deleting it is what item 6 calls for.
+  Tests that need a specific orientation call `orientBounds` /
+  `defaultSplatOrientation` directly rather than through the prop.
+- **Two prior corrections in I144's own account, fixed here rather than in place
+  (I144 is append-only):**
+  - *Shared-controls surface count.* I144 said wheel zoom is "shared by Plan, Orbit,
+    Mesh, and Splat" — four surfaces. It is three: Plan is plain SVG with no wheel
+    handler and never rides `orbit/controls.ts` at all. `controls.ts`'s header and its
+    `WHEEL_ZOOM_RATE` comment, and `splat/README.md`'s wheel-zoom section, now say
+    Orbit/Mesh/Splat.
+  - *Near-plane raw value.* I144 said the interior `minRadius` "drove the raw
+    `clipPlanes` formula to ~0.0015." `clipPlanes` (`model-scene.ts:55`) already floors
+    `near` at `0.01` regardless of `minRadius`, so the value actually reaching
+    `splat-canvas.tsx` was `0.01`, not `~0.0015`. The raise to `≥ 0.05` stands (`0.01`
+    still z-fights at typical room scale) — only the stated reason changes.
+    `splat-canvas.tsx`'s comment and `splat/README.md` gain a corrected account.
+
+**Tests.** `splat/__tests__/splat-scene.test.ts`: `orientBounds`'s worked example
+updated to the corrected sign (ceiling now lands at oriented `y′ = 3`, not `y′ = 0`,
+for a local box with height 3); `SPLAT_ORIENTATION`'s own-component test updated to
+`x ≈ −√½`; the polar test updated to assert `MAX_POLAR`; four new tests — the two
+physics-invariant tests described above, and two floater/low-scan guard tests. No
+other suite needed touching: `splat-canvas.test.tsx` never exercised the dropped
+`orientation` prop, and `orbit/__tests__/controls.test.ts`'s wheel-zoom suite was
+unaffected by the surface-count correction (it was prose, not an assertion).
+
+**Out of scope, same boundary as I144.** No change to `splat-stage.tsx`,
+`dev-splat-url.ts`, or `room-view.tsx`; no new chrome or controls UI (D1); no shadows
+(D4); no fixture regeneration; no merge, no deploy.
+
+*Entries add: I145 · last id = I145*
+
+### R124 · The Wayfinding Review — rulings on the ten questions — 2026-08-25
+
+**Ruled by Kody (interviewed).** Deck: `artifacts/document-wayfinding-directions-2026-08-25/presentation.html`,
+published at https://claude.ai/code/artifact/b8c4ac51-b7a8-473f-9b23-3a3a21a7a03d. Program folder:
+`artifacts/document-wayfinding-directions-2026-08-25/` (source docs in `source/`). Ruled against
+`main@695addb5f`. Method: nine seats (five UX/UI lenses, four Interior Design practitioner personas)
+reviewed `/desk` and `/doc/[id]` against both baselines (flag off, and flag `worktable` on — the
+Worktable's first-ever render); 86 verified shots, 203 raw findings collated to 101, 92 surviving
+three refuters. Two directions were judged: A "Everything Prints" (`source/direction-a.md` v2, zero
+canon amendments) and B "The Shop Ticket" (`source/direction-b.md` v2, two amendments to I136).
+
+1. **Sequence.** One program, not two concurrent lanes — A and B edit the same five files
+   (`ffe-section.tsx`, `doc/[id]/page.tsx`, `command-bar.tsx`, `document-index.ts`, the shelves), so
+   they never build concurrently. A ships first: the 20 shared planks (`source/shared-planks.md`) +
+   A's first slice ("the sentence and the spine," 5–7 days, unflagged), then A's remaining waves. B
+   follows, built on top of A's mount fix, behind the fail-closed flag `job-ticket`. B's own rulings
+   (items 4–6 below) are taken now, ahead of its build.
+2. **C14 / I138 reading — NARROW.** *"the flag off is main's composition exactly"* (I138, :8740–8742)
+   binds the `worktable` guard only. It does not freeze other shipping: A's unflagged first slice and
+   B's `job-ticket` flag may both land ahead of Kody's still-owed flag-on Worktable walk.
+3. **T4 / T2 — accepted, logged as open-by-choice.** No fleet view; "install" stays a label on
+   project mode, not a mode. A's ⌘K "Where the work stands" group answers the phase-wide question one
+   stage at a time; B's stage-grouped Desk roster answers it at zero acts, but not until B's wave two.
+   Neither first slice prints a studio-wide receivable. The three-person-studio principal (P2) is told
+   this rather than worked around.
+4. **Ticket gate — redrawn as a sticky seam.** Ahead of B1/B2 taking effect, the ticket is redrawn:
+   it collapses to B's own two-line 390 form once the letterhead scrolls past, at every width. Kody
+   reviews the redraw himself; no P1/P3 stand-in walk.
+5. **B1 — RATIFIED, conditional on the sticky-seam redraw (item 4) passing Kody's review.** Amendment;
+   see ledger below.
+6. **B2 — stands with B1.** Amendment; see ledger below.
+7. **I114 candidate — no ruling now.** B's section↔stage mapping (brief→Consultation ·
+   discovery→Schematic Design · direction→Design Development · proposal→no phase · project→
+   Procurement & Orders · install→Installation & Styling · care→Completion) is placed on the agenda
+   of Kody's still-owed I114 session as its opening proposal. Nothing built depends on it.
+8. **The Moved rung — vendor payouts exposed.** The Money region gains a read on the accounts data
+   the band already holds; `Moved` becomes ordered − paid out to makers, so the rung differs from
+   `Authorized`. Until that read lands, both lanes keep SP-03 (`Committed` → `Authorized`) and
+   SP-04's gloss, *"ordered through installed (committed, not yet paid out)."*
+9. **F03 — fixed with A's first slice, as shared plank SP-01.** The care spread's FF&E section stops
+   mounting with `mode="install"` (its heading currently reads "Install"); no standalone hotfix ahead
+   of the slice.
+10. **Four unowned defects — scheduled, each its own ticket outside both directions.**
+    a. `/room/<id>` prints a raw PostgREST error — *"Cannot coerce the result to a single JSON
+       object"* — on screen for a valid room id. Bug; owner is Room View.
+    b. F56 — contrast: clay `#C4A57B` and terracotta `#D4A090` as text ≈2.2:1 across ~374 sites; the
+       red-letter eyebrow `#C4836F` ≈2.95:1 — both under WCAG 2.2 AA's 4.5:1.
+    c. F55 — no skip link / bypass-blocks control in the `(document)` layout.
+    d. F58 — the same FF&E line reads "Received" on the paper and "Delivered" in the spec book — a
+       data-model ruling, not a rename.
+11. **Ledger hygiene — the Thumb Index.** Kody removed it verbally in July 2026 ("do not
+    re-propose"); a grep of this ledger for it returns zero hits before this entry. This item is that
+    record. Item 3 above is T4/T2's own open-by-choice record.
+12. **The deck.** Gains a "Ten questions, ten answers" section and republishes at the same URL —
+    tracked as production, not itself a design ruling.
+
+**Amendment ledger — B1 and B2, both clauses of one entry (I136). Counted as two, per the I138-A5
+form.**
+
+**B1 — the mount gate.** Amends I136. Quoted (`:8435`): *"The spine grows three blocks — ≥1440px
+only."* **Gains:** rooms, drawings, spec book, boards and roster become one act at every tier on all
+seven sections — closes F01, F14, F48, F72, half of F82. **Gives up:** the shelved spine as an
+organ — both blocks deleted, ~180px of every document's measure returned to the ticket. **Rollback:**
+`job-ticket` off restores both blocks byte-identically — the deletion must be built as a flag branch,
+not an unconditional delete, so the flag genuinely restores them (feasibility judge's condition,
+`source/judge-feasibility.md:63`). **Condition:** ratified only if the sticky-seam redraw (item 4)
+passes Kody's review.
+
+**B2 — the lens's width release.** Amends I136. Quoted (`:8462`): *"The hold releases if the window
+drops below 1440px, where nothing on screen could put it down."* **Gains:** a held room lifts at 1280
+and 390 — the clause's own stated reason stops being true once the ticket's room chip exists as the
+put-down affordance at every width. **Gives up:** the guarantee that a lift is only ever seen beside a
+full spine. **Rollback:** `job-ticket` off restores the auto-release. **Condition:** stands or falls
+with B1; I136's never-filters clause is untouched.
+
+Nothing built; build order = program (A waves, then B behind `job-ticket`).
+
+*Entries add: R124 · last id = R124*
+
+### R125 · The Wayfinding Review — build rulings — 2026-08-25
+
+**Ruled by Kody**, after `program-plan.md`'s build sections (§§3–7, completing the plan R124 already
+amended) were reviewed. Program folder: `artifacts/document-wayfinding-directions-2026-08-25/` (plan:
+`build/program-plan.md`; F58's options: `build/f58-options.md`; F56's inventory: `build/f56-plan.md`; the
+Moved-rung read: `build/moved-plan.md`). These are rulings on how the program builds and ships; R124
+already settled what it contains, its sequence, and the ten design questions.
+
+1. **One program, one shipment.** The entire program — Direction A's three waves and Direction B's three
+   waves — is built and shipped to production as ONE program, A then B, never concurrent. R124 item 1
+   already ruled this for the build; this extends it through shipping: nothing of A goes live while any of
+   B is still mid-build, and nothing of B goes live before all of A is live. No lane, no exception.
+
+2. **No feature flags anywhere.** R124's `job-ticket` flag — *"B follows, built on top of A's mount fix,
+   behind the fail-closed flag `job-ticket`"* — is **waived**. The B1 amendment's own condition, *"the
+   deletion must be built as a flag branch, not an unconditional delete, so the flag genuinely restores
+   [the spine's rooms and shelves blocks]"* (R124's B1 amendment-ledger entry), no longer applies: there is
+   no flag, so B1-L2 deletes both blocks outright. The **B1 sticky-seam review gate is waived**: R124 item
+   4's *"Kody reviews the redraw himself; no P1/P3 stand-in walk"* is superseded — the sticky seam ships on
+   the wave's own rendered-walk acceptance (program-plan.md §3) like every other lane, with no separate
+   pre-ship checkpoint. **B ships GA directly**, end to end, no flag anywhere in it. Rollback for any part
+   of the program is a **revert commit** (program-plan.md §4.4), never a toggle. The **pre-existing
+   `worktable` and `call-sheet` flags are untouched** — this program neither reads nor writes either one,
+   and R124 item 2's narrow C14 reading stands exactly as ruled: it binds the `worktable` guard only, so
+   B2-L4's Worktable composition still lands behind `worktable` precisely as program-plan.md §2 (Wave B2)
+   already describes, unaffected by this item.
+
+3. **Two production deploys.** DEPLOY A once A3 merges to `main`; DEPLOY B once B3 merges to `main`.
+   Nothing else ships to production in between, before, or immediately after, per item 1.
+
+4. **Full scope**, stated once: (a) Direction A's three waves in full — A1, A2, A3; (b) Direction B in
+   full, not a first slice — the ticket on all seven document sections (B1 and B2-L1), the stage-grouped
+   Desk roster (B2-L2), `deriveTicketLeader` (B2-L3), and the Worktable composition (B2-L4); (c) F58 per
+   **Option 3** of `build/f58-options.md` — one shared derivation, one word per state: **DELIVERED**
+   (arrived, awaiting inspection) · **RECEIVED** (inspected, full count) · **PARTIAL** (inspected, short) ·
+   **DAMAGED** (an open claim on the line); the FF&E board's own stage dropdown keeps reading `Received`
+   for `status = 'delivered'`, because it names a column value a line can move to, not the document's
+   richer inspection-aware stamp; (d) F56, repo-wide — new `-ink` companion tokens carry AA text contrast,
+   the existing clay/terracotta tokens stay untouched for rules and fills; (e) F55, the skip link; (f) F21
+   and F11, the two focus-restore defects; (g) `Moved` on the money ladder computed as ordered minus vendor
+   payouts — `authorized − sum(po_payments.amount_cents where po_payments.state = 'paid')` per project,
+   reading data `usePurchaseOrders` already selects, with **no migration**.
+
+5. **The record.** The I-entries at `program-plan.md` §6 (I146–I153) are this build's ledger, written by
+   each wave's own integration lane as it lands. Nothing else in R124 — the ten questions, the I136
+   amendment ledger, the Thumb Index note, the I114 agenda item, the four unowned defect tickets not named
+   in item 4 above (the `/room/<id>` PostgREST error stays Room View's) — changes.
+
+Nothing built yet by this entry; build order = program (A's three waves, then B's three waves, no flags,
+two deploys, per items 1–3 above).
+
+*Entries add: R125 · last id = R125*
+
+### I146 · Wave A1 — the sentence and the spine — 2026-08-25
+
+Wave A1 of "The Wayfinding Review" build shipped. Seven stage sentences replace the guide's shrugs (F18),
+with the two ⌥-templated dated headlines (install, proposal) built from real facts and never a fabricated
+date; `Review` retires from every guide label; `po_unacknowledged`/`po_unsent` repoint to the FF&E line
+instead of the ledger (C12); the new `rankOperationalNeeds` tie-break orders the red-letter zone and the
+guide identically. The shelved spine's mount predicate widens to install and care (F14, the blocker A1
+exists to fix); the running index derives from the spread's actual mount order via a new
+`paperRegionsForSection` helper rather than a fixed four-row assumption (C11); a composed-but-empty need
+list prints the guide instead of nothing (F77). The FF&E spread's `Spec book →` door ungates on install
+(F48); the care head reads `Care`, not `Install` (F03/SP-01, Kody's ruling answer to R124 item 9);
+`Add to project` becomes `Add a line` in both `ffe-section.tsx` and `command-bar.tsx` (SP-09). ⌘K drops
+its "Engine" framing (SP-07). No canon amendment beyond what R124 already ratified.
+
+Ships unflagged, per Kody's 2026-08-25 ruling (R125 to follow, as R125 itself already codified: no flags,
+two deploys total for this program — DEPLOY A once A3 merges, DEPLOY B once B3 merges — nothing ships to
+production from this merge alone). Gate on `main` after the merge: `pnpm --filter @patina/designer-portal
+type-check` clean; `pnpm --filter @patina/designer-portal test -- --ci` — 428 suites / 4601 tests passed
+(baseline before this wave was 426 suites / 4513 tests; this wave added 2 suites / 88 tests), all green.
+
+Deferred to A2/A3: SP-02, 03, 04, 05, 10, 11, 13, 14, 15, 16, 17, 19, 20; the F55 skip link and F21/F11
+focus-restore fixes; the six-rung money ladder and `vendor-payouts.ts`; the `Design authority` → `Money`
+rename; ⌘K's `WHERE THE WORK STANDS` group and `This surface` group; the FF&E spread's single-leader
+election and 390 wrap rule; the mobile bar's single primary act and `In this document` menu group; and the
+direction B graft of seven rest-state sentences into A — all per program-plan.md §6's I147/I148 scope.
+
+*Entries add: I146 · last id = I146*
+
+### I147 · Wave A2 — the remaining planks and the small a11y fixes — 2026-08-26
+
+Wave A2 of "The Wayfinding Review" build shipped. The ten planks SP-02, 10, 11, 13, 14, 15, 16, 17, 19, 20
+land; SP-03/04/05 are deliberately deferred into A3-L1's money-ladder lane rather than landed twice. Two
+accessibility defects close: F55 (a new `skip-to-paper.tsx`, the first focusable element in
+`(document)/layout.tsx`, targeting `data-document-paper`) and F21/F11 (⌘K and the ledger sheet both now
+capture and restore `document.activeElement` on open/close, with a `fallbackFocusRef` for F11's
+disconnected-trigger case). F41/SP-20 gives setup chores and dated overdue needs visibly distinct stamp
+colours by need kind, with no new count or badge (C4 held). Two A1 e2e follow-ups land alongside: the folio
+pick-up act's assertion in `action-visibility.spec.ts` now checks the accessible label on the card the
+primary belongs to rather than the Link's own (empty) textContent — FolderFace prints the legible label as
+a full-bleed sibling in front of the Link, not inside it, so "one legible primary per region" holds but the
+node carrying the words differs from what A1's test assumed; and the workflow stage-line assertion accounts
+for its wrap behaviour at the 320px viewport.
+
+Ships unflagged, per Kody's 2026-08-25 ruling (R125): no flags, two deploys total for this program — DEPLOY
+A once A3 merges, DEPLOY B once B3 merges — nothing ships to production from this merge alone. Gate on
+`main` after the merge: `pnpm --filter @patina/designer-portal type-check` clean; `pnpm --filter
+@patina/designer-portal test -- --ci` — 432 suites / 4635 tests passed (baseline before this wave was 428
+suites / 4601 tests; this wave added 4 suites / 34 tests), all green.
+
+Deferred to A3: SP-03/04/05 (the money-ladder lane, A3-L1); the six-rung money ladder and
+`vendor-payouts.ts`; the `Design authority` → `Money` rename; ⌘K's `WHERE THE WORK STANDS` group and `This
+surface` group; the FF&E spread's single-leader election and 390 wrap rule; the mobile bar's single primary
+act and `In this document` menu group; and the direction B graft of seven rest-state sentences into A — all
+per program-plan.md §6's I148 scope.
+
+*Entries add: I147 · last id = I147*
+
+### I148 · Wave A3 — the lexicon, ⌘K, money, mobile, the leader — 2026-08-26
+
+Wave A3 of "The Wayfinding Review" build shipped — the largest wave and the last before DEPLOY A. The
+six-rung money ladder (`Budget · Plan · Authorized · Moved · Owed · Not drawn`) ships via two new pure
+modules, `money-ladder.ts` and `vendor-payouts.ts` — the latter Kody's ruling 10 (R124 item 8): `Moved` is
+`Authorized − sum(po_payments.amount_cents where state='paid')`, reading data `usePurchaseOrders` already
+selects, with no migration; `Design authority` retires everywhere in favour of `Money`. The spine index and
+shelves lose the `knowledge` entry (F12, closing I136's open item) and gain corrected rail labels (F02),
+with `Pieces` and `The record`/`The studio today` renames landing across the Desk's header acts and content
+rows (F24/F38/F39/F65/F90). ⌘K gains its `WHERE THE WORK STANDS` empty-query group (F04) and a four-row
+`This surface` group (F29/F48/F50/F82); `The Scans` replaces `The Rooms` and `Ledgers` replaces `Studio
+books` in both ⌘K and the studio drawer, whose own `Find anything ⌘K` door now prints as a fourth row
+(`Library · People · The Scans · Ledgers ↑ · Find anything ⌘K`). The FF&E spread elects exactly one leader
+per exception class (F34/F08, new `ffe-leader.ts`), and every region head gains the 390 wrap rule
+(F28/F87, direction B's graft into A). The mobile bar registers a true single primary act read off the
+red-letter zone and gains an `In this document` menu group (F07/F49). Seven rest-state sentences replace
+the guide's quiet-case shrug on every stage (direction B's §3.3 graft into A). `NeedLine` gains `dueOn` and
+`owner` (A3-L7), and `need-tie-break.ts`'s `rankOperationalNeeds` reads them into a new dated/owned rank
+ahead of the kind-based fallback — a hard outside deadline inside seven days with a non-designer owner
+outranks everything, an already-past `dueOn` sorts oldest-first within its rank, and an undated need owned
+by the designer ranks as the studio's own pen — while a need this wave left undated and unowned still ranks
+exactly as A1-L2 first shipped it. Ships unflagged, per R125 item 2: no feature flags anywhere in this
+program, GA on merge.
+
+Gate on `main` after the merge: `pnpm --filter @patina/designer-portal type-check` clean (0 errors); `pnpm
+--filter @patina/designer-portal test -- --ci` — 437 suites / 4753 tests passed (baseline before this wave
+was 432 suites / 4635 tests; this wave added 5 suites / 118 tests), all green; `pnpm --filter
+@patina/designer-portal lint` — the same 2 pre-existing errors (`piece-room-save-gate.test.tsx:159:1`
+`import/first`, `use-commercial-documents.test.ts:930:8` `react-hooks/rules-of-hooks`, both untouched by
+this wave) + 200 pre-existing warnings, no new lint regressions. DEPLOY A follows once this wave's
+integration lane (A3-L8) merges and the full gate is green on `main`, per R125 item 3 — deployment itself is
+recorded separately once it happens, at I153. Deferred to B, in full per R125 item 4: the job ticket
+(B1/B2), the Desk's stage-grouped roster and `deriveTicketLeader` (B2), the Worktable composition behind
+the pre-existing `worktable` flag (B2-L4, untouched by this program), F58's Option 3 stamp-label unification
+(B3), and F56's repo-wide `-ink` contrast tokens (B3).
+
+*Entries add: I148 · last id = I148*

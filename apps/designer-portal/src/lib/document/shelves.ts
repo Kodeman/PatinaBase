@@ -13,7 +13,6 @@ export type ShelfKey =
   | 'specbook'
   | 'moodboards'
   | 'callsheet'
-  | 'knowledge'
   | 'clientcopy';
 
 export type ShelfLeafKey = Exclude<ShelfKey, 'callsheet'>;
@@ -57,13 +56,6 @@ const ALL_SHELVES: readonly ShelfDefinition[] = [
     title: 'Call sheet',
     eyebrow: 'Call sheet · The roster',
     kind: 'doorway',
-    subject: 'project',
-  },
-  {
-    key: 'knowledge',
-    title: 'Knowledge',
-    eyebrow: 'Studio library · Cross-project',
-    kind: 'leaf',
     subject: 'project',
   },
   {

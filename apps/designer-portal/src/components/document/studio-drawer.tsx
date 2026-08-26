@@ -20,7 +20,12 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { BookOpenText, MessageSquareText, type LucideIcon } from 'lucide-react';
+import {
+  BookOpenText,
+  MessageSquareText,
+  Search,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   useUnreadInboxCount,
   useProcurementUnreadCount,
@@ -40,7 +45,7 @@ import { useDocumentTime } from '@/hooks/document-time-provider';
 import { fmtMinutes } from '@/lib/document/time-derivation';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { AccountNameplate } from './account/account-nameplate';
-import type { OpenLedgerContext } from './command-bar';
+import { openCommandBar, type OpenLedgerContext } from './command-bar';
 import { useHydrated } from '@/hooks/use-hydrated';
 
 /** R93/R107 — the six doors, sourced from the Studio Surface Registry: label,
@@ -131,6 +136,10 @@ export function StudioDrawer() {
   const [openLedger, setOpenLedger] = useState<SheetKey | null>(null);
   const [booksOpen, setBooksOpen] = useState(false);
   const [recentBook, setRecentBook] = useState<SheetKey | null>(null);
+  // F11 — only a sheet opened from the books menu may restore focus to the
+  // books toggle; one opened by ⌘K, the margin rail, the mobile dock or the
+  // /desk?book= doorway must not drag focus down into the drawer.
+  const [openedFromBooksMenu, setOpenedFromBooksMenu] = useState(false);
   const booksButtonRef = useRef<HTMLButtonElement>(null);
   const booksMenuRef = useRef<HTMLDivElement>(null);
   const firstBookRef = useRef<HTMLButtonElement>(null);
@@ -216,10 +225,12 @@ export function StudioDrawer() {
   const openBook = (
     key: SheetKey,
     context: OpenLedgerContext | null = null,
+    { fromBooksMenu = false }: { fromBooksMenu?: boolean } = {},
   ) => {
     setBooksOpen(false);
     setSheetContext(context);
     setOpenLedger(key);
+    setOpenedFromBooksMenu(fromBooksMenu);
     rememberBook(key);
   };
 
@@ -252,6 +263,7 @@ export function StudioDrawer() {
         setBooksOpen(false);
         setSheetContext(context);
         setOpenLedger(FEEDBACK_SHEET.key);
+        setOpenedFromBooksMenu(false);
         return;
       }
       const match = LEDGERS.find((l) => l.key === name);
@@ -358,7 +370,7 @@ export function StudioDrawer() {
                 strokeWidth={1.5}
                 aria-hidden
               />
-              <span>Studio books</span>
+              <span>Ledgers</span>
               <span
                 aria-hidden
                 className="font-mono text-[12px] text-[var(--text-muted)]"
@@ -378,12 +390,12 @@ export function StudioDrawer() {
                 ref={booksMenuRef}
                 id="studio-books-menu"
                 role="group"
-                aria-label="Studio books"
+                aria-label="Ledgers"
                 className="absolute bottom-[calc(100%+8px)] left-1/2 w-[260px] -translate-x-1/2 overflow-hidden rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-surface)]"
               >
                 <div className="border-b border-[var(--border-default)] px-3 py-2">
                   <span className="font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-                    Studio books · sheets
+                    Ledgers · sheets
                   </span>
                 </div>
                 {orderedBooks.map((book, index) => {
@@ -402,7 +414,7 @@ export function StudioDrawer() {
                           weight: 'sheet',
                           source: 'drawer',
                         });
-                        openBook(book.key);
+                        openBook(book.key, null, { fromBooksMenu: true });
                       }}
                       className="flex min-h-11 w-full items-center gap-3 border-b border-[var(--border-default)] px-3 py-2 text-left text-[var(--text-body)] last:border-b-0 hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--color-clay)]"
                     >
@@ -447,6 +459,26 @@ export function StudioDrawer() {
               </div>
             )}
           </div>
+
+          {/* C-AP-05 — the register gets a printed door, so reaching a
+              document-scoped surface at 1280 is two acts and neither is
+              recalling a chord. */}
+          <button
+            type="button"
+            onClick={() => openCommandBar()}
+            /* The Desk header carries its own "Find anything" tertiary act, so
+               on /desk two controls stood in the tree under one accessible
+               name. The words on the paper are the ruled ones and do not move;
+               the name says which door this is. */
+            aria-label="Find anything (⌘K), from the studio drawer"
+            className="relative inline-flex min-h-11 items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[14px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+          >
+            <Search className="h-[15px] w-[15px] shrink-0" strokeWidth={1.5} aria-hidden />
+            <span>Find anything</span>
+            <span className="rounded-[3px] border border-[var(--border-default)] px-1.5 py-px font-mono text-[12px] text-[var(--text-muted)]">
+              ⌘K
+            </span>
+          </button>
         </div>
 
         {/* Right — in-hand state, notifications, identity. */}
@@ -522,6 +554,14 @@ export function StudioDrawer() {
           open?.key === 'accounts' ||
           open?.key === 'hours'
         }
+        // SP-13/F46 — Orders and Accounts render their own dialog-owned
+        // DocSheetHead with a working close; DocSheet must not print a second
+        // one above it. Hours and Feedback pass no onClose to their heads, so
+        // DocSheet's own close is the single copy for those two.
+        headOwnedByChild={open?.key === 'orders' || open?.key === 'accounts'}
+        // F11 — a books-menu row unmounts the moment it opens a sheet, so the
+        // still-mounted books toggle is where focus belongs on close.
+        fallbackFocusRef={openedFromBooksMenu ? booksButtonRef : undefined}
       >
         {open?.key === 'orders' && (
           <OrdersLedger

@@ -8,6 +8,11 @@
  * list that has a room dimension, on the paper and on the open shelf at once,
  * washed in clay. Nothing hides — which is why the room keeps its state word
  * while held; the "In hand" tag is added to the line, never swapped in.
+ *
+ * F72 — a project with no rooms yet still prints the heading and the
+ * placeholder line, the same discipline every other shelf already has. A
+ * block that returns null at zero is a block a reader can't tell is missing
+ * from one that hasn't loaded.
  */
 
 export interface SpineRoom {
@@ -25,8 +30,6 @@ export function SpineRoomsBlock({
   heldRoomId: string | null;
   onToggleRoom: (roomId: string) => void;
 }) {
-  if (rooms.length === 0) return null;
-
   return (
     <div className="mt-4 border-t border-[var(--color-pearl)] pt-3">
       <p
@@ -35,6 +38,7 @@ export function SpineRoomsBlock({
       >
         Rooms
       </p>
+      {rooms.length > 0 && (
       <div role="group" aria-labelledby="doc-spine-rooms-label">
         {rooms.map((room) => {
           const held = room.id === heldRoomId;
@@ -75,6 +79,7 @@ export function SpineRoomsBlock({
           );
         })}
       </div>
+      )}
       <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
         Take a room in hand · nothing hides
       </p>

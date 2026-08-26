@@ -28,7 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { FolderPlus, LifeBuoy, Ruler } from 'lucide-react';
+import { FolderPlus, LifeBuoy } from 'lucide-react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import {
   usePeopleDirectory,
@@ -41,18 +41,28 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { openAccount } from './account/account-sheet';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { openPost } from './overlays/post-sheet';
+import {
+  isElementRendered,
+  topActiveModalDialog,
+} from './overlays/active-dialog';
 import { openFeedbackSheet } from './feedback/feedback-sheet';
 import { openHelp } from '@/lib/help-system/open-help';
 import { openDraftProposalPicker } from './rooms/drafting/draft-proposal-opener';
 import { fillStateForDesk, type FillState } from '@/lib/document/fill-state';
-import { folderTab, type DocumentStateRow } from '@/lib/document/desk-derivation';
 import {
+  folderTab,
+  type DocumentStateRow,
+  type SectionKey,
+} from '@/lib/document/desk-derivation';
+import {
+  DOCUMENT_SCOPED_SURFACES,
   STUDIO_ROOMS,
   STUDIO_LEDGERS,
   STUDIO_VERBS,
   matchSurfaces,
   type StudioSurface,
 } from '@/lib/document/registry';
+import { openDraftingRoom } from '@/lib/document/open-drafting-room';
 import {
   documentEvents,
   readRecentDocumentsInHand,
@@ -61,7 +71,10 @@ import {
 import { authEvents } from '@/lib/analytics/events';
 import { StrataMark } from './strata-mark';
 import { EngineResults, type InDocument } from './engine/engine-results';
-import { recentBoardCommandDescriptor } from '@/lib/mood-board/navigation';
+import {
+  boardRoomHref,
+  recentBoardCommandDescriptor,
+} from '@/lib/mood-board/navigation';
 
 /** One selectable line. `match` is the lowercased filter text (label + aliases
  *  or keywords); registry surfaces additionally carry their icon + wayfinding
@@ -117,9 +130,39 @@ interface PaletteSection {
 // can never drift from the canonical verb/room marks.
 const DRAW_INVOICE_ICON = STUDIO_VERBS.find((v) => v.key === 'draw-invoice')!.icon;
 const DRAFTING_ROOM_ICON = STUDIO_ROOMS.find((r) => r.key === 'drafting-room')!.icon;
-const CALL_SHEET_ICON = STUDIO_LEDGERS.find((l) => l.key === 'call-sheet')!.icon;
-/** The plan room has no registry entry (it is a route, not a drawer sheet). */
-const PLAN_ROOM_ICON = Ruler;
+
+/** F04 — how each live stage is named in `Where the work stands`. Five of the
+ *  seven print the direction's own words; brief and care take the same shape. */
+const STAGE_LABELS: Record<SectionKey, string> = {
+  brief: 'In brief',
+  discovery: 'In discovery',
+  direction: 'In direction',
+  proposal: 'Out for signature',
+  project: 'In procurement',
+  install: 'In install',
+  care: 'In care',
+};
+
+/** Furthest along first: the work nearest the field leads the register. */
+const STAGE_ORDER: SectionKey[] = [
+  'care',
+  'install',
+  'project',
+  'proposal',
+  'direction',
+  'discovery',
+  'brief',
+];
+
+/** What is true of a live document right now — a folder's need line, or an
+ *  in-motion chip's own text. Structural so this reads both Desk populations
+ *  without importing either shape. */
+function liveLine(entry: {
+  need?: { text?: string } | null;
+  text?: string | null;
+}): string | null {
+  return entry.need?.text ?? entry.text ?? null;
+}
 
 /** Set true by {@link openCaptureLead} when the front door is invoked from a
  *  non-Desk surface; the Desk reads + clears it on mount so the sheet opens
@@ -169,10 +212,23 @@ export function openLedger(name: string, context?: OpenLedgerContext) {
   );
 }
 
-/** Open the command bar from a click affordance (the Desk's "Find anything"). */
-export function openCommandBar() {
-  window.dispatchEvent(new CustomEvent('document:open-command-bar'));
+/** Open the command bar from a click affordance (the Desk's "Find anything").
+ *  `query` pre-types the palette — the Desk's stage phrases open ⌘K already
+ *  filtered to that stage. */
+export function openCommandBar(query?: string) {
+  window.dispatchEvent(
+    new CustomEvent('document:open-command-bar', {
+      detail: query ? { query } : undefined,
+    }),
+  );
 }
+
+/** R79/`openCaptureLead` pattern — the Call Sheet is mounted on `/doc/[id]`
+ *  and nowhere else, so a doorway that names a document NOT in hand has to
+ *  walk there first: the event fires before that page's listener exists, and
+ *  this flag carries the intent across the navigation. The document reads and
+ *  clears it on mount. */
+export const callSheetPending = { value: false };
 
 export function CommandBar() {
   const router = useRouter();
@@ -202,6 +258,11 @@ export function CommandBar() {
   // "Recent" group reflects where the designer has actually been.
   const [recent, setRecent] = useState<RecentDocumentInHand[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  // F21 — the element that had focus when ⌘K opened, restored on close.
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  // The query a doorway asked the palette to open with, read and cleared by
+  // the open effect.
+  const pendingQueryRef = useRef<string | null>(null);
   // R97 — skip the mount emission so we only announce real open/close transitions.
   const didMountRef = useRef(false);
 
@@ -220,8 +281,12 @@ export function CommandBar() {
       }
     };
     // The Desk header's "Find anything" button dispatches this — an affordance,
-    // not the hotkey (F1 source attribution).
-    const onAffordance = () => {
+    // not the hotkey (F1 source attribution). `detail.query` pre-types the
+    // palette (the Desk's stage phrases): it is stashed rather than set here
+    // because the open effect below clears the query on every open.
+    const onAffordance = (event: Event) => {
+      const query = (event as CustomEvent<{ query?: string }>).detail?.query;
+      pendingQueryRef.current = typeof query === 'string' ? query : null;
       if (!open) documentEvents.commandBar.opened({ source: 'affordance' });
       setOpen(true);
     };
@@ -233,14 +298,43 @@ export function CommandBar() {
     };
   }, [open, asking]);
 
+  // F21 — restore focus to whatever opened ⌘K when it closes. Captured here
+  // (not read fresh on close) because by close time the palette's own last
+  // focused row/input is `document.activeElement`, not the opener.
+  // <body>-avoiding: a capture of `document.activeElement === document.body`
+  // (nothing was meaningfully focused — e.g. the hotkey fired with focus
+  // already nowhere) restores to nothing rather than parking focus back on
+  // the page root. Matches margin-rail.tsx / overlays/doc-sheet.tsx.
   useEffect(() => {
     if (open) {
-      setQuery('');
+      const activeElement = document.activeElement;
+      restoreFocusRef.current =
+        activeElement instanceof HTMLElement && activeElement !== document.body
+          ? activeElement
+          : null;
+      setQuery(pendingQueryRef.current ?? '');
+      pendingQueryRef.current = null;
       setActive(0);
       setAsking(null);
       setRecent(readRecentDocumentsInHand());
       requestAnimationFrame(() => inputRef.current?.focus());
+      return;
     }
+    const focusTarget = restoreFocusRef.current;
+    restoreFocusRef.current = null;
+    if (!focusTarget?.isConnected) return;
+    requestAnimationFrame(() => {
+      // A chosen row closes the palette and runs its act in one handler, so a
+      // sheet the row opened has already taken focus by the time this frame
+      // runs — restoring here would pull focus back out of an open modal.
+      // margin-rail.tsx:141 gates its own focus move the same way.
+      if (topActiveModalDialog()) return;
+      // Connected is not enough: a display:none opener (a shelf button after
+      // the shelf force-closes below 1440) swallows focus() to <body>.
+      if (focusTarget.isConnected && isElementRendered(focusTarget)) {
+        focusTarget.focus();
+      }
+    });
   }, [open]);
 
   // R97 — announce the palette's open state so the Desk Walkthrough can pause
@@ -260,27 +354,29 @@ export function CommandBar() {
   // the pre-addressing of THIS-SURFACE verbs both read off it. Works for any
   // engagement kind (a proposal carries no project_id, so `inDocument` below
   // stays project-scoped for the Engine, but the row still resumes).
-  const inHandRow = useMemo(() => {
+  const inHandRow = useMemo<DocumentStateRow | null>(() => {
     const m = pathname?.match(/^\/doc\/(.+)$/);
     const docId = m?.[1] ?? null;
     if (!docId || !data) return null;
-    return (
-      [...(data.folders ?? []), ...(data.chips ?? [])].find(
-        (x) => x.row.engagement_id === docId,
-      ) ?? null
-    );
+    // The LIVE population, not folders + chips: a document with neither a need
+    // nor a motion is in neither of those, and losing it here loses the
+    // `In hand` row and every `This surface` act with it.
+    return (data.live ?? []).find((r) => r.engagement_id === docId) ?? null;
   }, [pathname, data]);
 
   // The document in hand for the Engine (R38) — Place → targets it directly.
   // Project-scoped: a still-drafting proposal has no project to place into.
   const inDocument = useMemo<InDocument | null>(() => {
-    const pid = inHandRow?.row.project_id;
-    return pid ? { projectId: pid, projectName: folderTab(inHandRow!.row) } : null;
+    const pid = inHandRow?.project_id;
+    return pid ? { projectId: pid, projectName: folderTab(inHandRow!) } : null;
   }, [inHandRow]);
 
   const { rendered, flatRows, matchCount } = useMemo(() => {
     const liveDocs = [...(data?.folders ?? []), ...(data?.chips ?? [])];
-    const liveByEngagement = new Map(liveDocs.map((f) => [f.row.engagement_id, f.row]));
+    // Every live document the Desk saw — see `stageRows` below for why the two
+    // derived populations above are not that.
+    const liveRows = data?.live ?? [];
+    const liveByEngagement = new Map(liveRows.map((r) => [r.engagement_id, r]));
 
     const documentRow = (r: DocumentStateRow, hint?: string): PaletteRow => ({
       kind: 'document',
@@ -293,19 +389,22 @@ export function CommandBar() {
       match: `${folderTab(r)} ${r.title}`.toLowerCase(),
     });
 
-    // A recent MRU entry: prefer the live Desk row (truthful fill + family tab);
-    // an off-Desk memory falls back to its stored title + a neutral clay mark.
+    // A recent MRU entry: prefer the live Desk row (truthful fill + household);
+    // an off-Desk memory falls back to its stored title and a neutral clay mark.
+    // F13 — the row prints the document's FULL TITLE. Two documents in one
+    // household used to print as two rows reading the same bold family word.
     const recentRow = (entry: RecentDocumentInHand): PaletteRow => {
       const live = liveByEngagement.get(entry.id);
-      if (live) return documentRow(live);
-      const label = folderTab({ client_name: entry.subtitle ?? '', title: entry.title });
+      const title = live?.title ?? entry.title;
+      const household = live ? folderTab(live) : (entry.subtitle ?? '');
       return {
         kind: 'document',
         key: `doc:${entry.id}`,
-        label,
-        sub: entry.title,
+        label: title,
+        sub: household,
+        ...(live ? { fill: fillStateForDesk(live) } : {}),
         run: () => router.push(`/doc/${entry.id}`),
-        match: `${label} ${entry.title}`.toLowerCase(),
+        match: `${title} ${household}`.toLowerCase(),
       };
     };
 
@@ -333,9 +432,9 @@ export function CommandBar() {
     // (R93 THIS-SURFACE). Read cheaply off the row we already have — no fetch.
     const draftingProposalId =
       inHandRow &&
-      inHandRow.row.engagement_kind === 'proposal' &&
-      inHandRow.row.proposal_status === 'draft'
-        ? inHandRow.row.proposal_id
+      inHandRow.engagement_kind === 'proposal' &&
+      inHandRow.proposal_status === 'draft'
+        ? inHandRow.proposal_id
         : null;
 
     // One handler per registry surface, all wired to the openers the drawer/desk
@@ -370,13 +469,72 @@ export function CommandBar() {
           return () => window.dispatchEvent(new CustomEvent('document:open-call-sheet'));
         case 'drafting-room':
           return () =>
-            draftingProposalId
-              ? router.push(`/drafting/${draftingProposalId}`)
-              : openDraftProposalPicker();
+            openDraftingRoom({
+              proposalId: draftingProposalId,
+              navigate: (href) => router.push(href),
+            });
         default:
           return () => openLedger(s.key);
       }
     };
+
+    // F29/F48/F50/F82 — the four surfaces a document scopes: plan room, spec
+    // book, mood boards, call sheet. `paired` is the off-document form, where
+    // the row names the document it will act on (`Spec book · Vandersteen`).
+    //
+    // The boards have no index route of their own below 1440 (the shelf leaf is
+    // the only list, and it force-closes) — so the row opens this project's
+    // most recent board when one is already loaded, and otherwise walks to the
+    // document the shelf lives on.
+    const runForDocumentSurface = (
+      surface: StudioSurface,
+      target: DocumentStateRow,
+    ): (() => void) => {
+      switch (surface.key) {
+        case 'plan-room':
+          return () => router.push(`/doc/${target.engagement_id}/plans`);
+        case 'spec-book':
+          return () => router.push(`/doc/${target.project_id}/spec-book`);
+        case 'mood-boards':
+          return () => {
+            const board = recentBoards.find(
+              (b) => b.owner.kind === 'project' && b.owner.id === target.project_id,
+            );
+            router.push(
+              board
+                ? boardRoomHref({ boardId: board.id, from: pathname, source: 'command_bar' })
+                : `/doc/${target.engagement_id}`,
+            );
+          };
+        default:
+          // Document-scoped with no standalone destination: the roster sheet is
+          // mounted on /doc/[id] and listens for this event. Off that document
+          // the event has no listener, so the row walks there first and the
+          // pending flag carries the intent across the navigation.
+          return () => {
+            if (target.engagement_id === inHandRow?.engagement_id) {
+              window.dispatchEvent(new CustomEvent('document:open-call-sheet'));
+              return;
+            }
+            callSheetPending.value = true;
+            router.push(`/doc/${target.engagement_id}`);
+          };
+      }
+    };
+
+    const documentSurfaceRow = (
+      surface: StudioSurface,
+      target: DocumentStateRow,
+      paired: boolean,
+    ): PaletteRow => ({
+      kind: surface.kind === 'ledger' ? 'ledger' : 'room',
+      key: `${surface.key}-here`,
+      label: paired ? `${surface.label} · ${folderTab(target)}` : surface.label,
+      sub: paired ? target.title : (surface.subLabel ?? 'this project'),
+      icon: surface.icon,
+      run: runForDocumentSurface(surface, target),
+      match: [surface.label, ...surface.aliases].join(' ').toLowerCase(),
+    });
 
     const surfaceRow = (s: StudioSurface): PaletteRow => ({
       kind: s.kind,
@@ -465,11 +623,11 @@ export function CommandBar() {
       },
     ];
 
-    const addToProjectRow: PaletteRow | null = inHandRow?.row.project_id && inHandRow.row.active_section === 'project'
+    const addToProjectRow: PaletteRow | null = inHandRow?.project_id && inHandRow.active_section === 'project'
       ? {
           kind: 'verb',
           key: 'add-to-project-here',
-          label: 'Add to project',
+          label: 'Add a line',
           sub: 'this project · Library, link, need, import, or board',
           icon: FolderPlus,
           run: () => window.dispatchEvent(new CustomEvent('document:open-add-to-project', {
@@ -478,8 +636,8 @@ export function CommandBar() {
           match: 'add to project selection ffe furniture library product link import board need',
         }
       : null;
-    const addChangeRow: PaletteRow | null = inHandRow?.row.project_id &&
-      (inHandRow.row.active_section === 'install' || inHandRow.row.active_section === 'care')
+    const addChangeRow: PaletteRow | null = inHandRow?.project_id &&
+      (inHandRow.active_section === 'install' || inHandRow.active_section === 'care')
       ? {
           kind: 'verb',
           key: 'add-project-change-here',
@@ -491,6 +649,66 @@ export function CommandBar() {
         }
       : null;
 
+    // F04 — `Where the work stands`: one row per live stage, reduced from the
+    // Desk's LIVE rows. No new query; the data is loaded either way.
+    //
+    // Not `liveDocs`: that is folders + chips, the two DERIVED populations —
+    // a document with neither a need nor a motion is in neither, and chips are
+    // capped at MAX_MOTION_CHIPS. Counting the studio's stages off them prints
+    // an undercount, and a calm studio prints no group at all.
+    const lineByEngagement = new Map(
+      liveDocs.map((entry) => [entry.row.engagement_id, liveLine(entry)]),
+    );
+    const stageRows: PaletteRow[] = STAGE_ORDER.flatMap((stage) => {
+      const inStage = liveRows.filter((r) => r.active_section === stage);
+      if (inStage.length === 0) return [];
+      // The row a stage opens is the one that has something to say — a need or
+      // a motion — so the sub-line is never blank while a live line exists.
+      const head =
+        inStage.find((r) => lineByEngagement.get(r.engagement_id)) ?? inStage[0];
+      const titles = inStage.map((r) => r.title);
+      const headLine = lineByEngagement.get(head.engagement_id) ?? null;
+      const sub =
+        inStage.length === 1
+          ? [titles[0], headLine].filter(Boolean).join(' · ')
+          : titles.slice(0, 2).join(' · ') +
+            (inStage.length > 2 ? ` · +${inStage.length - 2} more` : '');
+      return [
+        {
+          kind: 'document' as const,
+          key: `stage:${stage}`,
+          label: `${STAGE_LABELS[stage]} · ${inStage.length}`,
+          sub,
+          fill: fillStateForDesk(head),
+          run: () => router.push(`/doc/${head.engagement_id}`),
+          match: [
+            STAGE_LABELS[stage],
+            stage,
+            ...titles,
+            ...inStage.map((r) => lineByEngagement.get(r.engagement_id) ?? null),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase(),
+        },
+      ];
+    });
+
+    // The document the four document-scoped surfaces act on: the one in hand,
+    // else the most recent project document the Desk knows about. Off that
+    // document the rows print paired, so the row says which job it opens.
+    const inHandProjectRow = inHandRow?.project_id ? inHandRow : null;
+    const pairedDoc: DocumentStateRow | null =
+      inHandProjectRow ??
+      recent
+        .map((r) => liveByEngagement.get(r.id))
+        .find((r): r is DocumentStateRow => Boolean(r?.project_id)) ??
+      liveRows.find((r) => Boolean(r.project_id)) ??
+      null;
+    const documentSurfaces = DOCUMENT_SCOPED_SURFACES.filter(
+      (surface) => surface.key !== 'call-sheet' || callSheetOn,
+    );
+
     const q = query.trim().toLowerCase();
     let sections: PaletteSection[];
     let matches = 0;
@@ -499,8 +717,11 @@ export function CommandBar() {
       // The populated palette (R93): grouped doorways, no query, always cut
       // below the fold (the list scrolls).
       sections = [];
+      if (stageRows.length) {
+        sections.push({ eyebrow: 'Where the work stands', rows: stageRows });
+      }
       if (inHandRow) {
-        sections.push({ eyebrow: 'In hand', rows: [documentRow(inHandRow.row, 'resume')] });
+        sections.push({ eyebrow: 'In hand', rows: [documentRow(inHandRow, 'resume')] });
       }
       if (recentBoards.length) {
         sections.push({
@@ -509,7 +730,7 @@ export function CommandBar() {
         });
       }
       const recentRows = recent
-        .filter((r) => r.id !== inHandRow?.row.engagement_id)
+        .filter((r) => r.id !== inHandRow?.engagement_id)
         .slice(0, 3)
         .map(recentRow);
       if (recentRows.length) sections.push({ eyebrow: 'Recent', rows: recentRows });
@@ -517,13 +738,13 @@ export function CommandBar() {
       const thisSurface: PaletteRow[] = [];
       if (addToProjectRow) thisSurface.push(addToProjectRow);
       if (addChangeRow) thisSurface.push(addChangeRow);
-      if (inHandRow?.row.project_id) {
-        const projectName = folderTab(inHandRow.row);
-        const projectId = inHandRow.row.project_id;
+      if (inHandRow?.project_id) {
+        const projectName = folderTab(inHandRow);
+        const projectId = inHandRow.project_id;
         thisSurface.push({
           kind: 'verb',
           key: 'draw-invoice-here',
-          label: `Draw an invoice for ${projectName}`,
+          label: `Draw an invoice · ${projectName}`,
           sub: 'this household · pre-addressed',
           icon: DRAW_INVOICE_ICON,
           run: () => openInvoiceComposer({ projectId }),
@@ -541,38 +762,20 @@ export function CommandBar() {
           match: '',
         });
       }
-      // Call Sheet — document-scoped AND flag-gated (registry.tsx's `call-sheet`
-      // entry): only ever a "This surface" row, never in the unfiltered
-      // Rooms & ledgers group below, and only once a project doc is in hand.
-      if (inHandRow?.row.project_id && callSheetOn) {
-        thisSurface.push({
-          kind: 'ledger',
-          key: 'call-sheet-here',
-          label: 'Open the call sheet',
-          sub: 'this project · who is on the job',
-          icon: CALL_SHEET_ICON,
-          run: () => window.dispatchEvent(new CustomEvent('document:open-call-sheet')),
-          match: '',
-        });
-      }
-      // The plan room — document-scoped like the Call Sheet above: only ever a
-      // "This surface" row, never in the unfiltered Rooms & ledgers group, and
-      // only once a project doc is in hand. Unlike the Call Sheet it has a real
-      // destination, so it navigates rather than dispatching an open event.
-      if (inHandRow?.row.project_id) {
-        thisSurface.push({
-          kind: 'ledger',
-          key: 'plan-room-here',
-          label: 'The plan room',
-          sub: 'this project · the current set',
-          icon: PLAN_ROOM_ICON,
-          run: () => router.push(`/doc/${inHandRow.row.engagement_id}/plans`),
-          match: '',
-        });
+      // F29/F48/F50/F82 — all four document-scoped surfaces, never in the
+      // unfiltered Rooms & ledgers group below, and only once a project doc is
+      // in hand. The call sheet is additionally gated on its own flag.
+      if (inHandProjectRow) {
+        thisSurface.push(
+          ...documentSurfaces.map((surface) =>
+            documentSurfaceRow(surface, inHandProjectRow, false),
+          ),
+        );
       }
       if (thisSurface.length) sections.push({ eyebrow: 'This surface', rows: thisSurface });
 
-      sections.push({ eyebrow: 'Begin', rows: STUDIO_VERBS.map(surfaceRow) });
+      // F37 — the doors you already have stand above the doors that start
+      // something new.
       sections.push({
         eyebrow: 'Rooms & ledgers',
         rows: [
@@ -580,6 +783,7 @@ export function CommandBar() {
           ...STUDIO_LEDGERS.filter((s) => s.scope === 'global'),
         ].map(surfaceRow),
       });
+      sections.push({ eyebrow: 'Begin', rows: STUDIO_VERBS.map(surfaceRow) });
       sections.push({ eyebrow: 'Studio', rows: utilityRows });
     } else {
       // Typed: filter across documents + registry surfaces (matchSurfaces folds
@@ -590,7 +794,7 @@ export function CommandBar() {
       // Concrete boards intentionally precede the static Drafting Room match
       // for "board" / "moodboard" queries.
       list.push(...recentBoards.map(recentBoardRow).filter((r) => r.match.includes(q)));
-      list.push(...liveDocs.map((f) => documentRow(f.row)).filter((r) => r.match.includes(q)));
+      list.push(...liveRows.map((r) => documentRow(r)).filter((r) => r.match.includes(q)));
       if (addToProjectRow?.match.includes(q)) list.push(addToProjectRow);
       if (addChangeRow?.match.includes(q)) list.push(addChangeRow);
       // Document-scoped registry surfaces (scope: 'document' — registry.tsx's
@@ -607,13 +811,31 @@ export function CommandBar() {
       // doorway shared with the "Draft a design agreement" verb), so gating
       // on that exact condition keeps what's shown in sync with what
       // clicking it will do, rather than hiding a fallback that already works.
+      // The four document-scoped surfaces are built below instead, pre-addressed
+      // with the document they act on, so they are excluded here rather than
+      // rendered twice.
+      const documentScoped = new Set(DOCUMENT_SCOPED_SURFACES.map((s) => s.key));
       const isSurfaceReachable = (s: StudioSurface): boolean => {
         if (s.scope !== 'document') return true;
-        if (s.key === 'call-sheet') return Boolean(inHandRow?.row.project_id) && callSheetOn;
         if (s.key === 'drafting-room') return Boolean(draftingProposalId);
-        return Boolean(inHandRow?.row.project_id);
+        return Boolean(inHandRow?.project_id);
       };
-      list.push(...matchSurfaces(query).filter(isSurfaceReachable).map(surfaceRow));
+      list.push(
+        ...matchSurfaces(query)
+          .filter((s) => !documentScoped.has(s.key))
+          .filter(isSurfaceReachable)
+          .map(surfaceRow),
+      );
+      // SP-16/F29/F48/F82 — the same four rows the empty query prints, reachable
+      // by typing. Off the document they name the job they open.
+      if (pairedDoc) {
+        const paired = pairedDoc.engagement_id !== inHandRow?.engagement_id;
+        list.push(
+          ...documentSurfaces
+            .map((surface) => documentSurfaceRow(surface, pairedDoc, paired))
+            .filter((r) => r.match.includes(q)),
+        );
+      }
       if (people) {
         list.push(
           ...people
@@ -623,15 +845,18 @@ export function CommandBar() {
         );
       }
       list.push(...utilityRows.filter((r) => r.match.includes(q)));
-      matches = list.length;
+      // F04 — a stage word filters the same group rather than falling through
+      // to `No match`.
+      const typedStageRows = stageRows.filter((r) => r.match.includes(q));
+      matches = list.length + typedStageRows.length;
 
       if (matches === 0) {
         list.push({
           kind: 'help',
           key: 'help-center-recovery',
           icon: LifeBuoy,
-          label: 'No match — Browse the Help Center',
-          sub: 'search the guides →',
+          label: 'No match',
+          sub: 'Try the Help Center',
           run: () => router.push('/help'),
           match: '',
         });
@@ -641,11 +866,16 @@ export function CommandBar() {
       list.push({
         kind: 'engine',
         key: 'engine',
-        label: 'Ask the Engine',
-        sub: `“${query.trim()}” · ask & place`,
+        label: `Ask about “${query.trim()}”`,
+        sub: 'ASK & PLACE',
         match: '',
       });
-      sections = [{ eyebrow: null, rows: list }];
+      sections = typedStageRows.length
+        ? [
+            { eyebrow: 'Where the work stands', rows: typedStageRows },
+            { eyebrow: null, rows: list },
+          ]
+        : [{ eyebrow: null, rows: list }];
     }
 
     let idx = 0;
@@ -789,8 +1019,8 @@ export function CommandBar() {
         <input
           ref={inputRef}
           type="text"
-          aria-label="Find anything, or ask the Engine"
-          placeholder="Find a document or a ledger — or ask the Engine…"
+          aria-label="Find anything"
+          placeholder="Find a document or a ledger…"
           className="w-full border-b border-[var(--color-pearl)] bg-transparent px-4 py-3 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-muted)] focus:outline-none"
           value={query}
           onChange={(e) => {
@@ -823,7 +1053,7 @@ export function CommandBar() {
           <div className="max-h-[60vh] overflow-y-auto px-4 pb-3 pt-2">
             <div className="mb-1 flex items-center justify-between gap-3">
               <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay)]">
-                The Engine · “{asking}”
+                Results · “{asking}”
               </span>
               <button
                 type="button"

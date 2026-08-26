@@ -1,0 +1,153 @@
+[
+  {
+    "probe": "1-hover-only-affordances",
+    "steps": [
+      "goto /doc/{project_rich} at 1440x1000",
+      "wait [data-document-shell] visible",
+      "for each candidate trigger: measure visibility/opacity before + after page.hover()"
+    ],
+    "observed": "row-overflow \"···\" glyphs: 0 elements found (selector may not match this doc's state) | region fold \"Fold ↑\" buttons (n=2): before visible=true opacity=1 bbox={\"x\":1090.71875,\"y\":607.984375,\"width\":63.28125,\"height\":44}; after-hover visible=true opacity=1 — NO CHANGE (not hover-gated) | colophon actions (n=4): before visible=true opacity=1 bbox={\"x\":813.46875,\"y\":2197.609375,\"width\":129.609375,\"height\":44}; after-hover visible=true opacity=1 — NO CHANGE (not hover-gated) | spine marks (n=13): before visible=true opacity=1 bbox={\"x\":126,\"y\":94.109375,\"width\":49.5,\"height\":49.5}; after-hover visible=true opacity=1 — NO CHANGE (not hover-gated) | margin item rows: 0 elements found (selector may not match this doc's state)",
+    "verdict": "partial",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/01-hover-only.png"
+  },
+  {
+    "probe": "2-esc-chain",
+    "steps": [
+      "opened shelf leaf 'Plan room': shelfOpenAfterClick=true",
+      "opened ⌘K on top: cmdkOpen=true",
+      "Esc #1: url=http://localhost:3000/doc/2992a486-b2bd-4139-9e51-33ed1621c59c cmdkOpen=false shelfOpen=true",
+      "Esc #2: url=http://localhost:3000/doc/2992a486-b2bd-4139-9e51-33ed1621c59c cmdkOpen=false shelfOpen=false",
+      "Esc #3: url=http://localhost:3000/desk"
+    ],
+    "observed": "Order: shelf leaf opened -> ⌘K opened on top -> Esc1 closes ⌘K (cmdkOpen after=false) -> Esc2 closes shelf (shelfOpen after=false) -> Esc3 puts document down (final url=http://localhost:3000/desk, started at http://localhost:3000/doc/2992a486-b2bd-4139-9e51-33ed1621c59c)",
+    "verdict": "works",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/02-esc-chain-stacked.png, /Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/02-esc-chain-final.png"
+  },
+  {
+    "probe": "3-keyboard-chords",
+    "steps": [
+      "from /desk, focus body, press each registered g-chord (g l/p/r/o/a/h/t)",
+      "press Meta+K",
+      "press '/' and '?' (neither has a registered handler in source)",
+      "record URL before/after and any [role=dialog] aria-label",
+      "grep-derived: check if g-chord text is rendered anywhere on /desk or /doc"
+    ],
+    "observed": "from /desk keys=\"g l\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"g p\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"g r\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"g o\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"g a\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"g h\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"g t\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"Meta+k\": url http://localhost:3000/desk -> http://localhost:3000/desk, dialog aria-label=\"Command bar\" || from /desk keys=\"/\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"?\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || chord text visible anywhere on screen: desk=\"true\" (⌘K glyph likely present as UI convention, not the g-chords), doc=\"false\"",
+    "verdict": "partial",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/03-chords-desk-final.png"
+  },
+  {
+    "probe": "3-keyboard-chords",
+    "steps": [
+      "from /desk, focus body, press each registered g-chord (g l/p/r/o/a/h/t)",
+      "press Meta+K",
+      "press '/' and '?' (neither has a registered handler in source)",
+      "record URL before/after and any [role=dialog] aria-label",
+      "grep-derived: check if g-chord text is rendered anywhere on /desk or /doc"
+    ],
+    "observed": "from /desk keys=\"g l\": url http://localhost:3000/desk -> http://localhost:3000/library, no dialog || from /desk keys=\"g p\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"g r\": url http://localhost:3000/desk -> http://localhost:3000/rooms, no dialog || from /desk keys=\"g o\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"g a\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"g h\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"g t\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"Meta+k\": url http://localhost:3000/desk -> http://localhost:3000/desk, dialog aria-label=\"Command bar\" || from /desk keys=\"/\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"?\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || chord text visible anywhere on screen: desk=\"true\" (⌘K glyph likely present as UI convention, not the g-chords), doc=\"false\"",
+    "verdict": "partial",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/03-chords-desk-final.png"
+  },
+  {
+    "probe": "3-keyboard-chords",
+    "steps": [
+      "from /desk, focus body, press each registered g-chord (g l/p/r/o/a/h/t)",
+      "press Meta+K",
+      "press '/' and '?' (neither has a registered handler in source)",
+      "record URL before/after and any [role=dialog] aria-label",
+      "grep-derived: check if g-chord text is rendered anywhere on /desk or /doc"
+    ],
+    "observed": "from /desk keys=\"g l\": url http://localhost:3000/desk -> http://localhost:3000/library, no dialog || from /desk keys=\"g p\": url http://localhost:3000/desk -> http://localhost:3000/people, no dialog || from /desk keys=\"g r\": url http://localhost:3000/desk -> http://localhost:3000/rooms, no dialog || from /desk keys=\"g o\": url http://localhost:3000/desk -> http://localhost:3000/desk, dialog opened (count=1, aria-label=null) || from /desk keys=\"g a\": url http://localhost:3000/desk -> http://localhost:3000/desk, dialog opened (count=1, aria-label=null) || from /desk keys=\"g h\": url http://localhost:3000/desk -> http://localhost:3000/desk, dialog opened (count=1, aria-label=null) || from /desk keys=\"g t\": url http://localhost:3000/desk -> http://localhost:3000/desk, dialog opened (count=1, aria-label=null) || from /desk keys=\"Meta+k\": url http://localhost:3000/desk -> http://localhost:3000/desk, dialog opened (count=1, aria-label=Command bar) || from /desk keys=\"/\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || from /desk keys=\"?\": url http://localhost:3000/desk -> http://localhost:3000/desk, no dialog || chord text visible anywhere on screen: desk=\"true\" (⌘K glyph likely present as UI convention, not the g-chords), doc=\"false\"",
+    "verdict": "partial",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/03-chords-desk-final.png"
+  },
+  {
+    "probe": "4-scroll-spy",
+    "steps": [
+      "goto /doc/2992a486-b2bd-4139-9e51-33ed1621c59c at 1440x1000",
+      "scroll in 10 steps top->bottom (11 samples incl. 0 and 10)",
+      "at each step read [aria-current=\"true\"] entries in the running index"
+    ],
+    "observed": "step 0 (scrollY target=0): active entries=1 -> [\"Client approvals0 in the log\"] | step 1 (scrollY target=241): active entries=1 -> [\"ScheduleNot scheduled\"] | step 2 (scrollY target=483): active entries=1 -> [\"ScheduleNot scheduled\"] | step 3 (scrollY target=724): active entries=1 -> [\"ScheduleNot scheduled\"] | step 4 (scrollY target=965): active entries=1 -> [\"ScheduleNot scheduled\"] | step 5 (scrollY target=1207): active entries=1 -> [\"Project · FF&E3 pieces · 0 rooms\"] | step 6 (scrollY target=1448): active entries=1 -> [\"Design authorityNo authority yet\"] | step 7 (scrollY target=1689): active entries=1 -> [\"Design authorityNo authority yet\"] | step 8 (scrollY target=1930): active entries=1 -> [\"Design authorityNo authority yet\"] | step 9 (scrollY target=2172): active entries=1 -> [\"Design authorityNo authority yet\"] | step 10 (scrollY target=2413): active entries=1 -> [\"Design authorityNo authority yet\"]",
+    "verdict": "works",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/04-scroll-spy-bottom.png"
+  },
+  {
+    "probe": "5-fold-unfold-persistence",
+    "steps": [
+      "found 3 'Fold ↑' buttons",
+      "clicked first Fold button (region hint=\"document-decision-controls\"); [data-fold-seam] count now=5",
+      "localStorage doc-fold keys after fold: {\"patina:doc-fold:2992a486-b2bd-4139-9e51-33ed1621c59c:schedule\":\"1\"}"
+    ],
+    "observed": "clicked first Fold button (region hint=\"document-decision-controls\"); [data-fold-seam] count now=5 | localStorage doc-fold keys after fold: {\"patina:doc-fold:2992a486-b2bd-4139-9e51-33ed1621c59c:schedule\":\"1\"} | after reload: [data-fold-seam] count=5 (persisted=true) | clicked seam for heading=\"project-approvals-title\": seam gone after click=true",
+    "verdict": "works",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/05-fold-folded.png, /Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/05-fold-after-reload.png, /Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/05-fold-unfolded.png"
+  },
+  {
+    "probe": "5b-running-index-unfold-folded-region",
+    "steps": [
+      "goto /doc/2992a486-b2bd-4139-9e51-33ed1621c59c at 1440",
+      "click a region's own 'Fold ↑' button to fold it",
+      "click every running-index row in turn, observing scroll position + remaining fold-seam count"
+    ],
+    "observed": "Schedule heading present before fold attempt: true | seams after folding: [\"project-approvals-title\",\"schedule-rule-title\",\"project-schedule-title\",\"money-region-heading\",\"care-band-heading\"] | running-index rows (n=4): [\"Client approvals0 in the log\",\"ScheduleNot scheduled\",\"Project · FF&E3 pieces · 0 rooms\",\"Design authorityNo authority yet\"] | clicked running-index row \"Client approvals\n0 IN THE LOG\": scrollY 0 -> 421 (moved=true), remaining seams=4 | clicked running-index row \"Schedule\nNOT SCHEDULED\": scrollY 421 -> 915 (moved=true), remaining seams=3 | clicked running-index row \"Project · FF&E\n3 PIECES · 0 ROOMS\": scrollY 915 -> 1502 (moved=true), remaining seams=3 | clicked running-index row \"Design authority\nNO AUTHORITY YET\": scrollY 1502 -> 2202 (moved=true), remaining seams=2",
+    "verdict": "works",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/05b-running-index-unfold.png"
+  },
+  {
+    "probe": "6-focus-return",
+    "steps": [
+      "for each of: shelf leaf, command bar, Orders ledger sheet, margin panel(1300px)",
+      "click/keyboard to open, close (Esc or close control), read document.activeElement"
+    ],
+    "observed": "shelf leaf (Plan room) (close=Escape): focus returned to trigger=true; document.activeElement=BUTTON[aria-label=null][class~=-mx-1.5 flex w-[calc(100%+0.75] | Command bar (via Meta+K, no visible trigger button found): focus returned to pre-open element=false | Orders ledger door not found in Studio drawer | Margin panel (1300px, sheet mode) (close=closeButton): focus returned to trigger=true; document.activeElement=BUTTON[aria-label=null][class~=group fixed right-0 top-28 z-[]",
+    "verdict": "partial",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/06-focus-return.png"
+  },
+  {
+    "probe": "6-focus-return",
+    "steps": [
+      "for each of: shelf leaf, command bar, Orders ledger sheet, margin panel(1300px)",
+      "click/keyboard to open, close (Esc or close control), read document.activeElement"
+    ],
+    "observed": "shelf leaf (Plan room) (close=Escape): focus returned to trigger=true; document.activeElement=BUTTON[aria-label=null][class~=-mx-1.5 flex w-[calc(100%+0.75] | Command bar (via Meta+K; no visible trigger on /doc so \"Plan room\" shelf button was deliberately focused first, label=\"Plan roomNothing filed→\"): focus returned to that pre-open element=false; document.activeElement after close=BODY/(self.__next_s=self.__next_s|| | Orders ledger sheet (drawer, via Studio books) (close=Escape): focus returned to trigger=false; document.activeElement=BODY[aria-label=null][class~=__variable_f367f3 __variable_3] | Margin panel (1300px, sheet mode) (close=closeButton): focus returned to trigger=true; document.activeElement=BUTTON[aria-label=null][class~=group fixed right-0 top-28 z-[]",
+    "verdict": "partial",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/06-focus-return.png"
+  },
+  {
+    "probe": "7-room-lens-strand",
+    "steps": [
+      "goto /doc/b0000000-0000-0000-0000-0000000000d1 at 1440 (only project with project_rooms rows)"
+    ],
+    "observed": "No rooms rendered in the spine Rooms block on b0000000-0000-0000-0000-0000000000d1 either — rooms found in spine rooms block: 0",
+    "verdict": "partial",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/07-room-lens-no-rooms.png"
+  },
+  {
+    "probe": "8-console-errors",
+    "steps": [
+      "goto /desk, waitUntil networkidle, collect console error/warning + pageerror for 600ms settle",
+      "goto /doc/2992a486-b2bd-4139-9e51-33ed1621c59c, waitUntil networkidle, collect console error/warning + pageerror for 600ms settle",
+      "goto /doc/b0000000-0000-0000-0000-000000000002, waitUntil networkidle, collect console error/warning + pageerror for 600ms settle",
+      "goto /doc/b0000000-0000-0000-0000-0000000000d1, waitUntil networkidle, collect console error/warning + pageerror for 600ms settle",
+      "goto /library, waitUntil networkidle, collect console error/warning + pageerror for 600ms settle",
+      "goto /people, waitUntil networkidle, collect console error/warning + pageerror for 600ms settle",
+      "goto /rooms, waitUntil networkidle, collect console error/warning + pageerror for 600ms settle",
+      "goto /drafting/d0c10000-0000-0000-0000-0000000000b2, waitUntil networkidle, collect console error/warning + pageerror for 600ms settle"
+    ],
+    "observed": "/desk: clean || /doc/2992a486-b2bd-4139-9e51-33ed1621c59c: clean || /doc/b0000000-0000-0000-0000-000000000002: clean || /doc/b0000000-0000-0000-0000-0000000000d1: clean || /library: clean || /people: clean || /rooms: clean || /drafting/d0c10000-0000-0000-0000-0000000000b2: clean",
+    "verdict": "works",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/08-console-last-route.png"
+  },
+  {
+    "probe": "9-timings",
+    "steps": [
+      "cold: fresh browser context, sign in, then goto(route) -> [data-document-shell] visible, time from goto start",
+      "warm: same context, prime both routes once, then re-navigate and time again"
+    ],
+    "observed": "cold /desk: 8112ms | cold /doc/2992a486-b2bd-4139-9e51-33ed1621c59c: 2878ms | warm /desk: 111ms | warm /doc/{project_rich}: 1725ms",
+    "verdict": "works",
+    "evidence": "/Users/kody/Code/patina-merged/artifacts/document-wayfinding-directions-2026-08-25/probe/09-timings-final.png"
+  }
+]

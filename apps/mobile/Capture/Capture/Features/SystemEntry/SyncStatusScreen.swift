@@ -100,11 +100,30 @@ struct SyncStatusScreen: View {
                     .font(CaptureType.footnote)
                     .foregroundStyle(CaptureColor.error)
             }
+            // Degrade honestly: the depth above counts work that this run will
+            // lose. Deliberately flag-independent — an off switch on the truth
+            // would put the designer back where this bug found her.
+            if store.openReport.losesWorkOnRelaunch {
+                Text(Self.inMemoryWarning)
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.error)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("u1.sync.in-memory-warning")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
         .padding(.bottom, 12)
     }
+
+    /// Said plainly, and in the one place the designer looks to know her work
+    /// is safe. There is no recovery she can perform, so this promises none —
+    /// and it must never send her to relaunch the app, which is the single
+    /// action that throws away everything this run is holding in memory.
+    static let inMemoryWarning =
+        "Nothing you capture here is being saved on this iPhone. "
+        + "Send what you have before you leave — anything still here is gone "
+        + "once the app closes."
 
     private var pendingCount: Int { rows.count + scanRows.count }
     private var hasRetryableTransfer: Bool {

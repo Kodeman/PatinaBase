@@ -1,0 +1,1190 @@
+/* ==========================================================================
+   The Document — Mock Kit (kit.css)
+   ==========================================================================
+   Self-contained stylesheet for hand-drawn HTML/CSS mocks of the Patina
+   designer portal's "Document" surfaces. Built for a single published
+   Artifact under a strict CSP (external hosts blocked except
+   https://fonts.googleapis.com; data: URIs fine; light + dark theme-aware).
+
+   Source of the visual grammar (read, not copied — see KIT.md for the full
+   token table with file:line citations):
+     apps/designer-portal/src/app/globals.css                (tokens, Scored Ink)
+     packages/patina-design-system/src/styles/typography.css (type roles)
+     apps/designer-portal/src/components/document/**          (region/spine/
+       strata-mark/red-letter/drawer/folio/margin primitives)
+
+   Doctrine D4: depth is value contrast + a 1px rule, NEVER a shadow.
+   This file contains zero box-shadow declarations. See KIT.md "do not" list.
+   ========================================================================== */
+
+/* ── 1. Fonts ──────────────────────────────────────────────────────────── */
+
+/* Primary: relative woff2 files shipped alongside this kit (recovered from
+   the real portal's Next.js font-optimizer build cache — see KIT.md "Font
+   mapping"). All three families are variable fonts (wght axis), so one file
+   per family/style correctly renders every weight declared below. */
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('./assets/fonts/playfair-variable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: italic;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('./assets/fonts/playfair-italic-variable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-variable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('./assets/fonts/dmmono-300.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/dmmono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./assets/fonts/dmmono-500.woff2') format('woff2');
+}
+
+/* Alternative A — inline base64 data URIs (no separate font requests at all,
+   good for a single-file artifact). Paste the contents of
+   OUT/mock/assets/fonts/fonts-data-uri.css HERE in place of the six
+   @font-face blocks above, trim to only the weights you actually use, and
+   delete the Google Fonts <link> below. Kept out-of-line here because the
+   full set is ~204KB base64 — comfortably under the 1.2MB budget, but no
+   reason to carry it in every kit.css consumer that doesn't need it.
+
+@font-face { font-family: 'Playfair Display'; font-style: normal; font-weight: 400 900; src: url(data:font/woff2;base64,...) format('woff2'); }
+@font-face { font-family: 'Playfair Display'; font-style: italic; font-weight: 400 900; src: url(data:font/woff2;base64,...) format('woff2'); }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 100 900; src: url(data:font/woff2;base64,...) format('woff2'); }
+@font-face { font-family: 'DM Mono'; font-style: normal; font-weight: 400; src: url(data:font/woff2;base64,...) format('woff2'); }
+@font-face { font-family: 'DM Mono'; font-style: normal; font-weight: 500; src: url(data:font/woff2;base64,...) format('woff2'); }
+*/
+
+/* Alternative B — Google Fonts fallback (third fallback; requires the CSP's
+   permitted https://fonts.googleapis.com host; NOT usable if the artifact
+   must render offline or the CSP tightens further). Put this <link> in the
+   page <head> — not usable from inside a CSS file, kept here as the paste-in
+   reference the ask requires:
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+*/
+
+/* Every font-family declaration below carries a real fallback stack so the
+   kit degrades gracefully if a font source is dropped entirely. */
+
+/* ── 2. Tokens ─────────────────────────────────────────────────────────── */
+
+:root {
+  /* — Font stacks — */
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta: 'DM Mono', 'SF Mono', 'Fira Code', monospace;
+
+  /* — Primary palette (globals.css :root, lines 9-16) — */
+  --color-off-white: #FAF7F2;
+  --color-pearl: #E5E2DD;
+  --color-clay: #C4A57B;
+  --color-aged-oak: #8B7355;
+  --color-mocha: #5C4A3C;
+  --color-charcoal: #2C2926;
+  --color-quiet-ink: #65594E;
+
+  /* — Extended palette (globals.css lines 19-23) — */
+  --color-sage: #A8B5A0;
+  --color-dusty-blue: #8B9CAD;
+  --color-terracotta: #D4A090;
+  --color-golden-hour: #E8C547;
+
+  /* — The Document paper surfaces (globals.css lines 26-36) — */
+  --doc-paper: #FCFAF6;
+  --doc-sheet-2: #EFE9DD;
+  --doc-sheet-3: #E2DACA;
+  --doc-ink-border: rgba(44, 41, 38, 0.18);
+  --doc-desk-ink: rgba(250, 247, 242, 0.45);
+  --doc-sheet-front: #F7F2EB;
+  --doc-sheet-back: #F1EBE2;
+
+  /* — Semantic assignments (globals.css lines 39-58) — */
+  --bg-primary: var(--color-off-white);
+  --bg-surface: #FFFFFF;
+  --bg-hover: rgba(196, 165, 123, 0.06);
+  --text-primary: var(--color-charcoal);
+  --text-body: var(--color-mocha);
+  --text-muted: var(--color-quiet-ink);
+  --text-subtle: var(--color-quiet-ink);
+  --accent-primary: var(--color-clay);
+  --accent-hover: var(--color-aged-oak);
+  --accent-active: var(--color-charcoal);
+  --border-default: var(--color-pearl);
+  --border-subtle: rgba(229, 226, 221, 0.6);
+  --border-warm: #DDD4C8;
+  --bg-warm: #EEE6DB;
+  --bg-subtle: #F5F1ED;
+  /* Spine/margin rail wash — a translucent pearl-tint over --doc-paper.
+     Kept as its own token (rather than a bare rgba literal) so it can be
+     re-pointed per theme instead of baking in the light pearl RGB. */
+  --spine-wash: rgba(229, 226, 221, 0.28);
+  --margin-wash: rgba(250, 247, 242, 0.98);
+
+  /* — Functional colors (globals.css lines 80-85) — */
+  --color-success: #7A9B76;
+  --color-warning: #D4A574;
+  --color-error: #C77B6E;
+  --color-info: #8B9CAD;
+
+  /* — Phase colors (globals.css lines 87-94) — */
+  --phase-consultation: #8B9CAD;
+  --phase-concept: #C4A57B;
+  --phase-refinement: #8B7355;
+  --phase-procurement: #E8C547;
+  --phase-installation: #D4A090;
+  --phase-walkthrough: #A8B5A0;
+
+  /* — PO / order-stamp colors (orders-ledger.tsx PO_STAMP) — */
+  --stamp-draft: var(--color-aged-oak);
+  --stamp-confirmed: var(--color-dusty-blue);
+  --stamp-in-production: var(--color-golden-hour);
+  --stamp-in-production-ink: #D8BE56;
+  --stamp-shipped: var(--color-golden-hour);
+  --stamp-delivered: var(--color-sage);
+  --stamp-cancelled: var(--color-terracotta);
+  --stamp-damaged: var(--color-error);
+
+  /* — Type floors (globals.css lines 47-52) — */
+  --type-metadata-min: 12px;
+  --type-body-min: 14px;
+  --type-control-min: 16px;
+
+  /* — Spacing (globals.css lines 108-118) — */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  /* — Motion (globals.css lines 96-106; kept for parity, mocks are static) — */
+  --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+
+  /* — Layout constants (doc/[id]/page.tsx grid; studio-drawer.tsx; margin-rail.tsx) — */
+  --doc-spine-w: 200px;
+  --doc-spine-compact-w: 56px;
+  --doc-margin-w: 232px;
+  --doc-drawer-h: 60px;
+  --doc-mobile-bar-h: 64px;
+}
+
+/* Dark theme — NOT present in the shipped product today (globals.css defines
+   no --doc-* dark values; the app only ships a shadcn-style OKLCH `.dark`
+   block unrelated to the Document paper tokens — see KIT.md "Dark theme").
+   Derived here for kit consumers that must be theme-aware: paper deepens to
+   a warm charcoal, ink lifts to off-white, clay/terracotta lighten one step.
+   Body-ink-on-paper contrast checked ≥4.5:1 (see KIT.md contrast table). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-off-white: #EDE6D8;
+    --color-pearl: #4A453F;
+    --color-clay: #D9BA8E;
+    --color-aged-oak: #C4A57B;
+    --color-mocha: #C9BCAE;
+    --color-charcoal: #F4F0E8;
+    --color-quiet-ink: #B9AC9B;
+
+    --color-sage: #B7C4AF;
+    --color-dusty-blue: #9DAEBE;
+    --color-terracotta: #E0AC9C;
+    --color-golden-hour: #EDCE6B;
+
+    --doc-paper: #211E1B;
+    --doc-sheet-2: #2A2621;
+    --doc-sheet-3: #332D26;
+    --doc-ink-border: rgba(237, 230, 216, 0.16);
+    --doc-desk-ink: rgba(33, 30, 27, 0.55);
+    --doc-sheet-front: #292521;
+    --doc-sheet-back: #322C26;
+
+    --bg-primary: #211E1B;
+    --bg-surface: #2A2621;
+    --bg-hover: rgba(217, 186, 142, 0.10);
+    --text-primary: var(--color-charcoal);
+    --text-body: var(--color-mocha);
+    --text-muted: var(--color-quiet-ink);
+    --text-subtle: var(--color-quiet-ink);
+    --accent-primary: var(--color-clay);
+    --accent-hover: var(--color-aged-oak);
+    --accent-active: var(--color-off-white);
+    --border-default: var(--color-pearl);
+    --border-subtle: rgba(74, 69, 63, 0.6);
+    --border-warm: #4A4038;
+    --bg-warm: #33291F;
+    --bg-subtle: #29241F;
+    --spine-wash: rgba(74, 69, 63, 0.35);
+    --margin-wash: rgba(42, 38, 33, 0.98);
+
+    --stamp-in-production-ink: #EDCE6B;
+  }
+}
+:root[data-theme="dark"] {
+  --color-off-white: #EDE6D8;
+  --color-pearl: #4A453F;
+  --color-clay: #D9BA8E;
+  --color-aged-oak: #C4A57B;
+  --color-mocha: #C9BCAE;
+  --color-charcoal: #F4F0E8;
+  --color-quiet-ink: #B9AC9B;
+
+  --color-sage: #B7C4AF;
+  --color-dusty-blue: #9DAEBE;
+  --color-terracotta: #E0AC9C;
+  --color-golden-hour: #EDCE6B;
+
+  --doc-paper: #211E1B;
+  --doc-sheet-2: #2A2621;
+  --doc-sheet-3: #332D26;
+  --doc-ink-border: rgba(237, 230, 216, 0.16);
+  --doc-desk-ink: rgba(33, 30, 27, 0.55);
+  --doc-sheet-front: #292521;
+  --doc-sheet-back: #322C26;
+
+  --bg-primary: #211E1B;
+  --bg-surface: #2A2621;
+  --bg-hover: rgba(217, 186, 142, 0.10);
+  --text-primary: var(--color-charcoal);
+  --text-body: var(--color-mocha);
+  --text-muted: var(--color-quiet-ink);
+  --text-subtle: var(--color-quiet-ink);
+  --accent-primary: var(--color-clay);
+  --accent-hover: var(--color-aged-oak);
+  --accent-active: var(--color-off-white);
+  --border-default: var(--color-pearl);
+  --border-subtle: rgba(74, 69, 63, 0.6);
+  --border-warm: #4A4038;
+  --bg-warm: #33291F;
+  --bg-subtle: #29241F;
+  --spine-wash: rgba(74, 69, 63, 0.35);
+  --margin-wash: rgba(42, 38, 33, 0.98);
+
+  --stamp-in-production-ink: #EDCE6B;
+}
+
+/* ── 3. Base ───────────────────────────────────────────────────────────── */
+
+.patina-mock {
+  background: var(--bg-primary);
+  color: var(--text-body);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.patina-mock * {
+  box-sizing: border-box;
+}
+
+/* ── 4. Print helpers ──────────────────────────────────────────────────── */
+
+.eyebrow {
+  font-family: var(--font-meta);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.serif-h {
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--text-primary);
+}
+.mono {
+  font-family: var(--font-meta);
+}
+/* .scored — a single or double rule under a word, the DocumentAction grammar
+   at rest (no hover/press states; mocks are static images). */
+.scored {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 6px;
+}
+.scored::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.5px;
+  background: currentColor;
+}
+.scored-double::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3.5px;
+  height: 1px;
+  background: var(--color-clay);
+}
+
+/* ── 5. .paper — the full-bleed document sheet ────────────────────────── */
+
+.paper {
+  background: var(--doc-paper);
+  color: var(--text-body);
+  min-height: 100%;
+}
+
+/* ── 6. .spine / .spine-compact — the left rail ───────────────────────── */
+
+.spine {
+  width: var(--doc-spine-w);
+  min-height: 100%;
+  background: var(--spine-wash);
+  border-right: 1px solid var(--color-pearl);
+  padding: 24px 16px;
+  font-family: var(--font-body);
+}
+/* .spine's background is a translucent pearl-tint (rgba, not a --token) so
+   it stays correct in both themes automatically — --color-pearl itself
+   flips per theme and this rule rides on that. */
+.spine .spine-put-down {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-meta);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-charcoal);
+  margin-bottom: 16px;
+}
+.spine .spine-mark-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.spine .spine-active-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-charcoal);
+  display: block;
+}
+.spine .spine-active-sub {
+  font-family: var(--font-meta);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-clay);
+  display: block;
+  margin-top: 1px;
+}
+.spine .spine-presence {
+  font-family: var(--font-meta);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-aged-oak);
+  margin-top: 8px;
+}
+
+.spine-compact {
+  width: var(--doc-spine-compact-w);
+  min-height: 100%;
+  background: var(--spine-wash);
+  border-right: 1px solid var(--color-pearl);
+  padding: 16px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* .running-index — "In this document" block in the spine */
+.running-index {
+  margin-top: 16px;
+  border-top: 1px solid var(--color-pearl);
+  padding-top: 12px;
+}
+.running-index .ri-label {
+  font-family: var(--font-meta);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-aged-oak);
+  margin-bottom: 8px;
+}
+.running-index .ri-row {
+  position: relative;
+  padding: 6px 0 6px 12px;
+}
+.running-index .ri-row.is-current {
+  border-left: 2px solid var(--color-clay);
+  margin-left: -12px;
+  padding-left: 12px;
+}
+.running-index .ri-row .ri-name {
+  display: block;
+  font-size: 13px;
+  color: var(--color-charcoal);
+  line-height: 1.2;
+}
+.running-index .ri-row.is-current .ri-name {
+  font-weight: 600;
+}
+.running-index .ri-row .ri-value {
+  display: block;
+  margin-top: 1px;
+  font-family: var(--font-meta);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-aged-oak);
+}
+.running-index .ri-row.is-current .ri-value {
+  color: var(--color-charcoal);
+}
+
+/* .shelf-row — one row of the spine's "The shelves" block */
+.shelf-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px;
+  margin: 0 -6px;
+  border-bottom: 1px solid rgba(44, 41, 38, 0.10);
+}
+.shelf-row.is-open {
+  background: rgba(196, 165, 123, 0.15);
+  border-bottom: none;
+}
+.shelf-row .shelf-title {
+  display: block;
+  font-size: 13.5px;
+  color: var(--color-charcoal);
+  line-height: 1.2;
+}
+.shelf-row.is-open .shelf-title {
+  font-weight: 600;
+}
+.shelf-row .shelf-status {
+  display: block;
+  margin-top: 1px;
+  font-family: var(--font-meta);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-aged-oak);
+}
+.shelf-row .shelf-arrow {
+  font-family: var(--font-meta);
+  font-size: 11px;
+  color: var(--color-aged-oak);
+}
+
+/* ── 7. .strata-mark — three descending bars, the brand/progress device ── */
+
+.strata-mark {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2.5px;
+}
+.strata-mark .strata-line {
+  height: 2px;
+  border-radius: 999px;
+  background: var(--color-pearl);
+}
+/* Overall mark width per size (SIZES table, strata-mark.tsx:41-47): the bars
+   below are percentages of THIS width, so the container needs an explicit
+   width — an inline-flex column's cross-axis won't resolve `width: 80%` on
+   a child against a shrink-to-fit parent. */
+.strata-mark.size-xs { width: 22px; }
+.strata-mark.size-sm { width: 48px; }
+.strata-mark.size-md { width: 88px; }
+.strata-mark.size-lg { width: 120px; }
+.strata-mark.size-xl { width: 150px; }
+.strata-mark.size-xs .strata-line { height: 2px; }
+.strata-mark.size-sm .strata-line { height: 2px; }
+.strata-mark.size-md .strata-line { height: 3px; }
+.strata-mark.size-lg .strata-line { height: 4px; }
+.strata-mark.size-xl .strata-line { height: 6px; }
+/* Widths at the canonical 100/80/60 ratio; set per-size via inline style or
+   nth-child rules on a fixed base width */
+.strata-mark .strata-line:nth-child(1) { width: 100%; }
+.strata-mark .strata-line:nth-child(2) { width: 80%; opacity: 1; }
+.strata-mark .strata-line:nth-child(3) { width: 60%; opacity: 0.55; }
+/* State variant (decorative divider): settled / active / future */
+.strata-mark.state-settled .strata-line { background: var(--color-sage); }
+.strata-mark.state-active .strata-line { background: var(--color-clay); }
+.strata-mark.state-future .strata-line { background: var(--color-pearl); }
+/* Fill variant (progress device): three movement hues, each bar a track +
+   filled overlay. Markup: .strata-mark.fill > .strata-line > .strata-fill
+   with .strata-fill width set inline (0-100%) per line. */
+.strata-mark.fill .strata-line {
+  position: relative;
+  background: rgba(44, 41, 38, 0.12);
+}
+.strata-mark.fill .strata-line .strata-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+}
+.strata-mark.fill .strata-line:nth-child(1) .strata-fill { background: var(--color-mocha); }
+.strata-mark.fill .strata-line:nth-child(2) .strata-fill { background: var(--color-clay); }
+.strata-mark.fill .strata-line:nth-child(3) .strata-fill { background: var(--color-dusty-blue); }
+
+/* ── 8. .letterhead / .vitals — the document's top block ─────────────── */
+
+.letterhead {
+  border-bottom: 1px solid var(--color-pearl);
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+.letterhead .lh-title {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--color-charcoal);
+}
+.vitals {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: baseline;
+}
+.vitals .vital {
+  font-family: var(--font-meta);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-aged-oak);
+}
+.vitals .vital-value {
+  font-family: var(--font-meta);
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+
+/* .guide — the "next up" band directly under the letterhead */
+.guide {
+  margin-top: 10px;
+  border-left: 2px solid var(--color-clay);
+  background: rgba(196, 165, 123, 0.15);
+  padding: 6px 10px;
+  font-family: var(--font-meta);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-charcoal);
+}
+
+/* ── 9. .red-letter — the needs-attention zone ────────────────────────── */
+
+.red-letter {
+  border-radius: 3px;
+  border-left: 2px solid var(--color-terracotta);
+  background: rgba(212, 160, 144, 0.08);
+  padding: 10px 14px;
+}
+.red-letter .rl-label {
+  font-family: var(--font-meta);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #C4836F;
+}
+.red-letter .rl-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(139, 115, 85, 0.14);
+}
+.red-letter .rl-row:last-child { border-bottom: none; }
+.red-letter .rl-text {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--color-charcoal);
+}
+.red-letter .rl-text.is-urgent { font-weight: 500; }
+.red-letter .rl-action {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--color-mocha);
+}
+
+/* ── 10. .region-head / .seam — region furniture ──────────────────────── */
+
+.region-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 8px 16px;
+}
+.region-head .rh-eyebrow {
+  font-family: var(--font-meta);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+.region-head .rh-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--color-charcoal);
+}
+.region-head .rh-status {
+  font-size: 12.5px;
+  color: var(--color-mocha);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.region-head .rh-ledger {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: flex-end;
+}
+/* the inked leader — one filled/flooded word, the only "filled" thing in
+   the whole kit; see KIT.md "do not" list */
+.region-head .rh-ledger .rh-act {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-mocha);
+  position: relative;
+  padding-bottom: 5px;
+}
+.region-head .rh-ledger .rh-act::after {
+  content: '';
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  bottom: 0;
+  height: 1px;
+  background: var(--doc-ink-border);
+}
+/* The inked leader: the one filled thing in the whole kit (globals.css
+   .da-inked — an already-flooded pool, off-white text on charcoal ink).
+   Built from --text-primary/--doc-paper rather than the raw
+   --color-charcoal/--color-off-white pair so it stays legible in dark theme:
+   --color-charcoal flips to a LIGHT ink color there (it's the "ink" role,
+   not literally-always-dark), so a hardcoded charcoal-on-off-white fill would
+   go light-text-on-light-fill and disappear. --text-primary/--doc-paper
+   invert together per theme, so the flood stays the highest-contrast mark on
+   the page in both. */
+.region-head .rh-ledger .rh-act.is-inked {
+  color: var(--doc-paper);
+  background: var(--text-primary);
+  padding: 4px 10px 6px;
+  border-radius: 2px;
+}
+.region-head .rh-ledger .rh-act.is-inked::after {
+  left: 10px;
+  right: 10px;
+  background: var(--color-clay);
+}
+
+/* .region-rule — the double rule that opens a region (globals.css .doc-region-rule) */
+.region-rule {
+  height: 6px;
+  border-top: 2px solid var(--color-charcoal);
+  border-bottom: 1px solid rgba(44, 41, 38, 0.18);
+  margin: 20px 0 16px;
+}
+
+.seam {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 12px;
+}
+.seam .seam-name {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--color-charcoal);
+}
+.seam .seam-summary {
+  font-family: var(--font-meta);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seam .seam-unfold {
+  font-family: var(--font-meta);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-clay);
+}
+
+/* ── 11. .ffe-row — name/vendor left, stamp + price right ─────────────── */
+
+.ffe-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.ffe-row .ffe-name {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--color-charcoal);
+}
+.ffe-row .ffe-vendor {
+  display: block;
+  margin-top: 1px;
+  font-family: var(--font-meta);
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.ffe-row .ffe-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ffe-row .ffe-price {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-charcoal);
+  white-space: nowrap;
+}
+
+/* ── 12. .stamp — outlined mono chip (stamp.tsx, exact grammar) ──────── */
+
+.stamp {
+  display: inline-block;
+  transform: rotate(-1.5deg);
+  white-space: nowrap;
+  border-radius: 3px;
+  border: 1.5px solid currentColor;
+  background: transparent;
+  padding: 3px 9px;
+  font-family: var(--font-meta);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+.stamp.size-sm {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.stamp.stamp-draft { color: var(--stamp-draft); }
+.stamp.stamp-confirmed { color: var(--stamp-confirmed); }
+.stamp.stamp-in-production { color: var(--stamp-in-production-ink); border-color: var(--stamp-in-production); }
+.stamp.stamp-shipped { color: var(--stamp-in-production-ink); border-color: var(--stamp-shipped); }
+.stamp.stamp-delivered,
+.stamp.stamp-received { color: var(--stamp-delivered); }
+.stamp.stamp-cancelled { color: var(--stamp-cancelled); }
+.stamp.stamp-damaged { color: var(--stamp-damaged); }
+
+/* ── 13. .money-ladder — four rungs (synthesized; see KIT.md) ─────────── */
+
+.money-ladder {
+  display: flex;
+  flex-direction: column;
+}
+.money-ladder .ml-rung {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-meta);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.money-ladder .ml-rung:last-child {
+  border-bottom: none;
+  border-top: 1px solid var(--color-charcoal);
+  margin-top: 4px;
+  padding-top: 10px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-charcoal);
+}
+.money-ladder .ml-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.money-ladder .ml-value {
+  font-family: var(--font-meta);
+}
+.money-ladder .ml-rung:last-child .ml-value {
+  font-family: var(--font-display);
+}
+
+/* ── 14. .margin / .margin-item — the right rail ──────────────────────── */
+
+.margin {
+  width: var(--doc-margin-w);
+  min-height: 100%;
+  background: var(--margin-wash);
+  border-left: 1px solid var(--color-pearl);
+  padding: 24px 16px;
+}
+.margin-item {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(44, 41, 38, 0.08);
+}
+.margin-item .mi-eyebrow {
+  font-family: var(--font-meta);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-charcoal);
+  margin-bottom: 3px;
+}
+.margin-item .mi-line {
+  font-size: 13px;
+  color: var(--color-charcoal);
+  line-height: 1.4;
+}
+
+/* ── 15. .drawer — 60px fixed bottom strip ────────────────────────────── */
+
+.drawer {
+  height: var(--doc-drawer-h);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  padding: 0 22px;
+}
+.drawer .drawer-word {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--text-primary);
+}
+.drawer .drawer-crumb {
+  font-family: var(--font-meta);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.drawer .drawer-center {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: center;
+}
+.drawer .drawer-nav-item {
+  font-size: 14px;
+  color: var(--text-body);
+  padding: 8px 10px;
+}
+.drawer .drawer-nav-item.is-active {
+  color: var(--text-primary);
+  position: relative;
+}
+.drawer .drawer-nav-item.is-active::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--color-clay);
+}
+.drawer .drawer-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.drawer .drawer-time {
+  font-family: var(--font-meta);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+/* No badges/counts — see KIT.md "do not" list */
+
+/* ── 16. .folio — desk card with a colored phase tab ──────────────────── */
+
+.folio {
+  position: relative;
+  width: 100%;
+  margin-top: 26px;
+  padding-top: 26px;
+}
+.folio .folio-sheet-back,
+.folio .folio-sheet-front {
+  position: absolute;
+  inset: 26px 0 0 0;
+  border-radius: 0 8px 8px 8px;
+  border: 1px solid var(--border-default);
+}
+.folio .folio-sheet-back {
+  transform: translate(10px, 10px);
+  background: var(--doc-sheet-back);
+}
+.folio .folio-sheet-front {
+  transform: translate(5px, 5px);
+  background: var(--doc-sheet-front);
+}
+.folio .folio-tab {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  border-radius: 7px 7px 0 0;
+  padding: 0 14px;
+  font-family: var(--font-meta);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #FFFFFF;
+  /* set background-color: var(--phase-*) per instance */
+}
+.folio .folio-face {
+  position: relative;
+  border-radius: 0 8px 8px 8px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  padding: 28px;
+}
+.folio .folio-face-title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+.folio .folio-face-meta {
+  font-family: var(--font-meta);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.folio .folio-face-need {
+  margin-top: 16px;
+  border-top: 1px solid var(--border-default);
+  padding-top: 14px;
+  font-size: 14px;
+  color: var(--text-body);
+}
+
+/* ── 17. .cmdk — ⌘K command bar dialog ────────────────────────────────── */
+
+.cmdk-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(44, 41, 38, 0.45);
+}
+.cmdk {
+  position: relative;
+  width: min(560px, 92%);
+  margin: 12vh auto 0;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid var(--doc-ink-border);
+  background: var(--doc-paper);
+}
+.cmdk .cmdk-input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--color-pearl);
+  background: transparent;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--color-charcoal);
+}
+.cmdk .cmdk-group-label {
+  font-family: var(--font-meta);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--color-clay);
+  padding: 8px 16px 4px;
+}
+.cmdk .cmdk-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+}
+.cmdk .cmdk-row-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-charcoal);
+}
+.cmdk .cmdk-row-meta {
+  font-family: var(--font-meta);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+/* ── 18. .mobile-bar / .sheet — 390px mobile chrome ───────────────────── */
+
+.mobile-bar {
+  height: var(--doc-mobile-bar-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid rgba(250, 247, 242, 0.16);
+  /* Literal, not var(--color-charcoal): the real mobile-bar.tsx is a fixed
+     dark strip (bg-[var(--color-charcoal)] in the product's LIGHT-only
+     token set, plus literal rgba(250,247,242,…) text below) independent of
+     page theme. --color-charcoal in THIS kit is theme-aware (it's the "ink"
+     role and flips light in dark mode), so referencing it here would turn
+     the bar white-on-white in dark theme. Pin the literal light-mode hex to
+     keep the always-dark strip the real component ships. */
+  background: #2C2926;
+  padding: 8px 12px;
+}
+.mobile-bar .mb-item {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+}
+.mobile-bar .mb-eyebrow {
+  display: block;
+  font-family: var(--font-meta);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(250, 247, 242, 0.58);
+}
+.mobile-bar .mb-value {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(250, 247, 242, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-bar .mb-value.is-clay {
+  font-style: italic;
+  color: var(--color-clay);
+}
+
+.sheet {
+  background: var(--doc-paper);
+  border-radius: 12px 12px 0 0;
+  border-top: 1px solid var(--doc-ink-border);
+  padding: 20px;
+}
+.sheet .sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-pearl);
+  margin: 0 auto 16px;
+}
+
+/* ── 19. .mock-frame — renders a screen at an exact CSS width ─────────── */
+
+/* Usage:
+     <div class="mock-frame" data-width="1440" data-scale="0.5">
+       <div class="mock-frame-inner"><!-- your 1440px-wide screen markup --></div>
+     </div>
+     <p class="mock-frame-caption">Caption text</p>
+
+   The inner element is laid out at its FULL width (1440/1280/390 etc, set
+   inline via style="width:1440px" on .mock-frame-inner) and then the OUTER
+   .mock-frame scales it down with a CSS transform so a wide frame still
+   fits a deck column. transform:scale() (not `zoom`, which some renderers
+   inside a strict-CSP artifact iframe treat inconsistently) keeps the frame
+   crisp and the caption at native size below it. */
+.mock-frame {
+  display: inline-block;
+  overflow: hidden;
+  border: 1px solid var(--doc-ink-border);
+  border-radius: 4px;
+  background: var(--doc-paper);
+  vertical-align: top;
+}
+.mock-frame-inner {
+  transform-origin: top left;
+  /* set `transform: scale(var(--frame-scale, 1))` via inline style once the
+     consumer knows target-column-width / native-frame-width */
+}
+.mock-frame-caption {
+  margin-top: 8px;
+  font-family: var(--font-meta);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* ── 20. D4 enforcement ────────────────────────────────────────────────
+   No rule in this file sets box-shadow, filter:drop-shadow, or any other
+   shadow primitive. Depth is value contrast (--doc-sheet-2/-3, folio offset
+   sheets) and 1px rules (--doc-ink-border, --border-default) only. If you
+   are tempted to add a shadow to a mock, stop — stack two offset sheets
+   (see .folio) or deepen a fill instead. ────────────────────────────── */

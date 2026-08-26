@@ -18,7 +18,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePlanRoom, type FilePlanPrintsResult } from '@patina/supabase';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
-import { folderTab } from '@/lib/document/desk-derivation';
 import { fmtDay } from '@/lib/document/format';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
@@ -113,7 +112,9 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
     );
   }
 
-  const projectName = row ? folderTab(row) : 'Project';
+  // SP-14/F100 — the return link names the full project, matching the spec
+  // book's leaf (not the folder tab's short surname), so the two leaves agree.
+  const projectName = row?.title || 'Project';
 
   const stageFiles = (files: File[]) => {
     const pdfs = files.filter(
@@ -171,7 +172,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
             ← {projectName}
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-heading text-xl">The plan room</h1>
+            <h1 className="truncate font-heading text-xl">Plan room</h1>
             <p className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {bundle?.sheets.length ?? 0}{' '}
               {(bundle?.sheets.length ?? 0) === 1 ? 'sheet' : 'sheets'}

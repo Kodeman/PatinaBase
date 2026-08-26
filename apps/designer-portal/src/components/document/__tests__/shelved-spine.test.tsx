@@ -3,18 +3,69 @@ import { useRoomLens, RoomLensProvider } from '../room-lens-context';
 import { SpineRunningIndex } from '../spine-running-index';
 import { SpineRoomsBlock } from '../spine-rooms-block';
 import { SpineShelvesBlock } from '../spine-shelves-block';
+import { DocSpineShelvedBlocks } from '../spine-shelved-blocks';
 import { ShelfPanel } from '../shelves/shelf-panel';
 import { requestShelfClose } from '@/lib/document/shelves';
 import {
   PROJECT_PAPER_ORDER,
+  paperRegionsForSection,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
+
+/** The blocks' reads; none of them is this file's subject except where the
+ *  ladder's live rung is what a test is checking. */
+const mockInvoiceRows: unknown[] = [];
+const mockPurchaseOrderRows: unknown[] = [];
+/** Neither of these two reads carries an `enabled` gate, so the only way to
+ *  withhold them on a spread that prints no money row is not to mount the
+ *  component that calls them. Counted, so that stays true. */
+const mockLadderReads = { purchaseOrders: 0, invoices: 0 };
+jest.mock('@patina/supabase', () => {
+  const actual = jest.requireActual('@patina/supabase');
+  return {
+    __esModule: true,
+    useProjectFFEItems: () => ({ data: [] }),
+    useProjectBoards: () => ({ data: [] }),
+    useProjectOwnedBoards: () => ({ data: [] }),
+    usePlanRoom: () => ({ data: { sheets: [] } }),
+    useProjectInvoices: () => {
+      mockLadderReads.invoices += 1;
+      return { isLoading: false, error: null, data: mockInvoiceRows };
+    },
+    usePurchaseOrders: () => {
+      mockLadderReads.purchaseOrders += 1;
+      return { isLoading: false, error: null, data: mockPurchaseOrderRows };
+    },
+    computeArAging: actual.computeArAging,
+    invoiceDaysOverdue: actual.invoiceDaysOverdue,
+  };
+});
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  __esModule: true,
+  useProjectBillingAuthority: () => ({
+    isLoading: false,
+    error: null,
+    data: { authorizedCents: 0 },
+  }),
+  useWorkingBudget: () => ({ isLoading: false, error: null, data: null }),
+  useProjectInstruments: () => ({ isLoading: false, error: null, data: [] }),
+  useTradeScopes: () => ({ isLoading: false, error: null, data: [] }),
+}));
+
+const mockRunningIndexCalls: DocumentIndexKey[][] = [];
+jest.mock('@/hooks/use-document-running-index', () => ({
+  __esModule: true,
+  useDocumentRunningIndex: (keys: readonly DocumentIndexKey[]) => {
+    mockRunningIndexCalls.push([...keys]);
+    return { activeKey: null, jump: jest.fn() };
+  },
+}));
 
 const VALUES: Record<DocumentIndexKey, string> = {
   schedule: 'Week 1 of 14',
   approvals: '3 in the log',
   ffe: '10 pieces · 5 rooms',
-  money: '$24,000 authority',
+  money: '$24,000 owed',
 };
 
 /** Built FROM the canonical order, so this fixture cannot quietly go on
@@ -33,14 +84,14 @@ describe('the running index', () => {
     );
 
     expect(
-      screen.getByRole('button', { name: /Project · FF&E/ }),
+      screen.getByRole('button', { name: /Pieces/ }),
     ).toHaveAttribute('aria-current', 'true');
     expect(screen.getByRole('button', { name: /Schedule/ })).toHaveAttribute(
       'aria-current',
       'false',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Design authority/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Money/ }));
     expect(onJump).toHaveBeenCalledWith('money');
   });
 
@@ -55,8 +106,8 @@ describe('the running index', () => {
     ).toEqual([
       'Client approvals',
       'Schedule',
-      'Project · FF&E',
-      'Design authority',
+      'Pieces',
+      'Money',
     ]);
   });
 
@@ -103,6 +154,17 @@ describe('the rooms block', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /Entry/ }));
     expect(onToggleRoom).toHaveBeenCalledWith('r2');
+  });
+
+  it('prints the heading and placeholder rather than nothing at zero rooms (F72)', () => {
+    render(
+      <SpineRoomsBlock rooms={[]} heldRoomId={null} onToggleRoom={jest.fn()} />,
+    );
+    expect(screen.getByText('Rooms')).toBeInTheDocument();
+    expect(
+      screen.getByText('Take a room in hand · nothing hides'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
 
@@ -293,5 +355,223 @@ describe('the shelf leaf', () => {
     expect(document.activeElement).toBe(
       screen.getByRole('button', { name: 'Spec book' }),
     );
+  });
+});
+
+describe('paperRegionsForSection', () => {
+  it('gives the Project spread all four regions, in the paper order', () => {
+    expect(paperRegionsForSection('project').map((r) => r.key)).toEqual([
+      'approvals',
+      'schedule',
+      'ffe',
+      'money',
+    ]);
+  });
+
+  it('drops the money and schedule regions on install and on care — neither spread mounts either', () => {
+    // MoneyRegion and ScheduleSpine — the only `data-index-region="money"` and
+    // `="schedule"` roots — both mount inside page.tsx's
+    // `spreadSection === 'project'` branch, so a row for either on these
+    // spreads would be a jump target with nothing behind it.
+    for (const section of ['install', 'care'] as const) {
+      expect(paperRegionsForSection(section).map((r) => r.key)).toEqual([
+        'approvals',
+        'ffe',
+      ]);
+    }
+  });
+
+  it('names no Project region on the spreads before the work starts', () => {
+    for (const section of [
+      'brief',
+      'discovery',
+      'direction',
+      'proposal',
+    ] as const) {
+      expect(paperRegionsForSection(section)).toEqual([]);
+    }
+  });
+
+  it('can never state an order the canonical paper order does not print', () => {
+    const canonical = PROJECT_PAPER_ORDER.map((r) => r.key);
+    for (const section of ['project', 'install', 'care'] as const) {
+      const subset = paperRegionsForSection(section).map((r) => r.key);
+      expect(subset).toEqual(canonical.filter((key) => subset.includes(key)));
+    }
+  });
+});
+
+describe('the shelved blocks', () => {
+  const props = {
+    projectId: 'proj-1',
+    rooms: [],
+    scheduleValue: 'Week 1 of 14',
+    approvalsValue: '3 in the log',
+    rosterCount: 0,
+    callSheetEnabled: false,
+    openShelf: null,
+    onToggleShelf: jest.fn(),
+  } as const;
+
+  beforeEach(() => {
+    mockRunningIndexCalls.length = 0;
+  });
+
+  const indexRows = () =>
+    Array.from(
+      screen
+        .getByRole('group', { name: 'In this document' })
+        .querySelectorAll('button'),
+    );
+
+  it('prints one index line per region the spread mounts — four on project', () => {
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    expect(indexRows()).toHaveLength(4);
+  });
+
+  it('prints two on install and on care — no line for the money or schedule region', () => {
+    for (const section of ['install', 'care'] as const) {
+      const { unmount } = render(
+        <DocSpineShelvedBlocks
+          {...props}
+          regions={paperRegionsForSection(section)}
+        />,
+      );
+      const rows = indexRows().map((b) => b.querySelector('span')?.textContent);
+      expect(rows).toHaveLength(2);
+      expect(rows).not.toContain('Money');
+      expect(rows).not.toContain('Schedule');
+      unmount();
+    }
+  });
+
+  it('offers the reading line only the keys the spread mounts', () => {
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('install')}
+      />,
+    );
+    expect(mockRunningIndexCalls[0]).toEqual(['approvals', 'ffe']);
+  });
+
+  it('reports the live money rung instead of the one empty tier (F09/F61)', () => {
+    mockInvoiceRows.length = 0;
+    mockInvoiceRows.push({
+      id: 'inv-1',
+      invoice_number: '2026-114',
+      status: 'sent',
+      due_date: '2020-01-01',
+      total_cents: 1_750_000,
+      amount_paid_cents: 0,
+      ar_flagged_at: null,
+    });
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    const moneyRow = screen.getByRole('button', { name: /Money/ });
+    expect(moneyRow).toHaveTextContent('$17,500 owed');
+    mockInvoiceRows.length = 0;
+  });
+
+  it('reaches the undrawn deposit rather than reporting $0 moved (F61)', () => {
+    // The live failure on the Chen residence: nothing owed, nothing ordered,
+    // $10,090 paid out and a $16,330 deposit standing undrawn. `Moved` clamps
+    // at zero — a FIGURE — so the index stopped there and printed "$0 moved"
+    // beside real money the region itself opened unfolded to show.
+    mockPurchaseOrderRows.length = 0;
+    mockPurchaseOrderRows.push({
+      id: 'po-1',
+      po_number: 'PO-2026-0418',
+      payments: [
+        { id: 'a', state: 'paid', kind: 'deposit', amount_cents: 1_009_000, label: null },
+        { id: 'b', state: 'due', kind: 'deposit', amount_cents: 1_633_000, label: '50% at release' },
+      ],
+    });
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+
+    const moneyRow = screen.getByRole('button', { name: /Money/ });
+    expect(moneyRow).toHaveTextContent('$16,330 not drawn');
+    expect(moneyRow).not.toHaveTextContent('$0 moved');
+    mockPurchaseOrderRows.length = 0;
+  });
+
+  it('pays for no money read on a spread that prints no money row', () => {
+    // The four commercial hooks were already gated on `printsMoneyRow`; these
+    // two take no `enabled`, so the gate has to be a conditional MOUNT.
+    mockLadderReads.purchaseOrders = 0;
+    mockLadderReads.invoices = 0;
+
+    for (const section of ['install', 'care'] as const) {
+      const { unmount } = render(
+        <DocSpineShelvedBlocks
+          {...props}
+          regions={paperRegionsForSection(section)}
+        />,
+      );
+      unmount();
+    }
+    expect(mockLadderReads).toEqual({ purchaseOrders: 0, invoices: 0 });
+
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    expect(mockLadderReads.purchaseOrders).toBeGreaterThan(0);
+    expect(mockLadderReads.invoices).toBeGreaterThan(0);
+  });
+
+  it('offers no Knowledge row among the shelves (F12)', () => {
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    expect(
+      screen.queryByRole('button', { name: /Knowledge/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('names the plan room shelf with its drawing-set gloss (F17)', () => {
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    expect(
+      screen.getByRole('button', { name: /Plan room/ }),
+    ).toHaveTextContent('the drawing set');
+  });
+
+  it('prints the Rooms heading and placeholder even at zero rooms (F72)', () => {
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        rooms={[]}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    expect(screen.getByText('Rooms')).toBeInTheDocument();
+    expect(
+      screen.getByText('Take a room in hand · nothing hides'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Rooms' })).not.toBeInTheDocument();
   });
 });

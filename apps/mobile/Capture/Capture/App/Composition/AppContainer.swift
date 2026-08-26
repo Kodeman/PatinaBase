@@ -22,6 +22,7 @@
 
 import Foundation
 import SwiftData
+import UIKit
 import CaptureKit
 import CaptureKitMocks
 import PostHog
@@ -75,7 +76,14 @@ public final class AppContainer {
     let portalLogin = PortalLoginController()
 
     public init() {
-        let real = AppConfiguration.runsRealServices; let store = CaptureStore.resilient(persistent: real)
+        let real = AppConfiguration.runsRealServices
+        // iOS relaunches Field in the background for the site-scan upload
+        // session, so the ladder can run before the first unlock, where a good
+        // store simply cannot be decrypted. UIKit lives app-side; CaptureKit
+        // takes the answer as a closure.
+        let store = CaptureStore.resilient(
+            persistent: real,
+            isProtectedDataAvailable: { UIApplication.shared.isProtectedDataAvailable })
         self.store = store
 
         if real {
@@ -151,6 +159,31 @@ public final class AppContainer {
             self.siteRequestOutboxDrainer = SiteRequestOutboxDrainer(store: store, remote: siteRequests)
             self.projectCache = CaptureProjectCache(store: store, projects: projects)
         }
+
+        // The ladder runs before analytics exists, so it reports rather than
+        // emits. Report it now — a degraded store must never be silent.
+        Self.reportStoreOpen(store.openReport, analytics: self.analytics)
+    }
+
+    /// Telemetry for the store-open ladder. `store.reset_incompatible` fires
+    /// when an unreadable store was set aside and recreated (Kody ruling
+    /// 2026-08-24: Field is not live, a fresh install may reset the store);
+    /// `store.in_memory_fallback` fires when persistence was asked for and
+    /// every on-disk rung refused, which costs the designer every capture made
+    /// in that run.
+    private static func reportStoreOpen(_ report: CaptureStoreOpenReport,
+                                        analytics: any CaptureAnalytics) {
+        if report.didResetIncompatibleStore {
+            analytics.event("store.reset_incompatible", [
+                "persistence": report.persistence.rawValue,
+                "failures": report.failures.joined(separator: " | ")
+            ])
+        }
+        guard report.losesWorkOnRelaunch else { return }
+        analytics.event("store.in_memory_fallback", [
+            "deferred_until_unlock": String(report.deferredUntilUnlock),
+            "failures": report.failures.joined(separator: " | ")
+        ])
     }
 
     /// Every protocol-typed Work dependency the app wires in real mode, bundled

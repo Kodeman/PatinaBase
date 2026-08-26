@@ -1,0 +1,341 @@
+
+  <!-- ── THEME 1 · WIDTH TIERS ─────────────────────────────────────────── -->
+  <div class="dk-theme-head">
+    <h3>Width tiers &mdash; what the window takes away</h3>
+    <span class="dk-count">4 of 25 &middot; 1 blocker</span>
+  </div>
+  <p>
+    Below 1440 the spine does not narrow. It empties. The three shelved blocks &mdash; the running
+    index, the rooms block, the shelves &mdash; are gated in one line, and an open shelf is
+    force-closed on the way down. This is ruled ground: I136 put those blocks at &ge;1440 on purpose.
+    It is still where four of the nine seats, and every practitioner, said they would give up.
+  </p>
+
+  <div class="dk-find" data-sev="blocker">
+    <div class="dk-find-top">
+      <span class="dk-id">F01</span>
+      <span class="dk-sev">Blocker</span>
+      <span class="dk-seats">7 seats &middot; U1 U3 U5 P1 P2 P3 P4 &middot; conf .95</span>
+      <span class="dk-canon">Ruled-against C8 (I136)</span>
+    </div>
+    <h4>Shelves, rooms block and running index are absent below 1440</h4>
+    <p class="dk-obs">
+      At 1280 the left rail is a 56px strip of unlabelled marks plus <code>In hand / &lt;1m</code>: no
+      <code>IN THIS DOCUMENT</code>, no <code>Rooms</code>, no <code>THE SHELVES</code>.
+      <code>Plan room</code>, <code>Spec book</code>, <code>Mood boards</code> and
+      <code>Call sheet</code> are not narrowed but <em>removed</em>, and an open shelf is force-closed
+      on crossing below 1440.
+    </p>
+    <figure class="dk-plate">
+      <!-- IMG w1280-doc-project-rich | The Chen Residence document at 1280: a bare 56px icon rail on the left where the running index, rooms block and shelves stand at 1440 -->
+      <figcaption><b>1280 &middot; doc, project section.</b> The whole left column, at the width most laptops actually are. Cropped to the first 1300px.</figcaption>
+    </figure>
+    <p class="dk-credit"><b>What stays true:</b> the shelved spine's mechanics are right where they exist.
+      Scroll-spy showed exactly one active entry at all eleven sample positions &mdash; no dead zones,
+      no double highlights &mdash; and clicking a folded region's index row both unfolds it and scrolls
+      to it in one act. Only the labels and the mount condition are wrong.</p>
+    <p class="dk-refs"><span>components/document/doc-spine.tsx:135</span> &middot;
+      <span>app/(document)/doc/[id]/page.tsx:553-562</span></p>
+  </div>
+
+  <div class="dk-find" data-sev="high">
+    <div class="dk-find-top">
+      <span class="dk-id">F02</span>
+      <span class="dk-sev">High</span>
+      <span class="dk-seats">7 seats &middot; U1 U2 U3 U4 U5 P1 P2 &middot; conf .95</span>
+      <span class="dk-canon">Ruled-against C8</span>
+    </div>
+    <h4>At 1280 the spine is an unlabelled 56px icon rail</h4>
+    <p class="dk-obs">
+      At 1180&ndash;1439 the seven section marks render as bare coloured bars with no printed text; the
+      active section's label is <code>hidden min-[1440px]:block</code>, and <code>StrataMark</code>'s
+      label becomes an aria-label only. <code>&larr; Put down</code> loses its word and becomes a bare
+      <code>&larr;</code>. The word <code>Project</code> appears nowhere in the rail.
+    </p>
+    <div class="dk-plates-2">
+      <figure class="dk-plate">
+        <!-- IMG w1440-spine-detail | The full spine at 1440, seven marks with the active section labelled in words beneath -->
+        <figcaption><b>1440.</b> Seven marks, the active section named.</figcaption>
+      </figure>
+      <figure class="dk-plate">
+        <!-- IMG w1280-spine-detail | The compact spine at 1280, seven bare coloured bars with no printed text -->
+        <figcaption><b>1280.</b> The same seven marks, no words.</figcaption>
+      </figure>
+    </div>
+    <p class="dk-credit"><b>What stays true:</b> <code>&larr; Put down</code> is a trade verb doing real
+      work and should never become &ldquo;Close&rdquo; or &ldquo;Exit&rdquo;; the Esc chain behind it is a
+      correct, live-verified LIFO &mdash; &#8984;K, then shelf, then put-down &mdash; with zero stranding
+      at every layer tested.</p>
+    <p class="dk-refs"><span>components/document/doc-spine.tsx:122-130,63</span> &middot;
+      <span>components/document/strata-mark.tsx:81-82</span></p>
+  </div>
+
+  <div class="dk-find" data-sev="high">
+    <div class="dk-find-top">
+      <span class="dk-id">F15</span>
+      <span class="dk-sev">High</span>
+      <span class="dk-seats">3 seats &middot; P1 P2 P3 &middot; conf .95</span>
+      <span class="dk-canon">Ruled-against C8 / D3</span>
+    </div>
+    <h4>The mobile spine sheet lists sections and nothing else</h4>
+    <p class="dk-obs">
+      The mobile spine sheet lists sections, Rooms when the project has any, and the margin &mdash;
+      but never the running index or any shelf.
+    </p>
+    <figure class="dk-plate dk-plate-narrow">
+      <!-- IMG m390-mobile-spine-sheet | The 390px mobile spine sheet, listing the seven sections and the margin, with no shelves -->
+      <figcaption><b>390 &middot; the spine sheet.</b> The phone's whole map of the document.</figcaption>
+    </figure>
+    <p class="dk-credit"><b>What stays true:</b> the sheet itself is a good compression &mdash; it folds
+      the running index and margin capture into one reachable bottom sheet that answers &ldquo;where am
+      I / what's waiting&rdquo; in a single tap, and every control in it clears the 44&times;44 minimum
+      the codebase applies without exception.</p>
+    <p class="dk-refs"><span>components/document/mobile/mobile-sheets.tsx:453-570</span></p>
+  </div>
+
+  <div class="dk-find" data-sev="medium">
+    <div class="dk-find-top">
+      <span class="dk-id">F25</span>
+      <span class="dk-sev">Medium</span>
+      <span class="dk-seats">3 seats &middot; U2 U5 P2 &middot; conf .50</span>
+      <span class="dk-canon">Ruled-against C8</span>
+    </div>
+    <h4>A held room has no visible release control once scrolled away</h4>
+    <p class="dk-obs">
+      The letterhead's <code>In hand &middot; {Room}</code> line is plain text with no &times; or close
+      affordance; the only release is clicking the same Rooms-block row again.
+    </p>
+    <p class="dk-credit"><b>What stays true:</b> the lens lifts and never filters &mdash; nothing hides,
+      and a held room keeps its own state word with <code>In hand</code> added rather than swapped in.
+      That prefix is real text, so it reads correctly to a screen reader.</p>
+    <p class="dk-refs">Confidence is .50 and stated so: the local seed holds no project with both rooms
+      and an active project section, so this is source-confirmed only, never driven.
+      <span>components/document/doc-letterhead.tsx:63-68</span> &middot;
+      <span>lib/document/room-lens-context.tsx</span></p>
+  </div>
+
+  <!-- ── THEME 2 · INSTALL AND CARE ────────────────────────────────────── -->
+  <div class="dk-theme-head">
+    <h3>Install and care &mdash; the document forgets where she is standing</h3>
+    <span class="dk-count">3 of 25 &middot; 2 blockers</span>
+  </div>
+  <p>
+    This is the review's sharpest finding and the one nobody had ruled on, because it is not a width
+    rule at all. The shelved blocks are gated on <code>active_section === 'project'</code>. Advance the
+    same document into install and every map on it disappears &mdash; at 1440 as much as at 390 &mdash;
+    on precisely the two spreads where a designer is standing in a house holding a phone.
+  </p>
+
+  <div class="dk-find" data-sev="blocker">
+    <div class="dk-find-top">
+      <span class="dk-id">F14</span>
+      <span class="dk-sev">Blocker</span>
+      <span class="dk-seats">3 seats &middot; U1 U3 P1 &middot; conf .97 &mdash; the highest in the set</span>
+      <span class="dk-canon">Open &mdash; no ruling governs it</span>
+    </div>
+    <h4>Index, rooms and shelves vanish on install and care documents</h4>
+    <p class="dk-obs">
+      On <code>w1440-doc-install</code> and <code>w1440-doc-care</code> the spine reads
+      <code>&larr; PUT DOWN</code>, seven marks, the active label and <code>&#9679; IN HAND / under a
+      min</code> &mdash; no <code>IN THIS DOCUMENT</code>, no <code>Rooms</code>, no
+      <code>THE SHELVES</code>. <code>DocSpineShelvedBlocks</code> mounts only when
+      <code>engagement_kind === 'project' &amp;&amp; active_section === 'project'</code>.
+    </p>
+    <div class="dk-plates-2">
+      <figure class="dk-plate">
+        <!-- IMG w1440-doc-install | An install-stage document at 1440 whose left rail carries only put-down, seven marks and the timer -->
+        <figcaption><b>1440 &middot; install.</b> Aspen Loft Refresh. The rail is empty at full width.</figcaption>
+      </figure>
+      <figure class="dk-plate">
+        <!-- IMG w1440-doc-care | A care-stage document at 1440 with the same empty rail -->
+        <figcaption><b>1440 &middot; care.</b> Birch Hollow, the book closed Aug 25.</figcaption>
+      </figure>
+    </div>
+    <p class="dk-credit"><b>What stays true:</b> fold state persists correctly per document and per
+      region across a reload, and a folded region reads visually distinct from an open-but-empty one
+      &mdash; the returning designer's reading position is honoured. The problem is not that the
+      product forgets her; it is that it forgets the job.</p>
+    <p class="dk-refs"><span>app/(document)/doc/[id]/page.tsx:938-952</span></p>
+  </div>
+
+  <div class="dk-find" data-sev="blocker">
+    <div class="dk-find-top">
+      <span class="dk-id">F48</span>
+      <span class="dk-sev">Blocker</span>
+      <span class="dk-seats">1 seat &middot; U1 &middot; conf .92</span>
+      <span class="dk-canon">Open</span>
+    </div>
+    <h4>The spec book has no door on install or care</h4>
+    <p class="dk-obs">
+      The <code>Spec book &rarr;</code> link renders inside <code>{mode === 'project' &amp;&amp; &hellip;}</code>;
+      in <code>mode === 'install'</code> the head prints only <code>Install</code> plus meta. There is
+      no spec-book entry in <code>STUDIO_ROOMS</code>, the ledgers or the verbs, so
+      <code>matchSurfaces</code> cannot find it and &#8984;K has no spec-book row in either branch.
+    </p>
+    <p class="dk-credit"><b>What stays true:</b> where the spec book <em>is</em> reachable, it is the
+      right place &mdash; the junior seat called the workbench route legible on sight, and the
+      procurement seat said it reads like the spreadsheet she trusts more than any app.</p>
+    <p class="dk-refs">One seat filed it; the code refuter confirmed it and the feasibility judge read
+      the line in the tree. <span>components/document/ffe-section.tsx:1030-1065</span> &middot;
+      <span>lib/document/registry.tsx:77-327</span></p>
+  </div>
+
+  <div class="dk-find" data-sev="high">
+    <div class="dk-find-top">
+      <span class="dk-id">F03</span>
+      <span class="dk-sev">High</span>
+      <span class="dk-seats">7 seats &middot; U1 U2 U3 U4 P1 P3 P4 &middot; conf .95</span>
+      <span class="dk-canon">Open</span>
+    </div>
+    <h4>The care-stage FF&amp;E spread is headed <em>Install</em></h4>
+    <p class="dk-obs">
+      On Birch Hollow (<code>Care &middot; ONGOING</code>, <code>The book closed Aug 25.</code>) the
+      FF&amp;E spread's heading is the literal word <code>Install</code> and its empty state reads
+      <code>No FF&amp;E lines are scheduled for installation.</code> &mdash; four lines below a
+      paragraph that correctly reads <code>Plan the care work</code>.
+    </p>
+    <p class="dk-credit"><b>What stays true:</b> honest, plain-sentence empty states everywhere &mdash;
+      <code>NOTHING FILED</code>, <code>No boards yet</code>, <code>0 of 5 essentials captured &mdash;
+      keep going</code>. Nothing pretends, which is why the numbers that are there are trusted. This
+      heading is the one place the paper says something untrue, and R7 already rules that stamps only
+      say true things.</p>
+    <p class="dk-refs"><span>components/document/ffe-section.tsx:1037,1232</span> &middot;
+      <span>app/(document)/doc/[id]/page.tsx:1436-1448</span></p>
+  </div>
+
+  <!-- ── THEME 3 · THE PHASE-WIDE QUESTION ─────────────────────────────── -->
+  <div class="dk-theme-head">
+    <h3>The phase-wide question &mdash; the one nobody has ruled</h3>
+    <span class="dk-count">1 of 25 &middot; 1 blocker &middot; the worst task in the review</span>
+  </div>
+
+  <div class="dk-find" data-sev="blocker">
+    <div class="dk-find-top">
+      <span class="dk-id">F04</span>
+      <span class="dk-sev">Blocker</span>
+      <span class="dk-seats">6 seats &middot; U1 U2 P1 P2 P3 P4 &middot; conf .95</span>
+      <span class="dk-canon">Known-open &mdash; T2 / T4, unruled since 2026&middot;08&middot;13</span>
+    </div>
+    <h4>Nothing answers a phase-wide question; &#8984;K typed <em>install</em> returns No match</h4>
+    <p class="dk-obs">
+      &#8984;K typed <code>install</code> returns only <code>No match &mdash; Browse the Help Center</code> /
+      <code>SEARCH THE GUIDES &rarr;</code> and <code>Ask the Engine &middot; "INSTALL" &middot; ASK &amp;
+      PLACE</code>, while the Desk behind it prints the folder tab <code>ASPEN &middot; INSTALL</code>.
+      No Desk filter, tab or chip groups by phase.
+    </p>
+    <figure class="dk-plate">
+      <!-- IMG w1440-cmdk-typed | The command bar with the word install typed, returning No match, over a Desk that shows a folio tabbed ASPEN INSTALL -->
+      <figcaption><b>&#8984;K, typed <i>install</i>.</b> The answer is printed on the card behind the dialog.</figcaption>
+    </figure>
+    <p class="dk-credit"><b>What stays true:</b> the Desk's folio cards already narrate the day in plain
+      sentences with dates and objects in them &mdash; <code>1 decision overdue &mdash; oldest due Aug 22</code>,
+      <code>AP-012 has an open damage claim</code> &mdash; each with exactly one act. Three seats called
+      this the single best piece of writing in the product. It answers &ldquo;what needs me today&rdquo;
+      completely; it just cannot be asked a question.</p>
+    <p class="dk-refs">Root cause, from the code refuter: a document row's &#8984;K match string is
+      <code>folderTab + title</code> only &mdash; the section word never enters it &mdash; and no registry
+      alias contains <code>install</code>.
+      <span>components/document/command-bar.tsx:589-617</span> &middot;
+      <span>lib/document/registry.tsx:344-351</span> &middot;
+      <span>app/(document)/desk/page.tsx:339-370</span></p>
+  </div>
+
+  <!-- ── THEME 4 · MONEY ───────────────────────────────────────────────── -->
+  <div class="dk-theme-head">
+    <h3>Money &mdash; four doors to bill, none to read what is owed</h3>
+    <span class="dk-count">4 of 25</span>
+  </div>
+  <p>
+    Every practitioner seat asked the same two-part question &mdash; <em>bill the deposit, and who
+    still owes me?</em> &mdash; and every one of them answered the first half quickly and the second
+    half by leaving the document. The region that holds the money is not called money.
+  </p>
+
+  <div class="dk-find" data-sev="high">
+    <div class="dk-find-top">
+      <span class="dk-id">F09</span>
+      <span class="dk-sev">High</span>
+      <span class="dk-seats">4 seats &middot; U4 P1 P2 P3 &middot; conf .90</span>
+      <span class="dk-canon">Open</span>
+    </div>
+    <h4>The money region is named <em>Design authority</em> and carries no money scent</h4>
+    <p class="dk-obs">
+      The folded seam reads <code>Design authority&nbsp;&nbsp; NO AUTHORITY YET &middot; $0 COMMITTED
+      &nbsp;&nbsp;UNFOLD &darr;</code>; unfolded, the head is <code>MONEY &middot; ONE REGION</code> /
+      <code>Design authority</code>. The word <em>money</em> appears only in that small eyebrow, and the
+      running-index row prints <code>Design authority</code> alone.
+    </p>
+    <figure class="dk-plate">
+      <!-- IMG w1440-money-region | The Design authority region unfolded, showing the four-rung money ladder and a dense explanatory paragraph -->
+      <figcaption><b>The money region, unfolded.</b> Four rungs, three competing acts, one paragraph of explanation.</figcaption>
+    </figure>
+    <p class="dk-credit"><b>What stays true:</b> the ladder's honesty. <code>no design authority
+      recorded yet</code>, <code>no working budget yet</code>, <code>nothing executed yet</code> &mdash;
+      the region refuses to pretend it knows a number it does not have, which is exactly why the
+      numbers it does print are believed.</p>
+    <p class="dk-refs"><span>lib/document/document-index.ts:34-55</span> &middot;
+      <span>components/document/commercial/money-region.tsx:295-305</span></p>
+  </div>
+
+  <div class="dk-find" data-sev="high">
+    <div class="dk-find-top">
+      <span class="dk-id">F16</span>
+      <span class="dk-sev">High</span>
+      <span class="dk-seats">3 seats &middot; U1 P1 P2 &middot; conf .90</span>
+      <span class="dk-canon">Known-open &mdash; I141, money does not seam on install or care</span>
+    </div>
+    <h4><em>Who still owes me</em> is unanswerable inside the document</h4>
+    <p class="dk-obs">
+      No row of the money ladder names a receivable; the answer sits in a nested band inside the same
+      region rather than in the four-rung ladder that heads it.
+    </p>
+    <p class="dk-credit"><b>What stays true:</b> ledger sheets slide over whatever she was looking at
+      rather than replacing it &mdash; her document is still hers when she closes Orders, Accounts or
+      Hours. The trip out is safe; it is just a trip.</p>
+    <p class="dk-refs"><span>components/document/commercial/money-region.tsx:308-336</span></p>
+  </div>
+
+  <div class="dk-find" data-sev="medium">
+    <div class="dk-find-top">
+      <span class="dk-id">F08</span>
+      <span class="dk-sev">Medium</span>
+      <span class="dk-seats">5 seats &middot; U2 U5 P1 P3 P4 &middot; conf .85</span>
+      <span class="dk-canon">Ruled-against C7 (I135, one leader per region)</span>
+    </div>
+    <h4>Three-to-four competing doors answer one money question</h4>
+    <p class="dk-obs">
+      The <code>Design authority</code> head prints <code>DRAW AN INVOICE</code>,
+      <code>AMENDMENT</code> and <code>HOURS &middot; THIS PROJECT &nearr;</code> side by side; the
+      FF&amp;E head adds <code>BILL 3 UNINVOICED</code>, &#8984;K adds <code>Draw an invoice for
+      {Project}</code>, and the Desk's <code>BEGIN</code> column a fourth. Nothing signposts which is
+      <em>the</em> door.
+    </p>
+    <p class="dk-credit"><b>What stays true:</b> scored ink. Every one of those acts is a bare DM&nbsp;Mono
+      word with a proofreader's rule under it &mdash; no boxes, no plates. The junior seat's note: once
+      she learned that underline means clickable, she stopped hunting for buttons anywhere on the
+      surface.</p>
+    <p class="dk-refs"><span>components/document/commercial/money-region.tsx:245-273</span> &middot;
+      <span>components/document/ffe-section.tsx:994-1008</span> &middot;
+      <span>lib/document/registry.tsx:301-313</span></p>
+  </div>
+
+  <div class="dk-find" data-sev="medium">
+    <div class="dk-find-top">
+      <span class="dk-id">F26</span>
+      <span class="dk-sev">Medium</span>
+      <span class="dk-seats">3 seats &middot; U3 U4 P2 &middot; conf .90</span>
+      <span class="dk-canon">Open</span>
+    </div>
+    <h4>The money explainer is a dense paragraph that names its own old UI</h4>
+    <p class="dk-obs">
+      Beneath four terse label rows sits one unbroken paragraph: <code>Authority &rarr; plan &rarr;
+      committed &rarr; moved. Moved is the accounts' committed figure &hellip; not funds
+      disbursed&hellip;</code> ending <code>Absorbs today's four separate bands: design authority,
+      working budget, authorizations &amp; trade scopes, the accounts.</code>
+    </p>
+    <p class="dk-credit"><b>What stays true:</b> zero-shadow depth genuinely works at &ge;1440 &mdash;
+      value contrast, rule weight and flat stacked edges carry the region separation cleanly with no
+      shadow anywhere in the primary reading flow. The density break here is a copy problem, not a
+      hierarchy one.</p>
+    <p class="dk-refs"><span>components/document/commercial/money-region.tsx:327-336</span></p>
+  </div>

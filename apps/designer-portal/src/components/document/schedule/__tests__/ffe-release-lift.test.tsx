@@ -140,12 +140,17 @@ describe('the release lift — the schedule’s half', () => {
       />,
     );
 
+    // F34: with the release lifted away, the head elects the sharpest
+    // exception standing on the spread — here, the one unspecified line.
     const inked = document.querySelectorAll('[data-action-variant="inked"]');
     expect(inked).toHaveLength(1);
-    expect(inked[0]).toHaveTextContent('Add to project');
+    expect(inked[0]).toHaveTextContent('Spec the 1 unspecified');
     expect(
       screen.queryByRole('button', { name: 'Release for authorization' }),
     ).toBeNull();
+    expect(
+      document.querySelector('[data-action-key="open-add-to-project"]'),
+    ).toHaveAttribute('data-action-variant', 'secondary');
   });
 
   it('reports the offer only while there is one to make', () => {

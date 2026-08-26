@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import DocumentPage from './page';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
@@ -111,7 +111,13 @@ jest.mock('@patina/supabase', () => ({
 
 // The project document's own sections are not what these tests exercise; the
 // guide strip and the margin are.
-jest.mock('@/components/document/ffe-section', () => ({ FFESection: () => null }));
+const mockFFESection = jest.fn();
+jest.mock('@/components/document/ffe-section', () => ({
+  FFESection: (props: Record<string, unknown>) => {
+    mockFFESection(props);
+    return null;
+  },
+}));
 jest.mock('@/components/document/schedule/schedule-spine', () => ({ ScheduleSpine: () => null }));
 jest.mock('@/components/document/approvals/project-approval-document', () => ({
   ProjectApprovalDocument: () => null,
@@ -123,11 +129,30 @@ jest.mock('@/components/document/commercial/project-commerce-section', () => ({
   ProjectCommerceSection: () => null,
 }));
 jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
+// Real section bodies this suite's install/care fixtures (F14) now reach but
+// do not exercise — stubbed the same way FFESection/ScheduleSpine/CareBand
+// above are, rather than threading every supabase hook their subtrees use.
+jest.mock('@/components/document/quiet-sections', () => ({ CareSection: () => null }));
+jest.mock('@/components/document/schedule/install-window-ceremony', () => ({
+  InstallWindowCeremony: () => null,
+}));
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
 jest.mock('@/components/document/commercial/money-region', () => ({ MoneyRegion: () => null }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
+// A1-L2's contract: the page hands this component the exact `regions` subset
+// `paperRegionsForSection` returned for the spread. Render that list as
+// testable rows here — the component's OWN rendering of them (labels, scroll
+// targets, fold state) is `shelved-spine.test.tsx`'s job (A1-L2), not this
+// integration suite's; this mock exists only to prove the page wired the
+// right subset through.
 jest.mock('@/components/document/spine-shelved-blocks', () => ({
-  DocSpineShelvedBlocks: () => null,
+  DocSpineShelvedBlocks: (props: { regions: ReadonlyArray<{ key: string }> }) => (
+    <ul data-testid="shelved-spine-regions" aria-label="In this document">
+      {props.regions.map((region) => (
+        <li key={region.key}>{region.key}</li>
+      ))}
+    </ul>
+  ),
 }));
 jest.mock('@/components/document/shelves/document-shelves', () => ({
   DocumentShelves: () => null,
@@ -152,8 +177,19 @@ jest.mock('@/components/document/mobile/mobile-shell', () => ({
 }));
 
 jest.mock('@/components/document/doc-spine', () => ({
-  DocSpine: ({ onJump }: { onJump: (section: string) => void }) => (
-    <button type="button" onClick={() => onJump('brief')}>Jump to brief</button>
+  // F14/C11: the page passes its shelved-blocks element (or null) as `shelved`
+  // — render it, or `DocSpineShelvedBlocks`'s own mock above never mounts.
+  DocSpine: ({
+    onJump,
+    shelved,
+  }: {
+    onJump: (section: string) => void;
+    shelved?: ReactNode;
+  }) => (
+    <>
+      <button type="button" onClick={() => onJump('brief')}>Jump to brief</button>
+      {shelved}
+    </>
   ),
 }));
 jest.mock('@/components/document/doc-letterhead', () => ({
@@ -398,6 +434,7 @@ describe('DocumentPage guide activation', () => {
     mockHistoryToggled.mockReset();
     mockDiscoveryFacetOpen.mockReset();
     mockDiscoveryFacetExpanded = false;
+    mockFFESection.mockClear();
     mockMarginItems = [];
     mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
     mockDraftingState = { gaps: [], isLoading: false, error: null };
@@ -451,12 +488,28 @@ describe('DocumentPage guide activation', () => {
   });
 
   it('activates the guide anchor and honors reduced motion', () => {
+    // A3-L7 — a Brief with nothing outstanding is at rest and states no act
+    // ("Nothing to decide yet."), so the anchor machinery is exercised through
+    // a need whose act lands on this document's own section rather than a
+    // ledger or a deep link.
+    mockDeskData = {
+      folders: [{
+        row: { engagement_id: 'lead-1' },
+        need: {
+          kind: 'ceremony_pending', text: 'Introduce yourself to Avery',
+          actionLabel: 'Continue the introduction', urgent: false,
+          stamp: { label: 'CLAIMED · CEREMONY WAITING' },
+        },
+      }],
+      chips: [],
+      composed: { 'lead-1': true },
+    };
     render(<DocumentPage params={fulfilledParams} />);
     const activeSection = document.querySelector<HTMLElement>('[data-active-section]');
     expect(activeSection).not.toBeNull();
     activeSection!.scrollIntoView = jest.fn();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review the brief' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue the introduction' }));
 
     expect(activeSection!.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
     expect(activeSection).toHaveFocus();
@@ -502,7 +555,7 @@ describe('DocumentPage guide activation', () => {
 
     expect(mockSelectOperationalNeed).toHaveReturnedWith(undefined);
     expect(screen.getByText(/2 decisions overdue/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Review decisions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chase the approval' })).toBeInTheDocument();
   });
 
   it('ignores a hot Desk cache for a document its side feeds cannot key on', () => {
@@ -522,7 +575,7 @@ describe('DocumentPage guide activation', () => {
         row: { engagement_id: 'relationship-1' },
         need: {
           kind: 'reconnect_due', text: 'Reconnect with Avery',
-          actionLabel: 'Review now', urgent: false, stamp: { label: 'DORMANT' },
+          actionLabel: null, urgent: false, stamp: { label: 'DORMANT' },
         },
       }],
       chips: [],
@@ -534,7 +587,7 @@ describe('DocumentPage guide activation', () => {
     expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: false });
     expect(mockSelectOperationalNeed).not.toHaveBeenCalled();
     expect(screen.queryByText('Reconnect with Avery')).not.toBeInTheDocument();
-    expect(screen.getByText('Complete Discovery')).toBeInTheDocument();
+    expect(screen.getByText('Finish what you need to know')).toBeInTheDocument();
   });
 
   it('skips the Desk read on a paused document', () => {
@@ -555,7 +608,7 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Guidance is unavailable' })).toBeInTheDocument();
     const activeSection = document.querySelector<HTMLElement>('[data-active-section]');
     activeSection!.scrollIntoView = jest.fn();
 
@@ -581,7 +634,9 @@ describe('DocumentPage guide activation', () => {
 
     expect(mockSelectOperationalNeed).toHaveReturnedWith(null);
     expect(screen.queryByText(/decision overdue/)).not.toBeInTheDocument();
-    expect(screen.getByText('Review the inquiry')).toBeInTheDocument();
+    // A3-L7 — the Desk's "nothing here" is the Brief's rest state, and rest is
+    // a named sentence rather than the old always-actionable default.
+    expect(screen.getByText('Nothing to decide yet.')).toBeInTheDocument();
   });
 
   it('derives locally when a hot Desk cache never composed this document', () => {
@@ -618,7 +673,7 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(screen.queryByText('Guidance is unavailable')).not.toBeInTheDocument();
-    expect(screen.getByText('Complete Discovery')).toBeInTheDocument();
+    expect(screen.getByText('Finish what you need to know')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 
@@ -655,7 +710,7 @@ describe('DocumentPage guide activation', () => {
     expect(mockSelectOperationalNeed).toHaveBeenCalledWith(
       mockDeskData, 'proposal-1',
     );
-    expect(screen.getByRole('link', { name: 'Review flagged lines' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open the flagged lines' })).toHaveAttribute(
       'href', '/drafting/proposal-1?flagged=1',
     );
   });
@@ -728,7 +783,7 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByRole('link', { name: 'Open Drafting Room' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open the Drafting Room' })).toHaveAttribute(
       'href', '/drafting/proposal-1',
     );
     expect(screen.getByText(/Input needed · phases & fees/)).toBeInTheDocument();
@@ -797,7 +852,7 @@ describe('DocumentPage guide activation', () => {
     };
 
     render(<DocumentPage params={fulfilledParams} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Review decisions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chase the approval' }));
     expect(screen.getByText('Decision controls')).toHaveFocus();
   });
 
@@ -837,14 +892,14 @@ describe('DocumentPage guide activation', () => {
     expect(pulse).toHaveAttribute('aria-expanded', 'false');
 
     // First activation unfolds it.
-    fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send the pulse' }));
     expect(document.getElementById('document-pulse-control-desktop')).toHaveAttribute(
       'aria-expanded', 'true',
     );
     expect(screen.getByText('Pulse body')).toBeInTheDocument();
 
     // Second activation must leave it open, not toggle it shut.
-    fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send the pulse' }));
     expect(document.getElementById('document-pulse-control-desktop')).toHaveAttribute(
       'aria-expanded', 'true',
     );
@@ -866,7 +921,7 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Guidance is unavailable' })).toBeInTheDocument();
     expect(screen.queryByText(/Input needed/)).not.toBeInTheDocument();
   });
 
@@ -1088,6 +1143,117 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('0');
   });
 
+  // ── A1-L2: F14/C11 — the shelved spine mounts on install/care, and its index
+  // derives from the spread's own regions (paperRegionsForSection). The
+  // per-row rendering (labels, scroll targets, fold state) is
+  // shelved-spine.test.tsx's job; this integration suite only proves the page
+  // wires the right region SET through for each spread. ──
+  describe('the shelved spine mount (F14/C11)', () => {
+    it('mounts on an install document with the two regions that spread prints', () => {
+      asProjectDocument();
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, active_section: 'install' } },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      // No money row (MoneyRegion mounts only under spreadSection === 'project')
+      // and no schedule row (nor does ScheduleSpine, the only
+      // data-index-region="schedule" root) — a row for either would be a jump
+      // target with nothing behind it.
+      const index = screen.getByTestId('shelved-spine-regions');
+      expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+        'approvals', 'ffe',
+      ]);
+    });
+
+    it('mounts on a care document with the same two regions', () => {
+      asProjectDocument();
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, active_section: 'care' } },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      // No money row (MoneyRegion mounts only under spreadSection === 'project')
+      // and no schedule row (nor does ScheduleSpine, the only
+      // data-index-region="schedule" root) — a row for either would be a jump
+      // target with nothing behind it.
+      const index = screen.getByTestId('shelved-spine-regions');
+      expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+        'approvals', 'ffe',
+      ]);
+    });
+
+    it('still mounts all four regions, money included, on the project section', () => {
+      asProjectDocument();
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const index = screen.getByTestId('shelved-spine-regions');
+      expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+        'approvals', 'schedule', 'ffe', 'money',
+      ]);
+    });
+  });
+
+  // ── A1-L1/L2 — the tie-break: the guide's headline and the red-letter
+  // zone's first row must name the same need. The two surfaces are mutually
+  // exclusive on a project engagement (the zone replaces the guide once it
+  // has rows), so this is asserted as two renders sharing one input pair and
+  // one ranking function, rather than one render showing both. ──
+  describe('the operational-need tie-break (rankOperationalNeeds)', () => {
+    const rankThreeThenOne = [
+      {
+        kind: 'task_due', text: 'Confirm the site measure',
+        actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+      },
+      {
+        kind: 'damage_claim', text: 'A delivered piece was damaged in transit',
+        actionLabel: null, urgent: true, stamp: { label: 'DAMAGE CLAIM' },
+      },
+    ];
+
+    it('leads the guide with the higher-ranked need even though it arrived second', () => {
+      // Default fixture: engagement_kind 'lead', active_section 'brief',
+      // engagement_id 'lead-1' — a non-project document, so the guide (not
+      // the zone) renders and speaks for whichever need ranks first.
+      mockDeskData = {
+        folders: [{ row: { engagement_id: 'lead-1' }, need: null, needs: rankThreeThenOne }],
+        chips: [],
+        composed: { 'lead-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(
+        screen.getByText('A delivered piece was damaged in transit'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Confirm the site measure')).not.toBeInTheDocument();
+    });
+
+    it('leads the red-letter zone with the same higher-ranked need, first row', () => {
+      asProjectDocument();
+      mockDeskData = {
+        folders: [{ row: { engagement_id: 'project-1' }, need: null, needs: rankThreeThenOne }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const region = screen.getByRole('region', { name: 'Needs attention' });
+      const rows = region.querySelectorAll('li');
+      expect(rows).toHaveLength(2);
+      expect(rows[0]!.textContent).toContain('A delivered piece was damaged in transit');
+      expect(rows[1]!.textContent).toContain('Confirm the site measure');
+    });
+  });
+
   // ── L1: the letterhead's red-letter zone (project documents only) ──
   describe('the red-letter zone', () => {
     it('renders the red-letter zone, not the guide strip, on a project document', () => {
@@ -1122,7 +1288,11 @@ describe('DocumentPage guide activation', () => {
       // (Brief) document — unaffected by the project-only swap.
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(screen.getByRole('button', { name: 'Review the brief' })).toBeInTheDocument();
+      // The strip's own heading id — the same proof the sibling test reads for
+      // its absence. A3-L7 leaves a resting Brief with no act to point at, so
+      // the strip is named by its heading rather than by a button.
+      expect(document.getElementById('document-next-up')).not.toBeNull();
+      expect(screen.getByText('Nothing to decide yet.')).toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
     });
 
@@ -1186,11 +1356,11 @@ describe('DocumentPage guide activation', () => {
       render(<DocumentPage params={fulfilledParams} />);
 
       expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
-      expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Guidance is unavailable' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     });
 
-    it('prints neither zone when the composition covered the project and found nothing', () => {
+    it('F77 — prints the guide, not the red-letter zone, when the composition covered the project and found nothing', () => {
       asProjectDocument();
       mockDeskData = { folders: [], chips: [], composed: { 'project-1': true } };
 
@@ -1198,7 +1368,38 @@ describe('DocumentPage guide activation', () => {
 
       expect(mockSelectOperationalNeeds).toHaveReturnedWith([]);
       expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
-      expect(document.getElementById('document-next-up')).toBeNull();
+      expect(document.getElementById('document-next-up')).not.toBeNull();
+    });
+
+    it('F77 — a care document always shows a guide with no Desk composition', () => {
+      asProjectDocument();
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, active_section: 'care' } },
+      };
+      // Left at the outer beforeEach default: mockDeskData = { folders: [], chips: [], composed: {} }.
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+      expect(document.getElementById('document-next-up')).not.toBeNull();
+    });
+
+    it('F77 — a care document always shows a guide when the composition covered it and found nothing', () => {
+      asProjectDocument();
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, active_section: 'care' } },
+      };
+      mockDeskData = { folders: [], chips: [], composed: { 'project-1': true } };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(mockSelectOperationalNeeds).toHaveReturnedWith([]);
+      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+      expect(document.getElementById('document-next-up')).not.toBeNull();
     });
   });
 
@@ -1227,7 +1428,7 @@ describe('DocumentPage guide activation', () => {
     ).toBeVisible();
     // The recap disclosure promises only what its own body holds.
     expect(
-      screen.getByRole('button', { name: /^Previous work · \d+ complete$/ }),
+      screen.getByRole('button', { name: /^The record · \d+ complete$/ }),
     ).toBeVisible();
   });
 
@@ -1243,6 +1444,82 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(screen.queryByText(/Client approvals/)).not.toBeInTheDocument();
+  });
+
+  // ── A3-L8: the wiring this wave's lanes contracted the page for ──
+  describe('A3 page wiring', () => {
+    it('hands the FF&E schedule the same ranked needs the red letter prints', () => {
+      asProjectDocument();
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: {
+            kind: 'damage_claim', text: 'A delivered piece was damaged in transit',
+            actionLabel: 'File the claim', urgent: true, stamp: { label: 'DAMAGED' },
+          },
+          needs: [{
+            kind: 'damage_claim', text: 'A delivered piece was damaged in transit',
+            actionLabel: 'File the claim', urgent: true, stamp: { label: 'DAMAGED' },
+          }],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      // One ordering for the whole spread: the head's leader is elected from
+      // the same list the zone's first row was drawn from.
+      const props = mockFFESection.mock.calls.at(-1)![0] as { needs?: readonly { kind: string }[] };
+      expect(props.needs?.map((need) => need.kind)).toEqual(['damage_claim']);
+    });
+
+    it('does not call a discovery document complete while its own read is in flight', () => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: {
+          ...current, engagement_kind: 'relationship', active_section: 'discovery',
+          engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+        } },
+      };
+      // The discovery read has not answered, so the checklist is empty for want
+      // of an answer rather than for want of work.
+      mockDiscoveryQuery = { data: undefined, isLoading: true, isError: false };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.queryByText('Discovery is complete. Shape the direction.')).not.toBeInTheDocument();
+      expect(screen.getByText('Finish what you need to know')).toBeInTheDocument();
+    });
+
+    it('rests a discovery document once its read answers with nothing outstanding', () => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: {
+          ...current, engagement_kind: 'relationship', active_section: 'discovery',
+          engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+        } },
+      };
+      mockDiscoveryQuery = {
+        data: { row: {
+          project_type: 'full_home', rooms: [{ name: 'Kitchen' }],
+          budget_max_cents: 18_450_000, target_date: '2026-11-02', hard_date: null,
+          style_tag_ids: ['warm-modern'], style_keywords: [],
+          lifestyle: [{ who: 'Two dogs', how: 'wipe-clean everything' }],
+          keep_items: [], avoid_items: [], decision_makers: [],
+          room_scan_id: null, site_notes: null,
+        } },
+        isLoading: false,
+        isError: false,
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.getByText('Discovery is complete. Shape the direction.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Begin the direction' })).toBeInTheDocument();
+    });
   });
 });
 

@@ -90,7 +90,11 @@ import {
   ReleaseCeremonyProvider,
   useReleaseCeremony,
 } from './schedule/release-ceremony-context';
-import type { SectionKey } from '@/lib/document/desk-derivation';
+import type { NeedLine, SectionKey } from '@/lib/document/desk-derivation';
+import {
+  electFfeLeader,
+  type FfeLeaderKind,
+} from '@/lib/document/ffe-leader';
 import { DocumentAction } from './document-action';
 import { SectionLoadingLine } from './section-loading-line';
 import { RegionHead, type RegionLedgerEntry } from './region/region-head';
@@ -442,17 +446,39 @@ function FFELine({
         anchorId={item.id}
       />
       {unfolded && !selecting && (
-        <LineUnfold
-          item={item}
-          projectId={projectId}
-          projectName={projectName}
-          onAddNote={onAddNote}
-          onFold={onToggle}
-          auth={auth}
-          isCommercialOrigin={isCommercialOrigin}
-          onIncludeInRelease={onIncludeInRelease}
-          canEditSelection={canEditSelection}
-        />
+        <>
+          <LineUnfold
+            item={item}
+            projectId={projectId}
+            projectName={projectName}
+            onAddNote={onAddNote}
+            onFold={onToggle}
+            auth={auth}
+            isCommercialOrigin={isCommercialOrigin}
+            onIncludeInRelease={onIncludeInRelease}
+            canEditSelection={canEditSelection}
+          />
+          {/* SP-19/F57 — Sku/Finish/Material/Colour/Exact Location are only
+              editable in the spec-book route; this in-flow act is the
+              unfolded line's own door to that route, scoped to this line. No
+              attribute becomes editable here.
+
+              It sits beside LineUnfold rather than inside its
+              `ffe-line-actions` group (line-unfold.tsx belongs to no A2 lane),
+              so it declares its own region key: one region key must never
+              span two disjoint subtrees, or DocumentActionGroup's
+              one-primary-per-region check silently stops seeing a member. */}
+          <DocumentAction
+            actionKey="edit-ffe-line-spec-details"
+            surfaceKey="project"
+            regionKey="ffe-line-spec-details"
+            variant="tertiary"
+            href={`/doc/${projectId}/spec-book?ffeItemId=${encodeURIComponent(item.id)}`}
+            className="-mt-1 mb-2"
+          >
+            Edit spec details →
+          </DocumentAction>
+        </>
       )}
     </li>
   );
@@ -656,6 +682,11 @@ interface FFESectionProps {
    *  ceremony is unmoved: selection, composition bar and review sheet stay
    *  here, because releasing is still the schedule's own act. */
   releaseLeaderElsewhere?: boolean;
+  /** F34 — the document's ranked operational needs, so the head's leader can
+   *  be the sharpest exception standing on the spread rather than a fixed
+   *  verb. The page reads them once (`rankOperationalNeeds`) and hands them
+   *  down; the section derives no need of its own. */
+  needs?: readonly NeedLine[];
   /** W4b — whether the section has a release to offer, for a head that stands
    *  outside it. Reported, never asked for: `canRelease` and per-line
    *  eligibility are derived here and nowhere else. Pass a stable callback. */
@@ -690,6 +721,7 @@ function FFESectionBody({
   onFolioDropConsumed = () => {},
   sectionDragOver = false,
   releaseLeaderElsewhere = false,
+  needs = [],
   onReleaseOffered,
   instruments,
 }: FFESectionProps & { instruments: InstrumentLike[] }) {
@@ -870,7 +902,9 @@ function FFESectionBody({
     ...row,
     projectId,
     projectName,
-    highlightId,
+    // C-AF-03 — the margin's hover wins; otherwise the head's elected leader
+    // points at the line it acts on.
+    highlightId: highlightId ?? ffeLeader.highlightLineId,
     unfolded: openLineId === row.item.id,
     onToggle: () =>
       setOpenLineId(openLineId === row.item.id ? null : row.item.id),
@@ -946,6 +980,7 @@ function FFESectionBody({
   }, [mode, ffeSetFolded]);
   useRegionUnfoldRequest('ffe', openFfeRegion);
   const ffeHeadingId = `ffe-region-heading-${projectId}`;
+  const ffeMovementId = `ffe-movement-${projectId}`;
   const ffeBodyId = `ffe-region-body-${projectId}`;
   const ffeFolded = mode === 'project' && !selecting && ffeFold.folded;
   const wasFfeFolded = useRef(ffeFold.folded);
@@ -968,15 +1003,37 @@ function FFESectionBody({
   const ffeAwaitingCount = rows.filter(
     (row) => row.auth.track === 'awaiting',
   ).length;
-  const ffeStatus = `${ffeGroupCount} ${ffeGroupWord} · ${total} lines${
-    ffeAwaitingCount > 0 ? ` · ${ffeAwaitingCount} awaiting authorization` : ''
-  }`;
+  const ffeCounts = `${ffeGroupCount} ${ffeGroupWord} · ${total} lines`;
+  const ffeAwaiting =
+    ffeAwaitingCount > 0
+      ? `${ffeAwaitingCount} awaiting authorization`
+      : null;
+  // C20 — the head's identity line carries the trade word the studio word
+  // leaves out, then the counts. Line one never elides (RegionHead).
+  const ffeStatus = `the FF&E schedule, by room · ${ffeCounts}`;
   const ffeSeamSummary =
-    total === 0 ? `${ffeGroupCount} ${ffeGroupWord} · no lines yet` : ffeStatus;
+    total === 0
+      ? `${ffeGroupCount} ${ffeGroupWord} · no lines yet`
+      : ffeAwaiting
+        ? `${ffeCounts} · ${ffeAwaiting}`
+        : ffeCounts;
+
+  // A line with no piece behind it is a line nobody has specified — the same
+  // set the Add-to-project sheet already offers as placeholders.
+  const unspecifiedLineIds = (items ?? [])
+    .filter((it) => !it.product_id && it.removed_at == null)
+    .map((it) => String(it.id));
+  const uninvoicedLineIds = billableUninvoiced.map((it) => String(it.id));
+  const ffeLeader = electFfeLeader({
+    releaseLift: releaseInHead,
+    needs,
+    unspecifiedLineIds,
+    uninvoicedLineIds,
+  });
 
   const ffeAddToProjectEntry: RegionLedgerEntry = {
     key: 'open-add-to-project',
-    label: 'Add to project',
+    label: 'Add a line',
     onClick: () => openAddToProject('section'),
   };
   const ffeReleaseEntry: RegionLedgerEntry = {
@@ -991,12 +1048,36 @@ function FFESectionBody({
       !readinessQuery.isLoading &&
       !readinessQuery.isError,
   };
+  // The one opener, reached at press time rather than at import time: a static
+  // `./command-bar` import drags @patina/help-system's @portabletext ESM into
+  // every suite that renders this section, which the jest transform cannot
+  // load. A1 fixed the destinations: a claim carrying no line id lands on
+  // receiving, an unanswered PO on the orders ledger.
+  const openOrdersLedger = (page: 'receiving' | 'ledger') => {
+    void import('./command-bar').then(({ openLedger }) =>
+      openLedger('orders', { page, projectId }),
+    );
+  };
+  const ffeClaimEntry: RegionLedgerEntry = {
+    key: 'file-ffe-claim',
+    label: 'File the claim',
+    onClick: () => openOrdersLedger('receiving'),
+  };
+  const ffePoEntry: RegionLedgerEntry = {
+    key: 'chase-ffe-po',
+    label: 'Chase the PO',
+    onClick: () => openOrdersLedger('ledger'),
+  };
   const ffeBillEntry: RegionLedgerEntry | null =
     billableUninvoiced.length > 0
       ? {
           key: 'bill-project-ffe',
-          label: `Bill ${billableUninvoiced.length} uninvoiced`,
+          // F08 — every invoice door but the Money region's names its scope.
+          label: `Bill ${billableUninvoiced.length} uninvoiced ${
+            billableUninvoiced.length === 1 ? 'line' : 'lines'
+          }`,
           variant: 'secondary',
+          trailing: '→',
           onClick: () =>
             openInvoiceComposer({
               projectId,
@@ -1008,34 +1089,71 @@ function FFESectionBody({
       : null;
   const ffeSpecBookEntry: RegionLedgerEntry = {
     key: 'open-spec-book',
-    label: 'Spec book',
+    // F48's sibling: one spec-book door, naming its scope when it has one.
+    label:
+      unspecifiedLineIds.length > 0
+        ? `Spec the ${unspecifiedLineIds.length} unspecified`
+        : 'Spec book',
     href: `/doc/${projectId}/spec-book`,
     variant: 'tertiary',
     trailing: '→',
   };
+
+  const ffeEntryByKind: Record<FfeLeaderKind, RegionLedgerEntry | null> = {
+    release: releaseInHead ? ffeReleaseEntry : null,
+    claim: ffeLeader.exceptions.some((e) => e.kind === 'claim')
+      ? ffeClaimEntry
+      : null,
+    po: ffeLeader.exceptions.some((e) => e.kind === 'po') ? ffePoEntry : null,
+    spec: ffeSpecBookEntry,
+    bill: ffeBillEntry,
+    'add-line': ffeAddToProjectEntry,
+  };
+  // The ledger's ORDER is its hierarchy, and index 0 is the elected leader.
+  const FFE_LEDGER_ORDER: readonly FfeLeaderKind[] = [
+    'release',
+    'claim',
+    'po',
+    'add-line',
+    'bill',
+    'spec',
+  ];
   const ffeLedger: RegionLedgerEntry[] = [
-    releaseInHead ? ffeReleaseEntry : ffeAddToProjectEntry,
-    ...(releaseInHead
-      ? [{ ...ffeAddToProjectEntry, variant: 'secondary' as const }]
-      : []),
-    ...(ffeBillEntry ? [ffeBillEntry] : []),
-    ffeSpecBookEntry,
+    ffeEntryByKind[ffeLeader.kind] ?? ffeAddToProjectEntry,
+    ...FFE_LEDGER_ORDER.filter((kind) => kind !== ffeLeader.kind)
+      .map((kind) => ffeEntryByKind[kind])
+      .filter((entry): entry is RegionLedgerEntry => entry !== null),
+  ];
+  const ffeExceptions = [
+    ...ffeLeader.exceptions.map((exception) => exception.text),
+    ...(ffeAwaiting ? [ffeAwaiting] : []),
   ];
 
   return (
     <section
       id="project-ffe"
-      data-index-region={groupByRoom ? 'ffe' : undefined}
+      // The index's root for this region on EVERY spread that prints it. The
+      // install and care spreads pass mode="install", so gating it on
+      // `groupByRoom` left their index row pointing at nothing.
+      data-index-region="ffe"
       className="scroll-mt-16"
     >
       {mode === 'install' || selecting ? (
         <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
-          <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
+          {/* This branch and the RegionHead below are mutually exclusive, so
+              the region's heading id is carried by exactly one of them. */}
+          <h2
+            id={ffeHeadingId}
+            tabIndex={-1}
+            className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]"
+          >
             {selecting
               ? 'Choose what to release'
               : mode === 'install'
-                ? 'Install'
-                : 'Project · FF&E'}
+                ? sectionKey === 'care'
+                  ? 'Care'
+                  : 'Install'
+                : 'Pieces'}
           </h2>
           <span className="flex items-baseline gap-3">
             {!selecting && meta && (
@@ -1055,14 +1173,12 @@ function FFESectionBody({
               </DocumentAction>
             ) : (
               <>
-                {mode === 'project' && (
-                  <Link
-                    href={`/doc/${projectId}/spec-book`}
-                    className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
-                  >
-                    Spec book →
-                  </Link>
-                )}
+                <Link
+                  href={`/doc/${projectId}/spec-book`}
+                  className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
+                >
+                  Spec book →
+                </Link>
                 {/* Add to project and Release for authorization are project-
                     mode acts, and project mode (not selecting) now renders
                     RegionHead below instead of this block — so both are
@@ -1105,7 +1221,7 @@ function FFESectionBody({
             <FoldSeam
               headingId={ffeHeadingId}
               bodyId={ffeBodyId}
-              name="Project · FF&E"
+              name="Pieces"
               summary={ffeSeamSummary}
               onUnfold={() => ffeFold.setFolded(false)}
               surfaceKey="project"
@@ -1115,8 +1231,9 @@ function FFESectionBody({
             <div className="mb-1.5">
               <RegionHead
                 headingId={ffeHeadingId}
-                name="Project · FF&E"
+                name="Pieces"
                 status={ffeStatus}
+                exceptions={ffeExceptions}
                 surfaceKey="project"
                 regionKey="ffe"
                 actions={ffeLedger}
@@ -1229,7 +1346,9 @@ function FFESectionBody({
           />
         ) : (
           <p className="border-t border-[var(--color-pearl)] py-3 text-[11.5px] text-[var(--text-muted)]">
-            No FF&amp;E lines are scheduled for installation.
+            {sectionKey === 'care'
+              ? 'No FF&E lines remain open for care.'
+              : 'No FF&E lines are scheduled for installation.'}
           </p>
         )
       )}
@@ -1279,10 +1398,12 @@ function FFESectionBody({
           {unassigned.length > 0 && (
             <div>
               <RoomHeading
-                name="Unsorted"
+                name="Not in a room yet"
                 budgetCents={0}
                 rows={unassigned}
-                onAddLine={() => setAddLineRoom({ id: null, name: 'Unsorted' })}
+                onAddLine={() =>
+                  setAddLineRoom({ id: null, name: 'Not in a room yet' })
+                }
                 {...roomHeadingProps(unassigned)}
               />
               <ul>
@@ -1296,7 +1417,9 @@ function FFESectionBody({
         </>
       ) : (
         <>
-          <ul>
+          {/* The movement column — the lines as they arrive. The install
+              stage's act lands here rather than on the section's first inch. */}
+          <ul id={ffeMovementId} tabIndex={-1} className="scroll-mt-16">
             {rows.map((row) => (
               <FFELine key={row.item.id} {...lineProps(row)} />
             ))}

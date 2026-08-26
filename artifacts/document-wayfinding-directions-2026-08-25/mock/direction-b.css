@@ -1,0 +1,338 @@
+/* ==========================================================================
+   Direction B — "The Shop Ticket"
+   Per-direction stylesheet. Every class prefixed .b-. kit.css is never edited.
+   Zero box-shadow / drop-shadow (D4). Depth = value contrast + 1px rules.
+   Colour comes from kit tokens only, so light/dark both hold.
+   ========================================================================== */
+
+/* ── Deck shell + frames ───────────────────────────────────────────────── */
+
+.b-deck { background: var(--bg-primary); color: var(--text-body); padding: 0 0 64px; }
+.b-deck-head { padding: 28px 32px 20px; border-bottom: 1px solid var(--doc-ink-border); }
+.b-deck-title { font-family: var(--font-display); font-size: 26px; font-weight: 500; color: var(--text-primary); margin: 0; }
+.b-deck-sub { font-family: var(--font-meta); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin: 6px 0 0; }
+
+.b-frame { display: block; border: none; border-radius: 0; overflow: visible; background: transparent; margin: 0 0 40px; }
+.b-figure { margin: 0; }
+.b-inner { position: relative; overflow: hidden; border: 1px solid var(--doc-ink-border); background: var(--doc-paper); transform: none; }
+.b-cap { display: block; margin: 8px 0 0; padding: 0 2px; max-width: 1040px; font-family: var(--font-meta); font-size: 11px; line-height: 1.6; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+.b-cap b { color: var(--text-primary); font-weight: 500; }
+
+/* ── Shared page furniture ─────────────────────────────────────────────── */
+
+.b-page { position: relative; width: 100%; height: 100%; background: var(--doc-paper); }
+.b-col { max-width: 1040px; margin: 0 auto; padding: 0 40px; }
+.b-rule { height: 1px; background: var(--doc-ink-border); }
+.b-hr-charcoal { height: 0; border-top: 1px solid var(--color-charcoal); }
+.b-body { font-size: 13.5px; line-height: 1.5; color: var(--text-body); }
+.b-strong { color: var(--text-primary); font-weight: 500; }
+.b-act { font-family: var(--font-meta); font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-primary); }
+.b-act-quiet { color: var(--text-muted); }
+.b-arrow { font-family: var(--font-meta); color: var(--color-clay); }
+.b-empty { color: var(--text-muted); font-style: normal; }
+
+/* the one inked leader per region — the only filled mark in the system */
+.b-inked { display: inline-block; font-family: var(--font-meta); font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--doc-paper); background: var(--text-primary); padding: 6px 10px; border-radius: 2px; }
+
+/* ── The seven section marks ───────────────────────────────────────────── */
+
+.b-marks { display: flex; gap: 3px; align-items: flex-end; }
+.b-marks-v { display: flex; flex-direction: column; gap: 7px; align-items: center; }
+.b-mark { display: flex; flex-direction: column; gap: 2px; width: 20px; }
+.b-mark i { display: block; height: 2px; background: var(--color-pearl); }
+.b-mark i:nth-child(1) { width: 100%; }
+.b-mark i:nth-child(2) { width: 78%; }
+.b-mark i:nth-child(3) { width: 56%; }
+.b-mark.is-past i { background: var(--color-aged-oak); opacity: 0.55; }
+.b-mark.is-lifted i { background: var(--color-charcoal); }
+.b-mark.is-lifted { width: 24px; }
+
+/* ── THE TICKET — the new organ ────────────────────────────────────────── */
+
+.b-ticket { margin: 18px 0 18px; border-top: 1px solid var(--color-charcoal); border-bottom: 1px solid var(--doc-ink-border); padding: 0 0 4px; }
+.b-tk-head { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 18px; padding: 9px 0 8px; border-bottom: 1px solid var(--doc-ink-border); }
+.b-tk-eyebrow { font-family: var(--font-meta); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-primary); }
+.b-tk-phase { font-family: var(--font-meta); font-size: 10px; text-transform: uppercase; letter-spacing: 0.11em; color: var(--color-aged-oak); text-align: right; }
+.b-tk-fold { font-family: var(--font-meta); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--color-clay); }
+
+.b-tk-row { display: grid; grid-template-columns: 96px 1fr 18px; align-items: baseline; gap: 14px; min-height: 30px; padding: 7px 0 6px; border-bottom: 1px solid var(--border-subtle); }
+.b-tk-row:last-child { border-bottom: none; }
+.b-tk-label { font-family: var(--font-meta); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-aged-oak); }
+.b-tk-value { font-size: 13px; line-height: 1.45; color: var(--text-body); }
+.b-tk-value .b-x { color: var(--text-primary); font-weight: 500; }
+.b-tk-door { font-family: var(--font-meta); font-size: 12px; color: var(--color-clay); text-align: right; }
+
+/* Rooms expanded in place — four chips, no boxes; a chip lifts at every width */
+.b-tk-chips { grid-column: 2 / 3; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; margin-top: 5px; }
+.b-tk-chip { font-size: 12.5px; color: var(--text-body); position: relative; padding-bottom: 3px; }
+.b-tk-chip::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--doc-ink-border); }
+.b-tk-chip em { font-style: normal; font-family: var(--font-meta); font-size: 10px; letter-spacing: 0.05em; color: var(--text-muted); margin-left: 4px; }
+.b-tk-sep { color: var(--color-pearl); font-size: 12px; }
+
+/* the 390 seam — two lines, fixed wrap rule */
+.b-seam2 { margin: 14px 0 16px; border-top: 1px solid var(--color-charcoal); border-bottom: 1px solid var(--doc-ink-border); padding: 9px 0 10px; }
+.b-seam2-l1 { font-family: var(--font-meta); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-primary); line-height: 1.5; }
+.b-seam2-l2 { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 12px; margin-top: 5px; }
+.b-seam2-ex { font-size: 14px; color: var(--text-primary); font-weight: 500; }
+.b-seam2-unfold { font-family: var(--font-meta); font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--color-clay); }
+
+/* ── Letterhead extras ─────────────────────────────────────────────────── */
+
+.b-lh-client { font-family: var(--font-display); font-style: italic; font-size: 17px; color: var(--color-clay); margin-top: 3px; }
+.b-instr { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; padding: 10px 0 12px; border-bottom: 1px solid var(--doc-ink-border); margin-bottom: 4px; }
+.b-instr .b-act { padding-bottom: 5px; }
+
+/* ── Red-letter rows (kit .red-letter, B stacking) ─────────────────────── */
+
+.b-rl-row { display: grid; grid-template-columns: 3px 1fr auto; gap: 0 12px; align-items: start; padding: 9px 0; border-bottom: 1px dashed rgba(139, 115, 85, 0.16); }
+.b-rl-row:last-child { border-bottom: none; }
+.b-rl-mark { width: 3px; align-self: stretch; background: var(--color-terracotta); }
+.b-rl-mark.is-chore { background: var(--color-aged-oak); }
+.b-rl-when { display: block; font-family: var(--font-meta); font-size: 9.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-aged-oak); margin-bottom: 3px; }
+.b-rl-line { font-size: 13.5px; line-height: 1.5; color: var(--text-primary); font-weight: 500; }
+
+/* ── Region furniture ──────────────────────────────────────────────────── */
+
+.b-region { margin-top: 18px; }
+.b-reg-head { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 10px 20px; }
+.b-reg-name { font-family: var(--font-display); font-size: 19px; font-weight: 500; color: var(--text-primary); line-height: 1.2; }
+.b-reg-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+.b-reg-status { font-family: var(--font-meta); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-top: 4px; }
+.b-ledger { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; justify-content: flex-end; }
+.b-room-head { display: flex; align-items: baseline; justify-content: space-between; margin: 14px 0 2px; }
+.b-room-name { font-family: var(--font-display); font-style: italic; font-size: 14px; font-weight: 500; color: var(--text-primary); }
+.b-room-count { font-family: var(--font-meta); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+.b-unfolded { margin: 2px 0 8px; padding: 10px 0 10px 14px; border-left: 2px solid var(--color-pearl); }
+.b-unfolded p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.55; color: var(--text-body); }
+.b-unfolded .b-acts { display: flex; gap: 20px; align-items: center; }
+
+/* ── Desk (M1) ─────────────────────────────────────────────────────────── */
+
+.b-desk-head { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 24px; padding-top: 46px; }
+.b-greet { font-family: var(--font-display); font-size: 30px; font-weight: 400; color: var(--text-primary); margin: 0; }
+.b-greet em { font-style: italic; }
+.b-date { font-family: var(--font-meta); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); margin-top: 6px; }
+.b-begin { display: flex; align-items: flex-start; gap: 30px; }
+.b-begin-item { text-align: left; }
+.b-begin-sub { display: block; margin-top: 6px; font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-muted); }
+
+.b-roster-head { margin-top: 40px; }
+.b-roster-eyebrow { display: flex; align-items: center; gap: 12px; font-family: var(--font-meta); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-primary); }
+.b-roster-eyebrow i { display: block; width: 26px; height: 0; border-top: 2px solid var(--color-charcoal); border-bottom: 1px solid var(--doc-ink-border); padding-bottom: 3px; }
+.b-roster-line { font-size: 14px; color: var(--text-body); margin: 8px 0 0; }
+.b-group { margin-top: 20px; }
+.b-group-name { font-family: var(--font-meta); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--color-aged-oak); padding-bottom: 5px; border-bottom: 1px solid var(--doc-ink-border); }
+.b-job { display: grid; grid-template-columns: 3px 214px 1fr auto; gap: 0 20px; align-items: start; padding: 11px 0; border-bottom: 1px solid var(--border-subtle); }
+.b-job:last-child { border-bottom: none; }
+.b-job-mark { width: 3px; align-self: stretch; background: transparent; }
+.b-job-mark.is-overdue { background: var(--color-terracotta); }
+.b-job-mark.is-chore { background: var(--color-aged-oak); }
+.b-job-name { font-family: var(--font-display); font-size: 16px; font-weight: 500; color: var(--text-primary); line-height: 1.25; }
+.b-job-state { font-size: 13px; line-height: 1.5; color: var(--text-body); }
+.b-job-state .b-od { font-family: var(--font-meta); font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--color-aged-oak); }
+.b-job-act { text-align: right; white-space: nowrap; }
+
+.b-contents { margin-top: 38px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 48px; }
+.b-contents-col h3 { font-family: var(--font-meta); font-size: 9.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-primary); margin: 0 0 8px; }
+.b-contents-row { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border-subtle); }
+.b-contents-row span:first-child { font-size: 14px; color: var(--text-primary); }
+.b-contents-row .b-meta { font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+.b-contents-row .b-new { color: var(--color-clay); }
+
+.b-foot { position: absolute; left: 0; right: 0; bottom: 0; }
+
+/* ── Doc grids ─────────────────────────────────────────────────────────── */
+
+.b-grid-1440 { display: grid; grid-template-columns: var(--doc-spine-w) 1fr var(--doc-margin-w); height: 100%; }
+.b-grid-1280 { display: grid; grid-template-columns: var(--doc-spine-compact-w) 1fr 34px; height: 100%; }
+.b-paper-col { padding: 34px 40px 0; overflow: hidden; }
+.b-spine-col { border-right: 1px solid var(--color-pearl); background: var(--spine-wash); padding: 24px 16px; }
+.b-spine-block { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--color-pearl); }
+.b-spine-label { font-family: var(--font-meta); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); margin-bottom: 9px; }
+.b-ri-row { padding: 6px 0; border-left: 2px solid transparent; }
+.b-ri-row.is-current { border-left-color: var(--color-clay); padding-left: 8px; margin-left: -10px; }
+.b-ri-name { display: block; font-size: 12.5px; color: var(--text-body); }
+.b-ri-row.is-current .b-ri-name { color: var(--text-primary); font-weight: 500; }
+.b-ri-value { display: block; font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-top: 2px; }
+.b-timer { margin-top: 18px; border: 1px solid var(--color-pearl); border-radius: 2px; padding: 10px 12px; background: var(--doc-paper); }
+.b-timer-eyebrow { font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-aged-oak); }
+.b-timer-value { font-family: var(--font-meta); font-size: 17px; color: var(--text-primary); margin-top: 3px; }
+.b-timer-acts { display: flex; gap: 14px; margin-top: 8px; }
+.b-timer-acts span { font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+.b-presence { font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-aged-oak); margin-top: 14px; line-height: 1.6; }
+
+.b-spine-compact { border-right: 1px solid var(--color-pearl); background: var(--spine-wash); padding: 22px 6px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.b-spine-compact .b-glyph { font-family: var(--font-meta); font-size: 15px; color: var(--text-primary); }
+.b-dot { display: inline-block; width: 5px; height: 5px; border-radius: 999px; background: var(--color-clay); }
+.b-compact-timer { font-family: var(--font-meta); font-size: 9px; color: var(--text-muted); writing-mode: vertical-rl; letter-spacing: 0.1em; }
+.b-margin-tab { border-left: 1px solid var(--color-pearl); background: var(--margin-wash); display: flex; align-items: flex-start; justify-content: center; padding-top: 34px; }
+.b-margin-tab span { font-family: var(--font-meta); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-muted); writing-mode: vertical-rl; transform: rotate(180deg); }
+.b-margin-col { border-left: 1px solid var(--color-pearl); background: var(--margin-wash); padding: 30px 18px; }
+.b-margin-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.b-margin-head .b-margin-title { font-family: var(--font-meta); font-size: 9.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-primary); }
+.b-margin-acts { display: flex; gap: 12px; margin-top: 10px; }
+.b-margin-acts span { font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-clay); }
+
+/* ── Mobile (M4) ───────────────────────────────────────────────────────── */
+
+.b-m { padding: 26px 28px 0; }
+.b-m-title { font-family: var(--font-display); font-size: 24px; font-weight: 500; line-height: 1.2; color: var(--text-primary); margin: 0; }
+.b-m-bar { position: absolute; left: 0; right: 0; bottom: 0; height: var(--doc-mobile-bar-h); display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; background: #2C2926; border-top: 1px solid rgba(250, 247, 242, 0.16); padding: 8px 14px; }
+.b-m-bar .b-mb-eyebrow { display: block; font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.09em; color: rgba(250, 247, 242, 0.58); }
+.b-m-bar .b-mb-value { display: block; font-family: var(--font-display); font-size: 14px; font-weight: 500; color: rgba(250, 247, 242, 0.9); }
+.b-m-bar .b-mb-primary { font-family: var(--font-meta); font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: rgba(250, 247, 242, 0.94); position: relative; padding-bottom: 5px; }
+.b-m-bar .b-mb-primary::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1.5px; background: var(--color-clay); }
+.b-m-bar .b-mb-more { text-align: center; }
+.b-m-bar .b-mb-more b { display: block; font-family: var(--font-meta); font-size: 15px; color: rgba(250, 247, 242, 0.9); letter-spacing: 0.14em; line-height: 1; }
+.b-m-bar .b-mb-more span { display: block; margin-top: 4px; font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.09em; color: rgba(250, 247, 242, 0.7); }
+
+.b-m-menu { position: absolute; left: 0; right: 0; bottom: var(--doc-mobile-bar-h); background: var(--doc-paper); border-top: 1px solid var(--doc-ink-border); border-radius: 12px 12px 0 0; padding: 14px 24px 18px; }
+.b-m-menu .b-handle { width: 36px; height: 4px; border-radius: 999px; background: var(--color-pearl); margin: 0 auto 12px; }
+.b-m-menu .b-menu-group { font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--color-aged-oak); margin: 12px 0 2px; }
+.b-menu-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; min-height: 44px; border-bottom: 1px solid var(--border-subtle); }
+.b-menu-row:last-child { border-bottom: none; }
+.b-menu-row .b-menu-name { font-size: 15px; color: var(--text-primary); }
+.b-menu-row .b-menu-meta { font-family: var(--font-meta); font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-muted); }
+.b-menu-row.is-first .b-menu-name { font-weight: 500; }
+.b-tap44 { display: inline-flex; align-items: center; min-height: 44px; }
+
+/* ── Density overrides, scoped to B's own pages (kit.css untouched) ────── */
+
+.b-page .region-rule { margin: 14px 0 12px; }
+.b-page .seam { min-height: 40px; padding: 6px 10px 6px 0; }
+.b-page .ffe-row { padding: 6px 0; }
+.b-page .money-ladder .ml-rung { padding: 5px 0; }
+.b-page .money-ladder .ml-rung:last-child { padding-top: 9px; }
+.b-page .letterhead { padding-bottom: 12px; margin-bottom: 0; }
+.b-page .red-letter { padding: 9px 14px; }
+.b-page .red-letter .rl-label { letter-spacing: 0.1em; }
+.b-page .vitals { margin-top: 6px; }
+.b-page .vitals .vital-value { font-size: 10.5px; }
+.b-page .stamp { font-size: 9px; padding: 2px 7px; }
+.b-put-down { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-meta); font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-primary); margin-bottom: 18px; }
+.b-active-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+.b-active-sub { display: block; margin-top: 2px; font-family: var(--font-meta); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-clay); }
+.b-page .money-ladder .ml-label em { font-style: normal; text-transform: none; letter-spacing: 0; font-family: var(--font-body); font-size: 12px; color: var(--text-muted); margin-left: 10px; }
+.b-page .money-ladder .ml-rung:last-child .ml-label em { font-family: var(--font-body); font-size: 12px; font-weight: 400; }
+.b-seam { border-bottom: 1px solid var(--border-subtle); }
+
+/* ── The guide band (M5) ───────────────────────────────────────────────── */
+.b-guide { margin: 4px 0 16px; border-left: 2px solid var(--color-clay); background: rgba(196, 165, 123, 0.10); padding: 10px 14px; }
+.b-guide-eyebrow { font-family: var(--font-meta); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--color-aged-oak); margin: 0 0 5px; }
+.b-guide-row { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 20px; margin: 0; }
+.b-guide-line { font-family: var(--font-display); font-size: 15px; color: var(--text-primary); }
+/* ── Block-margin reset + deliberate rhythm ────────────────────────────────
+   The UA's default 1em <p> margins were silently setting this page's spacing.
+   Reset them, then re-add air only where the composition asks for it, so the
+   fold lands where the direction says it must. ─────────────────────────── */
+
+.b-deck p, .b-deck h1, .b-deck h2, .b-deck h3, .b-deck figure { margin: 0; }
+
+/* seven section marks — readable as seven, not as a smear */
+.b-marks { gap: 7px; }
+.b-mark { width: 15px; }
+.b-mark.is-past i { opacity: 0.5; }
+.b-mark.is-lifted { width: 19px; }
+.b-marks-v { gap: 9px; }
+
+/* the paper */
+.b-paper-col { padding-top: 28px; }
+.b-page .letterhead { padding-bottom: 14px; }
+.b-lh-client { margin-top: 4px; }
+.b-page .vitals { margin-top: 8px; }
+
+.b-ticket { margin: 20px 0 18px; }
+.b-tk-head { padding: 9px 0 8px; }
+.b-tk-row { min-height: 26px; padding: 7px 0 6px; }
+.b-tk-chips { margin-top: 6px; }
+
+.b-page .red-letter { padding: 11px 14px; }
+.b-rl-row { padding: 9px 0; }
+.b-rl-when { margin-bottom: 3px; }
+.b-instr { padding: 13px 0 14px; margin-bottom: 4px; }
+.b-page .seam { min-height: 38px; padding: 8px 10px 8px 0; }
+
+.b-region { margin-top: 16px; }
+.b-page .region-rule { margin: 16px 0 14px; }
+.b-reg-name { line-height: 1.2; }
+.b-reg-sub { display: inline-block; margin: 5px 16px 0 0; }
+.b-reg-status { display: inline-block; margin-top: 5px; }
+.b-room-head { margin: 14px 0 2px; }
+.b-page .ffe-row { padding: 8px 0; }
+.b-unfolded { margin: 4px 0 6px; padding: 9px 0 9px 14px; }
+.b-unfolded p { margin-bottom: 9px; }
+.b-unfolded p:last-child { margin-bottom: 0; }
+.b-addroom { margin-top: 14px; }
+.b-page .money-ladder { margin-top: 12px; }
+.b-page .money-ladder .ml-rung { padding: 6px 0; font-size: 12px; }
+.b-page .money-ladder .ml-rung:last-child { padding-top: 11px; font-size: 16px; }
+
+/* the desk */
+.b-date { margin-top: 8px; }
+.b-roster-line { margin-top: 10px; }
+.b-group { margin-top: 26px; }
+.b-contents { margin-top: 60px; }
+.b-contents-col h3 { margin-bottom: 10px; }
+
+/* the spine + margin rails */
+.b-spine-label { margin-bottom: 10px; }
+.b-timer-value { margin-top: 4px; }
+.b-timer-acts { margin-top: 9px; }
+.b-presence { margin-top: 16px; }
+.b-margin-acts { margin-top: 12px; }
+.b-margin-col .margin-item:first-of-type { margin-top: 10px; }
+
+/* the guide band (M5) */
+.b-guide { margin: 14px 0 18px; }
+.b-guide-eyebrow { margin-bottom: 6px; }
+
+/* the phone */
+.b-m-title { margin: 0; }
+.b-m .b-lh-client { margin-top: 3px; }
+.b-seam2 { margin: 18px 0 18px; }
+.b-seam2-l1 { font-size: 9.5px; letter-spacing: 0.055em; white-space: nowrap; }
+.b-seam2-l2 { margin-top: 7px; }
+.b-m .b-rl-line { display: block; font-size: 13px; }
+.b-m .b-tap44 { display: flex; margin-top: 2px; }
+.b-m .b-instr { padding: 12px 0 12px; }
+.b-m .b-ledger { margin-top: 10px; }
+.b-m-menu { padding: 12px 24px 14px; }
+.b-m-menu .b-handle { margin-bottom: 10px; }
+.b-m-menu .b-menu-group { margin: 8px 0 0; }
+
+/* ── Fold pass: M2's fifth money rung must land above 1300px ───────────── */
+.b-paper-col { padding-top: 24px; }
+.b-page .letterhead { padding-bottom: 10px; }
+.b-page .vitals { margin-top: 6px; }
+.b-ticket { margin: 16px 0 14px; }
+.b-tk-head { padding: 8px 0 7px; }
+.b-tk-row { min-height: 24px; padding: 4px 0 3px; }
+.b-tk-chips { margin-top: 4px; }
+.b-page .red-letter { padding: 9px 14px; }
+.b-rl-row { padding: 6px 0; }
+.b-instr { padding: 10px 0 10px; }
+.b-page .seam { min-height: 30px; padding: 5px 10px 5px 0; }
+.b-region { margin-top: 12px; }
+.b-page .region-rule { margin: 10px 0 8px; }
+.b-reg-sub { margin-top: 3px; }
+.b-reg-status { margin-top: 3px; }
+.b-room-head { margin: 9px 0 2px; }
+.b-page .ffe-row { padding: 6px 0; }
+.b-unfolded { margin: 3px 0 4px; padding: 7px 0 7px 14px; }
+.b-unfolded p { margin-bottom: 7px; }
+.b-addroom { margin-top: 10px; }
+.b-page .money-ladder { margin-top: 8px; }
+.b-page .money-ladder .ml-rung { padding: 4px 0; font-size: 12px; }
+.b-page .money-ladder .ml-rung:last-child { padding-top: 8px; font-size: 16px; }
+.b-tk-row { padding: 3px 0 3px; }
+.b-page .money-ladder .ml-rung { padding: 3px 0; }
+.b-page .money-ladder .ml-rung:last-child { padding-top: 7px; }
+
+/* the region's status line keeps its own line — it is a different register
+   from the sub-line and must not read as one run of prose */
+.b-reg-status { display: block; margin-top: 4px; }
+.b-rl-row { padding: 5px 0; }
+.b-page .seam { min-height: 28px; padding: 4px 10px 4px 0; }
+.b-room-head { margin: 8px 0 2px; }
+.b-colophon { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.b-colophon-id { font-family: var(--font-meta); font-size: 9px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-muted); }
