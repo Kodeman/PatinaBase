@@ -340,7 +340,7 @@ struct V0VisitSheet: View {
     }
 
     private func endVisit() {
-        // Site 1 of 3 (spec §14): read the visit's own counts BEFORE `endVisit`
+        // Site 1 of 4 (spec §14): read the visit's own counts BEFORE `endVisit`
         // closes the context — afterwards `visitState` reads `.none` and they
         // are unrecoverable.
         if let context = contextStore.visitState(identity: identity).context {

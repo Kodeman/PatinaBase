@@ -13,6 +13,10 @@ struct WorkDashboardScreen: View {
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator
     let companion: FieldCompanionController
+    /// Only for `FieldVisitEndCounts.compute` on the stale prompt's "End visit"
+    /// — the five §14 numbers are read from the store, not from the model's
+    /// display projections.
+    private let store: CaptureStore
 
     @State private var model: WorkDashboardModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,6 +27,7 @@ struct WorkDashboardScreen: View {
         analytics = container.analytics
         self.coordinator = coordinator
         companion = container.companion
+        store = container.store
         _model = State(wrappedValue: WorkDashboardModel(container: container))
     }
 
@@ -48,24 +53,28 @@ struct WorkDashboardScreen: View {
                     },
                     onEndVisit: {
                         analytics.emit(FieldVisitTelemetry.stalePrompt(answer: "end"))
-                        // The stale-prompt "End visit" is the same act as sites
-                        // 1–3 (spec §14) and does not route through either of
-                        // them, so it emits `visit.end` here too. `model`
-                        // already holds this visit's own captures/unplaced —
-                        // read BEFORE `endVisit` closes the context, since
-                        // `refreshVisit()` right after empties them.
+                        // Site 4 of 4 (spec §14): the stale prompt's "End
+                        // visit" is the same act as the other three and does not
+                        // route through any of them, so it emits `visit.end`
+                        // here too — through the SHARED helper. It used to
+                        // re-implement the notes filter and substitute
+                        // `model.unplaced` / `model.scanUploads`, which agreed
+                        // with the other three by coincidence and had nothing
+                        // holding them in step; `unplaced` in particular must be
+                        // the tray-wide `unfiled(owner:)` count, not this
+                        // screen's display-deduped projection of it. Read BEFORE
+                        // `endVisit` closes the context — afterwards
+                        // `visitState` reads `.none` and the counts are gone.
                         if let context = model.visitState.context {
-                            let notes = model.visitCaptures.filter { specimen in
-                                specimen.photos.isEmpty
-                                    && ((specimen.voiceTranscript?.isEmpty == false)
-                                        || specimen.voiceAudioFilename?.isEmpty == false)
-                            }.count
+                            let counts = FieldVisitEndCounts.compute(
+                                context: context, store: store,
+                                runsRealServices: AppConfiguration.runsRealServices,
+                                userID: session.userID,
+                                workspaceID: session.workspaceID)
                             analytics.emit(FieldVisitTelemetry.visitEnd(
-                                duration: Date().timeIntervalSince(context.startedAt),
-                                captures: max(0, model.visitCaptures.count - notes),
-                                notes: notes,
-                                scans: model.scanUploads.count,
-                                unplaced: model.unplaced.count))
+                                duration: counts.duration, captures: counts.captures,
+                                notes: counts.notes, scans: counts.scans,
+                                unplaced: counts.unplaced))
                         }
                         _ = CaptureSessionContextStore.shared.endVisit(identity: identity)
                         model.refreshVisit()

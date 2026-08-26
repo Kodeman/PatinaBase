@@ -245,7 +245,7 @@ struct RootView: View {
         case FieldCompanionActionID.openVisit.rawValue:
             coordinator.present(.visit)
         case FieldCompanionActionID.endVisit.rawValue:
-            // Site 3 of 3 (spec §14) — the one reachable from every non-camera
+            // Site 3 of 4 (spec §14) — the one reachable from every non-camera
             // screen via the collapsed Companion strip, and the one it's
             // cheapest for her to miss counting. Read the visit's own counts
             // BEFORE `endVisit` closes the context: afterwards `visitState`
@@ -482,14 +482,14 @@ private enum FieldCompanionPlacement: Equatable {
 }
 
 /// Task 31: the exact five counts `FieldVisitTelemetry.visitEnd` needs, read
-/// from the OPEN visit's own context. Shared by all three end-visit call sites
-/// (V0's door, V1's tray, this companion-strip action) so `notes` vs `captures`
-/// splits the same way `FieldTodayBandBuilder` already does, and `unplaced`
-/// reads the true tray-wide `unfiled(owner:)` count rather than any one
-/// screen's display-deduped projection of it. `scans` mirrors what
+/// from the OPEN visit's own context. Shared by all FOUR end-visit call sites
+/// (V0's door, V1's tray, this companion-strip action, and W1's stale prompt)
+/// so `notes` vs `captures` splits the same way `FieldTodayBandBuilder` already
+/// does, and `unplaced` reads the true tray-wide `unfiled(owner:)` count rather
+/// than any one screen's display-deduped projection of it. `scans` mirrors what
 /// `SupabaseSiteScanService.pendingUploads()` reports (it is a thin wrapper over
 /// `store.scanUploadRecords(owner:)`), read straight from the store since none
-/// of these three call sites hold a live `SiteScanService`.
+/// of these four call sites hold a live `SiteScanService`.
 struct FieldVisitEndCounts {
     let duration: TimeInterval
     let captures: Int

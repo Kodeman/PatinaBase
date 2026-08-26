@@ -22,6 +22,7 @@ struct ViewfinderScreen: View {
     /// fresh card is a fresh note, so it resets with the card.
     @State private var affirmed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     private let coordinator: CaptureCoordinator
     /// C6 is a mode of this screen, so it is built here rather than routed to.
     private let container: AppContainer
@@ -135,6 +136,20 @@ struct ViewfinderScreen: View {
         // observable would mean editing a closed contract.
         .onChange(of: coordinator.sheet) { _, sheet in
             if sheet == nil { model.visitDoorClosed() }
+        }
+        // The C3 card's mic has no `UIBackgroundModes` entry behind it, so iOS
+        // suspends the engine on backgrounding — but `stop()` (which is what
+        // calls `endCardNote()`) is wired only to `.onDisappear`, which does not
+        // fire. `finish()` never returned, so the transcript, the segments and
+        // the duration were never written to the Specimen, and on resume the
+        // card still read "Recording — release to keep it" over a dead mic:
+        // her words gone AND the chrome overstating what was happening, the
+        // exact thing `ViewfinderModel.endCardNote` exists to prevent.
+        // `.background` and NOT `!= .active`, for C6's reason: Control Center,
+        // the app switcher and a screenshot all produce `.inactive` and must
+        // not end a note.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { model.endCardNote() }
         }
         .onDisappear { model.stop() }
         .statusBarHidden(true)

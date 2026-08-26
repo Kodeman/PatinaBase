@@ -17,7 +17,8 @@ final class C6VoiceModel {
     private let voice: any VoiceNoteService
     private let featureFlags: CaptureFeatureFlags
     private let owner: CaptureOwnerIdentity?
-    private let visit: CaptureVisitState
+    private let session: any SessionProviding
+    private let sessionContext: CaptureSessionContextStore
 
     private(set) var state: FieldVoiceModeState = .idle
     private(set) var transcript = ""
@@ -28,7 +29,7 @@ final class C6VoiceModel {
     private var task: Task<Void, Never>?
     private var ticker: Task<Void, Never>?
 
-    init(container: AppContainer, visit: CaptureVisitState) {
+    init(container: AppContainer) {
         store = container.store
         sync = container.sync
         analytics = container.analytics
@@ -42,8 +43,37 @@ final class C6VoiceModel {
                                        surface: "c6")
         featureFlags = container.featureFlags
         owner = container.session.ownerIdentity
-        self.visit = visit
+        session = container.session
+        sessionContext = .shared
     }
+
+    /// The visit as it is RIGHT NOW. C6 is a MODE of `ViewfinderScreen`, and V0
+    /// is a `.sheet` presented OVER that screen, so C1 never leaves the
+    /// hierarchy and this model — built once in `.task` — outlives every visit
+    /// she starts from the chip. A `visit` frozen in `init` is what made the
+    /// screen lie: the line under the transcript reads the VIEW's fresh visit
+    /// ("It lands on Ashford Residence") while `commit()` read the model's
+    /// stale one and filed the note with no project, no venue stamp and no
+    /// `inherit` — Invariant V failing on the one surface where the screen's
+    /// two halves disagree. `noteSetting` read it too, so a walk-through
+    /// answered `.solo`, the affirmation chip rendered nothing, and FC-R11's
+    /// consent step was skipped outright.
+    private var liveVisit: CaptureVisitState {
+        sessionContext.visitState(identity: CaptureSessionIdentity(
+            userID: session.userID, workspaceID: session.workspaceID))
+    }
+
+    /// The visit this TAKE belongs to, pinned by `start()` and used by nothing
+    /// else. The chip stays rendered and tappable in VOICE mode WHILE
+    /// recording, so re-reading the store in `commit()` would let a visit she
+    /// changed — or ended — mid-recording restamp words that were spoken
+    /// somewhere else, and would leave `created.noteSetting` describing a
+    /// different visit than `created.inherit(context)`. One take, one visit.
+    private var takeVisit: CaptureVisitState = .none
+    /// FC-R11's consent is given ONCE, before `start()`, and the recorder is
+    /// told the setting AT `start()`. Held so the row `commit()` writes and the
+    /// row `voice.start` already wrote cannot disagree.
+    private var takeNoteSetting: FieldNoteSetting = .solo
 
     /// The recorder is gated on a flag that evaluates null on every device
     /// build today, so this is the difference between a control that declines
@@ -58,7 +88,11 @@ final class C6VoiceModel {
         }
     }
 
-    var noteSetting: FieldNoteSetting {
+    /// Live, because its readers are live: the affirmation chip renders it on
+    /// every pass and `toggle(affirmed:)` gates on it at the tap.
+    var noteSetting: FieldNoteSetting { Self.noteSetting(for: liveVisit) }
+
+    private static func noteSetting(for visit: CaptureVisitState) -> FieldNoteSetting {
         guard let context = visit.context, let kind = context.kind else { return .solo }
         return CaptureVisitDraft(kind: kind, kit: context.kit).defaultNoteSetting
     }
@@ -80,12 +114,19 @@ final class C6VoiceModel {
         started = Date()
         segmentCount = 0
         transcript = ""
+        // Pinned here, before the `do`, because the recorder is told its note
+        // setting inside it. An `.onChange` on the view could not have landed
+        // yet if she starts a visit at the chip and records immediately, so
+        // pushing the visit INTO the model was never enough on its own —
+        // FC-R11's audit row is written on this turn.
+        takeVisit = liveVisit
+        takeNoteSetting = Self.noteSetting(for: takeVisit)
         do {
             // FC-R11: the recorder emits the ONE `voice.start`, and this is what
             // stops that row asserting "solo" over a conversation note — the
             // consent rule's only audit trail. The protocol default is a no-op,
             // so omitting it compiles clean and silently mislabels every note.
-            voice.setNoteSetting(noteSetting)
+            voice.setNoteSetting(takeNoteSetting)
             let stream = try voice.startLiveTranscription()
             state = .recording(elapsed: 0)
             task = Task { [weak self] in
@@ -169,19 +210,19 @@ final class C6VoiceModel {
             durationSeconds: result.durationSeconds,
             provenance: ContextCaptureProvenance(
                 scanSessionId: nil,
-                projectId: visit.context?.routing.projectID,
+                projectId: takeVisit.context?.routing.projectID,
                 // FC-R5 holds: this is the SCAN lane's `public.rooms` id, which
                 // rides in provenance because it is incompatible with
                 // `field_captures.project_room_id`. The CAPTURE lane's room
                 // reaches the column below, via `routing.stamped(onto:)`.
-                projectRoomId: visit.context?.scanRoomID,
+                projectRoomId: takeVisit.context?.scanRoomID,
                 cameraPoseRowMajor: nil,
                 capturedAt: ISO8601DateFormatter().string(from: Date())))
-        if let context = visit.context {
+        if let context = takeVisit.context {
             created.venue = context.routing.stamped(onto: created.venue ?? VenueStamp())
             created.inherit(context)
         }
-        created.noteSetting = noteSetting
+        created.noteSetting = takeNoteSetting
         created.voiceAudioSegmentsRaw = result.audioSegments.isEmpty
             ? nil : result.audioSegments
         created.voiceTranscriptSourceRaw = result.transcript.isEmpty
@@ -253,7 +294,7 @@ struct C6VoiceScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
             container.analytics.screen(CaptureScreenID.c6Voice.rawValue)
-            if model == nil { model = C6VoiceModel(container: container, visit: visit) }
+            if model == nil { model = C6VoiceModel(container: container) }
         }
         // `.background` and NOT `!= .active`: `.inactive` means frontmost but
         // not receiving events, which Control Center, the app switcher and a

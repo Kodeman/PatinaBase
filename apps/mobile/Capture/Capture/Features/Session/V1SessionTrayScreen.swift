@@ -383,7 +383,7 @@ struct V1SessionTrayScreen: View {
     }
 
     private func endVisit() {
-        // Site 2 of 3 (spec §14): read the visit's own counts BEFORE `endVisit`
+        // Site 2 of 4 (spec §14): read the visit's own counts BEFORE `endVisit`
         // closes the context — afterwards `visitState` reads `.none` and they
         // are unrecoverable. `unplaced` (the @State array) has already had this
         // visit's own unplaced rows excluded for display, so the count comes
