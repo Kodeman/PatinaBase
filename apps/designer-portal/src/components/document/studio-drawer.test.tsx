@@ -98,14 +98,14 @@ describe('StudioDrawer', () => {
     );
     expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'The Rooms' }),
+      screen.getByRole('button', { name: 'The Scans' }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Orders' }),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
-    const menu = screen.getByRole('group', { name: 'Studio books' });
+    fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
+    const menu = screen.getByRole('group', { name: 'Ledgers' });
     expect(within(menu).getByRole('button', { name: 'Orders' })).toHaveFocus();
     expect(within(menu).getByRole('button', { name: 'Accounts' })).toHaveClass(
       'min-h-11',
@@ -121,10 +121,10 @@ describe('StudioDrawer', () => {
     ).toBeInTheDocument();
   });
 
-  it('F11 — closing a books-menu sheet returns focus to Studio books once the opening row has unmounted', async () => {
+  it('F11 — closing a books-menu sheet returns focus to Ledgers once the opening row has unmounted', async () => {
     render(<StudioDrawer />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
     const ordersRow = screen.getByRole('button', { name: 'Orders' });
     ordersRow.focus();
     fireEvent.click(ordersRow);
@@ -141,13 +141,13 @@ describe('StudioDrawer', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Studio books/i })).toHaveFocus(),
+      expect(screen.getByRole('button', { name: 'Ledgers' })).toHaveFocus(),
     );
   });
 
   it('puts the most recently opened book first on the next visit', async () => {
     const first = render(<StudioDrawer />);
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
     fireEvent.click(screen.getByRole('button', { name: 'Accounts' }));
 
     expect(
@@ -159,11 +159,11 @@ describe('StudioDrawer', () => {
 
     first.unmount();
     render(<StudioDrawer />);
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
 
     await waitFor(() => {
       const items = within(
-        screen.getByRole('group', { name: 'Studio books' }),
+        screen.getByRole('group', { name: 'Ledgers' }),
       ).getAllByRole('button');
       expect(items[0]).toHaveAccessibleName(/Accounts.*Recent/i);
     });
@@ -171,17 +171,30 @@ describe('StudioDrawer', () => {
 
   it('offers feedback contextually from the books hub', () => {
     render(<StudioDrawer />);
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
     fireEvent.click(screen.getByRole('button', { name: 'Leave a note' }));
 
     expect(openFeedbackSheet).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('group')).not.toBeInTheDocument();
   });
 
+  it('C-AP-05 — prints Find anything ⌘K as a door of its own', () => {
+    const opened = jest.fn();
+    window.addEventListener('document:open-command-bar', opened);
+    render(<StudioDrawer />);
+
+    const door = screen.getByRole('button', { name: 'Find anything ⌘K' });
+    expect(door).toHaveClass('min-h-11');
+
+    fireEvent.click(door);
+    expect(opened).toHaveBeenCalledTimes(1);
+    window.removeEventListener('document:open-command-bar', opened);
+  });
+
   it('carries the shipped-feedback signal into the single feedback entrance', () => {
     mockUnseenFeedback = [{ id: 'feedback-1' }];
     render(<StudioDrawer />);
-    fireEvent.click(screen.getByRole('button', { name: /Studio books/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ledgers' }));
 
     expect(
       screen.getByRole('button', { name: /Leave a note.*Shipped/i }),

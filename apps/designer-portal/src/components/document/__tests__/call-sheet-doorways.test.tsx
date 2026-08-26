@@ -212,7 +212,7 @@ describe('command-bar — the "This surface" call sheet row', () => {
     render(<CommandBar />);
     await openPalette();
 
-    expect(screen.queryByText('Open the call sheet')).not.toBeInTheDocument();
+    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
   });
 
   it('is absent with a project document in hand when the flag is off', async () => {
@@ -223,7 +223,9 @@ describe('command-bar — the "This surface" call sheet row', () => {
     render(<CommandBar />);
     await openPalette();
 
-    expect(screen.queryByText('Open the call sheet')).not.toBeInTheDocument();
+    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
+    // A3-L3 — its three siblings are not flag-gated and still stand.
+    expect(screen.getByText('Plan room')).toBeInTheDocument();
   });
 
   it('appears in "This surface" with a project document in hand and the flag on', async () => {
@@ -235,7 +237,8 @@ describe('command-bar — the "This surface" call sheet row', () => {
     await openPalette();
 
     expect(screen.getByText('This surface')).toBeInTheDocument();
-    expect(screen.getByText('Open the call sheet')).toBeInTheDocument();
+    expect(screen.getByText('Call sheet')).toBeInTheDocument();
+    expect(screen.getByText('this project · who is on the job')).toBeInTheDocument();
   });
 
   it('never lists the call sheet in the unfiltered "Rooms & ledgers" group', async () => {
