@@ -56,6 +56,26 @@ public enum FieldVisitTelemetry {
     }
 
     public static let captureUnplaced: Event = ("capture.unplaced", [:])
+
+    /// FC-R21 part 1: the ONE predicate. Which of the pair fires is
+    /// `Specimen.isUnplaced` AFTER the action, and no emitter may decide it for
+    /// itself — `ViewfinderModel` read `isUnplaced` while `S3DestinationScreen`
+    /// read `venue.projectId != nil`, so a Library capture with no project
+    /// emitted opposite events depending on which route committed it and the
+    /// placed/unplaced ratio meant two different things at once. Library owes
+    /// no project, so such a capture is PLACED; only a destination that owes one
+    /// and lacks one is unplaced.
+    ///
+    /// `has_room` is the ID lane (FC-R5): `project_rooms.id` is what reaches
+    /// `field_captures.project_room_id`, and a typed room name can exist with
+    /// no id.
+    @MainActor
+    public static func placement(_ specimen: Specimen, basis: String) -> Event {
+        specimen.isUnplaced
+            ? captureUnplaced
+            : capturePlaced(basis: basis,
+                            hasRoom: specimen.venue?.projectRoomId != nil)
+    }
 }
 
 public extension CaptureAnalytics {

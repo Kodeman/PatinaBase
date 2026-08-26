@@ -186,12 +186,13 @@ private struct S3Content: View {
                 // so this success (the RETRY succeeding) must not count it again.
                 if specimen.placementEventEmitted != true {
                     specimen.placementEventEmitted = true
-                    if let venue = specimen.venue, venue.projectId != nil {
-                        analytics.emit(FieldVisitTelemetry.capturePlaced(
-                            basis: placementBasis, hasRoom: venue.projectRoomId != nil))
-                    } else {
-                        analytics.emit(FieldVisitTelemetry.captureUnplaced)
-                    }
+                    // FC-R21 / F-17: the predicate is `Specimen.isUnplaced`,
+                    // read from the shared factory. This route used to ask
+                    // `venue.projectId != nil` instead, which called a Library
+                    // capture with no project UNPLACED while its sibling
+                    // emitter called the same capture placed.
+                    analytics.emit(FieldVisitTelemetry.placement(
+                        specimen, basis: placementBasis))
                     try? store.save()
                 }
                 routing = nil

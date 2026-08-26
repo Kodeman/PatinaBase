@@ -340,6 +340,58 @@ struct VisitContextTests {
         #expect(specimen.venue?.projectId == nil)
     }
 
+    // MARK: - F-17 / FC-R21: ONE placement predicate, whatever the route
+
+    /// The case the two emitters used to split on. `ViewfinderModel` read
+    /// `specimen.isUnplaced`; `S3DestinationScreen` read `venue.projectId != nil`.
+    /// A LIBRARY capture with no project answers those two questions
+    /// differently — it is not unplaced (Library owes no project) but its venue
+    /// carries no project id — so the same capture emitted `capture.placed`
+    /// down one route and `capture.unplaced` down the other. The factory below
+    /// is the only thing either route may ask.
+    @MainActor
+    @Test func aLibraryCaptureWithNoProjectIsPlacedWhicheverRouteEmitsIt() throws {
+        let store = try CaptureStore.inMemory()
+        let library = store.newDraft()
+        library.destination = .library
+        try store.save()
+
+        #expect(!library.isUnplaced)
+        #expect(library.venue?.projectId == nil)
+
+        let event = FieldVisitTelemetry.placement(library, basis: "manual")
+        #expect(event.name == "capture.placed")
+        #expect(event.properties["has_room"] == "false")
+    }
+
+    @MainActor
+    @Test func anInboxCaptureWithNoProjectIsUnplacedWhicheverRouteEmitsIt() throws {
+        let store = try CaptureStore.inMemory()
+        let inbox = store.newDraft()
+        inbox.destination = .inbox
+        try store.save()
+
+        #expect(inbox.isUnplaced)
+        #expect(FieldVisitTelemetry.placement(inbox, basis: "manual").name
+                == "capture.unplaced")
+    }
+
+    @MainActor
+    @Test func aPlacedCaptureCarriesItsBasisAndRoomLane() throws {
+        let store = try CaptureStore.inMemory()
+        let placed = store.newDraft()
+        placed.destination = .inbox
+        placed.venue = VenueStamp()
+        placed.venue?.projectId = "p1"
+        placed.venue?.projectRoomId = "pr1"
+        try store.save()
+
+        let event = FieldVisitTelemetry.placement(placed, basis: "visit")
+        #expect(event.name == "capture.placed")
+        #expect(event.properties["basis"] == "visit")
+        #expect(event.properties["has_room"] == "true")
+    }
+
     /// FC-R6 (Ruling 3): the unplaced set INCLUDES committed rows. PLACEMENT is
     /// the only thing that clears `isUnplaced` — sync state never enters it, so
     /// a capture that reached the server hours ago with no project still waits

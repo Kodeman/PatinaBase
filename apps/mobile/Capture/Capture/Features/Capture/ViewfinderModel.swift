@@ -410,13 +410,8 @@ final class ViewfinderModel {
                 // counting this one capture.
                 specimen.placementEventEmitted = true
                 try? store.save()
-                if specimen.isUnplaced {
-                    analytics.emit(FieldVisitTelemetry.captureUnplaced)
-                } else {
-                    analytics.emit(FieldVisitTelemetry.capturePlaced(
-                        basis: visitState.isVisit ? "visit" : "manual",
-                        hasRoom: specimen.venue?.projectRoomId != nil))
-                }
+                analytics.emit(FieldVisitTelemetry.placement(
+                    specimen, basis: visitState.isVisit ? "visit" : "manual"))
                 try await sync.route(id, to: specimen.destination)
                 coordinator.present(specimen.destination == .library
                     ? .savedTerminal(id)
