@@ -1,14 +1,16 @@
 /**
  * The spine after B1's subtraction: one block, the running index, and nothing
  * else. The rooms and the shelves are the ticket's rows on the paper now, so
- * the two blocks that used to stand here are gone — `spine-rooms-block.tsx` is
- * deleted, and the shelves block survives only as the Finalize table's own.
+ * the two blocks that used to stand here are gone — `spine-rooms-block.tsx`
+ * and `spine-shelves-block.tsx` are both deleted (B2). What survives of the
+ * shelves is the Finalize table's one row, `The client's copy`, until the
+ * ticket mounts on the proposal spread and its ninth row carries it.
  */
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useRoomLens, RoomLensProvider } from '../room-lens-context';
 import { SpineRunningIndex } from '../spine-running-index';
-import { SpineShelvesBlock } from '../spine-shelves-block';
+import { FinalizeShelf } from '../worktable/finalize-shelf';
 import { DocSpineShelvedBlocks } from '../spine-shelved-blocks';
 import {
   PROJECT_PAPER_ORDER,
@@ -151,80 +153,47 @@ describe('the room lens', () => {
   });
 });
 
-describe('the shelves block — the Finalize table’s now, never the spine’s', () => {
-  const statuses = {
-    planroom: '4 sheets',
-    specbook: '10 specified · by room',
-    moodboards: '3 boards',
-    callsheet: '3 on the roster',
-    clientcopy: 'As sent · live',
-  };
-
-  it('declares expansion on the leaf shelves only', () => {
-    render(
-      <SpineShelvesBlock
-        openShelf="specbook"
-        statuses={statuses}
-        callSheetEnabled
-        onToggleShelf={jest.fn()}
-      />,
-    );
-    expect(screen.getByRole('button', { name: /Spec book/ })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
-    expect(screen.getByRole('button', { name: /Plan room/ })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
-    // The call sheet is a doorway to the roster sheet, not a leaf — it must not
-    // promise a panel it never opens here.
+describe('the Finalize table’s one row — `The client’s copy`', () => {
+  it('declares expansion, because the row opens a leaf', () => {
+    render(<FinalizeShelf openShelf="clientcopy" onToggleShelf={jest.fn()} />);
     expect(
-      screen.getByRole('button', { name: /Call sheet/ }),
-    ).not.toHaveAttribute('aria-expanded');
+      screen.getByRole('button', { name: /The client’s copy/ }),
+    ).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('names every shelf trigger so the leaf can hand focus back', () => {
-    render(
-      <SpineShelvesBlock
-        openShelf={null}
-        statuses={statuses}
-        callSheetEnabled
-        onToggleShelf={jest.fn()}
-      />,
-    );
+  it('names the trigger so the leaf can hand focus back', () => {
+    render(<FinalizeShelf openShelf={null} onToggleShelf={jest.fn()} />);
     expect(
-      screen.getByRole('button', { name: /Boards/ }),
-    ).toHaveAttribute('data-shelf-trigger', 'moodboards');
+      screen.getByRole('button', { name: /The client’s copy/ }),
+    ).toHaveAttribute('data-shelf-trigger', 'clientcopy');
   });
 
   it('points aria-controls at the leaf only while the leaf is on the page', () => {
     const { rerender } = render(
-      <SpineShelvesBlock
-        openShelf={null}
-        statuses={statuses}
-        callSheetEnabled
-        onToggleShelf={jest.fn()}
-      />,
+      <FinalizeShelf openShelf={null} onToggleShelf={jest.fn()} />,
     );
     // A closed leaf renders nothing — naming its id would offer a jump into a
     // void.
     expect(
-      screen.getByRole('button', { name: /Spec book/ }),
+      screen.getByRole('button', { name: /The client’s copy/ }),
     ).not.toHaveAttribute('aria-controls');
 
-    rerender(
-      <SpineShelvesBlock
-        openShelf="specbook"
-        statuses={statuses}
-        callSheetEnabled
-        onToggleShelf={jest.fn()}
-      />,
-    );
-    expect(screen.getByRole('button', { name: /Spec book/ })).toHaveAttribute(
-      'aria-controls',
-      'doc-shelf-leaf',
-    );
+    rerender(<FinalizeShelf openShelf="clientcopy" onToggleShelf={jest.fn()} />);
+    expect(
+      screen.getByRole('button', { name: /The client’s copy/ }),
+    ).toHaveAttribute('aria-controls', 'doc-shelf-leaf');
+  });
+
+  it('heads no group: one row is not a shelf-full', () => {
+    render(<FinalizeShelf openShelf={null} onToggleShelf={jest.fn()} />);
+    expect(screen.queryByText('The shelves')).not.toBeInTheDocument();
+  });
+
+  it('reaches the copy when pressed', () => {
+    const onToggle = jest.fn();
+    render(<FinalizeShelf openShelf={null} onToggleShelf={onToggle} />);
+    fireEvent.click(screen.getByRole('button', { name: /The client’s copy/ }));
+    expect(onToggle).toHaveBeenCalledWith('clientcopy');
   });
 });
 

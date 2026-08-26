@@ -159,6 +159,144 @@ describe('deriveTicket — eight rows, always', () => {
   });
 });
 
+/**
+ * The four stages before the work starts. A document standing on one of them
+ * has no project yet — no rooms, no scheme, no schedule, no money moving — so
+ * the ticket's job there is to say so eight times without inventing a figure.
+ */
+const BEFORE_THE_WORK = ['brief', 'discovery', 'direction', 'proposal'] as const;
+
+describe('deriveTicket — the four spreads before the work starts', () => {
+  it.each(BEFORE_THE_WORK)(
+    'prints the same eight rows, in the same order, on a %s document',
+    (section) => {
+      const rows = deriveTicket(emptyInput(section));
+      expect(rows).toHaveLength(8);
+      expect(rows.map((row) => row.key)).toEqual(ORDER);
+    },
+  );
+
+  it.each(BEFORE_THE_WORK)(
+    'says what a %s document has none of, without naming an install it has no use for',
+    (section) => {
+      const rows = deriveTicket(emptyInput(section));
+      expect(valueOf(rows, 'rooms')).toBe('No rooms yet');
+      expect(valueOf(rows, 'pieces')).toBe('No pieces yet');
+      expect(valueOf(rows, 'drawings')).toBe('Nothing filed');
+      expect(valueOf(rows, 'spec')).toBe('Nothing specified yet');
+      expect(valueOf(rows, 'boards')).toBe('No boards yet · start one');
+      expect(valueOf(rows, 'money')).toBe('Nothing moving yet');
+      expect(valueOf(rows, 'dates')).toBe('No dates yet');
+      expect(valueOf(rows, 'people')).toBe('Nobody on it yet');
+    },
+  );
+
+  it.each(BEFORE_THE_WORK)(
+    'opens on a %s document only what such a spread actually prints',
+    (section) => {
+      const rows = deriveTicket(emptyInput(section));
+      // No Project region stands on these four spreads
+      // (`paperRegionsForSection` returns nothing), so the three rows that
+      // index a region state their figure and open nothing — while the three
+      // leaf rows, which have a page of their own, open on every section
+      // (direction-b §4, F48).
+      expect(rows.map((row) => row.door.kind)).toEqual([
+        'expand',
+        'none',
+        'leaf',
+        'leaf',
+        'leaf',
+        'none',
+        'none',
+        'overlay',
+      ]);
+    },
+  );
+
+  it.each(BEFORE_THE_WORK)(
+    'still states the schedule’s own position on a %s document that has one',
+    (section) => {
+      const rows = deriveTicket({
+        ...emptyInput(section),
+        dates: {
+          settled: true,
+          schedule: {
+            selection: SELECTION,
+            fidelity: 'band',
+            positionText: 'Band',
+            install: null,
+          },
+        },
+      });
+      expect(valueOf(rows, 'dates')).toBe('Band');
+    },
+  );
+
+  it('keeps the install-date register where the work is', () => {
+    expect(valueOf(deriveTicket(emptyInput('install')), 'dates')).toBe(
+      'No install date yet',
+    );
+    expect(valueOf(deriveTicket(emptyInput('care')), 'dates')).toBe(
+      'No install date yet',
+    );
+  });
+
+  it.each(BEFORE_THE_WORK)(
+    'prints the phase on a %s document, and never the section word',
+    (section) => {
+      const head = deriveTicketHead({
+        ...emptyInput(section),
+        phase: { name: 'Schematic Design', position: 2, of: 6 },
+      });
+      expect(head.phase).toBe('Schematic Design · 2 of 6');
+      expect(head.phase).not.toMatch(/brief|discovery|direction|proposal/i);
+    },
+  );
+});
+
+describe('deriveTicket — the ninth row, `The client’s copy`', () => {
+  const onFinalize = (sent: boolean) =>
+    deriveTicket({
+      ...emptyInput('proposal'),
+      clientCopy: { settled: true, sent },
+    });
+
+  it('stands only where a proposal document has a copy to print', () => {
+    for (const section of [...BEFORE_THE_WORK, 'project', 'install', 'care'] as const) {
+      expect(deriveTicket(emptyInput(section))).toHaveLength(8);
+    }
+    const rows = onFinalize(true);
+    expect(rows).toHaveLength(9);
+    expect(rows.map((row) => row.key)).toEqual([...ORDER, 'clientcopy']);
+  });
+
+  it('names the copy, and opens the leaf the shelf used to open', () => {
+    const row = onFinalize(true).find((r) => r.key === 'clientcopy')!;
+    expect(row.label).toBe('Copy');
+    expect(row.value).toBe('The client’s copy · as sent, live');
+    expect(row.door).toEqual({ kind: 'leaf', shelf: 'clientcopy' });
+    expect(row.exception).toBeNull();
+  });
+
+  it('never confuses a copy not yet sent with one still being read', () => {
+    expect(onFinalize(false).find((r) => r.key === 'clientcopy')!.value).toBe(
+      'The client’s copy · not sent yet',
+    );
+    const reading = deriveTicket({
+      ...emptyInput('proposal'),
+      clientCopy: { settled: false, sent: false },
+    });
+    expect(reading.find((r) => r.key === 'clientcopy')!.value).toBe('Reading…');
+  });
+
+  it('carries no exception into the seam', () => {
+    const rows = onFinalize(false);
+    expect(deriveTicketSeam(rows, 'The job · Proposal').exceptions).toBe(
+      'Nothing overdue',
+    );
+  });
+});
+
 describe('deriveTicket — honest empties', () => {
   const rows = deriveTicket(emptyInput());
 

@@ -6,7 +6,7 @@
  */
 
 import { draftingEditability } from '../drafting-editability';
-import { shelvesFor } from '../shelves';
+import { shelfDefinition, shelvesFor } from '../shelves';
 
 describe('draftingEditability — the Room’s own rule, addressable', () => {
   it('lets a legacy DRAFT be edited, and nothing else', () => {
@@ -72,31 +72,23 @@ describe('draftingEditability — the Room’s own rule, addressable', () => {
   });
 });
 
-describe('shelvesFor — the client’s copy', () => {
+describe('shelvesFor — after the client’s copy became a ticket row', () => {
   it('never offers a project document a shelf that belongs to a proposal', () => {
     const keys = shelvesFor({ callSheetEnabled: true }).map((s) => s.key);
     expect(keys).toEqual(['planroom', 'specbook', 'moodboards', 'callsheet']);
-    // …not even when the flag that would raise it is on.
-    expect(
-      shelvesFor({ callSheetEnabled: true, clientCopyEnabled: true }).map((s) => s.key),
-    ).not.toContain('clientcopy');
   });
 
-  it('gives a proposal document its one shelf and none of the project’s', () => {
-    const shelves = shelvesFor({
-      subject: 'proposal',
-      callSheetEnabled: false,
-      clientCopyEnabled: true,
-    });
-    expect(shelves.map((s) => s.key)).toEqual(['clientcopy']);
-    expect(shelves[0]).toMatchObject({
+  it('offers a proposal document no shelf at all — the copy is the ticket’s ninth row', () => {
+    expect(shelvesFor({ subject: 'proposal', callSheetEnabled: false })).toEqual([]);
+    expect(shelvesFor({ subject: 'proposal', callSheetEnabled: true })).toEqual([]);
+  });
+
+  it('keeps the copy’s definition, because the leaf it opens still resolves by key', () => {
+    expect(shelfDefinition('clientcopy')).toMatchObject({
       kind: 'leaf',
+      subject: 'proposal',
       title: 'The client’s copy',
     });
-  });
-
-  it('offers a proposal document nothing at all off the Finalize table', () => {
-    expect(shelvesFor({ subject: 'proposal', callSheetEnabled: true })).toEqual([]);
   });
 
   it('keeps the call-sheet gate where it was', () => {

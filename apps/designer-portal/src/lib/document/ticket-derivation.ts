@@ -6,6 +6,16 @@
  * still prints, and says so in the product's own words — a row that vanishes
  * at zero is a row a reader cannot tell is empty from one that failed to load.
  *
+ * All seven sections read the same eight rows. The four stages before the work
+ * starts — brief, discovery, direction, proposal — put no Project region on the
+ * paper (`paperRegionsForSection`), so on those spreads the rows that index a
+ * region state their figure and open nothing, and the rows that count a
+ * project's own things say the honest empty for a paper with no project yet.
+ *
+ * The ONE variable row is a ninth: `The client's copy`, which stands only on a
+ * proposal document on the Finalize table. It was the proposal's one shelf
+ * before it was a row; it is the row's subject that gates it, never a flag.
+ *
  * Nothing here reads the network or the viewport: every figure arrives as a
  * fact the caller has already settled, and each fact group carries whether its
  * source has answered, so `Reading…` and an honest empty never wear one face.
@@ -32,7 +42,8 @@ export type TicketRowKey =
   | 'boards'
   | 'money'
   | 'dates'
-  | 'people';
+  | 'people'
+  | 'clientcopy';
 
 /** A room as the Rooms row expands to it: the name, and how much of the
  *  schedule belongs to it. Taking one in hand LIFTS it; nothing hides. */
@@ -127,6 +138,13 @@ export interface TicketPhase {
   of: number;
 }
 
+/** What the client is holding: whether the copy has gone out, and whether the
+ *  source has answered. `Reading…` and `not sent yet` never wear one face. */
+export interface TicketClientCopy {
+  settled: boolean;
+  sent: boolean;
+}
+
 export interface TicketInput {
   section: SectionKey;
   phase: TicketPhase | null;
@@ -151,6 +169,12 @@ export interface TicketInput {
   };
   dates: { settled: boolean; schedule: SectionScheduleFacts | null };
   people: { settled: boolean; callSheetEnabled: boolean; rosterCount: number };
+  /**
+   * The proposal's own copy, and the ninth row it prints. Absent on every
+   * document that is not a proposal standing on the Finalize table — which is
+   * what keeps the ticket eight rows everywhere else.
+   */
+  clientCopy?: TicketClientCopy | null;
   /**
    * The regions this spread actually mounts (C11). Defaults to what the
    * section prints; the caller passes its own where a pinned Worktable table
@@ -181,6 +205,21 @@ const SECTION_LABEL: Record<SectionKey, string> = {
   install: 'Install',
   care: 'Care',
 };
+
+/**
+ * The four stages before the work starts (`document-index.ts`'s own phrase).
+ * A document standing on one of them has no project yet, so a row whose empty
+ * names a project's own thing states the emptier fact instead.
+ */
+const PRE_WORK_SECTIONS: readonly SectionKey[] = [
+  'brief',
+  'discovery',
+  'direction',
+  'proposal',
+];
+
+const beforeTheWork = (section: SectionKey) =>
+  PRE_WORK_SECTIONS.includes(section);
 
 const RANK_ORDER: Record<TicketExceptionRank, number> = {
   'money-at-risk': 0,
@@ -531,7 +570,12 @@ function datesRow(input: TicketInput): TicketRow {
   if (!input.dates.settled) {
     value = READING;
   } else if (!dayStateable || days === null || install?.date == null) {
-    value = schedule?.positionText ?? 'No install date yet';
+    value =
+      schedule?.positionText ??
+      // Before the work starts there is nothing to install, so naming an
+      // install date the paper has never had a use for reads as a missing
+      // figure rather than a stage that has not arrived.
+      (beforeTheWork(input.section) ? 'No dates yet' : 'No install date yet');
   } else {
     const when = fmtWeekdayDate(install.date);
     if (days < 0) value = `Installed ${when}`;
@@ -589,9 +633,38 @@ function peopleRow(input: TicketInput): TicketRow {
   };
 }
 
-/** Eight rows, always eight, always in order. */
+/**
+ * The ninth row — the proposal's own copy, as the client is reading it.
+ *
+ * It was `shelves.ts`'s `clientcopy` entry, the one shelf a proposal document
+ * had; it is a ticket row now, so the proposal reaches it the way every other
+ * document reaches everything else. The door is the same leaf the shelf opened
+ * (`ShelfPanel` resolves it), which is why the row carries the shelf's key
+ * rather than a route: the copy has no page of its own, and below 1440 the
+ * Preview act has always been its form (Q7/A4).
+ */
+function clientCopyRow(copy: TicketClientCopy): TicketRow {
+  const value = !copy.settled
+    ? READING
+    : copy.sent
+      ? 'The client’s copy · as sent, live'
+      : 'The client’s copy · not sent yet';
+  return {
+    key: 'clientcopy',
+    label: 'Copy',
+    value,
+    emphasis: null,
+    door: { kind: 'leaf', shelf: 'clientcopy' },
+    exception: null,
+  };
+}
+
+/**
+ * Eight rows, always eight, always in order — and a ninth, `The client's copy`,
+ * only where a proposal document has one to print.
+ */
 export function deriveTicket(input: TicketInput): TicketRow[] {
-  return [
+  const rows = [
     roomsRow(input),
     piecesRow(input),
     drawingsRow(input),
@@ -601,6 +674,8 @@ export function deriveTicket(input: TicketInput): TicketRow[] {
     datesRow(input),
     peopleRow(input),
   ];
+  if (input.clientCopy) rows.push(clientCopyRow(input.clientCopy));
+  return rows;
 }
 
 /** `The job · Project · Procurement & Orders 4 of 6` — the seam's line one

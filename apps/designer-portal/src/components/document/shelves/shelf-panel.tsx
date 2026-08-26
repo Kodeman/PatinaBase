@@ -28,9 +28,9 @@ import {
   CLOSE_SHELF_EVENT,
   shelfDefinition,
   shelfRouteFor,
+  SHELF_LEAF_ID,
   type ShelfLeafKey,
 } from '@/lib/document/shelves';
-import { SHELF_LEAF_ID } from '../spine-shelves-block';
 
 /** Re-exported at the leaf, because a caller deciding between the leaf and the
  *  route asks the leaf for both. */
