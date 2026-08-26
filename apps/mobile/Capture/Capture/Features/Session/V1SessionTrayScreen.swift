@@ -215,12 +215,7 @@ struct V1SessionTrayScreen: View {
                        room: nil)
         try? store.save()
         if let basis = specimen.suggestionBasis {
-            analytics.emit(FieldVisitTelemetry.suggestionAccepted(CaptureSuggestion(
-                projectID: projectID,
-                projectRoomID: specimen.suggestedProjectRoomID,
-                basis: basis,
-                confidence: specimen.suggestionConfidence ?? 0,
-                reason: specimen.suggestionReason ?? "")))
+            analytics.emit(FieldVisitTelemetry.suggestionAccepted(basis: basis))
         }
         placedJustNow.insert(specimen.id)
         reload()

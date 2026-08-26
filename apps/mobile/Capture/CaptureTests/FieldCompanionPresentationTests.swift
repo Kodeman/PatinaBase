@@ -239,4 +239,11 @@ struct FieldCompanionPresentationTests {
         #expect(state.visitLabel == nil)
         #expect(state.captureCount == nil)
     }
+
+    @Test func theVisitActionsAreStableIdentifiers() {
+        // RootView.handleCompanionAction switches on these two strings.
+        #expect(FieldCompanionAction(id: "visit.open", label: "Start a visit").id == "visit.open")
+        #expect(FieldCompanionAction(id: "visit.end", label: "End visit",
+                                     role: .secondary).role == .secondary)
+    }
 }

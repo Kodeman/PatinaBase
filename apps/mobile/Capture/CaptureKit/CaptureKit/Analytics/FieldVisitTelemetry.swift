@@ -42,6 +42,15 @@ public enum FieldVisitTelemetry {
         ("suggestion.accepted", ["basis": suggestion.basis.rawValue])
     }
 
+    /// Same event as `suggestionAccepted(_:)`, from the basis alone — for a
+    /// caller (V1SessionTrayScreen) that has a `Specimen`, not a fresh
+    /// `CaptureSuggestion`, and must not read `suggestionConfidence` just to
+    /// build one: that number is CaptureKit-internal (Principle 4) and this
+    /// signature is how a view-layer call site stays off that path entirely.
+    public static func suggestionAccepted(basis: FieldSuggestionBasis) -> Event {
+        ("suggestion.accepted", ["basis": basis.rawValue])
+    }
+
     public static func capturePlaced(basis: String, hasRoom: Bool) -> Event {
         ("capture.placed", ["basis": basis, "has_room": hasRoom ? "true" : "false"])
     }
