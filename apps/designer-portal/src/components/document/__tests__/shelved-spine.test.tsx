@@ -3,12 +3,40 @@ import { useRoomLens, RoomLensProvider } from '../room-lens-context';
 import { SpineRunningIndex } from '../spine-running-index';
 import { SpineRoomsBlock } from '../spine-rooms-block';
 import { SpineShelvesBlock } from '../spine-shelves-block';
+import { DocSpineShelvedBlocks } from '../spine-shelved-blocks';
 import { ShelfPanel } from '../shelves/shelf-panel';
 import { requestShelfClose } from '@/lib/document/shelves';
 import {
   PROJECT_PAPER_ORDER,
+  paperRegionsForSection,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
+
+/** The blocks' four reads; none of them is this file's subject. */
+jest.mock('@patina/supabase', () => ({
+  __esModule: true,
+  useProjectFFEItems: () => ({ data: [] }),
+  useProjectBoards: () => ({ data: [] }),
+  useProjectOwnedBoards: () => ({ data: [] }),
+  usePlanRoom: () => ({ data: { sheets: [] } }),
+}));
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  __esModule: true,
+  useProjectBillingAuthority: () => ({
+    isLoading: false,
+    error: null,
+    data: { authorizedCents: 0 },
+  }),
+}));
+
+const mockRunningIndexCalls: DocumentIndexKey[][] = [];
+jest.mock('@/hooks/use-document-running-index', () => ({
+  __esModule: true,
+  useDocumentRunningIndex: (keys: readonly DocumentIndexKey[]) => {
+    mockRunningIndexCalls.push([...keys]);
+    return { activeKey: null, jump: jest.fn() };
+  },
+}));
 
 const VALUES: Record<DocumentIndexKey, string> = {
   schedule: 'Week 1 of 14',
@@ -293,5 +321,104 @@ describe('the shelf leaf', () => {
     expect(document.activeElement).toBe(
       screen.getByRole('button', { name: 'Spec book' }),
     );
+  });
+});
+
+describe('paperRegionsForSection', () => {
+  it('gives the Project spread all four regions, in the paper order', () => {
+    expect(paperRegionsForSection('project').map((r) => r.key)).toEqual([
+      'approvals',
+      'schedule',
+      'ffe',
+      'money',
+    ]);
+  });
+
+  it('drops the money region on install and on care — neither spread mounts it', () => {
+    for (const section of ['install', 'care'] as const) {
+      expect(paperRegionsForSection(section).map((r) => r.key)).toEqual([
+        'approvals',
+        'schedule',
+        'ffe',
+      ]);
+    }
+  });
+
+  it('names no Project region on the spreads before the work starts', () => {
+    for (const section of [
+      'brief',
+      'discovery',
+      'direction',
+      'proposal',
+    ] as const) {
+      expect(paperRegionsForSection(section)).toEqual([]);
+    }
+  });
+
+  it('can never state an order the canonical paper order does not print', () => {
+    const canonical = PROJECT_PAPER_ORDER.map((r) => r.key);
+    for (const section of ['project', 'install', 'care'] as const) {
+      const subset = paperRegionsForSection(section).map((r) => r.key);
+      expect(subset).toEqual(canonical.filter((key) => subset.includes(key)));
+    }
+  });
+});
+
+describe('the shelved blocks', () => {
+  const props = {
+    projectId: 'proj-1',
+    rooms: [],
+    scheduleValue: 'Week 1 of 14',
+    approvalsValue: '3 in the log',
+    rosterCount: 0,
+    callSheetEnabled: false,
+    openShelf: null,
+    onToggleShelf: jest.fn(),
+  } as const;
+
+  beforeEach(() => {
+    mockRunningIndexCalls.length = 0;
+  });
+
+  const indexRows = () =>
+    Array.from(
+      screen
+        .getByRole('group', { name: 'In this document' })
+        .querySelectorAll('button'),
+    );
+
+  it('prints one index line per region the spread mounts — four on project', () => {
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('project')}
+      />,
+    );
+    expect(indexRows()).toHaveLength(4);
+  });
+
+  it('prints three on install and on care — no line for the money region', () => {
+    for (const section of ['install', 'care'] as const) {
+      const { unmount } = render(
+        <DocSpineShelvedBlocks
+          {...props}
+          regions={paperRegionsForSection(section)}
+        />,
+      );
+      const rows = indexRows().map((b) => b.querySelector('span')?.textContent);
+      expect(rows).toHaveLength(3);
+      expect(rows).not.toContain('Design authority');
+      unmount();
+    }
+  });
+
+  it('offers the reading line only the keys the spread mounts', () => {
+    render(
+      <DocSpineShelvedBlocks
+        {...props}
+        regions={paperRegionsForSection('install')}
+      />,
+    );
+    expect(mockRunningIndexCalls[0]).toEqual(['approvals', 'schedule', 'ffe']);
   });
 });

@@ -56,10 +56,22 @@ export function useDocumentRunningIndex(
     if (ordered.length === 0) return;
 
     const seen = new Map<DocumentIndexKey, boolean>();
+    // Every branch below reads THIS set, not `ordered`: a spread states the
+    // regions it means to mount, but only the ones the DOM actually answers for
+    // may hold the reading line. Otherwise a key whose root never appeared
+    // (unmounted for this spread, or still settling) wins the first-region and
+    // foot-of-the-paper fallbacks and the index marks a row with nothing
+    // behind it.
+    const attached = new Set<DocumentIndexKey>();
 
     const resolve = () => {
-      if (lockRef.current) {
+      if (lockRef.current && attached.has(lockRef.current)) {
         setActiveKey(lockRef.current);
+        return;
+      }
+      const present = ordered.filter((key) => attached.has(key));
+      if (present.length === 0) {
+        setActiveKey(null);
         return;
       }
       // The foot of the paper belongs to the last region: the final region can
@@ -69,17 +81,17 @@ export function useDocumentRunningIndex(
         window.innerHeight + window.scrollY >=
         document.documentElement.scrollHeight - 4;
       if (atFoot) {
-        setActiveKey(ordered[ordered.length - 1]);
+        setActiveKey(present[present.length - 1]);
         return;
       }
-      const crossing = ordered.find((key) => seen.get(key));
+      const crossing = present.find((key) => seen.get(key));
       if (crossing) {
         setActiveKey(crossing);
         return;
       }
       const anchor = window.innerHeight * 0.25;
-      let best = ordered[0];
-      for (const key of ordered) {
+      let best = present[0];
+      for (const key of present) {
         const el = document.querySelector(regionAnchorSelector(key));
         if (el && el.getBoundingClientRect().top <= anchor) best = key;
       }
@@ -101,7 +113,6 @@ export function useDocumentRunningIndex(
 
     // `observe` is idempotent per element, so a retry that re-finds an
     // already-observed root costs nothing and simply picks up the new ones.
-    const attached = new Set<DocumentIndexKey>();
     let retriesLeft = ATTACH_RETRIES;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
