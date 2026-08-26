@@ -358,7 +358,7 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
     });
     mockPush.mockClear();
 
-    await openPaletteAndType('moodboards');
+    await openPaletteAndType('drafting');
 
     const row = screen.getByText('Drafting Room');
     await act(async () => {
@@ -372,9 +372,34 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
     mockPathname.mockReturnValue('/desk');
     mockDeskData.mockReturnValue({ folders: [], chips: [] });
 
-    await openPaletteAndType('moodboards');
+    await openPaletteAndType('drafting');
 
     expect(screen.queryByText('Drafting Room')).not.toBeInTheDocument();
+  });
+
+  it('gives \'moodboards\' to the Boards door alone (F62 — three names become one)', async () => {
+    mockPathname.mockReturnValue('/doc/prop-1');
+    mockDeskData.mockReturnValue({
+      folders: [
+        {
+          row: deskRow({
+            engagement_kind: 'proposal',
+            engagement_id: 'prop-1',
+            proposal_id: 'prop-1',
+            proposal_status: 'draft',
+          }),
+        },
+      ],
+      chips: [],
+    });
+
+    await openPaletteAndType('moodboards');
+
+    // The alias the Drafting Room used to squat on now names one door, and it
+    // is not the Drafting Room — even with the draft proposal in hand that
+    // would otherwise have offered it.
+    expect(screen.queryByText('Drafting Room')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Boards')).toHaveLength(1);
   });
 });
 
