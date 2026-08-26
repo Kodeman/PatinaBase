@@ -260,6 +260,37 @@ describe('deriveDeskRoster — the line', () => {
     );
   });
 
+  // B2-03 (re-verified for B3-L3): the roster carries whatever `need.text`
+  // says, and desk-derivation.ts's `needOverdueInvoice` puts the dollar
+  // figure and (via `overdueElapsedPhrase`) the age directly on that text —
+  // so a real overdue-invoice folder card's figure reaches the roster line
+  // with no roster-side reformatting.
+  it('carries the receivable’s dollar figure and its age onto the roster line', () => {
+    const r = row('a', 'project');
+    const roster = deriveDeskRoster(
+      input({
+        live: [r],
+        folders: [
+          folder(
+            r,
+            need({
+              kind: 'overdue_invoice',
+              text: 'Invoice 0418 · $17,500 overdue — oldest due Aug 3 — send a reminder',
+              actionLabel: 'Send reminder',
+              dueOn: '2026-08-03',
+            }),
+          ),
+        ],
+      }),
+      NOW,
+    );
+
+    const line = roster.groups[0].lines[0];
+    expect(line.mark).toBe('urgent');
+    expect(line.overdueText).toContain('$17,500');
+    expect(line.overdueText).toMatch(/^Overdue \d+ days? —/);
+  });
+
   it('marks a dated overdue item and a setup chore differently', () => {
     const late = row('late', 'project');
     const setup = row('setup', 'project');
