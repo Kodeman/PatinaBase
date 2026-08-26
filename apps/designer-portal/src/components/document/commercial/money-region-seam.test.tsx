@@ -14,6 +14,14 @@ let mockBudget: Record<string, unknown>;
 let mockInstruments: Record<string, unknown>;
 let mockTradeScopes: Record<string, unknown>;
 let mockAccount: Record<string, unknown>;
+let mockPurchaseOrders: Record<string, unknown>;
+let mockInvoices: Record<string, unknown>;
+
+jest.mock('@patina/supabase', () => ({
+  ...jest.requireActual('@patina/supabase'),
+  usePurchaseOrders: () => mockPurchaseOrders,
+  useProjectInvoices: () => mockInvoices,
+}));
 
 jest.mock('@/hooks/use-commercial-documents', () => ({
   useProjectBillingAuthority: () => mockAuthority,
@@ -74,6 +82,8 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
   };
+  mockPurchaseOrders = { data: [], isLoading: false, error: null };
+  mockInvoices = { data: [], isLoading: false, error: null };
 });
 
 describe('the Money seam, on the Delivery table', () => {
@@ -82,7 +92,7 @@ describe('the Money seam, on the Delivery table', () => {
 
     const seam = screen.getByRole('button', { name: /unfold/i });
     expect(seam).toHaveTextContent('$62,400 committed of $80,000 authority');
-    expect(screen.queryByRole('heading', { name: 'Design authority' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Money' })).toBeNull();
   });
 
   it('unfolds in place to exactly the region that stands on the paper today', () => {
@@ -91,12 +101,12 @@ describe('the Money seam, on the Delivery table', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
 
-    // Same section element, now carrying the whole region: head, four rungs,
-    // and the detail surfaces the tiers summarise.
+    // Same section element, now carrying the whole region: head, six rungs,
+    // and the detail surfaces the rungs summarise.
     expect(container.querySelector('[data-index-region="money"]')).toBe(section);
-    expect(screen.getByRole('heading', { name: 'Design authority' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
     expect(screen.getByText('$17,600 remaining · $62,400 committed')).toBeVisible();
-    expect(screen.getByText('Authority · $80,000 authorized')).toBeVisible();
+    expect(screen.getByText('Budget · $80,000 approved')).toBeVisible();
     expect(screen.getByText('Account band')).toBeInTheDocument();
   });
 
@@ -153,9 +163,9 @@ describe('the Money seam, on the Delivery table', () => {
     expect(
       screen.queryByText('$0 committed · no authority yet'),
     ).not.toBeInTheDocument();
-    // The region stands as it does anywhere unsettled: each tier printing its
+    // The region stands as it does anywhere unsettled: each rung printing its
     // name and no figure.
-    expect(screen.getByText('Authority')).toBeInTheDocument();
+    expect(screen.getByText('Budget')).toBeInTheDocument();
   });
 
   it('will not fold over money that is chasing the designer', () => {
@@ -176,7 +186,7 @@ describe('the Money seam, on the Delivery table', () => {
     render(<MoneyRegion projectId="project-1" tableSeam />);
 
     expect(screen.queryByRole('button', { name: /unfold/i })).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Design authority' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
     expect(screen.getByText('Account band')).toBeInTheDocument();
   });
 
