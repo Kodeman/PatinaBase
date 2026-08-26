@@ -59,6 +59,7 @@ import {
   STUDIO_ROOMS,
   STUDIO_LEDGERS,
   STUDIO_VERBS,
+  boardsRoutePath,
   matchSurfaces,
   type StudioSurface,
 } from '@/lib/document/registry';
@@ -71,10 +72,7 @@ import {
 import { authEvents } from '@/lib/analytics/events';
 import { StrataMark } from './strata-mark';
 import { EngineResults, type InDocument } from './engine/engine-results';
-import {
-  boardRoomHref,
-  recentBoardCommandDescriptor,
-} from '@/lib/mood-board/navigation';
+import { recentBoardCommandDescriptor } from '@/lib/mood-board/navigation';
 
 /** One selectable line. `match` is the lowercased filter text (label + aliases
  *  or keywords); registry surfaces additionally carry their icon + wayfinding
@@ -479,13 +477,8 @@ export function CommandBar() {
     };
 
     // F29/F48/F50/F82 — the four surfaces a document scopes: plan room, spec
-    // book, mood boards, call sheet. `paired` is the off-document form, where
+    // book, boards, call sheet. `paired` is the off-document form, where
     // the row names the document it will act on (`Spec book · Vandersteen`).
-    //
-    // The boards have no index route of their own below 1440 (the shelf leaf is
-    // the only list, and it force-closes) — so the row opens this project's
-    // most recent board when one is already loaded, and otherwise walks to the
-    // document the shelf lives on.
     const runForDocumentSurface = (
       surface: StudioSurface,
       target: DocumentStateRow,
@@ -495,17 +488,8 @@ export function CommandBar() {
           return () => router.push(`/doc/${target.engagement_id}/plans`);
         case 'spec-book':
           return () => router.push(`/doc/${target.project_id}/spec-book`);
-        case 'mood-boards':
-          return () => {
-            const board = recentBoards.find(
-              (b) => b.owner.kind === 'project' && b.owner.id === target.project_id,
-            );
-            router.push(
-              board
-                ? boardRoomHref({ boardId: board.id, from: pathname, source: 'command_bar' })
-                : `/doc/${target.engagement_id}`,
-            );
-          };
+        case 'boards':
+          return () => router.push(boardsRoutePath(target.engagement_id));
         default:
           // Document-scoped with no standalone destination: the roster sheet is
           // mounted on /doc/[id] and listens for this event. Off that document
@@ -787,12 +771,12 @@ export function CommandBar() {
       sections.push({ eyebrow: 'Studio', rows: utilityRows });
     } else {
       // Typed: filter across documents + registry surfaces (matchSurfaces folds
-      // in aliases — "invoicing" finds Draw an invoice, "moodboards" the
-      // Drafting Room, "po" Orders) + people + the studio's own actions. The
-      // Engine is always offered; a dry query recovers to the Help Center.
+      // in aliases — "invoicing" finds Draw an invoice, "moodboards" Boards,
+      // "po" Orders) + people + the studio's own actions. The Engine is always
+      // offered; a dry query recovers to the Help Center.
       const list: PaletteRow[] = [];
-      // Concrete boards intentionally precede the static Drafting Room match
-      // for "board" / "moodboard" queries.
+      // Concrete boards intentionally precede the one static Boards door for
+      // "board" / "moodboard" queries.
       list.push(...recentBoards.map(recentBoardRow).filter((r) => r.match.includes(q)));
       list.push(...liveRows.map((r) => documentRow(r)).filter((r) => r.match.includes(q)));
       if (addToProjectRow?.match.includes(q)) list.push(addToProjectRow);
