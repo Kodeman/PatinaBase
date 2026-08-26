@@ -203,21 +203,12 @@ export function FolderCard({
   // in DOM/tab order; FolderFace's content is pointer-events-none above it,
   // except its own interactive controls, which opt back in with
   // pointer-events-auto so clicks land on them instead of falling through.
-  //
-  // A1 e2e follow-up: this Link has no visible text of its own (the action
-  // label prints in FolderFace, a sibling) — its aria-label leads with
-  // need.actionLabel when present so the primary act stays legible to
-  // assistive tech even though nothing here is rendered on screen.
   return (
     <div className="group relative mt-[26px] w-full">
       <Link
         href={need.deepLink ?? `/doc/${row.engagement_id}`}
         onClick={selectFolioAction}
-        aria-label={
-          need.actionLabel
-            ? `${need.actionLabel} — ${row.title}`
-            : `${row.title} — ${need.text}`
-        }
+        aria-label={`${row.title} — ${need.text}`}
         data-action-key={need.actionLabel ? need.kind : undefined}
         data-action-variant={need.actionLabel ? 'primary' : undefined}
         data-action-region={need.actionLabel ? 'needs-your-hand' : undefined}

@@ -58,17 +58,17 @@ export function SectionStageLine({ model, fidelity }: SectionStageLineProps) {
           )}
 
           {model.tracks.length > 0 && (
-            // A1 e2e follow-up: `max-w-[21rem]` (336px) is wider than the
-            // whole 320px viewport, and the label column was a fixed
-            // `6.5rem` with nowhere to shrink to at that width. `w-full`
-            // caps the list at whatever room the section actually has, and
-            // `min-w-0 break-words` on the label column lets a long
-            // `label · stageNumber` pairing wrap instead of forcing the row
-            // past the section's own edge.
+            // A1 e2e follow-up: at 320px the bare `max-w-[21rem]` (336px) was
+            // wider than the viewport and the label column was a fixed
+            // `6.5rem` with nowhere to shrink to. `w-full` + `max-w` resolves
+            // to `min(100%, 21rem)`, so the 336px cap still holds on the wide
+            // paper, and `min-w-0 break-words` lets a long `label ·
+            // stageNumber` pairing wrap instead of forcing the row past the
+            // section's own edge.
             <ul
               id={tracksId}
               aria-label="Live workflow tracks"
-              className="mt-3 w-full min-w-0 space-y-1.5"
+              className="mt-3 w-full min-w-0 max-w-[21rem] space-y-1.5"
             >
               {model.tracks.map((track) => (
                 <li
