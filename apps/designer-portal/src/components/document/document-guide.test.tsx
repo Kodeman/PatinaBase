@@ -22,7 +22,7 @@ const model = (headline: string): DocumentGuideModel => ({
   reason: 'Review the active work.',
   action: {
     key: 'review-project-work',
-    label: 'Review active work',
+    label: 'Open the FF&E schedule',
     destination: { kind: 'anchor', section: 'project' },
   },
   topInput: null,
@@ -48,11 +48,35 @@ describe('DocumentGuide', () => {
     await waitFor(() => expect(liveRegion).toHaveTextContent('Next up: Second task'));
   });
 
+  it('prints a templated headline with its own eyebrow and act', () => {
+    render(
+      <DocumentGuide
+        model={{
+          ...model('Install is three weeks out — Tuesday, September 15'),
+          stage: 'install',
+          eyebrow: 'Install · finish in the field',
+          action: {
+            key: 'review-installation',
+            label: "Check what's arriving",
+            destination: { kind: 'anchor', section: 'install', focusId: 'ffe-region-heading-project-1' },
+          },
+        }}
+        onActivate={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'Install is three weeks out — Tuesday, September 15' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Install · finish in the field')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: "Check what's arriving" })).toBeInTheDocument();
+  });
+
   it('names the first known input, owner, blocker, and remaining count', () => {
     render(
       <DocumentGuide
         model={{
-          ...model('Complete Discovery'),
+          ...model('Finish what you need to know'),
           topInput: { label: 'Working budget', owner: 'Client', blocks: 'Direction' },
           remainingInputCount: 2,
         }}
@@ -66,17 +90,17 @@ describe('DocumentGuide', () => {
     expect(documentEvents.guideShown).toHaveBeenCalledWith(
       expect.objectContaining({ input_count: 3 }),
     );
-    screen.getByRole('button', { name: 'Review active work' }).click();
+    screen.getByRole('button', { name: 'Open the FF&E schedule' }).click();
     expect(documentEvents.guideSelected).toHaveBeenCalledWith(
       expect.objectContaining({ input_count: 3 }),
     );
   });
 
   it('keeps focus on the action when enrichment swaps it from button to link', () => {
-    const local = model('Move the project forward');
+    const local = model('The work is in motion — nothing is waiting on you');
     const { rerender } = render(<DocumentGuide model={local} onActivate={jest.fn()} />);
 
-    const button = screen.getByRole('button', { name: 'Review active work' });
+    const button = screen.getByRole('button', { name: 'Open the FF&E schedule' });
     button.focus();
     expect(button).toHaveFocus();
 
@@ -102,7 +126,7 @@ describe('DocumentGuide', () => {
   });
 
   it('does not steal focus back when the designer has moved on', () => {
-    const local = model('Move the project forward');
+    const local = model('The work is in motion — nothing is waiting on you');
     const { rerender } = render(
       <>
         <DocumentGuide model={local} onActivate={jest.fn()} />
@@ -110,7 +134,7 @@ describe('DocumentGuide', () => {
       </>,
     );
 
-    screen.getByRole('button', { name: 'Review active work' }).focus();
+    screen.getByRole('button', { name: 'Open the FF&E schedule' }).focus();
     const elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
     elsewhere.focus();
 
@@ -135,13 +159,13 @@ describe('DocumentGuide', () => {
   });
 
   it('does not steal focus back after the action was blurred to nothing', () => {
-    const local = model('Move the project forward');
+    const local = model('The work is in motion — nothing is waiting on you');
     const { rerender } = render(<DocumentGuide model={local} onActivate={jest.fn()} />);
 
     // Focused, then the designer clicks dead page area: focus lands on <body>,
     // which is exactly the state the swap-repair looks for. Having *once* held
     // focus must not license reclaiming it 60 seconds later.
-    const button = screen.getByRole('button', { name: 'Review active work' });
+    const button = screen.getByRole('button', { name: 'Open the FF&E schedule' });
     button.focus();
     button.blur();
     expect(document.body).toHaveFocus();

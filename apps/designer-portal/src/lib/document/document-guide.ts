@@ -1,5 +1,13 @@
-import { deriveNeed, type DocumentStateRow, type NeedLine, type SectionKey } from './desk-derivation';
+import {
+  deriveNeed,
+  type DocumentStateRow,
+  type NeedKind,
+  type NeedLine,
+  type SectionKey,
+} from './desk-derivation';
 import type { CommercialDocumentKind, CommercialState } from './commercial-documents';
+import type { SectionScheduleFacts } from './section-derivation';
+import type { SendWallLine } from './proposal-watch-derivation';
 import {
   gateActionLabel,
   gateSentence,
@@ -73,6 +81,11 @@ export interface ProposalGuideFacts {
   documentKind: CommercialDocumentKind | null;
   commercialState: CommercialState | null;
   projectId: string | null;
+  /** The send wall's own line (`deriveSendWallLine`). The proposal headline is
+   *  a template over `sentText`, and SP-12 reads `verb` to print the wall's
+   *  live act instead of a stand-in phrase. Absent = the wall has not answered,
+   *  and the sentence falls back to its undated form. */
+  sendWall?: SendWallLine | null;
 }
 
 interface DeriveDocumentGuideInput {
@@ -82,6 +95,10 @@ interface DeriveDocumentGuideInput {
   now?: Date;
   operationalNeed?: NeedLine | null;
   proposal?: ProposalGuideFacts | null;
+  /** The resolver's answer, as the section bars read it. The install headline
+   *  is a template over `install.date`, spoken only in a register that carries
+   *  a day (R107/R108) — absent, or band/frame, and the sentence stays undated. */
+  schedule?: SectionScheduleFacts | null;
   inputFacts?: readonly DocumentGuideInputFact[];
   /** The nearest open gate on this project (Ruling V). `undefined` means the
    *  gate read has not answered; `null` means it answered that none is open. */
@@ -92,53 +109,134 @@ const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput
   brief: {
     state: 'actionable',
     eyebrow: 'Brief · decide the fit',
-    headline: 'Review the inquiry',
+    headline: 'Decide on this inquiry',
     reason: 'Choose whether to accept, nurture, or pass so the relationship has a clear next move.',
-    action: { key: 'review-inquiry', label: 'Review the brief', destination: { kind: 'anchor', section: 'brief' } },
+    action: { key: 'review-inquiry', label: 'Accept and begin', destination: { kind: 'anchor', section: 'brief' } },
   },
   discovery: {
     state: 'needs_input',
     eyebrow: 'Discovery · shape the brief',
-    headline: 'Complete Discovery',
+    headline: 'Finish what you need to know',
     reason: 'Capture the essential scope, budget, timing, style, and lifestyle inputs before shaping direction.',
-    action: { key: 'continue-discovery', label: 'Continue Discovery', destination: { kind: 'anchor', section: 'discovery' } },
+    action: { key: 'continue-discovery', label: 'Add scope & rooms', destination: { kind: 'anchor', section: 'discovery' } },
   },
   direction: {
     state: 'actionable',
     eyebrow: 'Direction · compose the offer',
-    headline: 'Shape the direction',
+    headline: 'Draw up the direction',
     reason: 'Turn the agreed discovery into scope, fees, terms, and a visual point of view.',
-    action: { key: 'open-drafting-room', label: 'Open Drafting Room', destination: { kind: 'anchor', section: 'direction' } },
+    action: { key: 'open-drafting-room', label: 'Open the Drafting Room', destination: { kind: 'anchor', section: 'direction' } },
   },
+  // The proposal stage never reaches here for its headline or act — every
+  // proposal document is answered by proposalGuide, which carries the ⌥ dated
+  // sentence and SP-12's live act. This entry supplies the stage's eyebrow to
+  // the paused and needs-attention branches, and its undated fallback.
   proposal: {
     state: 'waiting',
     eyebrow: 'Proposal · in the client’s hands',
-    headline: 'Follow up on the proposal',
+    headline: 'Wait for the client’s signature',
     reason: 'Review its current state and use the existing proposal controls for the next client touch.',
-    action: { key: 'review-proposal', label: 'Review proposal', destination: { kind: 'anchor', section: 'proposal' } },
+    action: { key: 'review-proposal', label: 'Review signing controls', destination: { kind: 'anchor', section: 'proposal' } },
   },
   project: {
     state: 'on_track',
     eyebrow: 'Project · active work',
-    headline: 'Move the project forward',
+    headline: 'The work is in motion — nothing is waiting on you',
     reason: 'Start with the schedule and the active work that needs a decision, release, or follow-through.',
-    action: { key: 'review-project-work', label: 'Review active work', destination: { kind: 'anchor', section: 'project' } },
+    action: { key: 'review-project-work', label: 'Open the FF&E schedule', destination: { kind: 'anchor', section: 'project' } },
   },
   install: {
     state: 'actionable',
     eyebrow: 'Install · finish in the field',
     headline: 'Complete the installation',
     reason: 'Work through arrivals, inspections, installation details, and closeout items in the schedule.',
-    action: { key: 'review-installation', label: 'Review installation', destination: { kind: 'anchor', section: 'install' } },
+    action: { key: 'review-installation', label: 'Check what\'s arriving', destination: { kind: 'anchor', section: 'install' } },
   },
   care: {
     state: 'actionable',
     eyebrow: 'Care · close the loop',
-    headline: 'Close out the project',
+    headline: 'Close the book on this one',
     reason: 'Resolve the remaining care items, hand off the finished work, and close the book.',
-    action: { key: 'review-closeout', label: 'Review closeout', destination: { kind: 'anchor', section: 'care' } },
+    action: { key: 'review-closeout', label: 'Run the closeout checklist', destination: { kind: 'anchor', section: 'care' } },
   },
 };
+
+/** `ffe-section.tsx:948` — the FF&E region heading, the project act's landing. */
+const ffeRegionAnchorId = (projectId: string) => `ffe-region-heading-${projectId}`;
+
+/** `ffe-section.tsx:409` — one FF&E line's own row. */
+const ffeLineAnchorId = (lineId: string) => `ffe-selection-${lineId}`;
+
+const NUMBER_WORDS = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six',
+  'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+];
+
+const spell = (n: number) => NUMBER_WORDS[n] ?? String(n);
+
+/** Bare DATE columns must parse as LOCAL midnight, or the rendered day slips
+ *  back a day in negative-offset timezones. */
+const asLocalDate = (iso: string) =>
+  new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
+
+const DAY_MS = 86_400_000;
+
+/** Whole calendar days from `now` to `iso`, in the reader's own zone. */
+function calendarDaysUntil(iso: string, now: Date): number | null {
+  const then = asLocalDate(iso);
+  if (Number.isNaN(then.getTime())) return null;
+  const thenMidnight = new Date(then.getFullYear(), then.getMonth(), then.getDate()).getTime();
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.round((thenMidnight - nowMidnight) / DAY_MS);
+}
+
+const fmtWeekdayDate = (iso: string) =>
+  new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    .format(asLocalDate(iso));
+
+/**
+ * ⌥ `Install is three weeks out — {Weekday}, {Month d}` (C-AP-10).
+ *
+ * `null` = the facts do not carry a day this sentence may state, and the caller
+ * keeps the undated headline. Only the committed and record registers state a
+ * day at all (R107/R108: a band never names one and a frame only approximates
+ * one), and an install already behind us is no longer "out".
+ */
+function installGuideHeadline(
+  schedule: SectionScheduleFacts | null | undefined,
+  now: Date,
+): string | null {
+  const install = schedule?.install;
+  if (!install?.date) return null;
+  if (install.fidelity !== 'committed' && install.fidelity !== 'record') return null;
+  const days = calendarDaysUntil(install.date, now);
+  if (days === null || days < 0) return null;
+  const when = fmtWeekdayDate(install.date);
+  if (days === 0) return `Install is today — ${when}`;
+  if (days === 1) return `Install is tomorrow — ${when}`;
+  if (days < 7) return `Install is ${spell(days)} days out — ${when}`;
+  const weeks = Math.round(days / 7);
+  return `Install is ${weeks === 1 ? 'one week' : `${spell(weeks)} weeks`} out — ${when}`;
+}
+
+/**
+ * ⌥ `Sent {Mon d} · not opened yet` (C-AP-10) — the send wall's own `sentText`,
+ * which already refuses to state a date the row did not carry. `null` = either
+ * the wall has not answered or the client HAS opened it, and the caller keeps
+ * the undated headline rather than printing a claim the facts contradict.
+ */
+function proposalGuideHeadline(
+  row: DocumentStateRow,
+  sendWall: SendWallLine | null | undefined,
+): string | null {
+  if (!sendWall) return null;
+  const opened =
+    (row.proposal_open_count ?? 0) > 0 ||
+    Boolean(row.proposal_last_opened_at) ||
+    Boolean(row.proposal_viewed_at);
+  if (opened) return null;
+  return `${sendWall.sentText} · not opened yet`;
+}
 
 function withInputs(
   model: Omit<DocumentGuideModel, 'topInput' | 'remainingInputCount'>,
@@ -201,25 +299,68 @@ function gateGuide(
   };
 }
 
+/**
+ * The kind's own verb — the act to print when the need itself states none.
+ * Exhaustive over `NeedKind`, so a new kind is a type error rather than a
+ * silent shrug; `Review now` (F18) said nothing about any of them.
+ */
+function needVerb(kind: NeedKind): string {
+  switch (kind) {
+    case 'overdue_decision': return 'Chase the approval';
+    case 'overdue_invoice': return 'Send reminder';
+    case 'proposal_signed': return 'Open the project';
+    case 'damage_claim': return 'File the claim';
+    case 'proposal_declined': return 'Follow up';
+    case 'proposal_expired': return 'Revise proposal';
+    case 'lines_flagged': return 'Open the flagged lines';
+    case 'new_lead': return 'Respond to the inquiry';
+    case 'ceremony_pending': return 'Continue the introduction';
+    case 'reconnect_due': return 'Reach out';
+    case 'hesitating_proposal': return 'Follow up';
+    case 'awaiting_inspection': return 'Inspect the delivery';
+    case 'schedule_conflict': return 'Resolve the schedule';
+    case 'schedule_proposal': return 'Open the proposed date';
+    case 'task_due': return 'Open the task';
+    case 'schedule_unconfigured': return 'Open the schedule';
+    case 'po_unsent': return 'Send the purchase order';
+    case 'po_unacknowledged': return 'Follow up with the maker';
+    case 'pulse_due': return 'Send the pulse';
+  }
+}
+
 /** The act a need points at — extracted so a region that prints needs itself
  *  can reach the same destination the guide strip would have offered. `stage`
- *  is the section an anchor destination lands in; `projectId` only ever reaches
- *  an orders-ledger context. */
+ *  is the section an anchor destination lands in; `projectId` reaches the
+ *  orders-ledger context and the FF&E region anchor; `lineId` is the FF&E line
+ *  the need is about, where the caller knows it. */
 export function needGuideAction(
   need: NeedLine,
   stage: SectionKey,
   projectId?: string | null,
+  lineId?: string | null,
 ): DocumentGuideAction {
-  const orderPage =
-    need.kind === 'damage_claim' || need.kind === 'awaiting_inspection'
-      ? 'receiving'
-      : need.kind === 'po_unsent' || need.kind === 'po_unacknowledged'
-        ? 'ledger'
-        : null;
+  // C12 — a purchase order acts on the line it was raised for, so its act lands
+  // on that body rather than on the Orders ledger it used to open. A claim has
+  // no line to land on until one is carried, and keeps the receiving page.
+  const lineAnchor: DocumentGuideDestination | null =
+    lineId
+      ? { kind: 'anchor', section: stage, focusId: ffeLineAnchorId(lineId) }
+      : null;
+  const ffeAnchor: DocumentGuideDestination | null =
+    lineAnchor ??
+    (projectId
+      ? { kind: 'anchor', section: stage, focusId: ffeRegionAnchorId(projectId) }
+      : null);
   const destination: DocumentGuideDestination = need.kind === 'reconnect_due'
     ? { kind: 'href', href: '/people?view=nurture' }
-    : orderPage
-      ? { kind: 'ledger', name: 'orders', context: { page: orderPage, projectId: projectId ?? undefined } }
+    : (need.kind === 'po_unsent' || need.kind === 'po_unacknowledged') && ffeAnchor
+      ? ffeAnchor
+    : (need.kind === 'damage_claim' || need.kind === 'awaiting_inspection') && lineAnchor
+      ? lineAnchor
+    : need.kind === 'damage_claim' || need.kind === 'awaiting_inspection'
+      ? { kind: 'ledger', name: 'orders', context: { page: 'receiving', projectId: projectId ?? undefined } }
+    : need.kind === 'po_unsent' || need.kind === 'po_unacknowledged'
+      ? { kind: 'ledger', name: 'orders', context: { page: 'ledger', projectId: projectId ?? undefined } }
     : need.ledger
     ? { kind: 'ledger', name: need.ledger.name, context: need.ledger.context }
     : need.deepLink
@@ -239,7 +380,7 @@ export function needGuideAction(
         };
   return {
     key: `resolve-${need.kind}`,
-    label: need.actionLabel ?? 'Review now',
+    label: need.actionLabel ?? needVerb(need.kind),
     destination,
   };
 }
@@ -305,11 +446,22 @@ function proposalGuide(
       action: { key: 'review-proposal-follow-up', label: 'Review follow-up controls', destination: { kind: 'anchor', section: 'proposal' } },
     };
   }
+  // SP-12 — the real act is the send wall's nudge, ~200px lower. When the wall
+  // offers one, the strip prints that act instead of a stand-in phrase; where
+  // no nudge exists, `Review signing controls` is still the only truthful act.
+  const sendWall = proposal?.sendWall;
   return {
     state: 'waiting', stage, eyebrow: 'Proposal · with the client',
-    headline: 'Wait for the client’s signature',
+    headline: proposalGuideHeadline(row, sendWall) ?? 'Wait for the client’s signature',
     reason: 'The proposal is in the client’s hands. Review its activity and follow-up controls below.',
-    action: controls,
+    action:
+      sendWall?.verb === 'nudge'
+        ? {
+            key: 'nudge-client',
+            label: `Nudge ${row.client_name}`,
+            destination: { kind: 'anchor', section: 'proposal' },
+          }
+        : controls,
   };
 }
 
@@ -319,6 +471,7 @@ export function deriveDocumentGuide({
   retryAvailable = false,
   now = new Date(),
   proposal,
+  schedule,
   operationalNeed,
   inputFacts,
   gate,
@@ -326,7 +479,9 @@ export function deriveDocumentGuide({
   const stage = row.active_section;
   if (availability === 'unavailable') {
     return withInputs({
-      state: 'unavailable', stage, eyebrow: 'Next up', headline: 'Guidance is unavailable',
+      // SP-08 — the eyebrow names its own branch instead of borrowing `Next up`,
+      // a label with exactly one, wrong, use.
+      state: 'unavailable', stage, eyebrow: 'Guidance is unavailable', headline: 'Guidance is unavailable',
       // Only the retryable source gets the retry instruction. Telling a designer
       // to try again where no Try again exists is copy that cannot be obeyed.
       reason: retryAvailable
@@ -375,7 +530,7 @@ export function deriveDocumentGuide({
     return withInputs({
       state: 'actionable', stage, eyebrow: `${stageCopy[stage].eyebrow} · needs attention`,
       headline: need.text,
-      reason: 'This action comes from the operational signals available on the current document.',
+      reason: 'Something on this job needs a decision.',
       action: needGuideAction(need, row.active_section, row.project_id),
     }, inputFacts);
   }
@@ -386,13 +541,28 @@ export function deriveDocumentGuide({
   }
 
   const base = stageCopy[stage];
-  const action =
+  // Each act lands on the body it names: the drafting room, the FF&E heading
+  // the project sentence points at, and — on install — the same schedule the
+  // arrivals live in. Care's `Closing the book` seam carries no id yet, so its
+  // act still lands on the section.
+  const ffeAnchor: DocumentGuideDestination | null =
+    row.project_id
+      ? { kind: 'anchor', section: stage, focusId: ffeRegionAnchorId(row.project_id) }
+      : null;
+  const destination: DocumentGuideDestination | null =
     stage === 'direction' && row.proposal_id
-      ? { ...base.action!, destination: { kind: 'href' as const, href: `/drafting/${row.proposal_id}` } }
-      : base.action;
+      ? { kind: 'href', href: `/drafting/${row.proposal_id}` }
+      : (stage === 'project' || stage === 'install') && ffeAnchor
+        ? ffeAnchor
+        : null;
+  const action = destination ? { ...base.action!, destination } : base.action;
   return withInputs({
     ...base,
     stage,
+    headline:
+      stage === 'install'
+        ? installGuideHeadline(schedule, now) ?? base.headline
+        : base.headline,
     action,
   }, inputFacts);
 }
