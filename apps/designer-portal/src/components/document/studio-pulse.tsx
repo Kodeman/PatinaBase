@@ -10,7 +10,11 @@
  */
 
 import { useId, useState, type ReactNode } from 'react';
-import type { DeskFolder, MotionChip } from '@/lib/document/desk-derivation';
+import type {
+  DeskFolder,
+  MotionChip,
+  SectionKey,
+} from '@/lib/document/desk-derivation';
 import { studioPulseGateSentence } from '@/lib/document/workflow-gate';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import {
@@ -72,11 +76,114 @@ export function studioPulsePreview(counts: StudioPulseCounts): string {
   return phrases.join(' · ');
 }
 
+/** F39/F65 — "The studio today" reads the same live rows ⌘K's `Where the
+ *  work stands` group reduces over (`command-bar.tsx:620–645`), furthest
+ *  along first, so the sentence and the palette never disagree. */
+const STAGE_ORDER: readonly SectionKey[] = [
+  'care',
+  'install',
+  'project',
+  'proposal',
+  'direction',
+  'discovery',
+  'brief',
+];
+
+function stagePhrase(stage: SectionKey, count: number): string {
+  const n = count === 1 ? 'one' : String(count);
+  switch (stage) {
+    case 'proposal':
+      return `${n} letter${count === 1 ? '' : 's'} out`;
+    case 'project':
+      return `${n} in procurement`;
+    default:
+      return `${n} in ${stage}`;
+  }
+}
+
+export interface StageSentencePart {
+  stage: SectionKey;
+  count: number;
+  text: string;
+}
+
+/** Reduces the Desk's own live rows (folders + chips) into one entry per
+ *  live stage — the same population ⌘K's `Where the work stands` group
+ *  reads, never a second query. */
+export function studioStageSentenceParts(
+  rows: readonly { row: { active_section: SectionKey } }[],
+): StageSentencePart[] {
+  return STAGE_ORDER.flatMap((stage) => {
+    const count = rows.filter((r) => r.row.active_section === stage).length;
+    return count === 0 ? [] : [{ stage, count, text: stagePhrase(stage, count) }];
+  });
+}
+
+/** Reuses ⌘K's own open event (`command-bar.tsx`'s `openCommandBar`) so a
+ *  stage phrase and the Desk header's "Find anything" open the identical
+ *  palette — with the stage carried as `detail.query` for command-bar.tsx to
+ *  pre-type whenever it grows a listener for it. */
+function openStageInCommandBar(stage: SectionKey) {
+  window.dispatchEvent(
+    new CustomEvent('document:open-command-bar', { detail: { query: stage } }),
+  );
+}
+
+function capitalize(text: string): string {
+  return text.length ? text[0].toUpperCase() + text.slice(1) : text;
+}
+
+/** The one Playfair-italic sentence, each stage phrase scored as an inline
+ *  doorway (C6) — an underline, never a box or a plate (D4, I107). Full
+ *  `DocumentAction` is a 44px block control and does not sit inline inside a
+ *  running sentence, so this is the lighter inline variant of the same
+ *  "no box, just ink" grammar. */
+function StageSentence({
+  isReady,
+  parts,
+}: {
+  isReady: boolean;
+  parts: StageSentencePart[];
+}) {
+  if (!isReady) {
+    return (
+      <p className="font-heading text-[17px] italic text-[var(--text-muted)]">
+        Reading the studio…
+      </p>
+    );
+  }
+  if (parts.length === 0) {
+    return (
+      <p className="font-heading text-[17px] italic text-[var(--text-muted)]">
+        Nothing moving in the studio today.
+      </p>
+    );
+  }
+  return (
+    <p className="font-heading text-[17px] italic text-[var(--text-primary)]">
+      {parts.map((part, index) => (
+        <span key={part.stage}>
+          {index > 0 && ' · '}
+          <button
+            type="button"
+            className="not-italic underline decoration-dotted decoration-1 underline-offset-4 transition-colors hover:text-[var(--color-clay)] hover:decoration-solid motion-reduce:transition-none"
+            onClick={() => openStageInCommandBar(part.stage)}
+          >
+            {index === 0 ? capitalize(part.text) : part.text}
+          </button>
+        </span>
+      ))}
+      .
+    </p>
+  );
+}
+
 export function StudioPulseDisclosure({
   counts,
   isReady,
   hasError,
   gateSentence,
+  stageSentenceParts = [],
   children,
 }: {
   counts: StudioPulseCounts;
@@ -84,6 +191,8 @@ export function StudioPulseDisclosure({
   hasError: boolean;
   /** Ruling VI — the one aggregate sentence. */
   gateSentence?: string | null;
+  /** F39/F65 — "The studio today"'s stage phrases, furthest along first. */
+  stageSentenceParts?: StageSentencePart[];
   children: ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -96,9 +205,6 @@ export function StudioPulseDisclosure({
     : hasError
       ? `${knownCount} known ${knownCount === 1 ? 'item' : 'items'}`
       : `${knownCount} studio ${knownCount === 1 ? 'item' : 'items'}`;
-  const preview = !isReady
-    ? 'Reading studio activity…'
-    : `${studioPulsePreview(counts)}${hasError ? ' · Some activity unavailable' : ''}`;
 
   return (
     <section
@@ -108,15 +214,16 @@ export function StudioPulseDisclosure({
       <div className="flex flex-col gap-4 min-[720px]:flex-row min-[720px]:items-end min-[720px]:justify-between">
         <div className="min-w-0">
           <SectionEyebrow>
-            <span id="studio-pulse">Studio pulse</span>
+            <span id="studio-pulse">The studio today</span>
           </SectionEyebrow>
-          <p
-            role="status"
-            aria-live="polite"
-            className="doc-type-body text-[var(--text-muted)]"
-          >
-            {preview}
-          </p>
+          <div role="status" aria-live="polite">
+            <StageSentence isReady={isReady} parts={stageSentenceParts} />
+          </div>
+          {isReady && hasError && (
+            <p className="doc-type-body mt-1 text-[var(--text-muted)]">
+              Some activity unavailable.
+            </p>
+          )}
           {/* Ruling VI: exactly one aggregate sentence — the shape of the week
               in a line, so a designer can read it and stop. */}
           {isReady && gateSentence && (
@@ -207,12 +314,17 @@ export function StudioPulse({
     ),
   });
 
+  // F39/F65 — "The studio today"'s sentence reads the same live rows as the
+  // Desk's folios and chips, not a second query.
+  const stageSentenceParts = studioStageSentenceParts([...folders, ...chips]);
+
   return (
     <StudioPulseDisclosure
       counts={counts}
       isReady={isReady}
       hasError={hasError}
       gateSentence={gateSentence}
+      stageSentenceParts={stageSentenceParts}
     >
       {hasError && (
         <p
