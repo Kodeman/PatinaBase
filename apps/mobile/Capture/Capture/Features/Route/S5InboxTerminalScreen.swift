@@ -49,7 +49,7 @@ struct S5InboxTerminalScreen: View {
                     .foregroundStyle(CaptureColor.warning)
                 Text(isConfirmed
                      ? "Confirm the material, verify the trade price, then promote it to the library."
-                     : "Nothing is lost. Patina will send it up and confirm when it lands.")
+                     : "Nothing is lost. Patina will send it to the studio and confirm when it lands.")
                     .font(CaptureType.callout)
                     .foregroundStyle(CaptureColor.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
