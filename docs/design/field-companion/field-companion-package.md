@@ -1753,7 +1753,7 @@ New events (all on the existing `CaptureAnalytics.event` seam):
 | `voice.interrupted` | `reason` | how often a site visit interrupts a note |
 | `voice.audio_write_failed` | `reason` | F1 rate |
 | `voice.empty_transcript` | `had_audio` | **the honesty repair's own metric** — how often the old code would have silently discarded |
-| `capture.placed` | `basis` (visit/manual/suggested), `has_room`, `source` (capture/tray) | the program's headline metric |
+| `capture.placed` | `basis` (`FieldSuggestionBasis` raw value — visit/scan/proximity/venue/calendar/transcript — or `manual`; `"suggested"` is never emitted), `has_room`, `source` (capture/tray) | the program's headline metric |
 | `capture.unplaced` | `source` (capture/tray) | the roving hole's size |
 | `visit.start` | `kind`, `kit`, `offline` | wave 3 |
 | `visit.end` | `duration_min`, `captures`, `notes`, `scans`, `unplaced`, `reason` (explicit/auto/rollover/change) | wave 3 |
