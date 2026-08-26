@@ -24,16 +24,23 @@ const SHOT_DIR = path.resolve(
 const shot = (page: AuthenticatedPage, name: string, opts?: { fullPage?: boolean }) =>
   page.screenshot({ path: path.join(SHOT_DIR, name), fullPage: opts?.fullPage ?? false });
 
+/** The DESK HEADER's own "Find anything" act — scoped and exact, because the
+ *  Studio Drawer prints a second door with the same visible words (C-AP-05). */
+const findAnything = (page: AuthenticatedPage) =>
+  page
+    .locator('[role="group"][data-action-region="desk-head"]')
+    .getByRole('button', { name: 'Find anything', exact: true });
+
 async function gotoDesk(page: AuthenticatedPage): Promise<void> {
   await page.goto('/desk', { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('button', { name: /Find anything/i })).toBeVisible({
+  await expect(findAnything(page)).toBeVisible({
     timeout: 30_000,
   });
 }
 
 async function openPalette(page: AuthenticatedPage) {
   const palette = page.getByRole('dialog', { name: 'Command bar' });
-  const affordance = page.getByRole('button', { name: /Find anything/i });
+  const affordance = findAnything(page);
   // The affordance dispatches document:open-command-bar → setOpen(true) (an
   // idempotent open, so retrying is safe). Retry until the palette appears —
   // the CommandBar's listener attaches on a client-effect that can lag the

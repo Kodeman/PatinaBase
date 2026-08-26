@@ -183,7 +183,17 @@ describe('StudioDrawer', () => {
     window.addEventListener('document:open-command-bar', opened);
     render(<StudioDrawer />);
 
-    const door = screen.getByRole('button', { name: 'Find anything ⌘K' });
+    // The printed words are unchanged; only the accessible NAME distinguishes
+    // this door from the Desk header's own "Find anything" act, which shares
+    // the page with it at 1280.
+    const door = screen.getByRole('button', {
+      name: 'Find anything (⌘K), from the studio drawer',
+    });
+    expect(door).toHaveTextContent('Find anything');
+    expect(door).toHaveTextContent('⌘K');
+    expect(
+      screen.queryByRole('button', { name: 'Find anything' }),
+    ).not.toBeInTheDocument();
     expect(door).toHaveClass('min-h-11');
 
     fireEvent.click(door);

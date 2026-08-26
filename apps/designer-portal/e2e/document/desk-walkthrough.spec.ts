@@ -46,11 +46,20 @@ const shot = (page: AuthenticatedPage, name: string) =>
 // auto-modal path — we pin an explicit post-ship date instead.
 const FRESH_SIGNUP_CREATED_AT = '2026-07-12T00:00:00Z';
 
+/** The DESK HEADER's own "Find anything" act. The Studio Drawer prints a second
+ *  door with the same visible words (C-AP-05), so this is scoped to the desk
+ *  head's action region and matched on the exact accessible name — a bare
+ *  /Find anything/i now resolves two controls on /desk. */
+const findAnything = (page: AuthenticatedPage) =>
+  page
+    .locator('[role="group"][data-action-region="desk-head"]')
+    .getByRole('button', { name: 'Find anything', exact: true });
+
 /** Go to /desk and wait for the desk chrome (the "Find anything" affordance is
  *  always present) — steadier than networkidle against realtime sockets. */
 async function gotoDesk(page: AuthenticatedPage, search = ''): Promise<void> {
   await page.goto(`/desk${search}`, { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('button', { name: /Find anything/i })).toBeVisible({
+  await expect(findAnything(page)).toBeVisible({
     timeout: 30_000,
   });
 }
@@ -59,7 +68,7 @@ async function gotoDesk(page: AuthenticatedPage, search = ''): Promise<void> {
  *  retrying until it appears — the CommandBar listener can lag a cold compile. */
 async function openPalette(page: AuthenticatedPage) {
   const palette = page.getByRole('dialog', { name: 'Command bar' });
-  const affordance = page.getByRole('button', { name: /Find anything/i });
+  const affordance = findAnything(page);
   await expect(async () => {
     await affordance.click();
     await expect(palette).toBeVisible({ timeout: 1500 });
