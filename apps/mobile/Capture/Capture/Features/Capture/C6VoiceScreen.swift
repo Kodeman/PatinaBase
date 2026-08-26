@@ -63,17 +63,17 @@ final class C6VoiceModel {
             userID: session.userID, workspaceID: session.workspaceID))
     }
 
-    /// The visit this TAKE belongs to, pinned by `start()` and used by nothing
-    /// else. The chip stays rendered and tappable in VOICE mode WHILE
-    /// recording, so re-reading the store in `commit()` would let a visit she
-    /// changed — or ended — mid-recording restamp words that were spoken
+    /// The visit and note setting this TAKE belongs to, minted by `start()` and
+    /// used by nothing else. The chip stays rendered and tappable in VOICE mode
+    /// WHILE recording, so re-reading the store in `commit()` would let a visit
+    /// she changed — or ended — mid-recording restamp words that were spoken
     /// somewhere else, and would leave `created.noteSetting` describing a
     /// different visit than `created.inherit(context)`. One take, one visit.
-    private var takeVisit: CaptureVisitState = .none
-    /// FC-R11's consent is given ONCE, before `start()`, and the recorder is
-    /// told the setting AT `start()`. Held so the row `commit()` writes and the
-    /// row `voice.start` already wrote cannot disagree.
-    private var takeNoteSetting: FieldNoteSetting = .solo
+    ///
+    /// `FieldVoiceTake` is a CaptureKit value with an internal memberwise
+    /// initialiser, so this model cannot assemble one out of a fresh read: the
+    /// pin is the type's, and CaptureTests holds it.
+    private var take: FieldVoiceTake = .none
 
     /// The recorder is gated on a flag that evaluates null on every device
     /// build today, so this is the difference between a control that declines
@@ -90,12 +90,7 @@ final class C6VoiceModel {
 
     /// Live, because its readers are live: the affirmation chip renders it on
     /// every pass and `toggle(affirmed:)` gates on it at the tap.
-    var noteSetting: FieldNoteSetting { Self.noteSetting(for: liveVisit) }
-
-    private static func noteSetting(for visit: CaptureVisitState) -> FieldNoteSetting {
-        guard let context = visit.context, let kind = context.kind else { return .solo }
-        return CaptureVisitDraft(kind: kind, kit: context.kit).defaultNoteSetting
-    }
+    var noteSetting: FieldNoteSetting { FieldVoiceTake.noteSetting(for: liveVisit) }
 
     func toggle(affirmed: Bool) async {
         if isRecording {
@@ -119,14 +114,13 @@ final class C6VoiceModel {
         // yet if she starts a visit at the chip and records immediately, so
         // pushing the visit INTO the model was never enough on its own —
         // FC-R11's audit row is written on this turn.
-        takeVisit = liveVisit
-        takeNoteSetting = Self.noteSetting(for: takeVisit)
+        take = FieldVoiceTake.start(reading: { self.liveVisit })
         do {
             // FC-R11: the recorder emits the ONE `voice.start`, and this is what
             // stops that row asserting "solo" over a conversation note — the
             // consent rule's only audit trail. The protocol default is a no-op,
             // so omitting it compiles clean and silently mislabels every note.
-            voice.setNoteSetting(takeNoteSetting)
+            voice.setNoteSetting(take.noteSetting)
             let stream = try voice.startLiveTranscription()
             state = .recording(elapsed: 0)
             task = Task { [weak self] in
@@ -210,19 +204,19 @@ final class C6VoiceModel {
             durationSeconds: result.durationSeconds,
             provenance: ContextCaptureProvenance(
                 scanSessionId: nil,
-                projectId: takeVisit.context?.routing.projectID,
+                projectId: take.visit.context?.routing.projectID,
                 // FC-R5 holds: this is the SCAN lane's `public.rooms` id, which
                 // rides in provenance because it is incompatible with
                 // `field_captures.project_room_id`. The CAPTURE lane's room
                 // reaches the column below, via `routing.stamped(onto:)`.
-                projectRoomId: takeVisit.context?.scanRoomID,
+                projectRoomId: take.visit.context?.scanRoomID,
                 cameraPoseRowMajor: nil,
                 capturedAt: ISO8601DateFormatter().string(from: Date())))
-        if let context = takeVisit.context {
+        if let context = take.visit.context {
             created.venue = context.routing.stamped(onto: created.venue ?? VenueStamp())
             created.inherit(context)
         }
-        created.noteSetting = takeNoteSetting
+        created.noteSetting = take.noteSetting
         created.voiceAudioSegmentsRaw = result.audioSegments.isEmpty
             ? nil : result.audioSegments
         created.voiceTranscriptSourceRaw = result.transcript.isEmpty

@@ -168,6 +168,50 @@ struct VoiceModeTests {
         #expect(FieldVoiceModeCopy.toggleGlyph(isRecording: true) == "stop.circle.fill")
     }
 
+    // MARK: - F-1: the take's visit and note setting are pinned at start()
+
+    /// `C6VoiceModel` is app-target and `CaptureTests` has no app host, so the
+    /// invariant its FC-R11 fix rests on lives in `FieldVoiceTake` — the value
+    /// the model is forced through — and is pinned here. If the pin ever reads
+    /// live again, this goes red.
+    @Test func aTakeIsPinnedAtStartAndALaterVisitChangeCannotMoveIt() {
+        let identity = CaptureSessionIdentity(userID: "u1", workspaceID: "w1")
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let walkThrough = CaptureSessionContextPolicy.started(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, label: "Maple St",
+                              projectID: "project-a", projectName: "Maple St"),
+            identity: identity, now: now)
+        let tradeWalk = CaptureSessionContextPolicy.started(
+            CaptureVisitDraft(kind: .site, kit: .tradeWalk, label: "Ashford",
+                              projectID: "project-b", projectName: "Ashford"),
+            identity: identity, now: now)
+
+        var live = CaptureVisitState.active(walkThrough)
+        let take = FieldVoiceTake.start(reading: { live })
+        #expect(take.visit.context?.visitID == walkThrough.visitID)
+        #expect(take.noteSetting == .conversation)
+
+        live = .active(tradeWalk)
+
+        #expect(take.visit.context?.visitID == walkThrough.visitID)
+        #expect(take.visit.context?.routing.projectID == "project-a")
+        #expect(take.noteSetting == .conversation)
+    }
+
+    @Test func aTakeStartedOutsideAVisitIsSoloAndStaysSolo() {
+        let identity = CaptureSessionIdentity(userID: "u1", workspaceID: "w1")
+        let walkThrough = CaptureSessionContextPolicy.started(
+            CaptureVisitDraft(kind: .site, kit: .walkThrough, projectID: "project-a"),
+            identity: identity, now: Date(timeIntervalSince1970: 1_800_000_000))
+
+        var live = CaptureVisitState.none
+        let take = FieldVoiceTake.start(reading: { live })
+        live = .active(walkThrough)
+
+        #expect(take.visit == .none)
+        #expect(take.noteSetting == .solo)
+    }
+
     @Test func theStatusLineSaysTapNotHold() {
         #expect(FieldVoiceModeCopy.statusLine(hasTranscript: false) == "TAP TO TALK")
         #expect(FieldVoiceModeCopy.statusLine(hasTranscript: true) == "TAKE READY")

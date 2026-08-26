@@ -79,9 +79,17 @@ public extension FieldNoteSetting {
     }
 }
 
-/// FC-R11's gate, in CaptureKit so BOTH surfaces that record — the C3 card and
-/// C6 — share one rule and one test. §15.2 item 2: she TAPS it. A recording that
-/// starts while the chip is untapped has not been affirmed, whatever it says.
+/// FC-R11's gate, in CaptureKit so the two surfaces this wave gates — the C3
+/// card and C6 — share one rule and one test. §15.2 item 2: she TAPS it. A
+/// recording that starts while the chip is untapped has not been affirmed,
+/// whatever it says.
+///
+/// COVERAGE IS C3 AND C6 ONLY. FC-R11 names two further recording surfaces —
+/// N4 (`VoiceNoteSheet`) and F2 (`SiteScanContextCapture`'s recorder) — and
+/// neither has a chip or calls this gate. Wave 3's plan scoped Ruling 4 to C3
+/// and C6, so that is a SCHEDULED GAP, not a rule this type enforces. Read
+/// `recordingIsBlocked` as "blocked on the surfaces that ask", never as
+/// "every conversation note is affirmed".
 public enum FieldAffirmationPolicy {
     public static func chipTitle(noteSetting: FieldNoteSetting?) -> String? {
         noteSetting?.affirmation
@@ -90,6 +98,39 @@ public enum FieldAffirmationPolicy {
     public static func recordingIsBlocked(noteSetting: FieldNoteSetting?,
                                           affirmed: Bool) -> Bool {
         noteSetting == .conversation && !affirmed
+    }
+}
+
+/// FC-R11 / R263: the take's visit and note setting, fixed at `start()`.
+///
+/// `C6VoiceModel` is app-target and `CaptureTests` has no app host, so the
+/// invariant the Critical FC-R11 fix rests on cannot be tested where it is
+/// used. It is tested HERE instead, and the model is forced through this type:
+/// the memberwise initialiser is internal, so the only way to mint one from the
+/// app target is `start(reading:)`, which reads the live visit exactly once and
+/// keeps the answer. A model holding a `FieldVoiceTake` has nothing left to
+/// re-read — the chip stays tappable in VOICE mode WHILE recording, and a visit
+/// she changes or ends mid-take must not restamp words spoken somewhere else.
+public struct FieldVoiceTake: Equatable, Sendable {
+    public let visit: CaptureVisitState
+    public let noteSetting: FieldNoteSetting
+
+    /// No take in hand. The model's resting value.
+    public static let none = FieldVoiceTake(visit: .none, noteSetting: .solo)
+
+    /// Calls `liveVisit` EXACTLY ONCE and pins what it returns. Taking the
+    /// visit as a closure rather than a value is the point: it puts the single
+    /// read inside this type, where a test can change the source afterwards and
+    /// prove the take did not move.
+    public static func start(reading liveVisit: () -> CaptureVisitState) -> FieldVoiceTake {
+        let pinned = liveVisit()
+        return FieldVoiceTake(visit: pinned, noteSetting: noteSetting(for: pinned))
+    }
+
+    /// The kit carries FC-R11's default; no visit means `.solo`.
+    public static func noteSetting(for visit: CaptureVisitState) -> FieldNoteSetting {
+        guard let context = visit.context, let kind = context.kind else { return .solo }
+        return CaptureVisitDraft(kind: kind, kit: context.kit).defaultNoteSetting
     }
 }
 

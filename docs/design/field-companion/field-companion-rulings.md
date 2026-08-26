@@ -783,6 +783,75 @@ badge would end it.
 
 ---
 
+---
+
+## Post-wave-3 rulings — 2026-08-26
+
+Ruled after the wave-3 merge-readiness review (`plans/wave-3-merge-readiness-review.md`),
+against its §5 open items and findings F-16 and F-17. These are rulings, not proposals:
+the code in the wave-3 fix set is written to them.
+
+### FC-R20 · Affirmation lifetime (R279)
+
+**Ruled: consent affirmation is PER SESSION.** She affirms once per app session and the
+affirmation carries across visits.
+
+- **C6 keeps its session-scoped `affirmed`** exactly as built (`C6VoiceScreen.swift`
+  resets only when recording stops). No `.onChange(of: visitID)` reset is added.
+- **C3's per-card reset (`ViewfinderScreen.swift:110`) is a STRICTER surface and stays as
+  built.** The two surfaces sharing `FieldAffirmationChip` are therefore allowed to differ:
+  the shared thing is the *gate* (`FieldAffirmationPolicy.recordingIsBlocked`), not the
+  lifetime. A surface may ask more often than the session rule; none may ask less.
+- **The audit trail records the SESSION's affirmation.** `field_captures.note_setting`
+  written on a conversation note means "affirmed this session", not "affirmed for this
+  room". Anyone reading that column — now or in wave 6 — reads it that way.
+
+The review's §5 argument for a per-visit reset (the chip's text says "here", which is a
+place) is acknowledged and not adopted: the cost of the stricter rule is a tap in the
+middle of a walk-through, which is exactly where a consent control must not add friction.
+
+**No code change.** F-3 is closed by this ruling.
+
+### FC-R21 · One predicate for placed/unplaced; `visit.end` on every close (R269 + F-17)
+
+**Ruled, in three parts.**
+
+1. **`capture.placed` / `capture.unplaced` are defined by ONE predicate — `Specimen.isUnplaced`
+   after the action — regardless of which route emits them.** `venue.projectId != nil` is
+   not that predicate and is no longer read by any emitter (F-17's divergence: a Library
+   capture with no project emitted opposite events depending on route).
+2. **A capture later filed from the tray emits `capture.placed` with `source: "tray"`.**
+   The capture-time emission (C3's `saveFromCard`, S3's `choose`) carries
+   `source: "capture"`. `capture.unplaced` carries `source` too, so the placed/unplaced
+   ratio can be read per route. `placementEventEmitted` continues to dedupe the
+   capture-time pair; a later tray filing is a SECOND, deliberate event about the same
+   capture — it is the transition being counted, not the capture.
+3. **`visit.end` is emitted on EVERY close, with `reason` ∈ {`explicit`, `auto`,
+   `rollover`, `change`}.** `explicit` = one of the four End-visit taps. `auto` = the
+   12-hour idle rule or a backwards clock. `rollover` = the calendar-day rule. `change` =
+   a new visit started at the door over an open one. Exactly one `visit.end` fires per
+   close: the computed ends stamp `endedAt` when they are reaped, so a second reader of the
+   same expiry finds nothing left to close.
+
+`duration_min` on an auto- or rollover-ended visit is **wall time from `startedAt` to the
+moment the end is reaped**, not idle-adjusted. That is the same arithmetic the four tapped
+sites already use, and it is the number a completion-rate dashboard should divide by.
+
+### FC-R22 · Store auto-reset on open failure (F-16)
+
+**Ruled: KEEP AS BUILT** (Kody, 2026-08-26). The SwiftData set-aside-and-fresh-store on
+open failure stays as it is — any open failure renames the store to `.bak` (never deletes;
+refused while locked), opens fresh, and says so loudly in the Sync screen.
+
+**Rationale.** Unsynced captures remain on disk in the `.bak` and are recoverable by
+support; synced ones are already on the server. A silent in-memory store is the worse
+failure. Re-confirmed *after* TestFlight build 2 reached pilots, so the authorization the
+review flagged as retired (`"Patina Field is not live anywhere"`, 2026-08-24) is replaced
+by this one.
+
+**No code change.**
+
+
 ## Summary sheet
 
 **Ruling order: FC-R18 → FC-R8 → FC-R17 → FC-R11 / FC-R19 → FC-R14 → everything else.**
