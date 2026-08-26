@@ -112,6 +112,12 @@ describe('CareBand closeout authority', () => {
     expect(screen.getByRole('button', { name: 'Close the book' })).toBeDisabled();
   });
 
+  it('prints the checklist anchor the guide\'s care act names', () => {
+    const { container } = render(<CareBand projectId="project-1" />);
+
+    expect(container.querySelector('#closing-the-book')).not.toBeNull();
+  });
+
   it('does not ask the owner to fake a pre-close review request', () => {
     render(<CareBand projectId="project-1" />);
 

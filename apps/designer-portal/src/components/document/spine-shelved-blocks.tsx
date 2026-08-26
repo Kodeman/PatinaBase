@@ -25,10 +25,9 @@ import {
 } from '@patina/supabase';
 import { useProjectBillingAuthority } from '@/hooks/use-commercial-documents';
 import { money } from '@/lib/document/project-commerce';
-import {
-  DOCUMENT_INDEX_KEYS,
-  DOCUMENT_INDEX_LABELS,
-  type DocumentIndexKey,
+import type {
+  DocumentIndexKey,
+  ProjectPaperRegion,
 } from '@/lib/document/document-index';
 import { roomStateRowFromLine, roomStateWord } from '@/lib/document/room-state';
 import type { LineStampInput } from '@/lib/document/stamp-derivation';
@@ -49,6 +48,7 @@ type SpineFfeRow = LineStampInput & {
 
 export function DocSpineShelvedBlocks({
   projectId,
+  regions,
   rooms,
   scheduleValue,
   approvalsValue,
@@ -58,6 +58,10 @@ export function DocSpineShelvedBlocks({
   onToggleShelf,
 }: {
   projectId: string;
+  /** The regions THIS spread mounts (`paperRegionsForSection`), already in
+   *  `PROJECT_PAPER_ORDER` order — the index prints them as given so it can
+   *  never offer a line for a region the spread left off the paper. */
+  regions: readonly ProjectPaperRegion[];
   rooms: readonly DocumentRoom[];
   scheduleValue: string;
   approvalsValue: string;
@@ -67,10 +71,11 @@ export function DocSpineShelvedBlocks({
   onToggleShelf: (key: ShelfKey) => void;
 }) {
   const { heldRoomId, toggleRoom } = useRoomLens();
-  const { activeKey, jump } = useDocumentRunningIndex(
-    DOCUMENT_INDEX_KEYS,
-    projectId,
+  const indexKeys = useMemo(
+    () => regions.map((region) => region.key),
+    [regions],
   );
+  const { activeKey, jump } = useDocumentRunningIndex(indexKeys, projectId);
 
   const { data: ffeRows } = useProjectFFEItems(projectId) as {
     data: SpineFfeRow[] | undefined;
@@ -79,7 +84,10 @@ export function DocSpineShelvedBlocks({
   // from (React Query dedupes this one: identical key, identical args). A
   // second derivation off `projects.total_amount_cents` said a different
   // number than the region it points at.
-  const authorityQuery = useProjectBillingAuthority(projectId);
+  // Only the Project spread prints the Design authority row, so only it reads
+  // the door behind it — the install and care spreads filtered that row out.
+  const printsMoneyRow = regions.some((region) => region.key === 'money');
+  const authorityQuery = useProjectBillingAuthority(projectId, printsMoneyRow);
   const planRoom = usePlanRoom(projectId);
   const liveBoards = useProjectOwnedBoards(projectId);
   const frozenBoards = useProjectBoards(projectId);
@@ -115,10 +123,10 @@ export function DocSpineShelvedBlocks({
           : 'No authority yet',
   };
 
-  const entries = DOCUMENT_INDEX_KEYS.map((key) => ({
-    key,
-    label: DOCUMENT_INDEX_LABELS[key],
-    value: indexValues[key],
+  const entries = regions.map((region) => ({
+    key: region.key,
+    label: region.label,
+    value: indexValues[region.key],
   }));
 
   const sheetCount = planRoom.data?.sheets.length ?? 0;

@@ -52,6 +52,8 @@ import { RegionRule } from './region/region-rule';
 
 const HEADING_ID = 'care-band-heading';
 const BODY_ID = 'care-band-body';
+/** The guide's care act names this checklist (`document-guide.ts`). */
+const CHECKLIST_ID = 'closing-the-book';
 
 type AnyRecord = any;
 
@@ -334,7 +336,13 @@ export function CareBand({ projectId }: { projectId: string }) {
           </ul>
         </div>
       )}
-      <ul className="mt-3 border-t border-[rgba(139,115,85,0.14)] pt-2">
+      {/* The care stage's act lands on the checklist itself, not on the band's
+          first inch. */}
+      <ul
+        id={CHECKLIST_ID}
+        tabIndex={-1}
+        className="mt-3 scroll-mt-16 border-t border-[rgba(139,115,85,0.14)] pt-2"
+      >
         {effectiveItems.map((item) => (
           <li
             key={item.key}

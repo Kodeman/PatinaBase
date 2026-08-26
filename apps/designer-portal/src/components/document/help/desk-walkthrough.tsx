@@ -159,7 +159,7 @@ const STEPS: CoachmarkStep[] = [
     beforeShow: scrollAnchorIntoView('[data-tour-anchor="desk-find-anything"]'),
     fallbackHeading: 'Find anything',
     fallbackBody:
-      '⌘K reaches any folder, person, or book by name — try “invoice”. It can also ask the Engine.',
+      '⌘K reaches any folder, person, or book by name — try “invoice”. Type a question and it answers there too.',
   },
   {
     surfaceKey: TOUR.Step6Begin,

@@ -6,11 +6,12 @@ import {
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
 
-function Probe() {
-  const { activeKey, jump } = useDocumentRunningIndex(
-    DOCUMENT_INDEX_KEYS,
-    'proj-1',
-  );
+function Probe({
+  keys = DOCUMENT_INDEX_KEYS,
+}: {
+  keys?: readonly DocumentIndexKey[];
+}) {
+  const { activeKey, jump } = useDocumentRunningIndex(keys, 'proj-1');
   return (
     <div>
       <span data-testid="active">{activeKey ?? 'none'}</span>
@@ -32,9 +33,9 @@ describe('useDocumentRunningIndex', () => {
     jest.useRealTimers();
   });
 
-  function mountRegions() {
+  function mountRegions(keys: readonly DocumentIndexKey[] = DOCUMENT_INDEX_KEYS) {
     const host = document.createElement('div');
-    for (const key of DOCUMENT_INDEX_KEYS) {
+    for (const key of keys) {
       const section = document.createElement('section');
       section.setAttribute('data-index-region', key);
       host.appendChild(section);
@@ -79,5 +80,37 @@ describe('useDocumentRunningIndex', () => {
       jest.advanceTimersByTime(50);
     });
     expect(screen.getByTestId('active')).toHaveTextContent('money');
+  });
+
+  // C11 — the page hands the index the regions THIS spread mounts, but a root
+  // can still be missing when the line first reads: regions arrive as their own
+  // queries settle, and a pinned Worktable composition can put a different
+  // section on the paper. The reading line must stay on what the DOM actually
+  // answers for.
+  it('never lands the reading line on a region the spread did not mount', () => {
+    const installKeys: DocumentIndexKey[] = ['approvals', 'schedule', 'ffe'];
+    mountRegions(['approvals']);
+    render(<Probe keys={installKeys} />);
+
+    act(() => {
+      fireEvent.scroll(window);
+      jest.advanceTimersByTime(50);
+    });
+
+    // jsdom's document has no height, so the foot-of-the-paper branch decides
+    // this: unguarded it would hand the line to 'ffe', the last KEY, whose
+    // root is nowhere on the page.
+    expect(screen.getByTestId('active')).toHaveTextContent('approvals');
+  });
+
+  it('marks nothing at all while no region root has mounted', () => {
+    render(<Probe keys={['approvals', 'schedule', 'ffe']} />);
+
+    act(() => {
+      fireEvent.scroll(window);
+      jest.advanceTimersByTime(50);
+    });
+
+    expect(screen.getByTestId('active')).toHaveTextContent('none');
   });
 });

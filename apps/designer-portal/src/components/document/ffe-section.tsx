@@ -946,6 +946,7 @@ function FFESectionBody({
   }, [mode, ffeSetFolded]);
   useRegionUnfoldRequest('ffe', openFfeRegion);
   const ffeHeadingId = `ffe-region-heading-${projectId}`;
+  const ffeMovementId = `ffe-movement-${projectId}`;
   const ffeBodyId = `ffe-region-body-${projectId}`;
   const ffeFolded = mode === 'project' && !selecting && ffeFold.folded;
   const wasFfeFolded = useRef(ffeFold.folded);
@@ -976,7 +977,7 @@ function FFESectionBody({
 
   const ffeAddToProjectEntry: RegionLedgerEntry = {
     key: 'open-add-to-project',
-    label: 'Add to project',
+    label: 'Add a line',
     onClick: () => openAddToProject('section'),
   };
   const ffeReleaseEntry: RegionLedgerEntry = {
@@ -1025,16 +1026,27 @@ function FFESectionBody({
   return (
     <section
       id="project-ffe"
-      data-index-region={groupByRoom ? 'ffe' : undefined}
+      // The index's root for this region on EVERY spread that prints it. The
+      // install and care spreads pass mode="install", so gating it on
+      // `groupByRoom` left their index row pointing at nothing.
+      data-index-region="ffe"
       className="scroll-mt-16"
     >
       {mode === 'install' || selecting ? (
         <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
-          <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
+          {/* This branch and the RegionHead below are mutually exclusive, so
+              the region's heading id is carried by exactly one of them. */}
+          <h2
+            id={ffeHeadingId}
+            tabIndex={-1}
+            className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]"
+          >
             {selecting
               ? 'Choose what to release'
               : mode === 'install'
-                ? 'Install'
+                ? sectionKey === 'care'
+                  ? 'Care'
+                  : 'Install'
                 : 'Project · FF&E'}
           </h2>
           <span className="flex items-baseline gap-3">
@@ -1055,14 +1067,12 @@ function FFESectionBody({
               </DocumentAction>
             ) : (
               <>
-                {mode === 'project' && (
-                  <Link
-                    href={`/doc/${projectId}/spec-book`}
-                    className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
-                  >
-                    Spec book →
-                  </Link>
-                )}
+                <Link
+                  href={`/doc/${projectId}/spec-book`}
+                  className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
+                >
+                  Spec book →
+                </Link>
                 {/* Add to project and Release for authorization are project-
                     mode acts, and project mode (not selecting) now renders
                     RegionHead below instead of this block — so both are
@@ -1229,7 +1239,9 @@ function FFESectionBody({
           />
         ) : (
           <p className="border-t border-[var(--color-pearl)] py-3 text-[11.5px] text-[var(--text-muted)]">
-            No FF&amp;E lines are scheduled for installation.
+            {sectionKey === 'care'
+              ? 'No FF&E lines remain open for care.'
+              : 'No FF&E lines are scheduled for installation.'}
           </p>
         )
       )}
@@ -1296,7 +1308,9 @@ function FFESectionBody({
         </>
       ) : (
         <>
-          <ul>
+          {/* The movement column — the lines as they arrive. The install
+              stage's act lands here rather than on the section's first inch. */}
+          <ul id={ffeMovementId} tabIndex={-1} className="scroll-mt-16">
             {rows.map((row) => (
               <FFELine key={row.item.id} {...lineProps(row)} />
             ))}
