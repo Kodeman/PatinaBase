@@ -8,6 +8,8 @@ import {
 import type { CommercialDocumentKind, CommercialState } from './commercial-documents';
 import type { SectionScheduleFacts } from './section-derivation';
 import type { SendWallLine } from './proposal-watch-derivation';
+import type { TicketRow } from './ticket-derivation';
+import { deriveTicketLeader, leadTicketException } from './ticket-leader';
 import {
   gateActionLabel,
   gateSentence,
@@ -115,9 +117,15 @@ interface DeriveDocumentGuideInput {
    *  a read that answered "nothing outstanding", and only the second may rest.
    *  Omitted (the caller does not track it) reads as answered. */
   inputsPending?: boolean;
+  /** B2-L3 — the eight ticket rows this spread prints, which the sixth rung
+   *  elects its sentence from. Absent or `null` (a document whose spread does
+   *  not derive a ticket yet, or a read that failed) falls back to the
+   *  `stageCopy`/`restCopy` path below, so a spread without a map is guided
+   *  exactly as it was. */
+  ticketRows?: readonly TicketRow[] | null;
 }
 
-const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
+export const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
   brief: {
     state: 'actionable',
     eyebrow: 'Brief · decide the fit',
@@ -607,6 +615,7 @@ export function deriveDocumentGuide({
   gate,
   closureReady,
   inputsPending = false,
+  ticketRows,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
   const stage = row.active_section;
   if (availability === 'unavailable') {
@@ -698,6 +707,26 @@ export function deriveDocumentGuide({
         : null;
   const action = destination ? { ...base.action!, destination } : base.action;
   const installHeadline = stage === 'install' ? installGuideHeadline(schedule, now) : null;
+
+  // B2-L3 — with the ticket on the spread, the sixth rung stops reading a
+  // table keyed by the stage alone and names the exception the map is already
+  // printing, in direction-b §3.2's order. Only the leader's exception-led
+  // sentence is taken here: its rest sentence is the same `restCopy` row the
+  // branch below prints, and that branch also holds the facts the leader is
+  // not passed — the closure gate, the discovery inputs, the day the install
+  // sentence states.
+  const lead = ticketRows ? leadTicketException(ticketRows) : null;
+  if (ticketRows && lead) {
+    const leader = deriveTicketLeader(ticketRows, stage);
+    return withInputs({
+      ...base,
+      stage,
+      headline: leader.headline,
+      action: leader.action
+        ? { ...leader.action, destination: destination ?? leader.action.destination }
+        : null,
+    }, inputFacts);
+  }
 
   // A3-L7 (direction-b §3.3) — the quiet case gets its own named sentence
   // and act rather than reusing the always-actionable default above.
