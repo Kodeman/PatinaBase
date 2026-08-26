@@ -10,6 +10,13 @@
  * quieter word. That is why `variant` on entry 0 is ignored rather than
  * honored — a caller cannot demote the leader by relabelling it, and cannot
  * promote a second leader by spelling one.
+ *
+ * F28/F87 and direction-b §6 M4 — the head is a two-track grid only from
+ * 1180px. Below that the heading stacks ABOVE its ledger, because a two-track
+ * grid at 390 puts the inked leader over the region's own name. The status
+ * carries direction-b's wrap discipline: line one is identity and never
+ * elides; line two is the worst two exceptions in tie-break order; a third is
+ * dropped whole, never abbreviated; nothing cuts mid-word.
  */
 
 import type { ReactNode } from 'react';
@@ -40,8 +47,13 @@ export interface RegionHeadProps {
   headingId: string;
   /** Serif register — the region's name. */
   name: ReactNode;
-  /** One-line status phrase, truncated rather than wrapped. */
+  /** Line one — the region's identity. Wraps; never elides, never truncates. */
   status: ReactNode;
+  /**
+   * Line two — the exceptions standing on the region, sharpest first. At most
+   * two print; a third is dropped whole rather than abbreviated.
+   */
+  exceptions?: readonly ReactNode[];
   eyebrow?: ReactNode;
   surfaceKey: string;
   regionKey: string;
@@ -56,6 +68,7 @@ export function RegionHead({
   headingId,
   name,
   status,
+  exceptions = [],
   eyebrow,
   surfaceKey,
   regionKey,
@@ -64,6 +77,7 @@ export function RegionHead({
   onFold,
 }: RegionHeadProps) {
   const showFold = Boolean(bodyId && onFold);
+  const printedExceptions = exceptions.slice(0, 2);
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
@@ -88,7 +102,10 @@ export function RegionHead({
   }, [actions, bodyId, regionKey, surfaceKey]);
 
   return (
-    <div className="grid grid-cols-[1fr_auto] items-start gap-x-4 gap-y-2">
+    <div
+      data-region-head={regionKey}
+      className="grid grid-cols-1 items-start gap-x-4 gap-y-2 min-[1180px]:grid-cols-[1fr_auto]"
+    >
       <div className="min-w-0">
         {eyebrow && (
           <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
@@ -102,16 +119,24 @@ export function RegionHead({
         >
           {name}
         </h2>
-        <p className="truncate text-[12.5px] text-[var(--color-mocha)]">
-          {status}
-        </p>
+        <p className="text-[12.5px] text-[var(--color-mocha)]">{status}</p>
+        {printedExceptions.length > 0 && (
+          <p className="text-[12.5px] text-[var(--color-mocha)]">
+            {printedExceptions.map((exception, index) => (
+              <span key={index}>
+                {index > 0 && ' · '}
+                {exception}
+              </span>
+            ))}
+          </p>
+        )}
       </div>
 
       {(actions.length > 0 || showFold) && (
         <DocumentActionGroup
           surfaceKey={surfaceKey}
           regionKey={regionKey}
-          className="justify-end"
+          className="justify-start min-[1180px]:justify-end"
         >
           {actions.map((entry, index) => {
             const variant: DocumentActionVariant =
