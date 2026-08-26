@@ -4,7 +4,7 @@ import { PreviousWork } from './previous-work';
 describe('PreviousWork', () => {
   it('is closed by default and exposes an accessible disclosure', () => {
     render(<PreviousWork count={3}><div>Brief recap</div></PreviousWork>);
-    const button = screen.getByRole('button', { name: 'Previous work · 3 complete' });
+    const button = screen.getByRole('button', { name: 'The record · 3 complete' });
     expect(button).toHaveAttribute('aria-expanded', 'false');
     expect(document.getElementById(button.getAttribute('aria-controls')!)).toBeInTheDocument();
     expect(screen.queryByText('Brief recap')).not.toBeInTheDocument();
@@ -20,7 +20,7 @@ describe('PreviousWork', () => {
         <div>Brief recap</div>
       </PreviousWork>,
     );
-    expect(screen.getByRole('button', { name: 'Previous work · 3 complete' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'The record · 3 complete' })).toBeVisible();
     expect(screen.queryByText(/Client approvals/)).not.toBeInTheDocument();
   });
 
@@ -42,7 +42,7 @@ describe('PreviousWork', () => {
     );
 
     // The disclosure's accessible name promises only what its body holds.
-    const disclosure = screen.getByRole('button', { name: 'Previous work · 4 complete' });
+    const disclosure = screen.getByRole('button', { name: 'The record · 4 complete' });
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
 
     const door = screen.getByRole('button', {

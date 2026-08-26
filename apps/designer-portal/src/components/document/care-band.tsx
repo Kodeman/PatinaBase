@@ -75,7 +75,17 @@ function closeErrorMessage(error: unknown): string {
   return 'Could not close the book. Try again.';
 }
 
-export function CareBand({ projectId }: { projectId: string }) {
+export function CareBand({
+  projectId,
+  onCloseoutReady,
+}: {
+  projectId: string;
+  /** A3-L7 — the closure gate, published to the page so the guide's care rest
+   *  state can be gated on it. This band is the only reader of both halves
+   *  (the eight closeout queries and the checklist's own state), so it states
+   *  the answer once rather than the page deriving a second one. */
+  onCloseoutReady?: (ready: boolean) => void;
+}) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
   const { user, isLoading: authLoading } = useAuth();
   const phaseQuery = useProjectPhases(projectId);
@@ -169,6 +179,10 @@ export function CareBand({ projectId }: { projectId: string }) {
   );
   const ready = closureReady(effectiveItems, operational);
   const done = effectiveItems.filter((i) => i.completed).length;
+
+  useEffect(() => {
+    onCloseoutReady?.(ready);
+  }, [onCloseoutReady, ready]);
 
   const fold = useRegionFold({
     docId: projectId,

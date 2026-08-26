@@ -7,6 +7,19 @@ const FOLIO_ACTION =
 test.describe.configure({ mode: 'serial' });
 
 /**
+ * Each of these two tests walks five routes, and under `next dev` every one of
+ * them cold-compiles on first visit. Playwright's DEFAULT expect timeout is
+ * 5s — playwright.config.ts lifts the per-TEST budget to 60s but sets no
+ * `expect.timeout` — so the first assertion after a navigation is racing a
+ * compile, and whichever route happens to be cold on a given run is the one
+ * that fails. That is why the reported failures moved between regions from run
+ * to run. The waits that immediately follow a `goto` therefore carry a
+ * cold-compile budget; the box measurements below them keep the default,
+ * because by then the element has already been found.
+ */
+const COLD = 30_000;
+
+/**
  * The Scored Ink (I107): the visible instrument is a scored word (~26px), so
  * the 44px floor is carried by the invisible halo the primitive renders last.
  * The action itself must still be visible; the halo is what the finger hits.
@@ -14,7 +27,7 @@ test.describe.configure({ mode: 'serial' });
 async function expectMinTarget(
   action: ReturnType<AuthenticatedPage['locator']>,
 ) {
-  await expect(action).toBeVisible();
+  await expect(action).toBeVisible({ timeout: COLD });
   // Halo-or-self: a DocumentAction carries its 44px floor on the invisible
   // [data-action-hit] halo, but non-DocumentAction targets (the desk folio
   // card stamps data-action-variant="primary" on its whole ~200px surface)
@@ -41,7 +54,7 @@ async function expectMinRow(
   action: ReturnType<AuthenticatedPage['locator']>,
   pixels: number,
 ) {
-  await expect(action).toBeVisible();
+  await expect(action).toBeVisible({ timeout: COLD });
   await expect
     .poll(async () => {
       const box = await action.boundingBox();
@@ -64,11 +77,11 @@ async function expectInlinePrimary(
   const group = page
     .locator(`[role="group"][data-action-region="${regionKey}"]`)
     .first();
-  await expect(group).toBeVisible();
+  await expect(group).toBeVisible({ timeout: COLD });
   const primaries = group.locator('[data-action-variant="primary"]');
-  await expect(primaries).toHaveCount(1);
+  await expect(primaries).toHaveCount(1, { timeout: COLD });
   const primary = primaries.first();
-  await expect(primary).toContainText(label);
+  await expect(primary).toContainText(label, { timeout: COLD });
   await expectMinTarget(primary);
   return primary;
 }
@@ -79,12 +92,12 @@ async function expectMobileBar(
   label: string | RegExp,
 ) {
   const bar = page.getByTestId('mobile-bar');
-  await expect(bar).toBeVisible();
+  await expect(bar).toBeVisible({ timeout: COLD });
   await expect(page.locator('[data-mobile-edge-owner]')).toHaveCount(1);
   await expect(bar).toHaveAttribute('data-mobile-edge-owner', 'document-bar');
   const action = bar.locator(`[data-action-key="${actionKey}"]`);
-  await expect(action).toHaveCount(1);
-  await expect(action).toContainText(label);
+  await expect(action).toHaveCount(1, { timeout: COLD });
+  await expect(action).toContainText(label, { timeout: COLD });
   await expectMinRow(action, 44);
 }
 
@@ -104,14 +117,16 @@ test.describe('Inked Instruments action visibility', () => {
         '[data-tour-anchor="desk-folio"] [data-action-region="needs-your-hand"][data-action-variant="primary"]',
       )
       .first();
-    await expect(folioAction).toBeVisible();
+    await expect(folioAction).toBeVisible({ timeout: COLD });
     // A1 follow-up: the pick-up Link is a full-bleed sibling BEHIND
     // FolderFace, so the act's legible label prints in the face, not inside
     // this Link — its own textContent is empty and its accessible name names
     // the folio and its need, not the act. Assert the label on the card the
     // primary belongs to; "one legible primary per region" is unchanged, only
     // which node in the card carries the words.
-    await expect(folioAction.locator('xpath=..')).toContainText(FOLIO_ACTION);
+    await expect(folioAction.locator('xpath=..')).toContainText(FOLIO_ACTION, {
+      timeout: COLD,
+    });
     await expectMinTarget(folioAction);
 
     await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {
@@ -149,7 +164,7 @@ test.describe('Inked Instruments action visibility', () => {
     const captureLeadSheet = page.getByRole('dialog', {
       name: 'Capture a lead',
     });
-    await expect(captureLeadSheet).toBeVisible();
+    await expect(captureLeadSheet).toBeVisible({ timeout: COLD });
     for (const field of [
       captureLeadSheet.getByLabel('Contact'),
       captureLeadSheet.getByLabel('The project (one line)'),

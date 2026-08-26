@@ -110,7 +110,10 @@ import {
   type DocumentGuideAction,
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
-import { composeDocumentGuideInputs } from '@/lib/document/document-guide-inputs';
+import {
+  composeDocumentGuideInputs,
+  type DocumentGuideReadinessFacts,
+} from '@/lib/document/document-guide-inputs';
 import { deriveGates, nearestOpenGate } from '@/lib/document/workflow-gate';
 import {
   asCommercialDocumentKind,
@@ -123,7 +126,7 @@ import {
   selectOperationalNeedsForDocument,
   useDeskEngagements,
 } from '@/hooks/use-desk-engagements';
-import { openLedger } from '@/components/document/command-bar';
+import { callSheetPending, openLedger } from '@/components/document/command-bar';
 import { RedLetterZone, type RedLetterRow } from '@/components/document/red-letter-zone';
 import {
   RoomLensProvider,
@@ -432,6 +435,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // default; the letterhead instrument and ⌘K's "This surface" row both
   // dispatch document:open-call-sheet rather than holding their own state.
   const [callSheetOpen, setCallSheetOpen] = useState(false);
+  // A3-L7 — the care rest state ("Everything is settled." / CLOSE THE BOOK) is
+  // gated on the closure gate the Care band alone can compute: it is the only
+  // reader of the eight closeout queries AND of the checklist's own state. The
+  // band publishes its answer here rather than the page paying for that read
+  // twice and getting a second answer.
+  const [closureReady, setClosureReady] = useState(false);
   // FIX 2 — the event's optional { mode } detail (default 'sheet'), read off
   // whichever dispatch opened it and forwarded straight through to CallSheet.
   const [callSheetMode, setCallSheetMode] = useState<CallSheetOpenMode>('sheet');
@@ -510,6 +519,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       setCallSheetOpen(true);
     };
     window.addEventListener('document:open-call-sheet', onOpenCallSheet);
+    // A ⌘K row that named a document NOT in hand walked here instead of
+    // dispatching into a page that had no listener yet; the flag is the
+    // intent, read and cleared once on arrival (openCaptureLead's pattern).
+    if (callSheetPending.value) {
+      callSheetPending.value = false;
+      setCallSheetMode('sheet');
+      setCallSheetOpen(true);
+    }
     return () => window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
   }, []);
 
@@ -755,26 +772,32 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         projectId: liveProposal.project_id ?? null,
       }
     : null;
+  const discoveryReadiness: DocumentGuideReadinessFacts['discovery'] = discoveryQuery.isError
+    ? { state: 'error' }
+    : discoveryQuery.isLoading
+      ? { state: 'loading' }
+      : discoveryQuery.data
+        ? { state: 'ready', data: discoveryQuery.data.row ?? discoveryQuery.data.prefill ?? {} }
+        : { state: 'idle' };
+  const draftingReadiness: DocumentGuideReadinessFacts['drafting'] = draftingState.error
+    ? { state: 'error' }
+    : draftingState.isLoading
+      ? { state: 'loading' }
+      : { state: 'ready', data: { gaps: draftingState.gaps } };
   const guideInputs = row
     ? composeDocumentGuideInputs({
         row,
         proposal: proposalGuideFacts,
-        readiness: {
-          discovery: discoveryQuery.isError
-            ? { state: 'error' }
-            : discoveryQuery.isLoading
-              ? { state: 'loading' }
-              : discoveryQuery.data
-                ? { state: 'ready', data: discoveryQuery.data.row ?? discoveryQuery.data.prefill ?? {} }
-                : { state: 'idle' },
-          drafting: draftingState.error
-            ? { state: 'error' }
-            : draftingState.isLoading
-              ? { state: 'loading' }
-              : { state: 'ready', data: { gaps: draftingState.gaps } },
-        },
+        readiness: { discovery: discoveryReadiness, drafting: draftingReadiness },
       })
     : [];
+  // A3-L7's rest states read an empty `guideInputs` as "nothing outstanding".
+  // On these two stages that list is also empty while its own read is still in
+  // flight, so the stage would announce itself finished on a fact nobody has
+  // stated yet. Pending is not quiet.
+  const guideInputsPending =
+    (row?.active_section === 'discovery' && discoveryReadiness.state !== 'ready') ||
+    (row?.active_section === 'direction' && draftingReadiness.state !== 'ready');
   // A failed Desk read only blanks guidance that depended on it. A document its
   // side feeds never key on keeps its own truthful guidance through the outage.
   const deskGuidanceFailed = deskEnrichment && enrichedOperationalQuery.isError;
@@ -800,8 +823,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           : null,
         schedule: scheduleFacts,
         inputFacts: guideInputs,
+        inputsPending: guideInputsPending,
         operationalNeed: rankedOperationalNeeds?.[0] ?? enrichedOperationalNeed,
         gate: nearestGate,
+        closureReady,
       })
     : null;
   // Split from activateGuide so the red-letter zone's per-need actions (below)
@@ -1427,6 +1452,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     projectId={row.project_id}
                     projectName={row.title}
                     mode="project"
+                    needs={rankedOperationalNeeds}
                     highlightId={highlightLineId}
                     onAddNote={setPendingNoteAnchor}
                     sectionKey="project"
@@ -1458,7 +1484,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   )}
                   {/* R80: the Care band — closure stays reachable from an active
                     project (a quiet folded line until install nears). */}
-                  <CareBand projectId={row.project_id} />
+                  <CareBand projectId={row.project_id} onCloseoutReady={setClosureReady} />
                 </>
               )}
             {spreadSection === 'install' && row.project_id && (
@@ -1467,6 +1493,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   projectId={row.project_id}
                   projectName={row.title}
                   mode="install"
+                  needs={rankedOperationalNeeds}
                   highlightId={highlightLineId}
                   onAddNote={setPendingNoteAnchor}
                   sectionKey="install"
@@ -1481,7 +1508,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 <InstallWindowCeremony projectId={row.project_id} />
                 {/* R80: at install the band opens unfolded — closing out IS the
                     work of this stage. */}
-                <CareBand projectId={row.project_id} />
+                <CareBand projectId={row.project_id} onCloseoutReady={setClosureReady} />
               </>
             )}
             {spreadSection === 'care' && (
@@ -1496,6 +1523,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   <FFESection
                     projectId={row.project_id}
                     mode="install"
+                    needs={rankedOperationalNeeds}
                     highlightId={highlightLineId}
                     sectionKey="care"
                     clientUserId={row.client_profile_id}

@@ -89,6 +89,45 @@ describe('RegionHead', () => {
     ).toHaveLength(1);
   });
 
+  it('stacks the heading above its ledger below 1180 (F28)', () => {
+    renderHead();
+    const head = document.querySelector('[data-region-head="approvals"]');
+    // The two-track grid — the one that put the inked leader over the heading
+    // at 390 — is now gated behind 1180; below it the head is one column.
+    expect(head).toHaveClass('grid-cols-1');
+    expect(head).toHaveClass('min-[1180px]:grid-cols-[1fr_auto]');
+    expect(head).not.toHaveClass('grid-cols-[1fr_auto]');
+    expect(
+      document.querySelector('[role="group"][data-action-region="approvals"]'),
+    ).toHaveClass('justify-start', 'min-[1180px]:justify-end');
+  });
+
+  it('wraps a long status instead of truncating it (F87)', () => {
+    const status =
+      'Client approvals — 2 awaiting · the Vandersteens · sent Tuesday, August 25';
+    renderHead({ status });
+    expect(screen.getByText(status)).not.toHaveClass('truncate');
+  });
+
+  it('prints the worst two exceptions and drops a third whole', () => {
+    renderHead({
+      status: 'the FF&E schedule, by room · 3 groups · 12 lines',
+      exceptions: ['1 open damage claim', '2 unspecified', '3 uninvoiced'],
+    });
+    expect(screen.getByText(/1 open damage claim/)).toBeInTheDocument();
+    expect(screen.getByText(/2 unspecified/)).toBeInTheDocument();
+    // Dropped whole, never abbreviated.
+    expect(screen.queryByText(/3 uninvoiced/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/…/)).not.toBeInTheDocument();
+  });
+
+  it('prints no second line when the region carries no exception', () => {
+    renderHead({ status: 'the FF&E schedule, by room · 1 group · 2 lines' });
+    expect(
+      document.querySelectorAll('.text-\\[12\\.5px\\]'),
+    ).toHaveLength(1);
+  });
+
   it('reports an empty head with nothing to fold', async () => {
     const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     renderHead({ actions: [] });

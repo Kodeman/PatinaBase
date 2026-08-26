@@ -111,7 +111,13 @@ jest.mock('@patina/supabase', () => ({
 
 // The project document's own sections are not what these tests exercise; the
 // guide strip and the margin are.
-jest.mock('@/components/document/ffe-section', () => ({ FFESection: () => null }));
+const mockFFESection = jest.fn();
+jest.mock('@/components/document/ffe-section', () => ({
+  FFESection: (props: Record<string, unknown>) => {
+    mockFFESection(props);
+    return null;
+  },
+}));
 jest.mock('@/components/document/schedule/schedule-spine', () => ({ ScheduleSpine: () => null }));
 jest.mock('@/components/document/approvals/project-approval-document', () => ({
   ProjectApprovalDocument: () => null,
@@ -428,6 +434,7 @@ describe('DocumentPage guide activation', () => {
     mockHistoryToggled.mockReset();
     mockDiscoveryFacetOpen.mockReset();
     mockDiscoveryFacetExpanded = false;
+    mockFFESection.mockClear();
     mockMarginItems = [];
     mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
     mockDraftingState = { gaps: [], isLoading: false, error: null };
@@ -481,12 +488,28 @@ describe('DocumentPage guide activation', () => {
   });
 
   it('activates the guide anchor and honors reduced motion', () => {
+    // A3-L7 — a Brief with nothing outstanding is at rest and states no act
+    // ("Nothing to decide yet."), so the anchor machinery is exercised through
+    // a need whose act lands on this document's own section rather than a
+    // ledger or a deep link.
+    mockDeskData = {
+      folders: [{
+        row: { engagement_id: 'lead-1' },
+        need: {
+          kind: 'ceremony_pending', text: 'Introduce yourself to Avery',
+          actionLabel: 'Continue the introduction', urgent: false,
+          stamp: { label: 'CLAIMED · CEREMONY WAITING' },
+        },
+      }],
+      chips: [],
+      composed: { 'lead-1': true },
+    };
     render(<DocumentPage params={fulfilledParams} />);
     const activeSection = document.querySelector<HTMLElement>('[data-active-section]');
     expect(activeSection).not.toBeNull();
     activeSection!.scrollIntoView = jest.fn();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept and begin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue the introduction' }));
 
     expect(activeSection!.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
     expect(activeSection).toHaveFocus();
@@ -611,7 +634,9 @@ describe('DocumentPage guide activation', () => {
 
     expect(mockSelectOperationalNeed).toHaveReturnedWith(null);
     expect(screen.queryByText(/decision overdue/)).not.toBeInTheDocument();
-    expect(screen.getByText('Decide on this inquiry')).toBeInTheDocument();
+    // A3-L7 — the Desk's "nothing here" is the Brief's rest state, and rest is
+    // a named sentence rather than the old always-actionable default.
+    expect(screen.getByText('Nothing to decide yet.')).toBeInTheDocument();
   });
 
   it('derives locally when a hot Desk cache never composed this document', () => {
@@ -1263,7 +1288,11 @@ describe('DocumentPage guide activation', () => {
       // (Brief) document — unaffected by the project-only swap.
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(screen.getByRole('button', { name: 'Accept and begin' })).toBeInTheDocument();
+      // The strip's own heading id — the same proof the sibling test reads for
+      // its absence. A3-L7 leaves a resting Brief with no act to point at, so
+      // the strip is named by its heading rather than by a button.
+      expect(document.getElementById('document-next-up')).not.toBeNull();
+      expect(screen.getByText('Nothing to decide yet.')).toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
     });
 
@@ -1399,7 +1428,7 @@ describe('DocumentPage guide activation', () => {
     ).toBeVisible();
     // The recap disclosure promises only what its own body holds.
     expect(
-      screen.getByRole('button', { name: /^Previous work · \d+ complete$/ }),
+      screen.getByRole('button', { name: /^The record · \d+ complete$/ }),
     ).toBeVisible();
   });
 
@@ -1415,6 +1444,82 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(screen.queryByText(/Client approvals/)).not.toBeInTheDocument();
+  });
+
+  // ── A3-L8: the wiring this wave's lanes contracted the page for ──
+  describe('A3 page wiring', () => {
+    it('hands the FF&E schedule the same ranked needs the red letter prints', () => {
+      asProjectDocument();
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: {
+            kind: 'damage_claim', text: 'A delivered piece was damaged in transit',
+            actionLabel: 'File the claim', urgent: true, stamp: { label: 'DAMAGED' },
+          },
+          needs: [{
+            kind: 'damage_claim', text: 'A delivered piece was damaged in transit',
+            actionLabel: 'File the claim', urgent: true, stamp: { label: 'DAMAGED' },
+          }],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      // One ordering for the whole spread: the head's leader is elected from
+      // the same list the zone's first row was drawn from.
+      const props = mockFFESection.mock.calls.at(-1)![0] as { needs?: readonly { kind: string }[] };
+      expect(props.needs?.map((need) => need.kind)).toEqual(['damage_claim']);
+    });
+
+    it('does not call a discovery document complete while its own read is in flight', () => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: {
+          ...current, engagement_kind: 'relationship', active_section: 'discovery',
+          engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+        } },
+      };
+      // The discovery read has not answered, so the checklist is empty for want
+      // of an answer rather than for want of work.
+      mockDiscoveryQuery = { data: undefined, isLoading: true, isError: false };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.queryByText('Discovery is complete. Shape the direction.')).not.toBeInTheDocument();
+      expect(screen.getByText('Finish what you need to know')).toBeInTheDocument();
+    });
+
+    it('rests a discovery document once its read answers with nothing outstanding', () => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: {
+          ...current, engagement_kind: 'relationship', active_section: 'discovery',
+          engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+        } },
+      };
+      mockDiscoveryQuery = {
+        data: { row: {
+          project_type: 'full_home', rooms: [{ name: 'Kitchen' }],
+          budget_max_cents: 18_450_000, target_date: '2026-11-02', hard_date: null,
+          style_tag_ids: ['warm-modern'], style_keywords: [],
+          lifestyle: [{ who: 'Two dogs', how: 'wipe-clean everything' }],
+          keep_items: [], avoid_items: [], decision_makers: [],
+          room_scan_id: null, site_notes: null,
+        } },
+        isLoading: false,
+        isError: false,
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.getByText('Discovery is complete. Shape the direction.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Begin the direction' })).toBeInTheDocument();
+    });
   });
 });
 

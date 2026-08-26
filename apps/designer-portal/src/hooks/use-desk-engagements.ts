@@ -60,6 +60,11 @@ const getSupabase = () => createBrowserClient() as any;
 export interface DeskData {
   folders: DeskFolder[];
   chips: MotionChip[];
+  /** Every live (non-archived) document this composition saw, in read order.
+   *  `folders` and `chips` are derived subsets — a document with neither a
+   *  need nor a motion is in neither, and `chips` is capped — so anything
+   *  counting the studio's live work reads this instead. */
+  live: DocumentStateRow[];
   /** Engagement ids this composition actually derived a need for — see
    *  partitionDesk. Presence here is what makes a "no need" answer sayable.
    *  A plain object so React Query's replaceEqualDeep can structurally share it

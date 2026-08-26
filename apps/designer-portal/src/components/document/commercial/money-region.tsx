@@ -1,23 +1,20 @@
 'use client';
 
 /**
- * The money region (Wave 4 · W2) — one section, one dominant figure, and four
- * tiers in dependency order: authority → plan → committed → moved. It absorbs
- * the four bands that used to stand apart on the project document: the design
- * authority band, the working budget, the authorizations & trade scopes
- * ledger, and the accounts.
+ * The money region (Wave 4 · W2) — one section, one dominant figure, and the
+ * six-rung ladder in dependency order: budget → plan → authorized → moved →
+ * owed → not drawn. It absorbs the four bands that used to stand apart on the
+ * project document.
  *
- * Every tier reads the SAME hook the detail surface below it already calls, so
- * the region composes figures the page had already paid for rather than
- * opening new reads.
+ * Every rung but one reads the SAME hook the detail surface below it already
+ * calls, so the region composes figures the page had already paid for. The
+ * exception is the vendor-payout read `Moved` needs: nothing else on the page
+ * knows what has actually left the studio for the makers.
  *
- * Tier 3 and tier 4 are different money and must never be swapped: tier 3 is
- * what executed instruments contractually owe; tier 4 is the accounts'
- * committed figure — the CLIENT value of schedule lines at ordered and later.
- * Tier 4 is not a disbursement: nothing in the data models money leaving, so
- * the tier never claims funds were released. The product calls both figures
- * "committed" in different places, so the flow caption states the derivation
- * on the page.
+ * `Authorized` and `Moved` are different money and must never be swapped:
+ * `Authorized` is what executed instruments contractually owe; `Moved` is that
+ * figure less what `po_payments` records as paid out. The derivation is stated
+ * on the row itself so neither can be read as the other.
  *
  * The region head's ledger reuses the exact mechanisms the accounts band
  * already invokes — the same module-level openers, the same event names —
@@ -28,13 +25,9 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useAccountPage } from '@/hooks/use-account-page';
-import {
-  useProjectBillingAuthority,
-  useProjectInstruments,
-  useTradeScopes,
-  useWorkingBudget,
-} from '@/hooks/use-commercial-documents';
+import { useMoneyLadder } from '@/hooks/use-money-ladder';
 import type { SectionKey } from '@/lib/document/desk-derivation';
+import { type MoneyRung } from '@/lib/document/money-ladder';
 import { money } from '@/lib/document/project-commerce';
 import { AccountBand } from '../account-band';
 import { openInvoiceComposer } from '../accounts/invoice-overlays';
@@ -74,6 +67,13 @@ function Rung({
   );
 }
 
+/** A rung's printed figure: the money and the words that qualify it, or the
+ *  rung's honest state when it has no figure to print. */
+function figureOf(rung: MoneyRung): string | null {
+  if (rung.cents == null) return rung.note || null;
+  return rung.note ? `${money(rung.cents)} ${rung.note}` : money(rung.cents);
+}
+
 export function MoneyRegion({
   projectId,
   projectName,
@@ -89,41 +89,17 @@ export function MoneyRegion({
    *  the region stands as its seam and unfolds in place to exactly this body. */
   tableSeam?: boolean;
 }) {
-  const authorityQuery = useProjectBillingAuthority(projectId);
-  const budgetQuery = useWorkingBudget(projectId);
-  const instrumentsQuery = useProjectInstruments(projectId);
-  const tradeScopesQuery = useTradeScopes(projectId);
+  // R108 — the one derivation the spine's running index also reads, so the
+  // index can never summarise a ladder this region disagrees with.
+  const {
+    ladder,
+    authority,
+    committedCents,
+    draftScopeCount,
+    committedSettled,
+    settled: ladderSettled,
+  } = useMoneyLadder(projectId);
   const accountQuery = useAccountPage(projectId);
-
-  const authority = authorityQuery.data ?? null;
-  const authorityFailed = Boolean(authorityQuery.error);
-  const authoritySettled = !authorityQuery.isLoading && !authorityFailed;
-
-  const version = budgetQuery.data?.version ?? null;
-  const budgetFailed = Boolean(budgetQuery.error);
-  const budgetSettled = !budgetQuery.isLoading && !budgetFailed;
-  // project_budget_versions.target_total_cents is stamped only when a version
-  // publishes (00414's publish RPC), so a draft's stored total is stale. The
-  // rows the grid below renders are the honest source for the region's figure.
-  const planLines = version?.lines ?? [];
-  const planCents = planLines.reduce((sum, line) => sum + line.targetCents, 0);
-
-  const committedFailed = Boolean(instrumentsQuery.error || tradeScopesQuery.error);
-  const committedSettled =
-    !instrumentsQuery.isLoading && !tradeScopesQuery.isLoading && !committedFailed;
-  const executedInstruments = (instrumentsQuery.data ?? []).filter(
-    (instrument) => instrument.state === 'executed',
-  );
-  const executedScopes = (tradeScopesQuery.data ?? []).filter(
-    (scope) => scope.state === 'executed',
-  );
-  const draftScopeCount = (tradeScopesQuery.data ?? []).filter(
-    (scope) => scope.state === 'draft',
-  ).length;
-  const executedCount = executedInstruments.length + executedScopes.length;
-  const committedCents =
-    executedInstruments.reduce((sum, instrument) => sum + instrument.totalAmountCents, 0) +
-    executedScopes.reduce((sum, scope) => sum + scope.clientPriceCents, 0);
 
   // The same word the accounts band uses for this act, derived the same way.
   const changeOnly = activeSection === 'install' || activeSection === 'care';
@@ -131,42 +107,6 @@ export function MoneyRegion({
   const account = accountQuery.data ?? null;
   const accountFailed = Boolean(accountQuery.isError);
   const accountSettled = !accountQuery.isLoading && !accountFailed;
-
-  const authorityFigure = authorityFailed
-    ? 'could not be read'
-    : authority
-      ? `${money(authority.authorizedCents)} authorized`
-      : authoritySettled
-        ? 'no design authority recorded yet'
-        : null;
-  // A version row is created before its lines are derived (00422's
-  // derive_working_budget_draft), so a line-less version is a real state — and
-  // summing nothing into "$0" would state a plan that does not exist.
-  const planFigure = budgetFailed
-    ? 'could not be read'
-    : version && planLines.length > 0
-      ? `${money(planCents)} working budget v${version.version}`
-      : version
-        ? `working budget v${version.version} · no rooms yet`
-        : budgetSettled
-          ? 'no working budget yet'
-          : null;
-  const committedFigure = committedFailed
-    ? 'could not be read'
-    : !committedSettled
-      ? null
-      : executedCount === 0
-        ? 'nothing executed yet'
-        : `${money(committedCents)} · ${executedCount} ${
-            executedCount === 1 ? 'instrument' : 'instruments'
-          } executed — authorizations and trade scopes`;
-  const movedFigure = accountFailed
-    ? 'could not be read'
-    : !accountSettled
-      ? null
-      : account && account.committedCents > 0
-        ? `${money(account.committedCents)} in motion — ordered through installed`
-        : 'nothing in motion yet';
 
   // The account's own quiet test. A region that folds on authority/plan/
   // committed alone would hide an overdue invoice on a project that never
@@ -185,20 +125,20 @@ export function MoneyRegion({
   // The fold default is withheld until every source the sparse test reads from
   // has settled — a default computed from a partial read could latch shut a
   // region that is actually busy, or open one that is actually quiet.
-  const allSettled = authoritySettled && budgetSettled && committedSettled && accountSettled;
-  const defaultFolded = allSettled
-    ? committedCents === 0 &&
-      executedCount === 0 &&
-      (!version || planLines.length === 0) &&
-      accountQuiet
-    : null;
+  const allSettled = ladderSettled && accountSettled;
+  // C-AP-08 — the region opens when it has money to state. Any rung standing
+  // at a live figure is live money; so is a receivable the accounts hold that
+  // no rung reached, which is the money actually chasing the designer.
+  const hasLiveMoney =
+    Object.values(ladder).some((rung) => (rung.cents ?? 0) > 0) || !accountQuiet;
+  const defaultFolded = allSettled ? !hasLiveMoney : null;
 
   // On the table the posture is DECLARED rather than derived — money is
   // reference until it is asked for — but the declaration is subject to the
   // same two laws the region's own default obeys:
   //
   //   · It waits for the reads to settle. The seam states figures ("$0
-  //     committed · no authority yet"), so a fold declared before the money
+  //     authorized · no budget yet"), so a fold declared before the money
   //     was read would print a sentence it did not know and then flip. The
   //     null is `useRegionFold`'s own refusal of an unsettled default; until
   //     it settles the region stands as it does anywhere else, with each tier
@@ -229,18 +169,21 @@ export function MoneyRegion({
     wasFolded.current = folded;
   }, [folded]);
 
+  // The head and the seam speak the ladder's own words: rung 1 is `Budget`
+  // and rung 3 is `Authorized`. `authority`/`committed` named neither rung
+  // after SP-03, and `authority` is the word direction-a §5 sends away.
   const headStatus = authority
-    ? `${money(authority.remainingCents)} remaining · ${money(committedCents)} committed`
-    : 'no authority yet';
+    ? `${money(authority.remainingCents)} remaining · ${money(committedCents)} authorized`
+    : 'no budget yet';
   // The table's seam states the same two figures as one sentence: what has been
-  // committed, against the authority it is being spent out of.
+  // authorized, against the budget it is being spent out of.
   const seamSummary = tableSeam
     ? authority
-      ? `${money(committedCents)} committed of ${money(authority.authorizedCents)} authority`
-      : `${money(committedCents)} committed · no authority yet`
+      ? `${money(committedCents)} authorized of ${money(authority.authorizedCents)} budget`
+      : `${money(committedCents)} authorized · no budget yet`
     : authority
-      ? `${money(authority.authorizedCents)} authorized · ${money(committedCents)} committed`
-      : `no authority yet · ${money(committedCents)} committed`;
+      ? `${money(authority.authorizedCents)} budget · ${money(committedCents)} authorized`
+      : `no budget yet · ${money(committedCents)} authorized`;
 
   const ledger: RegionLedgerEntry[] = [
     // R74b — draw an invoice for THIS engagement: the anti-wizard composer,
@@ -279,7 +222,7 @@ export function MoneyRegion({
         <FoldSeam
           headingId={HEADING_ID}
           bodyId={BODY_ID}
-          name="Design authority"
+          name="Money"
           summary={seamSummary}
           onUnfold={() => setFolded(false)}
           surfaceKey="accounts"
@@ -294,9 +237,9 @@ export function MoneyRegion({
       <RegionRule />
       <RegionHead
         headingId={HEADING_ID}
-        name="Design authority"
+        name="Money"
         status={headStatus}
-        eyebrow="Money · one region"
+        eyebrow="The money · one region"
         surfaceKey="accounts"
         regionKey="money-head"
         actions={ledger}
@@ -307,32 +250,39 @@ export function MoneyRegion({
       <div id={BODY_ID}>
         <ol className="mt-3 space-y-2">
           <Rung
-            name="Authority"
-            figure={authorityFigure}
+            name="Budget"
+            figure={figureOf(ladder.budget)}
             meaning="What the client has agreed to fund"
           />
-          <Rung name="Plan" figure={planFigure} meaning="What the plan intends to spend" />
           <Rung
-            name="Committed"
-            figure={committedFigure}
-            meaning="What is contractually owed"
+            name="Plan"
+            figure={figureOf(ladder.plan)}
+            meaning="What the plan intends to spend"
+          />
+          <Rung
+            name="Authorized"
+            figure={figureOf(ladder.authorized)}
+            meaning="What is contractually owed to makers"
           />
           <Rung
             name="Moved"
-            figure={movedFigure}
-            meaning="The accounts’ committed figure — client value of lines at ordered and later; not funds disbursed"
+            figure={figureOf(ladder.moved)}
+            meaning="Committed, not yet paid out"
+          />
+          <Rung name="Owed" figure={figureOf(ladder.owed)} meaning="The receivable" />
+          <Rung
+            name="Not drawn"
+            figure={figureOf(ladder.notDrawn)}
+            meaning="Deposits and holdbacks not yet drawn"
           />
         </ol>
 
         <p className="mt-3 max-w-2xl text-[10.5px] leading-relaxed text-[var(--text-muted)]">
-          Authority → plan → committed → moved. Moved is the accounts&rsquo; committed figure
-          — the client value of schedule lines at ordered, in production, shipped, delivered
-          or installed — not funds disbursed, and not the contractually owed total above it.
+          Budget &rarr; plan &rarr; authorized &rarr; moved. Moved is what is ordered and
+          not yet paid out &mdash; not the contractually owed total above it.
           {committedSettled && draftScopeCount > 0
             ? ` ${draftScopeCount} trade ${draftScopeCount === 1 ? 'scope' : 'scopes'} still in draft, counted in neither.`
-            : ''}{' '}
-          Absorbs today&rsquo;s four separate bands: design authority, working budget,
-          authorizations &amp; trade scopes, the accounts.
+            : ''}
         </p>
 
         <div className="mt-4">

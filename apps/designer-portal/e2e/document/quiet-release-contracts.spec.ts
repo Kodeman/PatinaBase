@@ -345,7 +345,7 @@ test.describe("Quiet Work release browser contracts", () => {
     await mobileMore.click();
     await page
       .getByRole("group", { name: "More studio actions" })
-      .getByRole("button", { name: "Studio books" })
+      .getByRole("button", { name: "Ledgers" })
       .click();
     let drawer = page.locator('[data-mobile-sheet-kind="drawer"]');
     await expect(drawer).toBeVisible();
@@ -369,7 +369,7 @@ test.describe("Quiet Work release browser contracts", () => {
     await mobileMore.click();
     await page
       .getByRole("group", { name: "More studio actions" })
-      .getByRole("button", { name: "Studio books" })
+      .getByRole("button", { name: "Ledgers" })
       .click();
     drawer = page.locator('[data-mobile-sheet-kind="drawer"]');
     await expect(drawer).toBeVisible();
@@ -383,7 +383,7 @@ test.describe("Quiet Work release browser contracts", () => {
     await mobileMore.click();
     await page
       .getByRole("group", { name: "More studio actions" })
-      .getByRole("button", { name: "Studio books" })
+      .getByRole("button", { name: "Ledgers" })
       .click();
     drawer = page.locator('[data-mobile-sheet-kind="drawer"]');
     await expect(drawer).toBeVisible();

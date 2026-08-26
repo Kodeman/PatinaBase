@@ -18,7 +18,6 @@ const STATUSES: Record<ShelfKey, string> = {
   specbook: '',
   moodboards: '',
   callsheet: '',
-  knowledge: '',
   clientcopy: 'As sent · live',
 };
 

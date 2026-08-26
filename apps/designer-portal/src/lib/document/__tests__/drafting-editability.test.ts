@@ -75,7 +75,7 @@ describe('draftingEditability — the Room’s own rule, addressable', () => {
 describe('shelvesFor — the client’s copy', () => {
   it('never offers a project document a shelf that belongs to a proposal', () => {
     const keys = shelvesFor({ callSheetEnabled: true }).map((s) => s.key);
-    expect(keys).toEqual(['planroom', 'specbook', 'moodboards', 'callsheet', 'knowledge']);
+    expect(keys).toEqual(['planroom', 'specbook', 'moodboards', 'callsheet']);
     // …not even when the flag that would raise it is on.
     expect(
       shelvesFor({ callSheetEnabled: true, clientCopyEnabled: true }).map((s) => s.key),
@@ -104,7 +104,6 @@ describe('shelvesFor — the client’s copy', () => {
       'planroom',
       'specbook',
       'moodboards',
-      'knowledge',
     ]);
   });
 });

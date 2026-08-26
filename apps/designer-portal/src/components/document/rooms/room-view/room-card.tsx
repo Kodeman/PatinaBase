@@ -17,7 +17,7 @@
  *
  * The stretched link stashes the Rooms origin on click — the SAME mechanism
  * studio-drawer.tsx's `enterRoom` uses (`rememberRoomOrigin`), so leaving a
- * room opened from `/rooms` reads "← the Rooms" and returns here, rather
+ * room opened from `/rooms` reads "← the Scans" and returns here, rather
  * than degrading to the Desk (the Phase-2 gate finding; room-origin.ts's
  * `isRoomPath` deliberately excludes bare `/rooms` from its no-op guard so
  * this stash actually lands).

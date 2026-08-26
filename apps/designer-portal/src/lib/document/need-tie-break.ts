@@ -1,5 +1,6 @@
 /**
- * The operational needs' tie-break — direction A §3, as revised by C-AP-06.
+ * The operational needs' tie-break — direction A §3, as revised by C-AP-06,
+ * and by A3-L7, which gives `NeedLine` a `dueOn`/`owner` and reads them here.
  *
  * Four ranks, in this order:
  *   1. a hard outside deadline inside seven days — a carrier window, a
@@ -21,6 +22,52 @@
 import type { NeedKind, NeedLine } from './desk-derivation';
 
 export type NeedTieBreakRank = 1 | 2 | 3 | 4;
+
+const DAY_MS = 86_400_000;
+
+/** Bare DATE columns parse as LOCAL midnight, matching document-guide.ts's
+ *  own `asLocalDate` — a bare ISO date must not slip a day in negative-offset
+ *  zones, and a full timestamp parses as itself. */
+const asLocalDate = (iso: string): Date =>
+  new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
+
+/** Whole calendar days from `now` to `iso` — negative when `iso` is past.
+ *  `null` when `iso` does not parse. */
+function calendarDaysUntil(iso: string, now: Date): number | null {
+  const then = asLocalDate(iso);
+  if (Number.isNaN(then.getTime())) return null;
+  const thenMidnight = new Date(then.getFullYear(), then.getMonth(), then.getDate()).getTime();
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.round((thenMidnight - nowMidnight) / DAY_MS);
+}
+
+/**
+ * A3-L7's dated/owned rank, read directly off the need rather than off its
+ * kind — and in the SAME four-rank order the kind table below keeps, because
+ * one surface may not rank the same four ideas two ways:
+ *   1. `dueOn` lands within the next seven days (today included) AND the
+ *      need names an owner that is not the designer — a hard outside
+ *      deadline, whoever holds it;
+ *   2. `dueOn` has already passed — what is already past its date, sorted
+ *      oldest first by the caller;
+ *   3. the need names the designer as owner and carries no date at all — the
+ *      studio's own pen, against no outside clock.
+ *
+ * `null` for everything else, INCLUDING a need that states only an owner it
+ * shares with its kind's own rank, or a date further out than a week: the
+ * caller then reads the kind-based rank, which already knows what the need is.
+ * The dated rank may promote a need the kind could not see the urgency of; it
+ * may never demote one below what its kind already earned.
+ */
+function datedRank(need: NeedLine, now: Date): NeedTieBreakRank | null {
+  const days = need.dueOn != null ? calendarDaysUntil(need.dueOn, now) : null;
+  if (days !== null && days >= 0 && days <= 7 && need.owner && need.owner !== 'designer') {
+    return 1;
+  }
+  if (days !== null && days < 0) return 2;
+  if (need.owner === 'designer' && days === null) return 3;
+  return null;
+}
 
 /**
  * Rank per kind, exhaustive over `NeedKind` so a new kind is a type error
@@ -73,27 +120,40 @@ export function needTieBreakRank(kind: NeedKind): NeedTieBreakRank {
 
 /**
  * The needs, re-ordered by the four ranks. **Stable** — equal-rank input order
- * is preserved, and that order is `NEED_RULES`' declaration order, because
- * `deriveNeeds` (desk-derivation.ts:960–1011) pushes in rule order and never
- * sorts. **Total** — every input need comes back, exactly once.
+ * is preserved (and, inside rank 3, the older `dueOn` sorts first — "ties
+ * inside a rank go to the older date"), and that order is `NEED_RULES`'
+ * declaration order, because `deriveNeeds` (desk-derivation.ts:960–1011)
+ * pushes in rule order and never sorts. **Total** — every input need comes
+ * back, exactly once.
  *
- * Two clauses of direction A §3 are NOT implemented here and are scheduled for
- * A3, where `NeedLine` gains a deadline and an owner: rank 1's "inside seven
- * days" test (the kind stands in for the clock) and "ties inside a rank go to
- * the older date" (no date is read, so equal-rank order is the derivation
- * chain's). `now` is part of the contract A1-L2 already imports and is read by
- * neither clause yet.
+ * A need's rank is `datedRank` when it states a `dueOn` or an `owner`, and
+ * the kind-based `needTieBreakRank` otherwise — so a need this wave left
+ * undated and unowned ranks exactly as it always has (A1-L2's own
+ * falsifier test, kept green below).
  */
 export function rankOperationalNeeds(
   needs: readonly NeedLine[],
   now: Date,
 ): NeedLine[] {
   return needs
-    .map((need, index) => ({ need, index }))
-    .sort(
-      (a, b) =>
-        needTieBreakRank(a.need.kind) - needTieBreakRank(b.need.kind) ||
-        a.index - b.index,
-    )
+    .map((need, index) => ({
+      need,
+      index,
+      rank: datedRank(need, now) ?? needTieBreakRank(need.kind),
+    }))
+    .sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      // Rank 2 is "already past its date, oldest first" — a need with no
+      // dueOn (kind-fallback into rank 2) has no date to compare and keeps
+      // derivation order against its rank-2 peers.
+      if (a.rank === 2 && a.need.dueOn != null && b.need.dueOn != null) {
+        const aTime = new Date(a.need.dueOn).getTime();
+        const bTime = new Date(b.need.dueOn).getTime();
+        if (!Number.isNaN(aTime) && !Number.isNaN(bTime) && aTime !== bTime) {
+          return aTime - bTime;
+        }
+      }
+      return a.index - b.index;
+    })
     .map((entry) => entry.need);
 }

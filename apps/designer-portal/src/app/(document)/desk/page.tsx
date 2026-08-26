@@ -46,6 +46,17 @@ import {
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
+import { STUDIO_VERBS } from '@/lib/document/registry';
+
+// F24 — the two header acts print their registry sub-labels; the registry
+// (A3-L3's file) is the one place these strings are stored, so the header
+// reads the same words the Desk Contents' Begin column and ⌘K do.
+const CAPTURE_LEAD_SUBLABEL = STUDIO_VERBS.find(
+  (verb) => verb.key === 'capture-lead',
+)?.subLabel;
+const OPEN_PROJECT_SUBLABEL = STUDIO_VERBS.find(
+  (verb) => verb.key === 'open-project',
+)?.subLabel;
 
 export default function DeskPage() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.desk); // R89 — scope help to the Desk
@@ -199,30 +210,44 @@ export default function DeskPage() {
           regionKey="desk-head"
           aria-label="Desk actions"
         >
-          <DocumentAction
-            actionKey="capture-lead"
-            variant="primary"
-            leading="＋"
-            data-tour-anchor="desk-capture-lead"
-            onClick={() => setCaptureOpen(true)}
-          >
-            Capture a lead
-          </DocumentAction>
+          <div className="flex flex-col items-end gap-0.5">
+            <DocumentAction
+              actionKey="capture-lead"
+              variant="primary"
+              leading="＋"
+              data-tour-anchor="desk-capture-lead"
+              onClick={() => setCaptureOpen(true)}
+            >
+              Capture a lead
+            </DocumentAction>
+            {CAPTURE_LEAD_SUBLABEL && (
+              <span className="doc-type-meta uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                {CAPTURE_LEAD_SUBLABEL}
+              </span>
+            )}
+          </div>
           {/* R79 — the quiet secondary act beside capture: a project that
               skips the proposal (a repeat client, handshake work). */}
-          <DocumentAction
-            actionKey="open-project"
-            variant="secondary"
-            leading="＋"
-            onClick={() => setOpenProjectOpen(true)}
-          >
-            Open a project
-          </DocumentAction>
+          <div className="flex flex-col items-end gap-0.5">
+            <DocumentAction
+              actionKey="open-project"
+              variant="secondary"
+              leading="＋"
+              onClick={() => setOpenProjectOpen(true)}
+            >
+              Open a project
+            </DocumentAction>
+            {OPEN_PROJECT_SUBLABEL && (
+              <span className="doc-type-meta uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                {OPEN_PROJECT_SUBLABEL}
+              </span>
+            )}
+          </div>
           <DocumentAction
             actionKey="find-anything"
             variant="tertiary"
             data-tour-anchor="desk-find-anything"
-            onClick={openCommandBar}
+            onClick={() => openCommandBar()}
             trailing={
               <kbd className="rounded-[3px] border border-[var(--border-default)] px-1 py-px font-mono">
                 ⌘K
@@ -376,6 +401,7 @@ export default function DeskPage() {
           <StudioPulse
             chips={data?.chips ?? []}
             folders={data?.folders ?? []}
+            live={data?.live ?? []}
             engagementsResolved={Boolean(data) && !isLoading}
           />
 

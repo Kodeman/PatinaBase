@@ -52,6 +52,18 @@ describe("ProjectAuthorityBand", () => {
     expect(container).not.toHaveTextContent("internal-agreement-id");
   });
 
+  // F09 / direction-a §5: `Design authority` retires from the surface
+  // entirely. This band is the one component that printed it, and nothing is
+  // mocked here — the assertion runs against the string the band really draws.
+  it("retires Design authority from the surface entirely", () => {
+    const { container } = render(
+      <ProjectAuthorityBand authority={authority} />,
+    );
+
+    expect(container).not.toHaveTextContent("Design authority");
+    expect(screen.getByText("Budget · active")).toBeVisible();
+  });
+
   it("narrates the unpaid retainer gate", () => {
     render(
       <ProjectAuthorityBand

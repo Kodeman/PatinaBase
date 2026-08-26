@@ -18,3 +18,29 @@ describe('DocSpine unrecorded stages', () => {
     expect(screen.getByRole('button', { name: /Jump to Project/ })).toBeInTheDocument();
   });
 });
+
+describe('DocSpine at the compact tier (1180–1439) — F02', () => {
+  it('prints the active section label and "Put down" from 1180, not only from 1440', () => {
+    render(<DocSpine sections={sections} others={[]} onJump={jest.fn()} />);
+    expect(screen.getByText('Put down')).toHaveClass('min-[1180px]:inline');
+    expect(screen.getByText('Project').closest('p')).toHaveClass(
+      'min-[1180px]:block',
+    );
+  });
+
+  it('keeps the three shelved blocks hidden below 1440 (C8 untouched)', () => {
+    render(
+      <DocSpine
+        sections={sections}
+        others={[]}
+        onJump={jest.fn()}
+        shelved={<div data-testid="shelved-blocks">shelved</div>}
+      />,
+    );
+    const shelved = screen.getByTestId('shelved-blocks');
+    expect(shelved.parentElement).toHaveClass(
+      'hidden',
+      'min-[1440px]:block',
+    );
+  });
+});

@@ -167,3 +167,11 @@ describe('Desk — capture-lead affordance (A9)', () => {
     expect(screen.getAllByText('Capture a lead')).toHaveLength(1);
   });
 });
+
+describe('Desk — header acts print their sub-labels (F24)', () => {
+  it('prints the registry sub-label under each header act', () => {
+    render(<DeskPage />);
+    expect(screen.getByText('begin a Brief')).toBeInTheDocument();
+    expect(screen.getByText('no proposal needed')).toBeInTheDocument();
+  });
+});

@@ -66,9 +66,17 @@ function roomHref(boardId: string, pathname: string) {
 export function ProjectMoodBoards({
   projectId,
   canCreate = true,
+  // F30 — the shelf leaf mounts this region already unfolded (clicking the
+  // shelf row IS the unfold act); folding it again inside its own leaf is a
+  // second answer to a question already asked, and an empty leaf that only
+  // offers `UNFOLD ↓` names no way to start a board.
+  alwaysUnfolded = false,
+  startBoardLabel = 'Start a board',
 }: {
   projectId: string;
   canCreate?: boolean;
+  alwaysUnfolded?: boolean;
+  startBoardLabel?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -256,17 +264,19 @@ export function ProjectMoodBoards({
     ? 'no boards yet'
     : `${liveBoards.length} boards · ${frozenBoards.length} frozen`;
 
+  // C20 — one act, one name, in both states: the head's ledger entry and the
+  // empty state's action are the same act and print the same words.
   const ledger: RegionLedgerEntry[] = canCreate
     ? [
         {
           key: 'new-project-board',
-          label: 'New board',
+          label: startBoardLabel,
           onClick: () => setStartingBoard(true),
         },
       ]
     : [];
 
-  if (boardsFolded) {
+  if (boardsFolded && !alwaysUnfolded) {
     return (
       <>
         <RegionRule />
@@ -328,7 +338,11 @@ export function ProjectMoodBoards({
         regionKey="working-boards"
         actions={ledger}
         bodyId={BODY_ID}
-        onFold={() => setBoardsFolded(true)}
+        // F30 — the shelf leaf mounts this region already unfolded, and the
+        // fold key is shared with the region on the paper. Leaving the control
+        // wired there would fold the paper's Mood boards region while the leaf
+        // itself appeared not to move.
+        onFold={alwaysUnfolded ? undefined : () => setBoardsFolded(true)}
       />
       <div id={BODY_ID}>
       {boardsEmpty ? (
@@ -342,7 +356,7 @@ export function ProjectMoodBoards({
             title="Start the project’s visual direction"
             description="Use a working mood board to collect references, compose the room, and keep the visual decisions close to the project."
             inputs={['Room or purpose', 'References', 'A point of view']}
-            action={{ key: 'start-project-board', label: 'Start a mood board', onClick: () => setStartingBoard(true) }}
+            action={{ key: 'start-project-board', label: startBoardLabel, onClick: () => setStartingBoard(true) }}
           />
         )
       ) : (
