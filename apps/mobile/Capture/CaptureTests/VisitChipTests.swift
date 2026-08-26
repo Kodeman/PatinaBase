@@ -356,4 +356,24 @@ struct VisitChipTests {
         #expect(draft.destination == .library)
         #expect(draft.visitKind == .sourcing)
     }
+
+    @Test func theContextScreenNamesTheVisitWhenThereIsOne() {
+        #expect(FieldContextCaptureCopy.title(visitLabel: "Maple St · Living")
+                == "Photos & notes for Maple St · Living.")
+        #expect(FieldContextCaptureCopy.title(visitLabel: nil)
+                == "Photos & notes for this room.")
+        #expect(FieldContextCaptureCopy.eyebrow == "Photos & notes")
+        #expect(FieldContextCaptureCopy.detail
+                == "These reach the studio as soon as you have signal — they're notes, not a scan.")
+        for line in [FieldContextCaptureCopy.eyebrow,
+                     FieldContextCaptureCopy.detail,
+                     FieldContextCaptureCopy.title(visitLabel: nil)] {
+            #expect(!FieldCopyAudit.contains("inbox", in: line))
+        }
+    }
+
+    @Test func theContextScreenHasARealScreenID() {
+        #expect(CaptureScreenID.f1Context.rawValue == "screen.F1.context")
+        #expect(CaptureScreenID.allCases.map(\.rawValue).contains("screen.F1.context"))
+    }
 }

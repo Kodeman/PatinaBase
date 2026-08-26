@@ -177,6 +177,7 @@ struct SiteScanSetupScreen: View {
             SiteScanContextScreen(container: container,
                                   projectID: model.selectedProjectID,
                                   projectRoomID: model.selectedRoomID,
+                                  visit: model.visitState,
                                   onDone: { showContextCapture = false })
         }
         .navigationTitle("Site scan")

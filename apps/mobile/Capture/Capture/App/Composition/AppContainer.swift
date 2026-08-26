@@ -9,9 +9,10 @@
 //  Phase 2 designer/pro seams (projects/leads/decisions/messaging/receiving/
 //  portalAuth/siteScan): mock mode wires the CaptureKitMocks conformers; real
 //  mode calls each flow's own `<Flow>ServiceFactory.make(deps:)`, and every one
-//  of the eight now returns a real Supabase concrete. Field Companion wave 2
-//  added `smartGuess` and `featureFlags` as the last two composition seams; the
-//  rest of this file stays foundation-owner-only.
+//  of the eight now returns a real Supabase concrete. This file is owned by
+//  whichever wave is landing composition-root work; additive DI properties
+//  (wave 2's `smartGuess`/`featureFlags`, wave 3's `projectCache`) land with
+//  the wave that needs them, not on a fixed, closed list.
 //   • Real mode (physical device, or sim with -CaptureForceReal): Supabase
 //     session, persistent store (with graceful fallback), the local sync outbox
 //     wired to real capture-media upload + the commit RPC, the offline-sync Live

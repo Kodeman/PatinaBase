@@ -22,3 +22,18 @@ public enum FieldCopyAudit {
         return text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 }
+
+/// The non-Pro context screen (spec §7.11). R108.2: this is NEVER a scan, and
+/// the copy must never imply otherwise.
+public enum FieldContextCaptureCopy {
+    public static let eyebrow = "Photos & notes"
+    public static let detail =
+        "These reach the studio as soon as you have signal — they're notes, not a scan."
+
+    public static func title(visitLabel: String?) -> String {
+        guard let visitLabel, !visitLabel.isEmpty else {
+            return "Photos & notes for this room."
+        }
+        return "Photos & notes for \(visitLabel)."
+    }
+}
