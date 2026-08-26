@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import DocumentPage from './page';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
@@ -123,11 +123,30 @@ jest.mock('@/components/document/commercial/project-commerce-section', () => ({
   ProjectCommerceSection: () => null,
 }));
 jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
+// Real section bodies this suite's install/care fixtures (F14) now reach but
+// do not exercise — stubbed the same way FFESection/ScheduleSpine/CareBand
+// above are, rather than threading every supabase hook their subtrees use.
+jest.mock('@/components/document/quiet-sections', () => ({ CareSection: () => null }));
+jest.mock('@/components/document/schedule/install-window-ceremony', () => ({
+  InstallWindowCeremony: () => null,
+}));
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
 jest.mock('@/components/document/commercial/money-region', () => ({ MoneyRegion: () => null }));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
+// A1-L2's contract: the page hands this component the exact `regions` subset
+// `paperRegionsForSection` returned for the spread. Render that list as
+// testable rows here — the component's OWN rendering of them (labels, scroll
+// targets, fold state) is `shelved-spine.test.tsx`'s job (A1-L2), not this
+// integration suite's; this mock exists only to prove the page wired the
+// right subset through.
 jest.mock('@/components/document/spine-shelved-blocks', () => ({
-  DocSpineShelvedBlocks: () => null,
+  DocSpineShelvedBlocks: (props: { regions: ReadonlyArray<{ key: string }> }) => (
+    <ul data-testid="shelved-spine-regions" aria-label="In this document">
+      {props.regions.map((region) => (
+        <li key={region.key}>{region.key}</li>
+      ))}
+    </ul>
+  ),
 }));
 jest.mock('@/components/document/shelves/document-shelves', () => ({
   DocumentShelves: () => null,
@@ -152,8 +171,19 @@ jest.mock('@/components/document/mobile/mobile-shell', () => ({
 }));
 
 jest.mock('@/components/document/doc-spine', () => ({
-  DocSpine: ({ onJump }: { onJump: (section: string) => void }) => (
-    <button type="button" onClick={() => onJump('brief')}>Jump to brief</button>
+  // F14/C11: the page passes its shelved-blocks element (or null) as `shelved`
+  // — render it, or `DocSpineShelvedBlocks`'s own mock above never mounts.
+  DocSpine: ({
+    onJump,
+    shelved,
+  }: {
+    onJump: (section: string) => void;
+    shelved?: ReactNode;
+  }) => (
+    <>
+      <button type="button" onClick={() => onJump('brief')}>Jump to brief</button>
+      {shelved}
+    </>
   ),
 }));
 jest.mock('@/components/document/doc-letterhead', () => ({
@@ -456,7 +486,7 @@ describe('DocumentPage guide activation', () => {
     expect(activeSection).not.toBeNull();
     activeSection!.scrollIntoView = jest.fn();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review the brief' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept and begin' }));
 
     expect(activeSection!.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
     expect(activeSection).toHaveFocus();
@@ -534,7 +564,7 @@ describe('DocumentPage guide activation', () => {
     expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: false });
     expect(mockSelectOperationalNeed).not.toHaveBeenCalled();
     expect(screen.queryByText('Reconnect with Avery')).not.toBeInTheDocument();
-    expect(screen.getByText('Complete Discovery')).toBeInTheDocument();
+    expect(screen.getByText('Finish what you need to know')).toBeInTheDocument();
   });
 
   it('skips the Desk read on a paused document', () => {
@@ -555,7 +585,7 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Guidance is unavailable' })).toBeInTheDocument();
     const activeSection = document.querySelector<HTMLElement>('[data-active-section]');
     activeSection!.scrollIntoView = jest.fn();
 
@@ -581,7 +611,7 @@ describe('DocumentPage guide activation', () => {
 
     expect(mockSelectOperationalNeed).toHaveReturnedWith(null);
     expect(screen.queryByText(/decision overdue/)).not.toBeInTheDocument();
-    expect(screen.getByText('Review the inquiry')).toBeInTheDocument();
+    expect(screen.getByText('Decide on this inquiry')).toBeInTheDocument();
   });
 
   it('derives locally when a hot Desk cache never composed this document', () => {
@@ -618,7 +648,7 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(screen.queryByText('Guidance is unavailable')).not.toBeInTheDocument();
-    expect(screen.getByText('Complete Discovery')).toBeInTheDocument();
+    expect(screen.getByText('Finish what you need to know')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 
@@ -728,7 +758,7 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByRole('link', { name: 'Open Drafting Room' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open the Drafting Room' })).toHaveAttribute(
       'href', '/drafting/proposal-1',
     );
     expect(screen.getByText(/Input needed · phases & fees/)).toBeInTheDocument();
@@ -866,7 +896,7 @@ describe('DocumentPage guide activation', () => {
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Guidance is unavailable' })).toBeInTheDocument();
     expect(screen.queryByText(/Input needed/)).not.toBeInTheDocument();
   });
 
@@ -1088,6 +1118,109 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('0');
   });
 
+  // ── A1-L2: F14/C11 — the shelved spine mounts on install/care, and its index
+  // derives from the spread's own regions (paperRegionsForSection). The
+  // per-row rendering (labels, scroll targets, fold state) is
+  // shelved-spine.test.tsx's job; this integration suite only proves the page
+  // wires the right region SET through for each spread. ──
+  describe('the shelved spine mount (F14/C11)', () => {
+    it('mounts on an install document with three regions and no money row', () => {
+      asProjectDocument();
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, active_section: 'install' } },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const index = screen.getByTestId('shelved-spine-regions');
+      expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+        'approvals', 'schedule', 'ffe',
+      ]);
+    });
+
+    it('mounts on a care document with the same three regions and no money row', () => {
+      asProjectDocument();
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, active_section: 'care' } },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const index = screen.getByTestId('shelved-spine-regions');
+      expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+        'approvals', 'schedule', 'ffe',
+      ]);
+    });
+
+    it('still mounts all four regions, money included, on the project section', () => {
+      asProjectDocument();
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const index = screen.getByTestId('shelved-spine-regions');
+      expect(within(index).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+        'approvals', 'schedule', 'ffe', 'money',
+      ]);
+    });
+  });
+
+  // ── A1-L1/L2 — the tie-break: the guide's headline and the red-letter
+  // zone's first row must name the same need. The two surfaces are mutually
+  // exclusive on a project engagement (the zone replaces the guide once it
+  // has rows), so this is asserted as two renders sharing one input pair and
+  // one ranking function, rather than one render showing both. ──
+  describe('the operational-need tie-break (rankOperationalNeeds)', () => {
+    const rankThreeThenOne = [
+      {
+        kind: 'task_due', text: 'Confirm the site measure',
+        actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+      },
+      {
+        kind: 'damage_claim', text: 'A delivered piece was damaged in transit',
+        actionLabel: null, urgent: true, stamp: { label: 'DAMAGE CLAIM' },
+      },
+    ];
+
+    it('leads the guide with the higher-ranked need even though it arrived second', () => {
+      // Default fixture: engagement_kind 'lead', active_section 'brief',
+      // engagement_id 'lead-1' — a non-project document, so the guide (not
+      // the zone) renders and speaks for whichever need ranks first.
+      mockDeskData = {
+        folders: [{ row: { engagement_id: 'lead-1' }, need: null, needs: rankThreeThenOne }],
+        chips: [],
+        composed: { 'lead-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(
+        screen.getByText('A delivered piece was damaged in transit'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Confirm the site measure')).not.toBeInTheDocument();
+    });
+
+    it('leads the red-letter zone with the same higher-ranked need, first row', () => {
+      asProjectDocument();
+      mockDeskData = {
+        folders: [{ row: { engagement_id: 'project-1' }, need: null, needs: rankThreeThenOne }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const region = screen.getByRole('region', { name: 'Needs attention' });
+      const rows = region.querySelectorAll('li');
+      expect(rows).toHaveLength(2);
+      expect(rows[0]!.textContent).toContain('A delivered piece was damaged in transit');
+      expect(rows[1]!.textContent).toContain('Confirm the site measure');
+    });
+  });
+
   // ── L1: the letterhead's red-letter zone (project documents only) ──
   describe('the red-letter zone', () => {
     it('renders the red-letter zone, not the guide strip, on a project document', () => {
@@ -1122,7 +1255,7 @@ describe('DocumentPage guide activation', () => {
       // (Brief) document — unaffected by the project-only swap.
       render(<DocumentPage params={fulfilledParams} />);
 
-      expect(screen.getByRole('button', { name: 'Review the brief' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Accept and begin' })).toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
     });
 
@@ -1186,11 +1319,11 @@ describe('DocumentPage guide activation', () => {
       render(<DocumentPage params={fulfilledParams} />);
 
       expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
-      expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Guidance is unavailable' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     });
 
-    it('prints neither zone when the composition covered the project and found nothing', () => {
+    it('F77 — prints the guide, not the red-letter zone, when the composition covered the project and found nothing', () => {
       asProjectDocument();
       mockDeskData = { folders: [], chips: [], composed: { 'project-1': true } };
 
@@ -1198,7 +1331,38 @@ describe('DocumentPage guide activation', () => {
 
       expect(mockSelectOperationalNeeds).toHaveReturnedWith([]);
       expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
-      expect(document.getElementById('document-next-up')).toBeNull();
+      expect(document.getElementById('document-next-up')).not.toBeNull();
+    });
+
+    it('F77 — a care document always shows a guide with no Desk composition', () => {
+      asProjectDocument();
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, active_section: 'care' } },
+      };
+      // Left at the outer beforeEach default: mockDeskData = { folders: [], chips: [], composed: {} }.
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+      expect(document.getElementById('document-next-up')).not.toBeNull();
+    });
+
+    it('F77 — a care document always shows a guide when the composition covered it and found nothing', () => {
+      asProjectDocument();
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: { ...current, active_section: 'care' } },
+      };
+      mockDeskData = { folders: [], chips: [], composed: { 'project-1': true } };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(mockSelectOperationalNeeds).toHaveReturnedWith([]);
+      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+      expect(document.getElementById('document-next-up')).not.toBeNull();
     });
   });
 
