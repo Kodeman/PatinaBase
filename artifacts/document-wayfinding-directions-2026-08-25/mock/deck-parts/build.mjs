@@ -26,6 +26,7 @@ const PARTS = [
   "09-compare.html",
   "10-recommendation.html",
   "11-questions.html",
+  "11b-answers.html",
   "12-colophon.html",
   "99-script.html",
 ];

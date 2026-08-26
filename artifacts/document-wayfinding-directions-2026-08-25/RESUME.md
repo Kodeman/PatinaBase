@@ -21,23 +21,33 @@ Nine-seat review (5 UX/UI lenses U1–U5 + 4 practitioner personas P1–P4) of `
 - **Two judge reports** — J1 practitioner-workflow, J2 product/engineering feasibility, scored separately (never averaged): `source/judge-practitioner-workflow.md`, `source/judge-feasibility.md`
 - **Mock kit + ten fragments** — `mock/kit.css`, `mock/KIT.md`, `mock/kit-demo.html` + 5 mockups per direction (`mock/a/M1–M5`, `mock/b/M1–M5`)
 - **presentation.html** — 2.6 MB, fact-checked and visual-QA'd (`research/60-deck-factcheck.md`, `research/61-deck-visualqa.md`, revision logs `research/62-deck-revision-log.md`, `research/63-deck-revision-2.md`), published at https://claude.ai/code/artifact/b8c4ac51-b7a8-473f-9b23-3a3a21a7a03d
+- **Kody's rulings on all ten deck questions, taken 2026-08-25** — recorded as **`docs/design/the-document/DECISIONS.md` R124** and in friendlier long form at `source/rulings-2026-08-25.md`. Headline shape: sequence is A-then-B, never concurrent, with B's own rulings (B1/B2 amendments to I136, both conditional on a sticky-seam ticket-gate redraw Kody reviews himself) taken now, ahead of B's build; C14/I138 reads NARROW (binds only the `worktable` guard); T4/T2 accepted as open-by-choice; F03 fixed with A's first slice as SP-01; the Thumb-Index removal is now on the ledger; I114's candidate mapping goes on Kody's agenda, not ruled; the Moved rung gets a vendor-payout read; four defects (`/room/<id>` PostgREST error, F56 contrast + F55 skip link, F58 Received/Delivered) are scheduled as independent tickets. The deck itself gains a "Ten questions, ten answers" section and republishes at the same URL (tracked separately).
 
 **Workflow run ids:** `wf_5fdcbeaf-22f` (grounding — code anatomy + canon digest), `wf_887b4bac-02c` (shots — 86 verified + probe), `wf_b4800970-c1b` (panel + verify — 9 seats, collation, three refuters), `wf_783f6f10-2ea` (directions — A/B v1, critiques, v2, judges), `wf_662a99a0-5f1` (mocks + deck — kit, fragments, presentation.html, fact-check, visual QA)
 
 ## NOT DONE / OWED
-- **Kody's read of the deck and rulings on its ten questions:**
-  1. **B1** — may the shelved spine's mount gate (I136, ≥1440px only) move so Direction B's map clips to the paper at every tier?
-  2. **B2** — may a held room survive below 1440px (unwinding the I136 auto-release clause)?
-  3. **C14 narrow reading** — does "flag off is main's composition exactly" (I138) bind only the worktable guard, or freeze all unflagged shipping?
-  4. **Thumb-Index DECISIONS entry** — Kody removed it verbally ("do not re-propose"); zero grep hits in the ledger. Needs one entry recording the removal + reason.
-  5. **I114 candidate** — Direction B's section↔stage mapping (brief→Consultation … care→Completion) offered as a candidate for the agenda, not a ruling now.
-  6. **T4/T2 stance** — "no fleet view" / "install is a label on project mode, not a mode," the two most severe findings ever recorded against this surface, still never ruled. Is a quarter of eleven-open-documents acceptable, and should T4/T2 finally get a ledger entry?
-  7. **F03 hotfix** — the care spread's FF&E section mounts with `mode="install"` (heading literally reads "Install" in production). Shared plank SP-01 fixes it in two strings + one condition; ask is whether to hotfix now, independent of either direction.
-  8. **/room/<id> PostgREST defect** — verified screenshot shows a live app error ("Cannot coerce the result to a single JSON object") on screen; outside this review's scope (Room View internals excluded) but needs an owner and a bug.
-  9. **F56 contrast pass** — clay/terracotta text (~374 sites) at ~2.2:1, under WCAG 2.2 AA's 4.5:1; sibling F55 is a missing skip link. Neither direction touches it. Schedule, defer, or accept as known exception?
-  10. **The Moved rung** — on this specimen, Moved = Authorized ($141,600) because no vendor-payout figure exists on the document; both directions print the ambiguity rather than inventing arithmetic. Needs a data-model answer, not a design one.
-- **Nothing built.** Both directions are proposals only — no code changes landed against either lane.
-- **DECISIONS.md untouched** — do not append until Kody rules on the above.
+Rulings are DONE (R124, 2026-08-25 — see above). What's still owed:
+
+- **Kody's sticky-seam review.** The ticket gate must be redrawn as a sticky seam (collapsing to
+  B's two-line 390 form once the letterhead scrolls past, at every width) and Kody reviews the
+  redraw himself before B1/B2 take effect — no P1/P3 stand-in walk.
+- **Kody's flag-on Worktable walk.** Still owed since I143; the narrow C14 reading (R124) means it
+  no longer blocks A's unflagged slice or B's `job-ticket` flag from shipping, but it is still owed.
+- **The I114 session.** Direction B's candidate section↔stage mapping (brief→Consultation …
+  care→Completion) is on its agenda as the opening proposal; the session itself hasn't happened.
+- **The build program itself — not started.** Direction A's shared planks + first slice
+  ("the sentence and the spine," 5–7 days, unflagged) haven't begun; A's remaining waves and then
+  B's waves (behind `job-ticket`, gated on the sticky-seam review) follow. No code changes have
+  landed against either lane.
+- **The four scheduled defect tickets** (R124 item 10), each independent of both directions:
+  (a) `/room/<id>` PostgREST error ("Cannot coerce the result to a single JSON object") — owner:
+  Room View; (b) F56 contrast pass — clay/terracotta text at ~2.2:1, red-letter eyebrow ~2.95:1,
+  vs. WCAG 2.2 AA's 4.5:1; (c) F55 — no skip link / bypass-blocks control in the `(document)`
+  layout; (d) F58 — the same FF&E line reads "Received" on the paper and "Delivered" in the spec
+  book, a data-model ruling not a rename.
+- **The Moved-rung vendor-payout read.** Money region needs a read on the accounts data the band
+  already holds so `Moved` = ordered − paid out to makers, differing from `Authorized`. Until it
+  lands, both lanes keep SP-03 and SP-04's existing gloss.
 
 ## Environment notes
 - **Sandbox denies `.env` reads and caps file descriptors**, which breaks turbo's git-status scan and floods `next dev`'s watcher with `EMFILE`. Boot the portal via an unsandboxed steward — recipe in `research/02-steward-boot-off.md` (`dangerouslyDisableSandbox: true` on boot/kill only; zero `EMFILE` occurrences unsandboxed vs. 17 sandboxed).
@@ -46,4 +56,4 @@ Nine-seat review (5 UX/UI lenses U1–U5 + 4 practitioner personas P1–P4) of `
 - **The shots carry the Next.js devtools badge** (dev-mode indicator) — expected artifact of a local-dev capture, not a product defect.
 
 ## Resume prompt (paste into a new session)
-"Read `artifacts/document-wayfinding-directions-2026-08-25/RESUME.md`. The wayfinding review is complete and the deck is published; nothing is built. Get Kody's read of the deck (URL in RESUME.md) and his rulings on the ten questions listed under NOT DONE/OWED, then: log the Thumb-Index removal and any other resolved questions to `docs/design/the-document/DECISIONS.md`, and only then scope implementation of whichever direction (or hybrid) Kody picks."
+"Read `artifacts/document-wayfinding-directions-2026-08-25/RESUME.md`. The wayfinding review is complete, the deck is published, and Kody has ruled on all ten questions (`docs/design/the-document/DECISIONS.md` R124, friendlier form at `source/rulings-2026-08-25.md`). Nothing is built yet. Start Direction A's shared planks + first slice ('the sentence and the spine,' unflagged), per the NOT DONE/OWED list — the build program, the sticky-seam ticket-gate redraw, the four scheduled defect tickets, the I114 session, and the Moved-rung payout read are all still open."

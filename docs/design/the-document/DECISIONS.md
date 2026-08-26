@@ -9622,3 +9622,82 @@ unaffected by the surface-count correction (it was prose, not an assertion).
 (D4); no fixture regeneration; no merge, no deploy.
 
 *Entries add: I145 · last id = I145*
+
+### R124 · The Wayfinding Review — rulings on the ten questions — 2026-08-25
+
+**Ruled by Kody (interviewed).** Deck: `artifacts/document-wayfinding-directions-2026-08-25/presentation.html`,
+published at https://claude.ai/code/artifact/b8c4ac51-b7a8-473f-9b23-3a3a21a7a03d. Program folder:
+`artifacts/document-wayfinding-directions-2026-08-25/` (source docs in `source/`). Ruled against
+`main@695addb5f`. Method: nine seats (five UX/UI lenses, four Interior Design practitioner personas)
+reviewed `/desk` and `/doc/[id]` against both baselines (flag off, and flag `worktable` on — the
+Worktable's first-ever render); 86 verified shots, 203 raw findings collated to 101, 92 surviving
+three refuters. Two directions were judged: A "Everything Prints" (`source/direction-a.md` v2, zero
+canon amendments) and B "The Shop Ticket" (`source/direction-b.md` v2, two amendments to I136).
+
+1. **Sequence.** One program, not two concurrent lanes — A and B edit the same five files
+   (`ffe-section.tsx`, `doc/[id]/page.tsx`, `command-bar.tsx`, `document-index.ts`, the shelves), so
+   they never build concurrently. A ships first: the 20 shared planks (`source/shared-planks.md`) +
+   A's first slice ("the sentence and the spine," 5–7 days, unflagged), then A's remaining waves. B
+   follows, built on top of A's mount fix, behind the fail-closed flag `job-ticket`. B's own rulings
+   (items 4–6 below) are taken now, ahead of its build.
+2. **C14 / I138 reading — NARROW.** *"the flag off is main's composition exactly"* (I138, :8740–8742)
+   binds the `worktable` guard only. It does not freeze other shipping: A's unflagged first slice and
+   B's `job-ticket` flag may both land ahead of Kody's still-owed flag-on Worktable walk.
+3. **T4 / T2 — accepted, logged as open-by-choice.** No fleet view; "install" stays a label on
+   project mode, not a mode. A's ⌘K "Where the work stands" group answers the phase-wide question one
+   stage at a time; B's stage-grouped Desk roster answers it at zero acts, but not until B's wave two.
+   Neither first slice prints a studio-wide receivable. The three-person-studio principal (P2) is told
+   this rather than worked around.
+4. **Ticket gate — redrawn as a sticky seam.** Ahead of B1/B2 taking effect, the ticket is redrawn:
+   it collapses to B's own two-line 390 form once the letterhead scrolls past, at every width. Kody
+   reviews the redraw himself; no P1/P3 stand-in walk.
+5. **B1 — RATIFIED, conditional on the sticky-seam redraw (item 4) passing Kody's review.** Amendment;
+   see ledger below.
+6. **B2 — stands with B1.** Amendment; see ledger below.
+7. **I114 candidate — no ruling now.** B's section↔stage mapping (brief→Consultation ·
+   discovery→Schematic Design · direction→Design Development · proposal→no phase · project→
+   Procurement & Orders · install→Installation & Styling · care→Completion) is placed on the agenda
+   of Kody's still-owed I114 session as its opening proposal. Nothing built depends on it.
+8. **The Moved rung — vendor payouts exposed.** The Money region gains a read on the accounts data
+   the band already holds; `Moved` becomes ordered − paid out to makers, so the rung differs from
+   `Authorized`. Until that read lands, both lanes keep SP-03 (`Committed` → `Authorized`) and
+   SP-04's gloss, *"ordered through installed (committed, not yet paid out)."*
+9. **F03 — fixed with A's first slice, as shared plank SP-01.** The care spread's FF&E section stops
+   mounting with `mode="install"` (its heading currently reads "Install"); no standalone hotfix ahead
+   of the slice.
+10. **Four unowned defects — scheduled, each its own ticket outside both directions.**
+    a. `/room/<id>` prints a raw PostgREST error — *"Cannot coerce the result to a single JSON
+       object"* — on screen for a valid room id. Bug; owner is Room View.
+    b. F56 — contrast: clay `#C4A57B` and terracotta `#D4A090` as text ≈2.2:1 across ~374 sites; the
+       red-letter eyebrow `#C4836F` ≈2.95:1 — both under WCAG 2.2 AA's 4.5:1.
+    c. F55 — no skip link / bypass-blocks control in the `(document)` layout.
+    d. F58 — the same FF&E line reads "Received" on the paper and "Delivered" in the spec book — a
+       data-model ruling, not a rename.
+11. **Ledger hygiene — the Thumb Index.** Kody removed it verbally in July 2026 ("do not
+    re-propose"); a grep of this ledger for it returns zero hits before this entry. This item is that
+    record. Item 3 above is T4/T2's own open-by-choice record.
+12. **The deck.** Gains a "Ten questions, ten answers" section and republishes at the same URL —
+    tracked as production, not itself a design ruling.
+
+**Amendment ledger — B1 and B2, both clauses of one entry (I136). Counted as two, per the I138-A5
+form.**
+
+**B1 — the mount gate.** Amends I136. Quoted (`:8435`): *"The spine grows three blocks — ≥1440px
+only."* **Gains:** rooms, drawings, spec book, boards and roster become one act at every tier on all
+seven sections — closes F01, F14, F48, F72, half of F82. **Gives up:** the shelved spine as an
+organ — both blocks deleted, ~180px of every document's measure returned to the ticket. **Rollback:**
+`job-ticket` off restores both blocks byte-identically — the deletion must be built as a flag branch,
+not an unconditional delete, so the flag genuinely restores them (feasibility judge's condition,
+`source/judge-feasibility.md:63`). **Condition:** ratified only if the sticky-seam redraw (item 4)
+passes Kody's review.
+
+**B2 — the lens's width release.** Amends I136. Quoted (`:8462`): *"The hold releases if the window
+drops below 1440px, where nothing on screen could put it down."* **Gains:** a held room lifts at 1280
+and 390 — the clause's own stated reason stops being true once the ticket's room chip exists as the
+put-down affordance at every width. **Gives up:** the guarantee that a lift is only ever seen beside a
+full spine. **Rollback:** `job-ticket` off restores the auto-release. **Condition:** stands or falls
+with B1; I136's never-filters clause is untouched.
+
+Nothing built; build order = program (A waves, then B behind `job-ticket`).
+
+*Entries add: R124 · last id = R124*
