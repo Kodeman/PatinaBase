@@ -140,3 +140,59 @@ extension FieldVisitRoomMerge {
             && FieldVisitRoomOption.wholeHouse.isWholeHouse
     }
 }
+
+extension VisitRoomMergeTests {
+
+    private var identity: CaptureSessionIdentity {
+        CaptureSessionIdentity(userID: "u1", workspaceID: "w1")
+    }
+
+    private func siteVisit(projectID: String, project: String,
+                           room: String?) -> CaptureVisitState {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        return .active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            routing: CaptureRoutingMemory(destination: .inbox, projectID: projectID,
+                                          projectName: project, room: room),
+            kind: .site, label: project))
+    }
+
+    @Test func f1CollapsesWhenTheVisitAnsweredItAndTheGuardAgrees() {
+        let state = FieldScanSetupPolicy.state(
+            visitState: siteVisit(projectID: "p1", project: "Maple St", room: "Living"),
+            ownableProjectIDs: ["p1"], scanRoomIsAvailable: true)
+        #expect(state == .collapsed(summary: "Maple St · Living"))
+    }
+
+    @Test func f1ExpandsAndSaysSoWhenTheProjectFailsTheUploadGuard() {
+        let state = FieldScanSetupPolicy.state(
+            visitState: siteVisit(projectID: "p1", project: "Maple St", room: "Living"),
+            ownableProjectIDs: ["p9"], scanRoomIsAvailable: true)
+        #expect(state == .expanded(
+            reason: "Maple St isn't a project you can attach a scan to — choose another."))
+    }
+
+    @Test func f1ExpandsWhenTheProjectHasNoClientRoomsYet() {
+        let state = FieldScanSetupPolicy.state(
+            visitState: siteVisit(projectID: "p1", project: "Maple St", room: "Living"),
+            ownableProjectIDs: ["p1"], scanRoomIsAvailable: false)
+        #expect(state == .expanded(
+            reason: "No client rooms on this project yet — a scan has nothing to attach to."))
+    }
+
+    @Test func withNoVisitF1StaysTheFullForm() {
+        let state = FieldScanSetupPolicy.state(
+            visitState: .none, ownableProjectIDs: ["p1"], scanRoomIsAvailable: true)
+        #expect(state == .expanded(reason: "Choose a project for this scan."))
+    }
+
+    @Test func aSourcingVisitNeverCollapsesF1() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let sourcing = CaptureVisitState.active(CaptureSessionContext(
+            identity: identity, startedAt: now, lastActivityAt: now,
+            kind: .sourcing, label: "High Point 214"))
+        let state = FieldScanSetupPolicy.state(
+            visitState: sourcing, ownableProjectIDs: ["p1"], scanRoomIsAvailable: true)
+        #expect(state == .expanded(reason: "Choose a project for this scan."))
+    }
+}

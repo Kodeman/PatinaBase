@@ -30,6 +30,8 @@ import PatinaDesignKit
 final class SiteScanSetupModel {
     private let projects: any ProjectsService
     private let siteScan: any SiteScanService
+    private let session: any SessionProviding
+    private let sessionContext = CaptureSessionContextStore.shared
 
     var allProjects: [FieldProject] = []
     var selectedProjectID: String?
@@ -37,10 +39,16 @@ final class SiteScanSetupModel {
     var selectedRoomID: String?
     var name: String
     var loadError: String?
+    /// The open visit, refreshed on every `load()`. F1's Flow-4 collapse reads
+    /// this, not a fresh lookup, so `setupState` stays a pure read of stored state.
+    private(set) var visitState: CaptureVisitState = .none
+    /// Task 28: the `room_scans_guard_routing` (00258) tiebreak — see `load()`.
+    private(set) var ownableProjectIDs: [String] = []
 
-    init(projects: any ProjectsService, siteScan: any SiteScanService) {
+    init(projects: any ProjectsService, siteScan: any SiteScanService, session: any SessionProviding) {
         self.projects = projects
         self.siteScan = siteScan
+        self.session = session
         self.name = Self.defaultName()
     }
 
@@ -48,21 +56,53 @@ final class SiteScanSetupModel {
         allProjects.first { $0.id == selectedProjectID }?.name
     }
 
+    /// Spec §7.10 / Flow 4. Pure over its stored inputs — `loadError` (a failed
+    /// load, not a guard failure) is handled at the call site, in
+    /// `SiteScanSetupScreen.body`, so it never gets reported as "isn't a project
+    /// you can attach a scan to".
+    var setupState: FieldScanSetupState {
+        FieldScanSetupPolicy.state(visitState: visitState,
+                                   ownableProjectIDs: ownableProjectIDs,
+                                   scanRoomIsAvailable: !rooms.isEmpty)
+    }
+
     func load() async {
         loadError = nil
+        visitState = sessionContext.visitState(identity: CaptureSessionIdentity(
+            userID: session.userID, workspaceID: session.workspaceID))
         do {
-            // Real mode: scope the picker to what 00258's guard will actually
-            // accept (see this file's header + `ownableProjects()`'s doc).
-            // Mock mode (MockSiteScanService, no guard to mirror): fall back to
-            // the frozen mock ProjectsService list exactly as before, so the
-            // harness screenshot doesn't regress.
+            // Real mode: `allProjects` here IS `ownableProjects()`'s own result —
+            // it already mirrors 00258's guard (see this file's header +
+            // `ownableProjects()`'s doc) — so it doubles as the tiebreak's list
+            // with no second network round trip.
+            //
+            // Mock mode (MockSiteScanService): there is no `room_scans` guard to
+            // mirror, so there is nothing narrower to scope the tiebreak to.
+            // Deliberately treat every mock project as ownable — never widen the
+            // REAL guard (real mode never reaches this branch) — so the harness's
+            // populated setup-form screenshot doesn't regress.
             if let supabaseSiteScan = siteScan as? SupabaseSiteScanService {
                 allProjects = try await supabaseSiteScan.ownableProjects()
             } else {
                 allProjects = try await projects.listProjects()
             }
+            ownableProjectIDs = allProjects.map(\.id)
         } catch {
             loadError = "Couldn't load your projects. Pull to retry."
+            return
+        }
+        // Only a `.site` visit whose project already clears the ownable-projects
+        // guard is worth a rooms fetch: it pre-answers F1's scan lane, and
+        // `setupState` needs `rooms` to tell "collapsed" from "no client rooms
+        // yet" apart. A visit whose project fails the guard skips this — the
+        // reason is already decided without knowing about rooms at all.
+        if let context = visitState.context, context.kind == .site,
+           let projectID = context.routing.projectID,
+           ownableProjectIDs.contains(projectID) {
+            await selectProject(projectID)
+            if case .collapsed = setupState {
+                selectedRoomID = context.scanRoomID
+            }
         }
     }
 
@@ -99,7 +139,8 @@ struct SiteScanSetupScreen: View {
         self.coordinator = coordinator
         self.handoff = handoff
         _model = State(wrappedValue: SiteScanSetupModel(projects: container.projects,
-                                                        siteScan: container.siteScan))
+                                                        siteScan: container.siteScan,
+                                                        session: container.session))
     }
 
     var body: some View {
@@ -107,9 +148,25 @@ struct SiteScanSetupScreen: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
                 if !container.siteScan.isSupported { lidarCallout }
-                if let loadError = model.loadError { inlineError(loadError) }
-                projectSection
-                if model.selectedProjectID != nil { roomSection }
+                if let loadError = model.loadError {
+                    // A failed load is "we couldn't check", never the guard's
+                    // "isn't a project you can attach a scan to" — so it takes
+                    // the full form, not `setupState`'s reason copy.
+                    inlineError(loadError)
+                    projectSection
+                    if model.selectedProjectID != nil { roomSection }
+                } else {
+                    switch model.setupState {
+                    case .collapsed(let summary):
+                        collapsedScanLane(summary: summary)
+                    case .expanded(let reason):
+                        Text(reason)
+                            .font(CaptureType.footnote)
+                            .foregroundStyle(CaptureColor.warning)
+                        projectSection
+                        if model.selectedProjectID != nil { roomSection }
+                    }
+                }
                 nameSection
             }
             .padding(20)
@@ -163,6 +220,23 @@ struct SiteScanSetupScreen: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12).fill(CaptureColor.terracotta.opacity(0.10)))
         .accessibilityElement(children: .combine)
+    }
+
+    /// Spec §7.10 / Flow 4: inside a `.site` visit whose project already cleared
+    /// the upload guard, F1 collapses to one line instead of asking her to pick
+    /// a project and room she already answered at the door.
+    private func collapsedScanLane(summary: String) -> some View {
+        HStack(spacing: 8) {
+            Text(summary)
+                .font(CaptureType.bodyEmph)
+                .foregroundStyle(CaptureColor.ink)
+            Spacer()
+            Button("Change") { coordinator.present(.visit) }
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.verdigrisInk)
+                .frame(minHeight: 44)
+        }
+        .accessibilityIdentifier("scan.setup.collapsed")
     }
 
     private var projectSection: some View {

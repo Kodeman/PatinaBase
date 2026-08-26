@@ -82,3 +82,35 @@ public enum FieldVisitRoomMerge {
         return "No client rooms on this project yet — a scan has nothing to attach to."
     }
 }
+
+/// Spec §7.10 / Flow 4. F1 opens pre-answered from the visit — and the GUARD is
+/// the tiebreak: if the visit's project is not in `ownableProjects()` (which
+/// deliberately mirrors room_scans' BEFORE-INSERT guard), F1 must EXPAND AND SAY
+/// SO, never silently start a scan that will 4xx at upload.
+public enum FieldScanSetupState: Equatable, Sendable {
+    case collapsed(summary: String)
+    case expanded(reason: String)
+}
+
+public enum FieldScanSetupPolicy {
+    public static func state(visitState: CaptureVisitState,
+                             ownableProjectIDs: [String],
+                             scanRoomIsAvailable: Bool) -> FieldScanSetupState {
+        guard let context = visitState.context,
+              context.kind == .site,
+              let projectID = context.routing.projectID,
+              !projectID.isEmpty else {
+            return .expanded(reason: "Choose a project for this scan.")
+        }
+        let name = context.routing.projectName ?? context.label ?? "This project"
+        guard ownableProjectIDs.contains(projectID) else {
+            return .expanded(reason: "\(name) isn't a project you can attach a scan to — choose another.")
+        }
+        guard scanRoomIsAvailable else {
+            return .expanded(reason: "No client rooms on this project yet — a scan has nothing to attach to.")
+        }
+        let room = context.routing.room?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tail = (room?.isEmpty == false) ? room! : "Whole house"
+        return .collapsed(summary: "\(name) · \(tail)")
+    }
+}
