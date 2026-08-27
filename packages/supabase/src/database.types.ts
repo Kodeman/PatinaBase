@@ -1529,6 +1529,33 @@ export type Database = {
           },
         ]
       }
+      client_account_purges: {
+        Row: {
+          auth_deleted_at: string | null
+          detached: Json
+          email: string | null
+          id: string
+          purged_at: string
+          user_id: string
+        }
+        Insert: {
+          auth_deleted_at?: string | null
+          detached?: Json
+          email?: string | null
+          id?: string
+          purged_at?: string
+          user_id: string
+        }
+        Update: {
+          auth_deleted_at?: string | null
+          detached?: Json
+          email?: string | null
+          id?: string
+          purged_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       client_activity_log: {
         Row: {
           activity_type: string
@@ -25849,6 +25876,56 @@ export type Database = {
       }
     }
     Views: {
+      client_designer_roster: {
+        Row: {
+          client_id: string | null
+          created_at: string | null
+          designer_id: string | null
+          status: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string | null
+          designer_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string | null
+          designer_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "designer_clients_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_clients_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_clients_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_clients_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_order_status_v: {
         Row: {
           client_status: string | null
@@ -31522,6 +31599,10 @@ export type Database = {
         Args: { p_capture_id: string }
         Returns: undefined
       }
+      mark_client_account_purge_complete: {
+        Args: { p_purge_id: string }
+        Returns: undefined
+      }
       mark_client_decision_viewed: {
         Args: { p_decision_id: string }
         Returns: {
@@ -31914,7 +31995,7 @@ export type Database = {
         }
       }
       publish_project_review: { Args: { p_request: Json }; Returns: Json }
-      purge_client_account: { Args: { p_user_id: string }; Returns: undefined }
+      purge_client_account: { Args: { p_user_id: string }; Returns: string }
       react_to_feedback: {
         Args: { p_emoji: string; p_id: string }
         Returns: {

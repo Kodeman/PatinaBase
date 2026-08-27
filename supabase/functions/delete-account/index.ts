@@ -6,6 +6,10 @@
 // roster row. The designer's proposals, projects, invoices and decisions
 // survive with the person detached (purge_client_account, migration 00536).
 //
+// A DESIGNER calling this is refused before anything is written (review B-D3):
+// verify_jwt admits any Strata token, a designer-portal session included, and
+// designer-owned rows cascade from profiles(id) rather than detaching.
+//
 // verify_jwt stays at the platform default TRUE, and is stated explicitly in
 // config.toml: the gateway must never be relaxed here. The function then
 // re-reads the caller through a client carrying their own Authorization header
@@ -44,18 +48,49 @@ const gateway: DeleteAccountGateway = {
     return { userId: data.user.id };
   },
 
+  // Three independent reads, any one of which makes this a designer account.
+  // profiles.is_designer is the flag; the two counts catch a studio member
+  // whose flag was never set. A read error THROWS, so the handler fails closed.
+  async isDesigner(userId) {
+    const db = admin();
+    const profile = await db
+      .from("profiles")
+      .select("is_designer")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profile.error) throw new Error(profile.error.message);
+    if (profile.data?.is_designer) return true;
+
+    for (const table of ["projects", "designer_clients"] as const) {
+      const owned = await db
+        .from(table)
+        .select("id", { count: "exact", head: true })
+        .eq("designer_id", userId);
+      if (owned.error) throw new Error(owned.error.message);
+      if ((owned.count ?? 0) > 0) return true;
+    }
+    return false;
+  },
+
   async purge(userId) {
-    const { error } = await admin().rpc("purge_client_account", {
+    const { data, error } = await admin().rpc("purge_client_account", {
       p_user_id: userId,
     });
     if (error) return { ok: false, error: error.message };
-    return { ok: true };
+    return { ok: true, purgeId: typeof data === "string" ? data : undefined };
   },
 
   async deleteAuthUser(userId) {
     const { error } = await admin().auth.admin.deleteUser(userId);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
+  },
+
+  async markPurgeComplete(purgeId) {
+    const { error } = await admin().rpc("mark_client_account_purge_complete", {
+      p_purge_id: purgeId,
+    });
+    if (error) throw new Error(error.message);
   },
 };
 

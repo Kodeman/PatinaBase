@@ -11758,7 +11758,25 @@ END $g$;
 
 -- 00536_client_side_server_gaps.sql
 DO $g$ BEGIN
+  REVOKE ALL ON public.client_designer_roster FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00536_client_side_server_gaps.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.client_designer_roster TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00536_client_side_server_gaps.sql
+DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.rpc_start_direct_thread(UUID) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00536_client_side_server_gaps.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.client_account_purges FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -11771,5 +11789,17 @@ END $g$;
 -- 00536_client_side_server_gaps.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.purge_client_account(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00536_client_side_server_gaps.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_client_account_purge_complete(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00536_client_side_server_gaps.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_client_account_purge_complete(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

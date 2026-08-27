@@ -9,7 +9,15 @@
 --       co-member leg). RosterAPIClient.listRoster() selects
 --       designer_id,created_at,status filtered client_id=eq.<uid>, so it comes
 --       back EMPTY rather than forbidden and DesignerRelationship.roster is
---       unreachable in production. 00536 adds the client's own SELECT leg.
+--       unreachable in production. 00536 adds the client's own leg — as a
+--       SECURITY DEFINER VIEW, `client_designer_roster`, NOT a base-table
+--       policy (review B-D2): RLS is row-level, and that row carries the
+--       designer's notes, nickname, satisfaction_score, total_revenue,
+--       total_projects, referral_source, tags, style_preferences,
+--       inspiration_quote and last_contacted_at. A SELECT policy keyed on
+--       client_id would have let any homeowner GET the designer's private CRM
+--       row about them; column GRANTs cannot help, since designer and client
+--       are both `authenticated`.
 --
 --   m8. rpc_start_direct_thread(counterpart) (00103:51) checks only that the
 --       caller is authenticated and is not the counterpart — any signed-in user
@@ -17,13 +25,16 @@
 --       server-side counterpart predicate: roster, live lead, or project.
 --
 -- Covers:
---   1. the client reads exactly their own ACTIVE roster rows;
+--   1. the client reads exactly their own ACTIVE roster rows THROUGH THE VIEW;
+--  1b. the base table stays shut to them — the CRM columns never leave the
+--      database, which is the whole point of the view;
+--  1c. the view is four columns wide and carries no CRM column at all;
 --   2. a non-active row (status vocabulary is lead|proposal|active|completed|
---      nurture) stays invisible to the client — the policy scopes to 'active',
+--      nurture) stays invisible to the client — the view scopes to 'active',
 --      which is also the filter RosterAPIClient itself sends;
---   3. a stranger reads zero;
+--   3. a stranger reads zero, and anon cannot reach the view at all;
 --   4. the new leg is SELECT only — the client cannot update, delete or insert;
---   5. the designer still sees both of their rows (00014:110 intact);
+--   5. the designer still sees all of their rows (00014:110 intact);
 --   6. rpc_start_direct_thread refuses a counterpart with no relationship;
 --   7. it succeeds over a roster row, over a live lead, and over a project;
 --   8. it is symmetric — the designer→client direction still works;
@@ -117,52 +128,82 @@ DECLARE
   u_c4 uuid := 'd7000000-0000-4000-8000-000000000004';
   u_s  uuid := 'd7000000-0000-4000-8000-0000000000f5';
   v_count  int;
+  v_cols   text[];
   v_designer uuid;
   v_thread uuid;
   v_thread2 uuid;
 BEGIN
-  -- ── 1 + 2. the client reads their own ACTIVE row, and only that ──
+  -- ── 1. the client reads their own ACTIVE row, through the view ──
   PERFORM pg_temp.assume_user(u_c1);
-  SELECT count(*) INTO v_count
-    FROM public.designer_clients dc WHERE dc.client_id = u_c1;
-  SELECT dc.designer_id INTO v_designer
-    FROM public.designer_clients dc WHERE dc.client_id = u_c1;
+  SELECT count(*) INTO v_count FROM public.client_designer_roster;
   ASSERT v_count = 1,
     'the client must read exactly their own active roster row, got ' || v_count;
+  SELECT r.designer_id INTO v_designer FROM public.client_designer_roster r;
   ASSERT v_designer = u_d, 'and it must name their designer';
 
+  -- the shape RosterAPIClient sends, verbatim
+  SELECT count(*) INTO v_count FROM public.client_designer_roster r
+   WHERE r.client_id = u_c1 AND r.status = 'active';
+  ASSERT v_count = 1,
+    'select=designer_id,created_at,status&client_id=eq.<self>&status=eq.active must resolve, got ' || v_count;
+
+  -- ── 1b. the BASE TABLE stays shut (B-D2) ──
+  -- The designer's CRM row — notes, satisfaction_score, total_revenue — must
+  -- not be reachable by the person it is about.
   SELECT count(*) INTO v_count FROM public.designer_clients;
-  ASSERT v_count = 1, 'an unfiltered select must still return only their own row';
+  ASSERT v_count = 0,
+    'the client must NOT be able to read designer_clients directly, got ' || v_count || ' rows';
 
   -- ── 4. SELECT only ──
-  UPDATE public.designer_clients SET nickname = 'nope' WHERE client_id = u_c1;
-  GET DIAGNOSTICS v_count = ROW_COUNT;
-  ASSERT v_count = 0, 'the client leg must not grant UPDATE';
-  DELETE FROM public.designer_clients WHERE client_id = u_c1;
-  GET DIAGNOSTICS v_count = ROW_COUNT;
-  ASSERT v_count = 0, 'the client leg must not grant DELETE';
+  BEGIN
+    UPDATE public.client_designer_roster SET status = 'nope' WHERE client_id = u_c1;
+    ASSERT false, 'the client leg must not grant UPDATE';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;  -- expected: no UPDATE grant on the view
+  END;
+  BEGIN
+    DELETE FROM public.client_designer_roster WHERE client_id = u_c1;
+    ASSERT false, 'the client leg must not grant DELETE';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;  -- expected
+  END;
   BEGIN
     INSERT INTO public.designer_clients (designer_id, client_id, client_name, status)
     VALUES (u_d, u_c1, 'forged', 'active');
-    ASSERT false, 'the client leg must not grant INSERT';
+    ASSERT false, 'the client must not be able to write the base table either';
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;  -- expected: RLS refuses the insert
   END;
   PERFORM pg_temp.reset_role();
 
+  -- ── 1c. the view is a COLUMN contract ──
+  SELECT array_agg(a.attname::text ORDER BY a.attnum) INTO v_cols
+    FROM pg_attribute a
+   WHERE a.attrelid = 'public.client_designer_roster'::regclass
+     AND a.attnum > 0 AND NOT a.attisdropped;
+  ASSERT v_cols = ARRAY['designer_id','client_id','status','created_at'],
+    'client_designer_roster must expose exactly the four columns the roster needs, got '
+      || array_to_string(v_cols, ',');
+
   -- ── 2. a completed row stays invisible ──
   PERFORM pg_temp.assume_user(u_c2);
-  SELECT count(*) INTO v_count FROM public.designer_clients WHERE client_id = u_c2;
+  SELECT count(*) INTO v_count FROM public.client_designer_roster;
   ASSERT v_count = 0, 'a non-active roster row must stay invisible to the client';
   PERFORM pg_temp.reset_role();
 
-  -- ── 3. a stranger reads zero ──
+  -- ── 3. a stranger reads zero; anon reads nothing at all ──
   PERFORM pg_temp.assume_user(u_s);
-  SELECT count(*) INTO v_count FROM public.designer_clients;
+  SELECT count(*) INTO v_count FROM public.client_designer_roster;
   ASSERT v_count = 0, 'a stranger must read zero roster rows';
   PERFORM pg_temp.reset_role();
+  ASSERT has_table_privilege('authenticated', 'public.client_designer_roster', 'SELECT'),
+    'authenticated must be able to SELECT the view';
+  ASSERT NOT has_table_privilege('anon', 'public.client_designer_roster', 'SELECT'),
+    'anon must not reach the roster view';
+  ASSERT NOT has_table_privilege('authenticated', 'public.client_designer_roster', 'UPDATE'),
+    'the view must carry no UPDATE grant';
 
-  -- ── 5. the designer still sees both of their rows ──
+  -- ── 5. the designer still sees all of their rows ──
   PERFORM pg_temp.assume_user(u_d);
   SELECT count(*) INTO v_count FROM public.designer_clients WHERE designer_id = u_d;
   ASSERT v_count = 3, 'the designer must still see every one of their rows (00014:110)';
