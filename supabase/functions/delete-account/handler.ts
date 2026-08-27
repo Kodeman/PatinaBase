@@ -47,7 +47,9 @@ export interface DeleteAccountGateway {
   /** True when the caller owns designer-side rows that would cascade. */
   isDesigner(userId: string): Promise<boolean>;
   /** rpc purge_client_account (00536), service-role. Returns the journal id. */
-  purge(userId: string): Promise<{ ok: boolean; purgeId?: string; error?: string }>;
+  purge(
+    userId: string,
+  ): Promise<{ ok: boolean; purgeId?: string; error?: string }>;
   /** auth.admin.deleteUser, service-role. */
   deleteAuthUser(userId: string): Promise<{ ok: boolean; error?: string }>;
   /** rpc mark_client_account_purge_complete (00536), service-role. */
