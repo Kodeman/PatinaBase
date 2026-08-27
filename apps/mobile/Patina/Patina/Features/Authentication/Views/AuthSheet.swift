@@ -15,10 +15,30 @@ import SwiftUI
 struct AuthSheet: View {
     @Environment(\.dismiss) private var dismiss
 
+    /// SP-09: when the sheet is a SOFT wall over a flow the person is already
+    /// in, it says what it is gating and offers a Cancel. `nil` keeps the
+    /// bare presentation the app-level `.auth` sheet uses.
+    var title: String? = nil
+
     @State private var showingEmailCode = false
     @State private var showingPasswordSignIn = false
 
     var body: some View {
+        NavigationStack {
+            gate
+                .navigationTitle(title ?? "")
+                .toolbarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                            .foregroundStyle(PatinaColors.Text.muted)
+                            .accessibilityIdentifier("auth.sheet.cancel")
+                    }
+                }
+        }
+    }
+
+    private var gate: some View {
         AuthScreenView(
             onSignInWithApple: { result, rawNonce in
                 Task {

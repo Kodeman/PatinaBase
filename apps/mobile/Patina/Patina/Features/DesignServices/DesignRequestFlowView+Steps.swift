@@ -112,6 +112,15 @@ extension DesignRequestFlowView {
                 if !syncService.isNetworkAvailable {
                     offlineCard
                 }
+                if !authService.isAuthenticated {
+                    // SP-09: said on the way IN, so the sign-in sheet after
+                    // "Send request" is an expected step, not an ejection.
+                    Text(DesignRequestAuthCopy.reviewHint)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("designRequest.review.signInHint")
+                }
             }
             .padding(20)
         }
