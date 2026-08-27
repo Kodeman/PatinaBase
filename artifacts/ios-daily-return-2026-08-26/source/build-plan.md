@@ -139,6 +139,16 @@ Acceptance: `ios-gate.sh all` green; James (engaged, `james.okafor@example.com`)
 branch on Today and no duplicate lead is filed from "Get design help"; `-PatinaFlags house-first`
 flips `FeatureFlags.shared.isOn(.houseFirst)` in a debug launch; one count everywhere.
 
+### W1a — DONE 2026-08-27 (merged to main; 12 commits; 671 tests; `waves/w1a/`)
+Deviations accepted: `FeatureFlags` resolves synchronously from PostHog's persisted payload (first
+launch after install resolves every flag off; correct from launch two — W3 must not depend on a
+first-launch flag); `DesignerRelationshipResolver.resolve(lead:projects:roster:)` is fed
+`DesignRequestStatusService.liveLead` (no 14-day display window) — **W5 cites `liveLead`, never
+`promotedRequest`**; one counting predicate `RemoteProposal.isAwaitingSignature(now:)` for every
+attention surface; the Studio "Awaiting you" badge prints the item count. Escalated to W1b lane D as
+**00536**: client SELECT on `designer_clients` (roster attribution is unreachable without it) and a
+counterpart predicate in `rpc_start_direct_thread`.
+
 ### W1b — Repair planks (SP-02…SP-20 remainder; base = main after W1a)
 Four lanes with **owned file sets** (the steward assigns; a lane needing a change in another lane's
 file writes it as an integration note in `waves/w1b/<lane>-notes.md`, and the owner applies it).
@@ -171,7 +181,8 @@ App ID associated-domains capability + profile (device claim).
 | R1 record data | `HouseRecord` (NEEDS YOU / MOVED, rolling 7 days, `new` tick via `LastSeenStore`, ≤3 per eyebrow, `See all`), `RecordSnapshotStore` (App Group `group.cloud.patina.app` — **the entitlement is added in this wave**; falls back to the app container when the group URL is nil), `LastSeenStore` (`patina.house.lastSeenAt`, written on `.active`), per-item `StudioQueueBuilder` rows with dates, `designer:profiles!…` embeds on decisions/proposals/projects clients with the `displayName` "your designer" fallback, **discovering rows**: a saved piece withdrawn (`products.deleted_at`, 00435:563) and a saved piece repriced (`saved_items.price_cents_at_save` vs `products.price`) composed client-side over the saved list; empty-queue Next Move names `current_phase` (`ProjectsAPIClient.swift:25`); six-hour suppression on re-open; card weight follows content | `Features/Home/Models/HouseRecord.swift`, `Core/Persistence/{RecordSnapshotStore,LastSeenStore}.swift`, `Services/Badges/BadgeCountService.swift`, `StudioQueueBuilder.swift`, `Core/Network/{Decisions,Proposals,Projects}APIClient.swift`, `Patina.entitlements` |
 | R2 record UI | `HouseRecordCard`; the `Your designer` seat (name · studio · one line · Message via W1a's thread); `Your house` rail (project rooms + local rooms + Add a room — **verify first whether 00066:249-253 already grants clients SELECT on `project_rooms`; write 00537 only if a real blocker exists**); `NEW THIS WEEK` rail (`published_at` ≤ 7 d, **≥3 rows or it does not draw**); guest `Start with a room` two-act block; story demoted when nothing published, ordered `published_at desc, sort_order desc`; `TimeOfDay` greeting; labelled `Studio` control with the W1a count; **at guest/discovering the record draws nothing when empty (synthesis graft), at engaged/activeProject the truthful empties draw**; `PushPrimerView` timing unchanged from W1b; dark + XXL | `Features/Home/Views/{HouseRecordCard,YourDesignerSeat,YourHouseRail,NewThisWeekRail}.swift`, `DailyRoomView.swift`, `DailyGreetingHeader.swift` |
 | R3 hygiene (Q4) | Retire the July home rail: for each view in the Q4 list prove the call graph (`AddToRoomSheet` is LIVE and stays; `DailyProductCard` ← `DailyRoomViewModel`/`ProductCard`/`DailyProductDetailView`, `StudioHubSection` ← `DailyRoomStateBlocks`/`MarketplaceLinksSection`, `ContinueScanCard` ← `DesignRequestResumeBanner` are referenced — delete the *composition* (`DailyRoomStateBlocks`, `HomeStudioBlock`, `MarketplaceLinksSection`, `WorkWithDesignerCTA`, `RoomChipRail`, `RoomContextBar`, `DailyFeedEmptyModule`) and re-home any still-used piece); record the retirement in `research/11-canon-digest.md` §5 | the orphan set; tests referencing them |
-| Backend | **00537** `rooms.budget_cents`, `profiles.last_seen_at` (+ the `project_rooms` policy only if R2 proves it missing) — authored here so W4 has no late mint | `supabase/migrations/00537_*.sql` |
+| Backend | **00537** `rooms.budget_cents`, `profiles.last_seen_at` (+ the `project_rooms` policy only if R2 proves it missing), and `saved_items` de-duplication + two partial unique indexes (W1b ruling 4) — authored here so W4 has no late mint; **00538** `client_account_anonymize`: rewrite `purge_client_account` to anonymize the client and detach the auth user while retaining every designer-owned record (W1b ruling 2 — Kody may amend the policy); `account_purge_test.sql` asserts retention | `supabase/migrations/00537_*.sql`, `00538_*.sql`, `supabase/functions/delete-account/**` if the handler needs the new contract |
+| Carry-overs from W1b (`waves/w1b/rulings-fable.md`) | R2 folds `.moneyScreenTopBand()` into `PatinaScreenChrome` (one top-band pattern); R3 swaps the accepted-but-unsigned seal glyph for `checkmark.circle`; the walker re-shoots the proposal detail's Sign clearance and decision/Budget/invoice detail at XXL | — |
 Acceptance: Ruth's Today shows NEEDS YOU (decision overdue Aug 22 · proposal by Sep 8 · invoice due
 Sep 1) and MOVED with dates; Leah's seat with Message; her project rooms; the story below; the
 two-weeks header after a last-seen manipulation; James sees "Leah Hartwell picked up your request";
@@ -198,7 +209,7 @@ from the phases the detail already fetches, `profiles.last_seen_at` mirror. No n
 carried the columns).
 
 ### W5 — Purchase (B §5 + R3/Q5/Q6/Q11; `direct-orders`; base = main after W4)
-- Backend (Opus): **00538** — `direct_orders.designer_id/project_id/commission_rate` (snapshot in
+- Backend (Opus): **00539** (00538 was taken by W2's anonymize purge) — `direct_orders.designer_id/project_id/commission_rate` (snapshot in
   `create_direct_order`; immutable after `paid` by trigger), `designer_earnings` partial unique index
   on `order_id`, client-scoped SELECT on `fulfillment_orders`/`fulfillment_order_items`/
   `fulfillment_shipments` (`client_profile_id = auth.uid()`), `fulfillment_config` keys

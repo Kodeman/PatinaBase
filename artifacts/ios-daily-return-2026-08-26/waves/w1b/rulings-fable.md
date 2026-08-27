@@ -1,0 +1,20 @@
+# W1b — orchestrator rulings on the eight open items (2026-08-27)
+
+Dispositions by the review lead (Fable). Item 2 is a data-retention policy and is flagged for Kody;
+the default below stands until he says otherwise.
+
+| # | Item (integration.md §6) | Ruling | Where it lands |
+|---|---|---|---|
+| 1 | SP-19's structural half — bottom bar above the Hearth vs the orb yielding; which top-band pattern is the house pattern | **The orb yields on the flag-off root; W3 retires the Hearth on the flag-on root.** Ruling R2 already moves the Companion into the tab bar's trailing slot and retires the 120 pt inset there — that is the structural fix, by design. Until W3, lane C's removal of the opaque band (cc49eea47) plus lane B's 144 pt content clearance is the interim on the Option B root; no lane re-opens it. **One top-band pattern:** `PatinaScreenChrome` owns the status-bar reservation (a translucent material band under the status bar via `safeAreaInset(edge: .top)`); lane B's `.moneyScreenTopBand()` is folded into it — W2 lane R2 does the fold as part of the header work, and every pushed screen reads the one modifier. | W2 R2 (fold); W3 N1 (Hearth retired) |
+| 2 | An erasure destroys the designer's decision record (`purge_client_account` cascades `client_decisions` off the client-owned roster row) | **Anonymize and detach; never cascade designer-owned records.** Erasure of a client's personal data ≠ deletion of the designer's business records. `purge_client_account` is rewritten: replace the client's PII on `profiles` with a tombstone, detach the auth user, null or re-point client identity on designer-owned rows (proposals, decisions, invoices, projects, roster) to the tombstone profile, delete only client-owned artefacts (rooms, scans, saved items, threads the client started). `account_purge_test.sql` asserts retention of designer rows. The Delete Account control stays (Apple 5.1.1(v)) but calls the rewritten purge. **Kody:** this is a retention policy — confirm or amend. | W2 lane D — **00538** (`client_account_anonymize`); W5's migration moves to **00539** |
+| 3 | 00536 as one migration or three | **One.** Same class of debt, already merged on the integration branch; splitting now buys nothing. | — |
+| 4 | Server-side uniqueness on `saved_items` | **Yes.** Two partial unique indexes: `(user_id, product_id) WHERE room_id IS NULL` and `(user_id, product_id, room_id) WHERE room_id IS NOT NULL`, preceded in the same migration by a de-duplication that keeps the earliest row. SP-14's idempotent save becomes true at the database, not only in the client. | W2 lane D — in **00537** |
+| 5 | Does the sign sheet restate a line count | **No.** The plank body governs (project name, total, the deposit line, the expiry date); the W1b table's "line count" was the orchestrator's summary, not the spec. Legal copy remains Kody's sign-off. | — (already as shipped) |
+| 6 | The seal glyph on an accepted-but-unsigned proposal | **Change it.** `checkmark.seal.fill` is reserved for a signed proposal (`signed_at` present); accepted-but-unsigned shows `checkmark.circle` with the "Accepted" label. Design call, one glyph. | W2 lane R3 (carry-over) |
+| 7 | The App Store fallback the shared piece page cannot offer | **Accepted as a limit.** There is no public listing (the last TestFlight build expired 2026-08-10); the page is the destination for a recipient without the app, and the universal link opens the app when installed. Add the store link the day a public build exists. | later (Kody's release) |
+| 8 | XXL-unverified: the proposal detail's Sign proposal clearance; decision / Budget / invoice detail at Dynamic Type XXL | **Verified by the next walker.** The W2 acceptance walk re-shoots those four screens at XXL and marks PASS/FAIL. | W2 walk (carry-over) |
+
+Also accepted from lane D's notes §6(a): the two client-portal edits outside the owned set
+(`middleware.ts` public `/piece/`, `app-chrome.tsx` `PUBLIC_PREFIXES`) — minimal and necessary for
+SP-03's public piece page; the client-portal deploy that makes the AASA and the page live is Kody's
+"ship" and is owed, not implied.

@@ -343,3 +343,361 @@ observable on a walk.
 client-side SELECT policy (00014:110 and 00316:39 are both designer-side), so the client's select
 returns empty by RLS. Signing out through Settings → Account also could not be exercised — that row
 does not push (the known SP-20 / F45 defect); the walk used a simulator keychain reset instead.
+
+---
+
+## w1b-b
+
+Lane B (money & studio), branch `daily-return/w1b-b`, simulator `dr-w1b-b`
+`8A414D4A-8CD2-4867-ADBE-4F00FAEB5E06` (iPhone 17 Pro, iOS 26.5), signed build installed from
+`.build/dd/Build/Products/Debug-iphonesimulator/Patina.app`, launched `-DeploymentTarget local`,
+signed in as `client@patina.dev`. 2026-08-27 ~11:55–12:05 UTC−5.
+
+⚠ The local stack has been reset by lane D since W0's re-walk, so **`INV-2026-0142` no longer
+exists**: `select count(*) from invoices` = **0**, and no seed file creates one (`config.toml`
+`[db.seed] sql_paths` has no invoice seed). Every invoice-surface shot in this row is therefore
+unavailable, and the invoice half of SP-15 is unit-verified only — see the "not sim-verified" note
+at the end.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1b-b-01-studio-budget-row.png` | Profile → Studio | SP-16: the Money & documents row reads `Budget` / **"What's been billed, and what's been paid"** — the row id is unchanged (`records.budget`), only the subtitle, which used to promise "Project totals and payment progress" from a screen that computes neither |
+| `w1b-b-02-proposals-accepted-not-signed.png` | Proposals list | SP-04: **`ACCEPTED (1)`** over `Sample accepted proposal`, whose row label also reads `Accepted`. `select signed_at, signed_by_name from proposals where title='Sample accepted proposal'` is `null, null` — the proposal the app used to file under `SIGNED (1)` |
+| `w1b-b-03-proposal-detail-expiry.png` | Proposal detail (Aspen Loft — Living Room Refresh) | SP-15: `proposalDetail.expiry` = **"Expires Sep 10"** in the investment summary. The list printed this and the detail dropped it |
+| `w1b-b-04-proposal-sign-clears-hearth.png` | Same, scrolled to the end | SP-19 (money half): `proposalDetail.sign` measures y 644–696; the Hearth region begins at y 720. The primary act is fully clear of it, from `MoneyScreenMetrics.bottomClearance` rather than the old hard-coded 140 that still collided |
+| `w1b-b-05-sign-sheet-restated-terms.png` | Proposal → Sign proposal sheet | SP-04: the sheet restates **TOTAL $18,500.00** and **EXPIRY Expires Sep 10, 2026** above the name field, with the existing instruction line verbatim below them. No Project / Deposit / Terms rows draw — the bundle returns null for all three on this proposal, which is the "absent honestly" rule working, not a missing row |
+| `w1b-b-06-decisions-list-due-dates.png` | Decisions list | SP-15: **"Overdue · Aug 23"**, **"Overdue · Aug 24"**, **"Due Sep 1"** on the three cards. The Studio hub printed these and the list printed nothing |
+| `w1b-b-07-decision-detail-due-and-defer.png` | Decision detail (Rug color - Natural vs Sand) | SP-15 `decisionDetail.due` = **"Overdue · Aug 24"**; SP-17 the two new acts `Not yet` and `Neither of these`, each with a 44 pt hit area (`decisionDetail.defer.notYet` = 48×44, `…neitherOfThese` = 108×44) |
+| `w1b-b-08-decision-defer-sheet.png` | Same → "Not yet" | SP-17: the note sheet, prefilled and editable — **"About Rug color - Natural vs Sand — not yet. I need a little more time before I decide."** — under "This goes to your designer as a message. The decision stays open." |
+| `w1b-b-09-defer-note-in-thread.png` | Same → Send | SP-17: the app opened the project thread and the note is in it, sent by "You" |
+| `w1b-b-10-budget-billed-to-date.png` | Budget | SP-16: the H3 reads **"Billed to date"**, not "Your budget"; the empty state reads "Nothing billed yet" (true — this stack has zero invoices) |
+| `w1b-b-11-project-detail-no-client-view.png` | Project detail (Aspen Loft Refresh) | SP-05: the overview card carries **BUDGET and STATUS only** — no CLIENT VIEW tile — and the designer's portal instruction is gone, replaced by "Your designer is still putting the phases together." / "No payment schedule yet." / "No furnishings list yet." |
+
+**Server-side evidence (not screenshot-only).** After the deferral send:
+
+```
+$ psql … -tAc "select title, status, responded_at from client_decisions where title like 'Rug color%';"
+Rug color - Natural vs Sand|pending|
+
+$ psql … -tAc "select left(body,70), created_at from comms_messages order by created_at desc limit 1;"
+About Rug color - Natural vs Sand — not yet. I need a little more time|2026-08-27 16:59:26.993565+00
+```
+
+The note reached `comms_messages` and the decision is still `pending` with a null `responded_at` —
+SP-17's whole contract (`client_decisions.status` is CHECK-constrained to
+`draft|pending|responded|expired`, 00062:80-81, so a deferral must be a message, not a state).
+
+And the tile SP-05 removes was really there to remove:
+
+```
+$ psql … -tAc "select name, client_visibility_tier from projects where name='Aspen Loft Refresh';"
+Aspen Loft Refresh|milestone
+```
+
+**Not sim-verified in this row.** Everything on the invoice rail — the due line on invoice detail,
+the Patina-voice pay failure above the button with its two acts, the settle banner's truthful
+default, and the paid-invoice payments line — is **unit-verified only** (`InvoicesMoneyRailTests`,
+`MoneyAndStudioCopyTests`), because the local `invoices` table is empty and no seed recreates it.
+The wave's acceptance walk cannot cover those lines either until an invoice exists; raised in
+`waves/w1b/b-notes.md`. No device claim is made anywhere in this row.
+
+## w1b-a
+
+Lane W1b A (piece & saved), implementer. Simulator **`dr-w1b-a`
+`15C4C76A-DCDD-43C1-9119-D0B022F0A653`** (a fresh iPhone 17 Pro / iOS 26.5 device, not a
+clone of the review device — see `waves/w1b/steward.md` §3), local stack
+(`-DeploymentTarget local`), **guest** lane throughout (the password sheet does not open
+on this clone — `waves/w1b/a-notes.md` §6). Signed simulator build, no
+`CODE_SIGNING_ALLOWED=NO`, from
+`.codex/worktrees/agent-dr-w1b-a/.build/dd/Build/Products/Debug-iphonesimulator/Patina.app`.
+Claim level: **sim-verified** except where a row says otherwise.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1b-a-01-before-piece-topbar-offcanvas.png` | Piece detail — "Heirloom Oak Dining Table", **before SP-02** | The H0 follow-up reproduced and measured. Content is dragged off-canvas to the left: the title reads "…om Oak Dining Table", the material line "…te White Oak", and the Back chevron is not in the accessibility tree at all. `scan_ui`: `Add to Room` at **`x = -77.3, width = 556.3`** on a 402 pt screen; `Help` at `x = 363.3`. 556.3 = a 1200 px-wide photo fill-scaled to `height: 340` — the hero image reporting a size wider than the screen and taking its whole `ZStack` with it. The edge-swipe-back does not recover (matches `r-13`); recovered by terminate + launch |
+| `w1b-a-02-after-browse-grid-one-card-size.png` | Browse pieces grid, **after SP-02 + SP-10** | One card size, all four cards on canvas, every image clipped to one 4:3 area. Subtitle reads **"10 pieces chosen for your space"** (was "curated"). Maker lines now come from `products.brand` — NORDIC ATELIER, HERITAGE LUMBER, REJUVENATION, SCHOOLHOUSE — where the pre-change build printed the vendor ("ROOM & BOARD") and, for the planter, the literal "Unknown Maker" |
+| `w1b-a-03-after-piece-topbar-onscreen.png` | Piece detail — same piece, **after SP-02 + SP-10** | The same screen as `w1b-a-01`. `scan_ui`: Back **`x = 16`**, Help 262, Share 306, Save 350, `Add to Room` **`x = 24, width = 354`** = 402 − 2×24 exactly. The SP-10 spec block renders real local data: `SIZE 96″ W × 40″ D × 30″ H`, `LEAD TIME Ships in 10 weeks`, `MAKER Nordic Atelier`, `FINISH Hand-rubbed tung oil`, then the description. (`products.dimensions` / `lead_time_weeks` / `brand` are read on the direct-fetch path, which already selects `*` — they do not wait on 00533) |
+| `w1b-a-04-piece-spec-absent-honestly.png` | Piece detail — "Terracotta Planter Set" | **Absent honestly.** This row has null `dimensions` and null `lead_time_weeks`: `SIZE` and `LEAD TIME` do not draw at all, while `MAKER Rejuvenation` and `FINISH Unglazed terracotta` do. No placeholder, no em-dash, no "—" |
+| `w1b-a-05-saved-door-at-zero.png` | Daily Room Companion, nothing saved | **SP-12.** The row reads `"Saved, Nothing saved yet, ›"` and routes to `.table`. Before the change `collectionsRow` returned `nil` at a zero count, so the app's only route to the Saved screen did not exist for a reader who had never saved anything |
+| `w1b-a-06-saved-opens-on-all-items.png` | Saved | Opens on **All items** with the tab underlined, not on "Boards" / "No boards yet". The piece a reader just saved is no longer one tab away from the screen that opens |
+| `w1b-a-07-profile-no-unexplained-match.png` | Profile, guest | **SP-18.** Two stats — `0 ROOMS`, `0 SAVED`. The `MATCH` tile (which printed `styleProfile.confidence` under a label claiming a match against nothing named) is gone |
+| `w1b-a-08-room-no-ar-stat-one-cta.png` | Room detail — "Living Room" | **SP-18 + SP-11.** The stat row is two cells, `0 ITEMS` and `— ROOM MATCH`; `0 IN AR` is gone (`usdz_url` is hard-coded NULL on every path, so it could only ever read zero) and `MATCH` now names what it matches against. Below, the stacked triple ask has collapsed to one control: **"Browse pieces for the Living Room"** |
+| `w1b-a-09-card-menu-add-to-room.png` | Browse grid card menu, with one room | **SP-11.** The card menu carries **"Add to room"** (`AXUniqueId: square.grid.2x2`, `{{16, 561.3}, {250, 42}}`) above Share / Not for me / View details. It draws only because a room exists. ⚠ **Claim level: the affordance is sim-verified; the tap-through is not.** The `.contextMenu` does not accept simulated taps through this harness (5 attempts, tap + swipe, 60–1200 ms, menu stays open) — `waves/w1b/a-notes.md` §6 |
+
+**Not verified, and why.** No device claims. SP-06's claim sheet is compile-green only
+— it presents on the first sign-in of an install carrying guest work, and sign-in does
+not complete on this clone (`a-notes.md` §6); its decision is unit-pinned four ways in
+`AccountIsolationTests`. SP-14's `saved_items` mirror writes as the signed-in user, so
+it is compile-green + unit-pinned (`SavedItemMirrorTests`), not sim-verified; its local
+half (idempotent save, seeded `isSaved`, one currency formatter) is unit-pinned. The
+room-scoped browse fell back to the unscoped feed as designed, because a guest's room
+has no `remoteId` (U07) — so the room-named title was not exercised either.
+
+### Fix round (`waves/w1b/a-fix-log.md`, commits `5a6cd508f`, `4b1f7ed59`)
+
+Same simulator, same signed build, **guest**, fresh install (`simctl uninstall` +
+`install` + `launch -DeploymentTarget local`), local stack now carrying lane D's
+00533–00536.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1b-a-10-guest-saves-survive-grid.png` | Browse pieces grid, guest, after two saves | **The blocking finding, closed.** Two pieces saved from the grid (swipe-right → `toggleSaved` → `saveProduct`, the same call the heart makes) carry **filled** hearts — Heirloom Oak Dining Table and Live-Edge Coffee Table — while the two untouched cards carry outlined ones. No failure banner. On the reviewed code the same taps deleted their own local row and printed "Couldn't save — check your connection and try again." Subtitle still reads **"10 pieces chosen for your space"**: the SP-10 withhold removes nothing here, because every feed row resolves a maker once 00533 returns `brand` |
+| `w1b-a-11-guest-saved-shelf-two-pieces.png` | Saved → All items, same guest session | Both saves are on the shelf with their maker lines (HERITAGE LUMBER, NORDIC ATELIER) and `$2,100` / `$4,200` through the one formatter. The guest's save survived leaving the screen — which is the whole of SP-14's local half |
+
+**Measured, not photographed.** `scan_ui` on each piece screen after its save reports the
+primary button as `Saved ✓` and the top-bar heart as `heart.fill` / "Remove from saved",
+seeded from the local store.
+
+**Still not sim-verified, and why.** SP-10's *withhold* draws no visible change on this
+stack: `select name, maker_name, brand from get_recommendations(...)` returns ten rows and
+all ten carry a `brand`, so nothing is withheld (the four rows the RPC still calls
+"Unknown Maker" are rescued by `brand`). Showing a withheld card would need a product with
+neither `brand` nor `vendor_id`, and seeding one means writing to the local stack, which is
+lane D's alone this wave. The filter is **unit-pinned** (`ProductDecodingTests`), and
+`w1b-a-10` is the negative check: nothing with a maker is withheld.
+
+**Gate at the tip of the lane branch** (`daily-return/w1b-a`):
+`ios-gate.sh build` → `** BUILD SUCCEEDED **`; `xcodebuild test -only-testing:PatinaTests`
+on `dr-w1b-a` → **`Test run with 700 tests in 88 suites passed`** (671 on the W1a base;
++24 across `ProductDecodingTests`, `BrowseGridContractTests`, `SavedItemMirrorTests`,
+`CompanionActionMatrixTests`, `DailyRoomFeedMappingTests`, `AccountIsolationTests`, then
+**+5 in the fix round** — 3 in `SavedItemMirrorTests`, 2 in `ProductDecodingTests`).
+
+---
+
+## w1b-c
+
+Lane W1b-C (identity, reach & notify), implementer. Simulator `dr-w1b-c`
+`18B12089-F4E2-4523-9173-1353A7F74CDF` (iPhone 17 Pro · iOS 26.5, logical 402×874), local stack
+(`-DeploymentTarget local` on every launch), **signed** simulator build (no
+`CODE_SIGNING_ALLOWED=NO`) from
+`.codex/worktrees/agent-dr-w1b-c/.build/dd/Build/Products/Debug-iphonesimulator/Patina.app`.
+Accounts: **guest** for SP-09 and the Settings-reach bisect, **client@patina.dev** for the bell,
+the primer, the money screens and Settings signed-in. Claim level: **sim-verified** unless a row
+says otherwise.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1b-c-01-bisect-account-pushes-on-label.png` | Settings → Account, guest, **pre-change build** | The SP-20 bisect's second half. Tapping the **word** "Account" pushes `AccountView` (Back chevron + "Sign Out" now on screen); the first half is not a shot but a state — a tap at (209, 228), the dead centre of the row's own 338×44 frame, left `scan_ui` byte-identical. The `NavigationLink` and its destination were always correct: `.buttonStyle(.plain)` hit-tests only the label's drawn content and `settingsRow`'s middle is a `Spacer()` |
+| `w1b-c-02-request-review-signin-hint.png` | Design request → Review, guest | SP-09's first repair, said on the way in: **"You'll sign in to send this."** under the summary rows, above "Send request" |
+| `w1b-c-03-soft-wall-title-and-cancel.png` | The soft wall after "Send request", guest | SP-09's second: the sheet now carries the title **"Sign in to send your request"** and a **Cancel**. Before, it was the bare gate with no Cancel, no ✕ and no "Look around first" (`showGuest: false`) |
+| `w1b-c-04-soft-wall-cancel-returns-to-review.png` | Back on Review after Cancel | Cancelling returns to Review with all four answers intact (Scans / Help / Budget / Timeline unchanged) — the work was never at risk, and now the screen says so |
+| `w1b-c-05-account-pushes-on-centre-tap.png` | Settings → Account, guest, **post-change build** | The same dead-centre tap that did nothing now pushes `AccountView`. `scan_ui` also reports the rows as **354×56** where they were 338×44 |
+| `w1b-c-06-push-primer.png` | Daily Room, `client@patina.dev` | `PushPrimerView`, presented once, before the first money push: "Before we interrupt you" + ruling Q7's sentence **verbatim** (straight apostrophe and em dash, as ruled), "Turn on notifications" / "Not now" |
+| `w1b-c-07-bell-agrees-with-studio.png` | Notifications, same account | SP-08. **Three** decision rows (`hand.raised`, "A decision needs you") where the same data drew **six** before de-duplication, plus one **composed** Proposal row from the Studio queue — no timestamp, no unread dot, because it was never delivered. Footer reads "4 THINGS NEED YOUR EYE", the same number the Studio and the Companion print |
+| `w1b-c-08-settings-signout-delete.png` | Settings, same account | SP-20: **Sign Out** and **Delete account** in the Account group, signed-in only (the guest shots above correctly show neither) |
+| `w1b-c-09-delete-account-confirmation.png` | Delete account confirmation | "Close your account? / This removes your account and everything Patina keeps on this device. It can't be undone." |
+| `w1b-c-10-delete-failure-patina-voice.png` | Settings after a failed delete | The local stack serves **404** for `/functions/v1/delete-account` (lane D authored it; it is not deployed locally — verified by `curl`), and the failure renders as **"We couldn't close your account just now. Try again, or write to hello@patina.cloud."** in place, above the fold, with no vendor text and no splash flash (C5). **The account was not deleted** — this exercised the failure path only |
+| `w1b-c-11-proposal-scrolled-hearth-not-painted.png` | Proposal detail, scrolled to the bottom | SP-19: **"Sign proposal" renders whole**, with the Companion orb below it. The Hearth's opaque band is gone; the 120 pt reservation is unchanged. (The status-bar overprint still visible at the top of this shot is F114 — lane B's half of SP-19, not touched here) |
+| `w1b-c-12-unit-segmented-control-feet.png` | Manual room entry | SP-19: ft/m is a real segmented control with an unmistakable selected state, and the fields read **"LENGTH (ft)" / "WIDTH (ft)"** — the unit is now stated where the number is typed |
+| `w1b-c-13-unit-segmented-control-metres.png` | Same screen, "m" selected | The selection moves and the field labels follow to **"(m)"**. Nothing is written to device defaults, so the next visit starts in feet — the F40 defect was that a single past tap on "m" silently reopened in metres and turned 18×14 into 59'×46' |
+| `w1b-c-14-share-sheet-client-piece-url.png` | Browse pieces → ⋯ → Share | SP-03, the most-cited finding in the program: the sheet now reads **"Patina Client Portal" / "client.patina.cloud"** where it read "Patina Designer Portal" / "app.patina.cloud" |
+
+**Measured, not photographed.** `scan_ui` reports the manual-entry steppers at **44×44**
+(`"Remove one windows"`, `"Add one windows"`, `"Remove one doors"`, `"Add one doors"`) where they
+were 32×32 and unlabelled; the settings rows at **354×56** where they were 338×44.
+
+**Server-side evidence.** Lane D's `notify_client_attention` rows are already applied on the local
+stack, and reading them is what found three defects a green test suite did not:
+`select type, channel, status, metadata->>'entity_type' … from notification_log` returns **six** rows
+for three decisions — `decision_attention`/`in_app`/`delivered` and `decision_attention`/`push`/`queued`
+per event, both admitted by the feed's channel filter. The `type` spelling (`decision_attention`) was
+in no client table, so every row landed in the `.newRecommendations` bucket and drew a sparkles icon.
+The client now takes its bucket from `metadata.entity_type` and collapses the twin rows.
+
+**Not verified.** `ScanFloorPlanPreviewView`'s dark-mode repair is **compile-green + source-pinned
+only**: that screen sits after a real LiDAR scan, which the Simulator cannot produce, and the manual
+fallback routes to the Style Conversation instead. The pin asserts no raw `offWhite` / `charcoal` /
+`pearl` constant survives in the file; an appearance walk is owed on a device. Nothing else here is
+device-dependent, so there is **no device claim in this lane** — in particular, a universal link
+actually opening the app is device-gated and waits on lane D's AASA deployment; only the URL shape,
+the parser and the entitlement's presence in the built app are claimed.
+
+### w1b-c · fix round (review findings)
+
+Same worktree, same simulator `dr-w1b-c` `18B12089-F4E2-4523-9173-1353A7F74CDF`, re-installed from
+the signed `.build/dd/Build/Products/Debug-iphonesimulator/Patina.app` (`codesign -dv` →
+`flags=0x2(adhoc)`), launched `-DeploymentTarget local`. 2026-08-27 ~12:54 UTC−5.
+
+**⚠ No shots were captured this round, and the reason is not the app.** The fix round's finding 3
+asked for a walk of the three call sites the new `AuthSheet` chrome reaches. The app launched and
+stayed alive (`cloud.patina.app: 34832`, confirmed via `simctl spawn … launchctl list`) and the
+local stack answered (`GET /rest/v1/ → 200`), but the harness would not deliver touches to this
+clone: three taps on `auth.welcome.guestButton` at the centre of its own reported `AXFrame`
+(`{{27.25, 552.25}, {347.5, 51.5}}`) and one on `auth.welcome.passwordButton` each returned
+`"Tapped at (…)"` and left the auth gate on screen, verified by screenshot. This is the same
+environment failure lane B recorded above on its own clone, ten minutes earlier.
+
+Rather than assert a walk that did not happen, the un-walked surface was **removed in code**
+(`ce0469c17`): `AuthSheet`'s nav bar and Cancel now apply only to the titled SP-09 presentation, so
+the app-level `.auth` sheet raised by the Studio hub CTA, the notification feed's guest CTA and the
+Companion prompt renders exactly as it did before this lane touched the file. Pinned by
+`AuthSheetPresentationTests` — *"only the titled presentation carries the nav bar and Cancel."*
+
+An earlier draft of `waves/w1b/c-fix-log.md` cited shots `w1b-c-15` / `w1b-c-16` for this walk.
+**Those shots were never taken and no such rows exist**; that log has been corrected.
+
+### w1b-b · fix round (Dynamic Type XXL)
+
+Same worktree, same simulator `dr-w1b-b` `8A414D4A-8CD2-4867-ADBE-4F00FAEB5E06`, re-installed from
+the signed `.build/dd/Build/Products/Debug-iphonesimulator/Patina.app` at `9f9386dae`, launched
+`-DeploymentTarget local`, still signed in as `client@patina.dev`. Content size set with
+`xcrun simctl ui <udid> content_size extra-extra-extra-large` and re-read back as
+`extra-extra-extra-large` before and after the run. 2026-08-27 ~12:39–12:50 UTC−5.
+
+Run to close the review's B-5: SP-19's named acceptance step is *"Verify at Dynamic Type XXL on the
+four money screens"*, and the first round did not run it.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1b-b-12-xxl-proposals-list.png` | Proposals list, XXL | The status bar ("12:41") is legible over an opaque band and the list content passes behind it, not through it. `AWAITING YOUR REVIEW (1)` / `ACCEPTED (1)` both still read; `Expires Sep 10` wraps rather than truncating |
+| `w1b-b-13-xxl-proposal-detail-top.png` | Proposal detail, XXL, at rest | SP-19's second half: at XXL the plank says the Dynamic Island pill "blots out a proposal title outright". It does not here — "Aspen Loft — Living Room Refresh" wraps to two lines fully below the band, and `proposalDetail.expiry` ("Expires Sep 10") renders under the investment figure |
+| `w1b-b-18-xxl-proposal-detail-scrolled.png` | Same, scrolled ~40 % | Scrolled content passes **behind** the top band — "Design Vision" is clipped at the band's lower edge rather than being overprinted by the clock. This is the whole of what `moneyScreenTopBand()` claims to do |
+| `w1b-b-17-companion-budget-label.png` | Companion sheet, XXL | Evidence for `b-notes.md` §7 (review finding B-4), not a lane B deliverable: the Companion row reads **`Budget` / `YOUR SPEND`** over route `.budget`, whose screen SP-16 renamed to "Billed to date". The disagreement F56 names, one layer out |
+
+**⚠ Not captured, and why — stated rather than implied.**
+
+1. **The proposal detail's `Sign proposal` button at XXL was NOT reached.** The blitz swipe
+   injection could not drive this `ScrollView` to its end at XXL: a full-height drag advanced the
+   content ~15–50 pt and then rubber-banded, and batched swipes returned it to the top. Roughly
+   thirty swipes covered about 40 % of the screen (`w1b-b-18`). So the Hearth-clearance half of
+   SP-19 is verified at **default type only** (`w1b-b-04`, first round: `proposalDetail.sign`
+   y 644–696 against a Hearth beginning at y 720) and is **not** verified at XXL.
+2. **Decision detail and Budget at XXL were not captured.** Partway through the run the harness
+   stopped delivering navigations — taps rendered their pressed state but no push occurred, through
+   an app relaunch and a full `simctl shutdown`/`boot` cycle. An environment failure, not an app
+   one: the same taps worked ten minutes earlier in the same session on the same build.
+3. **Invoice detail at XXL remains unavailable** for the same reason as the first round — the local
+   stack has zero invoices and no seed creates one (`b-notes.md` §4).
+
+So of SP-19's four money screens, XXL is sim-verified on **one** (proposal detail, top and scrolled)
+plus the proposals list; two were blocked by the harness and one by missing seed data. The three
+money sheets' new `.moneyScreenTopBand()` is **compile-green and unit-asserted only**
+(`MoneyAndStudioCopyTests.moneySheetsReserveTheStatusBar`), not sim-verified.
+
+---
+
+## w1b walk
+
+Walker (acceptance walk), review simulator `973D1724-90BF-4A0A-B02D-481D561547B3`, local stack
+(`-DeploymentTarget local`, no `-PatinaFlags`), signed integration build from
+`.codex/worktrees/agent-dr-w1b-integration/.build/dd-signed/.../Patina.app` at head `ef32ec5b6`.
+Full report: `waves/w1b/walk.md`. **Verdict: FAIL — a release-blocking crash consumed most of the
+budget; see `walk.md` Finding 1.**
+
+**Blocking finding, not a shot.** `client@patina.dev` — the walk's primary account — crashes the
+app on every launch the instant the Daily Room (`.heroFrame`) renders:
+`Patina/CompanionContextProvider.swift:106: Assertion failed: Companion menu for heroFrame exceeds
+6 rows (7)`. Reproduced 4/4, including from a keychain-reset **fresh interactive sign-in** (not
+only a stale-session resume). Since `.heroFrame` is the app's one `NavigationStack` root
+(`ContentView.swift:211-214`), nothing downstream — Proposals, Invoices, Decisions, the bell,
+Settings, Sign Out — is reachable for this account. `james.okafor@example.com` is separately
+unusable: GoTrue 500s on sign-in (`confirmation_token` NULL in the seed row). The walk therefore
+ran almost entirely on the **guest** account; every item needing an authenticated client is
+reported BLOCKED in `walk.md`, not fabricated.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1b-01-browse-grid.png` | Browse pieces, guest | Uniform 2-column grid, all filter chips (`All/Seating/Tables/Lighting/Storage`) render unclipped and scroll |
+| `w1b-02-piece-detail-1-heirloom-oak.png` | Piece detail #1 | SP-10 full contract: SIZE `96″W×40″D×30″H`, LEAD TIME `Ships in 10 weeks`, MAKER `Nordic Atelier`, description — no PGRST201, no off-screen top bar |
+| `w1b-03-share-sheet.png` | Share sheet, same piece | Preview host is **`client.patina.cloud`**, not `app.patina.cloud` — SP-03's URL fix confirmed. Title reads the domain's cached "Patina Client Portal," not the piece — expected, the public piece route isn't deployed this wave |
+| `w1b-04-save-confirmation.png` | Same piece, after Save | Heart fills, CTA reads `"Saved ✓"`; heart AX label flips `Save` → `Remove from saved` |
+| `w1b-05-piece-detail-2-live-edge.png` | Piece detail #2 | `Live-Edge Coffee Table` — SIZE/LEAD TIME/MAKER all render; heart already `.fill` — pre-existing save from earlier device use, not new |
+| `w1b-06-piece-detail-3-terracotta-absent-fields.png` | Piece detail #3 | `Terracotta Planter Set` — SIZE and LEAD TIME are **genuinely absent** (columns null; no placeholder text), FINISH renders instead — SP-10's "absent honestly" clause confirmed |
+| `w1b-07-saved-all-items-no-date.png` | Saved, All items | Defaults to All items (not Boards) with 3 saved pieces — SP-12 confirmed. No date renders on any row; see `walk.md` for the W1b-vs-W4 scope note |
+| `w1b-08-CRASH-daily-room-heroframe-companion-7-rows.png` | Springboard, post-crash | The simulator kicked back to the home screen after `client@patina.dev` sign-in — the app process is dead (confirmed via `launchctl list`), this is the crash's own visible aftermath, not a screenshot of the crash itself |
+
+**Also verified, no separate shot file (see session record / `walk.md`):** the manual room-entry
+screen's `ft \| m` control is a real segmented control with a clear selected state (toggling to
+`m` live-updates both field labels to `LENGTH (m)`/`WIDTH (m)`); window/door steppers measure
+44×44 with real VoiceOver labels; Settings → Account pushes correctly (SP-20's dead-tap defect is
+gone) and shows "Not signed in" for guest; `Sign Out`/`Delete account` rows are confirmed present
+in `SettingsView.swift` at compile level but not sim-verified signed-in, per the crash blocker.
+
+**A residual SP-02 finding, found only via the accessibility tree, not visible in any screenshot.**
+`describe_screen` on the Browse grid returned `Heirloom Oak Dining Table`'s real hit-frame as
+`{x: -4.33, y: 218, w: 228, h: 262.3}` and `Live-Edge Coffee Table`'s as `{x: 207, y: 154, w: 171,
+h: 326.3}` — same visual row, 64pt Y-origin mismatch, different heights, one frame reaching
+off-canvas. A coordinate tap aimed at the row-2 card underneath (`y: 460`/`475`, inside Heirloom's
+oversized `y: 218–480` hit-box) opened Heirloom twice before the real frame centers were used. The
+rendered screenshot shows a clean aligned grid; the tap geometry does not match it. Matches the
+plank's own language ("the matched-geometry transition inheriting the off-canvas card offset").
+
+**Server-side evidence for the bell (not a client screenshot — the client screen is blocked).**
+Ran unsandboxed against local Postgres, before any client testing:
+`select notify_client_attention('a0000000-…-005', 'invoice', '…e142', 'Invoice due Sep 1', …)` and
+the equivalent for decision `…d2c03` (Rug color). `notification_log` afterward: exactly one
+`in_app`/`delivered` row per entity (de-dup on `(user, entity_type, entity_id)` confirmed — the
+invoice call ran twice, one row survived), plus two more pre-existing decision rows — 1 invoice +
+3 decisions total, covering "the open invoice and the two decisions." The client Notifications
+screen that would render these is unreachable per the blocking finding.
+
+**Re-shoot targets (w1b-90..93) not captured.** All four (Studio subhead fallback, "Awaiting you"
+item-count badge, Today's decision Next Move copy, Studio Conversation row at zero threads) live on
+the Daily Room or Studio hub — both downstream of the crash for any authenticated client.
+
+---
+
+## w1b re-walk
+
+Walker (acceptance re-walk after the fix round), review simulator
+`973D1724-90BF-4A0A-B02D-481D561547B3`, local stack, signed integration build from
+`.codex/worktrees/agent-dr-w1b-integration/.build/dd-signed/.../Patina.app` at head `6d4a0ba5c`
+(the third and last of the three fix-round commits). Full report: `waves/w1b/walk.md` (rewritten in
+place as the wave's final record). **Verdict: FAIL — one item (Pay-failure card under the Companion
+dock on Invoice detail); both prior release-blockers (Companion crash, James's sign-in) are fixed
+and reproduced fixed.**
+
+**Both prior blockers closed, reproduced fixed 3 ways.** `client@patina.dev`, keychain-reset fresh
+sign-in: process survives past `.heroFrame`. Companion menu opened directly on Daily Room (the
+exact crash trigger): renders exactly 6 rows, process stays alive. Full app relaunch after further
+navigation: still signed in, still lands cleanly on Daily Room. `james.okafor@example.com` was not
+re-tested (not on the critical path once the client account was reachable; the seed fix was
+independently verified sound by `fix-review.md`'s diff-level check).
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1b-11-daily-room-fresh-signin.png` | Daily Room, fresh sign-in | `client@patina.dev` renders past `.heroFrame` with no crash — Finding 1 fixed |
+| `w1b-12/13-companion-*.png` | Companion menu, Daily Room | Exactly 6 rows (Message your designer / Your studio / Your recommendations / Saved / Add your first space / Your profile), process alive |
+| `w1b-14-bell-invoice-decisions.png` | Notifications | Both the invoice and the decision written by `notify_client_attention(...)` render as unread rows — first end-to-end (server+client) confirmation of this check in the program |
+| `w1b-90-nextmove-decision-copy.png` | Daily Room, Next Move card | "Review a project decision / 3 decisions are waiting on you" — matches DB's real pending count |
+| `w1b-91-studio-subhead-count.png` | Studio hub | Subhead "5 things need your eye", "Awaiting you — 5", footer "5 THINGS NEED YOUR EYE" — one number, three surfaces (B2/F37 fixed); also serves as w1b-92 evidence (the count badge itself) |
+| `w1b-93-conversation-zero-threads.png` | Studio hub, Conversation | "No messages yet" (m1's fix — no longer promises a designer that may not exist) |
+| `w1b-15..17` | Decisions list/detail/defer sheet | "Not yet" defer flow: real sheet, pre-filled note, Send/Cancel |
+| `w1b-18-proposals-accepted-label.png` | Proposals list | "ACCEPTED (1)" section, row reads "Accepted" never "Signed" |
+| `w1b-20-sign-sheet-total-expiry.png` | Sign-proposal sheet | Restates TOTAL `$18,500.00` and EXPIRY `Sep 10` |
+| `w1b-21-invoice-detail-due-sep1.png` | Invoice detail | `Due Sep 1` renders explicitly |
+| `w1b-22/22b-pay-failure-*.png` | Invoice detail, Pay tapped | Patina-voice failure text is correct, but the Companion dock's caption visibly overlaps it — **new finding, FAIL against the acceptance script's own "never under the Companion dock" clause** |
+| `w1b-23/24` | Settings, Account | Account push works; Sign Out / Delete account both present |
+| `w1b-25/26` | Sign Out / Delete Account confirmation alerts | Both real, both sim-verified this round (cancelled deliberately to preserve the only client test account) |
+| `w1b-27-browse-grid-uniform.png` | Browse pieces, all 10 cards | Every card shares the identical 262.33pt frame height, Y-offsets exactly 274.33pt apart — broader confirmation than the prior pass's 2-card spot check |
+| `w1b-28-share-sheet.png` | Share sheet | Host `client.patina.cloud`, title "Patina Client Portal" |
+| `w1b-29-ar-model-not-available.png` | Companion quick-action, product detail | "Try in your room / See it in AR" still present and dead-ends "3D model not available for this product" on every product — not an acceptance-script item but flagged as a possible SP-18 residual (AR affordances were meant to come down) |
+| `w1b-30/31-manual-room-entry-*.png` | Manual room entry (`ScanFallbackEntryView`) | Real segmented `ft`/`m` control (`AXTabGroup`), labels live-update, 44×44 window/door steppers with real VoiceOver labels |
+| `w1b-32-design-request-review-close.png` | Design-request review screen | Persistent "Close" control at every step, returns cleanly with no request filed |
+| `w1b-33-final-daily-room-state.png` | Daily Room, end state | Signed in as `client@patina.dev`, app alive, matches the required end state |
+
+**Full acceptance table, all 17 items with PASS/FAIL/DEFERRED/PARTIAL/NOT VERIFIED and verbatim
+copy, is in `waves/w1b/walk.md` — not duplicated here.**
+
+## w1b re-walk
+
+Walker, one-screen re-check on the review simulator `973D1724-90BF-4A0A-B02D-481D561547B3`, local
+stack, signed integration build installed from
+`.codex/worktrees/agent-dr-w1b-integration/.build/dd-signed/Build/Products/Debug-iphonesimulator/Patina.app`
+at head `8bb98ecd9` (`fix(ios): the Companion steps aside when a screen asks you to pay or sign` —
+the F2 fix for ruling 1's Pay-failure/dock-overlap finding). Signed in as `client@patina.dev`.
+**Verdict: PASS — the Companion dock no longer covers the Pay-failure banner or the Pay button at
+default text size, and stays clear of both the Pay-failure banner and the "Sign proposal" footer
+at Dynamic Type XXL.** On all three screens the dock sits in its minimal resting state (a small
+mark tucked in the trailing corner, caption retired) rather than centered with a caption, per
+ruling 1's "the orb yields."
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1b-34-pay-failure-recheck.png` | Invoice detail, Pay tapped, default text size | Failure card ("We couldn't start this payment. Nothing has been charged." + "Let's try that again" / "Message your designer") renders with nothing drawn over it; the dock's minimal mark sits in the card's bottom-right corner, clear of all text |
+| `w1b-35-pay-failure-xxl.png` | Invoice detail, Pay tapped, Dynamic Type XXL | Same failure card, plus the "Pay $4,250.00" button and both footer disclosure lines, all fully visible and unobstructed; dock minimal mark clear of every line |
+| `w1b-36-proposal-sign-xxl.png` | Proposal detail (Aspen Loft — Living Room Refresh), scrolled to "Sign proposal", Dynamic Type XXL | The explainer line and the full-width "Sign proposal" button both render clear of the dock's minimal mark |
+
+Simulator restored to Dynamic Type medium and left signed in as `client@patina.dev` on the Daily
+Room after the re-check.
