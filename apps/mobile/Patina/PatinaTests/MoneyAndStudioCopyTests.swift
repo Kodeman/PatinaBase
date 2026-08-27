@@ -104,6 +104,28 @@ struct MoneyAndStudioCopyTests {
         #expect(snapshot.section(.awaitingYou).rows.first?.meta == stamped.text)
     }
 
+    /// B-1: the invoice list formatted its own "Due Aug 22, 2026" in muted
+    /// grey while the detail one tap later read "Overdue · Aug 22" in red.
+    /// Every list row that prints a date now reads the shared helper, and
+    /// colours on its `isPastDue`.
+    @Test("no money list formats a date of its own")
+    func moneyListsReadTheSharedDateHelper() throws {
+        let invoices = try String(
+            contentsOf: Self.sourceURL("Patina/Features/Invoices/Views/InvoiceListView.swift"),
+            encoding: .utf8
+        )
+        #expect(invoices.contains("DateDisplay.due(invoice.due_date)"))
+        #expect(!invoices.contains("\"Due \\("))
+        #expect(invoices.contains("due.isPastDue ? PatinaColors.error"))
+
+        let proposals = try String(
+            contentsOf: Self.sourceURL("Patina/Features/Proposals/Views/ProposalListView.swift"),
+            encoding: .utf8
+        )
+        #expect(proposals.contains("DateDisplay.expiry(proposal.valid_until)"))
+        #expect(proposals.contains("expiry.isPastDue ? PatinaColors.error"))
+    }
+
     @Test("every money detail carries the date its list already printed")
     func moneyDetailsCarryTheirDates() throws {
         let invoice = try String(
@@ -228,5 +250,30 @@ struct MoneyAndStudioCopyTests {
             #expect(!source.contains(".padding(.bottom, 120)"), "\(name) still hard-codes 120")
             #expect(!source.contains(".padding(.bottom, 140)"), "\(name) still hard-codes 140")
         }
+    }
+
+    /// SP-19 says "every scroll container **and sheet header**". The three
+    /// money sheets are scroll containers of their own and reach the status
+    /// bar at the `.large` detent.
+    @Test("the money sheets reserve the status bar too")
+    func moneySheetsReserveTheStatusBar() throws {
+        let sheets = [
+            "Patina/Features/Proposals/Views/ProposalSignSheet.swift",
+            "Patina/Features/Decisions/Views/DecisionDeferSheet.swift",
+            "Patina/Features/Decisions/Views/DecisionDetailView.swift" // DecisionConsentSheet
+        ]
+        for file in sheets {
+            let source = try String(contentsOf: Self.sourceURL(file), encoding: .utf8)
+            let name = (file as NSString).lastPathComponent
+            #expect(source.contains("moneyScreenTopBand()"), "\(name) misses the status-bar band")
+        }
+        // The consent sheet lives at the bottom of the decision detail file, so
+        // that file carries the band twice — once for the screen, once for the
+        // sheet.
+        let decision = try String(
+            contentsOf: Self.sourceURL("Patina/Features/Decisions/Views/DecisionDetailView.swift"),
+            encoding: .utf8
+        )
+        #expect(decision.components(separatedBy: "moneyScreenTopBand()").count - 1 == 2)
     }
 }

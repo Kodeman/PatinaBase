@@ -146,9 +146,9 @@ private struct ProposalRowCard: View {
                             .foregroundStyle(PatinaColors.Text.primary)
                     }
                     if let expiry = expiryLine {
-                        Text(expiry)
+                        Text(expiry.text)
                             .font(PatinaTypography.captionSmall)
-                            .foregroundStyle(PatinaColors.Text.muted)
+                            .foregroundStyle(expiry.isPastDue ? PatinaColors.error : PatinaColors.Text.muted)
                     }
                 }
             }
@@ -173,9 +173,9 @@ private struct ProposalRowCard: View {
     /// SP-15: the same expiry line the detail now carries, from the same
     /// helper — and it says "Expired" once the date has passed instead of
     /// promising an expiry that already happened.
-    private var expiryLine: String? {
+    private var expiryLine: DateDisplay.DueLine? {
         guard proposal.status != "accepted" else { return nil }
-        return DateDisplay.expiry(proposal.valid_until)?.text
+        return DateDisplay.expiry(proposal.valid_until)
     }
 }
 

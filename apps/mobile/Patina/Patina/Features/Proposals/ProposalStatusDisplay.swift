@@ -44,9 +44,10 @@ enum ProposalStatusDisplay {
             return "Signed by \(who)"
         }
         if justSigned { return "Signed by you" }
-        if let acceptedAt = proposal.accepted_at {
-            return "Accepted on \(DateDisplay.fromTimestamp(acceptedAt))"
-        }
+        // No "Accepted on <date>" branch: neither client RPC emits
+        // `accepted_at` (`list_client_proposals` 00422:2304-2334,
+        // `get_client_proposal_bundle` 00407:341-372), so it was a line the
+        // server could never reach and only a hand-made fixture could prove.
         return acceptedSectionTitle
     }
 }

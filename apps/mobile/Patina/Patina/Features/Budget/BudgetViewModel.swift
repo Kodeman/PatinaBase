@@ -192,7 +192,9 @@ final class BudgetViewModel {
         // All three failing (nil) is a real error; an empty-but-present result
         // is a legitimate "no budget yet" state.
         if projects == nil, proposals == nil, invoices == nil {
-            self.error = "Couldn't load your budget"
+            // SP-16: the screen is "Billed to date"; the load error named a
+            // screen that no longer exists.
+            self.error = "Couldn't load what's been billed"
             self.isLoading = false
             #if DEBUG
             PatinaLog.ui.error("[Budget] all sources failed")

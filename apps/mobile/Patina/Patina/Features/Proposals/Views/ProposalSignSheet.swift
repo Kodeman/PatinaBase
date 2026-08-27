@@ -82,6 +82,7 @@ struct ProposalSignSheet: View {
             .padding(24)
         }
         .background(PatinaColors.Background.primary)
+        .moneyScreenTopBand()
     }
 
     /// SP-04: what is being agreed to, above the name field. Every row is a
@@ -117,9 +118,10 @@ struct ProposalSignSheet: View {
         terms: ProposalSignTerms(
             projectName: "Aspen Loft Refresh",
             total: "$100,000.00",
-            deposit: "Deposit — $25,000.00",
+            depositLabel: "Retainer",
+            deposit: "$25,000.00",
             terms: "Net 30",
-            expiry: "Expires Sep 8, 2026"
+            expiry: "Expires Sep 8"
         ),
         isSigning: false,
         errorMessage: nil,
