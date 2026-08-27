@@ -49,6 +49,16 @@ final class BadgeCountService {
     /// is the signal that unlocks the full Studio hub (see `EngagementTier`).
     private(set) var projectCount: Int = 0
 
+    /// The projects themselves, retained so `DesignerRelationshipResolver`
+    /// and the Record (W2) read the rows this service already fetched instead
+    /// of issuing the same query again.
+    private(set) var projects: [RemoteProject] = []
+
+    /// The client's active `designer_clients` rows — the attribution roster.
+    /// Expected empty until a client SELECT policy on `designer_clients`
+    /// exists; see `RosterAPIClient`.
+    private(set) var roster: [RosterDesigner] = []
+
     /// True once a refresh has completed for an authenticated session.
     /// Guests never load — the rail renders invitations, not counts.
     private(set) var hasLoaded: Bool = false
@@ -73,6 +83,8 @@ final class BadgeCountService {
             proposalsAwaitingSignatureCount = 0
             payableInvoiceCount = 0
             projectCount = 0
+            projects = []
+            roster = []
             hasLoaded = false
             lastRefreshFailed = false
             return
@@ -83,9 +95,11 @@ final class BadgeCountService {
         async let proposalsFetch = try? ProposalsAPIClient.shared.listProposals()
         async let invoicesFetch = try? InvoicesAPIClient.shared.listInvoices()
         async let projectsFetch = try? ProjectsAPIClient.shared.listProjects()
-        let (decisions, summaries, proposals, invoices, projects) = await (
+        async let rosterFetch = try? RosterAPIClient.shared.listRoster()
+        let (decisions, summaries, proposals, invoices, fetchedProjects) = await (
             decisionsFetch, summariesFetch, proposalsFetch, invoicesFetch, projectsFetch
         )
+        let fetchedRoster = await rosterFetch
 
         if let decisions {
             pendingDecisionCount = decisions.count
@@ -102,11 +116,18 @@ final class BadgeCountService {
         if let invoices {
             payableInvoiceCount = invoices.filter { $0.isPayable }.count
         }
-        if let projects {
-            projectCount = projects.count
+        if let fetchedProjects {
+            projectCount = fetchedProjects.count
+            projects = fetchedProjects
+        }
+        // The roster is not part of the load verdict: under today's RLS an
+        // empty array IS the successful answer, so counting it would mask a
+        // total failure of the five queries that carry the rail.
+        if let fetchedRoster {
+            roster = fetchedRoster
         }
         if decisions != nil || summaries != nil || proposals != nil
-            || invoices != nil || projects != nil {
+            || invoices != nil || fetchedProjects != nil {
             hasLoaded = true
             lastRefreshFailed = false
         } else {

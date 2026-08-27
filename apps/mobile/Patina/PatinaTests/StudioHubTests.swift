@@ -190,4 +190,33 @@ struct StudioHubTests {
         ]
         """)
     }
+
+    /// SP-13: the Conversation block was the one block drawn without a route,
+    /// because `conversationThreadRow` returned nil at zero threads. A client
+    /// with a designer and no thread yet is exactly who needs the door.
+    @Test
+    @MainActor
+    func conversationRowIsEmittedAtZeroThreads() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-07-29T16:00:00Z"))
+        let snapshot = StudioQueueBuilder.build(
+            StudioQueueInput(
+                projects: try sampleProjects(),
+                decisions: [],
+                proposals: [],
+                invoices: [],
+                documents: [],
+                threads: [],
+                notifications: [],
+                currentUserId: "client",
+                now: now
+            )
+        )
+
+        let row = try #require(
+            snapshot.section(.conversation).rows.first { $0.id == "conversation.threads" }
+        )
+        #expect(row.route == .threadList)
+        #expect(row.title == "Conversation")
+        #expect(row.detail == "Start one with your designer")
+    }
 }

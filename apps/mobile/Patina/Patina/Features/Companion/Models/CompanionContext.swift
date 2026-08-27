@@ -89,6 +89,17 @@ public struct CompanionContext: Equatable {
     /// after construction.
     var engagementTier: EngagementTier?
 
+    // MARK: - Designer relationship
+
+    /// Whether a designer is on this client's job, and which one (SP-13, R3).
+    /// Resolved at the same enrichment seam as `activeDesignRequest`. `nil`
+    /// means unresolved and MUST be read as no designer — a message row that
+    /// opens a thread with nobody is worse than no row.
+    ///
+    /// Internal + assigned after construction for the same reason as
+    /// `engagementTier`: `DesignerRelationship` is internal.
+    var designerRelationship: DesignerRelationship?
+
     // MARK: - Initialization
 
     public init(

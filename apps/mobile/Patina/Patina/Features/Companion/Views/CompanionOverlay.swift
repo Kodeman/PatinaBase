@@ -185,6 +185,11 @@ public struct CompanionOverlay: View {
             invoiceCount: BadgeCountService.shared.payableInvoiceCount,
             decisionCount: BadgeCountService.shared.pendingDecisionCount
         )
+        context.designerRelationship = DesignerRelationshipResolver.resolve(
+            promotedRequest: DesignRequestStatusService.shared.promotedRequest,
+            projects: BadgeCountService.shared.projects,
+            roster: BadgeCountService.shared.roster
+        )
         context.hasStyleProfile = StyleProfileStore.shared.hasCompletedProfile
 
         let store = PersistenceController.shared.container.mainContext

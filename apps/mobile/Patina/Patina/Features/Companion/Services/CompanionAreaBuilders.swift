@@ -24,6 +24,13 @@ extension CompanionActionProvider {
         (context.engagementTier ?? .discovering) >= .engaged
     }
 
+    /// SP-13: the Daily Room carries a message row once a designer is actually
+    /// on the job. An unresolved relationship reads as no designer — never
+    /// offer a conversation with nobody.
+    static func showsMessageDesignerRow(_ context: CompanionContext) -> Bool {
+        context.designerRelationship?.isLive ?? false
+    }
+
     static func homeItems(context: CompanionContext) -> [CompanionActionItem] {
         if context.roomCount == 0 {
             var rows = [
@@ -32,6 +39,9 @@ extension CompanionActionProvider {
                 recommendationsRow(context: context)
             ]
             if let collections = collectionsRow(context: context) { rows.append(collections) }
+            if showsMessageDesignerRow(context) {
+                rows.append(messageDesignerRow(label: "Message your designer"))
+            }
             if showsStudioRow(context) { rows.append(studioRow()) }
             return rows
         }
@@ -41,6 +51,9 @@ extension CompanionActionProvider {
             scanRow(label: "Add another space", hint: "Capture another room", reason: .fresh)
         ]
         if let collections = collectionsRow(context: context) { rows.append(collections) }
+        if showsMessageDesignerRow(context) {
+            rows.append(messageDesignerRow(label: "Message your designer"))
+        }
         if context.activeDesignRequest != nil {
             rows.append(requestRow(context: context))
         } else if showsStudioRow(context) {

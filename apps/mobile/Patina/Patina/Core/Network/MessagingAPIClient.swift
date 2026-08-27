@@ -12,6 +12,16 @@
 import Foundation
 import Supabase
 
+/// The two thread-creation RPCs, pinned. Both are SECURITY DEFINER, idempotent
+/// and already granted to `authenticated` (`00103_comms_rpcs.sql:51`, `:105`,
+/// `:113`, `:173`) — SP-13 is client work only, with no backend delta.
+public enum ThreadCreationRPC {
+    public static let projectFunction = "rpc_start_project_thread"
+    public static let projectParameter = "p_project_id"
+    public static let directFunction = "rpc_start_direct_thread"
+    public static let directParameter = "counterpart"
+}
+
 // MARK: - DTOs
 
 public struct RemoteCommsThread: Codable, Sendable, Identifiable {
@@ -209,6 +219,57 @@ public actor MessagingAPIClient {
         let rows = try decoder.decode([RemoteCommsMessage].self, from: data)
         guard let first = rows.first else { throw RoomsAPIError.emptyResponse }
         return first
+    }
+
+    // MARK: - Create
+
+    /// Open (or fetch) the project's group thread. The RPC resolves an
+    /// existing thread before creating one, so a second tap is not a second
+    /// thread, and it seeds the system message "Project conversation opened."
+    /// so the record stays legible to the designer.
+    /// - Returns: the thread id.
+    public func createThread(projectId: String) async throws -> String {
+        try await startThread(
+            function: ThreadCreationRPC.projectFunction,
+            parameter: ThreadCreationRPC.projectParameter,
+            value: projectId
+        )
+    }
+
+    /// Open (or fetch) a direct thread with the designer — the matched client
+    /// who has no project yet.
+    /// - Returns: the thread id.
+    public func createDirectThread(counterpart: UUID) async throws -> String {
+        try await startThread(
+            function: ThreadCreationRPC.directFunction,
+            parameter: ThreadCreationRPC.directParameter,
+            value: counterpart.uuidString.lowercased()
+        )
+    }
+
+    /// Both RPCs `RETURNS UUID`, which PostgREST renders as a bare JSON string.
+    private func startThread(
+        function: String,
+        parameter: String,
+        value: String
+    ) async throws -> String {
+        var request = URLRequest(
+            url: baseURL.appendingPathComponent("/rest/v1/rpc/\(function)")
+        )
+        request.httpMethod = "POST"
+        await applyHeaders(to: &request)
+        request.httpBody = try JSONSerialization.data(withJSONObject: [parameter: value])
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw RoomsAPIError.http(
+                status: http.statusCode,
+                body: String(data: data, encoding: .utf8) ?? ""
+            )
+        }
+        guard let threadId = try? decoder.decode(String.self, from: data), !threadId.isEmpty else {
+            throw RoomsAPIError.emptyResponse
+        }
+        return threadId
     }
 
     // MARK: - Mark read

@@ -200,25 +200,30 @@ private extension StudioQueueBuilder {
         .sorted(by: rowComesFirst)
     }
 
+    /// SP-13: emitted even at zero threads. Returning nil there left the
+    /// Studio's Conversation block as the one block drawn without a route —
+    /// a dead end that read as "messaging does not exist".
     static func conversationThreadRow(_ context: StudioQueueContext) -> StudioQueueRow? {
         let threads = context.input.threads
-        guard !threads.isEmpty else { return nil }
         let unreadCount = context.unreadThreads.count
-        let detail = unreadCount == 0
-            ? "All caught up"
-            : countLabel(
+        let detail: String
+        if threads.isEmpty {
+            detail = "Start one with your designer"
+        } else if unreadCount == 0 {
+            detail = "All caught up"
+        } else {
+            detail = countLabel(
                 unreadCount,
                 singular: "1 unread thread",
                 plural: "\(unreadCount) unread threads"
             )
+        }
 
         return StudioQueueRow(
             id: "conversation.threads",
-            title: countLabel(
-                threads.count,
-                singular: "Conversation",
-                plural: "Conversations"
-            ),
+            title: threads.isEmpty
+                ? "Conversation"
+                : countLabel(threads.count, singular: "Conversation", plural: "Conversations"),
             detail: detail,
             meta: nil,
             systemImage: "bubble.left.and.bubble.right",

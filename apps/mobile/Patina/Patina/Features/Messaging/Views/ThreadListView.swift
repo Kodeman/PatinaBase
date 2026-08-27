@@ -17,6 +17,9 @@ struct ThreadListView: View {
     /// header + pinned back chevron), so `.searchable` has nowhere to render —
     /// a lightweight Patina-styled search field stands in for it.
     @State private var searchText: String = ""
+    /// SP-13 compose state for the empty view's "Message your designer".
+    @State private var isOpeningThread = false
+    @State private var openThreadFailed = false
 
     /// Threads matching the search text against the resolved title + preview.
     private var filteredItems: [ThreadListItem] {
@@ -175,18 +178,75 @@ struct ThreadListView: View {
         .accessibilityLabel(item.accessibilityLabel)
     }
 
-    /// U22: names the surface, names the trigger, and offers the one CTA
-    /// that actually unblocks it — track an in-flight request if one
-    /// exists, otherwise start one.
+    /// U22 + SP-13: names the surface, names the trigger, and offers the one
+    /// CTA that actually unblocks it. Once a designer is on the job that CTA
+    /// is the conversation itself — the Studio's Conversation block routes
+    /// here at zero threads, so this is where the compose act lives.
     private var emptyView: some View {
         PatinaEmptyState(
             icon: "bubble.left.and.bubble.right",
             title: "No conversations yet",
             message: "Messages with your designer land here once you're working together.",
-            ctaTitle: studioCTATitle,
-            ctaAction: presentStudioCTA
+            ctaTitle: isOpeningThread ? "Opening\u{2026}" : emptyCTATitle,
+            ctaAction: performEmptyCTA
         )
         .padding(.top, 80)
+    }
+
+    /// The live designer relationship, resolved from the same services the
+    /// Companion reads.
+    private var designerRelationship: DesignerRelationship {
+        DesignerRelationshipResolver.resolve(
+            promotedRequest: DesignRequestStatusService.shared.promotedRequest,
+            projects: BadgeCountService.shared.projects,
+            roster: BadgeCountService.shared.roster
+        )
+    }
+
+    private var emptyCTATitle: String {
+        openThreadFailed
+            ? "That didn\u{2019}t go through. Try again."
+            : (designerRelationship.isLive ? "Message your designer" : studioCTATitle)
+    }
+
+    private func performEmptyCTA() {
+        let relationship = designerRelationship
+        guard relationship.isLive else {
+            presentStudioCTA()
+            return
+        }
+        openThread(with: relationship)
+    }
+
+    /// A project thread where there is a project, a direct thread where the
+    /// client is matched but has none yet. Both RPCs are idempotent.
+    private func openThread(with relationship: DesignerRelationship) {
+        guard !isOpeningThread else { return }
+        isOpeningThread = true
+        openThreadFailed = false
+        Task {
+            do {
+                let threadId: String
+                switch relationship {
+                case let .project(projectId, _, _):
+                    threadId = try await MessagingAPIClient.shared
+                        .createThread(projectId: projectId.uuidString)
+                case let .lead(_, designerId, _):
+                    threadId = try await MessagingAPIClient.shared
+                        .createDirectThread(counterpart: designerId)
+                case .none, .roster:
+                    isOpeningThread = false
+                    return
+                }
+                isOpeningThread = false
+                coordinator.navigate(to: .threadDetail(threadId: threadId))
+            } catch {
+                // C5: never render a vendor error to a homeowner.
+                PatinaLog.ui.debug("[Messaging] open thread failed: \(error.localizedDescription)")
+                isOpeningThread = false
+                openThreadFailed = true
+            }
+        }
     }
 
     private var studioCTATitle: String {
