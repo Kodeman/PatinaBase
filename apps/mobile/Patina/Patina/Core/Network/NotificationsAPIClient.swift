@@ -172,6 +172,16 @@ extension AppNotificationType {
             self = .emergenceAlert
         case "scan_complete", "scan_processed", "room_scan_synced":
             self = .scanComplete
+        // SP-08: the client-facing money/decision types. `proposal_sent` is
+        // not new — 00388_proposal_send_dispatch_guard.sql:1258-1278 already
+        // writes it on the real send path; the seed bypassed it, which is why
+        // the bell read empty beside a proposal awaiting signature (F08).
+        case "proposal_sent", "proposal_reminder":
+            self = .proposal
+        case "invoice_sent", "invoice_due", "invoice_reminder":
+            self = .invoice
+        case "decision_raised", "decision_reminder":
+            self = .decision
         default:
             self = .newRecommendations
         }
@@ -184,6 +194,9 @@ extension AppNotificationType {
         case .styleUpdate: return "Style profile updated"
         case .emergenceAlert: return "Something's emerging"
         case .scanComplete: return "Room scan ready"
+        case .proposal: return "A proposal needs your signature"
+        case .invoice: return "An invoice is waiting"
+        case .decision: return "A decision needs you"
         }
     }
 }

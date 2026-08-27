@@ -26,6 +26,21 @@ struct AppNotification: Identifiable {
     /// depends on the entity (UUID for rooms/projects/decisions/threads,
     /// freeform string for products).
     let entityId: String?
+    /// SP-08: this row was composed from the Studio queue because
+    /// `notification_log` held nothing, not delivered by the backend. It
+    /// carries no read state and no time — inventing either would be the
+    /// fabricated signal C5 forbids.
+    let isStudioFallback: Bool
+    /// Where a composed Studio row goes. A delivered row resolves its route
+    /// from `entityType`/`entityId` through `NotificationRouter`; a composed
+    /// one carries the Studio row's own route, so the bell and the Studio land
+    /// a tap in the same place.
+    let fallbackRoute: AppRoute?
+
+    /// The one route a tap follows, whichever kind of row this is.
+    var route: AppRoute? {
+        fallbackRoute ?? NotificationRouter.route(for: self)
+    }
 
     init(
         id: UUID = UUID(),
@@ -36,7 +51,9 @@ struct AppNotification: Identifiable {
         timestamp: Date,
         isRead: Bool = false,
         entityType: String? = nil,
-        entityId: String? = nil
+        entityId: String? = nil,
+        isStudioFallback: Bool = false,
+        fallbackRoute: AppRoute? = nil
     ) {
         self.id = id
         self.remoteId = remoteId
@@ -47,6 +64,8 @@ struct AppNotification: Identifiable {
         self.isRead = isRead
         self.entityType = entityType
         self.entityId = entityId
+        self.isStudioFallback = isStudioFallback
+        self.fallbackRoute = fallbackRoute
     }
 
     var icon: String {
@@ -66,12 +85,18 @@ struct AppNotification: Identifiable {
     }
 }
 
-enum AppNotificationType {
+enum AppNotificationType: Equatable {
     case newRecommendations
     case designerResponse
     case styleUpdate
     case emergenceAlert
     case scanComplete
+    /// SP-08: the three client-facing money/decision events 00534 writes.
+    /// Without their own buckets they fell through to `.newRecommendations`
+    /// and an invoice arrived titled "New pieces for you".
+    case proposal
+    case invoice
+    case decision
 
     var icon: String {
         switch self {
@@ -80,6 +105,9 @@ enum AppNotificationType {
         case .styleUpdate: return "paintpalette.fill"
         case .emergenceAlert: return "star.fill"
         case .scanComplete: return "checkmark.circle.fill"
+        case .proposal: return "doc.text"
+        case .invoice: return "creditcard"
+        case .decision: return "hand.raised"
         }
     }
 
@@ -90,6 +118,20 @@ enum AppNotificationType {
         case .styleUpdate: return PatinaColors.sage
         case .emergenceAlert: return PatinaColors.goldenHour
         case .scanComplete: return PatinaColors.success
+        case .proposal: return PatinaColors.mocha
+        case .invoice: return PatinaColors.terracotta
+        case .decision: return PatinaColors.clayDeep
+        }
+    }
+
+    /// The `metadata.entity_type` spelling this bucket corresponds to —
+    /// lower-case, matching `NotificationRouter`'s table and 00534's contract.
+    var entityType: String? {
+        switch self {
+        case .proposal: return "proposal"
+        case .invoice: return "invoice"
+        case .decision: return "decision"
+        default: return nil
         }
     }
 }

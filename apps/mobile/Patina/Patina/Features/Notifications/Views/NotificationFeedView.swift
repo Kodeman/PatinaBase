@@ -10,6 +10,8 @@ import SwiftUI
 struct NotificationFeedView: View {
     @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = NotificationsViewModel()
+    @State private var isOpeningThread = false
+    @State private var openThreadFailed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -21,7 +23,7 @@ struct NotificationFeedView: View {
 
                 Spacer()
 
-                if !viewModel.notifications.isEmpty {
+                if viewModel.notifications.contains(where: { !$0.isStudioFallback && !$0.isRead }) {
                     Button("Mark all read") {
                         viewModel.markAllRead()
                     }
@@ -81,7 +83,7 @@ struct NotificationFeedView: View {
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if !notification.isRead {
+                        if !notification.isRead && !notification.isStudioFallback {
                             Button {
                                 viewModel.markRead(notification)
                             } label: {
@@ -123,18 +125,60 @@ struct NotificationFeedView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// U22: names the surface, names the trigger, and offers the one CTA
-    /// that actually unblocks it — track an in-flight request if one
-    /// exists, otherwise start one. Matches the other studio empties.
+    /// SP-08: offering "Get design help" to a client who has had a designer
+    /// for three months is its own insult. The CTA branches on the live
+    /// relationship first — the same predicate the thread list and the
+    /// Companion read — and only falls back to acquisition at discovering.
+    ///
+    /// Pure and static so the branch is testable without a live session.
+    static func emptyCTATitle(
+        relationship: DesignerRelationship,
+        hasPromotedRequest: Bool
+    ) -> String {
+        if relationship.isLive { return "Message your designer" }
+        return hasPromotedRequest ? "Track your request" : "Get design help"
+    }
+
     private var studioCTATitle: String {
-        DesignRequestStatusService.shared.promotedRequest != nil ? "Track your request" : "Get design help"
+        if isOpeningThread { return "Opening\u{2026}" }
+        if openThreadFailed { return "That didn\u{2019}t go through. Try again." }
+        return Self.emptyCTATitle(
+            relationship: DesignerThreadOpener.currentRelationship,
+            hasPromotedRequest: DesignRequestStatusService.shared.promotedRequest != nil
+        )
     }
 
     private func presentStudioCTA() {
+        let relationship = DesignerThreadOpener.currentRelationship
+        if relationship.isLive {
+            openDesignerThread(relationship)
+            return
+        }
         if DesignRequestStatusService.shared.promotedRequest != nil {
             coordinator.navigate(to: .designRequests(focusLeadId: nil))
         } else {
             coordinator.navigate(to: .designerConsultation)
+        }
+    }
+
+    private func openDesignerThread(_ relationship: DesignerRelationship) {
+        guard !isOpeningThread else { return }
+        isOpeningThread = true
+        openThreadFailed = false
+        Task {
+            do {
+                guard let threadId = try await DesignerThreadOpener.openThread(with: relationship) else {
+                    isOpeningThread = false
+                    return
+                }
+                isOpeningThread = false
+                coordinator.navigate(to: .threadDetail(threadId: threadId))
+            } catch {
+                // C5: never render a vendor error to a homeowner.
+                PatinaLog.ui.debug("[Notifications] open thread failed: \(error.localizedDescription)")
+                isOpeningThread = false
+                openThreadFailed = true
+            }
         }
     }
 
@@ -177,7 +221,7 @@ struct NotificationFeedView: View {
     /// feed but the row is still marked read.
     private func handleTap(_ notification: AppNotification) {
         viewModel.markRead(notification)
-        if let route = NotificationRouter.route(for: notification) {
+        if let route = notification.route {
             coordinator.navigate(to: route)
         }
     }
@@ -213,18 +257,22 @@ struct NotificationFeedView: View {
 
             Spacer()
 
-            // Trailing column: unread dot above the timestamp.
+            // Trailing column: unread dot above the timestamp. A composed
+            // Studio row has neither — it was never delivered, so it has no
+            // arrival time and no read state to report (C5).
             VStack(alignment: .trailing, spacing: 6) {
-                if !notification.isRead {
+                if !notification.isRead && !notification.isStudioFallback {
                     Circle()
                         .fill(PatinaColors.Text.interactive)
                         .frame(width: 8, height: 8)
                 }
 
-                Text(notification.timeAgo)
-                    .font(PatinaTypography.monoTiny)
-                    .foregroundStyle(PatinaColors.Text.muted)
-                    .tracking(0.3)
+                if !notification.isStudioFallback {
+                    Text(notification.timeAgo)
+                        .font(PatinaTypography.monoTiny)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                        .tracking(0.3)
+                }
             }
 
             // U12: read rows previously had zero visible tap affordance —
