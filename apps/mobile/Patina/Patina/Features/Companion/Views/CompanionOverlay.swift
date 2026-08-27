@@ -27,7 +27,6 @@ public struct CompanionOverlay: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = CompanionViewModel()
-    @State private var studioViewModel = StudioHubViewModel.shared
     @State private var state: CompanionState = .button
     @State private var voiceInputState: VoiceInputState = .idle
 
@@ -241,11 +240,12 @@ public struct CompanionOverlay: View {
         }
     }
 
+    /// SP-16: one count, from one source. The Studio snapshot is no longer
+    /// consulted here — it is a different fetch, and preferring it was exactly
+    /// how the Studio and the Daily Room came to print different numbers on
+    /// the same minute.
     private var liveStudioAttentionHint: String? {
-        if studioViewModel.hasLoaded, let hint = studioViewModel.attentionSummary.hint {
-            return hint
-        }
-        return coordinator.companionContext.attentionSummary
+        BadgeCountService.shared.attentionHint ?? coordinator.companionContext.attentionSummary
     }
 
     private var contextualCollapsedHint: String {

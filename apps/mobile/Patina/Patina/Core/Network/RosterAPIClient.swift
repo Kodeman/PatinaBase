@@ -42,7 +42,7 @@ public actor RosterAPIClient {
                 URLQueryItem(name: "select", value: "designer_id,created_at,status"),
                 URLQueryItem(name: "client_id", value: "eq.\(userId)"),
                 URLQueryItem(name: "status", value: "eq.active"),
-                URLQueryItem(name: "order", value: "created_at.desc"),
+                URLQueryItem(name: "order", value: "created_at.desc")
             ])
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")

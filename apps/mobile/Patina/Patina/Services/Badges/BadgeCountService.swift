@@ -49,15 +49,35 @@ final class BadgeCountService {
     /// is the signal that unlocks the full Studio hub (see `EngagementTier`).
     private(set) var projectCount: Int = 0
 
-    /// The projects themselves, retained so `DesignerRelationshipResolver`
-    /// and the Record (W2) read the rows this service already fetched instead
-    /// of issuing the same query again.
+    /// The rows themselves, retained so `DesignerRelationshipResolver` and the
+    /// Record (W2) read what this service already fetched instead of issuing
+    /// the same queries again. Each array is the one the matching count was
+    /// computed from, so a row list and its count can never disagree.
+    private(set) var pendingDecisions: [RemoteClientDecision] = []
+    private(set) var pendingProposals: [RemoteProposal] = []
+    private(set) var payableInvoices: [RemoteInvoice] = []
+    private(set) var threadSummaries: [RemoteCommsThreadSummary] = []
     private(set) var projects: [RemoteProject] = []
 
     /// The client's active `designer_clients` rows — the attribution roster.
     /// Expected empty until a client SELECT policy on `designer_clients`
     /// exists; see `RosterAPIClient`.
     private(set) var roster: [RosterDesigner] = []
+
+    /// SP-16: THE attention count. One number, computed once, printed by the
+    /// Profile/Studio subhead, the Companion (which is the footer on both the
+    /// Studio and the Daily Room) and the Daily Room itself.
+    ///
+    /// It counts ITEMS, not rows — four things needing the client is four,
+    /// even where the Studio groups them into three cards.
+    var attentionCount: Int {
+        pendingDecisionCount + proposalsAwaitingSignatureCount + payableInvoiceCount
+    }
+
+    /// That count as the one sentence every surface prints.
+    var attentionHint: String? {
+        StudioAttentionSummary.attentionHint(count: attentionCount)
+    }
 
     /// True once a refresh has completed for an authenticated session.
     /// Guests never load — the rail renders invitations, not counts.
@@ -71,7 +91,7 @@ final class BadgeCountService {
 
     private var pendingRefresh: Task<Void, Never>?
 
-    private init() {}
+    init() {}
 
     /// Fetch both counts. Guests resolve to zero without a network round
     /// trip — the rail hides counts in guest mode anyway. Failures keep
@@ -83,6 +103,10 @@ final class BadgeCountService {
             proposalsAwaitingSignatureCount = 0
             payableInvoiceCount = 0
             projectCount = 0
+            pendingDecisions = []
+            pendingProposals = []
+            payableInvoices = []
+            threadSummaries = []
             projects = []
             roster = []
             hasLoaded = false
@@ -101,37 +125,62 @@ final class BadgeCountService {
         )
         let fetchedRoster = await rosterFetch
 
-        if let decisions {
-            pendingDecisionCount = decisions.count
-        }
-        if let summaries {
-            let me = ThreadListViewModel.currentUserId()
-            unreadMessageCount = summaries
-                .filter { ThreadListViewModel.isUnread($0, me: me) }
-                .count
-        }
-        if let proposals {
-            proposalsAwaitingSignatureCount = proposals.filter { $0.isSignable }.count
-        }
-        if let invoices {
-            payableInvoiceCount = invoices.filter { $0.isPayable }.count
-        }
-        if let fetchedProjects {
-            projectCount = fetchedProjects.count
-            projects = fetchedProjects
-        }
-        // The roster is not part of the load verdict: under today's RLS an
-        // empty array IS the successful answer, so counting it would mask a
-        // total failure of the five queries that carry the rail.
-        if let fetchedRoster {
-            roster = fetchedRoster
-        }
+        apply(
+            decisions: decisions, summaries: summaries, proposals: proposals,
+            invoices: invoices, projects: fetchedProjects, roster: fetchedRoster
+        )
         if decisions != nil || summaries != nil || proposals != nil
             || invoices != nil || fetchedProjects != nil {
             hasLoaded = true
             lastRefreshFailed = false
         } else {
             lastRefreshFailed = true
+        }
+    }
+
+    /// Fold a set of fetched rows into the counts and the retained rows. A
+    /// `nil` argument means that fetch failed and its previous value stands —
+    /// a stale floor beats a flickering zero.
+    ///
+    /// The roster is deliberately not part of the load verdict its caller
+    /// computes: under today's `designer_clients` RLS an empty array IS the
+    /// successful answer, so counting it would mask a total failure of the
+    /// five queries that actually carry the rail.
+    /// Each fetch is a distinct queue with its own failure, so the arity is
+    /// inherent — bundling them into a struct would only move it.
+    func apply( // swiftlint:disable:this function_parameter_count
+        decisions: [RemoteClientDecision]?,
+        summaries: [RemoteCommsThreadSummary]?,
+        proposals: [RemoteProposal]?,
+        invoices: [RemoteInvoice]?,
+        projects fetchedProjects: [RemoteProject]?,
+        roster fetchedRoster: [RosterDesigner]?
+    ) {
+        if let decisions {
+            pendingDecisions = decisions
+            pendingDecisionCount = decisions.count
+        }
+        if let summaries {
+            let me = ThreadListViewModel.currentUserId()
+            threadSummaries = summaries
+            unreadMessageCount = summaries
+                .filter { ThreadListViewModel.isUnread($0, me: me) }
+                .count
+        }
+        if let proposals {
+            pendingProposals = proposals.filter { $0.isSignable }
+            proposalsAwaitingSignatureCount = pendingProposals.count
+        }
+        if let invoices {
+            payableInvoices = invoices.filter { $0.isPayable }
+            payableInvoiceCount = payableInvoices.count
+        }
+        if let fetchedProjects {
+            projects = fetchedProjects
+            projectCount = fetchedProjects.count
+        }
+        if let fetchedRoster {
+            roster = fetchedRoster
         }
     }
 

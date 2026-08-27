@@ -52,7 +52,9 @@ struct StudioHubView: View {
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let hint = viewModel.attentionSummary.hint {
+            // SP-16: the subhead prints THE attention count, not this
+            // screen's own recomputation of it.
+            if let hint = BadgeCountService.shared.attentionHint {
                 Text(hint)
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.interactive)

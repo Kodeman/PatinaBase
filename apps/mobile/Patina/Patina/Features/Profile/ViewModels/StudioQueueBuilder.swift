@@ -206,18 +206,12 @@ private extension StudioQueueBuilder {
     static func conversationThreadRow(_ context: StudioQueueContext) -> StudioQueueRow? {
         let threads = context.input.threads
         let unreadCount = context.unreadThreads.count
-        let detail: String
-        if threads.isEmpty {
-            detail = "Start one with your designer"
-        } else if unreadCount == 0 {
-            detail = "All caught up"
-        } else {
-            detail = countLabel(
-                unreadCount,
-                singular: "1 unread thread",
-                plural: "\(unreadCount) unread threads"
-            )
-        }
+        let detail = threads.isEmpty
+            ? "Start one with your designer"
+            : (unreadCount == 0
+               ? "All caught up"
+               : countLabel(unreadCount, singular: "1 unread thread",
+                            plural: "\(unreadCount) unread threads"))
 
         return StudioQueueRow(
             id: "conversation.threads",

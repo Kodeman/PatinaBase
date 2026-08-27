@@ -89,10 +89,17 @@ struct StudioAttentionSummary: Equatable {
         activeProjectCount: 0
     )
 
+    /// SP-16: the one attention sentence, so the Studio subhead, the Companion
+    /// and the Daily Room cannot phrase the same number three ways.
+    static func attentionHint(count: Int) -> String? {
+        if count == 1 { return "1 thing needs your eye" }
+        if count > 1 { return "\(count) things need your eye" }
+        return nil
+    }
+
     /// Short enough to sit beneath the collapsed Companion mark.
     var hint: String? {
-        if awaitingCount == 1 { return "1 thing needs your eye" }
-        if awaitingCount > 1 { return "\(awaitingCount) things need your eye" }
+        if let attention = Self.attentionHint(count: awaitingCount) { return attention }
         if unreadConversationCount == 1 { return "1 new conversation" }
         if unreadConversationCount > 1 { return "\(unreadConversationCount) new conversations" }
         if unreadUpdateCount == 1 { return "1 new Studio update" }
