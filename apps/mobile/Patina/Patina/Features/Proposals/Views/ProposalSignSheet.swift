@@ -12,6 +12,8 @@ import SwiftUI
 
 struct ProposalSignSheet: View {
     let proposalTitle: String
+    /// SP-04: what is being agreed to, restated from the bundle's own fields.
+    let terms: ProposalSignTerms
     let isSigning: Bool
     let errorMessage: String?
     let onSign: (String) -> Void
@@ -37,10 +39,13 @@ struct ProposalSignSheet: View {
                     Text(proposalTitle)
                         .font(PatinaTypography.h3)
                         .foregroundStyle(PatinaColors.Text.primary)
-                    Text("Type your full name to e-sign. Signing confirms the scope and kicks off your project.")
-                        .font(PatinaTypography.bodySmall)
-                        .foregroundStyle(PatinaColors.Text.secondary)
                 }
+
+                restatedTerms
+
+                Text("Type your full name to e-sign. Signing confirms the scope and kicks off your project.")
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
 
                 PatinaTextField(
                     "Full name",
@@ -78,11 +83,44 @@ struct ProposalSignSheet: View {
         }
         .background(PatinaColors.Background.primary)
     }
+
+    /// SP-04: what is being agreed to, above the name field. Every row is a
+    /// field the bundle returned; an absent field draws nothing.
+    @ViewBuilder
+    private var restatedTerms: some View {
+        let lines = terms.lines
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(lines, id: \.label) { line in
+                    HStack(alignment: .top, spacing: 12) {
+                        MonoLabel(text: line.label)
+                            .frame(width: 78, alignment: .leading)
+                        Text(line.value)
+                            .font(PatinaTypography.bodySmallMedium)
+                            .foregroundStyle(PatinaColors.Text.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PatinaColors.Background.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .accessibilityIdentifier("proposalSign.terms")
+        }
+    }
 }
 
 #Preview {
     ProposalSignSheet(
         proposalTitle: "Living Room Refresh",
+        terms: ProposalSignTerms(
+            projectName: "Aspen Loft Refresh",
+            total: "$100,000.00",
+            deposit: "Deposit — $25,000.00",
+            terms: "Net 30",
+            expiry: "Expires Sep 8, 2026"
+        ),
         isSigning: false,
         errorMessage: nil,
         onSign: { _ in },

@@ -40,6 +40,10 @@ struct ProposalDetailView: View {
         .sheet(isPresented: $viewModel.showSignSheet) {
             ProposalSignSheet(
                 proposalTitle: viewModel.proposal?.title ?? "this proposal",
+                terms: ProposalSignTerms.make(
+                    proposal: viewModel.proposal,
+                    milestones: viewModel.milestones
+                ),
                 isSigning: viewModel.isSigning,
                 errorMessage: viewModel.signError,
                 onSign: { name in

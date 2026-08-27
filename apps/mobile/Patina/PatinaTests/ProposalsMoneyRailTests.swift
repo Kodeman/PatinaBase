@@ -314,6 +314,60 @@ struct ProposalsMoneyRailTests {
             .appendingPathComponent(relativePath)
     }
 
+    // MARK: - SP-04 · the sign sheet restates the terms
+
+    @Test("the sign sheet restates only fields the bundle returned")
+    func signTermsComposeFromTheBundleAndOmitNulls() throws {
+        let proposal = try decode(RemoteProposal.self, """
+        { "id": "p-3", "status": "sent", "title": "Aspen Loft",
+          "total_amount": 10000000, "payment_terms": "net_30",
+          "valid_until": "2026-09-08", "project": { "id": "pr", "name": "Aspen Loft Refresh" },
+          "created_at": "2026-07-01T00:00:00Z" }
+        """)
+        let milestones = try decode([RemoteProposalMilestone].self, """
+        [{ "id": "m2", "label": "Second draw", "percentage": 50, "amount_cents": 5000000, "sort_order": 1 },
+         { "id": "m1", "label": "Deposit", "percentage": 25, "amount_cents": 2500000, "sort_order": 0 }]
+        """)
+        let terms = ProposalSignTerms.make(proposal: proposal, milestones: milestones)
+        #expect(terms.projectName == "Aspen Loft Refresh")
+        #expect(terms.total == "$100,000.00")
+        #expect(terms.deposit == "Deposit — $25,000.00")
+        #expect(terms.terms == "Net 30")
+        #expect(terms.expiry == "Expires Sep 8, 2026")
+        #expect(terms.lines.map(\.label) == ["Project", "Total", "Deposit", "Terms", "Expiry"])
+    }
+
+    @Test("a bundle with nothing to restate draws nothing, and invents nothing")
+    func signTermsAreEmptyWhenTheBundleIsBare() throws {
+        let bare = try decode(RemoteProposal.self, """
+        { "id": "p-4", "status": "sent", "created_at": "2026-07-01T00:00:00Z" }
+        """)
+        #expect(ProposalSignTerms.make(proposal: bare, milestones: []).lines.isEmpty)
+        #expect(ProposalSignTerms.make(proposal: nil, milestones: []) == .empty)
+    }
+
+    @Test("a milestone with only a percentage is not printed as a figure to sign")
+    func signTermsDoNotInventADepositAmount() throws {
+        let proposal = try decode(RemoteProposal.self, """
+        { "id": "p-5", "status": "sent", "total_amount": 10000000,
+          "created_at": "2026-07-01T00:00:00Z" }
+        """)
+        let milestones = try decode([RemoteProposalMilestone].self, """
+        [{ "id": "m1", "label": "Deposit", "percentage": 25, "amount_cents": null, "sort_order": 0 }]
+        """)
+        #expect(ProposalSignTerms.make(proposal: proposal, milestones: milestones).deposit == nil)
+    }
+
+    @Test("signing fires the confirmation email the RPC does not send")
+    func signPathInvokesTheConfirmationFunction() throws {
+        let source = try String(
+            contentsOf: Self.sourceURL("Patina/Services/API/ProposalsAPIClient.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("\"proposal-sign-confirmation\""))
+        #expect(source.contains("rpc(\"sign_proposal\""))
+    }
+
     // MARK: - Route names
 
     @Test
