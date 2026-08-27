@@ -11,6 +11,7 @@
 
 import Testing
 import Foundation
+import SwiftData
 @testable import Patina
 
 @MainActor
@@ -86,5 +87,54 @@ struct SavedItemMirrorTests {
             with: try JSONEncoder().encode(payload)
         ) as? [String: Any]
         #expect(try #require(json)["room_id"] as? String == "room-1")
+    }
+
+    // MARK: - The guest's save is local, and honest about it
+
+    /// The fix-round regression: `saveProduct` mirrored on every save, and
+    /// `resolveUserId()` throws `notAuthenticated` for a guest — so the guest's
+    /// heart-tap deleted its own row and printed a connection error. SP-14's
+    /// risk note says the local store stays authoritative until sign-in.
+    @Test
+    func aGuestSaveIsNotMirrored() {
+        #expect(SavedItemMirror.shouldAttempt(isAuthenticated: false) == false)
+        #expect(SavedItemMirror.shouldAttempt(isAuthenticated: true) == true)
+    }
+
+    /// A guest tapping the heart keeps the piece and is told nothing failed.
+    @Test
+    func aGuestHeartTapKeepsThePieceAndSaysNothingFailed() async throws {
+        let schema = Schema([TableItemModel.self])
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let context = ModelContext(try ModelContainer(for: schema, configurations: [config]))
+        let viewModel = RecommendationsViewModel()
+        let product = Product(
+            id: "p-guest", name: "Oak Reading Chair", priceCents: 180_000, matchScore: 70,
+            makerName: "Nordic Atelier", makerLocation: nil, makerStory: nil,
+            imageURL: nil, usdzURL: nil, styleTags: [], materialTags: [], badges: [],
+            category: .seating, tier: .styleMatch
+        )
+
+        viewModel.isAccountAvailable = { false }
+        viewModel.saveProduct(product, context: context)
+        // Long enough for a mirror Task to have run and reverted, had one run.
+        try await Task.sleep(for: .milliseconds(400))
+
+        #expect(viewModel.isSaved(product))
+        #expect(viewModel.saveFailureMessage == nil)
+        let stored = try context.fetch(FetchDescriptor<TableItemModel>())
+        #expect(stored.count == 1)
+        #expect(stored.first?.productId == "p-guest")
+    }
+
+    /// The notice a signed-in reader gets when the mirror does not land names
+    /// the phone and the account — it does not blame a connection the app
+    /// cannot see, and does not promise a retry that does not exist.
+    @Test
+    func theDeferredNoticeSaysWhatIsTrue() {
+        let notice = SavedItemMirror.deferredNotice
+        #expect(notice.contains("Saved on this phone"))
+        #expect(!notice.lowercased().contains("connection"))
+        #expect(!notice.lowercased().contains("will reach"))
     }
 }

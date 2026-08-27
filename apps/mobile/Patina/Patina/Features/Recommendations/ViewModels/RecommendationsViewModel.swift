@@ -35,9 +35,15 @@ final class RecommendationsViewModel {
     /// succeeds.
     private var remoteSavedItemIds: [String: String] = [:]
 
-    /// U29: transient notice shown when the remote save mirror fails, so the
-    /// user never believes an unsaved item is saved. Cleared automatically.
+    /// U29/SP-14: transient notice shown when a signed-in reader's remote save
+    /// mirror does not land — the piece is saved on this phone either way, and
+    /// the line says so. Never set for a guest, who has no account to mirror
+    /// into. Cleared automatically.
     var saveFailureMessage: String?
+
+    /// SP-14: whether there is an account to mirror a save into. A closure so
+    /// the guest path can be exercised without an ambient session.
+    var isAccountAvailable: () -> Bool = { AuthService.shared.isAuthenticated }
 
     // MARK: - Filters
 
@@ -177,35 +183,39 @@ final class RecommendationsViewModel {
         // room-scoped ones — `room_id` is nullable, and a save that never
         // reaches the server does not survive a reinstall or reach a second
         // device. `room_id` carries the room when there is one.
-        Task {
-            do {
-                let userId = try await RoomsAPIClient.shared.resolveUserId()
-                let payload = CreateSavedItemPayload(
-                    room_id: roomRemoteId,
-                    user_id: userId,
-                    product_id: product.id,
-                    name: product.name,
-                    image_url: product.imageURL,
-                    price_in_cents: product.priceCents,
-                    source: "ios",
-                    notes: nil
-                )
-                let created = try await RoomsAPIClient.shared.createItem(payload)
-                await MainActor.run {
-                    self.remoteSavedItemIds[product.id] = created.id
-                }
-            } catch {
-                #if DEBUG
-                PatinaLog.ui.error("[Recommendations] save sync failed: \(error.localizedDescription)")
-                #endif
-                // U29: the remote mirror is what makes a save durable
-                // across devices/the portal — on failure, revert the
-                // visible saved state rather than let the user believe
-                // an unsaved item is saved.
-                await MainActor.run {
-                    self.savedProductIds.remove(product.id)
-                    context.delete(item)
-                    self.showSaveFailure()
+        //
+        // A guest has no account to mirror into (SP-14's risk note): the local
+        // store stays authoritative and SP-06's claim step carries the work
+        // across at sign-in, so no request is made and nothing is said.
+        if SavedItemMirror.shouldAttempt(isAuthenticated: isAccountAvailable()) {
+            Task {
+                do {
+                    let userId = try await RoomsAPIClient.shared.resolveUserId()
+                    let payload = CreateSavedItemPayload(
+                        room_id: roomRemoteId,
+                        user_id: userId,
+                        product_id: product.id,
+                        name: product.name,
+                        image_url: product.imageURL,
+                        price_in_cents: product.priceCents,
+                        source: "ios",
+                        notes: nil
+                    )
+                    let created = try await RoomsAPIClient.shared.createItem(payload)
+                    await MainActor.run {
+                        self.remoteSavedItemIds[product.id] = created.id
+                    }
+                } catch {
+                    #if DEBUG
+                    PatinaLog.ui.error("[Recommendations] save sync failed: \(error.localizedDescription)")
+                    #endif
+                    // U29 wanted the visible saved state reverted when the mirror
+                    // failed. SP-14 makes the local store the thing that is saved,
+                    // so the row stays and the reader is told exactly what did and
+                    // did not happen instead.
+                    await MainActor.run {
+                        self.showSaveDeferred()
+                    }
                 }
             }
         }
@@ -250,10 +260,12 @@ final class RecommendationsViewModel {
         HapticManager.shared.notification(.success)
     }
 
-    /// U29: shows the save-failure notice for a few seconds then clears it —
-    /// deliberately lightweight, no dismiss affordance to wire up.
-    private func showSaveFailure() {
-        saveFailureMessage = "Couldn't save — check your connection and try again."
+    /// U29/SP-14: shows the mirror-deferred notice for a few seconds then
+    /// clears it — deliberately lightweight, no dismiss affordance to wire up.
+    /// The piece is saved either way; this only reports that the account copy
+    /// did not land.
+    private func showSaveDeferred() {
+        saveFailureMessage = SavedItemMirror.deferredNotice
         Task {
             try? await Task.sleep(for: .seconds(4))
             await MainActor.run {

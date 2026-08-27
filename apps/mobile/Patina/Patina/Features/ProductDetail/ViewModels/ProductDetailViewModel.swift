@@ -156,6 +156,9 @@ final class ProductDetailViewModel {
     /// Writes the account's `saved_items` row, skipping the insert when one
     /// already exists for this product — the remote half of "save once".
     private func mirrorSave(product: Product, roomRemoteId: String?) async {
+        // SP-14's risk note: a guest has no account to mirror into — the local
+        // store stays authoritative until SP-06's claim step.
+        guard SavedItemMirror.shouldAttempt(isAuthenticated: AuthService.shared.isAuthenticated) else { return }
         do {
             let userId = try await RoomsAPIClient.shared.resolveUserId()
             let existing = try await RoomsAPIClient.shared.listItems(forUserId: userId)
@@ -180,6 +183,7 @@ final class ProductDetailViewModel {
     }
 
     private func mirrorUnsave(productId: String) async {
+        guard SavedItemMirror.shouldAttempt(isAuthenticated: AuthService.shared.isAuthenticated) else { return }
         do {
             let userId = try await RoomsAPIClient.shared.resolveUserId()
             let rows = try await RoomsAPIClient.shared.listItems(forUserId: userId)
