@@ -71,6 +71,7 @@ final class FeatureFlags {
         if let inline = Self.inlineValues(arguments: arguments) {
             values = inline
             isResolved = true
+            logResolution(source: "launch-arguments")
             return
         }
         resolution = Task { [weak self] in
@@ -92,6 +93,7 @@ final class FeatureFlags {
         if let inline = Self.inlineValues(arguments: arguments) {
             values = inline
             isResolved = true
+            logResolution(source: "launch-arguments")
             return
         }
         let delivered = await provider.waitUntilReady(timeout: timeout)
@@ -101,6 +103,18 @@ final class FeatureFlags {
             }
         )
         isResolved = true
+        logResolution(source: delivered ? "posthog" : "timeout")
+    }
+
+    /// A walk has no other way to see which flags a launch resolved — nothing
+    /// reads them until W3 mounts the tab bar.
+    private func logResolution(source: String) {
+        #if DEBUG
+        let on = Flag.allCases.filter { isOn($0) }.map(\.rawValue)
+        PatinaLog.ui.debug(
+            "[FeatureFlags] resolved via \(source): on=[\(on.joined(separator: ","))]"
+        )
+        #endif
     }
 
     // MARK: - Launch arguments
