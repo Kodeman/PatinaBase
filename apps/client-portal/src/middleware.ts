@@ -125,6 +125,12 @@ export async function middleware(req: NextRequest) {
   // resolve_plan_transmittal() — a sub or fabricator handed a drawing set has
   // no Patina account and never will.
   const isPlansPage = req.nextUrl.pathname.startsWith('/plans/');
+  // /piece/[id] is the public face of a shared piece (SP-03). A homeowner texts
+  // the link to her husband, who has no Patina account and may never have one;
+  // redirecting him to /auth/signin is the same dead end the share already was.
+  // The read behind it is anon-scoped by RLS (products_catalog_select_anon,
+  // 00152:298) — no session data is reachable from here.
+  const isPiecePage = req.nextUrl.pathname.startsWith('/piece/');
   // Bearer-URL surfaces must never be cached by an intermediary: the HTML is
   // keyed on the token URL, so a cached copy would keep serving a revoked
   // link's sheet list. force-dynamic + meta tags govern Next and crawlers that
@@ -142,7 +148,8 @@ export async function middleware(req: NextRequest) {
     isFieldPage ||
     isRfqPage ||
     isEvidencePage ||
-    isPlansPage;
+    isPlansPage ||
+    isPiecePage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   // The wrong-portal interstitial is the redirect target for wrong-role users;
   // it must be exempt from the gate or a wrong-role user would loop. /unauthorized

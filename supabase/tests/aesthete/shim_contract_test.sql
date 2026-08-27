@@ -16,6 +16,8 @@
 --   4. get_recommendations (anon): still granted + serving (shared neutral
 --      profile at the fixed session key, get-or-created).
 --   5. match_events attribution: shim calls log source='ios'.
+--   6. 00533's widening (SP-10): the ten appended columns exist, in order,
+--      after the fourteen frozen ones.
 --
 -- Uses the seeded dev accounts + the 00244 demo seed (invoked here inside
 -- the transaction; rolled back).
@@ -88,9 +90,11 @@ BEGIN
   ASSERT pg_get_function_arguments('get_recommendations(uuid,text,int,int)'::regprocedure)
        = 'p_room_id uuid DEFAULT NULL::uuid, p_category text DEFAULT NULL::text, p_limit integer DEFAULT 20, p_offset integer DEFAULT 0',
     'get_recommendations arguments drifted from 00067';
+  -- The FIRST FOURTEEN columns are the 00067 freeze; 00533 (SP-10) appends ten
+  -- more. Widening by appending is the only sanctioned change to this shape.
   ASSERT pg_get_function_result('get_recommendations(uuid,text,int,int)'::regprocedure)
-       = 'TABLE(id text, name text, price_cents integer, match_score integer, maker_name text, maker_location text, maker_story text, image_url text, usdz_url text, style_tags text[], material_tags text[], badges text[], category text, tier text)',
-    'get_recommendations RETURNS TABLE drifted from 00067';
+       = 'TABLE(id text, name text, price_cents integer, match_score integer, maker_name text, maker_location text, maker_story text, image_url text, usdz_url text, style_tags text[], material_tags text[], badges text[], category text, tier text, dimensions jsonb, lead_time_weeks integer, brand text, description text, published_at timestamp with time zone, finish text, patina_managed boolean, photo_verified_at timestamp with time zone, source_url text, shipping_flat_cents integer)',
+    'get_recommendations RETURNS TABLE drifted from the 00067 prefix + 00533 contract';
 
   -- grants frozen: authenticated on both; anon additionally on get_recommendations
   ASSERT has_function_privilege('authenticated', 'process_style_quiz(jsonb,jsonb)', 'EXECUTE'),
@@ -177,6 +181,30 @@ BEGIN
   -- ── 5. match_events attribution ──
   ASSERT EXISTS (SELECT 1 FROM match_events me WHERE me.source = 'ios'),
     'shim calls must log match_events with source=ios';
+
+  -- ── 6. 00533 widening (SP-10): the ten appended columns ──
+  ASSERT EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'products'
+                    AND column_name = 'photo_verified_at'
+                    AND data_type = 'timestamp with time zone'),
+    '00533 must add products.photo_verified_at';
+  ASSERT EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = 'products'
+                    AND column_name = 'shipping_flat_cents'
+                    AND data_type = 'integer'),
+    '00533 must add products.shipping_flat_cents';
+
+  -- The projection carries the catalog's real values, not a column of nulls.
+  PERFORM pg_temp.assume_user(u_client);
+  SELECT count(*) INTO v_count
+    FROM get_recommendations(p_limit := 50) g
+   WHERE g.dimensions IS NOT NULL AND g.lead_time_weeks IS NOT NULL;
+  ASSERT v_count > 0,
+    '00533 must project real dimensions/lead_time_weeks from the seeded catalog';
+  SELECT count(*) INTO v_count
+    FROM get_recommendations(p_limit := 50) g WHERE g.brand IS NOT NULL;
+  ASSERT v_count > 0, '00533 must project products.brand';
+  PERFORM pg_temp.reset_role();
 
   RAISE NOTICE 'shim_contract_test: ALL ASSERTIONS PASSED';
 END $$;
