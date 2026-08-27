@@ -36,6 +36,12 @@ public final class PostHogService {
     /// Whether PostHog has been initialized
     private var isInitialized: Bool = false
 
+    /// Whether a feature-flag payload has landed this session. Observed from
+    /// `initialize()` so `awaitFeatureFlags` can answer instantly for a caller
+    /// that arrives after delivery.
+    private var hasReceivedFeatureFlags: Bool = false
+    private var flagDeliveryObserver: NSObjectProtocol?
+
     // MARK: - User Properties
 
     /// Current user ID for identification
@@ -64,6 +70,13 @@ public final class PostHogService {
         PostHogSDK.shared.setup(config)
         PostHogSDK.shared.register(["surface": "patina-ios"])
         isInitialized = true
+        flagDeliveryObserver = NotificationCenter.default.addObserver(
+            forName: PostHogSDK.didReceiveFeatureFlags,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.hasReceivedFeatureFlags = true }
+        }
         PatinaLog.ui.debug("[PostHog] Initialized successfully with host: \(hostURL)")
 
         // Respect App Tracking Transparency
@@ -150,6 +163,65 @@ public final class PostHogService {
         guard isEnabled else { return false }
 
         return PostHogSDK.shared.isFeatureEnabled(flag)
+    }
+
+    /// Wait until PostHog has delivered a feature-flag payload, or `timeout`
+    /// elapses — whichever comes first. Returns immediately when analytics is
+    /// off, because no payload will ever arrive.
+    ///
+    /// posthog-ios 3.48 exposes no `onFeatureFlags` method; the delivery
+    /// signal is the `PostHogSDK.didReceiveFeatureFlags` notification
+    /// (`PostHogExtensions.swift:19`, posted from `PostHogRemoteConfig`).
+    /// - Returns: whether a payload actually arrived. `false` means the wait
+    ///   timed out (or analytics is off) and the flag values must not be read.
+    @discardableResult
+    public func awaitFeatureFlags(timeout: Duration) async -> Bool {
+        guard isEnabled, isInitialized else { return false }
+        // A payload delivered before this call posted its notification already;
+        // waiting for a second one would always time out.
+        if hasReceivedFeatureFlags { return true }
+
+        let gate = FlagDeliveryGate()
+        let observer = NotificationCenter.default.addObserver(
+            forName: PostHogSDK.didReceiveFeatureFlags,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { gate.open(delivered: true) }
+        }
+        let bound = Task { @MainActor in
+            try? await Task.sleep(for: timeout)
+            gate.open(delivered: false)
+        }
+        let delivered = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            gate.attach(continuation)
+        }
+        bound.cancel()
+        NotificationCenter.default.removeObserver(observer)
+        return delivered
+    }
+
+    /// Resumes its continuation exactly once, whichever of the notification or
+    /// the timeout wins the race.
+    @MainActor
+    private final class FlagDeliveryGate {
+        private var continuation: CheckedContinuation<Bool, Never>?
+        private var outcome: Bool?
+
+        func attach(_ continuation: CheckedContinuation<Bool, Never>) {
+            if let outcome {
+                continuation.resume(returning: outcome)
+            } else {
+                self.continuation = continuation
+            }
+        }
+
+        func open(delivered: Bool) {
+            guard outcome == nil else { return }
+            outcome = delivered
+            continuation?.resume(returning: delivered)
+            continuation = nil
+        }
     }
 
     /// Get feature flag value

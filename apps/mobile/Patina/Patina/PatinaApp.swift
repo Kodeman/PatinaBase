@@ -79,6 +79,10 @@ struct PatinaApp: App {
         if !Self.isUITesting {
             PostHogService.shared.initialize()
         }
+
+        // Resolve every feature flag once, before the root is chosen, and hold
+        // the answer for the session.
+        FeatureFlags.shared.resolveAtLaunch()
     }
 
     var body: some Scene {
