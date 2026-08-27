@@ -197,4 +197,36 @@ struct MoneyAndStudioCopyTests {
         #expect(row.title == "Budget")
         #expect(row.detail == "What's been billed, and what's been paid")
     }
+
+    // MARK: - SP-19 (money half) · the status bar and the Hearth
+
+    static let moneyScreenSources = [
+        "Patina/Features/Invoices/Views/InvoiceDetailView.swift",
+        "Patina/Features/Invoices/Views/InvoiceListView.swift",
+        "Patina/Features/Proposals/Views/ProposalDetailView.swift",
+        "Patina/Features/Proposals/Views/ProposalListView.swift",
+        "Patina/Features/Decisions/Views/DecisionDetailView.swift",
+        "Patina/Features/Decisions/Views/DecisionListView.swift",
+        "Patina/Features/Budget/BudgetView.swift",
+        "Patina/Features/Projects/Views/ProjectDetailView.swift"
+    ]
+
+    @Test("nothing on a money screen is drawn inside the Hearth")
+    func moneyScreensClearTheHearth() {
+        #expect(MoneyScreenMetrics.bottomClearance >= CompanionHearthMetrics.reservedHeight)
+        #expect(CompanionHearthMetrics.reservedHeight == 120)
+    }
+
+    @Test("every money screen reserves the status bar and the Hearth from one place")
+    func moneyScreensShareOneChromeSource() throws {
+        for file in Self.moneyScreenSources {
+            let source = try String(contentsOf: Self.sourceURL(file), encoding: .utf8)
+            let name = (file as NSString).lastPathComponent
+            #expect(source.contains("moneyScreenTopBand()"), "\(name) misses the status-bar band")
+            #expect(source.contains("MoneyScreenMetrics.bottomClearance"),
+                    "\(name) hard-codes its Hearth clearance")
+            #expect(!source.contains(".padding(.bottom, 120)"), "\(name) still hard-codes 120")
+            #expect(!source.contains(".padding(.bottom, 140)"), "\(name) still hard-codes 140")
+        }
+    }
 }

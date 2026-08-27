@@ -30,12 +30,13 @@ struct ProposalDetailView: View {
                         .padding(.top, 80)
                 }
             }
-            .padding(.bottom, 140)
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
+        .moneyScreenTopBand()
         .task { await viewModel.load(proposalId: proposalId) }
         .sheet(isPresented: $viewModel.showSignSheet) {
             ProposalSignSheet(

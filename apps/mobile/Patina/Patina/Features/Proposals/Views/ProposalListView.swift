@@ -18,12 +18,13 @@ struct ProposalListView: View {
                 header
                 content
             }
-            .padding(.bottom, 120)
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
+        .moneyScreenTopBand()
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
     }
@@ -169,11 +170,12 @@ private struct ProposalRowCard: View {
         ProposalStatusDisplay.rowLabel(proposal)
     }
 
+    /// SP-15: the same expiry line the detail now carries, from the same
+    /// helper — and it says "Expired" once the date has passed instead of
+    /// promising an expiry that already happened.
     private var expiryLine: String? {
-        guard proposal.status != "accepted",
-              let until = proposal.valid_until,
-              let date = ISO8601DateParsing.date(from: until) else { return nil }
-        return "Expires \(DateDisplay.short(date))"
+        guard proposal.status != "accepted" else { return nil }
+        return DateDisplay.expiry(proposal.valid_until)?.text
     }
 }
 
