@@ -34,6 +34,14 @@ enum StudioQueueBuilder {
             )
         )
     }
+
+    /// Whether a project has stopped being live work. Internal because
+    /// `DesignerRelationshipResolver` asks the same question and the two must
+    /// not drift.
+    static func projectIsArchived(_ project: RemoteProject) -> Bool {
+        guard let status = project.status?.lowercased() else { return false }
+        return ["completed", "cancelled", "canceled", "archived", "inactive"].contains(status)
+    }
 }
 
 @MainActor
@@ -434,11 +442,6 @@ private extension StudioQueueBuilder {
         }
         return Calendar.current.startOfDay(for: expiry)
             >= Calendar.current.startOfDay(for: now)
-    }
-
-    static func projectIsArchived(_ project: RemoteProject) -> Bool {
-        guard let status = project.status?.lowercased() else { return false }
-        return ["completed", "cancelled", "canceled", "archived", "inactive"].contains(status)
     }
 
     static func notificationIsUnread(_ notification: RemoteNotification) -> Bool {
