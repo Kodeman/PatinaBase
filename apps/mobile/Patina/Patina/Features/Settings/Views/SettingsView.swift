@@ -17,6 +17,13 @@ struct SettingsView: View {
     @State private var contextMemory = ContextMemoryStore.shared
     @State private var showingForgetContextConfirmation = false
     @State private var showingResetTasteConfirmation = false
+    /// SP-20: Sign Out and Delete account live here, not only behind a screen
+    /// that could not be reached.
+    @State private var showingSignOutConfirmation = false
+    @State private var showingDeleteConfirmation = false
+    @State private var isDeletingAccount = false
+    @State private var deleteFailureMessage: String?
+    private var authService: AuthService { AuthService.shared }
     /// Cellular opt-in for large scan artifact uploads. Backing store is
     /// read by `RoomScanSyncService` at upload-time — UserDefaults key
     /// `patina.scanUploadOnCellularEnabled` keeps the two sides in sync.
@@ -63,6 +70,34 @@ struct SettingsView: View {
                         // same pattern as AccountView's "Sign in to Web".
                         coordinator.presentedSheet = .qr
                     }
+                    if authService.isAuthenticated {
+                        settingsButtonRow(
+                            icon: "rectangle.portrait.and.arrow.right",
+                            iconColor: PatinaColors.agedOak,
+                            label: "Sign Out"
+                        ) {
+                            showingSignOutConfirmation = true
+                        }
+                        .accessibilityIdentifier("SettingsView.SignOutButton")
+                        settingsButtonRow(
+                            icon: "trash",
+                            iconColor: PatinaColors.terracotta,
+                            label: "Delete account"
+                        ) {
+                            showingDeleteConfirmation = true
+                        }
+                        .accessibilityIdentifier("SettingsView.DeleteAccountButton")
+                    }
+                }
+
+                if let deleteFailureMessage {
+                    Text(deleteFailureMessage)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, PatinaSpacing.lg)
+                        .padding(.bottom, PatinaSpacing.lg)
+                        .accessibilityIdentifier("SettingsView.DeleteAccountFailure")
                 }
 
                 // Preferences group
@@ -149,6 +184,48 @@ struct SettingsView: View {
             }
         } message: {
             Text("This removes your local taste portrait and its tuning. Rooms, scans, saved pieces, and projects are not changed.")
+        }
+        .alert("Sign Out", isPresented: $showingSignOutConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Sign Out") { signOut() }
+        } message: {
+            Text("Are you sure you want to sign out?")
+        }
+        .alert(AccountDeletionService.confirmationTitle, isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete account", role: .destructive) { deleteAccount() }
+        } message: {
+            Text(AccountDeletionService.confirmationBody)
+        }
+    }
+
+    // MARK: - Account actions (SP-20)
+
+    private func signOut() {
+        Task { @MainActor in
+            // Close this sheet first so the splash transition isn't covered
+            // by it — the same order AccountView's alert uses.
+            coordinator.presentedSheet = nil
+            coordinator.beginSplashTransition()
+            try? await AuthService.shared.signOut()
+        }
+    }
+
+    private func deleteAccount() {
+        guard !isDeletingAccount else { return }
+        isDeletingAccount = true
+        deleteFailureMessage = nil
+        Task { @MainActor in
+            do {
+                coordinator.presentedSheet = nil
+                coordinator.beginSplashTransition()
+                try await AccountDeletionService.shared.deleteAccount()
+            } catch {
+                // C5: our sentence, never the server's.
+                deleteFailureMessage = AccountDeletionService.failureCopy
+                coordinator.presentedSheet = .settings
+            }
+            isDeletingAccount = false
         }
     }
 
