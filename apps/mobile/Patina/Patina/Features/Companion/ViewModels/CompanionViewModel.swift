@@ -125,6 +125,34 @@ public final class CompanionViewModel {
 
     // MARK: - Context Updates
 
+    /// Whether a `companion-context` request is warranted for a given screen.
+    ///
+    /// `CompanionOverlay` calls `updateContext(_:)` from three places — on a
+    /// `companionContext` change, on a `currentScreen` change, and on appear —
+    /// and at launch all three fire for the same screen. `updateContext` then
+    /// spawned a fetch every time, which is why the app sent
+    /// `companion-context` FOUR times in two seconds for one screen with the
+    /// function returning 200 (`research/05-rewalk.md` §2d: not retry
+    /// behaviour, an app-side duplicate-request defect).
+    struct QuickActionsGate {
+        private var lastFetchedScreen: String?
+
+        /// True the first time a screen identifier is seen, false for repeats.
+        mutating func shouldFetch(screen: String) -> Bool {
+            guard lastFetchedScreen != screen else { return false }
+            lastFetchedScreen = screen
+            return true
+        }
+
+        /// Forget the last screen so the next call fetches again — used by an
+        /// explicit refresh.
+        mutating func invalidate() {
+            lastFetchedScreen = nil
+        }
+    }
+
+    private var quickActionsGate = QuickActionsGate()
+
     /// Update companion state for the current context
     public func updateContext(_ newContext: CompanionContext) {
         let screenChanged = context.currentScreen != newContext.currentScreen
@@ -143,20 +171,24 @@ public final class CompanionViewModel {
             hasPendingMessage = true
         }
 
-        // Fetch API quick actions if authenticated
-        if AuthService.shared.isAuthenticated {
-            Task {
-                await fetchAPIQuickActions()
-            }
+        // Fetch API quick actions if authenticated — once per screen, not once
+        // per caller.
+        guard AuthService.shared.isAuthenticated else { return }
+        guard quickActionsGate.shouldFetch(screen: screenIdentifier(for: newContext.currentScreen)) else { return }
+        Task {
+            await fetchAPIQuickActions()
         }
     }
 
-    /// Fetch quick actions from the backend API
+    /// Fetch quick actions from the backend API. An explicit call always
+    /// fetches — the gate above exists only to collapse the duplicate context
+    /// updates that arrive for one screen.
     public func fetchAPIQuickActions() async {
         guard AuthService.shared.isAuthenticated else { return }
 
         do {
             let screenName = screenIdentifier(for: context.currentScreen)
+            _ = quickActionsGate.shouldFetch(screen: screenName)
             apiQuickActions = try await companionService.fetchQuickActions(
                 screen: screenName,
                 context: context,
