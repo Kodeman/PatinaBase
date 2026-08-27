@@ -26,9 +26,11 @@ import SwiftUI
 enum MoneyScreenMetrics {
 
     /// Clearance under the last element of a money screen, so nothing lands
-    /// inside the Hearth. Derived from the Hearth's own metric — a change
-    /// there moves this with it.
-    static let bottomClearance: CGFloat = CompanionHearthMetrics.reservedHeight + 24
+    /// inside the Hearth. Derived from what the dock actually draws — the
+    /// mark, its caption row and the overlay's lift — not from
+    /// `reservedHeight`, which is 20 points shorter than the dock and left the
+    /// old 144 clearing it by luck.
+    static let bottomClearance: CGFloat = CompanionHearthMetrics.dockHeight + 8
 }
 
 extension View {

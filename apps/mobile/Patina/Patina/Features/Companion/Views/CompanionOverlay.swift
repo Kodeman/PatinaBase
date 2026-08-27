@@ -136,6 +136,9 @@ public struct CompanionOverlay: View {
 
         if case .pieceDetail = screen { return .minimal }
         if case .arPlacement = screen { return .minimal }
+        // A screen with a pinned money act keeps the act; the dock yields to
+        // its corner mark. See `CompanionHearthMetrics.yieldsToPinnedFooter`.
+        if CompanionHearthMetrics.yieldsToPinnedFooter(for: screen) { return .minimal }
         if case .styleResult = screen { return .resting }
 
         if let nudge = CompanionActionProvider.nudge(

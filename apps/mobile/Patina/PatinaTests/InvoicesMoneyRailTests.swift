@@ -262,4 +262,54 @@ struct InvoicesMoneyRailTests {
         #expect(AppRoute.invoiceList.displayName == "Invoices")
         #expect(AppRoute.invoiceDetail(invoiceId: "i").displayName == "Invoice")
     }
+
+    // MARK: - The Pay act is never under the dock (ruling 1)
+
+    /// The dock height is the sum of what `CompanionHearthView.collapsedView`
+    /// and the overlay actually draw. Pinned here so a change to either one
+    /// fails this instead of silently re-colliding with the Pay button.
+    @Test("the dock's height matches what the Companion draws")
+    func dockHeightTracksTheCompanion() {
+        #expect(CompanionHearthMetrics.collapsedDiameter == CompanionConstants.buttonSize)
+        #expect(CompanionHearthMetrics.captionRowHeight == CompanionConstants.minimumTouchTarget)
+        #expect(CompanionHearthMetrics.dockHeight == 140)
+    }
+
+    /// The money clearance is measured against the dock, not against
+    /// `reservedHeight` — which is 20 points shorter than the dock draws.
+    @Test("a money screen's bottom inset clears the dock, not just the Hearth")
+    func moneyClearanceClearsTheDock() {
+        #expect(MoneyScreenMetrics.bottomClearance >= CompanionHearthMetrics.dockHeight)
+        #expect(CompanionHearthMetrics.dockHeight > CompanionHearthMetrics.reservedHeight)
+    }
+
+    /// An inset only moves a scroll view's resting position, so the three
+    /// screens that pin a money act also make the dock yield to its corner
+    /// mark; nothing else does.
+    @Test("only the pinned-money screens make the dock yield")
+    func pinnedMoneyScreensYieldTheDock() {
+        for route: AppRoute in [
+            .invoiceDetail(invoiceId: "i"),
+            .proposalDetail(proposalId: "p"),
+            .decisionDetail(decisionId: "d")
+        ] {
+            #expect(CompanionHearthMetrics.yieldsToPinnedFooter(for: route), "\(route) kept the full dock")
+        }
+        for route: AppRoute in [.heroFrame, .invoiceList, .proposalList, .decisionList, .budget] {
+            #expect(!CompanionHearthMetrics.yieldsToPinnedFooter(for: route), "\(route) yielded without a pinned act")
+        }
+    }
+
+    /// The policy is only a fix if the overlay reads it: `displayMode` must
+    /// resolve these routes to `.minimal` before it reaches the nudge, which
+    /// is what put a caption over the failure banner.
+    @Test("the overlay resolves a yielding route to the minimal dock")
+    func overlayHonoursTheYield() throws {
+        let source = try SourcePin.read("Patina/Features/Companion/Views/CompanionOverlay.swift")
+        let yield = try #require(
+            source.range(of: "yieldsToPinnedFooter(for: screen) { return .minimal }")
+        )
+        let nudge = try #require(source.range(of: "CompanionActionProvider.nudge("))
+        #expect(yield.lowerBound < nudge.lowerBound)
+    }
 }
