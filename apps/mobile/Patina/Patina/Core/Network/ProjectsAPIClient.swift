@@ -68,6 +68,23 @@ public struct RemoteProject: Codable, Sendable, Identifiable {
     }
 }
 
+/// A room a designer owns, on a project the client can see. Read-only here:
+/// the client did not type it, and the home draws it as a card they cannot
+/// edit (B §2, M1 block 4). `budget_cents` is NOT NULL with a 0 default and
+/// `committed_cents` is nullable, so "no figures" is a real state the card has
+/// to draw without inventing one (00066:220-237).
+public struct RemoteProjectRoom: Codable, Sendable, Identifiable {
+    public let id: String
+    public let project_id: String
+    public let name: String
+    public let room_type: String?
+    public let dimensions: String?
+    public let floor_area_sqft: Double?
+    public let budget_cents: Int?
+    public let committed_cents: Int?
+    public let sort_order: Int?
+}
+
 public struct RemoteProjectPhase: Codable, Sendable, Identifiable {
     public let id: String
     public let project_id: String
@@ -180,6 +197,23 @@ public actor ProjectsAPIClient {
             return try await get(path: "projects", queryItems:
                 [URLQueryItem(name: "select", value: "*")] + filters)
         }
+    }
+
+    /// The client's project rooms. The client-scoped SELECT policy on
+    /// `project_rooms` has existed since `00066:249-253` and filters correctly
+    /// in both directions (`waves/w2/steward.md` §5) — what was missing was any
+    /// fetch path in the app at all, which is this one.
+    public func listProjectRooms(projectIds: [String]) async throws -> [RemoteProjectRoom] {
+        guard !projectIds.isEmpty else { return [] }
+        return try await get(path: "project_rooms", queryItems: [
+            URLQueryItem(
+                name: "select",
+                value: "id,project_id,name,room_type,dimensions,floor_area_sqft,"
+                    + "budget_cents,committed_cents,sort_order"
+            ),
+            URLQueryItem(name: "project_id", value: "in.(\(projectIds.joined(separator: ",")))"),
+            URLQueryItem(name: "order", value: "sort_order.asc,name.asc"),
+        ])
     }
 
     public func listPhases(projectId: String) async throws -> [RemoteProjectPhase] {

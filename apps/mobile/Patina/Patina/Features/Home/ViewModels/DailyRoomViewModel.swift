@@ -42,6 +42,11 @@ final class DailyRoomViewModel {
     /// repriced rows over them.
     var savedItems: [TableItemModel] = []
 
+    /// The designer's rooms on the client's projects — read-only cards on the
+    /// house rail. Empty for anyone with no project, and after a failed read:
+    /// the rail then draws the rooms the person made, and nothing invented.
+    var projectRooms: [RemoteProjectRoom] = []
+
     var rooms: [RoomSummary] = []
     /// The real SwiftData rows behind `rooms`, retained so Today can show one
     /// active room with its actual image, timestamps, and saved-item history.
@@ -345,6 +350,34 @@ final class DailyRoomViewModel {
             },
             paint: { [weak self] painted in self?.record = painted }
         )
+    }
+
+    /// The client's project rooms. RLS has allowed this read since 00066; the
+    /// app simply never made it (`waves/w2/steward.md` §5).
+    func refreshProjectRooms() async {
+        guard AuthService.shared.isAuthenticated else {
+            projectRooms = []
+            return
+        }
+        let ids = BadgeCountService.shared.projects.map(\.id)
+        guard !ids.isEmpty else {
+            projectRooms = []
+            return
+        }
+        do {
+            projectRooms = try await ProjectsAPIClient.shared.listProjectRooms(projectIds: ids)
+        } catch {
+            #if DEBUG
+            PatinaLog.ui.error("[DailyRoomVM] project rooms failed: \(error)")
+            #endif
+        }
+    }
+
+    /// Every room the house holds — the designer's and the person's. The house
+    /// rail draws when this is non-zero, which is why an activeProject client
+    /// whose rooms all live on the project never sees the empty state.
+    var houseRoomCards: [HouseRoomCard] {
+        HouseRoomCard.cards(projectRooms: projectRooms, localRooms: roomModels)
     }
 
     private func fetchSavedItems() -> [TableItemModel] {
