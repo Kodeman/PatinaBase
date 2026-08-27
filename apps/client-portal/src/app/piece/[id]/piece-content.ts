@@ -124,8 +124,7 @@ export function pieceMetadata(view: PieceView): PieceMetadata {
     view.blurb ??
     [view.maker ? `Made by ${view.maker}.` : null, view.price, view.leadTime]
       .filter((line): line is string => Boolean(line))
-      .join(" · ") ??
-    "";
+      .join(" · ");
   return {
     title,
     description: description || `${view.name}, on Patina.`,

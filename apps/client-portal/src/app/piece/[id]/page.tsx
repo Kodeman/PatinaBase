@@ -127,13 +127,18 @@ export default async function PiecePage({
         </p>
       ) : null}
 
-      {piece.size || piece.leadTime ? (
+      {piece.size ? (
         <dl className="mt-8">
-          {piece.size ? <SpecRow label="Size" value={piece.size} /> : null}
-          {piece.leadTime ? (
-            <SpecRow label="Lead time" value={piece.leadTime} />
-          ) : null}
+          <SpecRow label="Size" value={piece.size} />
         </dl>
+      ) : null}
+
+      {/* The sentence alone (SP-10). "Lead time · Ships in about 10 weeks"
+          labelled the sentence with its own subject. */}
+      {piece.leadTime ? (
+        <p className="type-body-small mt-6 text-[var(--text-muted,#8a8175)]">
+          {piece.leadTime}
+        </p>
       ) : null}
 
       <a

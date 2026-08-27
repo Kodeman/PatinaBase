@@ -51,8 +51,23 @@ describe("Apple App Site Association", () => {
     );
     expect(client).toEqual({
       appID: "VP22LXHT7L.cloud.patina.app",
-      paths: ["/piece/*", "/invoice/*", "/proposal/*", "/decision/*"],
+      paths: ["/piece/*", "/invoices/*", "/proposals/*", "/decisions/*"],
     });
+  });
+
+  // review M-D2: the association must name routes that exist on this host and
+  // agree with the deep_link 00534 writes (/proposals/<id>, /invoices/<id>,
+  // /decisions/<id>). A singular path associates nothing.
+  it("associates the plural money routes the portal actually serves", () => {
+    const client = appleAppSiteAssociation().applinks.details.find(
+      (entry) => entry.appID === "VP22LXHT7L.cloud.patina.app",
+    );
+    for (const singular of ["/invoice/*", "/proposal/*", "/decision/*"]) {
+      expect(client?.paths).not.toContain(singular);
+    }
+    for (const plural of ["/invoices/*", "/proposals/*", "/decisions/*"]) {
+      expect(client?.paths).toContain(plural);
+    }
   });
 
   it("serves exactly the two apps, and no wildcard app entry", () => {

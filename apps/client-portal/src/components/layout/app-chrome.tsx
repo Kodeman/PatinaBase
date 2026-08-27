@@ -10,8 +10,14 @@ import { isClientActionableProjectApproval } from '../../lib/client-attention';
 // Routes that must NOT get the app chrome (auth, public token views, quiz,
 // demo, and the role-mismatch interstitials). Everything else is an
 // authenticated app page and gets the global header + mobile drawer.
+//
+// '/piece' is the shared-piece page (SP-03): a stranger opens it from a text
+// message with no session at all, and must not be handed a Client Portal
+// header, a project switcher and links to Projects and Invoices they cannot
+// open.
 const PUBLIC_PREFIXES = [
   '/auth',
+  '/piece',
   '/share',
   '/field',
   '/rfq',
