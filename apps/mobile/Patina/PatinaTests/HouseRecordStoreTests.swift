@@ -68,3 +68,100 @@ struct LastSeenStoreTests {
         #expect(source.contains("com.apple.developer.applesignin"))
     }
 }
+
+struct RecordSnapshotStoreTests {
+
+    private let referenceDate = Date(timeIntervalSince1970: 1_787_000_000)
+
+    /// A store that is guaranteed to miss the App Group and take the fallback,
+    /// which is also what the Simulator does without provisioning (§9.4).
+    /// The fallback directory is a fresh temp dir so the suites cannot see
+    /// each other's snapshots.
+    private func fallbackStore() throws -> RecordSnapshotStore {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("patina.tests.record.\(UUID().uuidString)")
+        return RecordSnapshotStore(
+            appGroupIdentifier: "group.does.not.exist.\(UUID().uuidString)",
+            fallbackDirectory: directory
+        )
+    }
+
+    private func sampleRecord() -> HouseRecord {
+        HouseRecord(
+            needsYou: [
+                HouseRecordRow(
+                    id: "decision:d1", kind: .decisionAsked,
+                    title: "Leah Hartwell asked you to choose.",
+                    detail: "Rug color — Natural vs Sand", date: referenceDate,
+                    state: .overdue, isNew: false,
+                    route: .decisionDetail(decisionId: "d1")
+                ),
+                HouseRecordRow(
+                    id: "invoice:i1", kind: .invoiceDue,
+                    title: "Your invoice is due.", detail: "INV-2026-0142",
+                    date: referenceDate, state: .amount(cents: 425_000, due: referenceDate),
+                    isNew: true, route: .invoiceDetail(invoiceId: "i1")
+                )
+            ],
+            moved: [
+                HouseRecordRow(
+                    id: "story:s1", kind: .story,
+                    title: "A new story from the workshop.",
+                    detail: "The Grain Whisperer of Maine", date: referenceDate,
+                    state: .none, isNew: true, route: nil
+                )
+            ],
+            window: DateInterval(start: referenceDate.addingTimeInterval(-604_800),
+                                 end: referenceDate),
+            lastSeenAt: referenceDate.addingTimeInterval(-86_400),
+            hasMoreNeedsYou: true, hasMoreMoved: false
+        )
+    }
+
+    @Test("a saved record loads back identical")
+    func aSavedRecordLoadsBackIdentical() throws {
+        let store = try fallbackStore()
+        let record = sampleRecord()
+
+        store.save(record)
+
+        #expect(try #require(store.load()) == record)
+    }
+
+    @Test("loading before anything is saved is nil, not an empty record")
+    func loadingBeforeAnythingIsSavedIsNil() throws {
+        #expect(try fallbackStore().load() == nil)
+    }
+
+    /// M16 / steward §9.4. On the Simulator the group container URL can be nil
+    /// even for a real group; the store must fall back and say so, not crash
+    /// and not silently no-op.
+    @Test("an unreachable App Group falls back to the app container and still works")
+    func anUnknownAppGroupFallsBackToTheAppContainer() throws {
+        let store = try fallbackStore()
+        #expect(store.usesAppGroupContainer == false)
+
+        store.save(sampleRecord())
+
+        #expect(try #require(store.load()).needsYou.count == 2)
+    }
+
+    @Test("a corrupt snapshot loads as nil rather than throwing at launch")
+    func aCorruptSnapshotLoadsAsNil() throws {
+        let store = try fallbackStore()
+        store.save(sampleRecord())
+
+        try Data("not json".utf8).write(to: store.fileURL)
+
+        #expect(store.load() == nil)
+    }
+
+    @Test("saving twice keeps the newer record")
+    func savingTwiceKeepsTheNewerRecord() throws {
+        let store = try fallbackStore()
+        store.save(sampleRecord())
+        store.save(HouseRecord.empty)
+
+        #expect(try #require(store.load()).isEmpty)
+    }
+}
