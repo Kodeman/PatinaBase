@@ -56,6 +56,7 @@ final class ProductDetailViewModel {
                         name: product.name,
                         image_url: product.imageURL,
                         price_in_cents: product.priceCents,
+                        price_cents_at_save: product.priceCents,
                         source: source,
                         notes: nil
                     )
@@ -171,6 +172,7 @@ final class ProductDetailViewModel {
                     name: product.name,
                     image_url: product.imageURL,
                     price_in_cents: product.priceCents,
+                    price_cents_at_save: product.priceCents,
                     source: "ios",
                     notes: nil
                 )

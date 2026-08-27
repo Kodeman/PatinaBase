@@ -125,6 +125,10 @@ public struct CreateSavedItemPayload: Encodable {
     public let name: String
     public let image_url: String?
     public let price_in_cents: Int?
+    /// SP-14 / 00535: what the piece cost the day it was saved. `price_in_cents`
+    /// mirrors what it costs today; the pair is what lets the app say a price
+    /// moved without inventing a figure. NULL when the price was unknown.
+    public let price_cents_at_save: Int? // swiftlint:disable:this identifier_name
     public let source: String
     public let notes: String?
 }
@@ -303,7 +307,7 @@ public actor RoomsAPIClient {
             .appending(queryItems: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "user_id", value: "eq.\(userId)"),
-                URLQueryItem(name: "order", value: "created_at.desc"),
+                URLQueryItem(name: "order", value: "created_at.desc")
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)

@@ -60,6 +60,7 @@ struct SavedItemMirrorTests {
             name: "Heirloom Oak",
             image_url: nil,
             price_in_cents: 420_000,
+            price_cents_at_save: 420_000,
             source: "ios",
             notes: nil
         )
@@ -80,6 +81,7 @@ struct SavedItemMirrorTests {
             name: "Heirloom Oak",
             image_url: nil,
             price_in_cents: 420_000,
+            price_cents_at_save: 420_000,
             source: "ios",
             notes: nil
         )

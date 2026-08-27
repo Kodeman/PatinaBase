@@ -76,6 +76,7 @@ final class ARPlacementViewModel {
                     name: product.name,
                     image_url: product.imageURL,
                     price_in_cents: product.priceCents,
+                    price_cents_at_save: product.priceCents,
                     source: "ar_placement",
                     notes: "transform:\(transformBlob)"
                 )
