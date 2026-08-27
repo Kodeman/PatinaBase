@@ -46,6 +46,17 @@ struct PortalLinkRoutingTests {
         #expect(route("https://client.patina.cloud/decision/\(uuid)") == .decisionDetail(decisionId: uuid))
     }
 
+    /// The spelling the portal actually serves and 00534 actually writes. The
+    /// AASA file publishes `/invoices/*`, `/proposals/*`, `/decisions/*`; a
+    /// singular-only matcher would never fire on a real link (d-notes.md §4).
+    @Test("the plural money paths the portal serves route")
+    func pluralUniversalLinksRoute() throws {
+        let uuid = "11111111-1111-1111-1111-111111111111"
+        #expect(route("https://client.patina.cloud/invoices/\(uuid)") == .invoiceDetail(invoiceId: uuid))
+        #expect(route("https://client.patina.cloud/proposals/\(uuid)") == .proposalDetail(proposalId: uuid))
+        #expect(route("https://client.patina.cloud/decisions/\(uuid)") == .decisionDetail(decisionId: uuid))
+    }
+
     /// `app.patina.cloud` is the designer portal — the client app has no
     /// business opening its routes, and no other host may steer navigation.
     @Test("a foreign host is not routed")

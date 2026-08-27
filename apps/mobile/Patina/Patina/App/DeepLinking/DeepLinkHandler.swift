@@ -215,14 +215,19 @@ public final class DeepLinkHandler {
         let id = parts[1]
         guard !id.isEmpty else { return nil }
 
+        // PLURAL is the real spelling: it is what client-portal serves
+        // (`ls apps/client-portal/src/app` → invoices, proposals, decisions,
+        // piece), what the AASA file publishes, and what 00534 writes into
+        // every notification's `deep_link` (d-notes.md §4). The singular forms
+        // are kept as aliases so an older link still lands somewhere true.
         switch parts[0] {
-        case "piece":
+        case "piece", "pieces":
             return .pieceDetail(pieceId: id)
-        case "invoice":
+        case "invoices", "invoice":
             return .invoiceDetail(invoiceId: id)
-        case "proposal":
+        case "proposals", "proposal":
             return .proposalDetail(proposalId: id)
-        case "decision":
+        case "decisions", "decision":
             return .decisionDetail(decisionId: id)
         default:
             return nil
