@@ -18,11 +18,10 @@ import {
   spacer,
   escapeHtml,
 } from '../_shared/branded-email.ts';
+import { sendCompliantEmail } from '../_shared/send-email.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
-const FROM_ADDRESS = Deno.env.get('RESEND_FROM') ?? 'hello@patina.cloud';
 const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
 const DESIGNER_PORTAL_URL = Deno.env.get('DESIGNER_PORTAL_URL') ?? 'https://app.patina.cloud';
 
@@ -34,6 +33,8 @@ const corsHeaders = {
 interface ProposalRow {
   id: string;
   title: string;
+  client_id: string | null;
+  designer_id: string | null;
   total_amount: number | null;
   signed_at: string | null;
   signed_by_name: string | null;
@@ -41,12 +42,14 @@ interface ProposalRow {
   client: { full_name: string | null; email: string | null } | null;
 }
 
-function formatCurrency(amount: number): string {
+// `proposals.total_amount` is INTEGER cents (00014:138) — the same column the
+// iOS sign sheet and the client portal read as cents.
+function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(cents / 100);
 }
 
 function formatDate(iso: string): string {
@@ -57,26 +60,6 @@ function formatDate(iso: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
-}
-
-async function sendEmail(opts: {
-  to: string;
-  subject: string;
-  html: string;
-}): Promise<{ ok: boolean; detail?: string }> {
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ from: FROM_ADDRESS, to: opts.to, subject: opts.subject, html: opts.html }),
-  });
-  if (!res.ok) {
-    const detail = await res.text();
-    return { ok: false, detail };
-  }
-  return { ok: true };
 }
 
 function json(body: unknown, status = 200): Response {
@@ -111,7 +94,7 @@ Deno.serve(async (req: Request) => {
     .from('proposals')
     .select(
       `
-      id, title, total_amount, signed_at, signed_by_name,
+      id, title, total_amount, signed_at, signed_by_name, client_id, designer_id,
       designer:profiles!designer_id(full_name, email),
       client:profiles!client_id(full_name, email)
     `
@@ -156,12 +139,18 @@ Deno.serve(async (req: Request) => {
         muted('— Patina'),
       ].join(''),
     });
-    const { ok, detail } = await sendEmail({
+    const { success, error: sendError } = await sendCompliantEmail(supabase, {
       to: proposal.client.email,
       subject: `Signed: "${proposal.title}"`,
       html,
+      userId: proposal.client_id ?? undefined,
+      notificationType: 'proposal_signed',
+      category: 'transactional',
+      templateId: 'proposal-sign-confirmation-client',
+      metadata: { proposal_id: proposal.id, signed_at: signedAt },
+      idempotencyKey: `proposal-signed-client:${proposal.id}`,
     });
-    results.client = ok ? true : detail;
+    results.client = success ? true : sendError;
   }
 
   if (proposal.designer?.email) {
@@ -185,12 +174,18 @@ Deno.serve(async (req: Request) => {
         muted('— Patina'),
       ].join(''),
     });
-    const { ok, detail } = await sendEmail({
+    const { success, error: sendError } = await sendCompliantEmail(supabase, {
       to: proposal.designer.email,
       subject: `Signed: "${proposal.title}"`,
       html,
+      userId: proposal.designer_id ?? undefined,
+      notificationType: 'proposal_signed',
+      category: 'transactional',
+      templateId: 'proposal-sign-confirmation-designer',
+      metadata: { proposal_id: proposal.id, signed_at: signedAt },
+      idempotencyKey: `proposal-signed-designer:${proposal.id}`,
     });
-    results.designer = ok ? true : detail;
+    results.designer = success ? true : sendError;
   }
 
   return json({ ok: true, results });
