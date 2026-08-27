@@ -42,9 +42,13 @@ final class AccountDeletionService {
     static let confirmationBody =
         "This removes your account and everything Patina keeps on this device. It can't be undone."
 
-    /// Delete the signed-in account, wipe the device-local store, and end the
-    /// session. Throws `AccountDeletionError.failed` for every failure mode —
-    /// the response body is logged in DEBUG and never surfaced.
+    /// Delete the signed-in account and wipe the device-local store.
+    ///
+    /// Deliberately does NOT sign out or touch presentation: the caller tears
+    /// the UI down only after this returns, so a failure leaves the person
+    /// exactly where they were with one sentence to read, instead of flashing
+    /// a splash and coming back. Throws `AccountDeletionError.failed` for
+    /// every failure mode — the response body is logged in DEBUG, never shown.
     func deleteAccount() async throws {
         guard let token = try? await SupabaseClientManager.shared.client.auth.session.accessToken else {
             throw AccountDeletionError.failed
@@ -79,9 +83,8 @@ final class AccountDeletionService {
             throw AccountDeletionError.failed
         }
 
-        // The account is gone server-side. Clear the device before ending the
-        // session — the sign-out transition tears the UI down.
+        // The account is gone server-side. Clear the device; the caller ends
+        // the session.
         LocalStoreReset.wipeUserScopedData()
-        try? await AuthService.shared.signOut()
     }
 }

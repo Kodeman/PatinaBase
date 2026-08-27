@@ -217,13 +217,16 @@ struct SettingsView: View {
         deleteFailureMessage = nil
         Task { @MainActor in
             do {
+                // Ask first, tear the UI down after. A failure must leave the
+                // person on this screen with one sentence, not flash a splash
+                // and bounce back.
+                try await AccountDeletionService.shared.deleteAccount()
                 coordinator.presentedSheet = nil
                 coordinator.beginSplashTransition()
-                try await AccountDeletionService.shared.deleteAccount()
+                try? await AuthService.shared.signOut()
             } catch {
                 // C5: our sentence, never the server's.
                 deleteFailureMessage = AccountDeletionService.failureCopy
-                coordinator.presentedSheet = .settings
             }
             isDeletingAccount = false
         }
