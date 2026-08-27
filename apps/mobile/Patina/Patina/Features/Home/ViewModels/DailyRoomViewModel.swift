@@ -335,6 +335,10 @@ final class DailyRoomViewModel {
             record = .empty
             return
         }
+        // The story is one of the record's MOVED rows, so wait for the fetch
+        // that is already in flight rather than building without it and
+        // showing the row one open late.
+        await storyTask?.value
         savedItems = fetchSavedItems()
         let products = await fetchSavedPieceProducts(for: savedItems)
         let saved = savedItems

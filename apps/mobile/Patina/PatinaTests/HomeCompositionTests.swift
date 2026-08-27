@@ -190,3 +190,57 @@ struct EmptyQueueNextMoveTests {
         #expect(move.kind == .reviewDecisions)
     }
 }
+
+// MARK: - What the screen actually mounts
+
+@MainActor
+struct HomeMountTests {
+
+    private func home() throws -> String {
+        try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
+    }
+
+    @Test("every block the composition names has a mount, and mounts only on it")
+    func everyBlockIsMountedThroughTheRule() throws {
+        let source = try home()
+        for block in [
+            HomeBlock.record, .nextMove, .designerSeat, .houseRail,
+            .startWithARoom, .newThisWeek, .story, .signInLine
+        ] {
+            #expect(source.contains("blocks.contains(.\(block.rawValue))"),
+                    "\(block.rawValue) is not mounted through HomeComposition")
+        }
+    }
+
+    @Test("the record is unflagged — rolling it back is deleting one mount")
+    func theRecordIsUnflagged() throws {
+        let source = try home()
+        #expect(source.contains("HouseRecordCard("))
+        #expect(!source.contains("FeatureFlags"))
+    }
+
+    @Test("markSeen is stamped by the rebuild on this screen, not in ContentView")
+    func theVisitIsStampedHere() throws {
+        let source = try home()
+        #expect(source.contains("viewModel.refreshRecord()"))
+        // Twice at least: on appear and on scenePhase → .active.
+        #expect(source.components(separatedBy: "viewModel.refreshRecord()").count - 1 >= 2)
+        let content = try SourcePin.read("Patina/ContentView.swift")
+        #expect(!content.contains("markSeen"))
+        // The stamp itself belongs to RecordRefresh, after the build.
+        let refresh = try SourcePin.read("Patina/Features/Home/ViewModels/RecordRefresh.swift")
+        let buildIndex = try #require(refresh.range(of: "let record = build("))
+        let stampIndex = try #require(refresh.range(of: "lastSeen.markSeen("))
+        #expect(buildIndex.lowerBound < stampIndex.lowerBound)
+    }
+
+    @Test("the push primer's trigger survives the recomposition")
+    func thePushPrimerStillFires() throws {
+        let source = try home()
+        #expect(source.contains("PushPrimerView"))
+        #expect(source.contains("presentPushPrimerIfEarned()"))
+        // Both call sites: the notifications task, and the sign-in change.
+        #expect(source.components(separatedBy: "presentPushPrimerIfEarned()").count - 1 >= 3)
+        #expect(source.contains("PushPrimerTrigger.shouldPresent(rows:"))
+    }
+}
