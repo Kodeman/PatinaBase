@@ -87,8 +87,12 @@ struct CompanionActionMatrixTests {
         hasStyleProfile: Bool = false,
         designer: DesignerRelationship? = nil
     ) -> CompanionContext {
-        // A viewing piece is supplied so the "Try in your room" arm on discovery
-        // screens is exercised (the fuller menu). tableItemCount > 0 so the
+        // A viewing piece is supplied for a representative context —
+        // `CompanionContext.summaryLine` and the nudge pill in
+        // `CompanionContextProvider` both key off it. It no longer drives a
+        // menu row here: the Companion's "Try in your room" action was
+        // retired (W2 R3, W1b SP-18 residual — it dead-ended on every
+        // product while usdz_url is NULL). tableItemCount > 0 so the
         // Collections row is present where offered.
         var context = CompanionContext(
             currentScreen: screen,
@@ -528,6 +532,27 @@ struct CompanionTierAndFreshnessTests {
         let ctx = Fixture.context(for: .heroFrame, roomCount: 2, active: false, hasStyleProfile: true)
         let items = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true)
         #expect(items.contains { $0.analyticsId == "recommendations" && $0.hint == "Based on your rooms" })
+    }
+
+    // MARK: - AR quick action retirement (W1b SP-18 residual)
+
+    @Test
+    func tryInRoomRowNeverAppearsOnPieceDetailOrEmergence() {
+        // The Companion's AR quick action dead-ends on every product while
+        // usdz_url is NULL (carry-over, W1b SP-18 residual). It returns the
+        // day an AR asset pipeline exists (build-plan.md W2 R3).
+        let screens: [AppRoute] = [
+            .pieceDetail(pieceId: "piece-1"),
+            .emergence(pieceId: nil),
+            .roomEmergence(roomId: UUID())
+        ]
+        for screen in screens {
+            let ctx = Fixture.context(for: screen, roomCount: 1, active: false, tier: .discovering)
+            let ids = CompanionActionProvider.actions(
+                for: screen, context: ctx, isAuthenticated: true
+            ).map(\.analyticsId)
+            #expect(!ids.contains("try_in_room"), "\(screen) still offers the dead-ended AR row")
+        }
     }
 
     // MARK: - SP-12: the Saved door opens at zero

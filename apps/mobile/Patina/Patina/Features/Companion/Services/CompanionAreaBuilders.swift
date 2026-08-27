@@ -76,14 +76,14 @@ extension CompanionActionProvider {
         switch screen {
         case .emergence, .roomEmergence:
             let roomId = emergenceRoomId(screen, context: context)
-            var rows = [saveRow(label: "Save to collection")]
-            if let piece = context.viewingPiece { rows.append(tryInRoomRow(productId: piece.id)) }
-            rows.append(designerRow(roomId: roomId, context: context))
-            return rows
-        case .pieceDetail(let pieceId):
+            let rows = [saveRow(label: "Save to collection")]
+            return rows + [designerRow(roomId: roomId, context: context)]
+        case .pieceDetail:
+            // W2 R3 (W1b SP-18 residual): `tryInRoomRow` dead-ended on every
+            // product while `usdz_url` is NULL — removed here, not deleted;
+            // it returns the day an AR asset pipeline exists.
             return [
                 saveRow(label: "Save"),
-                tryInRoomRow(productId: pieceId),
                 designerRow(roomId: nil, context: context)
             ]
         default: // .arPlacement
