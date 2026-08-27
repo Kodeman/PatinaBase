@@ -120,7 +120,7 @@ struct ProductDetailView: View {
                             ShareLink(
                                 item: Self.shareURL(for: product),
                                 subject: Text(product.name),
-                                message: Text("\(product.name) by \(product.makerName) on Patina")
+                                message: Text(Self.shareMessage(for: product))
                             ) {
                                 floatingCircleButton(icon: "square.and.arrow.up")
                             }
@@ -294,6 +294,15 @@ struct ProductDetailView: View {
     /// `app/(document)/library/[id]` on app.patina.cloud.
     private static func shareURL(for product: Product) -> URL {
         PatinaDeepLinks.productURL(forProductId: product.id)
+    }
+
+    /// `makerName` is the vendor join and can be the literal "Unknown Maker";
+    /// the share text names a maker only when one resolves (a-notes.md §3).
+    static func shareMessage(for product: Product) -> String {
+        guard let maker = product.resolvedMakerName else {
+            return "\(product.name) on Patina"
+        }
+        return "\(product.name) by \(maker) on Patina"
     }
 
     private func floatingCircleButton(icon: String) -> some View {
