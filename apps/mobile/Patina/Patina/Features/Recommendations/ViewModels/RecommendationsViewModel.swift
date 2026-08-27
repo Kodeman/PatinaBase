@@ -54,8 +54,17 @@ final class RecommendationsViewModel {
         let count = filteredProducts.count
         let piece = "piece\(count == 1 ? "" : "s")"
         // U06/U07: room-scoped browse gets its own scoping language.
-        let scope = lastRoomId != nil ? "curated for this room" : "curated for your space"
+        // SP-02: "curated" is not how anyone here talks — the word is "chosen".
+        let scope = lastRoomId != nil ? "chosen for this room" : "chosen for your space"
         return "\(count) \(piece) \(scope)"
+    }
+
+    /// SP-02: the chip's category goes to the RPC as `p_category`, so the
+    /// subtitle's number is the catalog's real count for that category rather
+    /// than however many of the ≤20 already-fetched rows happened to match.
+    /// `All` clears the filter.
+    static func category(forFilter filter: String) -> ProductCategory? {
+        ProductCategory.allCases.first { $0.displayName == filter }
     }
 
     func isSaved(_ product: Product) -> Bool {
@@ -101,8 +110,12 @@ final class RecommendationsViewModel {
         isLoading = true
         error = nil
 
+        let category = Self.category(forFilter: activeFilter)
         do {
-            let response = try await ProductAPIClient.shared.fetchRecommendations(roomId: roomId)
+            let response = try await ProductAPIClient.shared.fetchRecommendations(
+                roomId: roomId,
+                category: category
+            )
             await MainActor.run {
                 self.products = response.items
                 self.isLoading = false
@@ -117,6 +130,11 @@ final class RecommendationsViewModel {
             PatinaLog.ui.error("[Recommendations] load failed: \(error.localizedDescription)")
             #endif
         }
+    }
+
+    /// SP-02: re-fetch for the chip the reader just tapped.
+    func applyActiveFilter(roomId: String?) async {
+        await loadRecommendations(roomId: roomId)
     }
 
     /// U39: re-invokes the last load with the same room scope — the retry

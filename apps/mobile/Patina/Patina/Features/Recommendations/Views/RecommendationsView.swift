@@ -9,6 +9,10 @@ import SwiftUI
 import SwiftData
 
 struct RecommendationsView: View {
+    /// SP-02: one card aspect, so the image area is identical on every card
+    /// whatever the photo's own proportions.
+    private static let cardImageAspect: CGFloat = 4.0 / 3.0
+
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = RecommendationsViewModel()
@@ -66,7 +70,10 @@ struct RecommendationsView: View {
                     .transition(.opacity)
             }
 
-            // Filter bar
+            // Filter bar. SP-02: at XXL Dynamic Type the five chips are wider
+            // than the screen, so the row scrolls and carries a trailing fade
+            // that says there is more past the edge — "Storage" clipping to
+            // "Stor" with no affordance was the reported failure.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(viewModel.filters, id: \.self) { filter in
@@ -74,11 +81,13 @@ struct RecommendationsView: View {
                             withAnimation(.spring(response: 0.3)) {
                                 viewModel.activeFilter = filter
                             }
+                            Task { await viewModel.applyActiveFilter(roomId: roomRemoteId) }
                         }
                     }
                 }
                 .padding(.horizontal, 24)
             }
+            .mask(chipRowFade)
             .padding(.bottom, 12)
 
             content
@@ -101,6 +110,20 @@ struct RecommendationsView: View {
             async let load: Void = viewModel.loadRecommendations(roomId: roomRemoteId)
             _ = await (seed, load)
         }
+    }
+
+    /// SP-02: the trailing fade that tells a reader the chip row continues
+    /// past the right edge.
+    private var chipRowFade: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: 0.92),
+                .init(color: .black.opacity(0), location: 1)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 
     /// U06/U07 fix: `roomId` is the local `RoomModel.id`; resolve it to the
@@ -170,7 +193,7 @@ struct RecommendationsView: View {
         .simultaneousGesture(productCardSwipeGesture(product))
         // PT-2-5: collapse maker/name/price into one VoiceOver stop.
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(product.name) by \(product.makerName), \(product.fullFormattedPrice), \(product.matchLabel)")
+        .accessibilityLabel(cardAccessibilityLabel(product))
         .accessibilityHint("Double-tap to view details.")
         // PT-2-4: expose the swipe-to-save / swipe-to-skip gestures as
         // VoiceOver actions, since the swipe itself is inaccessible. Toggles
@@ -183,6 +206,13 @@ struct RecommendationsView: View {
         .accessibilityAction(named: "Skip") {
             viewModel.skipProduct(product)
         }
+    }
+
+    /// SP-10: VoiceOver names the maker only when there is one to name —
+    /// "by Unknown Maker" is not a sentence anyone should hear.
+    private func cardAccessibilityLabel(_ product: Product) -> String {
+        let maker = product.resolvedMakerName.map { " by \($0)" } ?? ""
+        return "\(product.name)\(maker), \(product.fullFormattedPrice), \(product.matchLabel)"
     }
 
     private func productCardLabel(_ product: Product) -> some View {
@@ -199,15 +229,20 @@ struct RecommendationsView: View {
             // Product image via PatinaAsyncImage (R15) — branded strata
             // placeholder for loading/failure; category gradient remains
             // the deliberate no-URL fallback.
-            if let imageURL = product.imageURL, let url = URL(string: imageURL) {
-                PatinaAsyncImage(url: url)
-                    .frame(height: 160)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-            } else {
-                product.placeholderGradient
-                    .frame(height: 160)
-            }
+            //
+            // SP-02: one card aspect for every card, image or gradient, so a
+            // photo that arrives late cannot resize its neighbour and the
+            // column stays the width the grid gave it.
+            Color.clear
+                .aspectRatio(Self.cardImageAspect, contentMode: .fit)
+                .overlay {
+                    if let imageURL = product.imageURL, let url = URL(string: imageURL) {
+                        PatinaAsyncImage(url: url)
+                    } else {
+                        product.placeholderGradient
+                    }
+                }
+                .clipped()
 
             // Match badge
             Text(product.matchLabel)
@@ -234,13 +269,19 @@ struct RecommendationsView: View {
     }
 
     private func productCardInfo(_ product: Product) -> some View {
+        // SP-02: every text block reserves the same number of lines, so the
+        // four cards in view are one card size rather than four heights.
         VStack(alignment: .leading, spacing: 2) {
-            MonoLabel(text: product.makerName, size: PatinaTypography.monoSmall)
+            MonoLabel(
+                text: product.resolvedMakerName ?? "\u{00A0}",
+                size: PatinaTypography.monoSmall
+            )
+            .lineLimit(1)
 
             Text(product.name)
                 .font(PatinaTypography.uiSmall)
                 .foregroundStyle(PatinaColors.Text.primary)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
                 .padding(.top, 2)
 
             Text(product.fullFormattedPrice)
@@ -252,10 +293,12 @@ struct RecommendationsView: View {
                 Text(rationale)
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
+                    .lineLimit(2, reservesSpace: true)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 5)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
     }
