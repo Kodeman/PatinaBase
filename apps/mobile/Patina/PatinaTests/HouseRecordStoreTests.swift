@@ -50,6 +50,33 @@ struct LastSeenStoreTests {
         #expect(readBack > first)
     }
 
+    @Test("the last visit is written where the widget can read it")
+    func markSeenWritesIntoTheAppGroupSuite() throws {
+        // `UserDefaults.standard` is the app's own domain and no extension can
+        // read it. W6's widget reads the group suite; the app must write there.
+        let suite = try #require(UserDefaults(suiteName: LastSeenStore.appGroupIdentifier))
+        let previous = suite.object(forKey: LastSeenStore.key)
+        defer {
+            if let previous { suite.set(previous, forKey: LastSeenStore.key) }
+            else { suite.removeObject(forKey: LastSeenStore.key) }
+        }
+
+        let store = LastSeenStore()
+        #expect(store.usesAppGroupDefaults)
+        #expect(LastSeenStore.appGroupIdentifier == "group.cloud.patina.app")
+
+        let moment = Date(timeIntervalSince1970: 1_787_000_123)
+        store.markSeen(now: moment)
+
+        let raw = try #require(suite.object(forKey: LastSeenStore.key) as? Double)
+        #expect(abs(raw - moment.timeIntervalSince1970) < 1)
+    }
+
+    @Test("the snapshot and the last visit share one container")
+    func bothStoresNameTheSameAppGroup() {
+        #expect(LastSeenStore.appGroupIdentifier == "group.cloud.patina.app")
+    }
+
     /// M16 / steward §9.4: the snapshot store is specified as an App Group
     /// container, and the entitlement lands in THIS wave, not W6.
     @Test("the entitlement carries the App Group the snapshot store asks for")

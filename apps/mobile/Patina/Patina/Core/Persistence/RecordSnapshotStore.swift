@@ -34,6 +34,9 @@ final class RecordSnapshotStore: Sendable {
     let usesAppGroupContainer: Bool
 
     private let fileManager: FileManager
+    /// One writer at a time. `.atomic` already keeps a torn file off disk; the
+    /// lock keeps two builds in one open from interleaving read and write.
+    private let lock = NSLock()
 
     init(
         appGroupIdentifier: String = "group.cloud.patina.app",
@@ -60,6 +63,8 @@ final class RecordSnapshotStore: Sendable {
     }
 
     func save(_ record: HouseRecord) {
+        lock.lock()
+        defer { lock.unlock() }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         do {
@@ -78,6 +83,8 @@ final class RecordSnapshotStore: Sendable {
     /// nil when nothing has been saved, or when what was saved no longer
     /// decodes — a stale shape must not stop the app from launching.
     func load() -> HouseRecord? {
+        lock.lock()
+        defer { lock.unlock() }
         guard let data = try? Data(contentsOf: fileURL) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601

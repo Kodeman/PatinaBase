@@ -14,6 +14,13 @@
 //  schema change, and `profiles.last_seen_at` (00537) is the second-device
 //  mirror, not this.
 //
+//  The App Group suite, not `.standard`: `UserDefaults.standard` is the app's
+//  own domain and no extension can read it. W6's widget will read
+//  `UserDefaults(suiteName: "group.cloud.patina.app")`, and it has to find the
+//  same timestamp the app wrote or it will call everything new for ever. Same
+//  container as `RecordSnapshotStore`, and the same honest fallback when the
+//  suite is unreachable.
+//
 
 import Foundation
 
@@ -23,12 +30,34 @@ struct LastSeenStore: Sendable {
     /// installed app's idea of "new", so it is a contract, not a detail.
     static let key = "patina.house.lastSeenAt"
 
+    /// The same group `RecordSnapshotStore` writes the snapshot into.
+    static let appGroupIdentifier = "group.cloud.patina.app"
+
     static let shared = LastSeenStore()
 
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    /// False when the shared suite was unreachable and the app's own domain is
+    /// being used instead — the widget would then read nothing. Reported, not
+    /// hidden; a genuinely shared suite is a device claim.
+    let usesAppGroupDefaults: Bool
+
+    /// `defaults` is for tests. Production takes the App Group suite, falling
+    /// back to `.standard` only when the suite cannot be opened.
+    init(defaults: UserDefaults? = nil) {
+        if let defaults {
+            self.defaults = defaults
+            self.usesAppGroupDefaults = false
+            return
+        }
+        let group = UserDefaults(suiteName: Self.appGroupIdentifier)
+        self.defaults = group ?? .standard
+        self.usesAppGroupDefaults = group != nil
+        if group == nil {
+            PatinaLog.sync.debug(
+                "[Record] App Group defaults unavailable — the last visit is app-local"
+            )
+        }
     }
 
     /// The last time the person opened the app, or nil before the first open.
