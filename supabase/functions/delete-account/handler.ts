@@ -13,19 +13,26 @@
 //      homeowner's account would permanently delete a designer's projects,
 //      proposals, invoices and roster. purge_client_account refuses on its own
 //      too; this is the half that answers before anything is written.
-//   3. purge_client_account (00536) detaches the person from the designer's
-//      documents, journals every id it unlinked into client_account_purges,
-//      and clears the road the auth delete would otherwise be blocked on.
-//   4. delete the auth user. profiles.id cascades from auth.users, and every
-//      client-owned table cascades from profiles.
+//   3. purge_client_account (00538) tombstones the PII on the caller's
+//      profiles row, deletes what they owned — rooms, scans, saved items, the
+//      threads they started, notifications, push tokens, companion history —
+//      and journals it into client_account_purges. It writes nothing to the
+//      designer's proposals, projects, invoices, decisions or roster: those
+//      keep naming the tombstone (W1b ruling 2).
+//   4. DETACH the auth user — a SOFT admin delete. GoTrue obfuscates the email
+//      and phone, empties the user metadata and the identity, nulls the
+//      password and drops every session, so the login is destroyed and the
+//      address is freed. A HARD delete would cascade profiles.id away
+//      (00013:12) and take the tombstone — and with it the client identity on
+//      every document the designer keeps.
 //   5. stamp the journal row complete.
 //
 // If (3) fails, (4) MUST NOT run: nothing has been detached, and the caller
 // retries.
 //
-// If (4) fails, the detachment has ALREADY COMMITTED and the account is still
+// If (4) fails, the anonymization has ALREADY COMMITTED and the login is still
 // live — the two are separate transactions and cannot be one, because the auth
-// delete goes through GoTrue's admin API. That state is recoverable only
+// detach goes through GoTrue's admin API. That state is recoverable only
 // because step 3 journalled it: client_account_purges holds the row with
 // auth_deleted_at NULL and every detached id under `detached`. The response
 // carries that row's id so an operator can either retry the delete or
@@ -46,12 +53,19 @@ export interface DeleteAccountGateway {
   authenticate(req: Request): Promise<{ userId: string } | null>;
   /** True when the caller owns designer-side rows that would cascade. */
   isDesigner(userId: string): Promise<boolean>;
-  /** rpc purge_client_account (00536), service-role. Returns the journal id. */
+  /** rpc purge_client_account (00538), service-role. Returns the journal id. */
   purge(
     userId: string,
   ): Promise<{ ok: boolean; purgeId?: string; error?: string }>;
-  /** auth.admin.deleteUser, service-role. */
-  deleteAuthUser(userId: string): Promise<{ ok: boolean; error?: string }>;
+  /**
+   * auth.admin.deleteUser, service-role. `soft` MUST be true: the tombstone
+   * profile the designer's records point at cascades from auth.users, so a
+   * hard delete would erase it.
+   */
+  deleteAuthUser(
+    userId: string,
+    soft: boolean,
+  ): Promise<{ ok: boolean; error?: string }>;
   /** rpc mark_client_account_purge_complete (00536), service-role. */
   markPurgeComplete(purgeId: string): Promise<void>;
 }
@@ -99,7 +113,7 @@ export function createDeleteAccountHandler(
       return json({ error: "purge_failed" }, 500);
     }
 
-    const deleted = await gateway.deleteAuthUser(caller.userId);
+    const deleted = await gateway.deleteAuthUser(caller.userId, true);
     if (!deleted.ok) {
       // The detachment is committed and the account is still live. Say so with
       // the journal id, and never silently report success.
