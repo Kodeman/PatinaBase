@@ -53,8 +53,13 @@ struct StudioHubView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             // SP-16: the subhead prints THE attention count, not this
-            // screen's own recomputation of it.
-            if let hint = BadgeCountService.shared.attentionHint {
+            // screen's own recomputation of it — but `attentionHint` is nil
+            // whenever nothing is awaiting, so the rest of the chain still has
+            // to answer or a client with three unread threads reads "Nothing
+            // needs your attention right now." above a block that says
+            // otherwise.
+            if let hint = BadgeCountService.shared.studioHint
+                ?? viewModel.snapshot.attentionSummary.hint {
                 Text(hint)
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.interactive)
@@ -203,14 +208,30 @@ struct StudioHubView: View {
 
             Spacer(minLength: 8)
 
-            Text("\(section.rows.count)")
+            Text("\(sectionBadgeCount(section))")
                 .font(PatinaTypography.monoLabel)
                 .foregroundStyle(PatinaColors.Text.secondary)
-                .accessibilityLabel("\(section.rows.count) categories")
+                .accessibilityLabel(sectionBadgeLabel(section))
         }
         .padding(14)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// SP-16 named three numbers on one screen, and "Awaiting you 3" under a
+    /// header reading "4 things need your eye" was the third. Every other
+    /// section badge counts its cards; this one counts the things, because it
+    /// is the one the header also speaks for.
+    private func sectionBadgeCount(_ section: StudioQueueSection) -> Int {
+        section.kind == .awaitingYou
+            ? viewModel.snapshot.attentionSummary.awaitingCount
+            : section.rows.count
+    }
+
+    private func sectionBadgeLabel(_ section: StudioQueueSection) -> String {
+        section.kind == .awaitingYou
+            ? "\(sectionBadgeCount(section)) things awaiting you"
+            : "\(section.rows.count) categories"
     }
 
     @ViewBuilder

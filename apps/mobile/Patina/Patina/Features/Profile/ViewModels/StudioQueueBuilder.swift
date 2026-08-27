@@ -60,7 +60,7 @@ private struct StudioQueueContext {
         self.input = input
         self.pendingDecisions = input.decisions.filter { !$0.isResolved }
         self.pendingProposals = input.proposals.filter {
-            StudioQueueBuilder.proposalIsAwaiting($0, now: input.now)
+            $0.isAwaitingSignature(now: input.now)
         }
         self.payableInvoices = input.invoices.filter(\.isPayable)
         self.activeProjects = input.projects.filter {
@@ -432,16 +432,6 @@ private extension StudioQueueBuilder {
 }
 
 private extension StudioQueueBuilder {
-    static func proposalIsAwaiting(_ proposal: RemoteProposal, now: Date) -> Bool {
-        guard proposal.status == "sent" || proposal.status == "viewed" else {
-            return false
-        }
-        guard let raw = proposal.valid_until, let expiry = parsedDate(raw) else {
-            return true
-        }
-        return Calendar.current.startOfDay(for: expiry)
-            >= Calendar.current.startOfDay(for: now)
-    }
 
     static func notificationIsUnread(_ notification: RemoteNotification) -> Bool {
         notification.opened_at == nil
@@ -478,13 +468,8 @@ private extension StudioQueueBuilder {
     }
 
     static func parsedDate(_ raw: String?) -> Date? {
-        guard let raw, !raw.isEmpty else { return nil }
-        if let parsed = ISO8601DateParsing.date(from: raw) { return parsed }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: String(raw.prefix(10)))
+        guard let raw else { return nil }
+        return ISO8601DateParsing.dateOrDay(from: raw)
     }
 
     static func countLabel(

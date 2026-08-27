@@ -77,7 +77,7 @@ struct AttentionCountTests {
     @Test("the attention count sums the three queues that actually need the client")
     func attentionCountSumsTheThreeQueues() throws {
         let rows = try fixtures()
-        let badges = BadgeCountService()
+        let badges = BadgeCountService.makeForTests()
         badges.apply(
             decisions: rows.decisions, summaries: rows.summaries,
             proposals: rows.proposals, invoices: rows.invoices,
@@ -94,7 +94,7 @@ struct AttentionCountTests {
     @Test("one thing needing the client reads in the singular")
     func singularHint() throws {
         let rows = try fixtures()
-        let badges = BadgeCountService()
+        let badges = BadgeCountService.makeForTests()
         badges.apply(
             decisions: [], summaries: rows.summaries,
             proposals: [], invoices: rows.invoices,
@@ -107,7 +107,7 @@ struct AttentionCountTests {
     @Test("nothing needing the client prints no count at all")
     func emptyHintIsNil() throws {
         let rows = try fixtures()
-        let badges = BadgeCountService()
+        let badges = BadgeCountService.makeForTests()
         badges.apply(
             decisions: [], summaries: rows.summaries,
             proposals: [], invoices: [],
@@ -122,7 +122,7 @@ struct AttentionCountTests {
     @Test("the Studio subhead, the footer/Companion and the Daily Room agree")
     func everyConsumerPrintsTheSameCount() throws {
         let rows = try fixtures()
-        let badges = BadgeCountService()
+        let badges = BadgeCountService.makeForTests()
         badges.apply(
             decisions: rows.decisions, summaries: rows.summaries,
             proposals: rows.proposals, invoices: rows.invoices,
@@ -147,15 +147,142 @@ struct AttentionCountTests {
                 now: try #require(ISO8601DateFormatter().date(from: "2026-07-29T16:00:00Z"))
             )
         )
+        // The "Awaiting you" badge prints `awaitingCount`, so this is also the
+        // assertion that the header and that badge cannot disagree.
         #expect(snapshot.attentionSummary.awaitingCount == badges.attentionCount)
         #expect(snapshot.attentionSummary.hint == expected)
         #expect(badges.attentionHint == expected)
     }
 
+    /// B2, authored by this lane and caught in review: the Studio subhead was
+    /// switched to `attentionHint` alone, which is nil whenever nothing is
+    /// awaiting — so a client with three unread threads and no decisions read
+    /// "Nothing needs your attention right now." as the header directly above
+    /// a Conversation block reading "3 unread threads".
+    @Test("a client with unread threads and nothing awaiting is not told nothing needs them")
+    func nothingAwaitingIsNotNothingHappening() throws {
+        let rows = try fixtures()
+        let badges = BadgeCountService.makeForTests()
+        badges.apply(
+            decisions: [], summaries: rows.summaries,
+            proposals: [], invoices: [],
+            projects: rows.projects, roster: []
+        )
+
+        #expect(badges.attentionCount == 0)
+        #expect(badges.attentionHint == nil, "nothing is awaiting, so there is no count to print")
+        #expect(badges.studioHint == "1 new conversation",
+                "the sentence a consumer prints must fall through to the rest of the chain")
+    }
+
+    @Test("with nothing awaiting and nothing unread the chain reaches the projects")
+    func theChainReachesTheProjects() throws {
+        let rows = try fixtures()
+        let badges = BadgeCountService.makeForTests()
+        badges.apply(
+            decisions: [], summaries: [], proposals: [], invoices: [],
+            projects: rows.projects, roster: []
+        )
+        #expect(badges.studioHint == "1 project is moving")
+    }
+
+    @Test("with nothing at all there is no sentence")
+    func silenceIsTheHonestAnswer() {
+        let badges = BadgeCountService.makeForTests()
+        badges.apply(
+            decisions: [], summaries: [], proposals: [], invoices: [],
+            projects: [], roster: []
+        )
+        #expect(badges.studioHint == nil)
+    }
+
+    /// m7: `everyConsumerPrintsTheSameCount` compares model to model, which is
+    /// why B2 slipped through the seam it was checking. The consumers are
+    /// SwiftUI `body` expressions with no callable seam, so this asserts on
+    /// what they read — a consumer that goes back to `attentionHint` alone,
+    /// or recomputes the count from its own fetch, fails here.
+    @Test("all three consumers read the one hint, not their own recomputation")
+    func everyConsumerReadsTheOneHint() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // PatinaTests
+            .deletingLastPathComponent()   // Patina
+            .appendingPathComponent("Patina")
+
+        for path in [
+            "Features/Profile/Views/StudioHubView.swift",
+            "Features/Companion/Views/CompanionOverlay.swift",
+            "Features/Home/Views/DailyRoomView.swift"
+        ] {
+            let source = try String(
+                contentsOf: root.appendingPathComponent(path), encoding: .utf8
+            )
+            #expect(source.contains("BadgeCountService.shared.studioHint")
+                    || source.contains("badges.studioHint"),
+                    "\(path) no longer reads the one hint")
+            for regression in ["shared.attentionHint", "badges.attentionHint"] {
+                #expect(!source.contains(regression),
+                        "\(path) prints the attention sentence alone, which is nil at zero")
+            }
+        }
+    }
+
+    /// M4: the header and the "Awaiting you" rows were two computations over
+    /// two fetches with different predicates. `valid_until` is a Postgres
+    /// `date`, which both ISO8601 formatters reject — so `isSignable` read a
+    /// long-expired proposal as having no expiry at all and counted it, while
+    /// the Studio's own row did not.
+    @Test("a proposal that expired yesterday counts for neither surface")
+    func anExpiredDateOnlyProposalCountsNowhere() throws {
+        let expired = try decode([RemoteProposal].self, """
+        [{ "id": "p-old", "title": "Phase 1", "status": "sent",
+           "valid_until": "2020-01-31", "updated_at": "2020-01-01T12:00:00Z" }]
+        """)
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-07-29T16:00:00Z"))
+
+        #expect(expired[0].isSignable, "isSignable still reads a bare date as no expiry")
+        #expect(!expired[0].isAwaitingSignature(now: now))
+
+        let badges = BadgeCountService.makeForTests()
+        badges.apply(
+            decisions: [], summaries: [], proposals: expired, invoices: [],
+            projects: [], roster: [], now: now
+        )
+        #expect(badges.proposalsAwaitingSignatureCount == 0)
+
+        let snapshot = StudioQueueBuilder.build(
+            StudioQueueInput(
+                projects: [], decisions: [], proposals: expired, invoices: [],
+                documents: [], threads: [], notifications: [],
+                currentUserId: "client", now: now
+            )
+        )
+        #expect(snapshot.attentionSummary.awaitingCount == badges.attentionCount)
+    }
+
+    /// The other half of M4: `listPending` returns rows the Studio treats as
+    /// answered, so the header could outrun the rows by one.
+    @Test("a pending row that has been responded to counts for neither surface")
+    func aRespondedDecisionCountsNowhere() throws {
+        let responded = try decode([RemoteClientDecision].self, """
+        [{ "id": "d9", "title": "Rug color", "status": "pending",
+           "responded_at": "2026-08-20T12:00:00Z",
+           "created_at": "2026-08-12T12:00:00Z" }]
+        """)
+        #expect(responded[0].isResolved)
+
+        let badges = BadgeCountService.makeForTests()
+        badges.apply(
+            decisions: responded, summaries: [], proposals: [], invoices: [],
+            projects: [], roster: []
+        )
+        #expect(badges.pendingDecisionCount == 0)
+        #expect(badges.attentionHint == nil)
+    }
+
     @Test("the fetched rows are retained for the Record")
     func refreshRetainsTheFetchedRows() throws {
         let rows = try fixtures()
-        let badges = BadgeCountService()
+        let badges = BadgeCountService.makeForTests()
         badges.apply(
             decisions: rows.decisions, summaries: rows.summaries,
             proposals: rows.proposals, invoices: rows.invoices,

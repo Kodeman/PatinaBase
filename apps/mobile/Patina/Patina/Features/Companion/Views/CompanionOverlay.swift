@@ -245,7 +245,7 @@ public struct CompanionOverlay: View {
     /// how the Studio and the Daily Room came to print different numbers on
     /// the same minute.
     private var liveStudioAttentionHint: String? {
-        BadgeCountService.shared.attentionHint ?? coordinator.companionContext.attentionSummary
+        BadgeCountService.shared.studioHint ?? coordinator.companionContext.attentionSummary
     }
 
     private var contextualCollapsedHint: String {

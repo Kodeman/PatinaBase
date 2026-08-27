@@ -94,11 +94,15 @@ enum TodayExperience {
 
     private static func projectMove(for input: TodayPriorityInput) -> TodayNextMove? {
         if input.pendingDecisionCount > 0 {
-            let noun = input.pendingDecisionCount == 1 ? "decision needs" : "decisions need"
+            // SP-16: "N things need your eye" belongs to the attention count
+            // and is printed by the Companion footer on this same screen.
+            // This move speaks for decisions alone, so it says so rather than
+            // stacking a second, smaller number under the same sentence.
+            let noun = input.pendingDecisionCount == 1 ? "decision is" : "decisions are"
             return TodayNextMove(
                 kind: .reviewDecisions,
                 title: "Review a project decision",
-                detail: "\(input.pendingDecisionCount) \(noun) your eye.",
+                detail: "\(input.pendingDecisionCount) \(noun) waiting on you.",
                 symbol: "checkmark.seal",
                 targetID: nil
             )

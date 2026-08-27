@@ -253,13 +253,7 @@ struct DailyRoomView: View {
         }
         // SP-16: the one attention count, not the decision count alone —
         // printing that here is what made Today disagree with the Studio.
-        if let attention = badges.attentionHint {
-            return attention
-        }
-        if badges.unreadMessageCount > 0 {
-            return "\(badges.unreadMessageCount) unread project \(badges.unreadMessageCount == 1 ? "message" : "messages")"
-        }
-        return nil
+        return badges.studioHint
     }
 
     private func syncCompanionContext() {

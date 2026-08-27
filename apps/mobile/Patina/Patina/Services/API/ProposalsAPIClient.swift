@@ -79,6 +79,23 @@ public struct RemoteProposal: Codable, Sendable, Identifiable {
     }
 
     public var isSigned: Bool { status == "accepted" }
+
+    /// SP-16: whether this proposal is one of the things awaiting the client.
+    /// THE counting predicate — `BadgeCountService.attentionCount` and the
+    /// Studio's "Awaiting you" block both read it, so the header sentence and
+    /// the rows beneath it cannot disagree about which proposals count.
+    ///
+    /// Deliberately not `isSignable`: that gates the signature act at instant
+    /// precision, and `valid_until` is a Postgres `date`, which the ISO8601
+    /// formatters reject outright. Day precision, so a proposal expiring later
+    /// today is still awaiting the client.
+    public func isAwaitingSignature(now: Date = Date()) -> Bool {
+        guard status == "sent" || status == "viewed" else { return false }
+        guard let raw = valid_until,
+              let expires = ISO8601DateParsing.dateOrDay(from: raw) else { return true }
+        let calendar = Calendar.current
+        return calendar.startOfDay(for: expires) >= calendar.startOfDay(for: now)
+    }
 }
 
 public struct RemoteProposalItem: Codable, Sendable, Identifiable {
@@ -428,5 +445,21 @@ enum ISO8601DateParsing {
 
     static func date(from string: String) -> Date? {
         withFraction.date(from: string) ?? plain.date(from: string)
+    }
+
+    private static let day: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    /// As `date(from:)`, plus the bare `yyyy-MM-dd` a Postgres `date` column
+    /// serialises to — which both ISO8601 formatters reject because it carries
+    /// no time, silently turning "expired" into "no expiry".
+    static func dateOrDay(from string: String) -> Date? {
+        guard !string.isEmpty else { return nil }
+        return date(from: string) ?? day.date(from: String(string.prefix(10)))
     }
 }

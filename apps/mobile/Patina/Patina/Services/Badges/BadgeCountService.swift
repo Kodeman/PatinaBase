@@ -79,6 +79,33 @@ final class BadgeCountService {
         StudioAttentionSummary.attentionHint(count: attentionCount)
     }
 
+    /// Projects that are still live work — the last rung of `studioHint`.
+    var activeProjectCount: Int {
+        projects.filter { !StudioQueueBuilder.projectIsArchived($0) }.count
+    }
+
+    /// THE Studio sentence, and the reason `attentionHint` alone is not it.
+    ///
+    /// `attentionHint` is nil whenever nothing is *awaiting* the client, so a
+    /// surface that printed it alone told a client with three unread threads
+    /// and no decisions "Nothing needs your attention right now." directly
+    /// above a Conversation block reading "3 unread threads". The count stays
+    /// single-sourced; the rest of the chain `StudioAttentionSummary.hint`
+    /// always had comes back with it.
+    ///
+    /// The one rung it cannot carry is unread Studio *updates*
+    /// (`notification_log`), which this service does not fetch — consumers
+    /// that have a Studio snapshot fall through to `attentionSummary.hint`
+    /// for it.
+    var studioHint: String? {
+        if let attention = attentionHint { return attention }
+        if unreadMessageCount == 1 { return "1 new conversation" }
+        if unreadMessageCount > 1 { return "\(unreadMessageCount) new conversations" }
+        if activeProjectCount == 1 { return "1 project is moving" }
+        if activeProjectCount > 1 { return "\(activeProjectCount) projects are moving" }
+        return nil
+    }
+
     /// True once a refresh has completed for an authenticated session.
     /// Guests never load — the rail renders invitations, not counts.
     private(set) var hasLoaded: Bool = false
@@ -91,7 +118,16 @@ final class BadgeCountService {
 
     private var pendingRefresh: Task<Void, Never>?
 
-    init() {}
+    /// Private on purpose: this service exists because two surfaces read two
+    /// different objects and printed two different numbers. A second instance
+    /// reproduces that by accident.
+    private init() {}
+
+    #if DEBUG
+    /// A detached instance for tests, which need to `apply(…)` fixtures
+    /// without touching the singleton every other surface reads.
+    static func makeForTests() -> BadgeCountService { BadgeCountService() }
+    #endif
 
     /// Fetch both counts. Guests resolve to zero without a network round
     /// trip — the rail hides counts in guest mode anyway. Failures keep
@@ -154,11 +190,15 @@ final class BadgeCountService {
         proposals: [RemoteProposal]?,
         invoices: [RemoteInvoice]?,
         projects fetchedProjects: [RemoteProject]?,
-        roster fetchedRoster: [RosterDesigner]?
+        roster fetchedRoster: [RosterDesigner]?,
+        now: Date = Date()
     ) {
         if let decisions {
-            pendingDecisions = decisions
-            pendingDecisionCount = decisions.count
+            // The Studio counts `!isResolved`, not every row `listPending`
+            // returns — a `status='pending'` row carrying `responded_at` is
+            // answered. One predicate, so the header cannot outrun the rows.
+            pendingDecisions = decisions.filter { !$0.isResolved }
+            pendingDecisionCount = pendingDecisions.count
         }
         if let summaries {
             let me = ThreadListViewModel.currentUserId()
@@ -168,7 +208,9 @@ final class BadgeCountService {
                 .count
         }
         if let proposals {
-            pendingProposals = proposals.filter { $0.isSignable }
+            // `isAwaitingSignature`, not `isSignable`: the Studio's rows use
+            // it, and `isSignable` reads a Postgres `date` as "no expiry".
+            pendingProposals = proposals.filter { $0.isAwaitingSignature(now: now) }
             proposalsAwaitingSignatureCount = pendingProposals.count
         }
         if let invoices {
