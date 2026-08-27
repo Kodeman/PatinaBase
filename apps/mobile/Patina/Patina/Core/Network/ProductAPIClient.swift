@@ -219,6 +219,7 @@ private struct RawProductWithVendor: Decodable {
     let published_at: String?
     let photo_verified_at: String?
     let shipping_flat_cents: Int?
+    let deleted_at: String?
 
     struct VendorInfo: Decodable {
         let name: String?
@@ -254,7 +255,8 @@ private struct RawProductWithVendor: Decodable {
             patinaManaged: patina_managed,
             photoVerifiedAt: Self.timestamp(photo_verified_at),
             sourceURL: source_url,
-            shippingFlatCents: shipping_flat_cents
+            shippingFlatCents: shipping_flat_cents,
+            deletedAt: Self.timestamp(deleted_at)
         )
     }
 
