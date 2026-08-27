@@ -343,3 +343,98 @@ observable on a walk.
 client-side SELECT policy (00014:110 and 00316:39 are both designer-side), so the client's select
 returns empty by RLS. Signing out through Settings → Account also could not be exercised — that row
 does not push (the known SP-20 / F45 defect); the walk used a simulator keychain reset instead.
+
+---
+
+## w1b-b
+
+Lane B (money & studio), branch `daily-return/w1b-b`, simulator `dr-w1b-b`
+`8A414D4A-8CD2-4867-ADBE-4F00FAEB5E06` (iPhone 17 Pro, iOS 26.5), signed build installed from
+`.build/dd/Build/Products/Debug-iphonesimulator/Patina.app`, launched `-DeploymentTarget local`,
+signed in as `client@patina.dev`. 2026-08-27 ~11:55–12:05 UTC−5.
+
+⚠ The local stack has been reset by lane D since W0's re-walk, so **`INV-2026-0142` no longer
+exists**: `select count(*) from invoices` = **0**, and no seed file creates one (`config.toml`
+`[db.seed] sql_paths` has no invoice seed). Every invoice-surface shot in this row is therefore
+unavailable, and the invoice half of SP-15 is unit-verified only — see the "not sim-verified" note
+at the end.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1b-b-01-studio-budget-row.png` | Profile → Studio | SP-16: the Money & documents row reads `Budget` / **"What's been billed, and what's been paid"** — the row id is unchanged (`records.budget`), only the subtitle, which used to promise "Project totals and payment progress" from a screen that computes neither |
+| `w1b-b-02-proposals-accepted-not-signed.png` | Proposals list | SP-04: **`ACCEPTED (1)`** over `Sample accepted proposal`, whose row label also reads `Accepted`. `select signed_at, signed_by_name from proposals where title='Sample accepted proposal'` is `null, null` — the proposal the app used to file under `SIGNED (1)` |
+| `w1b-b-03-proposal-detail-expiry.png` | Proposal detail (Aspen Loft — Living Room Refresh) | SP-15: `proposalDetail.expiry` = **"Expires Sep 10"** in the investment summary. The list printed this and the detail dropped it |
+| `w1b-b-04-proposal-sign-clears-hearth.png` | Same, scrolled to the end | SP-19 (money half): `proposalDetail.sign` measures y 644–696; the Hearth region begins at y 720. The primary act is fully clear of it, from `MoneyScreenMetrics.bottomClearance` rather than the old hard-coded 140 that still collided |
+| `w1b-b-05-sign-sheet-restated-terms.png` | Proposal → Sign proposal sheet | SP-04: the sheet restates **TOTAL $18,500.00** and **EXPIRY Expires Sep 10, 2026** above the name field, with the existing instruction line verbatim below them. No Project / Deposit / Terms rows draw — the bundle returns null for all three on this proposal, which is the "absent honestly" rule working, not a missing row |
+| `w1b-b-06-decisions-list-due-dates.png` | Decisions list | SP-15: **"Overdue · Aug 23"**, **"Overdue · Aug 24"**, **"Due Sep 1"** on the three cards. The Studio hub printed these and the list printed nothing |
+| `w1b-b-07-decision-detail-due-and-defer.png` | Decision detail (Rug color - Natural vs Sand) | SP-15 `decisionDetail.due` = **"Overdue · Aug 24"**; SP-17 the two new acts `Not yet` and `Neither of these`, each with a 44 pt hit area (`decisionDetail.defer.notYet` = 48×44, `…neitherOfThese` = 108×44) |
+| `w1b-b-08-decision-defer-sheet.png` | Same → "Not yet" | SP-17: the note sheet, prefilled and editable — **"About Rug color - Natural vs Sand — not yet. I need a little more time before I decide."** — under "This goes to your designer as a message. The decision stays open." |
+| `w1b-b-09-defer-note-in-thread.png` | Same → Send | SP-17: the app opened the project thread and the note is in it, sent by "You" |
+| `w1b-b-10-budget-billed-to-date.png` | Budget | SP-16: the H3 reads **"Billed to date"**, not "Your budget"; the empty state reads "Nothing billed yet" (true — this stack has zero invoices) |
+| `w1b-b-11-project-detail-no-client-view.png` | Project detail (Aspen Loft Refresh) | SP-05: the overview card carries **BUDGET and STATUS only** — no CLIENT VIEW tile — and the designer's portal instruction is gone, replaced by "Your designer is still putting the phases together." / "No payment schedule yet." / "No furnishings list yet." |
+
+**Server-side evidence (not screenshot-only).** After the deferral send:
+
+```
+$ psql … -tAc "select title, status, responded_at from client_decisions where title like 'Rug color%';"
+Rug color - Natural vs Sand|pending|
+
+$ psql … -tAc "select left(body,70), created_at from comms_messages order by created_at desc limit 1;"
+About Rug color - Natural vs Sand — not yet. I need a little more time|2026-08-27 16:59:26.993565+00
+```
+
+The note reached `comms_messages` and the decision is still `pending` with a null `responded_at` —
+SP-17's whole contract (`client_decisions.status` is CHECK-constrained to
+`draft|pending|responded|expired`, 00062:80-81, so a deferral must be a message, not a state).
+
+And the tile SP-05 removes was really there to remove:
+
+```
+$ psql … -tAc "select name, client_visibility_tier from projects where name='Aspen Loft Refresh';"
+Aspen Loft Refresh|milestone
+```
+
+**Not sim-verified in this row.** Everything on the invoice rail — the due line on invoice detail,
+the Patina-voice pay failure above the button with its two acts, the settle banner's truthful
+default, and the paid-invoice payments line — is **unit-verified only** (`InvoicesMoneyRailTests`,
+`MoneyAndStudioCopyTests`), because the local `invoices` table is empty and no seed recreates it.
+The wave's acceptance walk cannot cover those lines either until an invoice exists; raised in
+`waves/w1b/b-notes.md`. No device claim is made anywhere in this row.
+
+## w1b-a
+
+Lane W1b A (piece & saved), implementer. Simulator **`dr-w1b-a`
+`15C4C76A-DCDD-43C1-9119-D0B022F0A653`** (a fresh iPhone 17 Pro / iOS 26.5 device, not a
+clone of the review device — see `waves/w1b/steward.md` §3), local stack
+(`-DeploymentTarget local`), **guest** lane throughout (the password sheet does not open
+on this clone — `waves/w1b/a-notes.md` §6). Signed simulator build, no
+`CODE_SIGNING_ALLOWED=NO`, from
+`.codex/worktrees/agent-dr-w1b-a/.build/dd/Build/Products/Debug-iphonesimulator/Patina.app`.
+Claim level: **sim-verified** except where a row says otherwise.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1b-a-01-before-piece-topbar-offcanvas.png` | Piece detail — "Heirloom Oak Dining Table", **before SP-02** | The H0 follow-up reproduced and measured. Content is dragged off-canvas to the left: the title reads "…om Oak Dining Table", the material line "…te White Oak", and the Back chevron is not in the accessibility tree at all. `scan_ui`: `Add to Room` at **`x = -77.3, width = 556.3`** on a 402 pt screen; `Help` at `x = 363.3`. 556.3 = a 1200 px-wide photo fill-scaled to `height: 340` — the hero image reporting a size wider than the screen and taking its whole `ZStack` with it. The edge-swipe-back does not recover (matches `r-13`); recovered by terminate + launch |
+| `w1b-a-02-after-browse-grid-one-card-size.png` | Browse pieces grid, **after SP-02 + SP-10** | One card size, all four cards on canvas, every image clipped to one 4:3 area. Subtitle reads **"10 pieces chosen for your space"** (was "curated"). Maker lines now come from `products.brand` — NORDIC ATELIER, HERITAGE LUMBER, REJUVENATION, SCHOOLHOUSE — where the pre-change build printed the vendor ("ROOM & BOARD") and, for the planter, the literal "Unknown Maker" |
+| `w1b-a-03-after-piece-topbar-onscreen.png` | Piece detail — same piece, **after SP-02 + SP-10** | The same screen as `w1b-a-01`. `scan_ui`: Back **`x = 16`**, Help 262, Share 306, Save 350, `Add to Room` **`x = 24, width = 354`** = 402 − 2×24 exactly. The SP-10 spec block renders real local data: `SIZE 96″ W × 40″ D × 30″ H`, `LEAD TIME Ships in 10 weeks`, `MAKER Nordic Atelier`, `FINISH Hand-rubbed tung oil`, then the description. (`products.dimensions` / `lead_time_weeks` / `brand` are read on the direct-fetch path, which already selects `*` — they do not wait on 00533) |
+| `w1b-a-04-piece-spec-absent-honestly.png` | Piece detail — "Terracotta Planter Set" | **Absent honestly.** This row has null `dimensions` and null `lead_time_weeks`: `SIZE` and `LEAD TIME` do not draw at all, while `MAKER Rejuvenation` and `FINISH Unglazed terracotta` do. No placeholder, no em-dash, no "—" |
+| `w1b-a-05-saved-door-at-zero.png` | Daily Room Companion, nothing saved | **SP-12.** The row reads `"Saved, Nothing saved yet, ›"` and routes to `.table`. Before the change `collectionsRow` returned `nil` at a zero count, so the app's only route to the Saved screen did not exist for a reader who had never saved anything |
+| `w1b-a-06-saved-opens-on-all-items.png` | Saved | Opens on **All items** with the tab underlined, not on "Boards" / "No boards yet". The piece a reader just saved is no longer one tab away from the screen that opens |
+| `w1b-a-07-profile-no-unexplained-match.png` | Profile, guest | **SP-18.** Two stats — `0 ROOMS`, `0 SAVED`. The `MATCH` tile (which printed `styleProfile.confidence` under a label claiming a match against nothing named) is gone |
+| `w1b-a-08-room-no-ar-stat-one-cta.png` | Room detail — "Living Room" | **SP-18 + SP-11.** The stat row is two cells, `0 ITEMS` and `— ROOM MATCH`; `0 IN AR` is gone (`usdz_url` is hard-coded NULL on every path, so it could only ever read zero) and `MATCH` now names what it matches against. Below, the stacked triple ask has collapsed to one control: **"Browse pieces for the Living Room"** |
+| `w1b-a-09-card-menu-add-to-room.png` | Browse grid card menu, with one room | **SP-11.** The card menu carries **"Add to room"** (`AXUniqueId: square.grid.2x2`, `{{16, 561.3}, {250, 42}}`) above Share / Not for me / View details. It draws only because a room exists. ⚠ **Claim level: the affordance is sim-verified; the tap-through is not.** The `.contextMenu` does not accept simulated taps through this harness (5 attempts, tap + swipe, 60–1200 ms, menu stays open) — `waves/w1b/a-notes.md` §6 |
+
+**Not verified, and why.** No device claims. SP-06's claim sheet is compile-green only
+— it presents on the first sign-in of an install carrying guest work, and sign-in does
+not complete on this clone (`a-notes.md` §6); its decision is unit-pinned four ways in
+`AccountIsolationTests`. SP-14's `saved_items` mirror writes as the signed-in user, so
+it is compile-green + unit-pinned (`SavedItemMirrorTests`), not sim-verified; its local
+half (idempotent save, seeded `isSaved`, one currency formatter) is unit-pinned. The
+room-scoped browse fell back to the unscoped feed as designed, because a guest's room
+has no `remoteId` (U07) — so the room-named title was not exercised either.
+
+**Gate at the tip of the lane branch** (`daily-return/w1b-a`):
+`ios-gate.sh build` → `** BUILD SUCCEEDED **`; `xcodebuild test -only-testing:PatinaTests`
+on `dr-w1b-a` → **`Test run with 695 tests in 88 suites passed`** (671 on the W1a base;
++24 across `ProductDecodingTests`, `BrowseGridContractTests`, `SavedItemMirrorTests`,
+`CompanionActionMatrixTests`, `DailyRoomFeedMappingTests`, `AccountIsolationTests`).
