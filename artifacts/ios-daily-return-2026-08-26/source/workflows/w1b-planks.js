@@ -1,0 +1,100 @@
+export const meta = {
+  name: 'daily-return-w1b-planks',
+  description: 'W1b of the Daily Return build: the repair planks SP-02…SP-20 in four owned-file lanes (piece & saved · money & studio · identity, reach & notify · backend), reviewed, fixed, integrated by a steward, and walked on the simulator',
+  phases: [
+    { title: 'Steward setup', detail: 'worktrees, Secrets.swift, simulator clones, owned-file map' },
+    { title: 'Lanes', detail: 'A ∥ B ∥ C ∥ D — task list first, tests first, owned suites green, pathspec commits' },
+    { title: 'Reviews', detail: 'four separate-context adversarial reviews' },
+    { title: 'Fix', detail: 'blocking + major addressed per lane' },
+    { title: 'Integrate', detail: 'D → A → B → C into daily-return/integration; renumber; db reset + pgTAP; ios-gate all + lint-delta; deno; client-portal' },
+    { title: 'Walk', detail: 'acceptance script on the review simulator' },
+  ],
+}
+
+const ROOT = '/Users/kody/Code/patina-merged'
+const OUT = `${ROOT}/artifacts/ios-daily-return-2026-08-26`
+const S = `${OUT}/source`
+const R = `${OUT}/research`
+const W = `${OUT}/waves/w1b`
+const APP = `${ROOT}/apps/mobile/Patina`
+const REVIEW_UDID = '973D1724-90BF-4A0A-B02D-481D561547B3'
+const LANES = [
+  { key: 'a', name: 'A · piece & saved', model: 'opus', reviewer: 'sonnet' },
+  { key: 'b', name: 'B · money & studio', model: 'opus', reviewer: 'opus' },
+  { key: 'c', name: 'C · identity, reach & notify', model: 'opus', reviewer: 'sonnet' },
+  { key: 'd', name: 'D · backend', model: 'opus', reviewer: 'opus' },
+]
+const wt = (k) => `${ROOT}/.codex/worktrees/agent-dr-w1b-${k}`
+const br = (k) => `daily-return/w1b-${k}`
+
+const COMMON = `You are one agent in the Daily Return build program for the Patina iOS CLIENT app (apps/mobile/Patina). The orchestrator (Fable) reads only your structured return and your files on disk.
+Ground rules:
+- Program folder: ${OUT}. Read ${S}/build-plan.md "Global constraints", "Team model" and "### W1b" IN FULL first; then ${S}/rulings-2026-08-27.md; then ${S}/build-plan-critique.md (verified repo facts that correct the direction docs); then every plank section your lane cites in ${S}/shared-planks.md, in full. Load Skill "patina-parallel-work"; iOS lanes also load "patina-ios-verification"; the backend lane also loads "patina-db-migrations", "patina-edge-functions" and "patina-testing".
+- Sandbox: xcodebuild, xcrun simctl, git worktree add/remove, git merge, osascript, docker, sips and the supabase CLI fail inside the command sandbox — run exactly those with dangerouslyDisableSandbox: true; everything else sandboxed. Every build/test in the foreground.
+- Never git add -A / git add . ; pathspec commits only; never push; never run git in the main checkout except read-only log/show; never touch production.
+- Owned files: you may edit ONLY the files in your lane's row of the W1b table (plus new files under those directories and the test suites it names). A change you need in another lane's file goes into ${W}/<your-lane>-notes.md as an "integration note" (file, exact diff or precise instruction, why) — the steward applies it at integration. The steward's owned-file map at ${W}/steward.md is authoritative when the table is ambiguous.
+- Report with evidence (command output, diff stats, test names + pass/fail, shot names) — never a paraphrase. FINAL action = StructuredOutput, even on failure.`
+
+const safe = async (label, p) => { try { const r = await p; if (!r) log(`${label}: returned null`); return r } catch (e) { log(`${label}: threw ${e && e.message ? e.message : e}`); return null } }
+const REPORT = { type: 'object', required: ['ok', 'notes'], properties: { ok: { type: 'boolean' }, commits: { type: 'array', items: { type: 'string' } }, gate: { type: 'string' }, tasks_file: { type: 'string' }, notes_file: { type: 'string' }, app_path: { type: 'string' }, migrations: { type: 'array', items: { type: 'string' } }, notes: { type: 'array', items: { type: 'string' } }, failures: { type: 'array', items: { type: 'string' } } } }
+const REV = { type: 'object', required: ['file', 'blocking', 'major', 'minor'], properties: { file: { type: 'string' }, blocking: { type: 'array', items: { type: 'string' } }, major: { type: 'array', items: { type: 'string' } }, minor: { type: 'array', items: { type: 'string' } } } }
+
+phase('Steward setup')
+const setup = await safe('S', agent(`${COMMON}
+
+ROLE: S — steward setup for W1b. Base = the current main tip (W1a merged): record git -C ${ROOT} log --oneline -1 main. Unsandboxed, for each lane key in [a, b, c, d]: git -C ${ROOT} worktree add ${ROOT}/.codex/worktrees/agent-dr-w1b-<key> -b daily-return/w1b-<key> main ; copy ${APP}/Patina/App/Configuration/Secrets.swift into the same path inside each worktree (never commit). For the three iOS lanes [a, b, c]: xcrun simctl clone ${REVIEW_UDID} "dr-w1b-<key>" and boot it; record UDIDs. Do NOT touch ${REVIEW_UDID} or any "Coach-*" or "dr-w1a" device. If a "dr-w1a" clone still exists, delete it (xcrun simctl shutdown + delete) — W1a is merged. Write ${W}/steward.md (create the dir): base sha, worktree paths + branches, clone UDIDs per lane, and the OWNED-FILE MAP: copy the W1b table's "Owned files" column per lane from build-plan.md and resolve the ambiguities the plan leaves (e.g. Features/Home/Views/DailyRoomView.swift → lane C owns it in W1b (SP-08 primer trigger + Companion row hooks); Features/Companion/** → C; Core/Network/ProductAPIClient.swift → A; Services/Badges/BadgeCountService.swift → B; packages/supabase/src/database.types.ts → D; ContentView.swift → C; Features/Home/Views/DailyStoryCard.swift and EditorialStoriesAPIClient → A). Also record the current migration tip (ls ${ROOT}/supabase/migrations | tail -3) and the numbers lane D will mint (00533, 00534, 00535 — provisional). Return ok, notes (paths, udids, base sha).`, { label: 'S setup', phase: 'Steward setup', model: 'opus', schema: REPORT }))
+if (!setup || !setup.ok) return { setup }
+log('Steward setup done')
+
+phase('Lanes')
+const laneBrief = (l) => `${COMMON}
+
+ROLE: implementer of lane ${l.name} for W1b. Read ${W}/steward.md (your worktree, your simulator clone, the owned-file map). Deliver exactly the planks in your lane's row of the W1b table — no unrequested features, refactors or abstractions.
+WORKSPACE (mandatory, first): cd ${wt(l.key)}; verify git rev-parse --show-toplevel ends with agent-dr-w1b-${l.key}; mkdir .writer.lock.d (if it exists, stop and report — another writer is active); DerivedData: -derivedDataPath ${wt(l.key)}/.build/dd on every xcodebuild.
+TASK LIST FIRST: write ${W}/${l.key}-tasks.md in the superpowers writing-plans format — one task per plank (or per plank half), each with exact files, the interfaces neighbours rely on, the failing test (real code), run command, implementation, pass run, pathspec commit message. Read the code you will touch before writing (Serena symbolic tools scoped to apps/mobile/Patina, or grep + Read). Then execute in order, committing after each task with a Conventional Commit.
+${l.key === 'd' ? `BACKEND SPECIFICS: you own the local database this wave — you alone run supabase db reset (unsandboxed). Migrations: mint 00533 (get_recommendations DROP + CREATE with every existing output name preserved and the new columns added; ALTER TABLE products ADD COLUMN IF NOT EXISTS photo_verified_at timestamptz, shipping_flat_cents integer; both GRANTs re-applied per 00246:307-308; update the four external callers named in the plan; regen packages/supabase/src/database.types.ts with the repo's documented command — find it in package.json scripts / patina-db-migrations), 00534 (notify_client_attention per the plan's contract — two notification_log rows, service_role-only grants, invoke_edge_function('apns-send') with the push row id; AFTER INSERT trigger on client_decisions in the 00289 shape; call sites in proposal-send, invoice-send, invoice-reminders first stage), 00535 (saved_items.price_cents_at_save, saved_items.room_id if absent); the delete-account edge function (verify_jwt; cascade app rows then auth admin delete; deno test); client-portal: AASA details entry for cloud.patina.app (Team VP22LXHT7L; paths /piece/*, /invoice/*, /proposal/*, /decision/*) in apps/client-portal/src/app/.well-known/apple-app-site-association/route.ts + its test, and a public apps/client-portal/src/app/piece/[id]/page.tsx (name, maker, price, image, OG metadata, a deep link into the app) — check how that portal reads products (RLS allows anon read of published products?) and follow patina-portal-features; seeds: supabase/seed/products.sql gains dimensions + lead_time_weeks on at least six rows. Also verify supabase/functions/proposal-sign-confirmation: does sign_proposal (00400:408-437) or the proposal sign path invoke it? Report the fact for lane B (write it into ${W}/d-notes.md). Gate: supabase db reset (unsandboxed) replays clean; supabase/tests pgTAP (run the repo's documented SQL test command; add cases for 00533's shape and 00534's two-row behaviour); deno test for delete-account and the call sites; pnpm turbo type-check --filter=@patina/client-portal and the client-portal route tests (run the repo's test command for that app). Paste every tail. Re-check ls supabase/migrations | tail before your final commit and renumber if 00533–00535 collided.` : `iOS SPECIFICS: gate = apps/mobile/Patina/scripts/ios-gate.sh build (unsandboxed, from your worktree) then xcodebuild test -project ${wt(l.key)}/apps/mobile/Patina/Patina.xcodeproj -scheme Patina -configuration Debug -destination 'platform=iOS Simulator,id=<your clone udid>' -derivedDataPath ${wt(l.key)}/.build/dd -only-testing:PatinaTests (the whole tier must pass; the suites your row names are yours to keep green). Do NOT run ios-gate.sh all or lint-delta (steward-only this wave). The 00533/00535 columns are NOT in the local database until integration — decode them as optionals and let your sim check show "absent honestly"; do not run supabase db reset. SIM CHECK on your clone (launch with -DeploymentTarget local; sign in per ${R}/02-steward-boot.md §7 — client@patina.dev password123 for money/studio/saved checks, guest for piece/reach checks): capture ${OUT}/shots/w1b-${l.key}-NN-slug.png for each plank's visible outcome and append rows to ${R}/01-shot-ledger.md under "## w1b-${l.key}". Build a properly signed .app at the end (no CODE_SIGNING_ALLOWED=NO) and record its path.`}
+${l.key === 'a' ? 'LANE A NOTE: the off-canvas top bar on a piece opened from an off-canvas grid card (research/01-shot-ledger.md "H0 verification") is in scope under SP-02 — find the geometry cause (PatinaAsyncImage .aspectRatio(.fill) without .clipped(), the LazyVGrid item sizing, or the matched-geometry source frame) and prove it with a before/after shot pair on your clone.' : ''}
+${l.key === 'b' ? 'LANE B NOTE: the Pay failure must render in Patina\'s voice above the fold and never under the Companion dock — map every error the invoice/proposal/decision clients can surface to a plain sentence + "Let\'s try that again"; never show a vendor string (research/05-rewalk.md has the verbatim leak). Lane D writes whether proposal-sign-confirmation is wired into ${W}/d-notes.md — read it before finishing SP-04.' : ''}
+${l.key === 'c' ? 'LANE C NOTE: the permission ask is MOVED into PushPrimerView (SP-08\'s sentence verbatim; presented once, before the first money push, which arrives via the 00534 rows lane D writes — until those exist locally, gate the primer on the first client-facing proposal/invoice/decision notification row the app reads), not deleted. For SP-20 bisect why SettingsView.swift:50-58\'s NavigationLink never pushes before changing anything (research/33-verify-code-truth.json F45 note). For SP-03 the URL shape is https://client.patina.cloud/piece/<id> (lane D serves it); the entitlement is applinks:client.patina.cloud; AppCoordinator routes /piece, /invoice, /proposal, /decision. companion-context is called 4× at launch — fix the duplicate request (research/05-rewalk.md).' : ''}
+INTEGRATION NOTES: anything you need changed in another lane's file goes into ${W}/${l.key}-notes.md (file, exact diff, why) — do not edit it yourself.
+FINISH: rmdir .writer.lock.d; git log --oneline main..HEAD; git status --porcelain must be empty (untracked .build/ is fine — it is gitignored). Return ok, commits, gate, tasks_file, notes_file, app_path (iOS) / migrations (D), notes, failures.`
+
+const laneResults = await parallel(LANES.map(l => () => safe(l.key, agent(laneBrief(l), { label: `lane ${l.key}`, phase: 'Lanes', model: l.model, effort: 'high', schema: REPORT }))))
+log(`Lanes: ${LANES.map((l, i) => `${l.key}:${laneResults[i] ? laneResults[i].ok : 'NULL'}`).join(' ')}`)
+
+phase('Reviews')
+const reviews = await parallel(LANES.map((l, i) => () => laneResults[i] && laneResults[i].ok ? safe(`rev ${l.key}`, agent(`${COMMON}
+
+ROLE: adversarial reviewer of lane ${l.name} (W1b), separate context. Read-only: git -C ${wt(l.key)} diff main...HEAD, git -C ${wt(l.key)} log --oneline main..HEAD, ${W}/${l.key}-tasks.md, ${W}/${l.key}-notes.md if present, and the implementer's report: ${JSON.stringify({ commits: laneResults[i].commits, gate: laneResults[i].gate, notes: laneResults[i].notes, failures: laneResults[i].failures })}. Do not build; do not commit.
+Check every plank in the lane's row against ${S}/shared-planks.md (its "What changes", "Where", "Risk" and findings answered) and the plan's global constraints: is the plank fully delivered or partially (say which half); are copy strings in the brand voice and canonical names; honesty (nothing fabricated, nothing rendered that is not true, no vendor error text); tests real and failing-without-the-change; existing suites the row names still passing per the gate output; no edits outside the owned files (list any); migrations additive, grants right, numbers provisional (D); integration notes complete and precise; Conventional Commits with pathspecs; anything the report claims that the diff does not show. Write ${W}/${l.key}-review.md. Report every finding with severity + confidence; do not filter.`, { label: `review ${l.key}`, phase: 'Reviews', model: l.reviewer, effort: l.reviewer === 'opus' ? 'high' : undefined, schema: REV })) : Promise.resolve(null)))
+log(`Reviews: ${LANES.map((l, i) => `${l.key}:${reviews[i] ? `${reviews[i].blocking.length}/${reviews[i].major.length}/${reviews[i].minor.length}` : '-'}`).join(' ')}`)
+
+phase('Fix')
+const fixes = await parallel(LANES.map((l, i) => () => (reviews[i] && (reviews[i].blocking.length || reviews[i].major.length)) ? safe(`fix ${l.key}`, agent(`${laneBrief(l)}
+
+FIX ROUND (this replaces "TASK LIST FIRST"): the lane is already implemented on branch ${br(l.key)} in ${wt(l.key)}; read ${W}/${l.key}-review.md and address EVERY blocking and major item (change the code, or rebut in ${W}/${l.key}-fix-log.md with evidence); take cheap minors; re-run the lane's gate exactly as specified; pathspec-commit each fix. Findings: blocking=${JSON.stringify(reviews[i].blocking)} major=${JSON.stringify(reviews[i].major)}`, { label: `fix ${l.key}`, phase: 'Fix', model: l.model, effort: 'high', schema: REPORT })) : Promise.resolve(null)))
+log(`Fix: ${LANES.map((l, i) => `${l.key}:${fixes[i] ? fixes[i].ok : 'n/a'}`).join(' ')}`)
+
+phase('Integrate')
+const integ = await safe('integrate', agent(`${COMMON}
+
+ROLE: steward — integrate W1b. Read ${W}/steward.md, every ${W}/<lane>-review.md, ${W}/<lane>-fix-log.md and ${W}/<lane>-notes.md. Lane reports: ${JSON.stringify(LANES.map((l, i) => ({ lane: l.key, impl: laneResults[i] && { ok: laneResults[i].ok, commits: laneResults[i].commits, migrations: laneResults[i].migrations }, fix: fixes[i] && { ok: fixes[i].ok, commits: fixes[i].commits } })))}.
+1. Unsandboxed: git -C ${ROOT} worktree add ${ROOT}/.codex/worktrees/agent-dr-w1b-integration -b daily-return/integration main; cd there; copy Secrets.swift in; mkdir .writer.lock.d; clone a simulator "dr-w1b-int" from ${REVIEW_UDID} and boot it.
+2. Merge in order d → a → b → c (git merge --no-ff <branch> -m "merge(daily-return): w1b lane <x>" — NOTE the commit-msg hook rejects "merge:" subjects; use "chore(daily-return): integrate w1b lane <x>" if the hook refuses). Resolve conflicts by intent (both lanes' planks must survive); apply every integration note from ${W}/<lane>-notes.md to the owner's files; a note you cannot apply is reported, not dropped.
+3. Migrations: ls ${ROOT}/supabase/migrations | tail -5 against the integration tree; renumber lane D's files if a sibling landed in the range; then unsandboxed supabase db reset from the integration worktree's repo root (you own the DB now) and run the SQL tests + deno tests + pnpm turbo type-check --filter=@patina/client-portal + that app's route tests. Regenerate database.types.ts if the merge left it stale.
+4. iOS: apps/mobile/Patina/scripts/ios-gate.sh build; the whole PatinaTests tier on your clone (-derivedDataPath .build/dd); then ios-gate.sh lint-delta main (allowed for the steward). Paste tails. Build a properly signed .app (no CODE_SIGNING_ALLOWED=NO) and record its path.
+5. Write ${W}/integration.md: merge order, conflicts + resolutions, notes applied, renumbers, every gate result. Do not delete lane worktrees yet (the walker may need to re-check a lane). Return ok only if every gate is green; otherwise ok:false with the exact failures.`, { label: 'integrate', phase: 'Integrate', model: 'opus', effort: 'high', schema: REPORT }))
+log(`Integrate: ${integ ? integ.ok : 'NULL'}`)
+
+phase('Walk')
+const walk = integ && integ.ok ? await safe('walk', agent(`${COMMON}
+
+ROLE: walker — W1b acceptance on the review simulator ${REVIEW_UDID} (yours this wave). Read ${W}/integration.md and the "Acceptance walk (walker…)" paragraph of build-plan.md §W1b — that paragraph IS your script. Unsandboxed: xcrun simctl install ${REVIEW_UDID} ${integ.app_path}; terminate + launch with -DeploymentTarget local (no -PatinaFlags). Blitz taps per ${R}/02-steward-boot.md §5 (ToolSearch the mcp__blitz-iphone__ tools; explicit udid). Accounts: client@patina.dev (activeProject), james.okafor@example.com (engaged), guest — password123 per §7. For the bell check run, unsandboxed, against local Postgres: select notify_client_attention(...) for the open invoice and one pending decision (read the function signature from the 00534 file in the integration worktree) before opening Notifications. Capture ${OUT}/shots/w1b-NN-slug.png per script line, append rows to ${R}/01-shot-ledger.md under "## w1b walk", write ${W}/walk.md with a PASS/FAIL line per acceptance item (verbatim on-screen copy for every FAIL). Leave the simulator booted, signed in as client@patina.dev, on the Daily Room. Return ok = every item PASS; else ok:false with the FAIL list.`, { label: 'walk', phase: 'Walk', model: 'sonnet', schema: REPORT })) : null
+log(`Walk: ${walk ? walk.ok : 'skipped'}`)
+
+return {
+  setup: setup.notes,
+  lanes: LANES.map((l, i) => ({ lane: l.key, impl: laneResults[i] && { ok: laneResults[i].ok, commits: laneResults[i].commits, gate: laneResults[i].gate, failures: laneResults[i].failures }, review: reviews[i] && { blocking: reviews[i].blocking, major: reviews[i].major, minor_n: reviews[i].minor.length }, fix: fixes[i] && { ok: fixes[i].ok, commits: fixes[i].commits, failures: fixes[i].failures } })),
+  integration: integ && { ok: integ.ok, gate: integ.gate, app_path: integ.app_path, migrations: integ.migrations, notes: integ.notes, failures: integ.failures },
+  walk: walk && { ok: walk.ok, notes: walk.notes, failures: walk.failures },
+}

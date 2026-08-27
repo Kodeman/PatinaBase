@@ -310,3 +310,36 @@ opened (products `…001` and the Terracotta one) is a real, reproducible hard-t
 likely inherited from the pre-existing broken browse-grid card layout (g-15) via matched-geometry
 transition — and should be triaged before this is called done for users, since most of the grid's 10
 cards are off-canvas per g-15's "wildly differing card sizes" finding.
+
+## w1a
+
+Lane W1a (prerequisites), implementer I1. Simulator clone `dr-w1a`
+`66973A52-06CB-4455-8EC1-4C8A75496FA8`, local stack (`-DeploymentTarget local`), flag override
+`-PatinaFlags house-first` on every launch, signed simulator build from
+`.codex/worktrees/agent-dr-w1a-prereq/.build/dd/.../Patina.app`. Claim level: **sim-verified**.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1a-01-james-matched-today.png` | Today, `james.okafor@example.com` | The SP-07 matched branch, reachable for the first time: `"See your design request"` / `"You're matched with Leah Hartwell"`. James's seeded lead is `status='accepted'`, claimed, `client_request_id IS NULL` — the exact row the dropped filter excluded, which is why this account previously saw the guest-identical `"Bring your first room into Patina"` |
+| `w1a-02-get-design-help-existing.png` | Profile → "Get design help", same account | Opens the EXISTING request (`DESIGNER MATCHED` / `"You're matched with Leah Hartwell"` / the Request sent · Introduction · Discovery timeline) instead of the compose sheet. `select count(*) from leads where homeowner_id = '28fd9d2c-…'` = **1 before, 1 after** — no second lead filed |
+| `w1a-03-studio-subhead-count.png` | Profile → Studio, `client@patina.dev` | Subhead reads `"4 things need your eye"` from `BadgeCountService.attentionCount`. The `"Awaiting you, 3 categories"` block below it is unchanged and now distinct in wording — it counts grouped rows, which is a different and honest number. The Conversation block reads `"Conversation · Start one with your designer"` with `"Opens Messages."` — SP-13's route at zero threads |
+| `w1a-04-daily-room-footer-count.png` | Daily Room Companion, same account | The same `"4 things need your eye."`, where the pre-change build printed `"2 project decisions waiting"` on this surface. Also carries the new `"Message your designer"` row (`DesignerRelationship.isLive`) |
+| `w1a-05-companion-count.png` | Profile Companion, same account | `"4 things need your eye."` again — third surface, one number |
+| `w1a-06-project-message-designer.png` | Project detail (Aspen Loft Refresh) | The new `projectDetail.messageDesigner` affordance: `"Message your designer / Ask a question about this project"` |
+
+**Server-side evidence (not screenshot-only).** Tapping the project-detail affordance called
+`rpc_start_project_thread` and Postgres gained the row: `comms_threads` went 1 → 2, the new row is
+`kind='project'`, `project_id='b0000000-…-0000000000d1'`, and its first message is the RPC's own
+system line `"Project conversation opened."`. The app pushed the thread detail with a live compose
+field.
+
+**Flag override, proven.** `os_log` on the clone, launch with `-PatinaFlags house-first`:
+`[com.patina.app:ui] [FeatureFlags] resolved via launch-arguments: on=[house-first]`. Nothing reads
+the flag until W3 mounts the tab bar, so a DEBUG-only resolution log line is what makes it
+observable on a walk.
+
+**Not verified.** Nothing device-dependent was touched, so there is no device claim here. The
+`.roster` branch of `DesignerRelationship` could not be exercised at all: `designer_clients` has no
+client-side SELECT policy (00014:110 and 00316:39 are both designer-side), so the client's select
+returns empty by RLS. Signing out through Settings → Account also could not be exercised — that row
+does not push (the known SP-20 / F45 defect); the walk used a simulator keychain reset instead.
