@@ -27,6 +27,45 @@ public struct RemoteProject: Codable, Sendable, Identifiable {
     public let target_end_date: String?
     public let client_visibility_tier: String?
     public let updated_at: String?
+    /// Embedded `profiles!projects_designer_id_fkey` — the designer the
+    /// Record's rows and the designer seat name. Nil where the project has no
+    /// designer, or on any decode that predates the embed.
+    public let designer: RemoteDesignerRef?
+
+    public var designerDisplayName: String {
+        designer?.displayName ?? "your designer"
+    }
+
+    public var designerStudioName: String? {
+        designer?.studioName
+    }
+
+    /// Explicit, with `designer` defaulted, so adding the embed did not force
+    /// an edit on every existing construction site.
+    public init( // swiftlint:disable:this function_parameter_count
+        id: String, name: String, status: String?, client_id: String?,
+        designer_id: String?, studio_id: String?, total_amount_cents: Int?,
+        budget_cents: Int?, design_fee_cents: Int?, current_phase: String?,
+        start_date: String?, target_end_date: String?,
+        client_visibility_tier: String?, updated_at: String?,
+        designer: RemoteDesignerRef? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.status = status
+        self.client_id = client_id
+        self.designer_id = designer_id
+        self.studio_id = studio_id
+        self.total_amount_cents = total_amount_cents
+        self.budget_cents = budget_cents
+        self.design_fee_cents = design_fee_cents
+        self.current_phase = current_phase
+        self.start_date = start_date
+        self.target_end_date = target_end_date
+        self.client_visibility_tier = client_visibility_tier
+        self.updated_at = updated_at
+        self.designer = designer
+    }
 }
 
 public struct RemoteProjectPhase: Codable, Sendable, Identifiable {
@@ -109,16 +148,23 @@ public actor ProjectsAPIClient {
     // MARK: - Projects
 
     /// All projects the current user can see via RLS (designer or client).
+    /// `*` plus the designer, so the Record can say who acted without a second
+    /// round-trip. `projects.designer_id` really does reference
+    /// `public.profiles` (`projects_designer_id_fkey`), so the embed resolves;
+    /// naming the constraint keeps it unambiguous.
+    static let projectSelect =
+        "*,designer:profiles!projects_designer_id_fkey(" + RemoteDesignerRef.selectColumns + ")"
+
     public func listProjects() async throws -> [RemoteProject] {
         try await get(path: "projects", queryItems: [
-            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "select", value: Self.projectSelect),
             URLQueryItem(name: "order", value: "updated_at.desc"),
         ])
     }
 
     public func fetchProject(id: String) async throws -> RemoteProject? {
         let rows: [RemoteProject] = try await get(path: "projects", queryItems: [
-            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "select", value: Self.projectSelect),
             URLQueryItem(name: "id", value: "eq.\(id)"),
         ])
         return rows.first

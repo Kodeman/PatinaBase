@@ -37,10 +37,43 @@
 import Foundation
 import Supabase
 
+/// The designer, as `profiles` actually stores them. `profiles` has
+/// `display_name`, `full_name` and `business_name` and NO `studio_name` — a
+/// select naming a column that does not exist 400s the whole query and takes
+/// the row list down with it, so the column list is pinned by a test.
+public struct RemoteDesignerRef: Codable, Sendable {
+    public static let selectColumns = "id,display_name,full_name,business_name"
+
+    public let id: String?
+    public let display_name: String?
+    public let full_name: String?
+    public let business_name: String?
+
+    /// The name the record prints. Mirrors `RemoteInvoiceDesignerRef` so the
+    /// same designer cannot be named two ways on two rows of one card.
+    public var displayName: String {
+        if let display_name, !display_name.isEmpty { return display_name }
+        if let full_name, !full_name.isEmpty { return full_name }
+        if let business_name, !business_name.isEmpty { return business_name }
+        return "your designer"
+    }
+
+    /// The studio, when there is one. Never invented from the person's name.
+    public var studioName: String? {
+        guard let business_name, !business_name.isEmpty else { return nil }
+        return business_name
+    }
+}
+
 /// Embedded `projects(name)` row on a decision — gives list rows their
 /// project context without a second round-trip.
+///
+/// The designer rides in here rather than beside it: `client_decisions.designer_id`
+/// references `auth.users`, not `public.profiles`, so PostgREST has no
+/// relationship to embed directly. The project does.
 public struct RemoteDecisionProjectRef: Codable, Sendable {
     public let name: String?
+    public let designer: RemoteDesignerRef?
 }
 
 /// Embedded `products(...)` row on an option (FK from 00172). Null when the
@@ -78,6 +111,16 @@ public struct RemoteClientDecision: Codable, Sendable, Identifiable {
     /// Convenience: the decision has already been responded to.
     public var isResolved: Bool {
         status == "responded" || responded_at != nil
+    }
+
+    /// Who asked. "your designer" when the embed brought nobody — the record
+    /// names a person or it names nobody; it never invents one.
+    public var designerDisplayName: String {
+        project?.designer?.displayName ?? "your designer"
+    }
+
+    public var designerStudioName: String? {
+        project?.designer?.studioName
     }
 }
 
@@ -149,11 +192,12 @@ public actor DecisionsAPIClient {
     /// Decision columns selected with PostgREST aliases so the wire JSON
     /// matches `RemoteClientDecision`'s field names. Kept in one place so
     /// the list + detail queries can't drift.
-    private static let decisionSelect =
+    static let decisionSelect =
         "id,project_id,title,description:context,status,decision_type,"
         + "recommended_option_id,viewed_at,responded_at,due_date,"
         + "client_consent_method,client_consented_at,created_at,"
-        + "project:projects(name)"
+        + "project:projects(name,designer:profiles!projects_designer_id_fkey("
+        + RemoteDesignerRef.selectColumns + "))"
 
     /// Option columns, likewise aliased, with the linked product embedded
     /// (00172) so catalog-first options still render name/image/price.
