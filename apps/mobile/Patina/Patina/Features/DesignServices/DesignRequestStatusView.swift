@@ -105,7 +105,7 @@ struct DesignRequestStatusView: View {
                 }
                 if request.stage.isTerminal {
                     PatinaButton("Start a new request", style: .primary) {
-                        coordinator.presentedSheet = .designServices(roomId: nil, preselectedScanIds: [])
+                        coordinator.presentDesignServices(roomId: nil)
                     }
                 }
                 if !others.isEmpty {

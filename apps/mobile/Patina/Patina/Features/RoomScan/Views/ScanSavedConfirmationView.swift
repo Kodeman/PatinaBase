@@ -147,10 +147,7 @@ struct ScanSavedConfirmationView: View {
 
     private func getDesignHelp() {
         HapticManager.shared.impact(.light)
-        coordinator.presentedSheet = .designServices(
-            roomId: nil,
-            preselectedScanIds: [scanId]
-        )
+        coordinator.presentDesignServices(roomId: nil, preselectedScanIds: [scanId])
     }
 
     // MARK: - Derived state

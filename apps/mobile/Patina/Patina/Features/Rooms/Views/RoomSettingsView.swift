@@ -167,7 +167,7 @@ struct RoomSettingsView: View {
     private var shareButton: some View {
         Button {
             saveIfChanged()
-            coordinator.presentedSheet = .designServices(roomId: roomId, preselectedScanIds: [])
+            coordinator.presentDesignServices(roomId: roomId)
         } label: {
             HStack(spacing: 6) {
                 Text("↗")

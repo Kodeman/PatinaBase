@@ -263,6 +263,15 @@ public final class AppCoordinator: Coordinator {
     // MARK: - Navigation
 
     public func navigate(to route: AppRoute) {
+        // SP-07: "Get design help" must never file a second lead for a client
+        // who already has a live one. Both ways in are guarded — this route,
+        // and `presentDesignServices` for the sheet-based entry points.
+        if case .designerConsultation = route,
+           case let .existingRequest(leadId) = DesignHelpDestination.current {
+            navigate(to: .designRequests(focusLeadId: leadId.uuidString))
+            return
+        }
+
         // Update current screen tracking
         currentScreen = route
 
@@ -292,6 +301,17 @@ public final class AppCoordinator: Coordinator {
             push(route)
             updateContext(for: route)
         }
+    }
+
+    /// The one way to open the design-request compose sheet (SP-07). A client
+    /// with a live request is sent to that request instead of a second
+    /// compose step.
+    public func presentDesignServices(roomId: UUID?, preselectedScanIds: [UUID] = []) {
+        if case let .existingRequest(leadId) = DesignHelpDestination.current {
+            navigate(to: .designRequests(focusLeadId: leadId.uuidString))
+            return
+        }
+        presentedSheet = .designServices(roomId: roomId, preselectedScanIds: preselectedScanIds)
     }
 
     /// Append a pushed route to both the navigation path and its mirror
@@ -479,7 +499,7 @@ public final class AppCoordinator: Coordinator {
             return false
 
         case .requestDesignServices(let roomId):
-            presentedSheet = .designServices(roomId: roomId, preselectedScanIds: [])
+            presentDesignServices(roomId: roomId)
             return true
 
         case .viewRecommendations(let roomId):

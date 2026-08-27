@@ -12,9 +12,10 @@
 //  SELECT already passes RLS, verified in migration 00014). We disambiguate the
 //  two `profiles` FKs with the `designer:profiles!designer_id(...)` embed hint
 //  (the `homeowner_id` FK is the other), mirroring `SupabaseLeadsService`
-//  (apps/mobile/Capture) and `use-leads.ts` (packages/supabase). Only
-//  app-originated rows (`client_request_id IS NOT NULL`) are considered — the
-//  same discriminator the submit RPC stamps.
+//  (apps/mobile/Capture) and `use-leads.ts` (packages/supabase). EVERY lead
+//  RLS lets the homeowner see is considered, whatever intake path wrote it —
+//  a portal-created lead is the client's designer relationship just as much as
+//  an app-submitted one (SP-07).
 //
 //  Stage derives from `(designer_id, status)` JOINTLY, never status alone:
 //  claiming a request sets `designer_id` without changing `status` (00286), so
@@ -733,9 +734,14 @@ public final class DesignRequestStatusService {
     private func fetchLeadRows() async throws -> [LeadStatusRow] {
         let url = APIConfiguration.apiURL
             .appendingPathComponent("/rest/v1/leads")
+            // SP-07: no `client_request_id` filter. It admitted only
+            // app-originated rows, so a lead created from the designer portal
+            // never came back and the matched branch Today already renders was
+            // unreachable. The client scope is unchanged — `leads` RLS
+            // (00014:58-59) is `auth.uid() = homeowner_id`, which is the
+            // client-relationship scope this read always relied on.
             .appending(queryItems: [
                 URLQueryItem(name: "select", value: Self.selectColumns),
-                URLQueryItem(name: "client_request_id", value: "not.is.null"),
                 URLQueryItem(name: "order", value: "created_at.desc")
             ])
         var request = URLRequest(url: url)

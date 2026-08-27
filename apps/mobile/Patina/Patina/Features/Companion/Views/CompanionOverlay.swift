@@ -555,10 +555,7 @@ public struct CompanionOverlay: View {
                             case .openAuth:
                                 coordinator.presentedSheet = .auth
                             case let .openDesignServices(roomId):
-                                coordinator.presentedSheet = .designServices(
-                                    roomId: roomId,
-                                    preselectedScanIds: []
-                                )
+                                coordinator.presentDesignServices(roomId: roomId)
                             }
                             if navOutcome == .showFirstNavAck {
                                 presentFirstNavAck()

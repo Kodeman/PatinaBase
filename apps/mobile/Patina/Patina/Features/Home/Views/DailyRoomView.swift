@@ -211,7 +211,7 @@ struct DailyRoomView: View {
         switch move.kind {
         case .resumeDesignRequest:
             scanEvents.setPendingDesignRequestDraft(nil)
-            coordinator.presentedSheet = .designServices(roomId: nil, preselectedScanIds: [])
+            coordinator.presentDesignServices(roomId: nil)
         case .resumeScan:
             continueSavedScan()
         case .trackDesignRequest:

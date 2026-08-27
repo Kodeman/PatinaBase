@@ -205,4 +205,80 @@ struct EngagementTierTests {
         #expect(state(badgesLoaded: true) != .known(.discovering))
         #expect(state(requestsLoaded: true) != .known(.discovering))
     }
+
+    // MARK: - SP-07: the portal-created lead
+
+    /// James Okafor's seeded lead (`supabase/seed/leads_room_scans.sql:143`)
+    /// is `status='accepted'` with a designer and NO `client_request_id` — the
+    /// portal intake path. `fetchLeadRows` filtered exactly those rows out, so
+    /// the tier never promoted and the built matched branch on Today was
+    /// unreachable. Nothing about the row itself made it ineligible.
+    @Test
+    func portalCreatedLeadPromotesToEngaged() {
+        let portalLead = request(status: "accepted", designerId: UUID())
+        #expect(portalLead.stage == .matched)
+        #expect(portalLead.isVisibleForPromotion())
+        #expect(
+            EngagementTier.resolve(
+                requests: [portalLead],
+                projectCount: 0, proposalCount: 0, invoiceCount: 0, decisionCount: 0
+            ) == .engaged
+        )
+    }
+
+    @Test
+    func aPromotedRequestReachesTheMatchedBranchOnToday() {
+        let portalLead = request(status: "accepted", designerId: UUID())
+        let move = TodayExperience.nextMove(for: TodayPriorityInput(
+            promotedDesignRequestID: portalLead.leadId.uuidString,
+            promotedDesignRequestStatus: portalLead.stage.badgeTitle
+        ))
+        #expect(move.kind == .trackDesignRequest)
+        #expect(move.targetID == portalLead.leadId.uuidString)
+    }
+
+    // MARK: - SP-07: the duplicate-lead guard
+
+    @Test
+    func designHelpOpensTheExistingRequestWhenEngaged() {
+        let live = request(status: "accepted", designerId: UUID())
+        #expect(
+            DesignHelpDestination.resolve(tier: .engaged, promotedRequest: live)
+                == .existingRequest(leadId: live.leadId)
+        )
+        #expect(
+            DesignHelpDestination.resolve(tier: .activeProject, promotedRequest: live)
+                == .existingRequest(leadId: live.leadId)
+        )
+    }
+
+    @Test
+    func designHelpComposesWhenDiscovering() {
+        #expect(
+            DesignHelpDestination.resolve(tier: .discovering, promotedRequest: nil)
+                == .newRequest
+        )
+    }
+
+    @Test
+    func designHelpComposesWhenTheOnlyRequestIsTerminal() {
+        // A closed request is not a relationship — offering "Get design help"
+        // there is correct, and a second lead is the right outcome.
+        let closed = request(status: "declined")
+        #expect(closed.stage.isTerminal)
+        #expect(
+            DesignHelpDestination.resolve(tier: .engaged, promotedRequest: closed)
+                == .newRequest
+        )
+    }
+
+    @Test
+    func designHelpComposesWhenThereIsNoPromotedRequest() {
+        // activeProject with no live request (the project came from elsewhere):
+        // there is no request status to open, so compose.
+        #expect(
+            DesignHelpDestination.resolve(tier: .activeProject, promotedRequest: nil)
+                == .newRequest
+        )
+    }
 }

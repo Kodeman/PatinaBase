@@ -39,7 +39,7 @@ struct DesignerConsultationView: View {
 
                 // Door into the request flow
                 PatinaButton("Start a request", style: .primary) {
-                    coordinator.presentedSheet = .designServices(roomId: nil, preselectedScanIds: [])
+                    coordinator.presentDesignServices(roomId: nil)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 32)

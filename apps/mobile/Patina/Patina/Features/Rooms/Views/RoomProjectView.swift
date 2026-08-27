@@ -63,10 +63,7 @@ struct RoomProjectView: View {
                             itemsSection(for: room)
                             budgetNudge(for: level, room: room)
                             cta(primary: "Get design help with this room") {
-                                coordinator.presentedSheet = .designServices(
-                                    roomId: room.id,
-                                    preselectedScanIds: []
-                                )
+                                coordinator.presentDesignServices(roomId: room.id)
                             }
                         }
                         Spacer().frame(height: 100)
@@ -134,10 +131,7 @@ struct RoomProjectView: View {
         if let nudge = BudgetAssessment.companionNudge(for: level, roomName: room.name) {
             if level == .overRange {
                 Button {
-                    coordinator.presentedSheet = .designServices(
-                        roomId: room.id,
-                        preselectedScanIds: []
-                    )
+                    coordinator.presentDesignServices(roomId: room.id)
                 } label: {
                     Text(nudge)
                         .font(.custom("PlayfairDisplay-Italic", size: 13, relativeTo: .footnote))
