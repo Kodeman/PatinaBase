@@ -489,4 +489,41 @@ struct CompanionTierAndFreshnessTests {
         let items = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true)
         #expect(items.contains { $0.analyticsId == "recommendations" && $0.hint == "Based on your rooms" })
     }
+
+    // MARK: - SP-12: the Saved door opens at zero
+
+    /// The Companion's `Saved` row is the only route to the Saved screen
+    /// anywhere in the app. Gated on a non-zero count, a reader with nothing
+    /// saved could never reach the screen that teaches them what saving is
+    /// for.
+    @Test
+    func savedRowDrawsWithNothingSaved() {
+        var ctx = Fixture.context(for: .heroFrame, roomCount: 2, active: false)
+        ctx.tableItemCount = 0
+        let items = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true)
+        let saved = items.first { $0.analyticsId == "collections" }
+        #expect(saved?.label == "Saved")
+        #expect(saved?.hint == "Nothing saved yet")
+        #expect(saved?.route == .table)
+    }
+
+    @Test
+    func savedRowCountsWhatIsSaved() {
+        var ctx = Fixture.context(for: .heroFrame, roomCount: 2, active: false)
+        ctx.tableItemCount = 1
+        let one = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true)
+        #expect(one.first { $0.analyticsId == "collections" }?.hint == "1 saved piece")
+
+        ctx.tableItemCount = 4
+        let many = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true)
+        #expect(many.first { $0.analyticsId == "collections" }?.hint == "4 saved pieces")
+    }
+
+    /// SP-12: Saved opened on `Boards` while the piece just saved sat one tab
+    /// over under `All items`.
+    @Test
+    func savedDefaultsToTheTabHoldingThePieces() {
+        #expect(CollectionsViewModel.defaultTab(boardCount: 0) == "All items")
+        #expect(CollectionsViewModel.defaultTab(boardCount: 2) == "Boards")
+    }
 }

@@ -244,6 +244,19 @@ struct CollectionsView: View {
             )
     }
 
+    /// SP-12: the boards a saved piece can join. Empty until the reader makes
+    /// one, and the action does not draw while it is.
+    private var boardTargets: [ProductCardBoardTarget] {
+        viewModel.boards.map { ProductCardBoardTarget(id: $0.id.uuidString, name: $0.name) }
+    }
+
+    private func addSavedItem(_ item: TableItemModel, toBoardId boardId: String) {
+        guard let productId = item.productId,
+              let board = viewModel.boards.first(where: { $0.id.uuidString == boardId })
+        else { return }
+        viewModel.addToBoard(board, productId: productId)
+    }
+
     // MARK: - All Items Tab
 
     private var allItemsContent: some View {
@@ -285,6 +298,13 @@ struct CollectionsView: View {
                         shareURL: item.productId.map { PatinaDeepLinks.productURL(forProductId: $0) },
                         onRemove: {
                             viewModel.removeSavedItem(item, context: modelContext)
+                        },
+                        // SP-12: the only path that puts a piece on a board.
+                        // Without it `addToBoard` had no caller and a board
+                        // could never hold anything.
+                        boardTargets: boardTargets,
+                        onAddToBoard: { target in
+                            addSavedItem(item, toBoardId: target.id)
                         }
                     ) {
                         let pieceId = item.productId ?? item.id.uuidString

@@ -61,18 +61,28 @@ public struct ProductCard: View {
     /// call site can actually perform today.
     let shareURL: URL?
     let onRemove: (() -> Void)?
+    /// SP-12: the boards this piece can be added to, and what to do when one
+    /// is picked. Empty means the app has no boards yet and the action does
+    /// not draw. `BoardModel.addItem` had no caller anywhere before this, so
+    /// a board could never fill.
+    let boardTargets: [ProductCardBoardTarget]
+    let onAddToBoard: ((ProductCardBoardTarget) -> Void)?
 
     public init(
         data: ProductCardData,
         style: Style = .list,
         shareURL: URL? = nil,
         onRemove: (() -> Void)? = nil,
+        boardTargets: [ProductCardBoardTarget] = [],
+        onAddToBoard: ((ProductCardBoardTarget) -> Void)? = nil,
         onTap: @escaping () -> Void
     ) {
         self.data = data
         self.style = style
         self.shareURL = shareURL
         self.onRemove = onRemove
+        self.boardTargets = boardTargets
+        self.onAddToBoard = onAddToBoard
         self.onTap = onTap
     }
 
@@ -90,6 +100,8 @@ public struct ProductCard: View {
             name: data.name,
             shareURL: shareURL,
             onRemove: onRemove,
+            boardTargets: boardTargets,
+            onAddToBoard: onAddToBoard,
             onViewDetails: onTap
         ))
     }
@@ -176,10 +188,16 @@ private struct ProductCardContextMenu: ViewModifier {
     let name: String
     let shareURL: URL?
     let onRemove: (() -> Void)?
+    let boardTargets: [ProductCardBoardTarget]
+    let onAddToBoard: ((ProductCardBoardTarget) -> Void)?
     let onViewDetails: () -> Void
 
+    private var hasBoardAction: Bool {
+        onAddToBoard != nil && !boardTargets.isEmpty
+    }
+
     func body(content: Content) -> some View {
-        if shareURL == nil && onRemove == nil {
+        if shareURL == nil && onRemove == nil && !hasBoardAction {
             content
         } else {
             content.contextMenu {
@@ -187,6 +205,15 @@ private struct ProductCardContextMenu: ViewModifier {
                     onViewDetails()
                 } label: {
                     Label("View details", systemImage: "arrow.up.right")
+                }
+                if hasBoardAction, let onAddToBoard {
+                    Menu {
+                        ForEach(boardTargets) { board in
+                            Button(board.name) { onAddToBoard(board) }
+                        }
+                    } label: {
+                        Label("Add to board", systemImage: "rectangle.stack.badge.plus")
+                    }
                 }
                 if let shareURL {
                     ShareLink(item: shareURL, subject: Text(name)) {
@@ -202,6 +229,19 @@ private struct ProductCardContextMenu: ViewModifier {
                 }
             }
         }
+    }
+}
+
+// MARK: - Board target (SP-12)
+
+/// One board a saved piece can be added to.
+public struct ProductCardBoardTarget: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+
+    public init(id: String, name: String) {
+        self.id = id
+        self.name = name
     }
 }
 
