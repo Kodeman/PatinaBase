@@ -296,7 +296,10 @@ struct ContextualExperienceTests {
         ))
 
         #expect(move.kind == .reviewDecisions)
-        #expect(move.detail == "1 decision needs your eye.")
+        // SP-16: "needs your eye" is the attention count's sentence, printed
+        // by the Companion footer on this same screen. This move speaks for
+        // decisions alone.
+        #expect(move.detail == "1 decision is waiting on you.")
     }
 
     @Test

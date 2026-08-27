@@ -206,8 +206,13 @@ private extension StudioQueueBuilder {
     static func conversationThreadRow(_ context: StudioQueueContext) -> StudioQueueRow? {
         let threads = context.input.threads
         let unreadCount = context.unreadThreads.count
+        // Not "Start one with your designer": the Studio hub is reachable at
+        // `.engaged`, which includes a client whose request is still pooled
+        // with nobody claimed. `ThreadListView`'s CTA is gated on `isLive`
+        // and offers them "Track your request" instead, so this line has to
+        // be true for both.
         let detail = threads.isEmpty
-            ? "Start one with your designer"
+            ? "No messages yet"
             : (unreadCount == 0
                ? "All caught up"
                : countLabel(unreadCount, singular: "1 unread thread",

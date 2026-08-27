@@ -104,7 +104,16 @@ struct DesignRequestStatusView: View {
                     designerCard(request)
                 }
                 if request.stage.isTerminal {
-                    PatinaButton("Start a new request", style: .primary) {
+                    // The tap is guarded: a client with another open request
+                    // is sent to it rather than filing a second lead. Say so,
+                    // rather than promising a new request and delivering an
+                    // old one.
+                    PatinaButton(
+                        service.openRequest == nil
+                            ? "Start a new request"
+                            : "See your open request",
+                        style: .primary
+                    ) {
                         coordinator.presentDesignServices(roomId: nil)
                     }
                 }

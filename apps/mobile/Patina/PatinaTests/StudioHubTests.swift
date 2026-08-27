@@ -217,6 +217,9 @@ struct StudioHubTests {
         )
         #expect(row.route == .threadList)
         #expect(row.title == "Conversation")
-        #expect(row.detail == "Start one with your designer")
+        // m1: the hub is reachable at `.engaged`, which includes a client
+        // whose request is still pooled with nobody claimed — so the row may
+        // not promise a designer.
+        #expect(row.detail == "No messages yet")
     }
 }

@@ -33,6 +33,13 @@ struct MessagingThreadCreationTests {
 
     /// The migration is the authority; read it rather than trusting the
     /// constants above to have been transcribed correctly.
+    ///
+    /// Constraint, deliberately taken: this and `createPathsUseThePinnedConstants`
+    /// read the working tree at runtime via `#filePath`, so they hold only
+    /// where the test bundle runs beside its checkout — true for `ios-gate.sh`
+    /// and for Xcode, not for a bundle shipped anywhere else. The alternative
+    /// is duplicating the migration into a fixture, which is the drift these
+    /// tests exist to catch.
     @Test("the pinned names match the migration that defines them")
     func pinnedNamesMatchTheMigration() throws {
         let migration = URL(fileURLWithPath: #filePath)
