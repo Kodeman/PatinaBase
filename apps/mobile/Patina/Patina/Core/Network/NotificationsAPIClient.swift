@@ -131,17 +131,23 @@ extension AppNotification {
             ?? ISO8601DateFormatter().date(from: remote.created_at)
             ?? Date()
 
-        let type = AppNotificationType(serverType: remote.type)
+        // `notification_log` has no first-class entity columns (00041); routing
+        // payload lives in `metadata.entity_type` / `metadata.entity_id` to
+        // mirror the APNs envelope shape.
+        let entityType = remote.metadata?["entity_type"]?.value as? String
+        let entityId = remote.metadata?["entity_id"]?.value as? String
+
+        // `metadata.entity_type` is the field 00534 guarantees and the one
+        // NotificationRouter routes on, so it decides the bucket. The `type`
+        // string is a second opinion for rows that predate the contract —
+        // reading `type` alone put 00534's `decision_attention` rows in the
+        // "New pieces for you" bucket with a sparkles icon.
+        let type = AppNotificationType(entityType: entityType)
+            ?? AppNotificationType(serverType: remote.type)
         let title = remote.metadata?["title"]?.value as? String ?? type.defaultTitle
         let body = remote.metadata?["body"]?.value as? String
             ?? remote.metadata?["preview"]?.value as? String
             ?? ""
-
-        // `notification_log` has no first-class entity columns (migration
-        // 00041); routing payload lives in `metadata.entity_type` /
-        // `metadata.entity_id` to mirror the APNs envelope shape.
-        let entityType = remote.metadata?["entity_type"]?.value as? String
-        let entityId = remote.metadata?["entity_id"]?.value as? String
 
         self.init(
             remoteId: remote.id,
@@ -157,6 +163,19 @@ extension AppNotification {
 }
 
 extension AppNotificationType {
+    /// Map `metadata.entity_type` — the field 00534 guarantees and the one
+    /// `NotificationRouter` routes on — to a bucket. `nil` for anything that
+    /// is not one of the three client-facing kinds, so the caller falls back
+    /// to the `type` string.
+    init?(entityType: String?) {
+        switch entityType?.lowercased() {
+        case "proposal": self = .proposal
+        case "invoice": self = .invoice
+        case "decision": self = .decision
+        default: return nil
+        }
+    }
+
     /// Map a server `notification_log.type` value to a UI bucket. Keep this
     /// lenient — backend introduces new types frequently and we should still
     /// render *something*.
@@ -176,11 +195,11 @@ extension AppNotificationType {
         // not new — 00388_proposal_send_dispatch_guard.sql:1258-1278 already
         // writes it on the real send path; the seed bypassed it, which is why
         // the bell read empty beside a proposal awaiting signature (F08).
-        case "proposal_sent", "proposal_reminder":
+        case "proposal_sent", "proposal_reminder", "proposal_attention":
             self = .proposal
-        case "invoice_sent", "invoice_due", "invoice_reminder":
+        case "invoice_sent", "invoice_due", "invoice_reminder", "invoice_attention":
             self = .invoice
-        case "decision_raised", "decision_reminder":
+        case "decision_raised", "decision_reminder", "decision_attention":
             self = .decision
         default:
             self = .newRecommendations

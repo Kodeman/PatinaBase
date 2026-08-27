@@ -34,7 +34,7 @@ final class NotificationsViewModel {
         error = nil
         do {
             let remote = try await NotificationsAPIClient.shared.list()
-            let real = remote.map { AppNotification(from: $0) }
+            let real = Self.collapseDuplicates(remote.map { AppNotification(from: $0) })
             // SP-08: the bell read "Nothing yet" in the same minute the Studio
             // two screens away listed an overdue decision, a $4,250 invoice and
             // a proposal to review, because invoices and decisions write no
@@ -50,6 +50,32 @@ final class NotificationsViewModel {
             PatinaLog.ui.error("[Notifications] load failed: \(error.localizedDescription)")
             #endif
         }
+    }
+
+    /// 00534 writes TWO rows per event — `in_app`/`delivered` and
+    /// `push`/`queued` — and the feed's channel filter admits both, so every
+    /// decision printed twice on the walk. One event is one row in the bell:
+    /// collapse on `entity_type|entity_id`, keeping the first (the list is
+    /// ordered `created_at desc`) and preferring a row that is already read so
+    /// the unread dot cannot come back after it is dismissed.
+    static func collapseDuplicates(_ rows: [AppNotification]) -> [AppNotification] {
+        var seen = Set<String>()
+        var collapsed: [AppNotification] = []
+        for row in rows {
+            guard let entityType = row.entityType, let entityId = row.entityId else {
+                collapsed.append(row)
+                continue
+            }
+            let key = "\(entityType)|\(entityId)"
+            if seen.insert(key).inserted {
+                collapsed.append(row)
+            } else if row.isRead, let index = collapsed.firstIndex(where: {
+                $0.entityType == entityType && $0.entityId == entityId
+            }) {
+                collapsed[index].isRead = true
+            }
+        }
+        return collapsed
     }
 
     // MARK: - Studio fallback (SP-08)

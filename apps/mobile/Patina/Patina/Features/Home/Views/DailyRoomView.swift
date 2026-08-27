@@ -89,6 +89,14 @@ struct DailyRoomView: View {
         .onChange(of: viewModel.selectedRoomID) { _, _ in
             syncCompanionContext()
         }
+        .onChange(of: AuthService.shared.isAuthenticated) { _, isAuthenticated in
+            guard isAuthenticated else { return }
+            Task {
+                await badges.refresh()
+                await notificationsViewModel.load()
+                presentPushPrimerIfEarned()
+            }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             viewModel.load()
@@ -97,6 +105,12 @@ struct DailyRoomView: View {
                 await badges.refresh()
                 await requestStatus.refresh()
                 syncCompanionContext()
+                // The feed is what the primer trigger reads, and signing in
+                // inside this view's lifetime does not re-run the `.task`
+                // above — so a client who signed in on this screen would not
+                // meet the primer until a relaunch.
+                await notificationsViewModel.load()
+                presentPushPrimerIfEarned()
             }
         }
         .helpPanel(

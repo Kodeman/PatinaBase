@@ -49,6 +49,71 @@ struct BellQueueFallbackTests {
         #expect(AppNotificationType.scanComplete.entityType == nil)
     }
 
+    /// Observed live on `dr-w1b-c` against lane D's 00534 rows: they carry
+    /// `type = "decision_attention"`, which no `type`-only table anticipated,
+    /// so every one of them landed in `.newRecommendations` and drew a
+    /// sparkles icon. `metadata.entity_type` is the field 00534 guarantees and
+    /// the one `NotificationRouter` routes on, so it decides the bucket.
+    @Test("the bucket comes from metadata.entity_type, not from the type string")
+    func entityTypeDecidesTheBucket() {
+        #expect(AppNotificationType(entityType: "decision") == .decision)
+        #expect(AppNotificationType(entityType: "Invoice") == .invoice)
+        #expect(AppNotificationType(entityType: "proposal") == .proposal)
+        #expect(AppNotificationType(entityType: "room") == nil)
+        #expect(AppNotificationType(entityType: nil) == nil)
+    }
+
+    /// The `type` strings 00534 actually writes, kept as the second opinion
+    /// for rows that carry no entity metadata.
+    @Test("the attention type strings map too")
+    func attentionTypeStringsMap() {
+        #expect(AppNotificationType(serverType: "decision_attention") == .decision)
+        #expect(AppNotificationType(serverType: "invoice_attention") == .invoice)
+        #expect(AppNotificationType(serverType: "proposal_attention") == .proposal)
+    }
+
+    // MARK: - One event, one row
+
+    /// 00534 writes TWO rows per event — `in_app`/`delivered` and
+    /// `push`/`queued` — and the feed's channel filter admits both, so three
+    /// decisions printed as six rows on the walk.
+    @Test("the two rows 00534 writes per event collapse to one")
+    func duplicateChannelRowsCollapse() {
+        let rows = [
+            Self.delivered(type: .decision, entityId: "d-1"),
+            Self.delivered(type: .decision, entityId: "d-1"),
+            Self.delivered(type: .decision, entityId: "d-2"),
+            Self.delivered(type: .decision, entityId: "d-2")
+        ]
+        let collapsed = NotificationsViewModel.collapseDuplicates(rows)
+        #expect(collapsed.count == 2)
+        #expect(collapsed.compactMap(\.entityId) == ["d-1", "d-2"])
+    }
+
+    /// A row with no entity payload cannot be de-duplicated and must survive.
+    @Test("rows without an entity are never collapsed")
+    func rowsWithoutEntityAreKept() {
+        let rows = [
+            AppNotification(remoteId: "a", type: .scanComplete, title: "Room scan ready", body: "", timestamp: Self.now),
+            AppNotification(remoteId: "b", type: .scanComplete, title: "Room scan ready", body: "", timestamp: Self.now)
+        ]
+        #expect(NotificationsViewModel.collapseDuplicates(rows).count == 2)
+    }
+
+    /// If either copy has been read, the surviving row is read — the unread
+    /// dot must not come back because the twin was never PATCHed.
+    @Test("a read twin marks the surviving row read")
+    func readStateSurvivesTheCollapse() {
+        var read = Self.delivered(type: .invoice, entityId: "inv-1")
+        read.isRead = true
+        let collapsed = NotificationsViewModel.collapseDuplicates([
+            Self.delivered(type: .invoice, entityId: "inv-1"),
+            read
+        ])
+        #expect(collapsed.count == 1)
+        #expect(collapsed[0].isRead)
+    }
+
     // MARK: - The fallback
 
     @Test("the fallback prints the Studio's own awaiting rows")
