@@ -196,11 +196,7 @@ struct ThreadListView: View {
     /// The live designer relationship, resolved from the same services the
     /// Companion reads.
     private var designerRelationship: DesignerRelationship {
-        DesignerRelationshipResolver.resolve(
-            lead: DesignRequestStatusService.shared.liveLead,
-            projects: BadgeCountService.shared.projects,
-            roster: BadgeCountService.shared.roster
-        )
+        DesignerThreadOpener.currentRelationship
     }
 
     private var emptyCTATitle: String {
@@ -226,15 +222,7 @@ struct ThreadListView: View {
         openThreadFailed = false
         Task {
             do {
-                let threadId: String
-                switch relationship {
-                case let .project(projectId, _, _):
-                    threadId = try await MessagingAPIClient.shared
-                        .createThread(projectId: projectId.uuidString)
-                case let .lead(_, designerId, _):
-                    threadId = try await MessagingAPIClient.shared
-                        .createDirectThread(counterpart: designerId)
-                case .none, .roster:
+                guard let threadId = try await DesignerThreadOpener.openThread(with: relationship) else {
                     isOpeningThread = false
                     return
                 }

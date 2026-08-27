@@ -217,7 +217,10 @@ extension APIConfiguration {
             // User (PostgREST)
             case .currentUser: return "/rest/v1/profiles?select=*"
             case .updateProfile: return "/rest/v1/profiles"
-            case .deleteAccount: return "/rest/v1/rpc/delete_user_account"
+            // SP-20: `delete_user_account` never existed in any migration. The
+            // real destination is the `delete-account` edge function (verify_jwt),
+            // which cascades the caller's rows and then removes the auth user.
+            case .deleteAccount: return "/functions/v1/delete-account"
 
             // Rooms
             case .rooms: return "/rest/v1/rooms?select=*"
@@ -254,12 +257,11 @@ extension APIConfiguration {
             case .signIn, .signUp, .signOut, .refreshToken, .resetPassword,
                  .createRoom, .uploadRoomScan, .searchProducts,
                  .companionContext, .companionMessage,
-                 .recommendations, .trackInteraction, .styleQuiz:
+                 .recommendations, .trackInteraction, .styleQuiz,
+                 .deleteAccount:
                 return "POST"
             case .updateProfile:
                 return "PATCH"
-            case .deleteAccount:
-                return "DELETE"
             default:
                 return "GET"
             }

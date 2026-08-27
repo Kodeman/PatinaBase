@@ -15,10 +15,39 @@ import SwiftUI
 struct AuthSheet: View {
     @Environment(\.dismiss) private var dismiss
 
+    /// SP-09: when the sheet is a SOFT wall over a flow the person is already
+    /// in, it says what it is gating and offers a Cancel. `nil` keeps the
+    /// bare presentation the app-level `.auth` sheet uses.
+    var title: String? = nil
+
     @State private var showingEmailCode = false
     @State private var showingPasswordSignIn = false
 
     var body: some View {
+        if let title {
+            NavigationStack {
+                gate
+                    .navigationTitle(title)
+                    .toolbarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { dismiss() }
+                                .foregroundStyle(PatinaColors.Text.muted)
+                                .accessibilityIdentifier("auth.sheet.cancel")
+                        }
+                    }
+            }
+        } else {
+            // No title means this is not a soft wall over a flow in progress:
+            // it is the app-level `.auth` sheet the Studio hub CTA, the feed's
+            // guest CTA and the Companion prompt all raise. Those keep the bare
+            // presentation they have always had — a nav bar carrying a blank
+            // title would read as an unfinished screen.
+            gate
+        }
+    }
+
+    private var gate: some View {
         AuthScreenView(
             onSignInWithApple: { result, rawNonce in
                 Task {
