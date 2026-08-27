@@ -43,6 +43,14 @@ enum StudioQueueBuilder {
         return ["completed", "cancelled", "canceled", "archived", "inactive"].contains(status)
     }
 
+    /// `RemoteInvoiceDesignerRef.displayName` returns the literal string
+    /// "your designer" when its embed brought no name. That sentinel is not a
+    /// name and must not be printed as one.
+    static func named(_ value: String?) -> String? {
+        guard let value, !value.isEmpty, value != "your designer" else { return nil }
+        return value
+    }
+
     /// The same waiting things, one row each, with their own dates and their
     /// own destinations — what the Record's NEEDS YOU half is built from.
     ///
@@ -111,7 +119,8 @@ enum StudioQueueBuilder {
                     askedAt: parsedDate(invoice.sent_at ?? invoice.issue_date ?? invoice.created_at),
                     dueAt: parsedDate(invoice.due_date),
                     amountCents: invoice.balanceCents,
-                    designerName: invoice.designer?.displayName ?? designerFallback,
+                    designerName: Self.named(invoice.designer?.displayName)
+                        ?? designerFallback,
                     route: .invoiceDetail(invoiceId: invoice.id)
                 )
             }

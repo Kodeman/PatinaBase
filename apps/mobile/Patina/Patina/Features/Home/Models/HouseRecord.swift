@@ -52,17 +52,26 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
     let date: Date
     let state: State
     /// True when `date` postdates the last visit. False for everything on a
-    /// first run, because there is no last visit to be new against.
+    /// first run, because there is no last visit to be new against, and false
+    /// for every standing condition, whose `date` is not the event's.
     let isNew: Bool
+    /// True when the window does not vouch for `date` — either the record kept
+    /// the row although the window does not cover it (a matched request never
+    /// decays, B §1), or the row names a change the wire gives no date for (a
+    /// repriced saved piece, dated by the save). The card draws these outside
+    /// the dated group: no window-relative date, and never a "new" tick.
+    /// Ordering still uses `date`.
+    let isStandingCondition: Bool
     let route: AppRoute?
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, title, detail, date, state, isNew, route
+        case id, kind, title, detail, date, state, isNew, isStandingCondition, route
     }
 
     init(
         id: String, kind: Kind, title: String, detail: String?,
-        date: Date, state: State, isNew: Bool, route: AppRoute?
+        date: Date, state: State, isNew: Bool,
+        isStandingCondition: Bool = false, route: AppRoute?
     ) {
         self.id = id
         self.kind = kind
@@ -71,6 +80,7 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         self.date = date
         self.state = state
         self.isNew = isNew
+        self.isStandingCondition = isStandingCondition
         self.route = route
     }
 
@@ -83,6 +93,9 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         date = try container.decode(Date.self, forKey: .date)
         state = try container.decode(State.self, forKey: .state)
         isNew = try container.decode(Bool.self, forKey: .isNew)
+        isStandingCondition = try container.decodeIfPresent(
+            Bool.self, forKey: .isStandingCondition
+        ) ?? false
         route = try container.decodeIfPresent(RouteToken.self, forKey: .route)?.route
     }
 
@@ -95,6 +108,7 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         try container.encode(date, forKey: .date)
         try container.encode(state, forKey: .state)
         try container.encode(isNew, forKey: .isNew)
+        try container.encode(isStandingCondition, forKey: .isStandingCondition)
         try container.encodeIfPresent(route.flatMap(RouteToken.init(_:)), forKey: .route)
     }
 }
@@ -211,41 +225,71 @@ enum HouseRecordBuilder {
 
         let designerName = resolveDesignerName(badges: badges, liveLead: liveLead)
 
+        // Everything waiting, including the items that carry no date and so
+        // cannot draw. `hasMoreNeedsYou` counts against THIS, not against the
+        // rows that survived: the Studio's "Awaiting you" counts the same
+        // items, and the two surfaces must not disagree about how many there
+        // are with no `See all →` to explain the difference.
+        let waiting = StudioQueueBuilder.itemizedAwaitingRows(
+            decisions: badges.pendingDecisions,
+            proposals: badges.pendingProposals,
+            invoices: badges.payableInvoices,
+            designerFallback: designerName,
+            now: now
+        )
+
         // NEEDS YOU is deliberately NOT window-filtered: an open obligation
         // does not age out of view. Nothing decays (B §1).
-        let needsYou = needsYouRows(badges: badges, designerName: designerName, now: now)
+        let needsYou = needsYouRows(waiting: waiting, now: now)
             .map { $0.markingNew(against: anchor) }
             .sorted { $0.date < $1.date }
+        let drawnNeedsYou = Array(needsYou.prefix(maxRowsPerEyebrow))
 
+        // Two MOVED rows survive the window, and each is MARKED when it does,
+        // so the card never prints a date its own header contradicts:
+        //  • the matched designer — "a matched request stays on the record
+        //    until it resolves" (B §1; the two silent 14-day decays this
+        //    program removes are exactly this row disappearing). It carries a
+        //    real event date, so it stays a dated row while the window covers
+        //    it and becomes a standing condition when it does not;
+        //  • a repriced saved piece — nothing on the wire says when the price
+        //    moved, so the row is dated by the save and is ALWAYS a standing
+        //    condition: it never claims the save date as the change, and never
+        //    carries a "new" tick earned by the reader's own action (B §2).
+        // Everything else carries a real event date and is filtered by it.
         let moved = movedRows(
             badges: badges, saved: saved, products: products, story: story,
             liveLead: liveLead, designerName: designerName
         )
-        // Two MOVED rows are standing conditions rather than dated events and
-        // are not aged out:
-        //  • the matched designer — "a matched request stays on the record
-        //    until it resolves" (B §1; the two silent 14-day decays this
-        //    program removes are exactly this row disappearing);
-        //  • a repriced saved piece — nothing on the wire says when the price
-        //    moved, so the row is dated by the save, which is the only date
-        //    the app can stand behind.
-        // Everything else carries a real event date and is filtered by it.
-        .filter { row in
+        .compactMap { row -> HouseRecordRow? in
             switch row.kind {
-            case .matchedDesigner, .savedPieceRepriced: return true
-            default: return window.contains(row.date)
+            case .savedPieceRepriced:
+                return row.asStandingCondition()
+            case .matchedDesigner:
+                return window.contains(row.date) ? row : row.asStandingCondition()
+            default:
+                return window.contains(row.date) ? row : nil
             }
         }
         .map { $0.markingNew(against: anchor) }
         .sorted { $0.date > $1.date }
 
+        // The matched request is never the row the cap evicts — being pushed
+        // off by three newer rows is the same decay, arriving by another door.
+        let pinned = moved.filter { $0.kind == .matchedDesigner }
+        let rest = moved.filter { $0.kind != .matchedDesigner }
+        let drawnMoved = (
+            Array(pinned.prefix(maxRowsPerEyebrow))
+            + rest.prefix(max(0, maxRowsPerEyebrow - pinned.count))
+        ).sorted { $0.date > $1.date }
+
         return HouseRecord(
-            needsYou: Array(needsYou.prefix(maxRowsPerEyebrow)),
-            moved: Array(moved.prefix(maxRowsPerEyebrow)),
+            needsYou: drawnNeedsYou,
+            moved: drawnMoved,
             window: window,
             lastSeenAt: anchor,
-            hasMoreNeedsYou: needsYou.count > maxRowsPerEyebrow,
-            hasMoreMoved: moved.count > maxRowsPerEyebrow
+            hasMoreNeedsYou: waiting.count > drawnNeedsYou.count,
+            hasMoreMoved: moved.count > drawnMoved.count
         )
     }
 
@@ -267,14 +311,23 @@ enum HouseRecordBuilder {
         liveLead: DesignRequestStatus?
     ) -> String? {
         if let name = liveLead?.designerName, !name.isEmpty { return name }
-        if let name = badges.projects.compactMap({ $0.designer?.displayName }).first,
-           name != "your designer" { return name }
+        if let name = badges.projects.compactMap({ $0.designer?.displayName }).first {
+            return name
+        }
         if let name = badges.pendingDecisions
             .compactMap({ $0.project?.designer?.displayName }).first { return name }
-        if let name = badges.payableInvoices.compactMap({ $0.designer?.displayName }).first,
-           name != "your designer" { return name }
+        // `RemoteInvoiceDesignerRef.displayName` (a type this lane does not
+        // own) returns the literal "your designer" when its embed brought no
+        // name. That sentinel is not a name: skip it and keep looking, rather
+        // than printing it lower-case mid-sentence.
+        if let name = badges.payableInvoices
+            .compactMap({ $0.designer?.displayName })
+            .first(where: { $0 != invoiceDesignerSentinel }) { return name }
         return nil
     }
+
+    /// The one place the borrowed sentinel is named.
+    static let invoiceDesignerSentinel = "your designer"
 
     private static func subject(_ name: String?) -> String { name ?? "Your designer" }
 }
@@ -284,17 +337,10 @@ enum HouseRecordBuilder {
 private extension HouseRecordBuilder {
 
     static func needsYouRows(
-        badges: BadgeCountService,
-        designerName: String?,
+        waiting: [StudioQueueItemRow],
         now: Date
     ) -> [HouseRecordRow] {
-        StudioQueueBuilder.itemizedAwaitingRows(
-            decisions: badges.pendingDecisions,
-            proposals: badges.pendingProposals,
-            invoices: badges.payableInvoices,
-            designerFallback: designerName,
-            now: now
-        )
+        waiting
         .compactMap { item in
             // A row draws only for a real event with its real date. An item
             // that cannot say when it was asked does not draw at all.
@@ -381,7 +427,13 @@ private extension HouseRecordBuilder {
         designerName: String?
     ) -> HouseRecordRow? {
         guard let lead = liveLead, lead.designerId != nil else { return nil }
-        let picked = lead.updatedAt ?? lead.createdAt
+        // The match ceremony is created when the designer picks the request
+        // up, so its own timestamp is the event. `leads.updated_at` moves on
+        // any write to the lead and is the last resort, not the first.
+        let picked = lead.introduction?.createdAt
+            ?? lead.introduction?.offeredAt
+            ?? lead.updatedAt
+            ?? lead.createdAt
         return HouseRecordRow(
             id: "lead:\(lead.leadId.uuidString)",
             kind: .matchedDesigner,
@@ -472,12 +524,21 @@ private extension HouseRecordBuilder {
             }
 
             guard let savedPrice = item.priceInCents,
-                  savedPrice > 0, product.priceCents > 0,
-                  savedPrice != product.priceCents
+                  savedPrice > 0, product.priceCents > 0
             else { return nil }
 
             let difference = abs(savedPrice - product.priceCents)
+            // Under a dollar is not a change worth a row — and it is the only
+            // case where a whole-dollar figure could print "$0 less", a row
+            // that says nothing happened.
+            guard difference >= 100 else { return nil }
             let direction = product.priceCents < savedPrice ? "less" : "more"
+            // Whole dollars where the move is whole dollars (the mock's
+            // "$100 less"), exact cents otherwise, so the figure in the title
+            // is always the arithmetic of the two figures in the detail.
+            let amount = difference % 100 == 0
+                ? PatinaCurrency.formatWholeDollars(cents: difference)
+                : PatinaCurrency.format(cents: difference)
 
             return HouseRecordRow(
                 id: "saved-repriced:\(productId)",
@@ -486,8 +547,7 @@ private extension HouseRecordBuilder {
                 // scarcity count and no countdown — the change is a fact about
                 // a row, not a reason to hurry.
                 title: "The \(item.name) you saved is "
-                    + "\(PatinaCurrency.formatWholeDollars(cents: difference)) "
-                    + "\(direction) than when you saved it.",
+                    + "\(amount) \(direction) than when you saved it.",
                 detail: "Saved at \(PatinaCurrency.format(cents: savedPrice)) · "
                     + "now \(PatinaCurrency.format(cents: product.priceCents))",
                 // The catalogue does not tell the client when the price
@@ -504,12 +564,23 @@ private extension HouseRecordBuilder {
 
 private extension HouseRecordRow {
     /// New relative to the last visit, and to nothing else. On a first run
-    /// there is no visit, so nothing is new.
+    /// there is no visit, so nothing is new — and a standing condition is
+    /// never new, because its `date` is not the date of the change it names.
     func markingNew(against lastSeen: Date?) -> HouseRecordRow {
-        guard let lastSeen else { return self }
+        guard let lastSeen, !isStandingCondition else { return self }
         return HouseRecordRow(
             id: id, kind: kind, title: title, detail: detail, date: date,
-            state: state, isNew: date > lastSeen, route: route
+            state: state, isNew: date > lastSeen,
+            isStandingCondition: isStandingCondition, route: route
+        )
+    }
+
+    /// The window does not vouch for this row's date. It still draws; it draws
+    /// without a date and without a tick.
+    func asStandingCondition() -> HouseRecordRow {
+        HouseRecordRow(
+            id: id, kind: kind, title: title, detail: detail, date: date,
+            state: state, isNew: false, isStandingCondition: true, route: route
         )
     }
 }
