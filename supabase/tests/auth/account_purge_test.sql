@@ -34,7 +34,10 @@
 --      unreadable to anon/authenticated;
 --   9. a SECOND purge of the same id succeeds and reuses the open journal row
 --      — the purge and the auth detach are two round trips, so a retry is
---      expected and must not read as a second interrupted closure.
+--      expected and must not read as a second interrupted closure — and the
+--      retry MERGES into that row: the second sweep finds nothing left to
+--      delete, so an overwrite would erase the tally of what the first pass
+--      actually removed, which is what an operator reconciles from (D-1).
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -333,6 +336,24 @@ BEGIN
   ASSERT v_count = 1, 'exactly one journal row for this account, got ' || v_count;
   SELECT display_name INTO v_text FROM public.profiles WHERE id = u_client;
   ASSERT v_text = 'Former client', 'and leave the tombstone as it was';
+
+  -- and it must not erase what the first pass recorded (review D-1). This
+  -- second sweep deleted nothing — everything was already gone — so an
+  -- overwrite would empty the journal precisely when it is needed.
+  SELECT p.detached INTO v_detached FROM public.client_account_purges p
+   WHERE p.id = v_purge;
+  ASSERT v_detached->'deleted'->>'public.rooms' = '1',
+    'a retry must MERGE into the journal, not overwrite it: the room count reads '
+      || COALESCE(v_detached->'deleted'->>'public.rooms', '<absent>');
+  ASSERT v_detached->'deleted'->>'public.saved_items' = '1',
+    'and the saved-item count must survive the retry';
+  ASSERT v_detached->'deleted'->>'public.comms_threads' = '2',
+    'and both thread deletions must survive it';
+  ASSERT jsonb_array_length(v_detached->'threads_deleted') = 2,
+    'and the journal must still name both threads it deleted, got '
+      || jsonb_array_length(COALESCE(v_detached->'threads_deleted', '[]'::jsonb));
+  ASSERT v_detached->'tombstoned_profile' = to_jsonb(u_client),
+    'and still name the profile it tombstoned';
 
   PERFORM public.mark_client_account_purge_complete(v_purge);
   ASSERT EXISTS (SELECT 1 FROM public.client_account_purges

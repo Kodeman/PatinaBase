@@ -72,7 +72,10 @@
 --          erasure must not do;
 --   4. journals what it did into client_account_purges (00536), reusing an
 --      open row rather than opening a second one, so a retry after a failed
---      auth step does not leave a phantom "interrupted closure".
+--      auth step does not leave a phantom "interrupted closure" — and MERGING
+--      into that row rather than overwriting it, because the retry's own sweep
+--      finds nothing left to delete and would otherwise erase the record of
+--      what the first pass removed (review D-1).
 --
 -- ⚠ NOT scrubbed here, and flagged for Kody as a retention question rather
 --   than decided by a lane: designer_clients.client_name / .client_email carry
@@ -134,6 +137,10 @@ DECLARE
   v_deleted  jsonb := '{}'::jsonb;
   v_threads  uuid[];
   v_purge    uuid;
+  -- the journal as it already stands, when this call is a retry
+  v_prior       jsonb := '{}'::jsonb;
+  v_merged      jsonb;
+  v_threads_all uuid[];
 BEGIN
   IF p_user_id IS NULL THEN
     RAISE EXCEPTION 'purge_client_account requires a user id'
@@ -224,7 +231,8 @@ BEGIN
   -- No email is stored: an erasure ledger does not retain the address it
   -- erased. user_id identifies the row, and after the soft delete it names a
   -- profile that carries nothing of the person.
-  SELECT id INTO v_purge
+  SELECT id, COALESCE(detached, '{}'::jsonb)
+    INTO v_purge, v_prior
     FROM public.client_account_purges
    WHERE user_id = p_user_id AND auth_deleted_at IS NULL
    ORDER BY purged_at DESC
@@ -238,11 +246,36 @@ BEGIN
       'threads_deleted',    to_jsonb(v_threads)))
     RETURNING id INTO v_purge;
   ELSE
+    -- MERGE into the standing record; never overwrite it. On a retry the first
+    -- pass has already deleted everything, so THIS pass's counts are all zero —
+    -- writing them over the row would discard the only evidence of what the
+    -- closure actually removed, which is the one thing client_account_purges
+    -- exists to hold ("so an interrupted closure can be reconciled", 00536).
+    -- Counts are summed per table, so a row created between the two calls and
+    -- swept by the second is added to the tally rather than replacing it.
+    SELECT COALESCE(jsonb_object_agg(g.tbl, g.n), '{}'::jsonb) INTO v_merged
+      FROM (SELECT e.key AS tbl, sum(e.value::bigint) AS n
+              FROM (SELECT key, value FROM jsonb_each_text(
+                      CASE WHEN jsonb_typeof(v_prior->'deleted') = 'object'
+                           THEN v_prior->'deleted' ELSE '{}'::jsonb END)
+                    UNION ALL
+                    SELECT key, value FROM jsonb_each_text(v_deleted)) e
+             GROUP BY e.key) g;
+
+    SELECT COALESCE(array_agg(DISTINCT s.u), '{}'::uuid[]) INTO v_threads_all
+      FROM (SELECT x::uuid AS u
+              FROM jsonb_array_elements_text(
+                     CASE WHEN jsonb_typeof(v_prior->'threads_deleted') = 'array'
+                          THEN v_prior->'threads_deleted' ELSE '[]'::jsonb END) AS x
+            UNION ALL
+            SELECT unnest(v_threads)) s;
+
+    -- v_prior || … keeps any key an earlier lineage wrote that this one does not.
     UPDATE public.client_account_purges
-       SET detached = jsonb_build_object(
+       SET detached = v_prior || jsonb_build_object(
              'tombstoned_profile', to_jsonb(p_user_id),
-             'deleted',            v_deleted,
-             'threads_deleted',    to_jsonb(v_threads)),
+             'deleted',            v_merged,
+             'threads_deleted',    to_jsonb(v_threads_all)),
            purged_at = now()
      WHERE id = v_purge;
   END IF;
@@ -258,4 +291,4 @@ REVOKE ALL ON FUNCTION public.purge_client_account(uuid)
 GRANT EXECUTE ON FUNCTION public.purge_client_account(uuid) TO service_role;
 
 COMMENT ON FUNCTION public.purge_client_account(uuid) IS
-  'SP-20 / App Store 5.1.1(v) / W1b ruling 2: closes a CLIENT account by anonymizing rather than cascading. Replaces the PII on the client''s profiles row with a tombstone, deletes what the person owned (rooms, scans, saved items, the threads they started, and the rest of the former profiles-cascade set), and journals it into client_account_purges — reusing an open row so a retry does not read as a second interrupted closure. Writes NOTHING to proposals, projects, invoices, client_decisions or designer_clients: with the profile surviving, every designer-owned leg still names the tombstone, so the designer''s record — the decision included — stays whole. No trigger is disabled and no ACCESS EXCLUSIVE is taken (00536 needed both; see the 00538 banner). Refuses a designer id outright. The auth user is detached by the delete-account edge function through GoTrue''s SOFT admin delete, which obfuscates the login and leaves profiles standing. service_role only.';
+  'SP-20 / App Store 5.1.1(v) / W1b ruling 2: closes a CLIENT account by anonymizing rather than cascading. Replaces the PII on the client''s profiles row with a tombstone, deletes what the person owned (rooms, scans, saved items, the threads they started, and the rest of the former profiles-cascade set), and journals it into client_account_purges — reusing an open row (and merging into it, never overwriting) so a retry does not read as a second interrupted closure nor erase the first pass''s tally. Writes NOTHING to proposals, projects, invoices, client_decisions or designer_clients: with the profile surviving, every designer-owned leg still names the tombstone, so the designer''s record — the decision included — stays whole. No trigger is disabled and no ACCESS EXCLUSIVE is taken (00536 needed both; see the 00538 banner). Refuses a designer id outright. The auth user is detached by the delete-account edge function through GoTrue''s SOFT admin delete, which obfuscates the login and leaves profiles standing. service_role only.';
