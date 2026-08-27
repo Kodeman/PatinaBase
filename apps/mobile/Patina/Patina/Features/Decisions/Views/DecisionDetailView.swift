@@ -51,7 +51,6 @@ struct DecisionDetailView: View {
         // U18: standard pushed-screen chrome — the header above carries
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
-        .moneyScreenTopBand()
         .task { await viewModel.load(decisionId: decisionId) }
         .sheet(item: $viewModel.pendingDeferral) { deferral in
             DecisionDeferSheet(
@@ -444,7 +443,7 @@ private struct DecisionConsentSheet: View {
             .padding(24)
         }
         .background(PatinaColors.Background.primary)
-        .moneyScreenTopBand()
+        .patinaTopBand()
     }
 }
 
