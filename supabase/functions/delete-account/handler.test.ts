@@ -16,6 +16,7 @@ interface Spy {
   gateway: DeleteAccountGateway;
   purged: string[];
   deleted: string[];
+  softness: boolean[];
   stamped: string[];
   order: string[];
 }
@@ -28,11 +29,13 @@ function spy(opts: {
 } = {}): Spy {
   const purged: string[] = [];
   const deleted: string[] = [];
+  const softness: boolean[] = [];
   const stamped: string[] = [];
   const order: string[] = [];
   return {
     purged,
     deleted,
+    softness,
     stamped,
     order,
     gateway: {
@@ -52,8 +55,9 @@ function spy(opts: {
         return opts.purge ?? { ok: true, purgeId: PURGE_ID };
       },
       // deno-lint-ignore require-await
-      deleteAuthUser: async (userId) => {
+      deleteAuthUser: async (userId, soft) => {
         deleted.push(userId);
+        softness.push(soft);
         order.push("delete");
         return opts.deleteAuthUser ?? { ok: true };
       },
@@ -100,6 +104,19 @@ Deno.test("an unauthenticated caller deletes nothing", async () => {
   assertEquals(res.status, 401);
   assertEquals((await res.json()).error, "unauthorized");
   assertEquals(s.order, []);
+});
+
+// ── W1b ruling 2 ─────────────────────────────────────────────────────────────
+// The auth user is DETACHED, never hard-deleted. profiles.id cascades from
+// auth.users (00013:12), so a hard delete takes the tombstone — and the
+// designer's proposals, projects, invoices, decisions and roster row all name
+// it. GoTrue's soft delete obfuscates the login and leaves the profile
+// standing, which is the whole of 00538's design.
+Deno.test("the auth user is detached with a SOFT delete, never a hard one", async () => {
+  const s = spy();
+  const res = await createDeleteAccountHandler(s.gateway)(post());
+  assertEquals(res.status, 200);
+  assertEquals(s.softness, [true]);
 });
 
 Deno.test("the happy path checks the caller, purges, deletes, then stamps the journal", async () => {

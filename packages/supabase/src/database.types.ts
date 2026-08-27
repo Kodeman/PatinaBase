@@ -12763,6 +12763,7 @@ export type Database = {
           is_designer: boolean | null
           is_verified: boolean | null
           last_active_at: string | null
+          last_seen_at: string | null
           mfa_enforced: boolean
           original_source: string | null
           original_utm: Json | null
@@ -12802,6 +12803,7 @@ export type Database = {
           is_designer?: boolean | null
           is_verified?: boolean | null
           last_active_at?: string | null
+          last_seen_at?: string | null
           mfa_enforced?: boolean
           original_source?: string | null
           original_utm?: Json | null
@@ -12841,6 +12843,7 @@ export type Database = {
           is_designer?: boolean | null
           is_verified?: boolean | null
           last_active_at?: string | null
+          last_seen_at?: string | null
           mfa_enforced?: boolean
           original_source?: string | null
           original_utm?: Json | null
@@ -20299,6 +20302,7 @@ export type Database = {
       }
       rooms: {
         Row: {
+          budget_cents: number | null
           created_at: string
           emergence_count: number | null
           emergence_message: string | null
@@ -20319,6 +20323,7 @@ export type Database = {
           width_meters: number | null
         }
         Insert: {
+          budget_cents?: number | null
           created_at?: string
           emergence_count?: number | null
           emergence_message?: string | null
@@ -20339,6 +20344,7 @@ export type Database = {
           width_meters?: number | null
         }
         Update: {
+          budget_cents?: number | null
           created_at?: string
           emergence_count?: number | null
           emergence_message?: string | null
