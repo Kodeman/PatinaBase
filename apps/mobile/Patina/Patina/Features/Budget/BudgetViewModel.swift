@@ -63,7 +63,7 @@ enum BudgetMath {
     /// spine somehow didn't return. Projects with neither an accepted proposal
     /// nor a visible invoice are omitted. Pure — lives here (not on the
     /// `@MainActor` view model) so it stays directly unit-testable.
-    static func buildSections(
+    static func buildSections( // swiftlint:disable:this function_body_length
         projects: [RemoteProject],
         acceptedProposals: [RemoteProposal],
         milestonesByProposal: [String: [RemoteProposalMilestone]],

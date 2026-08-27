@@ -18,7 +18,7 @@ struct AuthSheet: View {
     /// SP-09: when the sheet is a SOFT wall over a flow the person is already
     /// in, it says what it is gating and offers a Cancel. `nil` keeps the
     /// bare presentation the app-level `.auth` sheet uses.
-    var title: String? = nil
+    var title: String?
 
     @State private var showingEmailCode = false
     @State private var showingPasswordSignIn = false

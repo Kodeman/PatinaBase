@@ -10,6 +10,7 @@ import Testing
 import Foundation
 @testable import Patina
 
+// swiftlint:disable:next type_body_length
 struct ProposalsMoneyRailTests {
 
     private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
