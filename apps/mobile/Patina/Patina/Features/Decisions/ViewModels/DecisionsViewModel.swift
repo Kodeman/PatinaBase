@@ -53,6 +53,56 @@ final class DecisionDetailViewModel {
     /// Approve and nothing at all happened.
     var submitFailure: MoneyFailure?
 
+    // MARK: - SP-17 · deferral
+
+    /// The deferral the client tapped — drives the note sheet.
+    var pendingDeferral: DecisionDeferral?
+    var isSendingDeferral: Bool = false
+    var deferralFailure: MoneyFailure?
+    /// Set once a deferral note has landed in the thread, so the screen can
+    /// say so without pretending the decision was answered.
+    private(set) var sentDeferral: DecisionDeferral?
+
+    func beginDeferral(_ deferral: DecisionDeferral) {
+        guard !isResolved, !isSendingDeferral else { return }
+        deferralFailure = nil
+        pendingDeferral = deferral
+    }
+
+    func cancelDeferral() {
+        pendingDeferral = nil
+    }
+
+    /// Send the note into the project thread. The decision is deliberately NOT
+    /// touched — `client_decisions.status` has no "deferred" value and a
+    /// deferral is a message, not a response (00062:80-81).
+    /// - Returns: the thread the note landed in, for the caller to open.
+    @discardableResult
+    func sendDeferral(note: String) async -> String? {
+        guard let deferral = pendingDeferral, !isSendingDeferral else { return nil }
+        guard let projectId = decision?.project_id, !projectId.isEmpty else {
+            deferralFailure = MoneyFailureCopy.decision(
+                NSError(domain: "Patina.Decisions", code: 0)
+            )
+            return nil
+        }
+        isSendingDeferral = true
+        deferralFailure = nil
+        defer { isSendingDeferral = false }
+        do {
+            let threadId = try await MessagingAPIClient.shared.createThread(projectId: projectId)
+            _ = try await MessagingAPIClient.shared.sendMessage(threadId: threadId, body: note)
+            self.discussThreadId = threadId
+            self.sentDeferral = deferral
+            self.pendingDeferral = nil
+            return threadId
+        } catch {
+            MoneyFailureCopy.log("decision deferral", error)
+            self.deferralFailure = MoneyFailureCopy.decision(error)
+            return nil
+        }
+    }
+
     func load(decisionId: String) async {
         isLoading = true
         error = nil
@@ -77,6 +127,13 @@ final class DecisionDetailViewModel {
     /// Whether a given option is the committed choice (local or server).
     func isSelected(_ option: RemoteDecisionOption) -> Bool {
         selectedOptionId == option.id || option.selected == true
+    }
+
+    /// SP-17: options exist but not one of them has a title, a note or an
+    /// image — a stack of blank cards nobody can choose. The screen says so
+    /// instead of drawing them.
+    var hasNoRenderableOptions: Bool {
+        !options.isEmpty && !options.contains { $0.hasRenderableContent }
     }
 
     /// Whether the decision is already resolved (any option chosen, or the

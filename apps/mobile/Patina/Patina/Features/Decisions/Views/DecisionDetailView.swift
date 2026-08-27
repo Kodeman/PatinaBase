@@ -22,9 +22,19 @@ struct DecisionDetailView: View {
                 if let decision = viewModel.decision {
                     header(decision)
                     submitFailureBanner(decision)
-                    ForEach(viewModel.options) { option in
-                        optionCard(option)
+                    if viewModel.hasNoRenderableOptions {
+                        // SP-17: never a stack of blank, untappable cards.
+                        Text(DecisionOptionCopy.allUnavailableLine)
+                            .font(PatinaTypography.bodySmall)
+                            .foregroundStyle(PatinaColors.Text.secondary)
+                            .padding(.horizontal, 24)
+                            .accessibilityIdentifier("decisionDetail.optionsPending")
+                    } else {
+                        ForEach(viewModel.options) { option in
+                            optionCard(option)
+                        }
                     }
+                    deferralActs(decision)
                     if let threadId = viewModel.discussThreadId {
                         discussAction(threadId)
                     }
@@ -42,6 +52,23 @@ struct DecisionDetailView: View {
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
         .task { await viewModel.load(decisionId: decisionId) }
+        .sheet(item: $viewModel.pendingDeferral) { deferral in
+            DecisionDeferSheet(
+                deferral: deferral,
+                decisionTitle: viewModel.decision?.title,
+                isSending: viewModel.isSendingDeferral,
+                failure: viewModel.deferralFailure,
+                onSend: { note in
+                    Task {
+                        if let threadId = await viewModel.sendDeferral(note: note) {
+                            coordinator.navigate(to: .threadDetail(threadId: threadId))
+                        }
+                    }
+                },
+                onCancel: { viewModel.cancelDeferral() }
+            )
+            .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: consentSheetBinding) {
             if let option = pendingOption {
                 DecisionConsentSheet(
@@ -176,7 +203,9 @@ struct DecisionDetailView: View {
                                 .foregroundStyle(PatinaColors.Text.muted)
                         }
                     } else {
-                        Text("Details unavailable — view in portal")
+                        // SP-17: client-voiced. The old line sent a homeowner
+                        // to a portal she cannot open.
+                        Text(DecisionOptionCopy.unavailableLine)
                             .font(PatinaTypography.bodySmall)
                             .foregroundStyle(PatinaColors.Text.muted)
                     }
@@ -244,6 +273,37 @@ struct DecisionDetailView: View {
     private static func formattedPrice(cents: Int) -> String {
         let dollars = cents / 100
         return "$\(NumberFormatter.localizedString(from: NSNumber(value: dollars), number: .decimal))"
+    }
+
+    /// SP-17: the two answers a real client gives, alongside the choices.
+    /// Neither resolves the decision — both open a note into the project
+    /// thread and leave it `pending`.
+    @ViewBuilder
+    private func deferralActs(_ decision: RemoteClientDecision) -> some View {
+        if !viewModel.isResolved {
+            VStack(alignment: .leading, spacing: 10) {
+                if let sent = viewModel.sentDeferral {
+                    Text("You told your designer: \(sent.actLabel.lowercased()). This decision is still open.")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                        .accessibilityIdentifier("decisionDetail.deferralSent")
+                }
+                HStack(spacing: 12) {
+                    ForEach(DecisionDeferral.allCases) { deferral in
+                        Button(deferral.actLabel) {
+                            viewModel.beginDeferral(deferral)
+                        }
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                        .accessibilityIdentifier("decisionDetail.defer.\(deferral.rawValue)")
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+        }
     }
 
     /// Quiet R20 affordance: jump to the project's comms thread to talk the
