@@ -1,0 +1,1048 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@300;400;500&display=swap');
+
+/* ==========================================================================
+   Patina iOS mock kit — kit.css
+   The Daily Return, 2026-08-26.  Every value is traced to
+   apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/ or to the shipped
+   Feature views at main @ 3cd84ecb3.  See KIT.md for the file:line map.
+   Mocks are drawn at 402 x 874 CSS px: 1 pt == 1 px, no scaling.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Tokens — light (PatinaColors.swift, PatinaSpacing.swift, PatinaShadows.swift)
+   -------------------------------------------------------------------------- */
+:root {
+  /* semantic colour roles */
+  --pat-bg:            #FAF7F2;   /* Background.primary   :94-96   */
+  --pat-bg-2:          #F5F2ED;   /* Background.secondary :98-100  */
+  --pat-bg-3:          #FAF7F2;   /* Background.tertiary  :102-104 */
+  --pat-bg-dark:       #2C2926;   /* Background.dark      :105-106  STATIC */
+  --pat-text:          #2C2926;   /* Text.primary         :110-112 */
+  --pat-text-2:        #5C4A3C;   /* Text.secondary       :113-115 */
+  --pat-text-muted:    #8B7355;   /* Text.muted           :116-118 */
+  --pat-text-inv:      #FAF7F2;   /* Text.inverse         :121-123 */
+  --pat-text-link:     #9F7E48;   /* Text.interactive     :124-126 */
+  --pat-accent:        #C4A57B;   /* Interactive.default  :131      STATIC */
+  --pat-accent-hover:  #8B7355;   /* Interactive.hover    :132-134 */
+  --pat-active-fill:   #2C2926;   /* Interactive.active   :136-138 */
+  --pat-strata-1:      #5C4A3C;   /* Strata.line1         :144-146 */
+  --pat-strata-2:      #C4A57B;   /* Strata.line2         :147      STATIC */
+  --pat-strata-3:      rgba(196,165,123,.5); /* Strata.line3 :148    STATIC */
+  --pat-glass:         rgba(250,247,242,.55); /* .ultraThinMaterial over artwork */
+  --pat-sys-grey:      #88878A;   /* NOT a Patina token — SwiftUI .secondary, used
+                                     only by the Today title help affordance */
+
+  /* raw palette — no dark variants, draw as-is in both themes */
+  --pat-off-white:  #FAF7F2;  /* :17 */
+  --pat-clay:       #C4A57B;  /* :20 */
+  --pat-clay-deep:  #9F7E48;  /* :23 */
+  --pat-aged-oak:   #8B7355;  /* :26 */
+  --pat-mocha:      #5C4A3C;  /* :29 */
+  --pat-charcoal:   #2C2926;  /* :32 */
+  --pat-soft-cream: #F5F2ED;  /* :37 */
+  --pat-warm-white: #FAF7F2;  /* :40 */
+  --pat-pearl:      #E5E2DD;  /* :43  hairline in BOTH themes */
+  --pat-sage:       #A8B5A0;  /* :46 */
+  --pat-dusty-blue: #8B9CAD;  /* :49 */
+  --pat-terracotta: #D4A090;  /* :52 */
+  --pat-golden:     #E8C547;  /* :55 */
+  --pat-success:    #7A9B76;  /* :60 */
+  --pat-warning:    #D4A574;  /* :63 */
+  --pat-error:      #C77B6E;  /* :66 */
+
+  /* type families — PatinaTypography.swift + Resources/Fonts */
+  --pat-serif: 'Playfair Display', 'Iowan Old Style', Georgia, serif;
+  --pat-sans:  Inter, -apple-system, 'Segoe UI', sans-serif;
+  --pat-mono:  'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* spacing — PatinaSpacing.swift:11-24 */
+  --pat-s-xxxs: 2px; --pat-s-xxs: 4px; --pat-s-xs: 4px; --pat-s-sm: 8px;
+  --pat-s-xsm: 12px; --pat-s-md: 16px; --pat-s-mdl: 20px; --pat-s-lg: 24px;
+  --pat-s-xl: 32px;  --pat-s-xxl: 48px; --pat-s-xxxl: 64px;
+
+  /* radius — PatinaSpacing.swift:27-34 (+ live non-token radii) */
+  --pat-r-sm: 4px; --pat-r-md: 8px; --pat-r-lg: 12px; --pat-r-xl: 16px;
+  --pat-r-xxl: 24px; --pat-r-full: 9999px;
+  --pat-r-card14: 14px;   /* browse card, profile action row, maker story */
+  --pat-r-bubble18: 18px; /* Companion intro bubble */
+  --pat-r-tile11: 11px;   /* notification icon tile */
+  --pat-r-match6: 6px;    /* MatchPill */
+
+  /* shadow — PatinaShadows.swift:11-62 (SwiftUI radius sigma x2 = CSS blur) */
+  --pat-sh-sm:        0 2px 8px rgba(92,74,60,.06);
+  --pat-sh-md:        0 4px 16px rgba(92,74,60,.08);
+  --pat-sh-lg:        0 8px 32px rgba(92,74,60,.12);
+  --pat-sh-xl:        0 16px 64px rgba(92,74,60,.16);
+  --pat-sh-daily:     0 4px 48px rgba(92,74,60,.18);
+  --pat-sh-companion: 0 4px 24px rgba(92,74,60,.20);
+
+  /* gradients — PatinaGradients.swift:12-131 */
+  --pat-g-warm:    linear-gradient(135deg,#F5F2ED,#C4A57B);
+  --pat-g-dusk:    linear-gradient(180deg,#8B9CAD,#5C4A3C);
+  --pat-g-earth:   linear-gradient(135deg,#8B7355,#C4A57B);
+  --pat-g-sage:    linear-gradient(135deg,#A8B5A0,#E5E2DD);
+  --pat-g-leather: linear-gradient(135deg,#8B6F47,#A3927C);
+  --pat-g-linen:   linear-gradient(135deg,#D4CFC7,#E5E2DD);
+  --pat-g-stone:   linear-gradient(135deg,#9E9689,#B8B0A5);
+  --pat-g-wood:    linear-gradient(135deg,#6B5B4E,#8B7355);
+  --pat-g-metal:   linear-gradient(135deg,#7A7B80,#A8A9AD);
+  --pat-g-rattan:  linear-gradient(135deg,#B8A080,#D4C4A8);
+  --pat-g-hero:    linear-gradient(135deg,#B8A080,#8B7355,#5C4A3C);
+  --pat-g-hero2:   linear-gradient(135deg,#A8B5A0,#8B9CAD,#5C4A3C);
+  --pat-g-walnut:  linear-gradient(135deg,#6B5B4E,#8B7355);
+  --pat-g-cherry:  linear-gradient(135deg,#8B5A3C,#B8775C);
+  --pat-g-sunrise: linear-gradient(135deg,#FAF7F2,#E8C547,#C4A57B);
+
+  /* device metrics — iPhone 17 Pro logical points */
+  --pat-screen-w: 402px;
+  --pat-screen-h: 874px;
+  --pat-safe-top: 59px;
+  --pat-safe-bottom: 34px;
+  --pat-gutter-home: 20px;    /* DailyRoomView.swift:120,138 */
+  --pat-gutter-push: 24px;    /* RecommendationsView.swift:49,144 */
+  --pat-push-top: 56px;       /* pushed screens start here */
+  --pat-hearth-inset: 120px;  /* ContentView.swift:166 */
+}
+
+/* dark — swap ONLY these; every other token is static by design.
+   PatinaColors.swift:75-88 (DarkPalette). Three selectors so one page can
+   host a system-dark viewer, an explicit toggle, and a single dark .frame. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pat-bg: #211E1B; --pat-bg-2: #2C2926; --pat-bg-3: #211E1B;
+    --pat-text: #F2EDE6; --pat-text-2: #D8C9B4; --pat-text-muted: #B5A487;
+    --pat-text-inv: #211E1B; --pat-text-link: #C4A57B;
+    --pat-accent-hover: #B5A487; --pat-active-fill: #F2EDE6;
+    --pat-strata-1: #D8C9B4;
+  --pat-glass: rgba(60,55,50,.55); --pat-sys-grey: #98979C;
+  }
+}
+:root[data-theme="dark"] {
+  --pat-bg: #211E1B; --pat-bg-2: #2C2926; --pat-bg-3: #211E1B;
+  --pat-text: #F2EDE6; --pat-text-2: #D8C9B4; --pat-text-muted: #B5A487;
+  --pat-text-inv: #211E1B; --pat-text-link: #C4A57B;
+  --pat-accent-hover: #B5A487; --pat-active-fill: #F2EDE6;
+  --pat-strata-1: #D8C9B4;
+  --pat-glass: rgba(60,55,50,.55); --pat-sys-grey: #98979C;
+}
+/* per-container override: a light and a dark phone side by side on one page.
+   Attribute-only so it works on a .frame, a deck panel, or any wrapper. */
+[data-scheme="dark"] {
+  --pat-bg: #211E1B; --pat-bg-2: #2C2926; --pat-bg-3: #211E1B;
+  --pat-text: #F2EDE6; --pat-text-2: #D8C9B4; --pat-text-muted: #B5A487;
+  --pat-text-inv: #211E1B; --pat-text-link: #C4A57B;
+  --pat-accent-hover: #B5A487; --pat-active-fill: #F2EDE6;
+  --pat-strata-1: #D8C9B4;
+  --pat-glass: rgba(60,55,50,.55); --pat-sys-grey: #98979C;
+}
+[data-scheme="light"] {
+  --pat-bg: #FAF7F2; --pat-bg-2: #F5F2ED; --pat-bg-3: #FAF7F2;
+  --pat-text: #2C2926; --pat-text-2: #5C4A3C; --pat-text-muted: #8B7355;
+  --pat-text-inv: #FAF7F2; --pat-text-link: #9F7E48;
+  --pat-accent-hover: #8B7355; --pat-active-fill: #2C2926;
+  --pat-strata-1: #5C4A3C;
+  --pat-glass: rgba(250,247,242,.55); --pat-sys-grey: #88878A;
+}
+
+/* --------------------------------------------------------------------------
+   2. Typography roles — PatinaTypography.swift:21-116
+   Line height: there is NO line-height token in the app (16-token-table §2);
+   1.2 on Playfair headings and 1.45 on body copy reproduces the render.
+   -------------------------------------------------------------------------- */
+.t-display1     { font:500 56px/1.08 var(--pat-serif); }
+.t-display2     { font:500 40px/1.12 var(--pat-serif); }
+.t-display-sm   { font:500 28px/1.16 var(--pat-serif); }
+.t-h1           { font:500 32px/1.14 var(--pat-serif); }
+.t-h2           { font:400 26px/1.18 var(--pat-serif); }
+.t-h3           { font:400 24px/1.2  var(--pat-serif); }
+.t-h4           { font:400 22px/1.2  var(--pat-serif); }
+.t-h5           { font:500 18px/1.28 var(--pat-serif); }
+.t-headline-serif { font:500 24px/1.2 var(--pat-serif); }
+.t-headline-md  { font:600 18px/1.35 var(--pat-sans); }
+.t-body-lg      { font:400 18px/1.45 var(--pat-sans); }
+.t-body         { font:400 16px/1.45 var(--pat-sans); }
+.t-body-md      { font:500 16px/1.45 var(--pat-sans); }
+.t-body-sm      { font:400 14px/1.45 var(--pat-sans); }
+.t-body-sm-md   { font:500 14px/1.45 var(--pat-sans); }
+.t-caption      { font:500 12px/1.42 var(--pat-sans); }
+.t-caption-md   { font:600 12px/1.42 var(--pat-sans); }
+.t-caption-sm   { font:400 10px/1.4  var(--pat-sans); }
+.t-mono         { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase; letter-spacing:.5px; }
+.t-mono-sm      { font:400 9px/1.4  var(--pat-mono); text-transform:uppercase; letter-spacing:.4px; }
+.t-mono-tiny    { font:400 8px/1.4  var(--pat-mono); text-transform:uppercase; letter-spacing:.3px; }
+.t-mono-label   { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase; letter-spacing:.5px; }
+.t-mono-med     { font:500 10px/1.4 var(--pat-mono); text-transform:uppercase; letter-spacing:.5px; }
+.t-eyebrow      { font:600 12px/1.3 var(--pat-sans); text-transform:uppercase; letter-spacing:1.5px; color:var(--pat-text-muted); }
+.t-voice        { font:400 italic 18px/1.36 var(--pat-serif); }
+.t-voice-lg     { font:400 italic 22px/1.3 var(--pat-serif); }
+.t-wordmark     { font:500 38px/1.1 var(--pat-serif); letter-spacing:6px; }
+.t-ui-action    { font:500 15px/1.3 var(--pat-sans); }
+.t-ui-small     { font:500 13px/1.35 var(--pat-sans); }
+
+/* colour utilities — every colour in a mock comes from a token */
+.c-text{color:var(--pat-text);} .c-text-2{color:var(--pat-text-2);}
+.c-muted{color:var(--pat-text-muted);} .c-inv{color:var(--pat-text-inv);}
+.c-link{color:var(--pat-text-link);} .c-clay{color:var(--pat-clay);}
+.c-off{color:var(--pat-off-white);} .c-pearl{color:var(--pat-pearl);}
+.c-success{color:var(--pat-success);} .c-error{color:var(--pat-error);}
+
+/* MonoLabel — Components/MonoLabel.swift:11-51. The app's universal
+   metadata label: DM Mono 10, UPPERCASE, Text.muted, tracking 0.5. */
+.mono-label { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+.mono-label--sm { font-size:9px; letter-spacing:.4px; }
+.mono-label--clay { color:var(--pat-clay); }
+.eyebrow { font:600 12px/1.3 var(--pat-sans); text-transform:uppercase;
+  letter-spacing:1.5px; color:var(--pat-text-muted); }
+
+/* --------------------------------------------------------------------------
+   3. Phone frame — 402x874 content box, iPhone 17 Pro proportions
+   -------------------------------------------------------------------------- */
+.frame {
+  position:relative; box-sizing:content-box;
+  width:var(--pat-screen-w); height:var(--pat-screen-h);
+  border:13px solid #1A1714; border-radius:68px;
+  background:var(--pat-bg);
+  box-shadow:0 0 0 2px #3B3631, var(--pat-sh-lg);
+  flex:0 0 auto;
+}
+.frame *, .frame *::before, .frame *::after { box-sizing:border-box; }
+.frame__screen {
+  position:absolute; inset:0; overflow:hidden;
+  border-radius:55px; background:var(--pat-bg);
+  font-family:var(--pat-sans); color:var(--pat-text);
+  -webkit-font-smoothing:antialiased;
+}
+/* the scrolling body of a screen; the Companion owns the bottom 120pt */
+.screen-body { position:absolute; inset:0; overflow:hidden; }
+.screen-body--scroll { overflow-y:auto; }
+.screen-body--scroll::-webkit-scrollbar { width:0; }
+.pad-hearth { height:var(--pat-hearth-inset); }
+
+/* chrome-less variant for deck strips and detail crops */
+.frame--bare { border:0; border-radius:24px; box-shadow:var(--pat-sh-md); }
+.frame--bare > .frame__screen { border-radius:24px; }
+.frame--bare .statusbar, .frame--bare .island, .frame--bare .home-indicator { display:none; }
+
+/* Dynamic Island */
+.island {
+  position:absolute; top:11px; left:50%; transform:translateX(-50%);
+  width:125px; height:37px; border-radius:20px; background:#000; z-index:40;
+}
+
+/* Status bar — reads 9:41, glyphs drawn in CSS + tiny inline SVG masks */
+.statusbar {
+  position:absolute; top:0; left:0; right:0; height:var(--pat-safe-top);
+  display:flex; align-items:flex-start; justify-content:space-between;
+  padding:0 35px 0 55px; z-index:41; pointer-events:none;
+  color:var(--pat-text);
+}
+.statusbar__time { font:600 17px/1 var(--pat-sans); letter-spacing:-.2px; margin-top:23px; }
+.statusbar__right { display:flex; align-items:flex-end; gap:8px; margin-top:25px; }
+.sb-signal { display:flex; align-items:flex-end; gap:2px; height:12px; }
+.sb-signal i { display:block; width:3px; border-radius:1px; background:currentColor; }
+.sb-signal i:nth-child(1){height:4px;} .sb-signal i:nth-child(2){height:6.5px;}
+.sb-signal i:nth-child(3){height:9px;} .sb-signal i:nth-child(4){height:12px;}
+.sb-wifi {
+  width:17px; height:12px; background:currentColor;
+  -webkit-mask:var(--sb-wifi) center/contain no-repeat; mask:var(--sb-wifi) center/contain no-repeat;
+}
+.sb-battery {
+  width:27px; height:13px; background:currentColor;
+  -webkit-mask:var(--sb-batt) center/contain no-repeat; mask:var(--sb-batt) center/contain no-repeat;
+}
+.frame[data-battery="charging"] .sb-battery {
+  background:#34C759;
+  -webkit-mask:var(--sb-batt-charge) center/contain no-repeat; mask:var(--sb-batt-charge) center/contain no-repeat;
+}
+:root {
+  --sb-wifi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 12'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round'%3E%3Cpath d='M1.5 4.1a10.5 10.5 0 0 1 14 0'/%3E%3Cpath d='M4.4 7.1a6.3 6.3 0 0 1 8.2 0'/%3E%3C/g%3E%3Ccircle cx='8.5' cy='10.3' r='1.5' fill='%23000'/%3E%3C/svg%3E");
+  --sb-batt: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 27 13'%3E%3Crect x='.6' y='.6' width='22.8' height='11.8' rx='3.6' fill='none' stroke='%23000' stroke-opacity='.4'/%3E%3Crect x='2.2' y='2.2' width='19.6' height='8.6' rx='2.4' fill='%23000'/%3E%3Cpath d='M25.1 4.4v4.2a2.3 2.3 0 0 0 0-4.2z' fill='%23000' fill-opacity='.4'/%3E%3C/svg%3E");
+  --sb-batt-charge: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 27 13'%3E%3Cpath fill-rule='evenodd' fill='%23000' d='M4.2.6h15.6a3.6 3.6 0 0 1 3.6 3.6v4.6a3.6 3.6 0 0 1-3.6 3.6H4.2A3.6 3.6 0 0 1 .6 8.8V4.2A3.6 3.6 0 0 1 4.2.6Zm9.4 1.5L8.9 7.2h2.9l-1.4 3.7 4.7-5.1h-2.9z'/%3E%3Cpath d='M25.1 4.4v4.2a2.3 2.3 0 0 0 0-4.2z' fill='%23000'/%3E%3C/svg%3E");
+}
+
+.home-indicator {
+  position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+  width:139px; height:5px; border-radius:3px;
+  background:var(--pat-text); opacity:.28; z-index:41; pointer-events:none;
+}
+
+/* --------------------------------------------------------------------------
+   4. App chrome
+   -------------------------------------------------------------------------- */
+
+/* Home header — Features/Home/Views/DailyGreetingHeader.swift:31-103 */
+.home-header {
+  display:flex; align-items:flex-start; gap:8px;
+  padding:calc(var(--pat-safe-top) + 57px) var(--pat-gutter-home) 0;
+}
+/* the bell/help/monogram cluster rides ~2pt below the date line, not flush with it */
+.home-header > .home-header__actions, .home-header > .monogram { margin-top:1.5px; }
+.home-header__stack { display:flex; flex-direction:column; gap:2px; flex:1 1 auto; min-width:0; }
+.home-header__date { font:400 10px/1.6 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+.home-header__titlerow { display:flex; align-items:flex-start; gap:18px; height:42px;
+  padding-top:3px; }
+.home-header__title { font:400 22px/1.2 var(--pat-serif); color:var(--pat-text); }
+.home-header__actions { display:flex; align-items:center; gap:4px; }
+.icon-btn {
+  position:relative; width:36px; height:36px; border-radius:var(--pat-r-full);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--pat-text-2); background:none; border:0; padding:0;
+}
+.icon-btn svg { width:21px; height:21px; }
+.icon-btn--sm svg { width:13px; height:13px; }
+/* the ? beside the Today title: smaller than a toolbar icon, set in system grey
+   (the one place the app steps outside the Patina palette) */
+.home-header__title-help {
+  width:20px; height:20px; flex:0 0 auto; align-self:center; color:var(--pat-sys-grey);
+  display:flex; align-items:center; justify-content:center;
+}
+.home-header__title-help svg { width:15.5px; height:15.5px; }
+.icon-btn__badge {
+  position:absolute; top:4px; right:4px; min-width:14px; height:14px; padding:0 4px;
+  border-radius:var(--pat-r-full); background:var(--pat-clay); color:var(--pat-off-white);
+  font:400 10px/14px var(--pat-sans); text-align:center;
+}
+.icon-btn__dot {
+  position:absolute; top:6px; right:7px; width:7px; height:7px;
+  border-radius:50%; background:var(--pat-clay);
+}
+.monogram {
+  width:36px; height:36px; border-radius:50%; background:var(--pat-g-earth);
+  display:flex; align-items:center; justify-content:center;
+  font:500 14px/1 var(--pat-serif); color:var(--pat-off-white); flex:0 0 auto;
+}
+.monogram--sm { width:20px; height:20px; font-size:9px; }
+
+/* Pushed-screen chrome — Design/Components/PatinaScreenChrome.swift:41-53
+   + BackChevronButton (Design/Animations/PatinaTransitions.swift:22-55) */
+.screen-chrome {
+  position:absolute; top:calc(var(--pat-safe-top) + 11px); left:18px;
+  display:flex; align-items:center; gap:12px; z-index:20;
+}
+.back-chevron {
+  width:36px; height:36px; border-radius:50%;
+  background:rgba(250,247,242,.92); border:1px solid var(--pat-pearl);
+  display:flex; align-items:center; justify-content:center; color:var(--pat-charcoal);
+}
+.back-chevron svg { width:18px; height:18px; }
+.back-chevron--dark { background:rgba(250,247,242,.12); border:0; color:var(--pat-off-white); }
+.screen-chrome__title { font:500 18px/1.28 var(--pat-serif); color:var(--pat-text); }
+.screen-chrome--dark .screen-chrome__title { color:var(--pat-off-white); }
+
+/* In-body header used by Browse / Saved / lists (title carried in the body,
+   chrome supplies only the chevron) — RecommendationsView.swift:37-50 */
+.screen-head { padding:calc(var(--pat-safe-top) + 60px) var(--pat-gutter-push) 12px; }
+.screen-head__row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.screen-head__title { font:400 22px/1.2 var(--pat-serif); color:var(--pat-text); }
+.screen-head__sub { font:500 13px/1.35 var(--pat-sans); color:var(--pat-text-muted); margin-top:4px; }
+
+/* --------------------------------------------------------------------------
+   5. The Companion — collapsed hearth, hint, expanded panel
+   Features/Companion/Components/CompanionHearthView.swift:121-183, 310-431
+   Features/Companion/Views/CompanionOverlay.swift:620-700
+   -------------------------------------------------------------------------- */
+.companion-dock {
+  position:absolute; left:0; right:0; bottom:62px; z-index:30;
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+}
+.orb {
+  width:64px; height:64px; border-radius:50%;
+  background:var(--pat-bg-dark);           /* static #2C2926 in both themes */
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:var(--pat-sh-companion);
+}
+/* the three-strata mark — CompanionMarkView.swift:223-240 (20/16/12 x 1.5,
+   spacing 3, offWhite at 100/70/40%).  StrataMarkView.swift:26-112 is the
+   design-system twin (24/18/12 x 3, spacing 4, spec colours). */
+.strata { display:flex; flex-direction:column; gap:3px; align-items:center; }
+.strata i { display:block; height:1.5px; border-radius:1px; background:var(--pat-off-white); }
+.strata i:nth-child(1){width:20px; opacity:1;}
+.strata i:nth-child(2){width:16px; opacity:.7;}
+.strata i:nth-child(3){width:12px; opacity:.4;}
+.strata--spec i, .strata--clay i { height:3px; border-radius:2px; }
+.strata--clay i { background:var(--pat-clay); }
+.strata--clay i:nth-child(1){width:24px; opacity:1;}
+.strata--clay i:nth-child(2){width:18px; opacity:.7;}
+.strata--clay i:nth-child(3){width:12px; opacity:.5;}
+.strata--spec i:nth-child(1){width:24px; background:var(--pat-strata-1); opacity:1;}
+.strata--spec i:nth-child(2){width:18px; background:var(--pat-strata-2); opacity:1;}
+.strata--spec i:nth-child(3){width:12px; background:var(--pat-strata-3); opacity:1;}
+.companion-hint {
+  font:400 9px/1.4 var(--pat-mono); text-transform:uppercase; letter-spacing:.4px;
+  color:var(--pat-text-muted); text-align:center; padding:4px 8px; max-width:260px;
+}
+
+/* expanded panel — dark shell, radius 26 (30 when full sheet), padding 20 */
+.companion-panel {
+  background:var(--pat-bg-dark); border-radius:26px; padding:20px;
+  display:flex; flex-direction:column; gap:16px; max-width:380px; width:100%;
+  box-shadow:var(--pat-sh-companion);
+}
+.companion-panel--full { border-radius:30px; min-height:360px; max-width:none; }
+.companion-panel__head { display:flex; align-items:flex-start; gap:12px; }
+.companion-panel__mark { width:44px; height:44px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.companion-panel__copy { display:flex; flex-direction:column; gap:3px; flex:1 1 auto; min-width:0; }
+.companion-panel__title { font:400 italic 18px/1.32 var(--pat-serif); color:var(--pat-off-white); }
+.companion-panel__detail { font:500 13px/1.35 var(--pat-sans); color:rgba(250,247,242,.72); }
+.companion-panel__btn {
+  width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,.1);
+  display:flex; align-items:center; justify-content:center; color:var(--pat-pearl);
+  border:0; flex:0 0 auto;
+}
+.companion-panel__btn svg { width:12px; height:12px; }
+.companion-panel__rows { display:flex; flex-direction:column; gap:8px; }
+.companion-row {
+  display:flex; align-items:center; gap:14px; padding:12px 14px;
+  border-radius:var(--pat-r-card14); background:rgba(255,255,255,.06);
+}
+.companion-row--suggested { background:rgba(196,165,123,.15); }
+.companion-row__icon {
+  width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,.08);
+  display:flex; align-items:center; justify-content:center; color:var(--pat-pearl); flex:0 0 auto;
+}
+.companion-row__icon svg { width:18px; height:18px; }
+.companion-row--suggested .companion-row__icon { background:var(--pat-clay); color:var(--pat-off-white); }
+.companion-row__copy { display:flex; flex-direction:column; gap:1px; flex:1 1 auto; min-width:0; }
+.companion-row__title { font:500 14px/1.4 var(--pat-sans); color:var(--pat-off-white); }
+.companion-row__meta { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-clay); }
+.companion-row__chev { color:var(--pat-aged-oak); flex:0 0 auto; }
+.companion-row__chev svg { width:12px; height:12px; }
+/* Companion progress bar (journey mode) — CompanionHearthView.swift:296-306 */
+.companion-progress { height:3px; border-radius:2px; background:rgba(255,255,255,.15); overflow:hidden; }
+.companion-progress > i { display:block; height:100%; background:var(--pat-clay); }
+
+/* the first-run intro bubble — CompanionOverlay.swift:580-605 */
+.companion-intro {
+  width:300px; padding:16px 16px 20px; border-radius:var(--pat-r-xl);
+  background:var(--pat-bg); box-shadow:var(--pat-sh-md);
+  display:flex; flex-direction:column; gap:5px;
+}
+.companion-intro__title { font:400 italic 18px/1.32 var(--pat-serif); color:var(--pat-text); }
+.companion-intro__body  { font:400 italic 15px/1.36 var(--pat-serif); color:var(--pat-text-2); }
+.companion-intro__acts  { display:flex; align-items:center; gap:10px; margin-top:14px; }
+
+/* --------------------------------------------------------------------------
+   6. Today modules — Features/Home/Views/TodayModules.swift, DailyStoryCard.swift
+   Today cards are FLAT (surface fill only, no shadow) at radius 16.
+   -------------------------------------------------------------------------- */
+.next-move {
+  display:flex; align-items:flex-start; gap:14px; padding:16px 11px 16px 16px;
+  background:var(--pat-bg-2); border-radius:var(--pat-r-xl);
+  margin:22px var(--pat-gutter-home) 0;
+}
+.next-move__icon {
+  width:54px; height:54px; border-radius:var(--pat-r-card14); flex:0 0 auto; align-self:center;
+  background:rgba(196,165,123,.14); color:var(--pat-text-link);
+  display:flex; align-items:center; justify-content:center;
+}
+.next-move__icon svg { width:20px; height:20px; }
+.next-move__body { display:flex; flex-direction:column; gap:4px; flex:1 1 auto; min-width:0; }
+.next-move__body > * { display:block; }
+.next-move__title { font:500 18px/1.35 var(--pat-serif); color:var(--pat-text); }
+.next-move__detail { font:500 12px/1.22 var(--pat-sans); color:var(--pat-text-2); }
+.next-move__arrow { color:var(--pat-text-link); flex:0 0 auto; align-self:center;
+  margin-top:2px; }
+.next-move__arrow svg { width:22px; height:22px; }
+
+.story-card {
+  position:relative; height:180px; border-radius:var(--pat-r-xl); overflow:hidden;
+  margin:16px var(--pat-gutter-home) 0; background:var(--pat-g-hero);
+}
+.story-card__art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.story-card::after {
+  content:''; position:absolute; left:0; right:0; bottom:0; height:135px;
+  background:linear-gradient(to top, rgba(44,41,38,.88) 0%, rgba(44,41,38,.2) 60%, rgba(44,41,38,0) 100%);
+}
+.story-card__pill {
+  position:absolute; top:12px; left:12px; z-index:2;
+  font:400 9px/1.4 var(--pat-mono); text-transform:uppercase; letter-spacing:.3px;
+  color:var(--pat-off-white); padding:3px 8px; border-radius:var(--pat-r-md);
+  background:rgba(44,41,38,.5);
+}
+.story-card__dot {
+  position:absolute; top:12px; right:12px; z-index:2;
+  width:7px; height:7px; border-radius:50%; background:var(--pat-clay);
+}
+.story-card__body { position:absolute; left:16px; right:16px; bottom:16px; z-index:2; }
+.story-card__tag {
+  font:400 9px/1.4 var(--pat-mono); text-transform:uppercase; letter-spacing:.6px;
+  color:var(--pat-text-link); padding-bottom:3px;
+}
+.story-card__title { font:500 18px/1.28 var(--pat-serif); color:var(--pat-off-white); }
+.story-card__sub { font:500 12px/1.4 var(--pat-sans); color:var(--pat-pearl); margin-top:2px; }
+
+.room-card {
+  margin:20px var(--pat-gutter-home) 0; border-radius:var(--pat-r-xl);
+  overflow:hidden; background:var(--pat-bg-2);
+}
+.room-card__art { position:relative; height:150px; background:var(--pat-g-warm); }
+.room-card__art > img { width:100%; height:100%; object-fit:cover; display:block; }
+.room-card__chip {
+  position:absolute; left:10px; bottom:10px;
+  font:400 8px/1.4 var(--pat-mono); text-transform:uppercase; letter-spacing:.6px;
+  color:var(--pat-off-white); padding:5px 8px; border-radius:var(--pat-r-full);
+  background:rgba(44,41,38,.6);
+}
+.room-card__body { display:flex; align-items:flex-start; gap:12px; padding:16px; }
+.room-card__copy { display:flex; flex-direction:column; gap:5px; flex:1 1 auto; min-width:0; }
+.room-card__name { font:400 22px/1.2 var(--pat-serif); color:var(--pat-text); }
+.room-card__meta { font:500 12px/1.4 var(--pat-sans); color:var(--pat-text-2); }
+.room-card__latest { font:500 12px/1.4 var(--pat-sans); color:var(--pat-text-muted); }
+.room-card__chev { color:var(--pat-text-muted); padding-top:22px; flex:0 0 auto; }
+.room-card__chev svg { width:14px; height:14px; }
+
+/* --------------------------------------------------------------------------
+   7. Product card + grid — Features/Recommendations/Views/RecommendationsView.swift:188-261
+   -------------------------------------------------------------------------- */
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:0 var(--pat-gutter-push); }
+.product-card { background:var(--pat-bg-2); border-radius:var(--pat-r-card14); overflow:hidden; }
+.product-card__art { position:relative; height:160px; background:var(--pat-g-leather); }
+.product-card__art > img { width:100%; height:100%; object-fit:cover; display:block; }
+.product-card__actions { position:absolute; top:8px; right:8px; display:flex; gap:6px; }
+.circ-btn {
+  width:30px; height:30px; border-radius:50%;
+  background:var(--pat-glass); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  display:flex; align-items:center; justify-content:center; color:var(--pat-text-2); border:0;
+}
+.circ-btn svg { width:14px; height:14px; }
+.circ-btn--lg { width:36px; height:36px; color:var(--pat-text); }
+.circ-btn--lg svg { width:16px; height:16px; }
+.match-pill {
+  position:absolute; top:8px; left:8px;
+  font:400 9px/1.4 var(--pat-mono); letter-spacing:.3px;
+  color:var(--pat-text-2); padding:3px 8px; border-radius:var(--pat-r-match6);
+  background:var(--pat-glass); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+}
+.product-card__info { padding:10px 12px; display:flex; flex-direction:column; }
+.product-card__maker { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+.product-card__name { font:500 13px/1.35 var(--pat-sans); color:var(--pat-text); padding-top:4px; }
+.product-card__price { font:500 18px/1.28 var(--pat-serif); color:var(--pat-text); padding-top:4px; }
+.product-card__why { font:500 12px/1.4 var(--pat-sans); color:var(--pat-text-muted); padding-top:7px; }
+
+/* FilterChip — Components/FilterChip.swift:11-36 (capsule, 14x6, caption 12) */
+.chip-row { display:flex; gap:8px; padding:0 var(--pat-gutter-push) 12px; overflow-x:auto; }
+.chip-row::-webkit-scrollbar { height:0; }
+.chip {
+  flex:0 0 auto; font:500 12px/1.2 var(--pat-sans);
+  padding:6px 14px; border-radius:var(--pat-r-full); border:0;
+  background:var(--pat-bg-2); color:var(--pat-text-2); white-space:nowrap;
+}
+.chip--active { background:var(--pat-active-fill); color:var(--pat-text-inv); }
+
+/* honest placeholder tile — PatinaAsyncImage's branded placeholder is a
+   Strata mark on Background.secondary, never a grey box
+   (Components/PatinaAsyncImage.swift:14). The labelled variant carries the
+   real maker + material so no stock photograph is ever implied. */
+.tile-placeholder {
+  position:relative; width:100%; height:100%;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--pat-bg-2);
+}
+.tile-placeholder--gradient { background:var(--pat-g-leather); }
+/* the no-image fallback is the bare category gradient — the Strata mark belongs
+   only to the loading/failure placeholder, so it is suppressed here. */
+.tile-placeholder--gradient .strata { display:none; }
+.tile-placeholder__label {
+  position:absolute; left:8px; right:8px; bottom:8px; text-align:left;
+  font:400 8px/1.45 var(--pat-mono); text-transform:uppercase; letter-spacing:.3px;
+  color:var(--pat-off-white); text-shadow:0 1px 2px rgba(44,41,38,.55);
+}
+.g-warm{background:var(--pat-g-warm);} .g-dusk{background:var(--pat-g-dusk);}
+.g-earth{background:var(--pat-g-earth);} .g-sage{background:var(--pat-g-sage);}
+.g-leather{background:var(--pat-g-leather);} .g-linen{background:var(--pat-g-linen);}
+.g-stone{background:var(--pat-g-stone);} .g-wood{background:var(--pat-g-wood);}
+.g-metal{background:var(--pat-g-metal);} .g-rattan{background:var(--pat-g-rattan);}
+.g-hero{background:var(--pat-g-hero);} .g-hero2{background:var(--pat-g-hero2);}
+.g-walnut{background:var(--pat-g-walnut);} .g-cherry{background:var(--pat-g-cherry);}
+.g-sunrise{background:var(--pat-g-sunrise);}
+
+/* --------------------------------------------------------------------------
+   8. Piece detail — Features/ProductDetail/Views/ProductDetailView.swift:70-330
+   -------------------------------------------------------------------------- */
+.detail-hero { position:relative; height:340px; background:var(--pat-g-wood); }
+.detail-hero > img { width:100%; height:100%; object-fit:cover; display:block; }
+.detail-hero__bar {
+  position:absolute; top:calc(var(--pat-safe-top) - 3px); left:16px; right:16px;
+  display:flex; align-items:center; gap:8px;
+}
+.detail-hero__bar .spacer { flex:1 1 auto; }
+.detail-body { padding:24px; display:flex; flex-direction:column; }
+.detail-maker { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-clay); padding-bottom:6px; }
+.detail-name { font:400 26px/1.18 var(--pat-serif); color:var(--pat-text); padding-bottom:4px; }
+.detail-materials { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-muted); padding-bottom:16px; }
+.detail-price-row { display:flex; align-items:baseline; gap:12px; padding-bottom:16px; }
+.detail-price { font:500 28px/1.16 var(--pat-serif); color:var(--pat-text); }
+.match-pill--detail {
+  font:400 10px/1.4 var(--pat-mono); letter-spacing:.3px;
+  color:var(--pat-success); background:rgba(122,155,118,.12);
+  padding:4px 10px; border-radius:var(--pat-r-full);
+}
+.spatial-row { display:flex; gap:6px; overflow-x:auto; padding-bottom:16px; }
+.spatial-pill {
+  flex:0 0 auto; font:500 12px/1.42 var(--pat-sans); color:var(--pat-text);
+  background:rgba(168,181,160,.15); padding:5px 10px; border-radius:var(--pat-r-full);
+}
+.prov-head { display:flex; align-items:center; gap:6px; padding-bottom:6px; }
+.badge-row { display:flex; flex-wrap:wrap; gap:8px; padding-bottom:20px; }
+.prov-badge {
+  font:500 12px/1.42 var(--pat-sans); color:var(--pat-text-2);
+  background:var(--pat-bg-2); padding:6px 12px; border-radius:var(--pat-r-full);
+}
+/* dimensions / materials specification rows */
+.spec-list { border-top:1px solid var(--pat-pearl); margin-bottom:20px; }
+.spec-row {
+  display:flex; align-items:baseline; justify-content:space-between; gap:16px;
+  padding:12px 0; border-bottom:1px solid var(--pat-pearl);
+}
+.spec-row__key { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+.spec-row__val { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text); text-align:right; }
+/* the acts row — the visible verbs on a piece */
+.acts-row { display:flex; gap:8px; flex-wrap:wrap; padding-bottom:20px; }
+.act {
+  display:flex; align-items:center; gap:6px; padding:8px 14px;
+  border-radius:var(--pat-r-full); border:1.5px solid var(--pat-pearl);
+  background:var(--pat-bg); color:var(--pat-text);
+  font:500 13px/1.35 var(--pat-sans);
+}
+.act svg { width:14px; height:14px; }
+.maker-story {
+  padding:20px; background:var(--pat-bg-2); border-radius:var(--pat-r-card14);
+  display:flex; flex-direction:column; gap:12px;
+}
+.maker-story__head { display:flex; align-items:center; gap:12px; }
+.maker-story__avatar { width:44px; height:44px; border-radius:50%; background:var(--pat-g-earth); flex:0 0 auto; }
+.maker-story__name { font:500 14px/1.45 var(--pat-sans); color:var(--pat-text); }
+.maker-story__quote { font:400 italic 14px/1.6 var(--pat-sans); color:var(--pat-text-2); }
+.detail-bar {
+  position:absolute; left:0; right:0; bottom:0; z-index:20;
+  display:flex; align-items:center; gap:12px;
+  padding:16px 24px 36px; border-top:.5px solid var(--pat-pearl);
+  background:rgba(250,247,242,.86); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+}
+[data-scheme="dark"] .detail-bar { background:rgba(33,30,27,.86); }
+.detail-bar__ar {
+  width:50px; height:50px; border-radius:50%; background:var(--pat-bg-2);
+  display:flex; align-items:center; justify-content:center; color:var(--pat-text); flex:0 0 auto;
+}
+
+/* --------------------------------------------------------------------------
+   9. Saved — Features/Collections/Views/CollectionsView.swift:76-210
+   -------------------------------------------------------------------------- */
+.tabs { display:flex; gap:24px; padding:0 var(--pat-gutter-push);
+  border-bottom:1px solid var(--pat-pearl); }
+.tab { flex:1 1 0; text-align:center; border:0; background:none; padding:0; }
+.tab__label { display:block; padding:12px 0; font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-muted); }
+.tab__rule { display:block; height:2px; background:transparent; }
+.tab--active .tab__label { color:var(--pat-text); font-weight:500; }
+.tab--active .tab__rule { background:var(--pat-clay); }
+.saved-row {
+  display:flex; align-items:center; gap:12px; padding:12px;
+  background:var(--pat-bg-2); border-radius:var(--pat-r-xl);
+}
+.saved-row__thumb { width:72px; height:72px; border-radius:var(--pat-r-md); overflow:hidden; flex:0 0 auto; }
+.saved-row__thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.saved-row__copy { display:flex; flex-direction:column; gap:2px; flex:1 1 auto; min-width:0; }
+.saved-row__name { font:500 13px/1.35 var(--pat-sans); color:var(--pat-text); }
+.saved-row__price { font:500 18px/1.28 var(--pat-serif); color:var(--pat-text); padding-top:2px; }
+.saved-row__chev { color:var(--pat-text-muted); }
+.saved-row__chev svg { width:12px; height:12px; }
+.board-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.board-head__name { font:500 18px/1.28 var(--pat-serif); color:var(--pat-text); }
+.board-tile { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+.board-tile__cell {
+  aspect-ratio:1/1; border-radius:var(--pat-r-lg); overflow:hidden;
+  background:var(--pat-bg-2); position:relative;
+}
+.board-tile__cell img { width:100%; height:100%; object-fit:cover; display:block; }
+.board-tile__price {
+  position:absolute; left:6px; bottom:6px;
+  font:500 11px/1.2 var(--pat-serif); color:var(--pat-off-white);
+  background:rgba(44,41,38,.7); padding:3px 6px; border-radius:var(--pat-r-full);
+}
+
+/* PatinaEmptyState — Components/PatinaEmptyState.swift:12-59 */
+.empty-state {
+  display:flex; flex-direction:column; align-items:center; gap:16px;
+  padding:32px; text-align:center;
+}
+.empty-state__icon { color:var(--pat-text-muted); }
+.empty-state__icon svg { width:40px; height:40px; stroke-width:1.2; }
+.empty-state__copy { display:flex; flex-direction:column; gap:4px; align-items:center; }
+.empty-state__title { font:400 22px/1.2 var(--pat-serif); color:var(--pat-text); }
+.empty-state__msg { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-muted); max-width:260px; }
+
+/* --------------------------------------------------------------------------
+   10. Your Spaces room card
+   -------------------------------------------------------------------------- */
+.space-card { border-radius:var(--pat-r-xl); overflow:hidden; background:var(--pat-bg-2); }
+.space-card__art { position:relative; height:132px; background:var(--pat-g-dusk); }
+.space-card__art img { width:100%; height:100%; object-fit:cover; display:block; }
+.space-card__body { padding:14px 16px; display:flex; align-items:center; gap:12px; }
+.space-card__name { display:block; font:500 18px/1.28 var(--pat-serif); color:var(--pat-text); }
+.space-card__meta { display:block; font:400 10px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); margin-top:2px; }
+
+/* --------------------------------------------------------------------------
+   11. PatinaButton — Components/PatinaButton.swift:25-125 (capsule, height 52,
+       label uiAction = Inter-Medium 15; .ghost is intrinsic width)
+   -------------------------------------------------------------------------- */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  width:100%; height:52px; padding:0 24px; border:0; border-radius:var(--pat-r-full);
+  font:500 15px/1.3 var(--pat-sans); cursor:default;
+}
+.btn svg { width:16px; height:16px; }
+.btn--primary     { background:var(--pat-active-fill); color:var(--pat-text-inv); }
+.btn--secondary   { background:var(--pat-bg); color:var(--pat-text); box-shadow:inset 0 0 0 1.5px var(--pat-pearl); }
+.btn--ghost       { background:transparent; color:var(--pat-text-link); width:auto; padding:0 8px; }
+.btn--clay        { background:var(--pat-clay); color:var(--pat-off-white); }
+.btn--destructive { background:var(--pat-error); color:var(--pat-off-white); }
+.btn.is-disabled  { opacity:.5; }
+.btn--compact     { width:auto; height:44px; padding:0 24px; }
+.btn--pill-sm     { width:auto; height:auto; padding:8px 16px; font:500 14px/1.2 var(--pat-sans); }
+/* AuthButton adapter — PatinaButton.swift:135-179 (height 50, radius 12) */
+.btn--auth { height:50px; border-radius:var(--pat-r-lg); }
+
+/* PatinaTextField — Components/PatinaTextField.swift:67-112 */
+.field { display:flex; flex-direction:column; gap:4px; }
+.field__label { font:500 12px/1.42 var(--pat-sans); color:var(--pat-text-muted); }
+.field__box {
+  display:flex; align-items:center; gap:16px; padding:16px;
+  background:var(--pat-bg-2); border-radius:var(--pat-r-lg);
+  box-shadow:inset 0 0 0 1px rgba(196,165,123,.2);
+  font:400 16px/1.45 var(--pat-sans); color:var(--pat-text);
+}
+.field__box .field__icon { color:var(--pat-text-muted); width:20px; flex:0 0 auto; display:flex; }
+.field__box .field__icon svg { width:18px; height:18px; }
+.field__box--focused { box-shadow:inset 0 0 0 1px rgba(159,126,72,.5); }
+.field__box--error   { box-shadow:inset 0 0 0 1.5px var(--pat-error); }
+.field__ph { color:var(--pat-text-muted); }
+.field__help { font:500 12px/1.42 var(--pat-sans); color:var(--pat-text-muted); }
+.field__err  { font:500 12px/1.42 var(--pat-sans); color:var(--pat-error); }
+
+/* PatinaStatusBadge — Components/PatinaStatusBadge.swift:11-61 */
+.status-badge {
+  display:inline-flex; align-items:center; gap:4px; padding:4px 8px;
+  border-radius:var(--pat-r-full);
+  font:600 12px/1.42 var(--pat-sans); letter-spacing:.5px; text-transform:uppercase;
+}
+.status-badge svg { width:12px; height:12px; }
+.status-badge--info    { color:var(--pat-dusty-blue); background:rgba(139,156,173,.14); }
+.status-badge--success { color:var(--pat-success);    background:rgba(122,155,118,.14); }
+.status-badge--warning { color:var(--pat-warning);    background:rgba(212,165,116,.14); }
+.status-badge--error   { color:var(--pat-error);      background:rgba(199,123,110,.14); }
+/* TierPill — Design/Components/TierPill.swift:10 */
+.tier-pill {
+  display:inline-flex; align-items:center; gap:5px; padding:4px 10px;
+  border-radius:var(--pat-r-full); background:rgba(196,165,123,.15);
+  font:400 9px/1.4 var(--pat-mono); text-transform:uppercase; letter-spacing:.4px;
+  color:var(--pat-text-2);
+}
+
+/* --------------------------------------------------------------------------
+   12. Sheets, toast — Features/Home/Views/AddToRoomSheet.swift:16-59
+   -------------------------------------------------------------------------- */
+.sheet-scrim { position:absolute; inset:0; background:rgba(0,0,0,.3);
+  backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); z-index:24; }
+.sheet {
+  position:absolute; left:0; right:0; bottom:0; z-index:25;
+  background:var(--pat-bg); border-radius:var(--pat-r-xxl) var(--pat-r-xxl) 0 0;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.sheet--medium { height:50%; }         /* .presentationDetents([.medium]) */
+.sheet--full   { top:calc(var(--pat-safe-top) - 9px); }
+.sheet__handle {
+  width:36px; height:4px; border-radius:2px; align-self:center;
+  background:rgba(139,115,85,.25); margin:18px 0 14px;
+}
+[data-scheme="dark"] .sheet__handle { background:rgba(181,164,135,.25); }
+/* title FIRST, mono eyebrow SECOND — the de-facto Patina sheet header
+   (AddToRoomSheet.swift:24-34), NOT the unused PatinaSheetHeader component. */
+.sheet__head { padding:0 24px; display:flex; flex-direction:column; gap:3px; }
+.sheet__title { font:500 18px/1.28 var(--pat-serif); color:var(--pat-text); }
+.sheet__eyebrow { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); padding-bottom:14px; }
+.sheet__body { padding:0 24px; display:flex; flex-direction:column; gap:7px; overflow-y:auto; }
+.sheet__foot { padding:14px 24px 36px; }
+.sheet-row {
+  display:flex; align-items:center; gap:11px; padding:11px;
+  background:var(--pat-bg-2); border-radius:var(--pat-r-lg);
+}
+.sheet-row--selected { background:var(--pat-active-fill); }
+.sheet-row__thumb { width:44px; height:44px; border-radius:9px; background:var(--pat-g-warm); flex:0 0 auto; }
+.sheet-row__copy { display:flex; flex-direction:column; gap:1px; flex:1 1 auto; min-width:0; }
+.sheet-row__name { font:500 13px/1.35 var(--pat-sans); color:var(--pat-text); }
+.sheet-row--selected .sheet-row__name { color:var(--pat-text-inv); }
+.sheet-row__meta { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.3px; color:var(--pat-text-muted); }
+.sheet-row--selected .sheet-row__meta { color:var(--pat-text-link); }
+.sheet-row__plus { font:500 15px/1 var(--pat-sans); color:var(--pat-text-link); }
+
+.toast {
+  position:absolute; left:24px; right:24px; bottom:196px; z-index:35;
+  padding:12px 16px; border-radius:var(--pat-r-lg);
+  background:var(--pat-bg-dark); color:var(--pat-off-white);
+  font:500 14px/1.45 var(--pat-sans); box-shadow:var(--pat-sh-lg);
+  display:flex; align-items:center; gap:10px;
+}
+.toast__act { margin-left:auto; color:var(--pat-clay); font:500 13px/1.35 var(--pat-sans); }
+
+/* --------------------------------------------------------------------------
+   13. Studio hub rows, notifications, money summaries, list rows, hairlines
+   -------------------------------------------------------------------------- */
+/* Features/Home/Views/StudioHubSection.swift:300-389 */
+.studio-row {
+  display:flex; align-items:center; gap:8px; padding:12px 0; min-height:44px;
+}
+.studio-row__icon {
+  width:28px; height:28px; border-radius:var(--pat-r-md); flex:0 0 auto;
+  background:rgba(196,165,123,.12); color:var(--pat-text-link);
+  display:flex; align-items:center; justify-content:center;
+}
+.studio-row__icon svg { width:15px; height:15px; }
+.studio-row__copy { display:flex; flex-direction:column; gap:2px; flex:1 1 auto; min-width:0; }
+.studio-row__title { font:500 18px/1.28 var(--pat-serif); color:var(--pat-text); }
+.studio-row__meta { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+.studio-row__count {
+  min-width:22px; height:22px; padding:0 8px; border-radius:var(--pat-r-full);
+  background:var(--pat-accent); color:var(--pat-text-inv);
+  font:600 12px/22px var(--pat-sans); text-align:center; flex:0 0 auto;
+}
+.studio-row__chev { color:var(--pat-text-muted); flex:0 0 auto; }
+.studio-row__chev svg { width:13px; height:13px; }
+.studio-row--locked { opacity:.45; }
+.studio-row--locked .studio-row__lock { color:var(--pat-text-muted); }
+.studio-row--locked .studio-row__lock svg { width:13px; height:13px; }
+/* Profile action row — the tinted-tile variant seen on Profile (radius 14) */
+.action-row {
+  display:flex; align-items:center; gap:14px; padding:14px;
+  background:var(--pat-bg-2); border-radius:var(--pat-r-card14);
+}
+.action-row__icon {
+  width:44px; height:44px; border-radius:var(--pat-r-lg); flex:0 0 auto;
+  background:rgba(196,165,123,.12); color:var(--pat-text-link);
+  display:flex; align-items:center; justify-content:center;
+}
+.action-row__title { font:400 18px/1.35 var(--pat-sans); color:var(--pat-text); flex:1 1 auto; }
+.action-row__chev { color:var(--pat-text-muted); }
+
+/* NotificationFeedView.swift:187-243 */
+.notif-row {
+  display:flex; align-items:flex-start; gap:14px; padding:16px 24px;
+  position:relative;
+}
+.notif-row--unread { background:rgba(159,126,72,.08); }
+[data-scheme="dark"] .notif-row--unread { background:rgba(196,165,123,.08); }
+.notif-row::after {
+  content:''; position:absolute; left:78px; right:0; bottom:0; height:1px; background:var(--pat-pearl);
+}
+.notif-row__icon {
+  width:40px; height:40px; border-radius:var(--pat-r-tile11); flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(139,156,173,.15); color:var(--pat-dusty-blue);
+}
+.notif-row__icon--clay { background:rgba(196,165,123,.15); color:var(--pat-clay); }
+.notif-row__icon--terracotta { background:rgba(212,160,144,.15); color:var(--pat-terracotta); }
+.notif-row__copy { display:flex; flex-direction:column; gap:2px; flex:1 1 auto; min-width:0; }
+.notif-row__title { font:500 14px/1.45 var(--pat-sans); color:var(--pat-text); }
+.notif-row__body { font:500 12px/1.4 var(--pat-sans); color:var(--pat-text-muted); }
+.notif-row__trail { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:0 0 auto; }
+.notif-row__dot { width:8px; height:8px; border-radius:50%; background:var(--pat-text-link); }
+.notif-row__time { font:400 8px/1.4 var(--pat-mono); letter-spacing:.3px; color:var(--pat-text-muted); }
+.notif-row__chev { color:var(--pat-text-muted); align-self:center; }
+.notif-row__chev svg { width:13px; height:13px; }
+
+/* Proposal / invoice summary — InvoiceListView.swift:120-148,
+   ProposalListView.swift:120-159 */
+.summary-card {
+  padding:16px; background:var(--pat-bg-2); border-radius:var(--pat-r-xl);
+  display:flex; flex-direction:column; gap:8px;
+}
+.summary-card__top { display:flex; align-items:flex-start; gap:8px; }
+.summary-card__stamp { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+.summary-card__title { font:500 18px/1.28 var(--pat-serif); color:var(--pat-text); }
+.summary-card__right { margin-left:auto; text-align:right; display:flex; flex-direction:column; gap:2px; }
+.summary-card__amount { font:500 18px/1.28 var(--pat-serif); color:var(--pat-text); }
+.summary-card__due { font:400 10px/1.4 var(--pat-sans); color:var(--pat-text-muted); }
+.summary-card__project { font:500 12px/1.4 var(--pat-sans); color:var(--pat-text-muted); }
+
+/* generic list rows + hairlines */
+.list-row {
+  display:flex; align-items:center; gap:12px; padding:14px 24px; min-height:56px;
+  position:relative;
+}
+.list-row + .list-row::before {
+  content:''; position:absolute; top:0; left:24px; right:0; height:1px; background:var(--pat-pearl);
+}
+.list-row__label { font:400 16px/1.45 var(--pat-sans); color:var(--pat-text); flex:1 1 auto; }
+.list-row__value { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+.hr { height:1px; background:var(--pat-pearl); border:0; margin:0; }
+.hr--soft { background:rgba(139,115,85,.18); }   /* StudioHubSection.swift:391-395 */
+.section-card {
+  background:var(--pat-bg-2); border:1px solid var(--pat-pearl);
+  border-radius:var(--pat-r-xl); overflow:hidden;
+}
+.section-card__head { display:flex; align-items:center; gap:10px; padding:14px; }
+.card {
+  padding:16px; background:var(--pat-bg-2); border-radius:var(--pat-r-lg);
+}
+.card--elevated { background:var(--pat-bg); box-shadow:var(--pat-sh-md); }
+.card--outline  { background:transparent; box-shadow:inset 0 0 0 1px var(--pat-pearl); }
+
+/* --------------------------------------------------------------------------
+   14. iOS system set — return surfaces that live outside the app
+   Rendered to Apple's own metrics, NOT to Patina tokens, except the app's
+   own icon and the body copy inside a widget.
+   -------------------------------------------------------------------------- */
+.ios-dark { color-scheme:dark; }
+
+/* Lock Screen push banner */
+.lockscreen {
+  position:absolute; inset:0; background:linear-gradient(160deg,#2A2723,#151311 60%,#0D0C0B);
+  display:flex; flex-direction:column; align-items:center;
+}
+.lockscreen__clock { margin-top:96px; text-align:center; color:#fff; }
+.lockscreen__date { font:600 20px/1.2 var(--pat-sans); opacity:.85; }
+.lockscreen__time { font:300 82px/1 var(--pat-sans); letter-spacing:-2px; }
+.push-banner {
+  width:368px; padding:12px 14px; border-radius:22px;
+  background:rgba(60,56,52,.62); backdrop-filter:blur(28px); -webkit-backdrop-filter:blur(28px);
+  display:flex; gap:11px; align-items:flex-start; color:#fff;
+  box-shadow:0 8px 30px rgba(0,0,0,.35);
+}
+.push-banner__icon {
+  width:38px; height:38px; border-radius:9px; flex:0 0 auto;
+  background:var(--pat-charcoal); display:flex; align-items:center; justify-content:center;
+}
+.push-banner__copy { flex:1 1 auto; min-width:0; }
+.push-banner__app { font:600 12px/1.2 var(--pat-sans); letter-spacing:.4px;
+  text-transform:uppercase; opacity:.75; }
+.push-banner__title { font:600 15px/1.32 var(--pat-sans); margin-top:2px; }
+.push-banner__body { font:400 15px/1.32 var(--pat-sans); opacity:.92; }
+.push-banner__time { font:400 13px/1.2 var(--pat-sans); opacity:.6; flex:0 0 auto; }
+
+/* Home Screen widgets — iOS continuous corner radius is 22 at these sizes */
+.widget {
+  border-radius:22px; background:var(--pat-bg); color:var(--pat-text);
+  padding:16px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,.18);
+  display:flex; flex-direction:column;
+}
+.widget--sm { width:170px; height:170px; }
+.widget--md { width:364px; height:170px; }
+.widget__head { display:flex; align-items:center; gap:6px; }
+.widget__mark { width:16px; height:16px; border-radius:4px; background:var(--pat-charcoal);
+  display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.widget__mark .strata i { height:1px; }
+.widget__mark .strata i:nth-child(1){width:9px;}
+.widget__mark .strata i:nth-child(2){width:7px;}
+.widget__mark .strata i:nth-child(3){width:5px;}
+.widget__eyebrow { font:400 9px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+.widget__title { font:500 18px/1.24 var(--pat-serif); color:var(--pat-text); margin-top:auto; }
+.widget__meta { font:500 12px/1.4 var(--pat-sans); color:var(--pat-text-2); margin-top:4px; }
+.widget__split { display:flex; gap:14px; height:100%; }
+.widget__art { width:120px; border-radius:12px; overflow:hidden; flex:0 0 auto; background:var(--pat-bg-2); }
+.widget__art img { width:100%; height:100%; object-fit:cover; display:block; }
+
+/* Live Activity — compact pill around the Dynamic Island, plus expanded card */
+.live-pill {
+  position:absolute; top:11px; left:50%; transform:translateX(-50%);
+  height:37px; min-width:250px; border-radius:20px; background:#000; color:#fff;
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:0 14px; z-index:42;
+}
+.live-pill__mark { width:18px; height:18px; display:flex; align-items:center; justify-content:center; }
+.live-pill__label { font:500 12px/1 var(--pat-sans); opacity:.9; }
+.live-pill__value { font:400 11px/1 var(--pat-mono); letter-spacing:.4px; color:var(--pat-clay); }
+.live-card {
+  width:368px; border-radius:38px; background:#000; color:#fff; padding:18px 20px 20px;
+  display:flex; flex-direction:column; gap:12px;
+}
+.live-card__head { display:flex; align-items:center; gap:10px; }
+.live-card__app { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-clay); }
+.live-card__title { font:500 20px/1.24 var(--pat-serif); }
+.live-card__meta { font:400 13px/1.4 var(--pat-sans); opacity:.7; }
+.live-card__bar { height:4px; border-radius:2px; background:rgba(255,255,255,.18); overflow:hidden; }
+.live-card__bar > i { display:block; height:100%; background:var(--pat-clay); }
+.live-card__steps { display:flex; justify-content:space-between;
+  font:400 9px/1.4 var(--pat-mono); text-transform:uppercase; letter-spacing:.4px; opacity:.6; }
+
+/* Notification permission — Apple's exact two-button alert */
+.sys-alert-scrim { position:absolute; inset:0; background:rgba(0,0,0,.2); z-index:44;
+  display:flex; align-items:center; justify-content:center; }
+.sys-alert {
+  width:270px; border-radius:14px; overflow:hidden; text-align:center;
+  background:rgba(248,248,248,.94); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px);
+  color:#000; font-family:var(--pat-sans);
+}
+[data-scheme="dark"] .sys-alert { background:rgba(40,40,42,.94); color:#fff; }
+.sys-alert__body { padding:19px 16px 16px; }
+.sys-alert__title { font:600 17px/1.3 var(--pat-sans); }
+.sys-alert__msg { font:400 13px/1.35 var(--pat-sans); margin-top:3px; }
+.sys-alert__actions { display:flex; border-top:.5px solid rgba(60,60,67,.29); }
+[data-scheme="dark"] .sys-alert__actions,
+[data-scheme="dark"] .sys-alert__btn + .sys-alert__btn { border-color:rgba(84,84,88,.65); }
+.sys-alert__btn {
+  flex:1 1 0; padding:11px 8px; border:0; background:none;
+  font:400 17px/1.3 var(--pat-sans); color:#007AFF;
+}
+.sys-alert__btn + .sys-alert__btn { border-left:.5px solid rgba(60,60,67,.29); font-weight:600; }
+
+/* --------------------------------------------------------------------------
+   15. Deck utilities — screen sheets and callout numbers
+   These are the DECK's furniture, not the app's. Keep them visually distinct
+   from anything inside a .frame.
+   -------------------------------------------------------------------------- */
+.frame-wrap { position:relative; display:inline-block; }
+.callout-n {
+  position:absolute; z-index:60; width:24px; height:24px; border-radius:50%;
+  background:var(--pat-charcoal); color:var(--pat-off-white);
+  font:500 12px/24px var(--pat-mono); text-align:center; letter-spacing:0;
+  box-shadow:0 0 0 3px var(--pat-off-white), var(--pat-sh-sm);
+}
+.callout-n--clay { background:var(--pat-clay); }
+.callout-n--ondark { box-shadow:0 0 0 3px var(--pat-charcoal); }
+
+.sheet-table { width:100%; border-collapse:collapse; text-align:left; }
+.sheet-table caption {
+  text-align:left; padding-bottom:10px;
+  font:600 12px/1.3 var(--pat-sans); text-transform:uppercase; letter-spacing:1.5px;
+  color:var(--pat-text-muted);
+}
+.sheet-table th, .sheet-table td {
+  border-top:1px solid var(--pat-pearl); padding:9px 12px 9px 0; vertical-align:top;
+}
+.sheet-table th {
+  width:132px; font:400 10px/1.6 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); white-space:nowrap;
+}
+.sheet-table td { font:400 14px/1.5 var(--pat-sans); color:var(--pat-text); }
+.sheet-table td code, .sheet-table td .mono {
+  font:400 12px/1.5 var(--pat-mono); color:var(--pat-text-2);
+}
+.sheet-table tr:last-child th, .sheet-table tr:last-child td { border-bottom:1px solid var(--pat-pearl); }
+.sheet-table .is-new { color:var(--pat-text-link); }
+
+/* generic stacking helpers used by the screens above */
+.stack { display:flex; flex-direction:column; }
+.stack-4  > * + * { margin-top:4px; }
+.stack-8  > * + * { margin-top:8px; }
+.stack-12 > * + * { margin-top:12px; }
+.stack-16 > * + * { margin-top:16px; }
+.stack-20 > * + * { margin-top:20px; }
+.stack-24 > * + * { margin-top:24px; }
+.pad-home { padding-left:var(--pat-gutter-home); padding-right:var(--pat-gutter-home); }
+.pad-push { padding-left:var(--pat-gutter-push); padding-right:var(--pat-gutter-push); }
+.row { display:flex; align-items:center; gap:8px; }
+.row--top { align-items:flex-start; }
+.grow { flex:1 1 auto; min-width:0; }

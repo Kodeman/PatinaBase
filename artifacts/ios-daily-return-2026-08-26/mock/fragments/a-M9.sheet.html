@@ -1,0 +1,16 @@
+<div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M9 &middot; Today &mdash; engaged (James) <i>(extra)</i></caption>
+    <tr><th>Callouts</th><td><b>1</b> the block, carrying the request&rsquo;s stage &mdash; the one thing that advances without him. <b>2</b> the Next Move: the stage&rsquo;s own <code>cardTitle</code> in the <i>title</i> slot. Today that string lands in the <b>detail</b> slot under the fixed title &ldquo;See your design request&rdquo; (<code>DailyRoomView.swift:184-191</code>); A swaps them. <b>3</b> the stage&rsquo;s own subtitle, verbatim from <code>DesignRequestStatusService.swift:150-152</code>. <b>4</b> the story row. <b>5</b> the hearth hint &mdash; at engaged the app names the designer for the first time.</td></tr>
+    <tr><th>Purpose</th><td>The tier that is currently byte-identical to guest.</td></tr>
+    <tr><th>Entry points</th><td>App root.</td></tr>
+    <tr><th>Components</th><td>Existing &mdash; <code>TodayExperience.swift:80-91</code> renders this branch already; SP-07&rsquo;s one-line filter fix is what lets it run.</td></tr>
+    <tr><th>Copy</th><td><span class="mono">WHAT MOVED</span> / &ldquo;Leah Hartwell picked up your request on the 18th.&rdquo; / <span class="mono">NEXT MOVE</span> / &ldquo;You&rsquo;re matched with Leah Hartwell&rdquo; / &ldquo;You&rsquo;re working with Leah Hartwell.&rdquo; &mdash; both verbatim from the shipped stage table (<code>cardTitle</code> <code>:182-183</code>, subtitle <code>:150-151</code>).</td></tr>
+    <tr><th>Data source</th><td><code>leads</code> + <code>match_ceremonies</code> via <code>DesignRequestStatusService</code>. <code>james.okafor@example.com</code> is the one local account at this tier: lead <code>status='accepted'</code>, designer matched, 0 projects (C29).</td></tr>
+    <tr><th>States</th><td>Stage advances change the copy from the existing stage table, verbatim (<code>held &rarr; inTouch &rarr; introduced &rarr; booked &rarr; matched</code>). Terminal stages hold for 14 days from <b>last seen</b>, capped at 60 days &mdash; absence stops deleting the one card that explains his designer (F189).</td></tr>
+    <tr><th>Interactions</th><td><code>today_next_move_tapped</code> (<code>action_id: trackDesignRequest</code>).</td></tr>
+    <tr><th>Tier behaviour</th><td>Engaged only. No Active Room card: this account has no room.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The block; the decay re-anchor to last seen; the title / detail swap.</td></tr>
+    <tr><th>Drawn vs manifest</th><td>&ldquo;the 18th&rdquo; and the designer&rsquo;s surname are <i>example</i>. The monogram is drawn as <b>J</b> for the seeded account.</td></tr>
+  </table>
+</div>

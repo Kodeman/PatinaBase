@@ -1,0 +1,2258 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<base href="../">
+<title>Direction B — fragment preview</title>
+<link rel="stylesheet" href="kit.css">
+<style>
+body{margin:0;background:#DCD8D1;font-family:Inter,sans-serif;padding:28px;}
+h1{font:500 26px/1.2 'Playfair Display',serif;color:#2C2926;margin:0 0 18px;}
+h2{font:600 12px/1.3 Inter,sans-serif;text-transform:uppercase;letter-spacing:1.5px;
+   color:#5C4A3C;margin:34px 0 14px;}
+.pv-row{display:flex;flex-wrap:wrap;gap:34px 26px;align-items:flex-start;}
+.pv-slot{width:428px;}
+.pv-cap{font:400 11px/1.4 'DM Mono',monospace;text-transform:uppercase;letter-spacing:.5px;
+   color:#5C4A3C;margin:10px 0 0;text-align:center;}
+.pv-sheets{display:flex;flex-wrap:wrap;gap:26px;}
+.pv-sheet{width:720px;background:#FAF7F2;border-radius:10px;padding:18px 20px;}
+</style></head><body>
+<h1>Direction B &mdash; the Record &middot; mock fragments</h1>
+<div class="pv-row">
+<div class="pv-slot" data-mock="b-M1"><!-- b-M1 — Direction B · M1 · Today, activeProject (light).
+     Kit additions live in the scoped block below; every one is named in the report-back. -->
+<div class="frame-wrap bx-m1">
+<style>
+/* Direction B kit additions — scoped to .bx-m1. Candidates for KIT.md §4.
+   .tabbar (B-1) · .rec (the record) · .seat (designer seat) · .rail (house rail)
+   · .sec (section eyebrow) · .doorrow (a labelled door row) */
+.bx-m1 .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:30;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m1 .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m1 .tabbar__item--active{color:var(--pat-text);}
+.bx-m1 .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m1 .tabbar__comp .strata{transform:scale(.8);}
+.bx-m1 .pad-tabbar{height:83px;}
+.bx-m1 .home-header__title--greet{font:500 28px/1.16 var(--pat-serif);}
+.bx-m1 .rec{margin:16px var(--pat-gutter-home) 0;background:var(--pat-bg-2);
+  border-radius:var(--pat-r-xl);padding:10px 16px 12px;}
+.bx-m1 .rec__head{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-text-muted);padding-bottom:8px;}
+.bx-m1 .rec__eyebrow{display:block;font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.5px;color:var(--pat-text-2);padding:6px 0 2px;border-top:1px solid var(--pat-pearl);}
+.bx-m1 .rec__row{display:flex;align-items:center;gap:12px;min-height:56px;}
+.bx-m1 .rec__row + .rec__row{border-top:1px solid var(--pat-pearl);}
+.bx-m1 .rec__title{font:500 14px/1.4 var(--pat-sans);color:var(--pat-text);flex:1 1 auto;min-width:0;}
+.bx-m1 .rec__state{font:400 10px/1.5 var(--pat-mono);text-transform:uppercase;letter-spacing:.4px;
+  color:var(--pat-text-muted);text-align:right;flex:0 0 auto;max-width:126px;}
+.bx-m1 .rec__state--late{color:var(--pat-error);}
+.bx-m1 .rec__new{color:var(--pat-clay);}
+.bx-m1 .rec__more{display:block;padding-top:8px;border-top:1px solid var(--pat-pearl);
+  font:500 15px/1.3 var(--pat-sans);color:var(--pat-text-link);}
+.bx-m1 .seat{margin:14px var(--pat-gutter-home) 0;background:var(--pat-bg-2);border-radius:var(--pat-r-xl);
+  padding:10px 14px 10px 16px;display:flex;align-items:center;gap:12px;}
+.bx-m1 .seat__mono{width:44px;height:44px;border-radius:50%;background:rgba(196,165,123,.15);
+  color:var(--pat-clay-deep);display:flex;align-items:center;justify-content:center;
+  font:500 15px/1 var(--pat-serif);letter-spacing:.5px;flex:0 0 auto;}
+.bx-m1 .seat__copy{flex:1 1 auto;min-width:0;}
+.bx-m1 .seat__name{display:block;font:600 18px/1.3 var(--pat-sans);color:var(--pat-text);}
+.bx-m1 .seat__meta{display:block;font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-muted);padding-top:2px;}
+.bx-m1 .sec{display:block;padding:12px var(--pat-gutter-home) 0;font:400 10px/1.4 var(--pat-mono);
+  text-transform:uppercase;letter-spacing:.5px;color:var(--pat-text-muted);}
+.bx-m1 .rail{display:flex;gap:12px;overflow-x:hidden;padding:6px var(--pat-gutter-home) 0;}
+.bx-m1 .rail__card{flex:0 0 240px;height:150px;border-radius:var(--pat-r-xl);overflow:hidden;
+  background:var(--pat-bg-2);display:flex;flex-direction:column;}
+.bx-m1 .rail__art{height:48px;}
+.bx-m1 .rail__body{padding:8px 14px;}
+.bx-m1 .rail__name{display:block;font:500 18px/1.28 var(--pat-serif);color:var(--pat-text);}
+.bx-m1 .rail__meta{display:block;font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-2);padding-top:3px;}
+.bx-m1 .rail__add{flex:0 0 128px;height:150px;border-radius:var(--pat-r-xl);border:1px dashed var(--pat-pearl);
+  display:flex;align-items:center;justify-content:center;font:500 14px/1.4 var(--pat-sans);
+  color:var(--pat-text-link);}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5c0 4-1.5 5.4-2.2 6.1a.6.6 0 0 0 .4 1h14.6a.6.6 0 0 0 .4-1c-.7-.7-2.2-2.1-2.2-6.1A5.5 5.5 0 0 0 12 3Z"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></g></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="home-header">
+        <div class="home-header__stack">
+          <div class="home-header__date">Wednesday &middot; Aug 26</div>
+          <div class="home-header__titlerow">
+            <span class="home-header__title home-header__title--greet">Good morning.</span>
+          </div>
+        </div>
+        <div class="home-header__actions">
+          <span class="icon-btn"><svg><use href="#i-bell"/></svg><span class="icon-btn__dot"></span></span>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div class="rec__head">Since you were last here &middot; Thu, Aug 20</div>
+        <span class="rec__eyebrow" style="border-top:0;padding-top:0">Needs you</span>
+        <div class="rec__row">
+          <span class="rec__title">Leah asked about the rug colour.</span>
+          <span class="rec__state">asked Aug 22<br><span class="rec__state--late">overdue</span></span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Leah sent a proposal to review.</span>
+          <span class="rec__state">by Sep 8</span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Your invoice is due.</span>
+          <span class="rec__state">$4,250.00 &middot; Sep 1</span>
+        </div>
+        <span class="rec__eyebrow">Moved</span>
+        <div class="rec__row">
+          <span class="rec__title">Your dining table shipped.</span>
+          <span class="rec__state">Aug 25 &middot; <span class="rec__new">new</span></span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Leah added two pieces to the proposal.</span>
+          <span class="rec__state">Aug 24</span>
+        </div>
+        <span class="rec__more">See all &rarr;</span>
+      </div>
+
+      <div class="seat">
+        <span class="seat__mono">LH</span>
+        <span class="seat__copy">
+          <span class="seat__name">Leah Hartwell</span>
+          <span class="seat__meta">Hartwell Studio &middot; Aspen Loft Refresh</span>
+        </span>
+        <span class="btn btn--secondary btn--pill-sm">Message</span>
+      </div>
+
+      <span class="sec">Your house</span>
+      <div class="rail">
+        <div class="rail__card">
+          <span class="rail__art g-earth"></span>
+          <span class="rail__body">
+            <span class="rail__name">Dining Room</span>
+            <span class="rail__meta">$18,400 of $32,000 committed</span>
+          </span>
+        </div>
+        <div class="rail__card">
+          <span class="rail__art g-warm"></span>
+          <span class="rail__body">
+            <span class="rail__name">Living Room</span>
+            <span class="rail__meta">3 saved pieces &middot; budget $9,000</span>
+          </span>
+        </div>
+        <span class="rail__add">Add a room</span>
+      </div>
+
+      <div class="story-card">
+        <span class="story-card__pill">Aug 25 &middot; 4 min</span>
+        <span class="story-card__body">
+          <span class="story-card__tag">Maker spotlight</span>
+          <span class="story-card__title">The Grain Whisperer of Maine</span>
+          <span class="story-card__sub">Jonathan Chilton on 40 years of listening to wood</span>
+        </span>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item tabbar__item--active">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:126px;left:2px">1</span>
+<span class="callout-n" style="top:210px;left:2px">2</span>
+<span class="callout-n callout-n--clay" style="top:614px;left:2px">3</span>
+<span class="callout-n" style="top:700px;left:2px">4</span>
+<span class="callout-n" style="bottom:44px;right:2px">6</span>
+</div>
+<p class="pv-cap">M1 &middot; Today, activeProject</p></div>
+<div class="pv-slot" data-mock="b-M1d"><!-- b-M1d — Direction B · M1d · Today, activeProject (DARK variant of b-M1).
+     Kit additions live in the scoped block below; every one is named in the report-back. -->
+<div class="frame-wrap bx-m1d">
+<style>
+/* Direction B kit additions — scoped to .bx-m1d. Candidates for KIT.md §4.
+   .tabbar (B-1) · .rec (the record) · .seat (designer seat) · .rail (house rail)
+   · .sec (section eyebrow) · .doorrow (a labelled door row) */
+.bx-m1d .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:30;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m1d .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m1d .tabbar__item--active{color:var(--pat-text);}
+.bx-m1d .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m1d .tabbar__comp .strata{transform:scale(.8);}
+.bx-m1d .pad-tabbar{height:83px;}
+.bx-m1d .home-header__title--greet{font:500 28px/1.16 var(--pat-serif);}
+.bx-m1d .rec{margin:16px var(--pat-gutter-home) 0;background:var(--pat-bg-2);
+  border-radius:var(--pat-r-xl);padding:10px 16px 12px;}
+.bx-m1d .rec__head{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-text-muted);padding-bottom:8px;}
+.bx-m1d .rec__eyebrow{display:block;font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.5px;color:var(--pat-text-2);padding:6px 0 2px;border-top:1px solid var(--pat-pearl);}
+.bx-m1d .rec__row{display:flex;align-items:center;gap:12px;min-height:56px;}
+.bx-m1d .rec__row + .rec__row{border-top:1px solid var(--pat-pearl);}
+.bx-m1d .rec__title{font:500 14px/1.4 var(--pat-sans);color:var(--pat-text);flex:1 1 auto;min-width:0;}
+.bx-m1d .rec__state{font:400 10px/1.5 var(--pat-mono);text-transform:uppercase;letter-spacing:.4px;
+  color:var(--pat-text-muted);text-align:right;flex:0 0 auto;max-width:126px;}
+.bx-m1d .rec__state--late{color:var(--pat-error);}
+.bx-m1d .rec__new{color:var(--pat-clay);}
+.bx-m1d .rec__more{display:block;padding-top:8px;border-top:1px solid var(--pat-pearl);
+  font:500 15px/1.3 var(--pat-sans);color:var(--pat-text-link);}
+.bx-m1d .seat{margin:14px var(--pat-gutter-home) 0;background:var(--pat-bg-2);border-radius:var(--pat-r-xl);
+  padding:10px 14px 10px 16px;display:flex;align-items:center;gap:12px;}
+.bx-m1d .seat__mono{width:44px;height:44px;border-radius:50%;background:rgba(196,165,123,.15);
+  color:var(--pat-clay-deep);display:flex;align-items:center;justify-content:center;
+  font:500 15px/1 var(--pat-serif);letter-spacing:.5px;flex:0 0 auto;}
+.bx-m1d .seat__copy{flex:1 1 auto;min-width:0;}
+.bx-m1d .seat__name{display:block;font:600 18px/1.3 var(--pat-sans);color:var(--pat-text);}
+.bx-m1d .seat__meta{display:block;font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-muted);padding-top:2px;}
+.bx-m1d .sec{display:block;padding:12px var(--pat-gutter-home) 0;font:400 10px/1.4 var(--pat-mono);
+  text-transform:uppercase;letter-spacing:.5px;color:var(--pat-text-muted);}
+.bx-m1d .rail{display:flex;gap:12px;overflow-x:hidden;padding:6px var(--pat-gutter-home) 0;}
+.bx-m1d .rail__card{flex:0 0 240px;height:150px;border-radius:var(--pat-r-xl);overflow:hidden;
+  background:var(--pat-bg-2);display:flex;flex-direction:column;}
+.bx-m1d .rail__art{height:48px;}
+.bx-m1d .rail__body{padding:8px 14px;}
+.bx-m1d .rail__name{display:block;font:500 18px/1.28 var(--pat-serif);color:var(--pat-text);}
+.bx-m1d .rail__meta{display:block;font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-2);padding-top:3px;}
+.bx-m1d .rail__add{flex:0 0 128px;height:150px;border-radius:var(--pat-r-xl);border:1px dashed var(--pat-pearl);
+  display:flex;align-items:center;justify-content:center;font:500 14px/1.4 var(--pat-sans);
+  color:var(--pat-text-link);}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5c0 4-1.5 5.4-2.2 6.1a.6.6 0 0 0 .4 1h14.6a.6.6 0 0 0 .4-1c-.7-.7-2.2-2.1-2.2-6.1A5.5 5.5 0 0 0 12 3Z"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></g></symbol></svg>
+
+<div class="frame" data-scheme="dark" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="home-header">
+        <div class="home-header__stack">
+          <div class="home-header__date">Wednesday &middot; Aug 26</div>
+          <div class="home-header__titlerow">
+            <span class="home-header__title home-header__title--greet">Good morning.</span>
+          </div>
+        </div>
+        <div class="home-header__actions">
+          <span class="icon-btn"><svg><use href="#i-bell"/></svg><span class="icon-btn__dot"></span></span>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div class="rec__head">Since you were last here &middot; Thu, Aug 20</div>
+        <span class="rec__eyebrow" style="border-top:0;padding-top:0">Needs you</span>
+        <div class="rec__row">
+          <span class="rec__title">Leah asked about the rug colour.</span>
+          <span class="rec__state">asked Aug 22<br><span class="rec__state--late">overdue</span></span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Leah sent a proposal to review.</span>
+          <span class="rec__state">by Sep 8</span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Your invoice is due.</span>
+          <span class="rec__state">$4,250.00 &middot; Sep 1</span>
+        </div>
+        <span class="rec__eyebrow">Moved</span>
+        <div class="rec__row">
+          <span class="rec__title">Your dining table shipped.</span>
+          <span class="rec__state">Aug 25 &middot; <span class="rec__new">new</span></span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Leah added two pieces to the proposal.</span>
+          <span class="rec__state">Aug 24</span>
+        </div>
+        <span class="rec__more">See all &rarr;</span>
+      </div>
+
+      <div class="seat">
+        <span class="seat__mono">LH</span>
+        <span class="seat__copy">
+          <span class="seat__name">Leah Hartwell</span>
+          <span class="seat__meta">Hartwell Studio &middot; Aspen Loft Refresh</span>
+        </span>
+        <span class="btn btn--secondary btn--pill-sm">Message</span>
+      </div>
+
+      <span class="sec">Your house</span>
+      <div class="rail">
+        <div class="rail__card">
+          <span class="rail__art g-earth"></span>
+          <span class="rail__body">
+            <span class="rail__name">Dining Room</span>
+            <span class="rail__meta">$18,400 of $32,000 committed</span>
+          </span>
+        </div>
+        <div class="rail__card">
+          <span class="rail__art g-warm"></span>
+          <span class="rail__body">
+            <span class="rail__name">Living Room</span>
+            <span class="rail__meta">3 saved pieces &middot; budget $9,000</span>
+          </span>
+        </div>
+        <span class="rail__add">Add a room</span>
+      </div>
+
+      <div class="story-card">
+        <span class="story-card__pill">Aug 25 &middot; 4 min</span>
+        <span class="story-card__body">
+          <span class="story-card__tag">Maker spotlight</span>
+          <span class="story-card__title">The Grain Whisperer of Maine</span>
+          <span class="story-card__sub">Jonathan Chilton on 40 years of listening to wood</span>
+        </span>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item tabbar__item--active">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n callout-n--ondark" style="top:126px;left:2px">1</span>
+<span class="callout-n callout-n--ondark" style="top:210px;left:2px">2</span>
+<span class="callout-n callout-n--clay callout-n--ondark" style="top:614px;left:2px">3</span>
+<span class="callout-n callout-n--ondark" style="top:700px;left:2px">4</span>
+<span class="callout-n callout-n--ondark" style="bottom:44px;right:2px">6</span>
+</div>
+<p class="pv-cap">M1d &middot; Today, activeProject &middot; dark</p></div>
+<div class="pv-slot" data-mock="b-M2"><!-- b-M2 — Direction B · M2 · Today, discovering (light), 9:10pm.
+     Kit additions scoped to .bx; named in the report-back. -->
+<div class="frame-wrap bx-m2">
+<style>
+.bx-m2 .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:30;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m2 .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m2 .tabbar__item--active{color:var(--pat-text);}
+.bx-m2 .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m2 .tabbar__comp .strata{transform:scale(.8);}
+.bx-m2 .pad-tabbar{height:83px;}
+.bx-m2 .home-header__title--greet{font:500 28px/1.16 var(--pat-serif);}
+.bx-m2 .rec{margin:16px var(--pat-gutter-home) 0;background:var(--pat-bg-2);
+  border-radius:var(--pat-r-xl);padding:10px 16px 12px;}
+.bx-m2 .rec__head{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-text-muted);padding-bottom:8px;}
+.bx-m2 .rec__eyebrow{display:block;font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.5px;color:var(--pat-text-2);padding:0 0 2px;}
+.bx-m2 .rec__row{display:flex;align-items:center;gap:12px;min-height:56px;}
+.bx-m2 .rec__row + .rec__row{border-top:1px solid var(--pat-pearl);}
+.bx-m2 .rec__title{font:500 14px/1.4 var(--pat-sans);color:var(--pat-text);flex:1 1 auto;min-width:0;}
+.bx-m2 .rec__state{font:400 10px/1.5 var(--pat-mono);text-transform:uppercase;letter-spacing:.4px;
+  color:var(--pat-text-muted);text-align:right;flex:0 0 auto;max-width:96px;}
+.bx-m2 .rec__new{color:var(--pat-clay);}
+.bx-m2 .sec{display:block;padding:12px var(--pat-gutter-home) 0;font:400 10px/1.4 var(--pat-mono);
+  text-transform:uppercase;letter-spacing:.5px;color:var(--pat-text-muted);}
+.bx-m2 .room-card--slim{margin-top:8px;}
+.bx-m2 .room-card--slim .room-card__art{height:48px;}
+.bx-m2 .room-card--slim .room-card__body{padding:12px 16px;}
+.bx-m2 .addrow{padding:6px var(--pat-gutter-home) 0;}
+.bx-m2 .railp{display:flex;gap:12px;overflow-x:hidden;padding:6px var(--pat-gutter-home) 0;}
+.bx-m2 .railp .product-card{flex:0 0 160px;}
+.bx-m2 .railp .product-card__art{height:84px;}
+.bx-m2 .railp .product-card__name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bx-m2 .railnote{display:block;padding:10px var(--pat-gutter-home) 0;
+  font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m2 .doorrow{margin:14px var(--pat-gutter-home) 0;background:var(--pat-bg-2);
+  border-radius:var(--pat-r-card14);padding:13px 16px;display:flex;align-items:center;gap:12px;}
+.bx-m2 .doorrow__title{font:500 18px/1.28 var(--pat-serif);color:var(--pat-text);flex:0 0 auto;}
+.bx-m2 .doorrow__meta{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.4px;
+  color:var(--pat-text-muted);flex:1 1 auto;text-align:right;}
+.bx-m2 .doorrow__chev{color:var(--pat-text-muted);display:flex;flex:0 0 auto;}
+.bx-m2 .doorrow__chev svg{width:13px;height:13px;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5c0 4-1.5 5.4-2.2 6.1a.6.6 0 0 0 .4 1h14.6a.6.6 0 0 0 .4-1c-.7-.7-2.2-2.1-2.2-6.1A5.5 5.5 0 0 0 12 3Z"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></g></symbol><symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="home-header">
+        <div class="home-header__stack">
+          <div class="home-header__date">Wednesday &middot; Aug 26</div>
+          <div class="home-header__titlerow">
+            <span class="home-header__title home-header__title--greet">Good evening.</span>
+          </div>
+        </div>
+        <div class="home-header__actions">
+          <span class="icon-btn"><svg><use href="#i-bell"/></svg></span>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div class="rec__head">Since you were last here &middot; Thu, Aug 20</div>
+        <span class="rec__eyebrow">Moved</span>
+        <div class="rec__row">
+          <span class="rec__title">The Brass Arc Floor Lamp you saved is $100 less than when you saved it.</span>
+          <span class="rec__state">Aug 24 &middot; <span class="rec__new">new</span></span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">A new story from the workshop.</span>
+          <span class="rec__state">Aug 25</span>
+        </div>
+      </div>
+
+      <span class="sec">Your house</span>
+      <div class="room-card room-card--slim">
+        <div class="room-card__art g-warm">
+          <span class="room-card__chip">Typed, not scanned</span>
+        </div>
+        <div class="room-card__body">
+          <span class="room-card__copy">
+            <span class="room-card__name">Living Room</span>
+            <span class="room-card__meta">18 &times; 14 ft &middot; 252 sq ft</span>
+            <span class="room-card__meta">3 saved pieces &middot; budget $9,000</span>
+            <span class="room-card__latest">You added the Brass Arc Floor Lamp on Tuesday</span>
+          </span>
+          <span class="room-card__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+      </div>
+      <div class="addrow"><span class="btn btn--ghost btn--pill-sm">+ Add a room</span></div>
+
+      <span class="sec">New this week</span>
+      <div class="railp">
+        <div class="product-card">
+          <div class="product-card__art"><img src="img/live-edge-coffee-table.jpg" alt="Live-Edge Coffee Table"></div>
+          <div class="product-card__info">
+            <span class="product-card__maker">Heritage Lumber</span>
+            <span class="product-card__name">Live-Edge Coffee Table</span>
+            <span class="product-card__price">$2,100</span>
+          </div>
+        </div>
+        <div class="product-card">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-metal">
+              <span class="tile-placeholder__label">Local Potter &middot; Glazed stoneware</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__maker">Local Potter</span>
+            <span class="product-card__name">Ceramic Table Lamp</span>
+            <span class="product-card__price">$420</span>
+          </div>
+        </div>
+        <div class="product-card">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-metal">
+              <span class="tile-placeholder__label">Schoolhouse &middot; Brass</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__maker">Schoolhouse</span>
+            <span class="product-card__name">Brass Arc Floor Lamp</span>
+            <span class="product-card__price">$890</span>
+          </div>
+        </div>
+      </div>
+      <span class="railnote">Three pieces joined Patina this week.</span>
+
+      <div class="doorrow">
+        <span class="doorrow__title">Saved</span>
+        <span class="doorrow__meta">3 saved &middot; Brass Arc Floor Lamp, Tuesday</span>
+        <span class="doorrow__chev"><svg><use href="#i-chev-r"/></svg></span>
+      </div>
+
+      <div class="story-card">
+        <span class="story-card__pill">Aug 25 &middot; 4 min</span>
+        <span class="story-card__body">
+          <span class="story-card__tag">Maker spotlight</span>
+          <span class="story-card__title">The Grain Whisperer of Maine</span>
+          <span class="story-card__sub">Jonathan Chilton on 40 years of listening to wood</span>
+        </span>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item tabbar__item--active">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:126px;left:2px">1</span>
+<span class="callout-n" style="top:210px;left:2px">2</span>
+<span class="callout-n callout-n--clay" style="top:398px;left:2px">3</span>
+<span class="callout-n" style="top:606px;left:2px">4</span>
+
+<span class="callout-n" style="bottom:44px;right:2px">7</span>
+</div>
+<p class="pv-cap">M2 &middot; Today, discovering</p></div>
+<div class="pv-slot" data-mock="b-M2d"><!-- b-M2d — Direction B · M2d · Today, discovering (DARK variant of b-M2).
+     Kit additions scoped to .bx; named in the report-back. -->
+<div class="frame-wrap bx-m2d">
+<style>
+.bx-m2d .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:30;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m2d .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m2d .tabbar__item--active{color:var(--pat-text);}
+.bx-m2d .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m2d .tabbar__comp .strata{transform:scale(.8);}
+.bx-m2d .pad-tabbar{height:83px;}
+.bx-m2d .home-header__title--greet{font:500 28px/1.16 var(--pat-serif);}
+.bx-m2d .rec{margin:16px var(--pat-gutter-home) 0;background:var(--pat-bg-2);
+  border-radius:var(--pat-r-xl);padding:10px 16px 12px;}
+.bx-m2d .rec__head{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-text-muted);padding-bottom:8px;}
+.bx-m2d .rec__eyebrow{display:block;font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.5px;color:var(--pat-text-2);padding:0 0 2px;}
+.bx-m2d .rec__row{display:flex;align-items:center;gap:12px;min-height:56px;}
+.bx-m2d .rec__row + .rec__row{border-top:1px solid var(--pat-pearl);}
+.bx-m2d .rec__title{font:500 14px/1.4 var(--pat-sans);color:var(--pat-text);flex:1 1 auto;min-width:0;}
+.bx-m2d .rec__state{font:400 10px/1.5 var(--pat-mono);text-transform:uppercase;letter-spacing:.4px;
+  color:var(--pat-text-muted);text-align:right;flex:0 0 auto;max-width:96px;}
+.bx-m2d .rec__new{color:var(--pat-clay);}
+.bx-m2d .sec{display:block;padding:12px var(--pat-gutter-home) 0;font:400 10px/1.4 var(--pat-mono);
+  text-transform:uppercase;letter-spacing:.5px;color:var(--pat-text-muted);}
+.bx-m2d .room-card--slim{margin-top:8px;}
+.bx-m2d .room-card--slim .room-card__art{height:48px;}
+.bx-m2d .room-card--slim .room-card__body{padding:12px 16px;}
+.bx-m2d .addrow{padding:6px var(--pat-gutter-home) 0;}
+.bx-m2d .railp{display:flex;gap:12px;overflow-x:hidden;padding:6px var(--pat-gutter-home) 0;}
+.bx-m2d .railp .product-card{flex:0 0 160px;}
+.bx-m2d .railp .product-card__art{height:84px;}
+.bx-m2d .railp .product-card__name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bx-m2d .railnote{display:block;padding:10px var(--pat-gutter-home) 0;
+  font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m2d .doorrow{margin:14px var(--pat-gutter-home) 0;background:var(--pat-bg-2);
+  border-radius:var(--pat-r-card14);padding:13px 16px;display:flex;align-items:center;gap:12px;}
+.bx-m2d .doorrow__title{font:500 18px/1.28 var(--pat-serif);color:var(--pat-text);flex:0 0 auto;}
+.bx-m2d .doorrow__meta{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.4px;
+  color:var(--pat-text-muted);flex:1 1 auto;text-align:right;}
+.bx-m2d .doorrow__chev{color:var(--pat-text-muted);display:flex;flex:0 0 auto;}
+.bx-m2d .doorrow__chev svg{width:13px;height:13px;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5c0 4-1.5 5.4-2.2 6.1a.6.6 0 0 0 .4 1h14.6a.6.6 0 0 0 .4-1c-.7-.7-2.2-2.1-2.2-6.1A5.5 5.5 0 0 0 12 3Z"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></g></symbol><symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol></svg>
+
+<div class="frame" data-scheme="dark" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="home-header">
+        <div class="home-header__stack">
+          <div class="home-header__date">Wednesday &middot; Aug 26</div>
+          <div class="home-header__titlerow">
+            <span class="home-header__title home-header__title--greet">Good evening.</span>
+          </div>
+        </div>
+        <div class="home-header__actions">
+          <span class="icon-btn"><svg><use href="#i-bell"/></svg></span>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div class="rec__head">Since you were last here &middot; Thu, Aug 20</div>
+        <span class="rec__eyebrow">Moved</span>
+        <div class="rec__row">
+          <span class="rec__title">The Brass Arc Floor Lamp you saved is $100 less than when you saved it.</span>
+          <span class="rec__state">Aug 24 &middot; <span class="rec__new">new</span></span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">A new story from the workshop.</span>
+          <span class="rec__state">Aug 25</span>
+        </div>
+      </div>
+
+      <span class="sec">Your house</span>
+      <div class="room-card room-card--slim">
+        <div class="room-card__art g-warm">
+          <span class="room-card__chip">Typed, not scanned</span>
+        </div>
+        <div class="room-card__body">
+          <span class="room-card__copy">
+            <span class="room-card__name">Living Room</span>
+            <span class="room-card__meta">18 &times; 14 ft &middot; 252 sq ft</span>
+            <span class="room-card__meta">3 saved pieces &middot; budget $9,000</span>
+            <span class="room-card__latest">You added the Brass Arc Floor Lamp on Tuesday</span>
+          </span>
+          <span class="room-card__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+      </div>
+      <div class="addrow"><span class="btn btn--ghost btn--pill-sm">+ Add a room</span></div>
+
+      <span class="sec">New this week</span>
+      <div class="railp">
+        <div class="product-card">
+          <div class="product-card__art"><img src="img/live-edge-coffee-table.jpg" alt="Live-Edge Coffee Table"></div>
+          <div class="product-card__info">
+            <span class="product-card__maker">Heritage Lumber</span>
+            <span class="product-card__name">Live-Edge Coffee Table</span>
+            <span class="product-card__price">$2,100</span>
+          </div>
+        </div>
+        <div class="product-card">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-metal">
+              <span class="tile-placeholder__label">Local Potter &middot; Glazed stoneware</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__maker">Local Potter</span>
+            <span class="product-card__name">Ceramic Table Lamp</span>
+            <span class="product-card__price">$420</span>
+          </div>
+        </div>
+        <div class="product-card">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-metal">
+              <span class="tile-placeholder__label">Schoolhouse &middot; Brass</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__maker">Schoolhouse</span>
+            <span class="product-card__name">Brass Arc Floor Lamp</span>
+            <span class="product-card__price">$890</span>
+          </div>
+        </div>
+      </div>
+      <span class="railnote">Three pieces joined Patina this week.</span>
+
+      <div class="doorrow">
+        <span class="doorrow__title">Saved</span>
+        <span class="doorrow__meta">3 saved &middot; Brass Arc Floor Lamp, Tuesday</span>
+        <span class="doorrow__chev"><svg><use href="#i-chev-r"/></svg></span>
+      </div>
+
+      <div class="story-card">
+        <span class="story-card__pill">Aug 25 &middot; 4 min</span>
+        <span class="story-card__body">
+          <span class="story-card__tag">Maker spotlight</span>
+          <span class="story-card__title">The Grain Whisperer of Maine</span>
+          <span class="story-card__sub">Jonathan Chilton on 40 years of listening to wood</span>
+        </span>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item tabbar__item--active">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n callout-n--ondark" style="top:126px;left:2px">1</span>
+<span class="callout-n callout-n--ondark" style="top:210px;left:2px">2</span>
+<span class="callout-n callout-n--clay callout-n--ondark" style="top:398px;left:2px">3</span>
+<span class="callout-n callout-n--ondark" style="top:606px;left:2px">4</span>
+
+<span class="callout-n callout-n--ondark" style="bottom:44px;right:2px">7</span>
+</div>
+<p class="pv-cap">M2d &middot; Today, discovering &middot; dark</p></div>
+<div class="pv-slot" data-mock="b-M3"><!-- b-M3 — Direction B · M3 · Piece detail with the purchase acts (light).
+     Gate passed: price, seller of record, dimensions, lead time, brand, verified image. -->
+<div class="frame-wrap bx-m3">
+<style>
+.bx-m3 .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:31;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m3 .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m3 .tabbar__item--active{color:var(--pat-text);}
+.bx-m3 .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m3 .tabbar__comp .strata{transform:scale(.8);}
+.bx-m3 .pad-tabbar{height:180px;}
+.bx-m3 .detail-body{padding:18px 24px 0;}
+.bx-m3 .detail-materials{padding-bottom:10px;}
+.bx-m3 .detail-maker{padding-bottom:4px;}
+.bx-m3 .detail-name{padding-bottom:2px;}
+.bx-m3 .detail-price-row{padding-bottom:10px;}
+.bx-m3 .spec-row{padding:8px 0;}
+.bx-m3 .spec-list{margin-bottom:12px;}
+.bx-m3 .detail-desc{font:400 14px/1.5 var(--pat-sans);color:var(--pat-text-2);margin:0;padding-bottom:12px;}
+.bx-m3 .fitline{background:var(--pat-bg-2);border-radius:var(--pat-r-lg);padding:12px 14px;
+  font:400 14px/1.45 var(--pat-sans);color:var(--pat-text);margin-bottom:18px;}
+.bx-m3 .sold-by{font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-muted);padding-bottom:18px;}
+.bx-m3 .detail-bar--pair{bottom:83px;padding:12px 20px 12px 24px;gap:8px;}
+.bx-m3 .detail-bar--pair .btn--primary{flex:1 1 auto;}
+.bx-m3 .detail-bar--pair .btn--ghost{flex:0 0 auto;white-space:nowrap;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol><symbol id="i-qcircle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.8c0 1.7-2.4 2-2.4 3.6"/><circle cx="12" cy="17.2" r=".9" fill="currentColor" stroke="none"/></g></symbol><symbol id="i-share" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6v11"/><path d="M8.4 7.2 12 3.6l3.6 3.6"/><path d="M6 12.4H5a1.6 1.6 0 0 0-1.6 1.6v5a1.6 1.6 0 0 0 1.6 1.6h14a1.6 1.6 0 0 0 1.6-1.6v-5a1.6 1.6 0 0 0-1.6-1.6h-1"/></g></symbol><symbol id="i-heart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" d="M12 20s-7.4-4.5-7.4-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.4 2.6C19.4 15.5 12 20 12 20Z"/></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="detail-hero">
+        <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table">
+        <div class="detail-hero__bar">
+          <span class="circ-btn circ-btn--lg"><svg><use href="#i-chev-l"/></svg></span>
+          <span class="spacer"></span>
+          <span class="circ-btn circ-btn--lg"><svg><use href="#i-qcircle"/></svg></span>
+          <span class="circ-btn circ-btn--lg"><svg><use href="#i-share"/></svg></span>
+          <span class="circ-btn circ-btn--lg"><svg><use href="#i-heart"/></svg></span>
+        </div>
+      </div>
+
+      <div class="detail-body">
+        <span class="detail-maker">Nordic Atelier</span>
+        <span class="detail-name">Heirloom Oak Dining Table</span>
+        <span class="detail-materials">Quarter-sawn white oak &middot; Hand-rubbed tung oil</span>
+        <div class="detail-price-row"><span class="detail-price">$4,200</span></div>
+
+        <div class="spec-list">
+          <div class="spec-row">
+            <span class="spec-row__key">Dimensions</span>
+            <span class="spec-row__val">84&Prime; W &times; 38&Prime; D &times; 30&Prime; H</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row__key">Lead time</span>
+            <span class="spec-row__val">Made to order &middot; ships in 10&ndash;12 weeks</span>
+          </div>
+        </div>
+
+        <p class="detail-desc">Solid quarter-sawn white oak with hand-rubbed tung oil finish. Each
+          table is made to order by a three-person workshop outside Aarhus.</p>
+
+        <div class="fitline">Your Living Room&#8217;s longest wall is 18 ft. This table is 7 ft.</div>
+
+        <div class="prov-head"><span class="mono-label">Provenance</span></div>
+        <div class="badge-row">
+          <span class="prov-badge">Made to order</span>
+          <span class="prov-badge">Solid hardwood</span>
+          <span class="prov-badge">Aarhus, Denmark</span>
+        </div>
+
+        <div class="maker-story">
+          <div class="maker-story__head">
+            <span class="maker-story__avatar"></span>
+            <span class="maker-story__name">Nordic Atelier &middot; Aarhus</span>
+          </div>
+          <p class="maker-story__quote">Three of us build every table in the room it was drawn in.</p>
+        </div>
+
+        <p class="sold-by">Sold and shipped by Patina. Delivery, damage and returns are handled by
+          Patina support, with your designer copied when you have one.</p>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="detail-bar detail-bar--pair">
+      <span class="btn btn--primary">Buy &mdash; $4,200</span>
+      <span class="btn btn--ghost btn--pill-sm">Add to room</span>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item tabbar__item--active">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n callout-n--ondark" style="top:120px;left:2px">1</span>
+<span class="callout-n" style="top:352px;left:2px">2</span>
+<span class="callout-n" style="top:440px;left:2px">5</span>
+<span class="callout-n callout-n--clay" style="top:492px;left:2px">6</span>
+<span class="callout-n" style="top:578px;left:2px">7</span>
+<span class="callout-n callout-n--clay" style="top:654px;left:2px">8</span>
+<span class="callout-n" style="bottom:110px;right:2px">11</span>
+</div>
+<p class="pv-cap">M3 &middot; Piece detail, purchase acts</p></div>
+<div class="pv-slot" data-mock="b-M3d"><!-- b-M3d — Direction B · M3d · Piece detail (DARK variant of b-M3).
+     Gate passed: price, seller of record, dimensions, lead time, brand, verified image. -->
+<div class="frame-wrap bx-m3d">
+<style>
+.bx-m3d .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:31;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m3d .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m3d .tabbar__item--active{color:var(--pat-text);}
+.bx-m3d .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m3d .tabbar__comp .strata{transform:scale(.8);}
+.bx-m3d .pad-tabbar{height:180px;}
+.bx-m3d .detail-body{padding:18px 24px 0;}
+.bx-m3d .detail-materials{padding-bottom:10px;}
+.bx-m3d .detail-maker{padding-bottom:4px;}
+.bx-m3d .detail-name{padding-bottom:2px;}
+.bx-m3d .detail-price-row{padding-bottom:10px;}
+.bx-m3d .spec-row{padding:8px 0;}
+.bx-m3d .spec-list{margin-bottom:12px;}
+.bx-m3d .detail-desc{font:400 14px/1.5 var(--pat-sans);color:var(--pat-text-2);margin:0;padding-bottom:12px;}
+.bx-m3d .fitline{background:var(--pat-bg-2);border-radius:var(--pat-r-lg);padding:12px 14px;
+  font:400 14px/1.45 var(--pat-sans);color:var(--pat-text);margin-bottom:18px;}
+.bx-m3d .sold-by{font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-muted);padding-bottom:18px;}
+.bx-m3d .detail-bar--pair{bottom:83px;padding:12px 20px 12px 24px;gap:8px;}
+.bx-m3d .detail-bar--pair .btn--primary{flex:1 1 auto;}
+.bx-m3d .detail-bar--pair .btn--ghost{flex:0 0 auto;white-space:nowrap;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol><symbol id="i-qcircle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.8c0 1.7-2.4 2-2.4 3.6"/><circle cx="12" cy="17.2" r=".9" fill="currentColor" stroke="none"/></g></symbol><symbol id="i-share" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6v11"/><path d="M8.4 7.2 12 3.6l3.6 3.6"/><path d="M6 12.4H5a1.6 1.6 0 0 0-1.6 1.6v5a1.6 1.6 0 0 0 1.6 1.6h14a1.6 1.6 0 0 0 1.6-1.6v-5a1.6 1.6 0 0 0-1.6-1.6h-1"/></g></symbol><symbol id="i-heart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" d="M12 20s-7.4-4.5-7.4-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.4 2.6C19.4 15.5 12 20 12 20Z"/></symbol></svg>
+
+<div class="frame" data-scheme="dark" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="detail-hero">
+        <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table">
+        <div class="detail-hero__bar">
+          <span class="circ-btn circ-btn--lg"><svg><use href="#i-chev-l"/></svg></span>
+          <span class="spacer"></span>
+          <span class="circ-btn circ-btn--lg"><svg><use href="#i-qcircle"/></svg></span>
+          <span class="circ-btn circ-btn--lg"><svg><use href="#i-share"/></svg></span>
+          <span class="circ-btn circ-btn--lg"><svg><use href="#i-heart"/></svg></span>
+        </div>
+      </div>
+
+      <div class="detail-body">
+        <span class="detail-maker">Nordic Atelier</span>
+        <span class="detail-name">Heirloom Oak Dining Table</span>
+        <span class="detail-materials">Quarter-sawn white oak &middot; Hand-rubbed tung oil</span>
+        <div class="detail-price-row"><span class="detail-price">$4,200</span></div>
+
+        <div class="spec-list">
+          <div class="spec-row">
+            <span class="spec-row__key">Dimensions</span>
+            <span class="spec-row__val">84&Prime; W &times; 38&Prime; D &times; 30&Prime; H</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row__key">Lead time</span>
+            <span class="spec-row__val">Made to order &middot; ships in 10&ndash;12 weeks</span>
+          </div>
+        </div>
+
+        <p class="detail-desc">Solid quarter-sawn white oak with hand-rubbed tung oil finish. Each
+          table is made to order by a three-person workshop outside Aarhus.</p>
+
+        <div class="fitline">Your Living Room&#8217;s longest wall is 18 ft. This table is 7 ft.</div>
+
+        <div class="prov-head"><span class="mono-label">Provenance</span></div>
+        <div class="badge-row">
+          <span class="prov-badge">Made to order</span>
+          <span class="prov-badge">Solid hardwood</span>
+          <span class="prov-badge">Aarhus, Denmark</span>
+        </div>
+
+        <div class="maker-story">
+          <div class="maker-story__head">
+            <span class="maker-story__avatar"></span>
+            <span class="maker-story__name">Nordic Atelier &middot; Aarhus</span>
+          </div>
+          <p class="maker-story__quote">Three of us build every table in the room it was drawn in.</p>
+        </div>
+
+        <p class="sold-by">Sold and shipped by Patina. Delivery, damage and returns are handled by
+          Patina support, with your designer copied when you have one.</p>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="detail-bar detail-bar--pair">
+      <span class="btn btn--primary">Buy &mdash; $4,200</span>
+      <span class="btn btn--ghost btn--pill-sm">Add to room</span>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item tabbar__item--active">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n callout-n--ondark" style="top:120px;left:2px">1</span>
+<span class="callout-n callout-n--ondark" style="top:352px;left:2px">2</span>
+<span class="callout-n callout-n--ondark" style="top:440px;left:2px">5</span>
+<span class="callout-n callout-n--clay callout-n--ondark" style="top:492px;left:2px">6</span>
+<span class="callout-n callout-n--ondark" style="top:578px;left:2px">7</span>
+<span class="callout-n callout-n--clay callout-n--ondark" style="top:654px;left:2px">8</span>
+<span class="callout-n callout-n--ondark" style="bottom:110px;right:2px">11</span>
+</div>
+<p class="pv-cap">M3d &middot; Piece detail &middot; dark</p></div>
+<div class="pv-slot" data-mock="b-M4"><!-- b-M4 — Direction B · M4 · The room (activeProject, Living Room, three pieces). -->
+<div class="frame-wrap bx-m4">
+<style>
+.bx-m4 .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:31;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m4 .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m4 .tabbar__item--active{color:var(--pat-text);}
+.bx-m4 .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m4 .tabbar__comp .strata{transform:scale(.8);}
+.bx-m4 .pad-tabbar{height:100px;}
+.bx-m4 .room-hero{height:220px;}
+.bx-m4 .room-body{padding:12px var(--pat-gutter-push) 0;}
+.bx-m4 .room-title{display:block;font:400 26px/1.18 var(--pat-serif);color:var(--pat-text);}
+.bx-m4 .room-sub{display:block;font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.5px;color:var(--pat-text-muted);padding-top:6px;}
+.bx-m4 .statrow{display:flex;gap:20px;margin-top:10px;padding:8px 0;
+  border-top:1px solid var(--pat-pearl);border-bottom:1px solid var(--pat-pearl);}
+.bx-m4 .stat{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-text-2);}
+.bx-m4 .roomsec{display:block;padding:10px var(--pat-gutter-push) 6px;font:400 10px/1.4 var(--pat-mono);
+  text-transform:uppercase;letter-spacing:.5px;color:var(--pat-text-muted);}
+.bx-m4 .grid-2{gap:8px;}
+.bx-m4 .product-card--compact .product-card__art{height:88px;}
+.bx-m4 .product-card--compact .product-card__info{padding:8px 10px;}
+.bx-m4 .product-card--compact .product-card__name{padding-top:0;}
+.bx-m4 .product-card--compact .product-card__price{padding-top:3px;}
+.bx-m4 .room-acts{padding:12px var(--pat-gutter-push) 0;}
+.bx-m4 .room-acts2{display:flex;gap:10px;padding:8px var(--pat-gutter-push) 0;}
+.bx-m4 .room-acts2 .btn{flex:1 1 0;height:44px;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="room-hero g-warm"></div>
+
+      <div class="room-body">
+        <span class="room-title">Living Room</span>
+        <span class="room-sub">18 &times; 14 ft &middot; 252 sq ft &middot; Typed, not scanned</span>
+        <div class="statrow">
+          <span class="stat">3 saved pieces</span>
+          <span class="stat">$2,400 of $9,000 budget</span>
+        </div>
+      </div>
+
+      <span class="roomsec">In this room</span>
+      <div class="grid-2">
+        <div class="product-card product-card--compact">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-warm">
+              <span class="tile-placeholder__label">Studio Piet &middot; Jute</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__name">Woven Jute Area Rug 8x10</span>
+            <span class="product-card__price">$1,450</span>
+          </div>
+        </div>
+        <div class="product-card product-card--compact">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-metal">
+              <span class="tile-placeholder__label">Schoolhouse &middot; Brass</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__name">Brass Arc Floor Lamp</span>
+            <span class="product-card__price">$890</span>
+          </div>
+        </div>
+        <div class="product-card product-card--compact">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-leather">
+              <span class="tile-placeholder__label">Article &middot; Velvet</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__name">Velvet Club Chair</span>
+            <span class="product-card__price">$1,250</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="room-acts"><span class="btn btn--primary">Browse pieces for the Living Room</span></div>
+      <div class="room-acts2">
+        <span class="btn btn--secondary">Edit dimensions</span>
+        <span class="btn btn--secondary">Set a budget</span>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="screen-chrome">
+      <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item">Today</span>
+      <span class="tabbar__item tabbar__item--active">Spaces</span>
+      <span class="tabbar__item">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:120px;left:2px">1</span>
+<span class="callout-n" style="top:236px;left:2px">2</span>
+<span class="callout-n callout-n--clay" style="top:296px;left:2px">3</span>
+<span class="callout-n" style="top:352px;left:2px">4</span>
+<span class="callout-n" style="top:684px;left:2px">5</span>
+<span class="callout-n callout-n--clay" style="top:742px;left:2px">6</span>
+<span class="callout-n" style="bottom:44px;right:2px">7</span>
+</div>
+<p class="pv-cap">M4 &middot; The room</p></div>
+<div class="pv-slot" data-mock="b-M5a"><!-- b-M5a — Direction B · M5a · The order sheet (full detent) over the piece detail. -->
+<div class="frame-wrap bx-m5a">
+<style>
+.bx-m5a .sheet__body{gap:0;flex:1 1 auto;}
+.bx-m5a .ord-row{display:flex;align-items:center;gap:12px;padding-bottom:14px;}
+.bx-m5a .ord-thumb{width:72px;height:72px;border-radius:var(--pat-r-md);overflow:hidden;flex:0 0 auto;}
+.bx-m5a .ord-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.bx-m5a .ord-maker{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-clay);}
+.bx-m5a .ord-desc{font:400 14px/1.5 var(--pat-sans);color:var(--pat-text-2);margin:0;padding-bottom:12px;}
+.bx-m5a .spec-row{padding:9px 0;}
+.bx-m5a .spec-list{margin-bottom:12px;}
+.bx-m5a .money-row{display:flex;align-items:baseline;justify-content:space-between;
+  padding:10px 0 8px;border-top:1px solid var(--pat-pearl);}
+.bx-m5a .money-row__key{font:400 16px/1.45 var(--pat-sans);color:var(--pat-text);}
+.bx-m5a .money-row__val{font:500 18px/1.28 var(--pat-serif);color:var(--pat-text);}
+.bx-m5a .ord-note{font:400 14px/1.45 var(--pat-sans);color:var(--pat-text-muted);padding-bottom:12px;}
+.bx-m5a .ord-sold{font:500 14px/1.45 var(--pat-sans);color:var(--pat-text);padding-bottom:4px;}
+.bx-m5a .ord-resp{font:400 12px/1.5 var(--pat-sans);color:var(--pat-text-muted);padding-bottom:12px;}
+.bx-m5a .ord-attr{background:var(--pat-bg-2);border-radius:var(--pat-r-lg);padding:12px 14px;
+  font:400 13px/1.45 var(--pat-sans);color:var(--pat-text-2);}
+.bx-m5a .sheet__foot{padding:12px 24px 30px;}
+.bx-m5a .ord-safari{display:block;text-align:center;font:400 12px/1.42 var(--pat-sans);
+  color:var(--pat-text-muted);padding-top:8px;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body">
+      <div class="detail-hero">
+        <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table">
+      </div>
+      <div class="detail-body" style="padding-top:20px">
+        <span class="detail-maker">Nordic Atelier</span>
+        <span class="detail-name">Heirloom Oak Dining Table</span>
+      </div>
+    </div>
+
+    <div class="sheet-scrim"></div>
+    <div class="sheet sheet--full">
+      <span class="sheet__handle"></span>
+      <div class="sheet__head">
+        <span class="sheet__title">Order</span>
+        <span class="sheet__eyebrow">Heirloom Oak Dining Table</span>
+      </div>
+      <div class="sheet__body">
+        <div class="ord-row">
+          <span class="ord-thumb"><img src="img/heirloom-thumb.jpg" alt="Heirloom Oak Dining Table"></span>
+          <span class="ord-maker">Nordic Atelier &middot; Aarhus, Denmark</span>
+        </div>
+
+        <p class="ord-desc">Solid quarter-sawn white oak with hand-rubbed tung oil finish. Each table
+          is made to order by a three-person workshop outside Aarhus.</p>
+
+        <div class="spec-list">
+          <div class="spec-row">
+            <span class="spec-row__key">Dimensions</span>
+            <span class="spec-row__val">84&Prime; W &times; 38&Prime; D &times; 30&Prime; H</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-row__key">Lead time</span>
+            <span class="spec-row__val">Made to order &middot; ships in 10&ndash;12 weeks</span>
+          </div>
+        </div>
+
+        <div class="money-row">
+          <span class="money-row__key">Piece</span>
+          <span class="money-row__val">$4,200.00</span>
+        </div>
+        <span class="ord-note">Delivery and tax are added at payment. You&#8217;ll see the full total
+          before you pay.</span>
+
+        <span class="ord-sold">Sold and shipped by Patina.</span>
+        <span class="ord-resp">Patina is responsible for delivery, damage and returns on this order.
+          Questions or damage: patina.cloud/help &middot; (608) 555-0147</span>
+
+        <span class="ord-attr">Ordered in your name. Leah sees it on your project and is credited at
+          the piece&#8217;s trade rate. This doesn&#8217;t change your price.</span>
+      </div>
+      <div class="sheet__foot">
+        <span class="btn btn--primary">Continue to payment</span>
+        <span class="ord-safari">Payment opens securely in Safari.</span>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:104px;left:2px">1</span>
+<span class="callout-n" style="top:160px;left:2px">2</span>
+<span class="callout-n" style="top:318px;left:2px">3</span>
+<span class="callout-n callout-n--clay" style="top:396px;left:2px">4</span>
+<span class="callout-n" style="top:492px;left:2px">5</span>
+<span class="callout-n callout-n--clay" style="top:596px;left:2px">6</span>
+<span class="callout-n" style="bottom:76px;right:2px">7</span>
+</div>
+<p class="pv-cap">5a &middot; Order sheet</p></div>
+<div class="pv-slot" data-mock="b-M5b"><!-- b-M5b — Direction B · M5b · Payment hand-off. Stripe hosted Checkout inside
+     SFSafariViewController; the app waits behind it. Everything inside .safari is drawn to
+     Apple's / Stripe's own chrome, not to Patina tokens — the same rule kit.css §14 uses. -->
+<div class="frame-wrap bx-m5b">
+<style>
+.bx-m5b .wait{position:absolute;left:20px;right:20px;top:68px;text-align:center;
+  font:400 14px/1.45 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m5b .safari{position:absolute;left:0;right:0;top:120px;bottom:0;z-index:26;overflow:hidden;
+  border-radius:12px 12px 0 0;background:#FFF;color:#111;font-family:var(--pat-sans);
+  box-shadow:0 -8px 30px rgba(0,0,0,.22);}
+.bx-m5b .safari__bar{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;
+  background:#F7F7F8;border-bottom:.5px solid rgba(60,60,67,.29);}
+.bx-m5b .safari__done{font:400 17px/1 var(--pat-sans);color:#007AFF;flex:0 0 auto;}
+.bx-m5b .safari__url{flex:1 1 auto;text-align:center;font:400 13px/1.2 var(--pat-sans);color:#3C3C43;}
+.bx-m5b .safari__lock{font-size:11px;}
+.bx-m5b .safari__refresh{flex:0 0 auto;color:#007AFF;font:400 17px/1 var(--pat-sans);}
+.bx-m5b .safari__page{padding:20px 22px;}
+.bx-m5b .stripe-merchant{font:600 15px/1.3 var(--pat-sans);color:#1A1A1A;}
+.bx-m5b .stripe-item{display:flex;align-items:center;gap:12px;padding:14px 0;
+  border-bottom:1px solid #E6E6E6;}
+.bx-m5b .stripe-item__thumb{width:44px;height:44px;border-radius:6px;overflow:hidden;flex:0 0 auto;}
+.bx-m5b .stripe-item__thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.bx-m5b .stripe-item__name{flex:1 1 auto;font:400 14px/1.35 var(--pat-sans);color:#1A1A1A;}
+.bx-m5b .stripe-item__amt{font:500 14px/1.35 var(--pat-sans);color:#1A1A1A;}
+.bx-m5b .stripe-note{font:400 12px/1.45 var(--pat-sans);color:#6B7280;padding:10px 0 16px;}
+.bx-m5b .stripe-apay{height:46px;border-radius:8px;background:#000;color:#fff;display:flex;
+  align-items:center;justify-content:center;gap:6px;font:600 17px/1 var(--pat-sans);}
+.bx-m5b .stripe-or{display:flex;align-items:center;gap:10px;padding:16px 0;color:#6B7280;
+  font:400 12px/1.2 var(--pat-sans);}
+.bx-m5b .stripe-or::before,.bx-m5b .stripe-or::after{content:'';flex:1 1 auto;height:1px;background:#E6E6E6;}
+.bx-m5b .stripe-lab{font:400 12px/1.4 var(--pat-sans);color:#6B7280;padding-bottom:5px;}
+.bx-m5b .stripe-field{height:44px;border:1px solid #D5D9E0;border-radius:6px;padding:0 12px;
+  display:flex;align-items:center;font:400 14px/1 var(--pat-sans);color:#9AA1AC;margin-bottom:14px;
+  background:#fff;}
+.bx-m5b .safari__tools{position:absolute;left:0;right:0;bottom:0;height:66px;background:#F7F7F8;
+  border-top:.5px solid rgba(60,60,67,.29);display:flex;align-items:flex-start;
+  justify-content:space-around;padding:14px 34px 0;color:#007AFF;}
+.bx-m5b .safari__tools svg{width:20px;height:20px;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol><symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol><symbol id="i-share" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6v11"/><path d="M8.4 7.2 12 3.6l3.6 3.6"/><path d="M6 12.4H5a1.6 1.6 0 0 0-1.6 1.6v5a1.6 1.6 0 0 0 1.6 1.6h14a1.6 1.6 0 0 0 1.6-1.6v-5a1.6 1.6 0 0 0-1.6-1.6h-1"/></g></symbol><symbol id="i-compass" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.6 8.4-2 5.2-5.2 2 2-5.2Z"/></g></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body" style="background:var(--pat-bg)">
+      <span class="wait">Confirming payment&hellip; This usually takes a few seconds.</span>
+    </div>
+
+    <div class="safari">
+      <div class="safari__bar">
+        <span class="safari__done">Done</span>
+        <span class="safari__url"><span class="safari__lock">&#128274;</span> checkout.stripe.com</span>
+        <span class="safari__refresh">&#8635;</span>
+      </div>
+      <div class="safari__page">
+        <div class="stripe-merchant">Patina</div>
+        <div class="stripe-item">
+          <span class="stripe-item__thumb"><img src="img/heirloom-thumb.jpg" alt="Heirloom Oak Dining Table"></span>
+          <span class="stripe-item__name">Heirloom Oak Dining Table</span>
+          <span class="stripe-item__amt">$4,200.00</span>
+        </div>
+        <p class="stripe-note">Shipping and tax are calculated once you enter your address.</p>
+        <div class="stripe-apay">&#63743; Pay</div>
+        <div class="stripe-or">Or pay with card</div>
+        <div class="stripe-lab">Email</div>
+        <div class="stripe-field">you@example.com</div>
+        <div class="stripe-lab">Card information</div>
+        <div class="stripe-field">1234 1234 1234 1234</div>
+        <div class="stripe-lab">Shipping address</div>
+        <div class="stripe-field">Address line 1</div>
+      </div>
+      <div class="safari__tools">
+        <span><svg><use href="#i-chev-l"/></svg></span>
+        <span style="opacity:.35"><svg><use href="#i-chev-r"/></svg></span>
+        <span><svg><use href="#i-share"/></svg></span>
+        <span><svg><use href="#i-compass"/></svg></span>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:78px;left:2px">1</span>
+<span class="callout-n" style="top:150px;left:2px">2</span>
+<span class="callout-n callout-n--clay" style="top:260px;left:2px">3</span>
+<span class="callout-n" style="top:352px;left:2px">4</span>
+</div>
+<p class="pv-cap">5b &middot; Payment hand-off</p></div>
+<div class="pv-slot" data-mock="b-M5c"><!-- b-M5c — Direction B · M5c · Order placed. Full screen, presented over the flow — no tab bar. -->
+<div class="frame-wrap bx-m5c">
+<style>
+.bx-m5c .placed{padding:calc(var(--pat-safe-top) + 96px) var(--pat-gutter-push) 0;}
+.bx-m5c .placed__mark{display:flex;padding-bottom:22px;}
+.bx-m5c .placed__title{display:block;font:500 28px/1.16 var(--pat-serif);color:var(--pat-text);
+  padding-bottom:12px;}
+.bx-m5c .placed__line{display:block;font:400 16px/1.45 var(--pat-sans);color:var(--pat-text-2);
+  padding-bottom:10px;}
+.bx-m5c .placed__receipt{display:block;font:400 14px/1.45 var(--pat-sans);color:var(--pat-text-muted);
+  padding-bottom:10px;}
+.bx-m5c .placed__resp{display:block;font:400 12px/1.5 var(--pat-sans);color:var(--pat-text-muted);
+  padding-bottom:22px;}
+.bx-m5c .notify{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--pat-bg-2);
+  border-radius:var(--pat-r-xl);}
+.bx-m5c .notify__copy{flex:1 1 auto;font:500 14px/1.45 var(--pat-sans);color:var(--pat-text);}
+.bx-m5c .placed__acts{position:absolute;left:0;right:0;bottom:0;padding:0 var(--pat-gutter-push) 36px;}
+.bx-m5c .placed__acts .btn--ghost{margin:6px auto 0;display:flex;}
+</style>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body">
+      <div class="placed">
+        <span class="placed__mark"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+        <span class="placed__title">Order placed.</span>
+        <span class="placed__line">Heirloom Oak Dining Table &middot; $4,200.00 &middot; total with
+          delivery and tax</span>
+        <span class="placed__receipt">A receipt is on its way to your inbox.</span>
+        <span class="placed__resp">Sold and shipped by Patina. Patina is responsible for delivery,
+          damage and returns on this order. Questions or damage: patina.cloud/help &middot;
+          (608) 555-0147</span>
+        <div class="notify">
+          <span class="notify__copy">We&#8217;ll tell you when it ships.</span>
+          <span class="btn btn--secondary btn--pill-sm">Notify me</span>
+        </div>
+      </div>
+      <div class="placed__acts">
+        <span class="btn btn--primary">See your order</span>
+        <span class="btn btn--ghost btn--pill-sm">Back to Today</span>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:160px;left:2px">1</span>
+<span class="callout-n" style="top:200px;left:2px">2</span>
+<span class="callout-n" style="top:296px;left:2px">3</span>
+<span class="callout-n callout-n--clay" style="top:410px;left:2px">4</span>
+<span class="callout-n" style="bottom:120px;right:2px">5</span>
+</div>
+<p class="pv-cap">5c &middot; Order placed</p></div>
+<div class="pv-slot" data-mock="b-M6a"><!-- b-M6a — Direction B · M6a · The Lock Screen: one push, one rectangular widget, no count.
+     Drawn to Apple's metrics (kit.css §14); the status-bar clock is hidden because the Lock
+     Screen owns the time. -->
+<div class="frame-wrap bx-m6a">
+<style>
+.bx-m6a--lock .statusbar__time{visibility:hidden;}
+.bx-m6a .lockscreen__clock{margin-top:78px;}
+.bx-m6a .lockwidget{width:172px;margin:22px auto 0;padding:10px 12px;border-radius:14px;
+  background:rgba(255,255,255,.14);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  color:#fff;}
+.bx-m6a .lockwidget__app{font:400 9px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:1px;
+  opacity:.7;}
+.bx-m6a .lockwidget__line{font:500 14px/1.3 var(--pat-sans);margin-top:3px;}
+.bx-m6a .push-banner__app,.bx-m6a .push-banner__title,.bx-m6a .push-banner__body{display:block;}
+.bx-m6a .lock-notifs{position:absolute;left:0;right:0;bottom:88px;display:flex;justify-content:center;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-strata-x" viewBox="0 0 24 24"><path d="M0 0h0"/></symbol></svg>
+
+<div class="frame bx-m6a--lock" data-scheme="dark" data-battery="charging">
+  <div class="frame__screen">
+    <div class="lockscreen">
+      <div class="lockscreen__clock">
+        <div class="lockscreen__date">Wednesday, August 26</div>
+        <div class="lockscreen__time">9:12</div>
+      </div>
+      <div class="lockwidget">
+        <div class="lockwidget__app">Patina</div>
+        <div class="lockwidget__line">Rug colour &mdash; asked Aug 22</div>
+      </div>
+    </div>
+
+    <div class="lock-notifs">
+      <div class="push-banner">
+        <span class="push-banner__icon"><span class="strata"><i></i><i></i><i></i></span></span>
+        <span class="push-banner__copy">
+          <span class="push-banner__app">Patina</span>
+          <span class="push-banner__title">Leah sent a proposal</span>
+          <span class="push-banner__body">Aspen Loft &mdash; Living Room Refresh &middot; review by Sep 8</span>
+        </span>
+        <span class="push-banner__time">now</span>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n callout-n--ondark" style="top:296px;left:2px">2</span>
+<span class="callout-n callout-n--clay callout-n--ondark" style="bottom:150px;left:2px">1</span>
+</div>
+<p class="pv-cap">6a &middot; Lock Screen</p></div>
+<div class="pv-slot" data-mock="b-M6b"><!-- b-M6b — Direction B · M6b · The Home Screen widget, drawn twice: with a record row, and
+     with none. The app has no extension target today (F130). -->
+<div class="frame-wrap bx-m6b">
+<style>
+.bx-m6b .homescreen{position:absolute;inset:0;background:linear-gradient(165deg,#3B342C,#1E1B18 55%,#0F0E0D);
+  padding:calc(var(--pat-safe-top) + 44px) 22px 0;display:flex;flex-direction:column;gap:26px;
+  align-items:center;}
+.bx-m6b .hs-row{display:flex;gap:18px;}
+.bx-m6b .hs-icons{display:flex;gap:26px;}
+.bx-m6b .hs-app{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.bx-m6b .hs-icon{width:60px;height:60px;border-radius:14px;background:var(--pat-charcoal);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 6px 18px rgba(0,0,0,.3);}
+.bx-m6b .hs-label{font:400 11px/1.2 var(--pat-sans);color:rgba(255,255,255,.9);}
+.bx-m6b .widget--sm{width:158px;height:158px;padding:14px;}
+.bx-m6b .widget__line{font:500 15px/1.35 var(--pat-sans);color:var(--pat-text);margin-top:auto;}
+.bx-m6b .widget__empty{font:500 15px/1.35 var(--pat-sans);color:var(--pat-text-muted);margin-top:auto;}
+.bx-m6b .widget__foot{display:flex;justify-content:flex-end;margin-top:10px;}
+</style>
+
+<div class="frame" data-scheme="dark" data-battery="charging">
+  <div class="frame__screen">
+    <div class="homescreen">
+      <div class="hs-row">
+        <div class="widget widget--sm">
+          <div class="widget__head">
+            <span class="widget__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="widget__eyebrow">Since Thu</span>
+          </div>
+          <span class="widget__line">Leah asked about the rug colour.</span>
+        </div>
+        <div class="widget widget--sm">
+          <div class="widget__head">
+            <span class="widget__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="widget__eyebrow">Since Thu</span>
+          </div>
+          <span class="widget__empty">Nothing moved since Thursday.</span>
+        </div>
+      </div>
+
+      <div class="hs-icons">
+        <span class="hs-app">
+          <span class="hs-icon"><span class="strata strata--clay"><i></i><i></i><i></i></span></span>
+          <span class="hs-label">Patina</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n callout-n--ondark" style="top:126px;left:2px">1</span>
+<span class="callout-n callout-n--clay callout-n--ondark" style="top:126px;right:2px">2</span>
+<span class="callout-n callout-n--ondark" style="top:326px;left:2px">3</span>
+</div>
+<p class="pv-cap">6b &middot; Home Screen widget</p></div>
+<div class="pv-slot" data-mock="b-M6c"><!-- b-M6c — Direction B · M6c · The permission primer, met at the first real event.
+     The iOS alert only follows a tap on "Turn these on". -->
+<div class="frame-wrap bx-m6c">
+<style>
+.bx-m6c .primer{padding:calc(var(--pat-safe-top) + 88px) var(--pat-gutter-push) 0;}
+.bx-m6c .primer__mark{display:flex;padding-bottom:24px;}
+.bx-m6c .primer__title{display:block;font:400 24px/1.2 var(--pat-serif);color:var(--pat-text);
+  padding-bottom:20px;}
+.bx-m6c .primer__list{border-top:1px solid var(--pat-pearl);margin-bottom:20px;}
+.bx-m6c .primer__item{display:block;padding:13px 0;border-bottom:1px solid var(--pat-pearl);
+  font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-text-2);}
+.bx-m6c .primer__say{display:block;font:400 14px/1.55 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m6c .primer__acts{position:absolute;left:0;right:0;bottom:0;padding:0 var(--pat-gutter-push) 36px;}
+.bx-m6c .primer__acts .btn--ghost{margin:8px auto 0;display:flex;}
+</style>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body">
+      <div class="primer">
+        <span class="primer__mark"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+        <span class="primer__title">Four things, and nothing else.</span>
+        <div class="primer__list">
+          <span class="primer__item">Your designer sends a proposal</span>
+          <span class="primer__item">An invoice comes due</span>
+          <span class="primer__item">A decision is waiting</span>
+          <span class="primer__item">Something you ordered moves</span>
+        </div>
+        <span class="primer__say">We&#8217;ll tell you when your designer sends a proposal, when an
+          invoice comes due, when a decision is waiting, and when something you ordered moves.
+          Nothing else.</span>
+      </div>
+      <div class="primer__acts">
+        <span class="btn btn--primary">Turn these on</span>
+        <span class="btn btn--ghost btn--pill-sm">Not now</span>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:152px;left:2px">1</span>
+<span class="callout-n" style="top:210px;left:2px">2</span>
+<span class="callout-n callout-n--clay" style="top:290px;left:2px">3</span>
+<span class="callout-n" style="top:508px;left:2px">4</span>
+<span class="callout-n" style="bottom:112px;right:2px">5</span>
+</div>
+<p class="pv-cap">6c &middot; Permission primer</p></div>
+<div class="pv-slot" data-mock="b-M6d"><!-- b-M6d — Direction B · M6d · What greets you: M1 with the record's top row opened
+     to its date, the decision one tap away.
+     Kit additions live in the scoped block below; every one is named in the report-back. -->
+<div class="frame-wrap bx-m6d">
+<style>
+/* Direction B kit additions — scoped to .bx-m6d. Candidates for KIT.md §4.
+   .tabbar (B-1) · .rec (the record) · .seat (designer seat) · .rail (house rail)
+   · .sec (section eyebrow) · .doorrow (a labelled door row) */
+.bx-m6d .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:30;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m6d .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m6d .tabbar__item--active{color:var(--pat-text);}
+.bx-m6d .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m6d .tabbar__comp .strata{transform:scale(.8);}
+.bx-m6d .pad-tabbar{height:83px;}
+.bx-m6d .home-header__title--greet{font:500 28px/1.16 var(--pat-serif);}
+.bx-m6d .rec{margin:16px var(--pat-gutter-home) 0;background:var(--pat-bg-2);
+  border-radius:var(--pat-r-xl);padding:10px 16px 12px;}
+.bx-m6d .rec__head{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-text-muted);padding-bottom:8px;}
+.bx-m6d .rec__eyebrow{display:block;font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.5px;color:var(--pat-text-2);padding:6px 0 2px;border-top:1px solid var(--pat-pearl);}
+.bx-m6d .rec__row{display:flex;align-items:center;gap:12px;min-height:56px;}
+.bx-m6d .rec__row + .rec__row{border-top:1px solid var(--pat-pearl);}
+.bx-m6d .rec__title{font:500 14px/1.4 var(--pat-sans);color:var(--pat-text);flex:1 1 auto;min-width:0;}
+.bx-m6d .rec__state{font:400 10px/1.5 var(--pat-mono);text-transform:uppercase;letter-spacing:.4px;
+  color:var(--pat-text-muted);text-align:right;flex:0 0 auto;max-width:126px;}
+.bx-m6d .rec__state--late{color:var(--pat-error);}
+.bx-m6d .rec__new{color:var(--pat-clay);}
+.bx-m6d .rec__open{padding:0 0 14px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;}
+.bx-m6d .rec__open__q{font:500 18px/1.28 var(--pat-serif);color:var(--pat-text);}
+.bx-m6d .rec__open__meta{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.4px;
+  color:var(--pat-text-muted);}
+.bx-m6d .rec__more{display:block;padding-top:8px;border-top:1px solid var(--pat-pearl);
+  font:500 15px/1.3 var(--pat-sans);color:var(--pat-text-link);}
+.bx-m6d .seat{margin:14px var(--pat-gutter-home) 0;background:var(--pat-bg-2);border-radius:var(--pat-r-xl);
+  padding:10px 14px 10px 16px;display:flex;align-items:center;gap:12px;}
+.bx-m6d .seat__mono{width:44px;height:44px;border-radius:50%;background:rgba(196,165,123,.15);
+  color:var(--pat-clay-deep);display:flex;align-items:center;justify-content:center;
+  font:500 15px/1 var(--pat-serif);letter-spacing:.5px;flex:0 0 auto;}
+.bx-m6d .seat__copy{flex:1 1 auto;min-width:0;}
+.bx-m6d .seat__name{display:block;font:600 18px/1.3 var(--pat-sans);color:var(--pat-text);}
+.bx-m6d .seat__meta{display:block;font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-muted);padding-top:2px;}
+.bx-m6d .sec{display:block;padding:12px var(--pat-gutter-home) 0;font:400 10px/1.4 var(--pat-mono);
+  text-transform:uppercase;letter-spacing:.5px;color:var(--pat-text-muted);}
+.bx-m6d .rail{display:flex;gap:12px;overflow-x:hidden;padding:6px var(--pat-gutter-home) 0;}
+.bx-m6d .rail__card{flex:0 0 240px;height:150px;border-radius:var(--pat-r-xl);overflow:hidden;
+  background:var(--pat-bg-2);display:flex;flex-direction:column;}
+.bx-m6d .rail__art{height:48px;}
+.bx-m6d .rail__body{padding:8px 14px;}
+.bx-m6d .rail__name{display:block;font:500 18px/1.28 var(--pat-serif);color:var(--pat-text);}
+.bx-m6d .rail__meta{display:block;font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-2);padding-top:3px;}
+.bx-m6d .rail__add{flex:0 0 128px;height:150px;border-radius:var(--pat-r-xl);border:1px dashed var(--pat-pearl);
+  display:flex;align-items:center;justify-content:center;font:500 14px/1.4 var(--pat-sans);
+  color:var(--pat-text-link);}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5c0 4-1.5 5.4-2.2 6.1a.6.6 0 0 0 .4 1h14.6a.6.6 0 0 0 .4-1c-.7-.7-2.2-2.1-2.2-6.1A5.5 5.5 0 0 0 12 3Z"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></g></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="home-header">
+        <div class="home-header__stack">
+          <div class="home-header__date">Wednesday &middot; Aug 26</div>
+          <div class="home-header__titlerow">
+            <span class="home-header__title home-header__title--greet">Good morning.</span>
+          </div>
+        </div>
+        <div class="home-header__actions">
+          <span class="icon-btn"><svg><use href="#i-bell"/></svg><span class="icon-btn__dot"></span></span>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div class="rec__head">Since you were last here &middot; Thu, Aug 20</div>
+        <span class="rec__eyebrow" style="border-top:0;padding-top:0">Needs you</span>
+        <div class="rec__row">
+          <span class="rec__title">Leah asked about the rug colour.</span>
+          <span class="rec__state">asked Aug 22<br><span class="rec__state--late">overdue</span></span>
+        </div>
+        <div class="rec__open">
+          <span class="rec__open__q">Rug color &mdash; Natural vs Sand</span>
+          <span class="rec__open__meta">Two options &middot; both $850</span>
+          <span class="btn btn--primary btn--compact">Answer</span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Leah sent a proposal to review.</span>
+          <span class="rec__state">by Sep 8</span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Your invoice is due.</span>
+          <span class="rec__state">$4,250.00 &middot; Sep 1</span>
+        </div>
+        <span class="rec__eyebrow">Moved</span>
+        <div class="rec__row">
+          <span class="rec__title">Your dining table shipped.</span>
+          <span class="rec__state">Aug 25 &middot; <span class="rec__new">new</span></span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Leah added two pieces to the proposal.</span>
+          <span class="rec__state">Aug 24</span>
+        </div>
+        <span class="rec__more">See all &rarr;</span>
+      </div>
+
+      <div class="seat">
+        <span class="seat__mono">LH</span>
+        <span class="seat__copy">
+          <span class="seat__name">Leah Hartwell</span>
+          <span class="seat__meta">Hartwell Studio &middot; Aspen Loft Refresh</span>
+        </span>
+        <span class="btn btn--secondary btn--pill-sm">Message</span>
+      </div>
+
+      <span class="sec">Your house</span>
+      <div class="rail">
+        <div class="rail__card">
+          <span class="rail__art g-earth"></span>
+          <span class="rail__body">
+            <span class="rail__name">Dining Room</span>
+            <span class="rail__meta">$18,400 of $32,000 committed</span>
+          </span>
+        </div>
+        <div class="rail__card">
+          <span class="rail__art g-warm"></span>
+          <span class="rail__body">
+            <span class="rail__name">Living Room</span>
+            <span class="rail__meta">3 saved pieces &middot; budget $9,000</span>
+          </span>
+        </div>
+        <span class="rail__add">Add a room</span>
+      </div>
+
+      <div class="story-card">
+        <span class="story-card__pill">Aug 25 &middot; 4 min</span>
+        <span class="story-card__body">
+          <span class="story-card__tag">Maker spotlight</span>
+          <span class="story-card__title">The Grain Whisperer of Maine</span>
+          <span class="story-card__sub">Jonathan Chilton on 40 years of listening to wood</span>
+        </span>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item tabbar__item--active">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:126px;left:2px">1</span>
+<span class="callout-n" style="top:210px;left:2px">2</span>
+<span class="callout-n callout-n--clay" style="top:300px;left:2px">3</span>
+
+<span class="callout-n" style="bottom:44px;right:2px">4</span>
+</div>
+<p class="pv-cap">6d &middot; What greets you</p></div>
+<div class="pv-slot" data-mock="b-M7"><!-- b-M7 — Direction B · M7 · Ask your designer (Path B), medium detent over the rug. -->
+<div class="frame-wrap bx-m7">
+<style>
+.bx-m7 .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:22;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m7 .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m7 .tabbar__item--active{color:var(--pat-text);}
+.bx-m7 .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m7 .tabbar__comp .strata{transform:scale(.8);}
+.bx-m7 .ask-row{display:flex;align-items:center;gap:12px;padding-bottom:12px;}
+.bx-m7 .ask-thumb{width:56px;height:56px;border-radius:var(--pat-r-md);overflow:hidden;flex:0 0 auto;}
+.bx-m7 .ask-meta{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-text-muted);}
+.bx-m7 .ask-pick{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:var(--pat-bg-2);border-radius:var(--pat-r-lg);padding:12px 14px;margin-bottom:12px;
+  font:400 16px/1.45 var(--pat-sans);color:var(--pat-text);}
+.bx-m7 .ask-pick__key{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-text-muted);}
+.bx-m7 .ask-msg{background:var(--pat-bg-2);border-radius:var(--pat-r-lg);padding:14px;
+  box-shadow:inset 0 0 0 1px rgba(159,126,72,.5);min-height:84px;
+  font:400 16px/1.45 var(--pat-sans);color:var(--pat-text);}
+.bx-m7 .ask-cap{display:block;text-align:center;font:400 12px/1.42 var(--pat-sans);
+  color:var(--pat-text-muted);padding-top:8px;}
+.bx-m7 .sheet__foot{padding:12px 24px 30px;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body">
+      <div class="detail-hero">
+        <span class="tile-placeholder tile-placeholder--gradient g-warm" style="display:flex;height:100%">
+          <span class="tile-placeholder__label">Studio Piet &middot; Jute</span>
+        </span>
+      </div>
+      <div class="detail-body" style="padding-top:20px">
+        <span class="detail-maker">Studio Piet</span>
+        <span class="detail-name">Woven Jute Area Rug 8x10</span>
+        <div class="detail-price-row"><span class="detail-price">$1,450</span></div>
+      </div>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item tabbar__item--active">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="sheet-scrim"></div>
+    <div class="sheet sheet--medium">
+      <span class="sheet__handle"></span>
+      <div class="sheet__head">
+        <span class="sheet__title">Ask Leah</span>
+        <span class="sheet__eyebrow">Woven Jute Area Rug 8x10</span>
+      </div>
+      <div class="sheet__body" style="flex:1 1 auto">
+        <div class="ask-row">
+          <span class="ask-thumb tile-placeholder tile-placeholder--gradient g-warm"></span>
+          <span class="ask-meta">Studio Piet &middot; $1,450</span>
+        </div>
+        <div class="ask-pick">
+          <span class="ask-pick__key">For</span>
+          <span>Living Room</span>
+          <span class="doorrow__chev"><svg style="width:13px;height:13px"><use href="#i-chev-r"/></svg></span>
+        </div>
+        <div class="ask-msg">Can we use this rug in the living room?</div>
+      </div>
+      <div class="sheet__foot">
+        <span class="btn btn--primary">Send to Leah</span>
+        <span class="ask-cap">She&#8217;ll see the piece, the price and the room.</span>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:470px;left:2px">1</span>
+<span class="callout-n" style="top:552px;left:2px">2</span>
+<span class="callout-n callout-n--clay" style="top:614px;left:2px">3</span>
+<span class="callout-n" style="top:676px;left:2px">4</span>
+<span class="callout-n" style="bottom:76px;right:2px">5</span>
+</div>
+<p class="pv-cap">M7 &middot; Ask your designer</p></div>
+<div class="pv-slot" data-mock="b-M8"><!-- b-M8 — Direction B · M8 · Studio → Ordered, over both rails: the piece the client bought
+     and the piece Leah bought. -->
+<div class="frame-wrap bx-m8">
+<style>
+.bx-m8 .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:31;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m8 .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m8 .tabbar__item--active{color:var(--pat-text);}
+.bx-m8 .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m8 .tabbar__comp .strata{transform:scale(.8);}
+.bx-m8 .pad-tabbar{height:100px;}
+.bx-m8 .screen-head{padding:calc(var(--pat-safe-top) + 56px) var(--pat-gutter-push) 10px;}
+.bx-m8 .ord-cards{padding:0 var(--pat-gutter-push);display:flex;flex-direction:column;gap:14px;}
+.bx-m8 .ord-card{background:var(--pat-bg-2);border-radius:var(--pat-r-xl);padding:16px;}
+.bx-m8 .ord-card__name{display:block;font:500 18px/1.28 var(--pat-serif);color:var(--pat-text);}
+.bx-m8 .ord-card__maker{display:block;font:400 9px/1.5 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.4px;color:var(--pat-text-muted);padding-top:2px;}
+.bx-m8 .ord-rail{display:flex;gap:6px;padding:14px 0 10px;}
+.bx-m8 .ord-step{flex:1 1 0;}
+.bx-m8 .ord-step__bar{display:block;height:3px;border-radius:2px;background:var(--pat-pearl);}
+.bx-m8 .ord-step__lab{display:block;font:400 8px/1.4 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.4px;color:var(--pat-text-muted);padding-top:6px;}
+.bx-m8 .ord-step--done .ord-step__bar{background:var(--pat-clay);}
+.bx-m8 .ord-step--now .ord-step__bar{background:var(--pat-active-fill);}
+.bx-m8 .ord-step--now .ord-step__lab{color:var(--pat-text);}
+.bx-m8 .ord-card__line{display:block;font:500 14px/1.45 var(--pat-sans);color:var(--pat-text);}
+.bx-m8 .ord-card__money{display:block;font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.4px;color:var(--pat-text-muted);padding-top:4px;}
+.bx-m8 .ord-card__acts{margin-top:12px;border-top:1px solid var(--pat-pearl);}
+.bx-m8 .ord-card__act{display:flex;align-items:center;justify-content:space-between;padding:11px 0;
+  font:500 14px/1.45 var(--pat-sans);color:var(--pat-text-link);
+  border-bottom:1px solid var(--pat-pearl);}
+.bx-m8 .ord-card__act:last-child{border-bottom:0;}
+.bx-m8 .ord-card__foot{display:block;font:400 9px/1.5 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.4px;color:var(--pat-text-muted);padding-top:10px;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol><symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="screen-head">
+        <span class="mono-label">Ordered</span>
+        <div class="screen-head__row"><span class="screen-head__title">Your orders</span></div>
+      </div>
+
+      <div class="ord-cards">
+        <div class="ord-card">
+          <span class="ord-card__name">Heirloom Oak Dining Table</span>
+          <span class="ord-card__maker">Nordic Atelier</span>
+          <div class="ord-rail">
+            <span class="ord-step ord-step--done"><span class="ord-step__bar"></span><span class="ord-step__lab">Confirmed</span></span>
+            <span class="ord-step ord-step--done"><span class="ord-step__bar"></span><span class="ord-step__lab">In production</span></span>
+            <span class="ord-step ord-step--now"><span class="ord-step__bar"></span><span class="ord-step__lab">Shipped</span></span>
+            <span class="ord-step"><span class="ord-step__bar"></span><span class="ord-step__lab">Delivered</span></span>
+          </div>
+          <span class="ord-card__line">Shipped Sep 12 &middot; arriving Sep 18</span>
+          <span class="ord-card__money">$4,200.00 &middot; paid Sep 3</span>
+          <div class="ord-card__acts">
+            <span class="ord-card__act">Track with the carrier <svg style="width:13px;height:13px"><use href="#i-chev-r"/></svg></span>
+            <span class="ord-card__act">Message your designer <svg style="width:13px;height:13px"><use href="#i-chev-r"/></svg></span>
+          </div>
+          <span class="ord-card__foot">You ordered this.</span>
+        </div>
+
+        <div class="ord-card">
+          <span class="ord-card__name">Woven Jute Area Rug 8x10</span>
+          <span class="ord-card__maker">Studio Piet</span>
+          <div class="ord-rail">
+            <span class="ord-step ord-step--done"><span class="ord-step__bar"></span><span class="ord-step__lab">Confirmed</span></span>
+            <span class="ord-step ord-step--now"><span class="ord-step__bar"></span><span class="ord-step__lab">In production</span></span>
+            <span class="ord-step"><span class="ord-step__bar"></span><span class="ord-step__lab">Shipped</span></span>
+            <span class="ord-step"><span class="ord-step__bar"></span><span class="ord-step__lab">Delivered</span></span>
+          </div>
+          <span class="ord-card__line">Leah updates this as it moves.</span>
+          <div class="ord-card__acts">
+            <span class="ord-card__act">Message your designer <svg style="width:13px;height:13px"><use href="#i-chev-r"/></svg></span>
+          </div>
+          <span class="ord-card__foot">Leah ordered this for Aspen Loft Refresh.</span>
+        </div>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="screen-chrome">
+      <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item">Pieces</span>
+      <span class="tabbar__item tabbar__item--active">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:120px;left:2px">1</span>
+<span class="callout-n callout-n--clay" style="top:236px;left:2px">2</span>
+<span class="callout-n" style="top:300px;left:2px">3</span>
+<span class="callout-n" style="top:396px;left:2px">4</span>
+<span class="callout-n callout-n--clay" style="top:512px;left:2px">5</span>
+</div>
+<p class="pv-cap">M8 &middot; Studio &rarr; Ordered</p></div>
+<div class="pv-slot" data-mock="b-M9"><!-- b-M9 — Direction B · M9 · The Pieces tab, with Saved kept as its own labelled door. -->
+<div class="frame-wrap bx-m9">
+<style>
+.bx-m9 .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:31;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m9 .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m9 .tabbar__item--active{color:var(--pat-text);}
+.bx-m9 .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m9 .tabbar__comp .strata{transform:scale(.8);}
+.bx-m9 .pad-tabbar{height:100px;}
+.bx-m9 .tabhead{padding:calc(var(--pat-safe-top) + 52px) var(--pat-gutter-home) 0;}
+.bx-m9 .tabhead__title{display:block;font:400 26px/1.18 var(--pat-serif);color:var(--pat-text);}
+.bx-m9 .doorrow{margin:14px var(--pat-gutter-home) 0;background:var(--pat-bg-2);
+  border-radius:var(--pat-r-card14);padding:13px 16px;display:flex;align-items:center;gap:12px;}
+.bx-m9 .doorrow__title{font:500 18px/1.28 var(--pat-serif);color:var(--pat-text);flex:0 0 auto;}
+.bx-m9 .doorrow__meta{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.4px;
+  color:var(--pat-text-muted);flex:1 1 auto;text-align:right;}
+.bx-m9 .doorrow__chev{color:var(--pat-text-muted);display:flex;flex:0 0 auto;}
+.bx-m9 .doorrow__chev svg{width:13px;height:13px;}
+.bx-m9 .chip-row{padding:14px var(--pat-gutter-home) 12px;}
+.bx-m9 .grid-2{padding:0 var(--pat-gutter-home);}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol><symbol id="i-heart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" d="M12 20s-7.4-4.5-7.4-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.4 2.6C19.4 15.5 12 20 12 20Z"/></symbol><symbol id="i-dots" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></g></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="tabhead"><span class="tabhead__title">Browse pieces</span></div>
+
+      <div class="doorrow">
+        <span class="doorrow__title">Saved</span>
+        <span class="doorrow__meta">3 pieces</span>
+        <span class="doorrow__chev"><svg><use href="#i-chev-r"/></svg></span>
+      </div>
+
+      <div class="chip-row">
+        <span class="chip chip--active">All</span>
+        <span class="chip">Seating</span>
+        <span class="chip">Tables</span>
+        <span class="chip">Lighting</span>
+        <span class="chip">Rugs</span>
+      </div>
+
+      <div class="grid-2">
+        <div class="product-card">
+          <div class="product-card__art">
+            <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table">
+            <span class="product-card__actions">
+              <span class="circ-btn"><svg><use href="#i-heart"/></svg></span>
+              <span class="circ-btn"><svg><use href="#i-dots"/></svg></span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__maker">Nordic Atelier</span>
+            <span class="product-card__name">Heirloom Oak Dining Table</span>
+            <span class="product-card__price">$4,200</span>
+          </div>
+        </div>
+        <div class="product-card">
+          <div class="product-card__art">
+            <img src="img/live-edge-coffee-table.jpg" alt="Live-Edge Coffee Table">
+            <span class="product-card__actions">
+              <span class="circ-btn"><svg><use href="#i-heart"/></svg></span>
+              <span class="circ-btn"><svg><use href="#i-dots"/></svg></span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__maker">Heritage Lumber</span>
+            <span class="product-card__name">Live-Edge Coffee Table</span>
+            <span class="product-card__price">$2,100</span>
+          </div>
+        </div>
+        <div class="product-card">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-leather">
+              <span class="tile-placeholder__label">Article &middot; Velvet</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__maker">Article</span>
+            <span class="product-card__name">Velvet Club Chair</span>
+            <span class="product-card__price">$1,250</span>
+          </div>
+        </div>
+        <div class="product-card">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-warm">
+              <span class="tile-placeholder__label">Studio Piet &middot; Jute</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__maker">Studio Piet</span>
+            <span class="product-card__name">Woven Jute Area Rug 8x10</span>
+            <span class="product-card__price">$1,450</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item tabbar__item--active">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:112px;left:2px">1</span>
+<span class="callout-n callout-n--clay" style="top:168px;left:2px">2</span>
+<span class="callout-n" style="top:236px;left:2px">3</span>
+<span class="callout-n" style="top:300px;left:2px">4</span>
+<span class="callout-n" style="bottom:44px;right:2px">5</span>
+</div>
+<p class="pv-cap">M9 &middot; The Pieces tab</p></div>
+<div class="pv-slot" data-mock="b-M9b"><!-- b-M9b — Direction B · M9b · Saved, pushed from the Pieces tab: every row prints its save
+     date, its room, and the note the data model has always held. -->
+<div class="frame-wrap bx-m9b">
+<style>
+.bx-m9b .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:31;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m9b .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m9b .tabbar__item--active{color:var(--pat-text);}
+.bx-m9b .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m9b .tabbar__comp .strata{transform:scale(.8);}
+.bx-m9b .pad-tabbar{height:100px;}
+.bx-m9b .screen-head{padding:calc(var(--pat-safe-top) + 56px) var(--pat-gutter-push) 10px;}
+.bx-m9b .saved-list{padding:14px var(--pat-gutter-push) 0;display:flex;flex-direction:column;gap:10px;}
+.bx-m9b .saved-row__head{display:block;font:500 14px/1.4 var(--pat-sans);color:var(--pat-text);}
+.bx-m9b .saved-row__where{display:block;font:400 10px/1.5 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.4px;color:var(--pat-text-muted);padding-top:3px;}
+.bx-m9b .saved-row__note{display:block;font:400 italic 14px/1.5 var(--pat-sans);color:var(--pat-text-2);
+  padding-top:5px;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol><symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="screen-head">
+        <div class="screen-head__row"><span class="screen-head__title">Saved</span></div>
+      </div>
+
+      <div class="tabs">
+        <span class="tab"><span class="tab__label">Boards</span><span class="tab__rule"></span></span>
+        <span class="tab tab--active"><span class="tab__label">All items</span><span class="tab__rule"></span></span>
+      </div>
+
+      <div class="saved-list">
+        <div class="saved-row">
+          <span class="saved-row__thumb tile-placeholder tile-placeholder--gradient g-metal"></span>
+          <span class="saved-row__copy">
+            <span class="saved-row__head">$890 &middot; Brass Arc Floor Lamp</span>
+            <span class="saved-row__where">Living Room &middot; saved Tuesday</span>
+            <span class="saved-row__note">&ldquo;too deep for the alcove&rdquo;</span>
+          </span>
+          <span class="saved-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+        <div class="saved-row">
+          <span class="saved-row__thumb tile-placeholder tile-placeholder--gradient g-warm"></span>
+          <span class="saved-row__copy">
+            <span class="saved-row__head">$1,450 &middot; Woven Jute Area Rug 8x10</span>
+            <span class="saved-row__where">Living Room &middot; saved Aug 19</span>
+          </span>
+          <span class="saved-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+        <div class="saved-row">
+          <span class="saved-row__thumb tile-placeholder tile-placeholder--gradient g-leather"></span>
+          <span class="saved-row__copy">
+            <span class="saved-row__head">$1,250 &middot; Velvet Club Chair</span>
+            <span class="saved-row__where">No room yet &middot; saved Aug 14</span>
+          </span>
+          <span class="saved-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="screen-chrome">
+      <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item tabbar__item--active">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:126px;left:2px">6</span>
+<span class="callout-n callout-n--clay" style="top:250px;left:2px">7</span>
+</div>
+<p class="pv-cap">M9b &middot; Saved, pushed</p></div>
+</div>
+<h2>Screen sheets</h2>
+<div class="pv-sheets">
+<div class="pv-sheet"><table class="sheet-table">
+  <caption>M1 &middot; Today, activeProject &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> header &mdash; date over the time-of-day greeting, bell with a clay dot, <i>no monogram</i> &middot; <b>2</b> the record, one card, two eyebrows &middot; <b>3</b> the designer&#8217;s permanent seat &middot; <b>4</b> the house rail &middot; <b>6</b> the tab bar with the Companion in the trailing slot. Block <b>5</b>, the story card, sits below the fold on this screen &mdash; the frame is drawn at its first viewport, and the screen scrolls.</td></tr>
+  <tr><th>Purpose</th><td>Answer &ldquo;what happened to my house&rdquo; in the first viewport, before any navigation.</td></tr>
+  <tr><th>Entry</th><td>Cold launch &middot; tab <code>Today</code> &middot; push &middot; widget.</td></tr>
+  <tr><th>Components</th><td><code>DailyRoomView</code> (recomposed) &middot; <code>HouseRecordCard</code> (<b>new</b>, 2) &middot; <code>DesignerSeatCard</code> (<b>new</b>, 3) &middot; <code>RoomRail</code> (<b>new</b>, 4) &middot; <code>DailyStoryCard</code> (existing, 5) &middot; <code>PatinaTabBar</code> (<b>new</b>, hand-rolled, 6).</td></tr>
+  <tr><th>Copy</th><td>As drawn, verbatim. &ldquo;Since you were last here &middot; Thu, Aug 20&rdquo; &middot; &ldquo;Leah asked about the rug colour.&rdquo; &middot; &ldquo;Leah sent a proposal to review.&rdquo; &middot; &ldquo;Your invoice is due.&rdquo; &middot; &ldquo;Your dining table shipped.&rdquo; &middot; &ldquo;Leah added two pieces to the proposal.&rdquo; &middot; &ldquo;See all &rarr;&rdquo;. <code>error</code> is reserved for money that is actually late, so <code>$4,250.00 &middot; Sep 1</code> is mono, not red; <code>overdue</code> is.</td></tr>
+  <tr><th>Data</th><td><code>BadgeCountService</code>&#8217;s five collections, rows retained &middot; per-item <code>StudioQueueBuilder</code> rows &middot; <code>notification_log</code> &middot; <code>DesignRequestStatusService</code> &middot; <code>project_rooms</code> + local <code>RoomModel</code> &middot; <code>editorial_stories</code> &middot; <code>RecordSnapshotStore</code> (App Group).</td></tr>
+  <tr><th>States</th><td>First paint &rarr; the last snapshot, instantly. Refresh failure &rarr; the snapshot stands, with &ldquo;Let&#8217;s try that again&rdquo; on the failing group only. NEEDS YOU empty &rarr; &ldquo;Nothing needs you right now.&rdquo; MOVED empty &rarr; &ldquo;Nothing moved since Thursday.&rdquo;</td></tr>
+  <tr><th>Interactions</th><td><code>today_record_line_tapped {kind}</code> &middot; <code>today_record_shown {needs_count, moved_count, days_since_last_seen}</code> &middot; <code>today_record_empty_shown {half}</code> &middot; <code>designer_card_message_tapped</code> &middot; <code>house_room_opened</code>.</td></tr>
+  <tr><th>Tier</th><td>guest / discovering: the record mounts with MOVED only, no designer seat. engaged: the seat plus the picked-up-your-request row, no money rows. activeProject: as drawn.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>The record, the greeting, the designer seat, the room rail, the dated story chip, the tab bar. Today&#8217;s home is four blocks and a date (<code>DailyRoomView.swift:104-145</code>). Dark variant drawn as <b>M1d</b>.</td></tr>
+</table>
+</div>
+<div class="pv-sheet"><table class="sheet-table">
+  <caption>M2 &middot; Today, discovering &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> header at 9:10pm &mdash; &ldquo;Good evening.&rdquo; from <code>TimeOfDay</code> &middot; <b>2</b> the record, MOVED only &middot; <b>3</b> the room the person made, with its own dated state line &middot; <b>4</b> NEW THIS WEEK, drawn only at three or more rows &middot; <b>7</b> the tab bar. Blocks <b>5</b> (the Saved summary row) and <b>6</b> (the story) continue below the fold.</td></tr>
+  <tr><th>Purpose</th><td>Give a person with no designer an honest reason to open &mdash; and an honest silence when there isn&#8217;t one.</td></tr>
+  <tr><th>Entry</th><td>Cold launch &middot; tab <code>Today</code>.</td></tr>
+  <tr><th>Components</th><td><code>HouseRecordCard</code> (<b>new</b>, 2) &middot; <code>RoomHeroCard</code> (<b>new</b>, 3) &middot; <code>NewThisWeekRail</code> (<b>new</b>, reuses <code>ProductCard</code>, 4) &middot; <code>DailyStoryCard</code> (existing).</td></tr>
+  <tr><th>Copy</th><td>As drawn. &ldquo;The Brass Arc Floor Lamp you saved is $100 less than when you saved it.&rdquo; states both numbers and never a countdown, a scarcity count or a was/now strike. &ldquo;Three pieces joined Patina this week.&rdquo; sits under NEW THIS WEEK, not on the record &mdash; the catalogue is not a person. Room, price and lamp lines are <i>example copy</i>: the walk accounts carry 0 rooms and 0 saved items.</td></tr>
+  <tr><th>Data</th><td><code>get_recommendations</code> widened with <code>description</code> + <code>published_at</code> (SP-10&#8217;s DROP/recreate) &middot; <code>saved_items</code> + <code>price_cents_at_save</code> &middot; <code>products.deleted_at</code> &middot; local <code>RoomModel</code>.</td></tr>
+  <tr><th>States</th><td>No room &rarr; <b>Start with a room</b> with &ldquo;Type the dimensions&rdquo; and &ldquo;Scan it&rdquo;, the light act first. Fewer than three genuinely new pieces &rarr; the block does not draw and is never padded. Nothing moved &rarr; &ldquo;Nothing moved since Thursday.&rdquo; drawn on the card, not hidden.</td></tr>
+  <tr><th>Interactions</th><td><code>house_add_room_tapped {method}</code> &middot; <code>piece_card_tapped</code> &middot; <code>today_record_line_tapped {kind}</code>.</td></tr>
+  <tr><th>Tier</th><td>guest = identical minus the saved rows, plus one quiet line: &ldquo;Sign in to keep this on every device.&rdquo; No wall, no sheet.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>Everything above the story. Today a discovering user sees the same four blocks as a guest and as an activeProject client (F13). Dark variant drawn as <b>M2d</b>.</td></tr>
+</table>
+</div>
+<div class="pv-sheet"><table class="sheet-table">
+  <caption>M3 &middot; Piece detail, purchase acts &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> 340 pt hero, a real catalogue crop &middot; <b>2</b> <code>products.brand</code>, not the vendor &middot; <b>5</b> price &middot; <b>6</b> size and lead time, the two facts the buyability gate insists on &middot; <b>7</b> the description the database already holds &middot; <b>8</b> the fit line, printed in numbers &middot; <b>11</b> the purchase bar above the tab bar. Provenance, the maker story and the responsibility line (blocks 9&ndash;10) follow below the fold.</td></tr>
+  <tr><th>Purpose</th><td>Let a person decide, then act &mdash; buy it, or hand it to their designer.</td></tr>
+  <tr><th>Entry</th><td>Pieces tab &middot; Saved &middot; a room &middot; a <code>patina://piece/&lt;id&gt;</code> link.</td></tr>
+  <tr><th>Components</th><td><code>ProductDetailView</code> (existing) + <code>PurchaseActionBar</code> (<b>new</b>, 11) + <code>FitLine</code> (<b>new</b>, 8).</td></tr>
+  <tr><th>Copy</th><td>As drawn; the description is printed, not composed. &ldquo;Buy &mdash; $4,200&rdquo; &middot; &ldquo;Add to room&rdquo; &middot; &ldquo;Your Living Room&#8217;s longest wall is 18 ft. This table is 7 ft.&rdquo; Dimensions, lead time and the fit line are <i>example copy</i> &mdash; empty in the seed, and a piece without them shows Path C instead.</td></tr>
+  <tr><th>Data</th><td>The detail reads the table directly &mdash; <code>products?id=eq.&lt;id&gt;&amp;select=*,vendors(...)</code> (<code>ProductAPIClient.swift:91-105</code>) &mdash; so <code>description</code>, <code>dimensions</code>, <code>lead_time_weeks</code> and <code>patina_managed</code> need no RPC change here. That same <code>select</code> is SP-01&#8217;s PGRST201 two-FK bug.</td></tr>
+  <tr><th>States</th><td>Loading &rarr; &ldquo;One moment&hellip;&rdquo; &middot; failure &rarr; &ldquo;Couldn&#8217;t load product&rdquo; / &ldquo;Let&#8217;s try that again&rdquo; <b>with a working back control</b> (SP-01) &middot; gate fails or price null &rarr; Path C, primary reads &ldquo;Ask about this piece&rdquo; over &ldquo;We don&#8217;t have this piece&#8217;s size and lead time yet.&rdquo;</td></tr>
+  <tr><th>Interactions</th><td><code>piece_buy_tapped</code> &middot; <code>piece_ask_designer_tapped</code> &middot; <code>piece_add_to_room_tapped</code> &middot; <code>piece_saved</code>.</td></tr>
+  <tr><th>Tier</th><td>guest &rarr; <code>Buy</code> opens the auth sheet with a Cancel (SP-09), then the order sheet. engaged / activeProject &rarr; primary becomes &ldquo;Ask Leah to source this&rdquo;, with &ldquo;Buy it myself&rdquo; as the secondary.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>Today the terminus is <code>Add to Room</code> &rarr; <code>Saved &#10003;</code> with no size, lead time, description, maker&#8217;s town or purchase (F12, F17). The match percentage comes off the screen (F158). Dark variant drawn as <b>M3d</b>.</td></tr>
+</table>
+</div>
+<div class="pv-sheet"><table class="sheet-table">
+  <caption>M4 &middot; The room &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> 220 pt hero on the room-type gradient (living &rarr; <code>warm</code>) &middot; <b>2</b> name and the honest capture label &middot; <b>3</b> the stat row, with no AR cell &middot; <b>4</b> the pieces in the room &middot; <b>5</b> one room-scoped browse act &middot; <b>6</b> the two acts that make the numbers correctable &middot; <b>7</b> tab bar, Spaces active.</td></tr>
+  <tr><th>Purpose</th><td>The room is the thing that gets better with use &mdash; and the numbers on it must be correctable.</td></tr>
+  <tr><th>Entry</th><td>Tab <code>Spaces</code> &middot; the room rail on Today &middot; <code>patina://room/&lt;id&gt;</code>.</td></tr>
+  <tr><th>Components</th><td><code>RoomProjectView</code> (existing, trimmed) &middot; <code>RoomSettingsView</code> (existing, now reachable) &middot; <code>RoomBudgetSheet</code> (<b>new</b>, 6).</td></tr>
+  <tr><th>Copy</th><td>As drawn. <code>TYPED, NOT SCANNED</code> replaces the <code>JUST SCANNED</code> / <code>MANUAL ENTRY</code> pair (F51); the stat is labelled <code>SAVED PIECES</code>, never spend. Dimensions and budget are <i>example copy</i>.</td></tr>
+  <tr><th>Data</th><td>Local <code>RoomModel</code> (budget written locally first, mirrored to <code>rooms.budget_cents</code> on sync) &middot; <code>saved_items</code> scoped by <code>room_id</code> &middot; <code>project_rooms</code> where a project owns the room, in which case the stat reads <code>committed_cents</code> and is labelled as such.</td></tr>
+  <tr><th>States</th><td>No pieces &rarr; &ldquo;Nothing in this room yet.&rdquo; and the one browse act &middot; no budget &rarr; the ghost act, never a <code>&mdash;</code> &middot; unsynced room &rarr; the budget still saves, locally.</td></tr>
+  <tr><th>Interactions</th><td><code>house_room_opened</code> &middot; <code>room_budget_set</code> &middot; <code>room_dimensions_edited</code> &middot; <code>room_browse_tapped</code>.</td></tr>
+  <tr><th>Tier</th><td>Identical at every tier; a project&#8217;s name appears only when the room belongs to one.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>The pieces grid, the budget, <code>Edit dimensions</code>, the honest capture label, and the removal of <code>0 IN AR</code> (F64, F110, F193).</td></tr>
+</table>
+</div>
+<div class="pv-sheet"><table class="sheet-table">
+  <caption>M5 &middot; The purchase flow (5a &middot; 5b &middot; 5c) &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>5a</b>: <b>1</b> title over the piece &middot; <b>2</b> maker and their town &middot; <b>3</b> size and lead time &middot; <b>4</b> the money line and what is still to come &middot; <b>5</b> who is responsible, and one contact that resolves &middot; <b>6</b> the attribution line, activeProject only &middot; <b>7</b> the act, and where payment opens. <b>5b</b>: <b>1</b> the app waiting behind &middot; <b>2</b> Safari, not Patina &middot; <b>3</b> the piece line &middot; <b>4</b> Apple Pay as Stripe renders it. <b>5c</b>: <b>1</b> the mark &middot; <b>2</b> what was bought &middot; <b>3</b> the receipt &middot; <b>4</b> the push moment, opt-in &middot; <b>5</b> two ways out.</td></tr>
+  <tr><th>Purpose</th><td>Take $4,200 from a person who has never bought furniture from a phone.</td></tr>
+  <tr><th>Entry</th><td><code>Buy &mdash; $4,200</code> on M3.</td></tr>
+  <tr><th>Components</th><td><code>OrderSheet</code> (<b>new</b>) &middot; <code>SFSafariViewController</code> (the <code>InvoicesViewModel</code> pattern) &middot; <code>OrderPlacedView</code> (<b>new</b>).</td></tr>
+  <tr><th>Copy</th><td>As drawn, verbatim. &ldquo;Delivery and tax are added at payment. You&#8217;ll see the full total before you pay.&rdquo; &middot; &ldquo;Sold and shipped by Patina.&rdquo; &middot; &ldquo;Payment opens securely in Safari.&rdquo; &middot; &ldquo;Ordered in your name. Leah sees it on your project and is credited at the piece&#8217;s trade rate. This doesn&#8217;t change your price.&rdquo; The contact line and the Stripe page are <i>example copy</i>: the responsibility paragraph is config-driven and Path A does not ship until it is real, and 5c prints the settled total from Stripe rather than the piece price.</td></tr>
+  <tr><th>Data</th><td><code>create_direct_order(p_product_id, p_quantity)</code> &rarr; <code>create-checkout-session {direct_order_id}</code> (+ <code>automatic_tax</code>, <code>shipping_options</code>, widened PI metadata) &rarr; poll <code>direct_orders.status</code> on dismiss (3 s / 60 s, the invoice pattern) &rarr; <code>stripe-webhook</code> settles &rarr; <code>fulfillment_intake</code> enqueue.</td></tr>
+  <tr><th>States</th><td>Create fails &rarr; the error <b>above</b> a dimmed button, with &ldquo;Let&#8217;s try that again&rdquo; and &ldquo;Message your designer&rdquo; &middot; poll times out &rarr; &ldquo;We haven&#8217;t seen this payment yet. We&#8217;ll update this as soon as it clears.&rdquo;, never the unconditional bank-transfer line (F157) &middot; ACH chosen &rarr; &ldquo;Your bank transfer is on its way. This usually clears in 3&ndash;5 business days.&rdquo; &middot; canceled &rarr; the sheet returns intact.</td></tr>
+  <tr><th>Interactions</th><td><code>order_sheet_shown</code> &middot; <code>order_created</code> &middot; <code>order_checkout_opened</code> &middot; <code>order_checkout_returned {outcome}</code> &middot; <code>order_settled</code> &middot; <code>order_failed {reason}</code> &middot; <code>push_permission_primer_shown</code> &middot; <code>push_permission_result</code>.</td></tr>
+  <tr><th>Tier</th><td>guest &rarr; the auth sheet first, with a Cancel. activeProject &rarr; the attribution line draws, and this whole flow is the secondary act behind &ldquo;Ask Leah to source this&rdquo;.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>Entirely new on iOS. The backend chain exists end to end (<code>research/12-backend-reality.md</code> &sect;5); the attribution columns and the tax / freight completion are B-5. W4 also repoints the direct-order <code>success_url</code> off the client-portal <code>/orders</code> page (<code>create-checkout-session:554</code>).</td></tr>
+</table>
+</div>
+<div class="pv-sheet"><table class="sheet-table">
+  <caption>M6 &middot; The return moment (6a&ndash;6d) &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>6a</b>: <b>1</b> the push, naming the person and the object &middot; <b>2</b> the Lock Screen rectangular widget &mdash; no count. <b>6b</b>: <b>1</b> the small widget, one line &middot; <b>2</b> the same widget with nothing to say &middot; <b>3</b> the app&#8217;s first extension. <b>6c</b>: <b>1</b> the mark &middot; <b>2</b> the promise &middot; <b>3</b> the four events &middot; <b>4</b> the sentence, verbatim &middot; <b>5</b> two real buttons. <b>6d</b>: <b>1</b> header &middot; <b>2</b> the record &middot; <b>3</b> the top row opened to its date, the decision one tap away &middot; <b>4</b> the tab bar.</td></tr>
+  <tr><th>Purpose</th><td>Bring the person back for something true, and land them where it is.</td></tr>
+  <tr><th>Entry</th><td>APNs push &middot; widget tap &middot; an emailed link, once AASA lands (SP-03).</td></tr>
+  <tr><th>Components</th><td><code>PatinaWidget</code> (<b>new</b> WidgetKit target &mdash; the app&#8217;s first extension) &middot; <code>PushPrimerView</code> (<b>new</b>) &middot; <code>NotificationRouter</code> (existing, extended to <code>invoice</code>, <code>proposal</code>, <code>decision</code>, <code>thread</code>, <code>order</code>).</td></tr>
+  <tr><th>Copy</th><td>As drawn; every push names the person and the object, never &ldquo;you have an update&rdquo;. Widget empty: &ldquo;Nothing moved since Thursday.&rdquo; Primer: &ldquo;We&#8217;ll tell you when your designer sends a proposal, when an invoice comes due, when a decision is waiting, and when something you ordered moves. Nothing else.&rdquo;</td></tr>
+  <tr><th>Data</th><td><code>apns-send</code> from two edge functions (<code>proposal-send</code>, <code>invoice-send</code> + <code>invoice-reminders</code>) and one new <code>AFTER INSERT</code> trigger on <code>client_decisions</code>, each passing a <code>notification_log_id</code>. The widget reads the App Group snapshot written on foreground &mdash; it can be one open behind, by design.</td></tr>
+  <tr><th>States</th><td>Widget with no data &rarr; &ldquo;Open Patina to see your house.&rdquo; &middot; permission denied &rarr; no push, and the record still works. The iOS system alert follows only a tap on &ldquo;Turn these on&rdquo;.</td></tr>
+  <tr><th>Interactions</th><td><code>push_received {kind}</code> &middot; <code>push_opened {kind}</code> &middot; <code>widget_opened</code> &middot; <code>push_permission_primer_shown</code>.</td></tr>
+  <tr><th>Tier</th><td>discovering and guest get no money pushes; the widget renders only for signed-in accounts.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>The app has one off-app surface (push receive), no extension target (F130, A15), and asks for permission once, after a design request, with no copy at all (F47, F167). 6a hides the status-bar clock because the Lock Screen owns the time; APNs, universal links and the App Group are device claims, and this program produced no device pass.</td></tr>
+</table>
+</div>
+<div class="pv-sheet"><table class="sheet-table">
+  <caption>M7 &middot; Ask your designer (Path B) &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> her name in the title, the piece in the eyebrow &middot; <b>2</b> the piece, its maker and its price &middot; <b>3</b> the room picker &middot; <b>4</b> a pre-filled, fully editable message &middot; <b>5</b> the act, and what she will see.</td></tr>
+  <tr><th>Purpose</th><td>Let the client shop <i>with</i> the designer instead of around her.</td></tr>
+  <tr><th>Entry</th><td>&ldquo;Ask Leah to source this&rdquo; on M3 &middot; Path C at engaged / activeProject &middot; the Companion&#8217;s &ldquo;Message your designer&rdquo; row.</td></tr>
+  <tr><th>Components</th><td><code>AskDesignerSheet</code> (<b>new</b>) &middot; <code>MessagingAPIClient</code> (existing) + SP-13&#8217;s create call.</td></tr>
+  <tr><th>Copy</th><td>As drawn; the message is editable and never sent without a tap. &ldquo;Can we use this rug in the living room?&rdquo; &middot; &ldquo;She&#8217;ll see the piece, the price and the room.&rdquo;</td></tr>
+  <tr><th>Data</th><td><code>rpc_start_project_thread(p_project_id)</code> (idempotent, exists, granted) then <code>sendMessage</code> with the product id in metadata &mdash; one thread per project, so every entry point adds to one conversation.</td></tr>
+  <tr><th>States</th><td>No project yet &rarr; <code>rpc_start_direct_thread</code> &middot; send fails &rarr; the message is kept and &ldquo;Let&#8217;s try that again&rdquo; offered.</td></tr>
+  <tr><th>Interactions</th><td><code>piece_ask_designer_tapped</code> &middot; <code>ask_designer_sent {has_room}</code>.</td></tr>
+  <tr><th>Tier</th><td>engaged and activeProject only; at discovering the same control reads &ldquo;Get design help&rdquo;.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>The piece screen has no way to reach a person at all (F150, F87); messaging exists but a client cannot start a thread.</td></tr>
+</table>
+</div>
+<div class="pv-sheet"><table class="sheet-table">
+  <caption>M8 &middot; Studio &rarr; Ordered &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> a pushed screen, not a tab root &middot; <b>2</b> the piece the client bought &middot; <b>3</b> the four-step rail, current step in charcoal &middot; <b>4</b> the carrier and the designer, one tap each &middot; <b>5</b> the piece <i>Leah</i> bought, on the same list.</td></tr>
+  <tr><th>Purpose</th><td>Answer T8 &mdash; &ldquo;where is it&rdquo; &mdash; in one screen, for everything on the job, not only what you bought yourself.</td></tr>
+  <tr><th>Entry</th><td>Tab <code>Studio</code> &rarr; <code>Ordered</code> &middot; the record&#8217;s MOVED rows &middot; an order push.</td></tr>
+  <tr><th>Components</th><td><code>OrderListView</code> / <code>OrderDetailCard</code> (<b>new</b>) &middot; <code>PatinaStatusBadge</code> (existing).</td></tr>
+  <tr><th>Copy</th><td>The states are <code>_shared/fulfillment-templates.ts:31-37</code>&#8217;s six transitions, verbatim. Dates, the ETA and &ldquo;Leah updates this as it moves.&rdquo; are <i>example copy</i>.</td></tr>
+  <tr><th>Data</th><td>One list over <code>fulfillment_orders</code> + <code>fulfillment_order_items</code> + <code>fulfillment_shipments</code> scoped to <code>client_profile_id = auth.uid()</code> &mdash; <b>the new client-scoped SELECT policy</b>; today those tables are admin- and agent-read only (<code>00350:316-325</code>). <code>direct_orders</code> supplies the paid-but-not-yet-intaken window. &ldquo;Track with the carrier&rdquo; resolves <code>carrier</code> + <code>tracking</code> through a client-side carrier&rarr;URL map; no <code>tracking_url</code> column exists and none is added.</td></tr>
+  <tr><th>States</th><td>No orders &rarr; the section does not render &middot; paid but not yet on the rail &rarr; &ldquo;Paid Sep 3. We&#8217;ll tell you when it ships.&rdquo; &middot; refunded &rarr; &ldquo;Refunded Sep 20&rdquo; &middot; designer-sourced &rarr; &ldquo;Leah updates this as it moves.&rdquo; rather than a blank rail.</td></tr>
+  <tr><th>Interactions</th><td><code>order_status_opened</code> &middot; <code>order_track_tapped</code>.</td></tr>
+  <tr><th>Tier</th><td>Any tier that has ordered, or whose designer has.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>No order object exists anywhere in the client app (F19, F66); the state machine stops at <code>paid</code> (F154); the shipping push exists and reaches nobody (F198).</td></tr>
+</table>
+</div>
+<div class="pv-sheet"><table class="sheet-table">
+  <caption>M9 &middot; The Pieces tab, and Saved as its own door &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> the tab root, gutter 20 &middot; <b>2</b> the labelled Saved row that cannot hide &middot; <b>3</b> category chips, server-side &middot; <b>4</b> one card size (SP-02) &middot; <b>5</b> the tab bar, Pieces active. <b>M9b</b>: <b>6</b> Saved keeps its own Boards / All items surface &middot; <b>7</b> every row now prints its price, its room, its save date and the note the data model has always held.</td></tr>
+  <tr><th>Purpose</th><td>Give browsing a door that cannot hide, and keep Saved a canonical surface rather than a segment.</td></tr>
+  <tr><th>Entry</th><td>Tab <code>Pieces</code> &middot; the Saved summary row on Today &middot; a <code>patina://piece/&lt;id&gt;</code> back path.</td></tr>
+  <tr><th>Components</th><td><code>EmergenceView</code> (existing) &middot; <code>SavedRow</code> (<b>new</b>, 7) &middot; <code>TableView</code> (the existing Saved surface, 6).</td></tr>
+  <tr><th>Copy</th><td>Tab label <code>Pieces</code>; screen title &ldquo;Browse pieces&rdquo;; row label &ldquo;Saved&rdquo; &mdash; the two canonical names stay distinct, and the tab&#8217;s VoiceOver label is &ldquo;Browse pieces&rdquo; alone (B-7). The note &ldquo;too deep for the alcove&rdquo; and the save dates are <i>example copy</i>.</td></tr>
+  <tr><th>Data</th><td><code>get_recommendations</code> with <code>p_category</code> &mdash; a parameter nobody sends today &middot; <code>saved_items</code> with <code>saved_at</code>, <code>room_id</code>, <code>note</code> (F197, F170).</td></tr>
+  <tr><th>States</th><td>Nothing saved &rarr; the row reads &ldquo;Saved&rdquo; / &ldquo;Nothing yet&rdquo; and still draws (F14) &middot; no results for a chip &rarr; &ldquo;Nothing here yet.&rdquo; and the chip stays selected.</td></tr>
+  <tr><th>Interactions</th><td><code>browse_category_selected {category}</code> &middot; <code>saved_opened</code> &middot; <code>saved_note_edited</code>.</td></tr>
+  <tr><th>Tier</th><td>Identical at every tier; guest saves are local and belong to the guest (SP-06).</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>Browse has no door on the home or in the orb (F98); Saved&#8217;s door disappears at zero (F14); a saved row carries no date, room or note (F197). The match pill comes off the grid with the percentage (F158).</td></tr>
+</table>
+</div>
+</div>
+</body></html>

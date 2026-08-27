@@ -1,0 +1,1379 @@
+[
+ {
+  "id": "H1-01",
+  "seat": "H1",
+  "task_ids": [
+   "T2",
+   "T11"
+  ],
+  "key": "home|all|only-the-date-changes",
+  "surface": "Daily Room",
+  "tier": "all",
+  "class": "return",
+  "title": "Only the date changes from one morning to the next",
+  "observation": "\"WEDNESDAY · AUG 26\" / \"Today\" / NEXT MOVE \"Bring your first room into Patina\" / MAKER SPOTLIGHT \"The Grain Whisperer of Maine\" — the identical Next Move, identical story and identical layout appear on the guest home, the guest home an hour later, the signed-in client home, the dark-mode home and the final frame of the program.",
+  "why_it_matters": "The daily-return question has one honest answer today — the date string — so there is no reason to open the app tomorrow.",
+  "evidence": {
+   "shots": [
+    "g-12-home-discovering-top.png",
+    "g-39-home-after-idle.png",
+    "d-01-home-top.png",
+    "final-handoff-state.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:48-160",
+    "apps/mobile/Patina/Patina/Features/Home/ViewModels/DailyRoomViewModel.swift:85-89"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.9,
+  "already_ruled": "C23 — Option B's Today contract (one next move, one story, one active room) was accepted; this finding is about what makes those three honestly new, not about replacing them",
+  "july_status": null,
+  "proposal_seed": "Give Today one module whose content is produced by an event nobody in the household caused — new maker arrivals in the saved palette — with a truthful \"nothing new\" fallback."
+ },
+ {
+  "id": "H1-02",
+  "seat": "H1",
+  "task_ids": [
+   "T2",
+   "T11"
+  ],
+  "key": "home|all|story-unread-dot-always-on",
+  "surface": "Daily Room story card",
+  "tier": "all",
+  "class": "trust",
+  "title": "Story \"unread\" dot is on permanently",
+  "observation": "The clay dot in the top-right of the \"MAKER SPOTLIGHT / The Grain Whisperer of Maine\" card is present on every capture of the home in every lane, including after the story has been opened.",
+  "why_it_matters": "A freshness signal that is always on teaches the reader to ignore the only \"something is new\" mark on the return screen.",
+  "evidence": {
+   "shots": [
+    "g-12-home-discovering-top.png",
+    "d-01-home-top.png",
+    "c-31-engaged-home-top.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Core/Network/EditorialStoriesAPIClient.swift:119",
+    "apps/mobile/Patina/Patina/Features/Home/Views/DailyStoryCard.swift:80-87"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": "C5 honesty rule; C28 names the hard-coded isUnread as fair game",
+  "july_status": null,
+  "proposal_seed": "Persist a per-story read timestamp locally and drive the dot from it."
+ },
+ {
+  "id": "H1-03",
+  "seat": "H1",
+  "task_ids": [
+   "T2",
+   "T11"
+  ],
+  "key": "home|all|story-never-rotates",
+  "surface": "Daily Room story card",
+  "tier": "all",
+  "class": "return",
+  "title": "The same story is on the home every day",
+  "observation": "\"MAKER SPOTLIGHT / The Grain Whisperer of Maine / Jonathan Chilton on 40 years of listening to wood / 4 MIN READ\" is the story on the guest home, the signed-in client home, the engaged home, the dark home and the program's final frame.",
+  "why_it_matters": "The one editorial surface that could earn a nightly visit is a single fixed row, so a returning reader sees the article they already read.",
+  "evidence": {
+   "shots": [
+    "g-12-home-discovering-top.png",
+    "c-03-home-top-activeproject.png",
+    "d-01-home-top.png",
+    "final-handoff-state.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Core/Network/EditorialStoriesAPIClient.swift:72-79"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Serve the highest-sort_order story the reader has not opened, falling back to the newest, so the card advances as it is consumed."
+ },
+ {
+  "id": "H1-04",
+  "seat": "H1",
+  "task_ids": [
+   "T3",
+   "T6",
+   "T7"
+  ],
+  "key": "piece-detail|all|load-failure-hard-trap",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "purchase",
+  "title": "Every piece detail fails and traps you",
+  "observation": "\"Couldn't load product\" / \"Let's try that again\" on an otherwise empty screen; the accessibility tree returns exactly one element — the retry link — with no Back, no navigation and no Companion, and an edge-swipe back does nothing.",
+  "why_it_matters": "The screen where every browse path ends, where price, maker and materials live, cannot be reached at all, and reaching it costs the guest their session.",
+  "evidence": {
+   "shots": [
+    "g-17-piece-detail-top.png",
+    "g-17b-piece-detail-after-retry.png",
+    "g-17c-after-edge-swipe-back.png",
+    "d-04-piece-detail.png",
+    "x-04-piece-detail.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:99"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.95,
+  "already_ruled": "C27 names this as genuinely app-side, distinct from the local edge-function 503s",
+  "july_status": null,
+  "proposal_seed": "Disambiguate the embed to vendors!products_vendor_id_fkey(...) and give the error state a Back control."
+ },
+ {
+  "id": "H1-05",
+  "seat": "H1",
+  "task_ids": [
+   "T3"
+  ],
+  "key": "browse|all|grid-geometry-broken",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "purchase",
+  "title": "Browse grid runs off both edges of the screen",
+  "observation": "Under \"Browse pieces / 10 pieces curated for your space\" the left column is cut off — the readable text is \"M & BOARD\", \"rloom Oak / ing Table\", \",200\" — while card frames report x = −32.7 and x = −10.7 and a fourth card ends at x = 412.7 on a 402 pt screen; card sizes differ (284×294, 171×341, 240×293, 240×304).",
+  "why_it_matters": "The app's only shopping surface is unreadable, so half of a ten-piece catalogue cannot be evaluated or bought.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png",
+    "g-15b-browse-grid-settled.png",
+    "g-16-filter-chip-seating.png",
+    "d-03-browse-pieces.png",
+    "x-03-browse-pieces.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:134-234"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.95,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Fix the LazyVGrid to a single fixed-size two-column layout with the screen's own horizontal padding."
+ },
+ {
+  "id": "H1-06",
+  "seat": "H1",
+  "task_ids": [
+   "T3",
+   "T7"
+  ],
+  "key": "piece-detail|all|no-dimensions-anywhere",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "purchase",
+  "title": "No dimensions on any piece, anywhere",
+  "observation": "A card carries only maker, name, price and \"46% match\"; no width, depth, height, lead time, stock, shipping or returns line exists on any product surface in the app.",
+  "why_it_matters": "A buyer with a measured 18 × 14 room cannot tell whether a sofa fits, which is the first question every furniture purchase asks.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png",
+    "g-22b-saved-all-items.png"
+   ],
+   "refs": [
+    "supabase/migrations/00001_initial_schema.sql:35",
+    "supabase/migrations/00246_aesthete_quiz_bridge.sql:199-214",
+    "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:30-41"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Return products.dimensions from get_recommendations, decode it, and print it under the price as \"W × D × H\"."
+ },
+ {
+  "id": "H1-07",
+  "seat": "H1",
+  "task_ids": [
+   "T3",
+   "T6"
+  ],
+  "key": "browse|all|photos-show-a-different-piece",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "trust",
+  "title": "Product photos show a different piece entirely",
+  "observation": "\"ROOM & BOARD / Heirloom Oak Dining Table\" is illustrated with a white table surrounded by green velvet chairs; \"LEE INDUSTRIES / Live-Edge Coffee Table\" is illustrated with an old ladder-back chair standing in grass.",
+  "why_it_matters": "On a marketplace whose pitch is provenance, a listing photograph that is not the listed piece destroys the basis for a four-figure purchase.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png",
+    "g-22b-saved-all-items.png"
+   ],
+   "refs": []
+  },
+  "severity": "S0",
+  "confidence": 0.9,
+  "already_ruled": "C23 Option B contract: \"the app does not invent or mislabel imagery\"",
+  "july_status": null,
+  "proposal_seed": "Fail a listing to the honest branded fallback tile unless its image is verified against the product row."
+ },
+ {
+  "id": "H1-08",
+  "seat": "H1",
+  "task_ids": [
+   "T3"
+  ],
+  "key": "browse|all|unknown-maker-label",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "trust",
+  "title": "\"UNKNOWN MAKER\" on a provenance marketplace",
+  "observation": "A card in the grid carries the maker line \"UNKNOWN MAKER\" above the piece name.",
+  "why_it_matters": "The entire premise offered on the home screen — the maker and their story — is contradicted by the first grid the reader is sent to.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png"
+   ],
+   "refs": [
+    "supabase/migrations/00246_aesthete_quiz_bridge.sql:272-300"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Withhold catalogue rows with no resolvable vendor from the recommendations feed rather than shipping them with a placeholder maker."
+ },
+ {
+  "id": "H1-09",
+  "seat": "H1",
+  "task_ids": [
+   "T7"
+  ],
+  "key": "piece-detail|all|no-purchase-path",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "purchase",
+  "title": "No way to buy; the piece ends at \"Saved ✓\"",
+  "observation": "The terminal act on a piece is the button \"Add to Room\", which becomes \"Saved ✓\"; the card menu offers only \"Save · Share · Not for me · View details\". There is no Buy, no cart, no quote request, no vendor link and no price enquiry anywhere in the app.",
+  "why_it_matters": "Five taps of looking end at a save button, so the shopper leaves to buy the same piece from whoever does sell it.",
+  "evidence": {
+   "shots": [
+    "g-20-card-more-menu.png",
+    "g-17-piece-detail-top.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:338-399"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.95,
+  "already_ruled": "C11 — direct orders are a ratified backlog item, sequenced but not designed; C24 — the direct_orders rail exists on the backend with zero iOS client code",
+  "july_status": null,
+  "proposal_seed": "Ship the through-designer and quote paths first on the piece screen so the shopper always has one live commercial next step."
+ },
+ {
+  "id": "H1-10",
+  "seat": "H1",
+  "task_ids": [
+   "T4"
+  ],
+  "key": "saved|all|price-missing-thousands-separator",
+  "surface": "Saved",
+  "tier": "all",
+  "class": "content",
+  "title": "Saved renders the price as \"$4200\"",
+  "observation": "The saved row reads \"ROOM & BOARD / Heirloom Oak Dining Table / $4200\" while the same piece on the browse grid reads \"$4,200\".",
+  "why_it_matters": "The list held up as the record of what someone is saving toward prints money in a format the rest of the app does not use.",
+  "evidence": {
+   "shots": [
+    "g-22b-saved-all-items.png",
+    "c-22b-saved-all-items.png"
+   ],
+   "refs": []
+  },
+  "severity": "S3",
+  "confidence": 0.95,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Route the Saved row through the same currency formatter the grid uses."
+ },
+ {
+  "id": "H1-11",
+  "seat": "H1",
+  "task_ids": [
+   "T4"
+  ],
+  "key": "saved|all|default-tab-is-empty-boards",
+  "surface": "Saved",
+  "tier": "all",
+  "class": "wayfinding",
+  "title": "Saved opens on an empty \"Boards\" tab",
+  "observation": "Tapping the Companion row labelled \"Saved / 1 SAVED PIECE\" lands on the \"Boards\" tab reading \"No boards yet\" / \"Save pieces from recommendations to create your first board\"; the piece is one tab away under \"All items\".",
+  "why_it_matters": "The screen that is supposed to prove the app remembered the investment opens by saying it has nothing.",
+  "evidence": {
+   "shots": [
+    "g-21-saved-empty-boards-tab.png",
+    "g-22-saved-one-piece.png",
+    "c-22-saved-signed-in.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:18-22"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Default to \"All items\" whenever the board count is zero."
+ },
+ {
+  "id": "H1-12",
+  "seat": "H1",
+  "task_ids": [
+   "T4"
+  ],
+  "key": "saved|all|boards-cannot-hold-a-piece",
+  "surface": "Saved",
+  "tier": "all",
+  "class": "return",
+  "title": "A board can be created but never holds a piece",
+  "observation": "The board created from the \"+\" control shows \"This board is empty\" with a \"Browse pieces\" link, and no control anywhere in the app adds a piece to a board.",
+  "why_it_matters": "The one organising act the app invites — group what you love — can be started and never finished, so the investment never accumulates.",
+  "evidence": {
+   "shots": [
+    "g-21-saved-empty-boards-tab.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:101"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": "C28 names boards-never-hold-a-piece as fair game",
+  "july_status": null,
+  "proposal_seed": "Add \"Add to board\" to the card menu and wire it to the existing addToBoard call, or remove Boards until it works."
+ },
+ {
+  "id": "H1-13",
+  "seat": "H1",
+  "task_ids": [
+   "T4"
+  ],
+  "key": "saved|all|no-door-until-first-save",
+  "surface": "Companion panel",
+  "tier": "all",
+  "class": "wayfinding",
+  "title": "Saved has no door until something is saved",
+  "observation": "The Companion panel — the app's only navigation surface — lists \"Add your first space\", \"Retake the quiz\", \"Your recommendations\", \"Your studio\", \"Your profile\" and no \"Saved\" row while the saved count is zero, and the home has no Saved entry at all.",
+  "why_it_matters": "Someone cannot discover what the app does with the things they love until after they have blindly loved something.",
+  "evidence": {
+   "shots": [
+    "g-14b-companion-next-steps.png",
+    "d-09-companion-panel.png",
+    "x-09-companion-panel.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionActionRows.swift:219"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": "C1 — no tab bar; the Companion and the hub rail are the navigation",
+  "july_status": null,
+  "proposal_seed": "Always show the Saved row, with its empty count as the hint."
+ },
+ {
+  "id": "H1-14",
+  "seat": "H1",
+  "task_ids": [
+   "T4",
+   "T11"
+  ],
+  "key": "piece-detail|all|save-state-not-seeded",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "return",
+  "title": "Tomorrow the saved piece says \"Add to Room\" again",
+  "observation": "The piece-detail save state is never seeded from storage, so a piece saved yesterday shows the primary button \"Add to Room\" on the next visit and saving again inserts a second row.",
+  "why_it_matters": "The app forgets the single act it asks the user to perform, which is the whole basis for coming back.",
+  "evidence": {
+   "shots": [
+    "g-22b-saved-all-items.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/ProductDetail/ViewModels/ProductDetailViewModel.swift:104-125"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.75,
+  "already_ruled": "C28 names re-saving duplicates rows",
+  "july_status": null,
+  "proposal_seed": "Seed isSaved from the local table on appear and make the save idempotent on productId."
+ },
+ {
+  "id": "H1-15",
+  "seat": "H1",
+  "task_ids": [
+   "T5"
+  ],
+  "key": "browse|all|no-add-to-room-action",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "return",
+  "title": "No way to put a piece in a room",
+  "observation": "The card menu offers \"Save · Share · Not for me · View details\" and nothing else, even when the grid was entered from the room's own \"Browse Picks for This Room\" button, while the room screen counts \"0 ITEMS\" and says \"start building this room\".",
+  "why_it_matters": "The room is the only thing in the app that could visibly grow between visits, and nothing can be put into it.",
+  "evidence": {
+   "shots": [
+    "g-20-card-more-menu.png",
+    "g-27c-card-menu-in-room-context.png",
+    "g-28b-room-view.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Home/Views/AddToRoomSheet.swift:8"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": "residual — DELIVERY.md's own follow-up list names \"Add-to-Room (+ Add) gives no visible feedback and no confirmed saved_items row\"",
+  "proposal_seed": "Mount the existing AddToRoomSheet from the card menu whenever the reader has at least one room."
+ },
+ {
+  "id": "H1-16",
+  "seat": "H1",
+  "task_ids": [
+   "T5"
+  ],
+  "key": "room-entry|all|feet-reinterpreted-as-metres",
+  "surface": "Manual room entry",
+  "tier": "all",
+  "class": "trust",
+  "title": "A 6-point toggle turned 18×14 ft into 2713 sq ft",
+  "observation": "Entered LENGTH 18 / WIDTH 14 with the unit control reading \"ft\"; the summary returns \"46 ft\" × \"59 ft\" and \"2713 SQUARE FEET\", and the number then propagates to \"Living Room / 2713 SQ FT · 2 WINDOWS\", \"59' × 46'\" and the home card \"2713 sq ft · 0 pieces saved\".",
+  "why_it_matters": "The one fact the app holds about the reader's actual home is wrong by a factor of three and cannot be corrected from any screen.",
+  "evidence": {
+   "shots": [
+    "g-25-manual-room-entry-metric.png",
+    "g-27-room-with-recommendations.png",
+    "d-06a-room-summary-light-locked.png",
+    "g-40b-home-active-room-clipped.png"
+   ],
+   "refs": []
+  },
+  "severity": "S0",
+  "confidence": 0.95,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Stop converting a value the reader entered in the displayed unit, and make ft/m a 44-point segmented control with a visible selected state."
+ },
+ {
+  "id": "H1-17",
+  "seat": "H1",
+  "task_ids": [
+   "T5"
+  ],
+  "key": "room|all|typed-form-called-a-scan",
+  "surface": "Room",
+  "tier": "all",
+  "class": "trust",
+  "title": "\"Captured\", \"Rescan\", \"SCANNED\" for a typed form",
+  "observation": "After typing room dimensions the app says \"YOUR ROOM IS CAPTURED · LET'S DISCOVER YOUR STYLE\", the summary offers \"Rescan\" and \"0 ITEMS DETECTED\", and the account later lists the room as \"Living Room / SCANNED AUG 26\" beside a chip reading \"MANUAL ENTRY\".",
+  "why_it_matters": "The app claims to have seen a room it never saw, which is the same class of dishonesty the review series already ruled out.",
+  "evidence": {
+   "shots": [
+    "g-26-after-room-created.png",
+    "g-27-room-with-recommendations.png",
+    "c-06c-studio-bottom.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Rooms/Views/RoomProjectView.swift:219-228"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": "C5 honesty; C12 as corrected — the manual route is a first-class path, not a degraded scan",
+  "july_status": null,
+  "proposal_seed": "Give the manual route its own vocabulary end to end — entered, edit, no detected-items stat."
+ },
+ {
+  "id": "H1-18",
+  "seat": "H1",
+  "task_ids": [
+   "T5"
+  ],
+  "key": "room|all|ar-offered-never-renders",
+  "surface": "Room",
+  "tier": "all",
+  "class": "trust",
+  "title": "AR is offered on every room and never works",
+  "observation": "The room stat row reads \"0\" under \"IN AR\" on every room screen captured, and the label is never defined; code-read, usdz_url is NULL for every product so the AR button never draws and the AR route's own copy is \"3D model not available for this product\".",
+  "why_it_matters": "\"See it in my room\" is the reason a furniture app earns a place on the phone, and it is advertised by a counter that can only ever read zero. What would settle this: one device run against a product row with a non-null usdz_url.",
+  "evidence": {
+   "shots": [
+    "g-28b-room-view.png",
+    "c-24-room-detail.png",
+    "d-06-room-detail.png"
+   ],
+   "refs": [
+    "supabase/migrations/00246_aesthete_quiz_bridge.sql:281",
+    "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:192",
+    "apps/mobile/Patina/Patina/Features/ARPlacement/Views/ARPlacementView.swift:200"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.6,
+  "already_ruled": "C28 names usdz_url always NULL so AR never renders",
+  "july_status": null,
+  "proposal_seed": "Hide the In AR stat and the Try-in-your-room row until at least one catalogue row carries a model."
+ },
+ {
+  "id": "H1-19",
+  "seat": "H1",
+  "task_ids": [
+   "T1",
+   "T6"
+  ],
+  "key": "style|all|two-quizzes-two-names",
+  "surface": "Style quiz / taste portrait",
+  "tier": "all",
+  "class": "trust",
+  "title": "Two quizzes give my taste two different names",
+  "observation": "The Companion quiz returns \"Warm Modern / YOUR TASTE PORTRAIT\" after the reader chose \"Warm Minimal\"; the second quiz that runs after room creation asks four of the same five questions with different options and returns \"YOUR STYLE, FOUND / Modern Warmth\"; a third account's profile badge reads \"Style Explorer\".",
+  "why_it_matters": "Every recommendation in the app is justified by this label, so three names for one thing makes the whole match rationale unbelievable.",
+  "evidence": {
+   "shots": [
+    "g-08-quiz-result.png",
+    "g-26-after-room-created.png",
+    "g-28-room-view-final.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/StyleQuiz/Models/QuizModels.swift:23-26"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": "C4 — one name per concept",
+  "july_status": null,
+  "proposal_seed": "Delete the second quiz and route room creation into the one taste portrait."
+ },
+ {
+  "id": "H1-20",
+  "seat": "H1",
+  "task_ids": [
+   "T3",
+   "T6"
+  ],
+  "key": "profile|all|match-percentage-undefined",
+  "surface": "Profile",
+  "tier": "all",
+  "class": "trust",
+  "title": "\"48% MATCH\" never says matched to what",
+  "observation": "Profile shows the stat trio \"0 ROOMS | 1 SAVED | 48% MATCH\"; cards show \"46% match\" and \"45% match\"; the taste portrait carries an unlabelled progress bar at roughly 45% directly under \"WHY PATINA SEES THIS\".",
+  "why_it_matters": "Three unexplained percentages sit on the screens meant to build confidence in the recommendation, and one of them moved from 48% to 63% with no explanation.",
+  "evidence": {
+   "shots": [
+    "g-36-profile-guest.png",
+    "g-15-browse-pieces-grid.png",
+    "g-08-quiz-result.png",
+    "c-26-profile.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Profile/Views/ProfileView.swift:187-221"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.8,
+  "already_ruled": "U02 established that match scores are real, not fabricated — this is about legibility, not honesty",
+  "july_status": "residual — U43 replaced the fabricated \"47% Style Confidence\"; the Profile MATCH stat and the unlabelled portrait bar were not part of that fix",
+  "proposal_seed": "Label the stat in words — \"how close today's edit is to your portrait\" — or drop it."
+ },
+ {
+  "id": "H1-21",
+  "seat": "H1",
+  "task_ids": [
+   "T6",
+   "T14"
+  ],
+  "key": "piece-detail|all|no-decision-aids",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "purchase",
+  "title": "No compare, no notes, no ask-about-this-piece",
+  "observation": "The acts available on a piece are back, help, Share and ♥ in the top bar and \"Add to Room\" at the foot; the card menu adds \"Not for me\". There is no compare surface, no notes field, and no \"Get design help\" on the piece screen — the CTA appears on eleven other surfaces and not this one.",
+  "why_it_matters": "The moment someone is deciding on a $2,000 piece is the moment a designer is worth paying for, and the app offers no way to ask from there.",
+  "evidence": {
+   "shots": [
+    "g-20-card-more-menu.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:89-138",
+    "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:42"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Put \"Ask a designer about this piece\" in the piece-detail action bar, pre-scoped to the piece."
+ },
+ {
+  "id": "H1-22",
+  "seat": "H1",
+  "task_ids": [
+   "T12"
+  ],
+  "key": "share|all|share-sends-the-designer-portal",
+  "surface": "Share sheet",
+  "tier": "all",
+  "class": "trust",
+  "title": "Sharing a piece sends the designer portal",
+  "observation": "The iOS share sheet for a piece is titled \"Patina Designer Portal\" / \"app.patina.cloud\".",
+  "why_it_matters": "The household's normal way of deciding — send it to the other person — hands them a link branded as the professional tool they are not in.",
+  "evidence": {
+   "shots": [
+    "g-19-share-sheet.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Shared/PatinaPortalLinks.swift:16-22"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.95,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Share a consumer-facing patina.cloud piece URL with the piece's own title and image."
+ },
+ {
+  "id": "H1-23",
+  "seat": "H1",
+  "task_ids": [
+   "T12"
+  ],
+  "key": "share|all|link-cannot-open-the-app",
+  "surface": "Share sheet",
+  "tier": "all",
+  "class": "return",
+  "title": "The shared link cannot open the app",
+  "observation": "The app declares only the custom scheme \"patina\" and no associated-domains entitlement, so the https link it shares opens Safari even on a phone that has Patina installed.",
+  "why_it_matters": "The one path a second person has into the app dumps them on the web, which is the cheapest return surface the product owns and it is unused.",
+  "evidence": {
+   "shots": [
+    "g-19-share-sheet.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Patina.entitlements:5-10",
+    "apps/mobile/Patina/Patina/Info.plist:15-27"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Add the associated-domains entitlement and map /piece/<id> to the existing deep-link handler."
+ },
+ {
+  "id": "H1-24",
+  "seat": "H1",
+  "task_ids": [
+   "T12"
+  ],
+  "key": "account|all|no-second-person",
+  "surface": "Account / Settings",
+  "tier": "all",
+  "class": "return",
+  "title": "No way to bring my partner in",
+  "observation": "There is no invite, household, partner, co-viewer or shared-list concept anywhere in the app, and no way to share a room, a board or the Saved list — the three Share controls all emit the same product link.",
+  "why_it_matters": "Furnishing a first house is a two-person decision, and an app only one person can hold stays a browsing app.",
+  "evidence": {
+   "shots": [
+    "g-19-share-sheet.png",
+    "g-37-settings-guest.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Shared/PatinaPortalLinks.swift:16-22"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Start with one shared list per household — an invite link that grants a second account read/save access to the same Saved rows."
+ },
+ {
+  "id": "H1-25",
+  "seat": "H1",
+  "task_ids": [
+   "T9"
+  ],
+  "key": "design-request|guest|auth-wall-at-last-tap",
+  "surface": "Design request",
+  "tier": "guest",
+  "class": "trust",
+  "title": "Auth wall lands at the last tap, no escape",
+  "observation": "After four screens of the design-request flow, \"Send request\" throws the full gate — \"PATINA / Welcome home / Start with a piece you love\" — as a sheet with no Cancel, no ✕ and no \"Look around first\"; the same sheet reached from the sign-in path does have a Cancel. Nothing in the flow said an account would be needed.",
+  "why_it_matters": "The moment a guest has typed their budget and their hopes is the moment they judge whether the company is careful, and the app takes their escape hatches away.",
+  "evidence": {
+   "shots": [
+    "g-31-design-request-step1.png",
+    "g-33-after-send-request.png",
+    "g-35-auth-wall-no-dismiss.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Authentication/Views/AuthSheet.swift:41"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.95,
+  "already_ruled": "C9 — the auth sheet presents over context and never ejects; that half holds, but this variant ships with no dismiss control",
+  "july_status": "residual — U21's Studio-row entry variant of the same AuthSheet plumbing was never exercised in the July passes",
+  "proposal_seed": "Say \"you'll sign in to send this\" on the first step of the flow, and give the sheet a Cancel."
+ },
+ {
+  "id": "H1-26",
+  "seat": "H1",
+  "task_ids": [
+   "T9"
+  ],
+  "key": "design-request|all|offers-a-scan-it-cannot-take",
+  "surface": "Design request",
+  "tier": "all",
+  "class": "wayfinding",
+  "title": "Request sheet offers a scan it cannot take",
+  "observation": "\"Your design request\" opens on \"No scans on this phone yet\" / \"You can scan a room to attach — or request design help without one below.\" with exactly one control on the screen: \"Request without a scan\".",
+  "why_it_matters": "The copy names the better option and provides no way to take it, so the reader submits a weaker request than the app just told them to make.",
+  "evidence": {
+   "shots": [
+    "g-30-designer-consultation.png",
+    "c-33-engaged-design-request-again.png",
+    "x-06-design-request.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/DesignServices/DesignRequestFlowView.swift:60-65"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Put a \"Scan a room now\" secondary control on the empty state, routing to the scan flow and back."
+ },
+ {
+  "id": "H1-27",
+  "seat": "H1",
+  "task_ids": [
+   "T9",
+   "T8",
+   "T14"
+  ],
+  "key": "home|engaged|matched-designer-invisible",
+  "surface": "Daily Room",
+  "tier": "engaged",
+  "class": "return",
+  "title": "A matched homeowner's home is the guest home",
+  "observation": "An account whose design request was accepted and claimed by a designer on Aug 18, and which has already uploaded a room scan, sees \"NEXT MOVE / Bring your first room into Patina / A short scan gives the Companion a real space to work from\" — the guest home verbatim — with no \"Your studio\" row in the Companion and five zeroes in the Studio.",
+  "why_it_matters": "The single most return-worthy event in the whole product, a human agreeing to help with your house, appears nowhere in the app.",
+  "evidence": {
+   "shots": [
+    "c-31-engaged-home-top.png",
+    "c-32-engaged-companion.png",
+    "c-32c-engaged-studio-rows.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:80-91",
+    "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:352-360"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.9,
+  "already_ruled": "C5 — tier never demotes on failure; this is the tier resolving but the home never reading it",
+  "july_status": null,
+  "proposal_seed": "Make the accepted request the Next Move — the designer's name and what happens next — until the first project exists."
+ },
+ {
+  "id": "H1-28",
+  "seat": "H1",
+  "task_ids": [
+   "T10",
+   "T8"
+  ],
+  "key": "notifications|all|nothing-money-shaped-can-push",
+  "surface": "Notifications",
+  "tier": "all",
+  "class": "return",
+  "title": "Nothing money-shaped can ever notify me",
+  "observation": "\"Notifications / Nothing yet / Updates from your designer will land here.\" is the state on the guest, the signed-in client and the dark-mode client — the last of these while two decisions are overdue since Aug 22, an invoice is due Sep 1 and a proposal expires Sep 8.",
+  "why_it_matters": "The only external trigger the product owns fires for three design-request events and an operator-pressed shipping notice, so a proposal arriving or an invoice coming due can only be discovered by opening the app and hoping.",
+  "evidence": {
+   "shots": [
+    "g-29-notifications-guest.png",
+    "c-21-notifications-signed-in.png",
+    "d-10-notifications.png"
+   ],
+   "refs": [
+    "supabase/functions/notification-dispatch/index.ts:183-186",
+    "supabase/functions/invoice-reminders/index.ts:1-45"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.9,
+  "already_ruled": "C26 corrects C14 — apns-send is complete and provisioned; none of its five callers touches invoices, proposals, decisions or orders",
+  "july_status": null,
+  "proposal_seed": "Add one invoke_edge_function('apns-send', …) call to the proposal-sent and invoice-due triggers, on the pattern already proven three times."
+ },
+ {
+  "id": "H1-29",
+  "seat": "H1",
+  "task_ids": [
+   "T10"
+  ],
+  "key": "notifications|all|permission-asked-once-unexplained",
+  "surface": "Notifications",
+  "tier": "all",
+  "class": "return",
+  "title": "Notification permission asked once, unexplained",
+  "observation": "Authorization is requested exactly once per install, immediately after the first successful design-request submission, with no pre-permission screen and no rationale copy; the only related control is a Settings toggle labelled \"Notifications\" that writes a profile preference, not the OS grant, and reads ON for a guest who can receive none.",
+  "why_it_matters": "Someone who never submits a request is never asked, so the app has no way to reach the majority of its readers for the rest of the install's life.",
+  "evidence": {
+   "shots": [
+    "g-29-notifications-guest.png",
+    "g-37-settings-guest.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Services/API/PushTokenService.swift:87-108",
+    "apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:73"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": "C28 names the single unexplained prompt as fair game",
+  "july_status": null,
+  "proposal_seed": "Ask at the first genuinely notify-worthy moment — the first save or the first room — with one line naming what will be sent."
+ },
+ {
+  "id": "H1-30",
+  "seat": "H1",
+  "task_ids": [
+   "T10"
+  ],
+  "key": "notifications|guest|sign-in-button-drawn-as-a-circle",
+  "surface": "Notifications",
+  "tier": "guest",
+  "class": "content",
+  "title": "\"Sign in\" drawn as a circle, label overflowing",
+  "observation": "The guest empty state's \"Sign in\" control renders as a circle whose label extends past both edges of the circle.",
+  "why_it_matters": "The conversion control on the screen that asks a guest to sign in is visibly broken.",
+  "evidence": {
+   "shots": [
+    "g-29-notifications-guest.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:151"
+   ]
+  },
+  "severity": "S3",
+  "confidence": 0.95,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Use the design kit's capsule button rather than a circular glyph frame."
+ },
+ {
+  "id": "H1-31",
+  "seat": "H1",
+  "task_ids": [
+   "T11"
+  ],
+  "key": "auth|guest|returning-guest-loses-everything",
+  "surface": "Auth gate",
+  "tier": "guest",
+  "class": "return",
+  "title": "A returning guest is dumped at \"Welcome home\"",
+  "observation": "After a relaunch the guest lands on the gate reading \"Welcome home\" / \"Start with a piece you love\" with the session, the quiz progress and the room gone; the saved piece and the coach-mark flags do survive, and Profile still shows the \"Warm Modern\" badge while the Companion on that same launch says \"Style quiz / DISCOVER YOUR STYLE\" and \"Your recommendations / TAKE THE QUIZ FIRST\".",
+  "why_it_matters": "Every guest who leaves and comes back loses the work the app asked them to do, and the app greets them as a stranger while three of its surfaces disagree about what it remembers.",
+  "evidence": {
+   "shots": [
+    "g-38-relaunch-returning-guest.png",
+    "s-04-relaunch-guest-persist.png",
+    "g-40-companion-inconsistent-persistence.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/ContentView.swift:55",
+    "apps/mobile/Patina/Patina/App/Coordinators/AppCoordinator.swift:212-214"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.9,
+  "already_ruled": "C9 — guests browse behind a soft wall",
+  "july_status": null,
+  "proposal_seed": "Persist guestModeOptIn across launches and land a returning guest on the home, not the gate."
+ },
+ {
+  "id": "H1-32",
+  "seat": "H1",
+  "task_ids": [
+   "T11",
+   "T2"
+  ],
+  "key": "home|all|no-since-your-last-visit",
+  "surface": "Daily Room",
+  "tier": "all",
+  "class": "return",
+  "title": "Nothing anywhere says what changed since last visit",
+  "observation": "A returning client is dropped on a byte-identical Today — no welcome-back line, no unread marker, no last-visit timestamp — and there is no last-seen record for the story, the feed, the room or the saved list anywhere in the app.",
+  "why_it_matters": "One hour away and fourteen days away produce the same screen, so absence is neither punished nor acknowledged and there is no reward for returning.",
+  "evidence": {
+   "shots": [
+    "c-29-relaunch-returning-client.png",
+    "g-12-home-discovering-top.png",
+    "d-01-home-top.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:104-145",
+    "apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:169-172"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": "C23 — Option B's Today contract permits a truthful fallback, which is what a \"nothing new\" line would be",
+  "july_status": null,
+  "proposal_seed": "Record a last-opened timestamp and render one honest line above Today: what moved, or that nothing did."
+ },
+ {
+  "id": "H1-33",
+  "seat": "H1",
+  "task_ids": [
+   "T13"
+  ],
+  "key": "chrome|all|headings-scroll-under-the-clock",
+  "surface": "Scrolling screens",
+  "tier": "all",
+  "class": "reach",
+  "title": "Headings scroll under the status-bar clock",
+  "observation": "\"WEDNESDAY · AUG 26\" collides with the 9:41 clock on the scrolled home, \"Guest\" is sliced by the screen top on Profile, and at extra-large text the Dynamic Island pill itself occludes the proposal title \"Aspen Loft — Living Room Refresh / Review by Sep 8\".",
+  "why_it_matters": "Every scrolling surface in the app loses its own heading to the system chrome, which reads as unfinished on a product asking for four-figure trust.",
+  "evidence": {
+   "shots": [
+    "g-40b-home-active-room-clipped.png",
+    "g-36b-profile-guest-scrolled.png",
+    "x-02-profile-studio-rows.png"
+   ],
+   "refs": []
+  },
+  "severity": "S2",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Reserve the top safe-area inset on every scroll container instead of drawing content into it."
+ },
+ {
+  "id": "H1-34",
+  "seat": "H1",
+  "task_ids": [
+   "T13",
+   "T5"
+  ],
+  "key": "companion|all|orb-covers-the-primary-button",
+  "surface": "Companion orb",
+  "tier": "all",
+  "class": "reach",
+  "title": "The Companion orb covers the primary button",
+  "observation": "The orb sits on top of \"Browse Picks for This Room\" on the room screen and on \"Sign proposal\" on the proposal screen, clipping both; the same bubble covered the Next Move card during both coach-mark steps and the Companion panel's own first row.",
+  "why_it_matters": "The single most important control on a screen is the one thing the always-present overlay obscures.",
+  "evidence": {
+   "shots": [
+    "g-28b-room-view.png",
+    "c-24-room-detail.png",
+    "c-11-proposal-detail-scrolled.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/ContentView.swift:166"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": "C23 Option B contract: \"The Hearth is reserved layout space… App content does not render beneath the active Companion shape.\" — this is that contract not being honoured",
+  "july_status": null,
+  "proposal_seed": "Make the 120 pt hearth a real bottom inset on every screen that draws a primary action."
+ },
+ {
+  "id": "H1-35",
+  "seat": "H1",
+  "task_ids": [
+   "T13",
+   "T3"
+  ],
+  "key": "browse|all|filter-chips-clip-at-large-text",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "reach",
+  "title": "Filter chips clip to \"Stor\" at large text",
+  "observation": "At content size extra-extra-large the chip row \"All / Seating / Tables / Lighting / Storage\" overflows the screen width and \"Storage\" is clipped to \"Stor\" at the right edge with no horizontal scroll affordance.",
+  "why_it_matters": "A reader who needs larger text loses a whole category from the shop's only filter.",
+  "evidence": {
+   "shots": [
+    "x-03-browse-pieces.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:44"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Put the chip row in a horizontal ScrollView with a visible trailing fade."
+ },
+ {
+  "id": "H1-36",
+  "seat": "H1",
+  "task_ids": [
+   "T13",
+   "T5"
+  ],
+  "key": "room-entry|all|screen-ignores-dark-mode",
+  "surface": "Room summary",
+  "tier": "all",
+  "class": "reach",
+  "title": "Room summary renders light inside dark mode",
+  "observation": "With the system in dark appearance, the \"YOUR SPACE / Here's what I see.\" summary renders on a cream ground with near-black text — the only screen in the walk to ignore the override — and its own headline washes out to near-invisible.",
+  "why_it_matters": "The screen where the reader confirms the facts about their home is the one screen they may not be able to read at night.",
+  "evidence": {
+   "shots": [
+    "d-06a-room-summary-light-locked.png",
+    "d-01-home-top.png"
+   ],
+   "refs": [
+    "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Tokens/PatinaColors.swift:154-166"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.9,
+  "already_ruled": "C7 — dynamic dark mode via PatinaColors; camera/AR chrome is the deliberate exception and this is not that",
+  "july_status": null,
+  "proposal_seed": "Replace this screen's hard-coded colours with the dynamic tokens."
+ },
+ {
+  "id": "H1-37",
+  "seat": "H1",
+  "task_ids": [
+   "T13",
+   "T5"
+  ],
+  "key": "chrome|all|targets-far-under-44pt",
+  "surface": "Multiple",
+  "tier": "all",
+  "class": "reach",
+  "title": "Core controls are far under 44 points",
+  "observation": "The room form's unit toggles measure 12×13 pt (\"ft\") and 6×13 pt (\"m\"); the Saved screen's \"Boards\" tab is 46×17 pt; the trapped product screen's \"Let's try that again\" is 125×17 pt; the room steppers are 32×32.",
+  "why_it_matters": "The 6-point control is the one that silently corrupted the room's dimensions, so undersized targets here are a data-integrity problem, not only a comfort one.",
+  "evidence": {
+   "shots": [
+    "g-25-manual-room-entry-metric.png",
+    "g-21-saved-empty-boards-tab.png",
+    "g-17-piece-detail-top.png"
+   ],
+   "refs": []
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": "C23 Option B contract: \"a minimum 44×44 point interactive target\"",
+  "july_status": null,
+  "proposal_seed": "Raise every one of these to a 44 pt hit area with contentShape, starting with the ft/m toggle."
+ },
+ {
+  "id": "H1-38",
+  "seat": "H1",
+  "task_ids": [
+   "T1",
+   "T3"
+  ],
+  "key": "home|discovering|no-browse-door",
+  "surface": "Daily Room",
+  "tier": "discovering",
+  "class": "wayfinding",
+  "title": "No Browse door on the home or in the orb",
+  "observation": "The guest home shows four things — greeting, Next Move, story, Companion — and does not scroll; the Companion panel offers \"Add your first space\", \"Style quiz\", \"Your recommendations / TAKE THE QUIZ FIRST\" and \"Sign in\", with no Browse row until the quiz is finished.",
+  "why_it_matters": "Someone who came to look at furniture cannot reach the furniture without first completing a personality quiz.",
+  "evidence": {
+   "shots": [
+    "g-12-home-discovering-top.png",
+    "g-13-home-scrolled.png",
+    "g-14b-companion-next-steps.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Home/Views/MarketplaceLinksSection.swift:16",
+    "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomStateBlocks.swift:25"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": "C1 no tab bar; C23 — MarketplaceLinksSection is orphaned, not ruled against, and is one mount away",
+  "july_status": "residual — U24 delivered MarketplaceLinksSection persisting at every tier above discovering; it is no longer mounted by anything",
+  "proposal_seed": "Give the Companion a permanent Browse row at every tier, quiz or no quiz."
+ },
+ {
+  "id": "H1-39",
+  "seat": "H1",
+  "task_ids": [
+   "T1"
+  ],
+  "key": "onboarding|all|tour-step-two-never-renders",
+  "surface": "First-launch tour",
+  "tier": "all",
+  "class": "wayfinding",
+  "title": "The tour's save-loop step never renders",
+  "observation": "The shipped tour runs \"Step 1 of 2 / Welcome to Patina\" then \"Step 2 of 2 / Your profile\"; the declared middle step — \"Save what you love\" / \"Add pieces to a room with + Add — they follow you everywhere.\" — is dropped because its anchor mounts in no view, and the \"+ Add\" control it names does not exist on the shipped home.",
+  "why_it_matters": "The one first-run explanation of the app's save-and-return loop is silently omitted from every install.",
+  "evidence": {
+   "shots": [
+    "g-09-home-tour-step1.png",
+    "g-10-home-tour-step2.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:227-252",
+    "apps/mobile/Patina/Patina/Features/Home/Views/DailyGreetingHeader.swift:57"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.8,
+  "already_ruled": "C18 — the ratified 3-step tour copy is canonical; this is the delivery of step 2, not its wording",
+  "july_status": "regression-class — U32 delivered the rewritten tour VERIFIED; the middle step's anchor was lost with the Option B home rewrite",
+  "proposal_seed": "Anchor step 2 to whatever control now performs the save, or rewrite it to the act that exists."
+ },
+ {
+  "id": "H1-40",
+  "seat": "H1",
+  "task_ids": [
+   "T1"
+  ],
+  "key": "onboarding|all|coach-marks-cover-their-target",
+  "surface": "First-launch tour",
+  "tier": "all",
+  "class": "wayfinding",
+  "title": "Coach marks cover the card they describe",
+  "observation": "\"Step 1 of 2 / Welcome to Patina / This is your Daily Room — picks and stories chosen for your space.\" fully covers the Next Move card it is describing; step 2 does the same while pointing at the profile monogram; the Companion's own \"Got it\" bubble then covers the panel's first row. Skip/Next render in iOS system blue, the only blue in the app.",
+  "why_it_matters": "Three teaching moments in a row hide the thing being taught, on the reader's first thirty seconds.",
+  "evidence": {
+   "shots": [
+    "g-09-home-tour-step1.png",
+    "g-10-home-tour-step2.png",
+    "g-14-companion-panel-open.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:227-252"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.9,
+  "already_ruled": "C18 — tour copy is canonical; this is placement and tint, not copy",
+  "july_status": "residual — DELIVERY.md names the Companion-intro/tour collision as still open",
+  "proposal_seed": "Offset the bubble below its anchor and tint its controls with the app's clay, not system blue."
+ },
+ {
+  "id": "H1-41",
+  "seat": "H1",
+  "task_ids": [
+   "T1"
+  ],
+  "key": "launch|all|blank-white-launch-screen",
+  "surface": "Launch screen",
+  "tier": "all",
+  "class": "content",
+  "title": "Launch screen is blank white",
+  "observation": "The launch screen is pure white with no wordmark, no mark and no colour, captured identically on two separate cold launches, before the warm cream ground of the app appears.",
+  "why_it_matters": "The first frame of every session flashes a screen that belongs to no brand.",
+  "evidence": {
+   "shots": [
+    "g-01-splash.png",
+    "g-02-first-screen-after-splash.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Splash/Views/SplashView.swift:25"
+   ]
+  },
+  "severity": "S3",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Set the launch storyboard's background to the app's ground colour."
+ },
+ {
+  "id": "H1-42",
+  "seat": "H1",
+  "task_ids": [
+   "T3"
+  ],
+  "key": "browse|all|no-search-anywhere",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "purchase",
+  "title": "No search anywhere in the app",
+  "observation": "\"Browse pieces / 10 pieces curated for your space\" offers five hard-coded chips — All / Seating / Tables / Lighting / Storage — filtering the already-fetched rows client-side; there is no search field on any screen in the app.",
+  "why_it_matters": "Someone arriving with a specific need — a sofa for the living room — has no way to express it, so the app can only answer questions it chose.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png",
+    "g-14b-companion-next-steps.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:44,48-51"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Add a single search field over the catalogue, sending the category and query server-side instead of filtering twenty cached rows."
+ },
+ {
+  "id": "H1-43",
+  "seat": "H1",
+  "task_ids": [
+   "T5"
+  ],
+  "key": "room|all|room-browse-is-not-room-filtered",
+  "surface": "Room",
+  "tier": "all",
+  "class": "content",
+  "title": "\"Browse Picks for This Room\" is not room-filtered",
+  "observation": "The room's own primary button opens the same generic \"Browse pieces / 10 pieces curated for your space\" grid, with no room name and no room filtering, and the rationale copy has switched to naming a different taste-portrait result than the one on Profile.",
+  "why_it_matters": "The one promise that makes a scanned room worth having — pieces chosen for this space — is not kept by the button that makes it.",
+  "evidence": {
+   "shots": [
+    "g-27b-room-picks.png",
+    "g-28b-room-view.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:106-111"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": "residual — U07 delivered room-scoped routing for this CTA; a local-only room still falls back to the unscoped marketplace",
+  "proposal_seed": "Sync the room before offering the CTA, and title the scoped grid with the room's name."
+ },
+ {
+  "id": "H1-44",
+  "seat": "H1",
+  "task_ids": [
+   "T4",
+   "T12",
+   "T11"
+  ],
+  "key": "account|all|guest-data-adopted-by-next-account",
+  "surface": "Account",
+  "tier": "all",
+  "class": "trust",
+  "title": "Guest room and saves follow the next account in",
+  "observation": "The room typed and the piece saved as a guest appeared under client@patina.dev — \"ACTIVE ROOM / Living Room\", \"1 ROOM\", \"1 SAVED PIECE\", the badge \"✦ Modern Warmth\" and \"1 ROOMS\" — for an account with zero rooms and zero saved items server-side; \"Your Spaces\" flags the same room \"SAVED ON THIS PHONE\" while every other surface counts it as account data, and it disappeared only when the local store was cleared.",
+  "why_it_matters": "On the shared phone or tablet a household actually uses, one person's browsing silently becomes another person's account history, and nothing tells either of them it moved.",
+  "evidence": {
+   "shots": [
+    "c-03-home-top-activeproject.png",
+    "c-05-companion-panel-client.png",
+    "c-26-profile.png",
+    "c-34-final-state-signed-in-client.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Core/Persistence/LocalStoreReset.swift"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.9,
+  "already_ruled": "C27 names the device-scoped local store adopted by whichever account signs in next as genuinely app-side",
+  "july_status": null,
+  "proposal_seed": "Scope the local store to a user id and offer an explicit \"keep the room and saves you made as a guest\" step at sign-in."
+ },
+ {
+  "id": "H1-45",
+  "seat": "H1",
+  "task_ids": [
+   "T12"
+  ],
+  "key": "settings|all|no-sign-out-control",
+  "surface": "Settings",
+  "tier": "all",
+  "class": "trust",
+  "title": "There is no Sign Out anywhere",
+  "observation": "Settings shows \"ACCOUNT / Account / Sign in on the web\" and nothing else account-shaped; no Sign Out control exists in Profile or Settings in either the guest or the signed-in tier, and switching accounts during the walk required wiping the simulator keychain from the host.",
+  "why_it_matters": "Two people sharing a device cannot hand the app over, and a signed-in reader cannot leave — which is also an App Store account-deletion exposure for an account you can create in the app.",
+  "evidence": {
+   "shots": [
+    "g-37-settings-guest.png",
+    "g-37b-settings-account-tap-guest.png",
+    "c-27-account-row-inert.png",
+    "c-30-after-keychain-signout.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Account/AccountView.swift:52-70",
+    "apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:11"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.95,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Surface Sign Out (and Delete Account) directly in Settings rather than only inside the unreachable Account screen."
+ },
+ {
+  "id": "H1-46",
+  "seat": "H1",
+  "task_ids": [
+   "T1",
+   "T12"
+  ],
+  "key": "settings|all|account-row-is-inert",
+  "surface": "Settings",
+  "tier": "all",
+  "class": "wayfinding",
+  "title": "Settings \"Account >\" row does nothing",
+  "observation": "The \"Account\" row draws a chevron and does not navigate — tapped dead centre of its 338×44 frame with the screen unchanged, reproduced three times across the guest and signed-in tiers.",
+  "why_it_matters": "The row is the only route to the sign-out and account controls, so a dead chevron makes both unreachable.",
+  "evidence": {
+   "shots": [
+    "g-02b-settings-account-inert.png",
+    "g-37b-settings-account-tap-guest.png",
+    "c-27-account-row-inert.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:11",
+    "apps/mobile/Patina/Patina/Features/Account/AccountView.swift:52-70"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": "C5 — no dead controls",
+  "july_status": "regression-class — U05 delivered \"all 7 named dead controls wired or removed\"; this row is inert on the walked build",
+  "proposal_seed": "Fix the push to AccountView, or remove the row until it navigates."
+ },
+ {
+  "id": "H1-47",
+  "seat": "H1",
+  "task_ids": [
+   "T8"
+  ],
+  "key": "orders|all|no-order-object-to-track",
+  "surface": "Notifications / Studio",
+  "tier": "all",
+  "class": "purchase",
+  "title": "No order exists to track, on either side",
+  "observation": "There is no order screen, order history or shipping status anywhere in the app; the bell reads \"Nothing yet\" and Profile reads \"Nothing needs your attention right now.\" directly above \"Your Studio begins with a project.\"",
+  "why_it_matters": "Post-purchase tracking is the most reliable return trigger a furniture product has, and the backend's direct-order rail plus the fulfilment push vocabulary (confirmed / in_production / shipped / delivered / eta_change / substitution) exist with no client to show them.",
+  "evidence": {
+   "shots": [
+    "g-29-notifications-guest.png",
+    "c-21-notifications-signed-in.png",
+    "g-36-profile-guest.png"
+   ],
+   "refs": [
+    "supabase/migrations/00276_direct_orders.sql:48-67",
+    "supabase/functions/_shared/fulfillment-templates.ts:31-37"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": "C24 — direct orders exist on the backend with no iOS client and no designer attribution; C11 sequences them as a ratified backlog item",
+  "july_status": null,
+  "proposal_seed": "When the first order exists, give it a Today module that carries its state — and decide the designer attribution before the client ships."
+ }
+]

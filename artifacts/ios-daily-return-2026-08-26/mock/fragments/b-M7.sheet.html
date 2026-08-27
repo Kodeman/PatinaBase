@@ -1,0 +1,13 @@
+<table class="sheet-table">
+  <caption>M7 &middot; Ask your designer (Path B) &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> her name in the title, the piece in the eyebrow &middot; <b>2</b> the piece, its maker and its price &middot; <b>3</b> the room picker &middot; <b>4</b> a pre-filled, fully editable message &middot; <b>5</b> the act, and what she will see.</td></tr>
+  <tr><th>Purpose</th><td>Let the client shop <i>with</i> the designer instead of around her.</td></tr>
+  <tr><th>Entry</th><td>&ldquo;Ask Leah to source this&rdquo; on M3 &middot; Path C at engaged / activeProject &middot; the Companion&#8217;s &ldquo;Message your designer&rdquo; row.</td></tr>
+  <tr><th>Components</th><td><code>AskDesignerSheet</code> (<b>new</b>) &middot; <code>MessagingAPIClient</code> (existing) + SP-13&#8217;s create call.</td></tr>
+  <tr><th>Copy</th><td>As drawn; the message is editable and never sent without a tap. &ldquo;Can we use this rug in the living room?&rdquo; &middot; &ldquo;She&#8217;ll see the piece, the price and the room.&rdquo;</td></tr>
+  <tr><th>Data</th><td><code>rpc_start_project_thread(p_project_id)</code> (idempotent, exists, granted) then <code>sendMessage</code> with the product id in metadata &mdash; one thread per project, so every entry point adds to one conversation.</td></tr>
+  <tr><th>States</th><td>No project yet &rarr; <code>rpc_start_direct_thread</code> &middot; send fails &rarr; the message is kept and &ldquo;Let&#8217;s try that again&rdquo; offered.</td></tr>
+  <tr><th>Interactions</th><td><code>piece_ask_designer_tapped</code> &middot; <code>ask_designer_sent {has_room}</code>.</td></tr>
+  <tr><th>Tier</th><td>engaged and activeProject only; at discovering the same control reads &ldquo;Get design help&rdquo;.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>The piece screen has no way to reach a person at all (F150, F87); messaging exists but a client cannot start a thread.</td></tr>
+</table>

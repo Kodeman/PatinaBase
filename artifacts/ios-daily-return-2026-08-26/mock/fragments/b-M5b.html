@@ -1,0 +1,95 @@
+<!-- b-M5b — Direction B · M5b · Payment hand-off. Stripe hosted Checkout inside
+     SFSafariViewController; the app waits behind it. Everything inside .safari is drawn to
+     Apple's / Stripe's own chrome, not to Patina tokens — the same rule kit.css §14 uses. -->
+<div class="frame-wrap bx-m5b">
+<style>
+.bx-m5b .wait{position:absolute;left:20px;right:20px;top:68px;text-align:center;
+  font:400 14px/1.45 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m5b .safari{position:absolute;left:0;right:0;top:120px;bottom:0;z-index:26;overflow:hidden;
+  border-radius:12px 12px 0 0;background:#FFF;color:#111;font-family:var(--pat-sans);
+  box-shadow:0 -8px 30px rgba(0,0,0,.22);}
+.bx-m5b .safari__bar{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;
+  background:#F7F7F8;border-bottom:.5px solid rgba(60,60,67,.29);}
+.bx-m5b .safari__done{font:400 17px/1 var(--pat-sans);color:#007AFF;flex:0 0 auto;}
+.bx-m5b .safari__url{flex:1 1 auto;text-align:center;font:400 13px/1.2 var(--pat-sans);color:#3C3C43;}
+.bx-m5b .safari__lock{font-size:11px;}
+.bx-m5b .safari__refresh{flex:0 0 auto;color:#007AFF;font:400 17px/1 var(--pat-sans);}
+.bx-m5b .safari__page{padding:20px 22px;}
+.bx-m5b .stripe-merchant{font:600 15px/1.3 var(--pat-sans);color:#1A1A1A;}
+.bx-m5b .stripe-item{display:flex;align-items:center;gap:12px;padding:14px 0;
+  border-bottom:1px solid #E6E6E6;}
+.bx-m5b .stripe-item__thumb{width:44px;height:44px;border-radius:6px;overflow:hidden;flex:0 0 auto;}
+.bx-m5b .stripe-item__thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.bx-m5b .stripe-item__name{flex:1 1 auto;font:400 14px/1.35 var(--pat-sans);color:#1A1A1A;}
+.bx-m5b .stripe-item__amt{font:500 14px/1.35 var(--pat-sans);color:#1A1A1A;}
+.bx-m5b .stripe-note{font:400 12px/1.45 var(--pat-sans);color:#6B7280;padding:10px 0 16px;}
+.bx-m5b .stripe-apay{height:46px;border-radius:8px;background:#000;color:#fff;display:flex;
+  align-items:center;justify-content:center;gap:6px;font:600 17px/1 var(--pat-sans);}
+.bx-m5b .stripe-or{display:flex;align-items:center;gap:10px;padding:16px 0;color:#6B7280;
+  font:400 12px/1.2 var(--pat-sans);}
+.bx-m5b .stripe-or::before,.bx-m5b .stripe-or::after{content:'';flex:1 1 auto;height:1px;background:#E6E6E6;}
+.bx-m5b .stripe-lab{font:400 12px/1.4 var(--pat-sans);color:#6B7280;padding-bottom:5px;}
+.bx-m5b .stripe-field{height:44px;border:1px solid #D5D9E0;border-radius:6px;padding:0 12px;
+  display:flex;align-items:center;font:400 14px/1 var(--pat-sans);color:#9AA1AC;margin-bottom:14px;
+  background:#fff;}
+.bx-m5b .safari__tools{position:absolute;left:0;right:0;bottom:0;height:66px;background:#F7F7F8;
+  border-top:.5px solid rgba(60,60,67,.29);display:flex;align-items:flex-start;
+  justify-content:space-around;padding:14px 34px 0;color:#007AFF;}
+.bx-m5b .safari__tools svg{width:20px;height:20px;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol><symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol><symbol id="i-share" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6v11"/><path d="M8.4 7.2 12 3.6l3.6 3.6"/><path d="M6 12.4H5a1.6 1.6 0 0 0-1.6 1.6v5a1.6 1.6 0 0 0 1.6 1.6h14a1.6 1.6 0 0 0 1.6-1.6v-5a1.6 1.6 0 0 0-1.6-1.6h-1"/></g></symbol><symbol id="i-compass" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.6 8.4-2 5.2-5.2 2 2-5.2Z"/></g></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body" style="background:var(--pat-bg)">
+      <span class="wait">Confirming payment&hellip; This usually takes a few seconds.</span>
+    </div>
+
+    <div class="safari">
+      <div class="safari__bar">
+        <span class="safari__done">Done</span>
+        <span class="safari__url"><span class="safari__lock">&#128274;</span> checkout.stripe.com</span>
+        <span class="safari__refresh">&#8635;</span>
+      </div>
+      <div class="safari__page">
+        <div class="stripe-merchant">Patina</div>
+        <div class="stripe-item">
+          <span class="stripe-item__thumb"><img src="img/heirloom-thumb.jpg" alt="Heirloom Oak Dining Table"></span>
+          <span class="stripe-item__name">Heirloom Oak Dining Table</span>
+          <span class="stripe-item__amt">$4,200.00</span>
+        </div>
+        <p class="stripe-note">Shipping and tax are calculated once you enter your address.</p>
+        <div class="stripe-apay">&#63743; Pay</div>
+        <div class="stripe-or">Or pay with card</div>
+        <div class="stripe-lab">Email</div>
+        <div class="stripe-field">you@example.com</div>
+        <div class="stripe-lab">Card information</div>
+        <div class="stripe-field">1234 1234 1234 1234</div>
+        <div class="stripe-lab">Shipping address</div>
+        <div class="stripe-field">Address line 1</div>
+      </div>
+      <div class="safari__tools">
+        <span><svg><use href="#i-chev-l"/></svg></span>
+        <span style="opacity:.35"><svg><use href="#i-chev-r"/></svg></span>
+        <span><svg><use href="#i-share"/></svg></span>
+        <span><svg><use href="#i-compass"/></svg></span>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:78px;left:2px">1</span>
+<span class="callout-n" style="top:150px;left:2px">2</span>
+<span class="callout-n callout-n--clay" style="top:260px;left:2px">3</span>
+<span class="callout-n" style="top:352px;left:2px">4</span>
+</div>

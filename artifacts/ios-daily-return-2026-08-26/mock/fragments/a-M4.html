@@ -1,0 +1,109 @@
+<div class="frame-wrap a-m4">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="a-roomhero g-warm"></div>
+        <div class="pad-push" style="padding-top:12px">
+          <div class="t-h1">Living Room</div>
+          <div class="mono-label" style="display:block;margin-top:2px">18 &times; 14 ft &middot; North-facing &middot; 2 windows &middot; Entered Aug 24</div>
+          <div class="a-stats" style="margin-top:14px">
+            <span class="a-stat"><span class="a-stat__val">3</span><span class="a-stat__key">Items</span></span>
+            <span class="a-stat"><span class="a-stat__val">$3,590</span><span class="a-stat__key">Saved</span></span>
+          </div>
+          <div class="a-fill" style="margin-top:10px">Your range &middot; $5K+ &middot; from your quiz answer</div>
+          <div class="mono-label" style="display:block;margin-top:16px">Your items</div>
+          <div style="margin-top:6px">
+          <div class="a-item">
+            <span class="a-item__thumb tile-placeholder tile-placeholder--gradient g-leather"></span>
+            <span class="a-item__copy">
+              <span class="a-item__name">Velvet Club Chair</span>
+              <span class="a-item__maker">Article</span>
+            </span>
+            <span class="a-item__right">
+              <span class="a-item__price">$1,250</span>
+              <span class="a-item__saved">Saved Aug 24</span>
+            </span>
+          </div>
+          <div class="a-item">
+            <span class="a-item__thumb tile-placeholder tile-placeholder--gradient g-metal"></span>
+            <span class="a-item__copy">
+              <span class="a-item__name">Brass Arc Floor Lamp</span>
+              <span class="a-item__maker">Schoolhouse</span>
+            </span>
+            <span class="a-item__right">
+              <span class="a-item__price">$890</span>
+              <span class="a-item__saved">Saved Aug 22</span>
+            </span>
+          </div>
+          <div class="a-item">
+            <span class="a-item__thumb tile-placeholder tile-placeholder--gradient g-linen"></span>
+            <span class="a-item__copy">
+              <span class="a-item__name">Woven Jute Area Rug 8x10</span>
+              <span class="a-item__maker">Studio Piet</span>
+            </span>
+            <span class="a-item__right">
+              <span class="a-item__price">$1,450</span>
+              <span class="a-item__saved">Saved Sunday</span>
+            </span>
+          </div>
+          </div>
+          <div style="margin-top:14px"><span class="btn btn--primary">Browse pieces for the Living Room</span></div>
+        </div>
+      </div>
+      <div class="screen-chrome">
+        <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+      </div>
+      <span class="circ-btn circ-btn--lg a-gear"><svg><use href="#i-gear"/></svg></span>
+      <div class="companion-dock">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+        <span class="companion-hint">Living Room &middot; 3 saved</span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:268px;left:2px">1</span>
+  <span class="callout-n callout-n--clay" style="top:330px;right:2px">2</span>
+  <span class="callout-n" style="top:400px;left:2px">3</span>
+  <span class="callout-n" style="top:452px;right:2px">4</span>
+  <span class="callout-n" style="top:530px;right:2px">5</span>
+  <span class="callout-n" style="top:672px;left:2px">6</span>
+</div>
+<style>
+/* the room's stat tiles — two, not three (SP-18 takes IN AR and bare MATCH down) */
+.a-m4 .a-stats { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.a-m4 .a-stat { background:var(--pat-bg-2); border-radius:var(--pat-r-xl);
+  padding:11px 12px; display:flex; flex-direction:column; align-items:center; gap:3px; }
+.a-m4 .a-stat__val { font:400 22px/1.2 var(--pat-serif); color:var(--pat-text); }
+.a-m4 .a-stat__key { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+
+/* the room's item rows — thumbnail, name, maker, price, and the save date */
+.a-m4 .a-item { display:flex; align-items:center; gap:12px; padding:2px 0; }
+.a-m4 .a-item + .a-item { border-top:1px solid var(--pat-pearl); }
+.a-m4 .a-item__thumb { width:64px; height:64px; flex:0 0 auto; overflow:hidden;
+  border-radius:var(--pat-r-md); position:relative; }
+.a-m4 .a-item__copy { display:flex; flex-direction:column; gap:2px; flex:1 1 auto; min-width:0; }
+.a-m4 .a-item__name { font:500 13px/1.35 var(--pat-sans); color:var(--pat-text); }
+.a-m4 .a-item__maker { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+.a-m4 .a-item__right { margin-left:auto; display:flex; flex-direction:column;
+  align-items:flex-end; gap:2px; }
+.a-m4 .a-item__price { font:500 18px/1.28 var(--pat-serif); color:var(--pat-text); }
+.a-m4 .a-item__saved { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+
+/* the room's fill line — spend beside the quiz's own band label */
+.a-m4 .a-fill { font:400 10px/1.6 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-2); }
+
+.a-m4 .a-roomhero { height:240px; }
+.a-m4 .a-gear { position:absolute; top:calc(var(--pat-safe-top) + 11px); right:18px; z-index:20; }
+</style>

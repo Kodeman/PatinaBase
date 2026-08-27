@@ -1,0 +1,77 @@
+<!-- s-M3 · Shared planks — Saved, Boards: a board that actually holds pieces.
+     SP-12 (either wire the save path to addToBoard, or take Boards out of the app).
+     Additions to the kit, scoped under .sp-boards: .sp-boards__new, .sp-boards__body. -->
+<div class="frame-wrap sp-boards">
+  <style>
+    .sp-boards .screen-head__title { font:400 26px/1.18 var(--pat-serif); }
+    .sp-boards .sp-boards__new { color:var(--pat-text-link); }
+    .sp-boards .sp-boards__new svg { width:22px; height:22px; }
+    .sp-boards .sp-boards__body { padding:24px; display:flex; flex-direction:column; gap:12px; }
+  </style>
+
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+
+      <div class="screen-body screen-body--scroll">
+        <div class="screen-head">
+          <div class="screen-head__row">
+            <span class="screen-head__title">Saved</span>
+            <span class="icon-btn sp-boards__new"><svg><use href="#i-plus-circle"/></svg></span>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <span class="tab tab--active"><span class="tab__label">Boards</span><span class="tab__rule"></span></span>
+          <span class="tab"><span class="tab__label">All items</span><span class="tab__rule"></span></span>
+        </div>
+
+        <div class="sp-boards__body">
+          <div class="board-head">
+            <span class="board-head__name">Living Room</span>
+            <span class="mono-label">3 items</span>
+          </div>
+
+          <div class="board-tile">
+            <span class="board-tile__cell">
+              <img src="img/heirloom-thumb.jpg" alt="Heirloom Oak Dining Table">
+              <span class="board-tile__price">$4,200</span>
+            </span>
+            <span class="board-tile__cell">
+              <img src="img/live-edge-coffee-table.jpg" alt="Live-Edge Coffee Table">
+              <span class="board-tile__price">$2,100</span>
+            </span>
+            <span class="board-tile__cell">
+              <span class="tile-placeholder"><span class="strata strata--clay"><i></i><i></i><i></i></span></span>
+              <span class="board-tile__price">$1,450</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="pad-hearth"></div>
+      </div>
+
+      <div class="screen-chrome">
+        <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+      </div>
+
+      <div class="companion-dock">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:190px;right:24px">1</span>
+  <span class="callout-n" style="top:251px;left:150px">2</span>
+  <span class="callout-n" style="top:300px;right:24px">3</span>
+  <span class="callout-n callout-n--clay" style="top:100px;right:24px">4</span>
+</div>

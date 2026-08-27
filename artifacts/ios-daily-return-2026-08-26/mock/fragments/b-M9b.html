@@ -1,0 +1,93 @@
+<!-- b-M9b — Direction B · M9b · Saved, pushed from the Pieces tab: every row prints its save
+     date, its room, and the note the data model has always held. -->
+<div class="frame-wrap bx-m9b">
+<style>
+.bx-m9b .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:31;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m9b .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m9b .tabbar__item--active{color:var(--pat-text);}
+.bx-m9b .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m9b .tabbar__comp .strata{transform:scale(.8);}
+.bx-m9b .pad-tabbar{height:100px;}
+.bx-m9b .screen-head{padding:calc(var(--pat-safe-top) + 56px) var(--pat-gutter-push) 10px;}
+.bx-m9b .saved-list{padding:14px var(--pat-gutter-push) 0;display:flex;flex-direction:column;gap:10px;}
+.bx-m9b .saved-row__head{display:block;font:500 14px/1.4 var(--pat-sans);color:var(--pat-text);}
+.bx-m9b .saved-row__where{display:block;font:400 10px/1.5 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.4px;color:var(--pat-text-muted);padding-top:3px;}
+.bx-m9b .saved-row__note{display:block;font:400 italic 14px/1.5 var(--pat-sans);color:var(--pat-text-2);
+  padding-top:5px;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol><symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="screen-head">
+        <div class="screen-head__row"><span class="screen-head__title">Saved</span></div>
+      </div>
+
+      <div class="tabs">
+        <span class="tab"><span class="tab__label">Boards</span><span class="tab__rule"></span></span>
+        <span class="tab tab--active"><span class="tab__label">All items</span><span class="tab__rule"></span></span>
+      </div>
+
+      <div class="saved-list">
+        <div class="saved-row">
+          <span class="saved-row__thumb tile-placeholder tile-placeholder--gradient g-metal"></span>
+          <span class="saved-row__copy">
+            <span class="saved-row__head">$890 &middot; Brass Arc Floor Lamp</span>
+            <span class="saved-row__where">Living Room &middot; saved Tuesday</span>
+            <span class="saved-row__note">&ldquo;too deep for the alcove&rdquo;</span>
+          </span>
+          <span class="saved-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+        <div class="saved-row">
+          <span class="saved-row__thumb tile-placeholder tile-placeholder--gradient g-warm"></span>
+          <span class="saved-row__copy">
+            <span class="saved-row__head">$1,450 &middot; Woven Jute Area Rug 8x10</span>
+            <span class="saved-row__where">Living Room &middot; saved Aug 19</span>
+          </span>
+          <span class="saved-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+        <div class="saved-row">
+          <span class="saved-row__thumb tile-placeholder tile-placeholder--gradient g-leather"></span>
+          <span class="saved-row__copy">
+            <span class="saved-row__head">$1,250 &middot; Velvet Club Chair</span>
+            <span class="saved-row__where">No room yet &middot; saved Aug 14</span>
+          </span>
+          <span class="saved-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="screen-chrome">
+      <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item tabbar__item--active">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:126px;left:2px">6</span>
+<span class="callout-n callout-n--clay" style="top:250px;left:2px">7</span>
+</div>

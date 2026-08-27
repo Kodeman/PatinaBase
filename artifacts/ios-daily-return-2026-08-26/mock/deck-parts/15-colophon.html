@@ -1,0 +1,48 @@
+<section id="colophon" class="dk-sec reg-paper" data-index-title="Colophon" data-day="later">
+  <div class="dk-wrap">
+    <p class="hour"><b>+14d</b> &middot; Two weeks later</p>
+    <h2 class="dk-h2">Colophon</h2>
+    <p class="dk-lede">What this review looked at, how it was run, and what it is not.</p>
+
+    <h3 class="dk-h3">What this panel is</h3>
+    <div class="dk-disclosure">
+      <b>What this panel is</b>
+      Nine simulated seats, written by language models against a fixed task script. Quotes are
+      synthesized reviews, not customer research. No usage data was available to this review.
+    </div>
+
+    <h3 class="dk-h3">Evidence</h3>
+    <dl class="dk-kv">
+      <dt>Shots captured</dt>
+      <dd>155 PNGs, all checked for existence, file size (minimum observed 104&nbsp;KB), pixel dimensions (1206&times;2622&nbsp;@3&times; &mdash; the iPhone&nbsp;17&nbsp;Pro&rsquo;s 402&times;874&nbsp;pt logical screen) and non&#8209;blank content. <span class="lvl lvl--sim">sim-verified</span> All 155 pass.</dd>
+      <dt>Lanes</dt>
+      <dd>guest <code>g-</code> 56 &middot; signed&#8209;in client <code>c-</code> 45 &middot; dark mode <code>d-</code> 30 &middot; Dynamic Type XXL <code>x-</code> 14 &middot; steward / harness&#8209;proof <code>s-</code> 7 &middot; end&#8209;of&#8209;walk restore checks 3</dd>
+      <dt>Routes reached</dt>
+      <dd>20 of 31 <code>AppRoute</code> cases carry at least one confirming shot &mdash; one of those, <code>pieceDetail</code>, only as a universal failure state; no lane ever saw a working product page load.</dd>
+      <dt>Routes without a shot</dt>
+      <dd>9 &mdash; <code>scanFlow</code>, <code>emergence</code>, <code>roomEmergence</code>, <code>arPlacement</code> (no camera/LiDAR/AR in Simulator &mdash; <span class="lvl lvl--code">code-read</span> only, this program&rsquo;s standing rule); <code>threadList</code>, <code>threadDetail</code>, <code>documentList</code> (zero seed rows plus no reachable UI affordance); <code>roomSettings</code>, <code>roomSavedItems</code> (visible but not tapped into, in the walk&rsquo;s time budget). Two more &mdash; <code>designerConsultation</code>, <code>crossRoom</code> &mdash; are reached but their title/route correspondence is not settled by this pass.</dd>
+      <dt>Findings</dt>
+      <dd>213 total &mdash; 199 verified, 14 contested, 0 unverified, 0 refuted this round. Every <code>F##</code> printed anywhere in this deck resolves in <code>research/31-verified-findings.json</code>.</dd>
+      <dt>Evidence levels</dt>
+      <dd><span class="lvl lvl--sim">sim-verified</span> a shot in <code>shots/</code> shows it &middot; <span class="lvl lvl--code">code-read</span> a <code>file:line</code> in the repo says it &middot; <span class="lvl lvl--inf">inferred</span> reasoned from the two, and the caption says from what. Camera, LiDAR and AR claims are code-read only, everywhere in this program.</dd>
+      <dt>What this review could not settle</dt>
+      <dd>No usage data (PostHog OAuth needed a person) and no prod counts (no read path without a secret) &mdash; every return claim here is reasoned from the product, not measured. No device pass: Apple Pay inside the hosted Checkout, push delivery end&#8209;to&#8209;end, LiDAR/AR paths. Live vs test Stripe keys on Strata, unresolved (Question eleven).</dd>
+    </dl>
+
+    <h3 class="dk-h3">The run</h3>
+    <dl class="dk-kv">
+      <dt>Build</dt>
+      <dd><code>3cd84ecb3</code>, 2026-08-26 &mdash; <code>apps/mobile/Patina/Patina.xcodeproj</code>, scheme <code>Patina</code>, Debug configuration, plain simulator build. The live repo has since advanced under concurrent work elsewhere in this checkout; that later history is not reflected in the shots.</dd>
+      <dt>Simulator</dt>
+      <dd>iPhone 17 Pro &middot; udid <code>973D1724-90BF-4A0A-B02D-481D561547B3</code> &middot; iOS 26.5 &middot; against the <strong>local</strong> Supabase stack only (<code>127.0.0.1:54321</code>). No shot in this program shows prod data.</dd>
+      <dt>Workflow stages</dt>
+      <dd>Sequential Workflows with Fable checkpoints between each: <strong>W1a</strong> grounding (code anatomy, canon digest, backend reality, gap critique, gap fill) &middot; <strong>W1b</strong> evidence (steward boot, guest + client walks, dark/XXL variants, the shot ledger) &middot; <strong>W2</strong> panel (9 seats run T1&ndash;T14, collated, then 3 refuters &mdash; code&#8209;truth, canon&#8209;truth, repro on the booted sim &mdash; against 213 findings) &middot; <strong>W3</strong> directions (shared planks, Direction A + Direction B, 4 critics, a v2 pass, judges J1/J2/J3) &middot; <strong>W4</strong> mocks and this deck (the CSS mock kit, screen sheets, parts assembled and size&#8209;checked). Orchestrator scripts on disk at <code>source/workflows/</code>: <code>collate.py</code>, <code>merge.py</code>, <code>theme.py</code>, <code>w2-panel.js</code>, <code>w3-directions.js</code>, <code>w4-deck.js</code>.</dd>
+      <dt>Panel</dt>
+      <dd>H1/H2/H3 homeowners, D1/D2/D3 interior designers, U1/U2/U3 UX/UI lenses &mdash; nine simulated seats, run per <code>source/instruments.md</code> &sect;2&ndash;4.</dd>
+    </dl>
+
+    <h3 class="dk-h3">Folder</h3>
+    <p class="dk-p"><code>artifacts/ios-daily-return-2026-08-26/</code> &mdash; <code>source/</code> (plan, instruments, both directions, judges, the review lead&rsquo;s synthesis) &middot; <code>research/</code> (code anatomy, canon digest, backend reality, panel reports, findings, gap fills) &middot; <code>shots/</code> (155 simulator captures) &middot; <code>mock/</code> (the CSS phone kit, fragments, deck parts, this presentation).</p>
+
+  </div>
+</section>

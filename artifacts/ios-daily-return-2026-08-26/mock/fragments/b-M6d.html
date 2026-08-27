@@ -1,0 +1,173 @@
+<!-- b-M6d — Direction B · M6d · What greets you: M1 with the record's top row opened
+     to its date, the decision one tap away.
+     Kit additions live in the scoped block below; every one is named in the report-back. -->
+<div class="frame-wrap bx-m6d">
+<style>
+/* Direction B kit additions — scoped to .bx-m6d. Candidates for KIT.md §4.
+   .tabbar (B-1) · .rec (the record) · .seat (designer seat) · .rail (house rail)
+   · .sec (section eyebrow) · .doorrow (a labelled door row) */
+.bx-m6d .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:30;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m6d .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m6d .tabbar__item--active{color:var(--pat-text);}
+.bx-m6d .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m6d .tabbar__comp .strata{transform:scale(.8);}
+.bx-m6d .pad-tabbar{height:83px;}
+.bx-m6d .home-header__title--greet{font:500 28px/1.16 var(--pat-serif);}
+.bx-m6d .rec{margin:16px var(--pat-gutter-home) 0;background:var(--pat-bg-2);
+  border-radius:var(--pat-r-xl);padding:10px 16px 12px;}
+.bx-m6d .rec__head{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-text-muted);padding-bottom:8px;}
+.bx-m6d .rec__eyebrow{display:block;font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.5px;color:var(--pat-text-2);padding:6px 0 2px;border-top:1px solid var(--pat-pearl);}
+.bx-m6d .rec__row{display:flex;align-items:center;gap:12px;min-height:56px;}
+.bx-m6d .rec__row + .rec__row{border-top:1px solid var(--pat-pearl);}
+.bx-m6d .rec__title{font:500 14px/1.4 var(--pat-sans);color:var(--pat-text);flex:1 1 auto;min-width:0;}
+.bx-m6d .rec__state{font:400 10px/1.5 var(--pat-mono);text-transform:uppercase;letter-spacing:.4px;
+  color:var(--pat-text-muted);text-align:right;flex:0 0 auto;max-width:126px;}
+.bx-m6d .rec__state--late{color:var(--pat-error);}
+.bx-m6d .rec__new{color:var(--pat-clay);}
+.bx-m6d .rec__open{padding:0 0 14px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;}
+.bx-m6d .rec__open__q{font:500 18px/1.28 var(--pat-serif);color:var(--pat-text);}
+.bx-m6d .rec__open__meta{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.4px;
+  color:var(--pat-text-muted);}
+.bx-m6d .rec__more{display:block;padding-top:8px;border-top:1px solid var(--pat-pearl);
+  font:500 15px/1.3 var(--pat-sans);color:var(--pat-text-link);}
+.bx-m6d .seat{margin:14px var(--pat-gutter-home) 0;background:var(--pat-bg-2);border-radius:var(--pat-r-xl);
+  padding:10px 14px 10px 16px;display:flex;align-items:center;gap:12px;}
+.bx-m6d .seat__mono{width:44px;height:44px;border-radius:50%;background:rgba(196,165,123,.15);
+  color:var(--pat-clay-deep);display:flex;align-items:center;justify-content:center;
+  font:500 15px/1 var(--pat-serif);letter-spacing:.5px;flex:0 0 auto;}
+.bx-m6d .seat__copy{flex:1 1 auto;min-width:0;}
+.bx-m6d .seat__name{display:block;font:600 18px/1.3 var(--pat-sans);color:var(--pat-text);}
+.bx-m6d .seat__meta{display:block;font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-muted);padding-top:2px;}
+.bx-m6d .sec{display:block;padding:12px var(--pat-gutter-home) 0;font:400 10px/1.4 var(--pat-mono);
+  text-transform:uppercase;letter-spacing:.5px;color:var(--pat-text-muted);}
+.bx-m6d .rail{display:flex;gap:12px;overflow-x:hidden;padding:6px var(--pat-gutter-home) 0;}
+.bx-m6d .rail__card{flex:0 0 240px;height:150px;border-radius:var(--pat-r-xl);overflow:hidden;
+  background:var(--pat-bg-2);display:flex;flex-direction:column;}
+.bx-m6d .rail__art{height:48px;}
+.bx-m6d .rail__body{padding:8px 14px;}
+.bx-m6d .rail__name{display:block;font:500 18px/1.28 var(--pat-serif);color:var(--pat-text);}
+.bx-m6d .rail__meta{display:block;font:500 12px/1.4 var(--pat-sans);color:var(--pat-text-2);padding-top:3px;}
+.bx-m6d .rail__add{flex:0 0 128px;height:150px;border-radius:var(--pat-r-xl);border:1px dashed var(--pat-pearl);
+  display:flex;align-items:center;justify-content:center;font:500 14px/1.4 var(--pat-sans);
+  color:var(--pat-text-link);}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5c0 4-1.5 5.4-2.2 6.1a.6.6 0 0 0 .4 1h14.6a.6.6 0 0 0 .4-1c-.7-.7-2.2-2.1-2.2-6.1A5.5 5.5 0 0 0 12 3Z"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></g></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="home-header">
+        <div class="home-header__stack">
+          <div class="home-header__date">Wednesday &middot; Aug 26</div>
+          <div class="home-header__titlerow">
+            <span class="home-header__title home-header__title--greet">Good morning.</span>
+          </div>
+        </div>
+        <div class="home-header__actions">
+          <span class="icon-btn"><svg><use href="#i-bell"/></svg><span class="icon-btn__dot"></span></span>
+        </div>
+      </div>
+
+      <div class="rec">
+        <div class="rec__head">Since you were last here &middot; Thu, Aug 20</div>
+        <span class="rec__eyebrow" style="border-top:0;padding-top:0">Needs you</span>
+        <div class="rec__row">
+          <span class="rec__title">Leah asked about the rug colour.</span>
+          <span class="rec__state">asked Aug 22<br><span class="rec__state--late">overdue</span></span>
+        </div>
+        <div class="rec__open">
+          <span class="rec__open__q">Rug color &mdash; Natural vs Sand</span>
+          <span class="rec__open__meta">Two options &middot; both $850</span>
+          <span class="btn btn--primary btn--compact">Answer</span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Leah sent a proposal to review.</span>
+          <span class="rec__state">by Sep 8</span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Your invoice is due.</span>
+          <span class="rec__state">$4,250.00 &middot; Sep 1</span>
+        </div>
+        <span class="rec__eyebrow">Moved</span>
+        <div class="rec__row">
+          <span class="rec__title">Your dining table shipped.</span>
+          <span class="rec__state">Aug 25 &middot; <span class="rec__new">new</span></span>
+        </div>
+        <div class="rec__row">
+          <span class="rec__title">Leah added two pieces to the proposal.</span>
+          <span class="rec__state">Aug 24</span>
+        </div>
+        <span class="rec__more">See all &rarr;</span>
+      </div>
+
+      <div class="seat">
+        <span class="seat__mono">LH</span>
+        <span class="seat__copy">
+          <span class="seat__name">Leah Hartwell</span>
+          <span class="seat__meta">Hartwell Studio &middot; Aspen Loft Refresh</span>
+        </span>
+        <span class="btn btn--secondary btn--pill-sm">Message</span>
+      </div>
+
+      <span class="sec">Your house</span>
+      <div class="rail">
+        <div class="rail__card">
+          <span class="rail__art g-earth"></span>
+          <span class="rail__body">
+            <span class="rail__name">Dining Room</span>
+            <span class="rail__meta">$18,400 of $32,000 committed</span>
+          </span>
+        </div>
+        <div class="rail__card">
+          <span class="rail__art g-warm"></span>
+          <span class="rail__body">
+            <span class="rail__name">Living Room</span>
+            <span class="rail__meta">3 saved pieces &middot; budget $9,000</span>
+          </span>
+        </div>
+        <span class="rail__add">Add a room</span>
+      </div>
+
+      <div class="story-card">
+        <span class="story-card__pill">Aug 25 &middot; 4 min</span>
+        <span class="story-card__body">
+          <span class="story-card__tag">Maker spotlight</span>
+          <span class="story-card__title">The Grain Whisperer of Maine</span>
+          <span class="story-card__sub">Jonathan Chilton on 40 years of listening to wood</span>
+        </span>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item tabbar__item--active">Today</span>
+      <span class="tabbar__item">Spaces</span>
+      <span class="tabbar__item">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:126px;left:2px">1</span>
+<span class="callout-n" style="top:210px;left:2px">2</span>
+<span class="callout-n callout-n--clay" style="top:300px;left:2px">3</span>
+
+<span class="callout-n" style="bottom:44px;right:2px">4</span>
+</div>

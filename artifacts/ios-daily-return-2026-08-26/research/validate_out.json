@@ -1,0 +1,1397 @@
+[
+  {
+    "file": "c-00-start-state.png",
+    "size_bytes": 178376,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "c-01-signin-email-entry.png",
+    "size_bytes": 181359,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-01b-signin-filled.png",
+    "size_bytes": 184061,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-02-home-immediately-after-signin.png",
+    "size_bytes": 912061,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 25,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-03-home-top-activeproject.png",
+    "size_bytes": 1489404,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 20,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-04-home-scrolled-studio-rows.png",
+    "size_bytes": 1499590,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 32,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-04b-your-studio-hub.png",
+    "size_bytes": 271163,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-05-companion-panel-client.png",
+    "size_bytes": 1449263,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 23,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-06-studio-rows-designer.png",
+    "size_bytes": 325495,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-06b-studio-awaiting-you.png",
+    "size_bytes": 328143,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-06c-studio-bottom.png",
+    "size_bytes": 436891,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-06d-studio-money-documents.png",
+    "size_bytes": 357930,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-07-projects-list.png",
+    "size_bytes": 271163,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-08-project-detail.png",
+    "size_bytes": 252955,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-09-proposals-list.png",
+    "size_bytes": 254855,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-10-proposal-detail-top.png",
+    "size_bytes": 336730,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-11-proposal-detail-scrolled.png",
+    "size_bytes": 295612,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-11b-proposal-sign-act.png",
+    "size_bytes": 295738,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 7,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-11c-sign-sheet.png",
+    "size_bytes": 295699,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 9,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-12-invoices-list.png",
+    "size_bytes": 221951,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-13-invoice-detail.png",
+    "size_bytes": 319208,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-13b-invoice-detail-scrolled.png",
+    "size_bytes": 337686,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-14-pay-handoff.png",
+    "size_bytes": 344512,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-15-budget.png",
+    "size_bytes": 253287,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-17-decisions-list.png",
+    "size_bytes": 282221,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-18-decision-detail.png",
+    "size_bytes": 274134,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-19-messages-empty.png",
+    "size_bytes": 357930,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-21-notifications-signed-in.png",
+    "size_bytes": 220282,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "c-22-saved-signed-in.png",
+    "size_bytes": 229706,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-22b-saved-all-items.png",
+    "size_bytes": 301949,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 7,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-23-your-spaces.png",
+    "size_bytes": 924538,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 17,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-24-room-detail.png",
+    "size_bytes": 1212711,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 19,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-25-piece-detail-client.png",
+    "size_bytes": 118348,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-26-profile.png",
+    "size_bytes": 342906,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-27-account-row-inert.png",
+    "size_bytes": 260753,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-28-settings-client.png",
+    "size_bytes": 260753,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-28b-settings-scrolled.png",
+    "size_bytes": 241840,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-29-relaunch-returning-client.png",
+    "size_bytes": 1489404,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 20,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-30-after-keychain-signout.png",
+    "size_bytes": 178376,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "c-31-engaged-home-top.png",
+    "size_bytes": 950407,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 21,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-32-engaged-companion.png",
+    "size_bytes": 1721824,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 31,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-32b-engaged-profile-studio.png",
+    "size_bytes": 333179,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-32c-engaged-studio-rows.png",
+    "size_bytes": 290586,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-33-engaged-design-request-again.png",
+    "size_bytes": 164751,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "c-34-final-state-signed-in-client.png",
+    "size_bytes": 942060,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 11,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-00-current-state-before-dark.png",
+    "size_bytes": 942060,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 11,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-01-home-top.png",
+    "size_bytes": 880349,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 10,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-02-home-studio-rows.png",
+    "size_bytes": 880349,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 10,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-02-profile-studio-rows.png",
+    "size_bytes": 279270,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-02-profile-top.png",
+    "size_bytes": 287396,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-03-browse-pieces.png",
+    "size_bytes": 1811901,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 27,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-04-piece-detail.png",
+    "size_bytes": 107183,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 1,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "d-04b-relaunch-recover-check.png",
+    "size_bytes": 880349,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 10,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-06-room-detail.png",
+    "size_bytes": 1180492,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 19,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-06a-room-summary-light-locked.png",
+    "size_bytes": 132653,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 1,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "d-06b-home-with-active-room.png",
+    "size_bytes": 1432750,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 19,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-07-proposal-detail.png",
+    "size_bytes": 282721,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-08-invoice-detail.png",
+    "size_bytes": 263150,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-09-companion-panel.png",
+    "size_bytes": 1325264,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 27,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-10-notifications.png",
+    "size_bytes": 168204,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 1,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "d-check-after-tap.png",
+    "size_bytes": 264644,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "d-check-studio-bottom.png",
+    "size_bytes": 287396,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-check-studio-bottom2.png",
+    "size_bytes": 264644,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "d-check-studio-scrolled.png",
+    "size_bytes": 287396,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-check10-after-heart-tap.png",
+    "size_bytes": 1816581,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 24,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-check11.png",
+    "size_bytes": 1816581,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 24,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-check12.png",
+    "size_bytes": 107183,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 1,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "d-check2.png",
+    "size_bytes": 202327,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-check3.png",
+    "size_bytes": 264644,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "d-check4-invoices-list.png",
+    "size_bytes": 164621,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "d-check5.png",
+    "size_bytes": 264644,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "d-check6-add-space.png",
+    "size_bytes": 226532,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-check7.png",
+    "size_bytes": 226532,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "d-check8.png",
+    "size_bytes": 132653,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 1,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "d-check9.png",
+    "size_bytes": 1180492,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 19,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "final-check-restore.png",
+    "size_bytes": 433637,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "final-check-restore2.png",
+    "size_bytes": 1486684,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 19,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "final-handoff-state.png",
+    "size_bytes": 1486684,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 19,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-01-splash.png",
+    "size_bytes": 190341,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 1,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "g-02-first-screen-after-splash.png",
+    "size_bytes": 178376,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "g-02a-unexpected-signed-in-after-reinstall.png",
+    "size_bytes": 942060,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 11,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-02b-settings-account-inert.png",
+    "size_bytes": 259747,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-06-quiz-q1.png",
+    "size_bytes": 1121633,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 24,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-07-quiz-q2-midway.png",
+    "size_bytes": 424780,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 8,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-07b-quiz-q3.png",
+    "size_bytes": 452931,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 14,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-08-quiz-result.png",
+    "size_bytes": 372324,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-08b-quiz-result-scrolled.png",
+    "size_bytes": 369622,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-09-home-tour-step1.png",
+    "size_bytes": 1109784,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 29,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-10-home-tour-step2.png",
+    "size_bytes": 1096170,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 29,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-11-companion-intro-card.png",
+    "size_bytes": 1031469,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 21,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-12-home-discovering-top.png",
+    "size_bytes": 1031469,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 21,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-13-home-scrolled.png",
+    "size_bytes": 1031469,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 21,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-14-companion-panel-open.png",
+    "size_bytes": 1665204,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 31,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-14b-companion-next-steps.png",
+    "size_bytes": 1722267,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 30,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-15-browse-pieces-grid.png",
+    "size_bytes": 1871546,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 20,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-15b-browse-grid-settled.png",
+    "size_bytes": 1871546,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 20,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-15c-browse-after-right-swipe.png",
+    "size_bytes": 1870009,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 20,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-16-filter-chip-seating.png",
+    "size_bytes": 1337906,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 21,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-17-piece-detail-top.png",
+    "size_bytes": 118348,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-17b-piece-detail-after-retry.png",
+    "size_bytes": 118348,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-17c-after-edge-swipe-back.png",
+    "size_bytes": 118348,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-19-share-sheet.png",
+    "size_bytes": 1707788,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 32,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-20-card-more-menu.png",
+    "size_bytes": 1472535,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 26,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-21-saved-empty-boards-tab.png",
+    "size_bytes": 229706,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-22-saved-one-piece.png",
+    "size_bytes": 229706,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-22b-saved-all-items.png",
+    "size_bytes": 301949,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 7,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-23-spaces-or-scan.png",
+    "size_bytes": 217219,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-25-manual-room-entry-metric.png",
+    "size_bytes": 217200,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-26-after-room-created.png",
+    "size_bytes": 1420649,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 25,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-26-room-view-after-create.png",
+    "size_bytes": 193880,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-26b-second-quiz-next.png",
+    "size_bytes": 222352,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-26c-second-quiz-q3.png",
+    "size_bytes": 2180542,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 42,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-26d-second-quiz-next.png",
+    "size_bytes": 2166665,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 41,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-26e-room-result.png",
+    "size_bytes": 184593,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-27-room-with-recommendations.png",
+    "size_bytes": 138093,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 1,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "g-27b-room-picks.png",
+    "size_bytes": 1872265,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 20,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-27c-card-menu-in-room-context.png",
+    "size_bytes": 1474627,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 26,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-28-room-view-final.png",
+    "size_bytes": 133791,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 1,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "g-28b-room-view.png",
+    "size_bytes": 1212711,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 19,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-29-notifications-guest.png",
+    "size_bytes": 222222,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "g-30-designer-consultation.png",
+    "size_bytes": 151413,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-31-design-request-step1.png",
+    "size_bytes": 234035,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-32-design-request-review.png",
+    "size_bytes": 146281,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-33-after-send-request.png",
+    "size_bytes": 171826,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-34-after-dismissing-auth-wall.png",
+    "size_bytes": 146521,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-35-auth-wall-no-dismiss.png",
+    "size_bytes": 171826,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-36-profile-guest.png",
+    "size_bytes": 340858,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-36b-profile-guest-scrolled.png",
+    "size_bytes": 310221,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-37-settings-guest.png",
+    "size_bytes": 259682,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-37b-settings-account-tap-guest.png",
+    "size_bytes": 259682,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 6,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-38-relaunch-returning-guest.png",
+    "size_bytes": 178376,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "g-39-home-after-idle.png",
+    "size_bytes": 1489019,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 29,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-40-companion-inconsistent-persistence.png",
+    "size_bytes": 1523602,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 25,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "g-40b-home-active-room-clipped.png",
+    "size_bytes": 1506772,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 36,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "s-01-first-launch.png",
+    "size_bytes": 178376,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "s-02-after-blitz-tap.png",
+    "size_bytes": 1109733,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 29,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "s-03-after-swipe.png",
+    "size_bytes": 1031469,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 21,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "s-04-relaunch-guest-persist.png",
+    "size_bytes": 181651,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "s-05-signed-in-client.png",
+    "size_bytes": 679859,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 23,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "s-06-applescript-tap-test.png",
+    "size_bytes": 222941,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "s-07-helper-script-tap.png",
+    "size_bytes": 222941,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 2,
+    "flag_undersize": false,
+    "flag_flat": true
+  },
+  {
+    "file": "x-01-home-top.png",
+    "size_bytes": 1484690,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 28,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-02-profile-studio-rows.png",
+    "size_bytes": 344482,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-02b-projects-list-bonus.png",
+    "size_bytes": 293618,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-03-browse-pieces.png",
+    "size_bytes": 1867998,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 30,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-04-piece-detail.png",
+    "size_bytes": 119581,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 3,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-05-proposal-detail.png",
+    "size_bytes": 344710,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-06-design-request.png",
+    "size_bytes": 185619,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-09-companion-panel.png",
+    "size_bytes": 1330162,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 23,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-check-after-relaunch.png",
+    "size_bytes": 1484690,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 28,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-check-back.png",
+    "size_bytes": 293618,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 4,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-check-live-apply.png",
+    "size_bytes": 1484690,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 28,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-check-nav.png",
+    "size_bytes": 344482,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-check-proposals.png",
+    "size_bytes": 281052,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 5,
+    "flag_undersize": false,
+    "flag_flat": false
+  },
+  {
+    "file": "x-check-tap.png",
+    "size_bytes": 1867998,
+    "width": 1206,
+    "height": 2622,
+    "distinct_colours_64": 30,
+    "flag_undersize": false,
+    "flag_flat": false
+  }
+]

@@ -1,0 +1,76 @@
+<div class="frame-wrap a-m5c">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="screen-head">
+          <span class="mono-label" style="display:block">Ordered &middot; Aug 26</span>
+          <div class="t-h2" style="margin-top:8px">Heirloom Oak Dining Table</div>
+          <div class="t-body-sm" style="color:var(--pat-text-muted);margin-top:4px">Nordic Atelier &middot; Aarhus</div>
+          <div style="margin-top:14px"><span class="status-badge status-badge--success"><svg><use href="#i-check-fill"/></svg>Paid</span></div>
+        </div>
+        <div class="pad-push" style="padding-top:8px">
+          <div class="a-money">
+            <div class="a-money__row"><span class="a-money__k">Paid</span><span class="a-money__v">$4,550.00</span></div>
+            <div class="a-money__row"><span class="a-money__k">Receipt</span><span class="a-money__v">Emailed to walt@&hellip;</span></div>
+          </div>
+          <div class="a-note" style="margin-top:16px">Nordic Atelier starts it this week. We&rsquo;ll email you when it ships.</div>
+        </div>
+      </div>
+      <div class="a-acts-foot">
+        <span class="btn btn--primary">Back to Today</span>
+        <span style="display:flex;justify-content:center;margin-top:6px"><span class="btn btn--ghost btn--pill-sm">Your orders</span></span>
+      </div>
+      <div class="a-dock--min" style="bottom:161px">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:170px;left:2px">6</span>
+  <span class="callout-n callout-n--clay" style="top:250px;right:2px">7</span>
+  <span class="callout-n" style="top:378px;left:2px">8</span>
+  <span class="callout-n" style="top:754px;right:2px">9</span>
+  <div class="a-inset">
+    <span class="a-inset__label">Inset &middot; the credited variant</span>
+    <span class="a-inset__line">Leah Hartwell is credited on this order.</span>
+  </div>
+</div>
+<style>
+/* the order sheet's money block — label left, figure right, pearl hairlines */
+.a-m5c .a-money { border-top:1px solid var(--pat-pearl); }
+.a-m5c .a-money__row { display:flex; align-items:baseline; justify-content:space-between;
+  gap:16px; padding:9px 0; border-bottom:1px solid var(--pat-pearl); }
+.a-m5c .a-money__k { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-2); }
+.a-m5c .a-money__v { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text); }
+.a-m5c .a-money__row--total { border-bottom:0; padding-top:12px; }
+.a-m5c .a-money__row--total .a-money__k,
+.a-m5c .a-money__row--total .a-money__v { font-weight:600; color:var(--pat-text); }
+.a-m5c .a-note { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-2); }
+.a-m5c .a-thumb56 { width:56px; height:56px; border-radius:var(--pat-r-md);
+  overflow:hidden; flex:0 0 auto; }
+.a-m5c .a-thumb56 img { width:100%; height:100%; object-fit:cover; display:block; }
+
+/* deck furniture, not app UI: the variant inset the manifest calls for */
+.a-m5c .a-inset { width:402px; margin:14px 0 0 13px; padding:12px 14px;
+  border:1px solid var(--pat-pearl); border-radius:var(--pat-r-lg);
+  background:var(--pat-bg); }
+.a-m5c .a-inset__label { display:block; font:600 12px/1.3 var(--pat-sans);
+  text-transform:uppercase; letter-spacing:1.5px; color:var(--pat-text-muted);
+  padding-bottom:5px; }
+.a-m5c .a-inset__line { display:block; font:400 14px/1.45 var(--pat-sans); color:var(--pat-text); }
+
+/* the Hearth in .minimal mode — bottom-trailing, no hint
+   (CompanionOverlay.swift:386-391), which is what pushed screens show */
+.a-m5c .a-dock--min { position:absolute; right:20px; z-index:30; }
+
+.a-m5c .a-acts-foot { position:absolute; left:0; right:0; bottom:0; z-index:20;
+  padding:0 24px calc(var(--pat-safe-bottom) + 24px); }
+</style>

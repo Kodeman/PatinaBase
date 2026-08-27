@@ -1,0 +1,35 @@
+{
+  "url": "file:///Users/kody/Code/patina-merged/artifacts/ios-daily-return-2026-08-26/mock/kit-demo.html",
+  "consoleErrors": [],
+  "pageErrors": [],
+  "requestFailures": [],
+  "fontRequests": [
+    "[light] 200 https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@300;400;500&display=swap",
+    "[light] 200 https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2",
+    "[light] 200 https://fonts.gstatic.com/s/playfairdisplay/v40/nuFRD-vYSZviVYUb_rj3ij__anPXDTnCjmHKM4nYO7KN_qiTXtHA-X-uE0qEEw.woff2",
+    "[light] 200 https://fonts.gstatic.com/s/dmmono/v16/aFTU7PB1QTsUX8KYthqQBK6PYK0.woff2",
+    "[light] 200 https://fonts.gstatic.com/s/dmmono/v16/aFTR7PB1QTsUX8KYvumzEYOtbYf-Vlg.woff2",
+    "[light] 200 https://fonts.gstatic.com/s/playfairdisplay/v40/nuFiD-vYSZviVYUb_rj3ij__anPXDTzYgEM86xQ.woff2",
+    "[dark] 200 https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@300;400;500&display=swap",
+    "[dark] 200 https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2",
+    "[dark] 200 https://fonts.gstatic.com/s/dmmono/v16/aFTU7PB1QTsUX8KYthqQBK6PYK0.woff2",
+    "[dark] 200 https://fonts.gstatic.com/s/dmmono/v16/aFTR7PB1QTsUX8KYvumzEYOtbYf-Vlg.woff2",
+    "[dark] 200 https://fonts.gstatic.com/s/playfairdisplay/v40/nuFRD-vYSZviVYUb_rj3ij__anPXDTnCjmHKM4nYO7KN_qiTXtHA-X-uE0qEEw.woff2",
+    "[dark] 200 https://fonts.gstatic.com/s/playfairdisplay/v40/nuFiD-vYSZviVYUb_rj3ij__anPXDTzYgEM86xQ.woff2"
+  ],
+  "fontsLoaded": [
+    "DM Mono 400",
+    "DM Mono 500",
+    "Inter 400",
+    "Inter 500",
+    "Inter 600",
+    "Playfair Display 400",
+    "Playfair Display 500"
+  ],
+  "written": [
+    "/Users/kody/Code/patina-merged/artifacts/ios-daily-return-2026-08-26/mock/kit-demo-light.png",
+    "/Users/kody/Code/patina-merged/artifacts/ios-daily-return-2026-08-26/mock/cal-today.png",
+    "/Users/kody/Code/patina-merged/artifacts/ios-daily-return-2026-08-26/mock/cal-browse.png",
+    "/Users/kody/Code/patina-merged/artifacts/ios-daily-return-2026-08-26/mock/kit-demo-dark.png"
+  ]
+}

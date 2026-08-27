@@ -1,0 +1,51 @@
+<div class="frame-wrap a-m8">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="pad-push" style="padding-top:calc(var(--pat-safe-top) + 132px)">
+          <span class="a-mark" style="display:block"><span class="strata"><i></i><i></i><i></i></span></span>
+          <div class="t-h2" style="margin-top:28px">Only when something needs you.</div>
+          <div class="t-body-lg" style="color:var(--pat-text-2);margin-top:14px">We&rsquo;ll tell you when your designer sends something that needs you &mdash; a decision, a proposal, or an invoice. Nothing else.</div>
+          <div class="stack" style="gap:12px;margin-top:30px">
+            <span class="a-perm__row"><span class="a-perm__dot"></span>A decision to make</span>
+            <span class="a-perm__row"><span class="a-perm__dot"></span>A proposal to read</span>
+            <span class="a-perm__row"><span class="a-perm__dot"></span>An invoice coming due</span>
+          </div>
+        </div>
+      </div>
+      <div class="a-perm__foot">
+        <span class="btn btn--primary">Turn on notifications</span>
+        <span style="display:flex;justify-content:center;margin-top:6px"><span class="btn btn--ghost btn--pill-sm">Not now</span></span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:216px;left:2px">1</span>
+  <span class="callout-n callout-n--clay" style="top:290px;right:2px">2</span>
+  <span class="callout-n" style="top:470px;left:2px">3</span>
+  <span class="callout-n" style="top:740px;right:2px">4</span>
+</div>
+<style>
+.a-m8 .a-mark { display:flex; }
+.a-m8 .a-mark .strata { align-items:flex-start; }
+.a-m8 .a-mark .strata i { height:3px; border-radius:2px; background:var(--pat-clay); }
+.a-m8 .a-mark .strata i:nth-child(1){width:32px; opacity:1;}
+.a-m8 .a-mark .strata i:nth-child(2){width:24px; opacity:.7;}
+.a-m8 .a-mark .strata i:nth-child(3){width:16px; opacity:.5;}
+.a-m8 .a-perm__row { display:flex; align-items:center; gap:10px;
+  font:400 10px/1.6 var(--pat-mono); text-transform:uppercase; letter-spacing:.5px;
+  color:var(--pat-text-2); }
+.a-m8 .a-perm__dot { width:6px; height:6px; border-radius:50%; flex:0 0 auto;
+  background:var(--pat-clay); }
+
+.a-m8 .a-perm__foot { position:absolute; left:0; right:0; bottom:0; z-index:20;
+  padding:0 24px calc(var(--pat-safe-bottom) + 24px); }
+</style>

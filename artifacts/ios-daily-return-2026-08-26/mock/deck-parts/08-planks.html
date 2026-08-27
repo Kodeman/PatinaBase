@@ -1,0 +1,274 @@
+<section id="planks" class="dk-sec reg-paper" data-index-title="Shared planks" data-day="midday">
+  <div class="dk-wrap">
+    <p class="hour"><b>12:30</b> &middot; Midday</p>
+
+    <h2 class="dk-h2">Twenty planks, and neither direction skips one</h2>
+    <p class="dk-lede">Each one repairs a claim the app already makes, data it already holds, or a screen it already ships. Direction A and Direction B are built on top of this list, not around it &mdash; whichever Kody rules for, the floor is the same floor.</p>
+    <p class="dk-p">Ordered by the severity of what each one fixes &mdash; S0 funnel breaks first &mdash; not by cost. Four of the twenty are drawn in full below the list.</p>
+
+    <ul class="plank-list">
+      <li class="plank">
+        <span class="plank__id">SP-01</span>
+        <div>
+          <p class="plank__title">Every piece detail loads, and the error has a door</p>
+          <p class="plank__why">An ambiguous vendor join fails every browse tap; qualifying the embed loads the screen, and the failure state keeps the chevron the loaded one has.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s1" href="#found">F04</a></p>
+          <p class="dk-note">Size S. No backend &mdash; client-side only.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-02</span>
+        <div>
+          <p class="plank__title">The browse grid is one card size, and the chips can be reached</p>
+          <p class="plank__why">The app&rsquo;s only shopping surface runs off-canvas on first load, and the filter row clips at XXL type with nowhere to scroll.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F05</a></p>
+          <p class="dk-note">Size M. No backend.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-03</span>
+        <div>
+          <p class="plank__title">The share names Patina, and the link opens the app</p>
+          <p class="plank__why">A shared piece hands the recipient the designer portal&rsquo;s title on a link that cannot open the app, installed or not.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F01</a></p>
+          <p class="dk-note">Size M. No migration, no edge function &mdash; a client-facing piece route plus an entitlement, portal-side.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-04</span>
+        <div>
+          <p class="plank__title">A proposal is called what it is, and the sheet restates it</p>
+          <p class="plank__why">The list calls an unsigned proposal &ldquo;SIGNED,&rdquo; and the e-sign sheet asks for a name without saying what it is agreeing to.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F02</a><a class="f-chip f-chip--s0" href="#found">F03</a></p>
+          <p class="dk-note">Size M. One confirmation email on the existing send-email chokepoint.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-05</span>
+        <div>
+          <p class="plank__title">The client&rsquo;s project screen stops talking to the designer</p>
+          <p class="plank__why">The client&rsquo;s own project screen prints &ldquo;CLIENT VIEW / Milestone&rdquo; and a portal instruction written for the designer.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F20</a></p>
+          <p class="dk-note">Size S. No backend.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-06</span>
+        <div>
+          <p class="plank__title">Guest work belongs to the guest</p>
+          <p class="plank__why">A guest&rsquo;s room and saves inherit onto the next account signed in on the same phone, and every count on Today presents device data as account data.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F23</a></p>
+          <p class="dk-note">Size M. No backend for the prompt &mdash; rooms and saved_items already accept the mirror.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-07</span>
+        <div>
+          <p class="plank__title">The matched designer becomes visible (one filter)</p>
+          <p class="plank__why">One query filter hides every lead created from the designer portal, so a matched client&rsquo;s home reads byte-identical to a guest&rsquo;s.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F10</a></p>
+          <p class="dk-note">Size M &mdash; the filter is one line; the sheet branch and the Studio row are the rest. No backend.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-08</span>
+        <div>
+          <p class="plank__title">The bell shows what is already waiting; the permission is earned</p>
+          <p class="plank__why">The bell reads &ldquo;Nothing yet&rdquo; beside a Studio listing an overdue decision, a due invoice and a proposal to review.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F08</a></p>
+          <p class="dk-note">Size M. apns-send and device_push_tokens already ship; add notification_log writes on two existing paths.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-09</span>
+        <div>
+          <p class="plank__title">The last tap of a design request has a way back</p>
+          <p class="plank__why">Sending a request throws a guest the full auth gate with no Cancel and no way to look around first.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F27</a></p>
+          <p class="dk-note">Size S. No backend.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-10</span>
+        <div>
+          <p class="plank__title">The piece says what it is: size, lead time, maker</p>
+          <p class="plank__why">A $4,000 chair carries no dimension, no lead time, and often the retailer&rsquo;s name where the maker&rsquo;s belongs.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F17</a></p>
+          <p class="dk-note">Size L. One migration on a frozen RPC contract, plus a catalog pass to fill vendor fields.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-11</span>
+        <div>
+          <p class="plank__title">A piece can be put in a room, and room browse is the room&rsquo;s</p>
+          <p class="plank__why">The room&rsquo;s own button opens the generic grid with no room filter, and nothing in the app can put a piece into a room.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F15</a></p>
+          <p class="dk-note">Size M. No backend &mdash; saved_items.room_id already exists.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-12</span>
+        <div>
+          <p class="plank__title">Saved has a door, and opens where the pieces are</p>
+          <p class="plank__why">The Companion&rsquo;s only route to Saved hides until something is already saved, and Saved opens on a Boards tab that can never fill.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F14</a></p>
+          <p class="dk-note">Size M. No backend.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-13</span>
+        <div>
+          <p class="plank__title">A client can start the conversation</p>
+          <p class="plank__why">Messaging ships, but a client cannot start a thread &mdash; the Studio&rsquo;s Conversation block is the one drawn without a chevron. (F21 survives only in this narrowed form.)</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s0" href="#found">F21</a></p>
+          <p class="dk-note">Size M. No backend &mdash; both start-thread RPCs are already granted to authenticated.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-14</span>
+        <div>
+          <p class="plank__title">Save once, and it is still saved tomorrow</p>
+          <p class="plank__why">The real save route runs local-only, never seeds its own saved state, and a second tap can write a second row.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s1" href="#found">F122</a></p>
+          <p class="dk-note">Size M. No backend &mdash; saved_items already accepts a null room.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-15</span>
+        <div>
+          <p class="plank__title">Money screens carry the date and the failure</p>
+          <p class="plank__why">The due date on every list vanishes on its own detail screen, and a failed $4,250 hand-off leaves a live button under one crowded red line.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s1" href="#found">F102</a></p>
+          <p class="dk-note">Size M. No backend.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-16</span>
+        <div>
+          <p class="plank__title">One count, and a budget that is a budget</p>
+          <p class="plank__why">One screen prints three disagreeing counts of what needs attention, and &ldquo;Your budget&rdquo; shows one invoice against a project total two taps away.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s1" href="#found">F41</a></p>
+          <p class="dk-note">Size M. No backend.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-17</span>
+        <div>
+          <p class="plank__title">A decision can be deferred, and shows the colour</p>
+          <p class="plank__why">A colour decision presents two text-only cards, and there is no way for a client to say &ldquo;not yet.&rdquo;</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s2" href="#found">F44</a><a class="f-chip f-chip--s1" href="#found">F59</a></p>
+          <p class="dk-note">Size M. No backend, deliberately &mdash; deferring routes through the existing thread, not a new status.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-18</span>
+        <div>
+          <p class="plank__title">Signals that are not real come down</p>
+          <p class="plank__why">The room&rsquo;s AR stat can never be anything but zero, and one editorial story stays marked unread through every relaunch.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s1" href="#found">F64</a><a class="f-chip f-chip--s1" href="#found">F46</a></p>
+          <p class="dk-note">Size S. No backend to take the signals down.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-19</span>
+        <div>
+          <p class="plank__title">Nothing covers the button; nothing is smaller than a thumb</p>
+          <p class="plank__why">The Companion&rsquo;s Hearth paints an opaque band over &ldquo;Sign proposal,&rdquo; and the status bar draws over invoice numbers and proposal titles.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s1" href="#found">F49</a><a class="f-chip f-chip--s1" href="#found">F114</a></p>
+          <p class="dk-note">Size M. No backend.</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-20</span>
+        <div>
+          <p class="plank__title">Sign Out, and a way to close the account</p>
+          <p class="plank__why">There is no way to sign out of this app &mdash; the Settings row to Account draws a chevron and does not navigate.</p>
+          <p class="f-chips plank__meta"><a class="f-chip f-chip--s1" href="#found">F45</a><span class="f-chip f-chip--s0">App Store 5.1.1(v)</span></p>
+          <p class="dk-note">Size S for sign-out, M with deletion. Sign-out: none. Deletion: one new edge function.</p>
+        </div>
+      </li>
+    </ul>
+
+    <p class="dk-p">Across all twenty, the backend cost is one migration, one new edge function, <code>notification_log</code> writes on two existing paths, one confirmation email on an existing chokepoint, and a portal-side route. Everything else is iOS &mdash; the client app is behind its own backend, not ahead of it.</p>
+
+    <hr class="dk-rule">
+
+    <h3 class="dk-h3">Four of the twenty, drawn</h3>
+    <p class="dk-p">SP-01, SP-10, SP-13, SP-14 and SP-19 converge on one screen below &mdash; the piece that finally says what it is. SP-12, SP-08 and SP-03 each get their own: a board that actually holds a piece, the moment before the ask, and what the other phone actually sees.</p>
+
+    <div class="dk-screen">
+      <div class="dk-screen__stage">
+        <div class="dk-frames frames-1">
+          <div class="dk-frame-slot">
+            <div class="dk-frame-fit"><!-- include:fragments/s-M1.html --></div>
+            <p class="dk-frame-cap"><b>s-M1</b> &middot; Piece detail, repaired &middot; SP-01, SP-10, SP-13, SP-14, SP-19</p>
+          </div>
+        </div>
+      </div>
+      <div class="dk-screen__sheet">
+        <div class="dk-sheet"><!-- include:fragments/s-M1.sheet.html --></div>
+      </div>
+    </div>
+
+    <div class="dk-screen">
+      <div class="dk-screen__stage">
+        <div class="dk-frames frames-1">
+          <div class="dk-frame-slot">
+            <div class="dk-frame-fit"><!-- include:fragments/s-M3.html --></div>
+            <p class="dk-frame-cap"><b>s-M3</b> &middot; Saved &middot; Boards, holding a piece &middot; SP-12</p>
+          </div>
+        </div>
+      </div>
+      <div class="dk-screen__sheet">
+        <div class="dk-sheet"><!-- include:fragments/s-M3.sheet.html --></div>
+      </div>
+    </div>
+
+    <div class="dk-screen">
+      <div class="dk-screen__stage">
+        <div class="dk-frames frames-1">
+          <div class="dk-frame-slot">
+            <div class="dk-frame-fit"><!-- include:fragments/s-M4.html --></div>
+            <p class="dk-frame-cap"><b>s-M4</b> &middot; The permission moment &middot; SP-08</p>
+          </div>
+        </div>
+      </div>
+      <div class="dk-screen__sheet">
+        <div class="dk-sheet"><!-- include:fragments/s-M4.sheet.html --></div>
+      </div>
+    </div>
+
+    <div class="dk-screen">
+      <div class="dk-screen__stage">
+        <div class="dk-frames frames-1">
+          <div class="dk-frame-slot">
+            <div class="dk-frame-fit"><!-- include:fragments/s-M6.html --></div>
+            <p class="dk-frame-cap"><b>s-M6</b> &middot; What the partner receives &middot; SP-03</p>
+          </div>
+        </div>
+      </div>
+      <div class="dk-screen__sheet">
+        <div class="dk-sheet"><!-- include:fragments/s-M6.sheet.html --></div>
+      </div>
+    </div>
+  </div>
+</section>

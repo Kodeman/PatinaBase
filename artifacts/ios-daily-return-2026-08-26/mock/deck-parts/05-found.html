@@ -1,0 +1,319 @@
+<section id="found" class="dk-sec reg-dark" data-index-title="What we found" data-day="midday">
+<div class="dk-wrap">
+<p class="hour"><b>12:30</b> &middot; Midday</p>
+
+<div class="dk-grid">
+<div class="dk-prose">
+<h2 class="dk-h2">Two hundred and thirteen findings, in six shapes</h2>
+<p class="dk-lede">Nine simulated seats walked fourteen tasks across four tiers. What came back is not a list of bugs. It is one app that looks the same every morning, cannot take money for a chair, and names the designer exactly once &mdash; on the bill.</p>
+<p class="dk-p">The class sizes are worth reading before their contents. <b>Trust</b> is the largest by a wide margin: sixty-six findings in which a screen says something the account behind it does not support. <b>Purchase</b> is the second-smallest, for the reason that there is almost no purchase surface to find fault with.</p>
+<p class="dk-note">Severity is the review&#8217;s scale: <b>S0</b> breaks return, purchase or trust; <b>S1</b> is major friction; <b>S2</b> is hesitation; <b>S3</b> is polish. 199 verified, 14 contested, 0 refuted; every F## resolves in <code>research/31-verified-findings.json</code>. No usage data was available to this review, so no number here measures behaviour &mdash; each is a count of what is on the screen or in the repository.</p>
+</div>
+
+<div class="dk-stage">
+<div class="dk-tablewrap">
+<table class="dk-table">
+<caption>213 findings by class &middot; the walk of 2026-08-26</caption>
+<thead><tr><th>Class</th><th>Findings</th><th>What the class says</th></tr></thead>
+<tbody>
+<tr><th class="dk-row-h">Return</th><td class="dk-num">47</td><td>Nothing on the first screen knows you were gone.</td></tr>
+<tr><th class="dk-row-h">Purchase</th><td class="dk-num">20</td><td>Every path to money ends at a button that saves.</td></tr>
+<tr><th class="dk-row-h">Trust</th><td class="dk-num">66</td><td>The screens disagree with each other, and with the account.</td></tr>
+<tr><th class="dk-row-h">Wayfinding</th><td class="dk-num">33</td><td>The work is behind an unlabelled monogram.</td></tr>
+<tr><th class="dk-row-h">Content</th><td class="dk-num">32</td><td>One story, one room, one number &mdash; none of them yours.</td></tr>
+<tr><th class="dk-row-h">Reach</th><td class="dk-num">15</td><td>What the thumb cannot reach, and who cannot be reached.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<hr class="dk-rule">
+
+<!-- RETURN -->
+<div class="dk-grid">
+<div class="dk-prose">
+<p class="dk-h4">Return &middot; 47 findings</p>
+<h3 class="dk-h3">Nothing on the first screen knows you were gone</h3>
+<p class="dk-p">A force-quit and relaunch returns a Today byte-identical to the one left behind: same Next Move, same story, same room card. No last-visit timestamp is stored anywhere, so two weeks and two minutes draw the same screen. The bell reads &ldquo;Nothing yet&rdquo; / &ldquo;Updates from your designer will land here.&rdquo; on the same device, the same minute, that the Studio lists two decisions overdue since Aug 22, $4,250.00 due Sep 1 and a proposal to review by Sep 8.</p>
+<p class="dk-p">Nor can it. <code>apns-send</code>&#8217;s only callers are three design-request triggers, an operator-pressed fulfilment send and a site-request dispatch &mdash; no proposal, invoice or decision emits a push. The app declares no widget, no Live Activity, no App Intent and no local notification, so it owns no surface outside itself from which to ask for a morning.</p>
+<p class="f-chips">
+<span class="f-chip f-chip--s0">F34 <span>Two weeks away looks exactly like two minutes away</span></span>
+<span class="f-chip f-chip--s0">F16</span>
+<span class="f-chip f-chip--s0">F08 <span>Notifications empty while four items are due</span></span>
+<span class="f-chip f-chip--s0">F07 <span>Push never fires for proposals, invoices or decisions</span></span>
+<span class="f-chip f-chip--s0">F13</span>
+<span class="f-chip f-chip--s1">F130 <span>The app owns no surface outside itself</span></span>
+<span class="f-chip f-chip--s1">F42</span>
+</p>
+<p class="dk-note"><span class="lvl lvl--code">code-read</span> F07 &mdash; <code>supabase/functions/apns-send/index.ts</code>, <code>notification-dispatch/index.ts:183-186</code>. F130 &mdash; <code>Patina.xcodeproj/project.pbxproj:177-223</code>. Email reminders to the client do exist and are cron-scheduled; the gap is the phone, not the client.</p>
+</div>
+
+<div class="dk-stage">
+<div class="ev-grid ev-grid--wide">
+<figure class="ev-fig">
+<div class="ev-fig__shot"><img data-shot="c-29-relaunch-returning-client.png" alt="Today after a force-quit and relaunch, unchanged"></div>
+<figcaption class="ev-fig__cap">
+<b>c-29 &middot; Today, after a relaunch</b>
+The session survives. The screen does not change: no welcome back, no unread marker, no timestamp of the last visit.
+<span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><span class="f-chip f-chip--s0">F34</span><span class="f-chip f-chip--s0">F16</span></span>
+</figcaption>
+</figure>
+</div>
+<blockquote class="voice">
+<p class="voice__q">Right now, two weeks and two minutes look exactly the same.</p>
+<p class="voice__who"><span class="voice__seat">H2</span><span class="voice__role">Ruth, 47, Des Moines &middot; engaged a designer three months ago &middot; simulated seat</span></p>
+</blockquote>
+</div>
+</div>
+
+<hr class="dk-rule">
+
+<!-- PURCHASE -->
+<div class="dk-grid">
+<div class="dk-prose">
+<p class="dk-h4">Purchase &middot; 20 findings</p>
+<h3 class="dk-h3">Every path to money ends at a button that saves</h3>
+<p class="dk-p">The terminus of every browse path is one primary button labelled &ldquo;Add to Room&rdquo;, which becomes &ldquo;Saved &#10003;&rdquo;. Above it: a back chevron, &ldquo;?&rdquo;, Share and a heart. There is no cart, no checkout, no &ldquo;Request a quote&rdquo;, no vendor link, no dimensions and no lead time &mdash; the things a person wants before spending $4,000 are absent from the surface that asks them to.</p>
+<p class="dk-p">The rail behind it is finished: <code>create_direct_order</code>, the <code>direct_order_id</code> branch in <code>create-checkout-session</code>, the settle branch in <code>stripe-webhook</code>, the receipt emails. Nineteen of the twenty-one local catalog rows already pass the buyability gate. The delta is entirely client-side. In this walk nobody reached the button at all: every product tap in every lane returned &ldquo;Couldn&#8217;t load product&rdquo;.</p>
+<p class="f-chips">
+<span class="f-chip f-chip--s0">F12 <span>Buying ends at &ldquo;Add to Room / Saved &#10003;&rdquo;</span></span>
+<span class="f-chip f-chip--s0">F05 <span>Browse grid renders off-canvas, unreadable cards</span></span>
+<span class="f-chip f-chip--s0">F17 <span>Dimensions and lead time exist nowhere</span></span>
+<span class="f-chip f-chip--s1">F04 <span>Every piece detail fails and traps the user</span></span>
+<span class="f-chip f-chip--s1">F151 <span>Buy-now is armed on the backend and unbuilt on iOS</span></span>
+<span class="f-chip f-chip--s1">F52</span>
+</p>
+<p class="dk-note"><span class="lvl lvl--code">code-read</span> F151 &mdash; <code>supabase/migrations/00276_direct_orders.sql:41-200</code>. The nineteen-of-twenty-one figure is a live count over the local catalog, not a production one.</p>
+</div>
+
+<div class="dk-stage">
+<div class="ev-grid ev-grid--wide">
+<figure class="ev-fig">
+<div class="ev-fig__shot"><img data-shot="g-15-browse-pieces-grid.png" alt="Browse grid with cards cropped by the left screen edge"></div>
+<figcaption class="ev-fig__cap">
+<b>g-15 &middot; Browse pieces</b>
+Card frames at x = &minus;32.7 and &minus;10.7, off the left edge. The maker reads &ldquo;M &amp; BOARD&rdquo;, the name &ldquo;rloom Oak / ing Table&rdquo;, the price &ldquo;,200&rdquo;.
+<span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><span class="f-chip f-chip--s0">F05</span></span>
+</figcaption>
+</figure>
+<figure class="ev-fig">
+<div class="ev-fig__shot"><img data-shot="g-17-piece-detail-top.png" alt="Couldn't load product, with a retry button and nothing else"></div>
+<figcaption class="ev-fig__cap">
+<b>g-17 &middot; Piece detail</b>
+&ldquo;Couldn&#8217;t load product / Let&#8217;s try that again.&rdquo; One interactive element on the whole screen: the retry, at 125 &times; 17 pt. No back, no chevron.
+<span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><span class="f-chip f-chip--s1">F04</span></span>
+</figcaption>
+</figure>
+</div>
+<blockquote class="voice">
+<p class="voice__q">The money rail is armed and pointed at a button nobody drew. The entire delta is client-side.</p>
+<p class="voice__who"><span class="voice__seat">U3</span><span class="voice__role">Commerce UX &middot; simulated seat</span></p>
+</blockquote>
+</div>
+</div>
+
+<hr class="dk-rule">
+
+<!-- TRUST -->
+<div class="dk-grid">
+<div class="dk-prose">
+<p class="dk-h4">Trust &middot; 66 findings</p>
+<h3 class="dk-h3">The screens disagree with each other, and with the account</h3>
+<p class="dk-p">&ldquo;SIGNED (1)&rdquo; heads a card reading &ldquo;Sample accepted proposal / $100,000.00&rdquo;. The proposal&#8217;s status is <code>accepted</code>; the seed holds zero signed proposals. One screen on, the instrument that binds the client restates no amount, no line items, no terms and no date &mdash; while the terms it skips read &ldquo;Deposits are non-refundable once procurement begins. Custom items are final sale.&rdquo;</p>
+<p class="dk-p">The client&#8217;s own project screen prints a stat labelled &ldquo;CLIENT VIEW / Milestone&rdquo; &mdash; a column name &mdash; and a boxed line reading &ldquo;Set up phases, payments, and FF&amp;E in the portal &rarr;&rdquo;, an instruction written for the designer and handed to the homeowner. A room typed and a piece saved as a guest appear under the next account that signs in. And the designer appears exactly once in the whole signed-in app: &ldquo;Aspen Loft Refresh &middot; from Leah Hartwell&rdquo;, in small mono type, under a bill.</p>
+<p class="f-chips">
+<span class="f-chip f-chip--s0">F02 <span>Proposals list mislabels an accepted proposal &ldquo;SIGNED&rdquo;</span></span>
+<span class="f-chip f-chip--s0">F03 <span>The signature sheet restates nothing</span></span>
+<span class="f-chip f-chip--s0">F01 <span>Sharing a piece hands over the designer portal</span></span>
+<span class="f-chip f-chip--s0">F23 <span>Guest&#8217;s room and taste portrait adopted by the account</span></span>
+<span class="f-chip f-chip--s0">F20</span>
+<span class="f-chip f-chip--s0">F09 <span>The designer is named once, on the bill</span></span>
+<span class="f-chip f-chip--s1">F41</span>
+<span class="f-chip f-chip--s1">F157 <span>Card payers are told a bank transfer has started</span></span>
+</p>
+</div>
+
+<div class="dk-stage">
+<div class="ev-grid ev-grid--wide">
+<figure class="ev-fig">
+<div class="ev-fig__shot"><img data-shot="c-09-proposals-list.png" alt="Proposals list with a SIGNED section over a $100,000 proposal"></div>
+<figcaption class="ev-fig__cap">
+<b>c-09 &middot; Proposals</b>
+&ldquo;SIGNED (1)&rdquo; over &ldquo;Sample accepted proposal / $100,000.00&rdquo;. The status is accepted. Nobody signed it.
+<span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><span class="f-chip f-chip--s0">F02</span></span>
+</figcaption>
+</figure>
+<figure class="ev-fig">
+<div class="ev-fig__shot"><img data-shot="g-19-share-sheet.png" alt="iOS share sheet titled Patina Designer Portal"></div>
+<figcaption class="ev-fig__cap">
+<b>g-19 &middot; Share a piece</b>
+The share sheet offers &ldquo;Patina Designer Portal&rdquo; / &ldquo;app.patina.cloud&rdquo;. A homeowner sending a chair sends the designer&#8217;s portal.
+<span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><span class="f-chip f-chip--s0">F01</span></span>
+</figcaption>
+</figure>
+</div>
+<blockquote class="voice">
+<p class="voice__q">The app is printing the word SIGNED on a six-figure document nobody signed. If that were my client and my number, I would be on the phone to Patina inside the hour.</p>
+<p class="voice__who"><span class="voice__seat">D1</span><span class="voice__role">Leah, 38, Columbus &middot; solo residential designer &middot; simulated seat</span></p>
+</blockquote>
+</div>
+</div>
+
+<hr class="dk-rule">
+
+<!-- WAYFINDING -->
+<div class="dk-grid">
+<div class="dk-prose">
+<p class="dk-h4">Wayfinding &middot; 33 findings</p>
+<h3 class="dk-h3">The work is behind an unlabelled monogram</h3>
+<p class="dk-p">The signed-in home is four elements and does not scroll: the Next Move, an editorial story, &ldquo;ACTIVE ROOM&rdquo; and the Companion orb. Projects, proposals, invoices, budget and decisions live three acts away, behind a 36-point circular &ldquo;C&rdquo; in the top-right corner &mdash; the hardest zone to reach one-handed on this phone, and the only door there is.</p>
+<p class="dk-p">There is no search anywhere in the app. The Saved row does not appear in the Companion until something is already saved, so it is invisible at the moment it would teach the loop. And the Settings row marked &ldquo;Account&rdquo; draws a chevron and does not navigate &mdash; tapped dead-centre, reproduced three times across two tiers, with Sign Out stranded behind it.</p>
+<p class="f-chips">
+<span class="f-chip f-chip--s0">F11 <span>Money rail sits behind an unlabelled monogram</span></span>
+<span class="f-chip f-chip--s0">F14 <span>Saved has no door until something is already saved</span></span>
+<span class="f-chip f-chip--s1">F121</span>
+<span class="f-chip f-chip--s1">F43 <span>No search exists anywhere in the app</span></span>
+<span class="f-chip f-chip--s1">F55 <span>&ldquo;Account &gt;&rdquo; has a chevron and does nothing</span></span>
+<span class="f-chip f-chip--s1">F138</span>
+<span class="f-chip f-chip--s1">F50</span>
+</p>
+</div>
+
+<div class="dk-stage">
+<div class="ev-grid ev-grid--wide">
+<figure class="ev-fig">
+<div class="ev-fig__shot"><img data-shot="c-03-home-top-activeproject.png" alt="Signed-in home with no tab bar and three small glyphs top right"></div>
+<figcaption class="ev-fig__cap">
+<b>c-03 &middot; Today, activeProject</b>
+Three projects, four proposals, an open invoice, two overdue decisions. The screen offers one sentence about work, and the only route to the rest is the monogram.
+<span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><span class="f-chip f-chip--s0">F11</span><span class="f-chip f-chip--s1">F41</span></span>
+</figcaption>
+</figure>
+</div>
+<blockquote class="voice">
+<p class="voice__q">A tab bar tells you what exists just by being on screen; the Companion requires opening the orb and reading subtitles to learn the app has a Studio, or Saved, or anything else.</p>
+<p class="voice__who"><span class="voice__seat">U2</span><span class="voice__role">Interaction, navigation and visual &middot; simulated seat</span></p>
+</blockquote>
+</div>
+</div>
+
+<hr class="dk-rule">
+
+<!-- CONTENT -->
+<div class="dk-grid">
+<div class="dk-prose">
+<p class="dk-h4">Content &middot; 32 findings</p>
+<h3 class="dk-h3">One story, one room, one number &mdash; none of them yours</h3>
+<p class="dk-p">The editorial well holds three rows. The home fetches the highest-sorted one with <code>limit=1</code>, so &ldquo;MAKER SPOTLIGHT / The Grain Whisperer of Maine&rdquo; is the story on the guest home, the engaged home and the activeProject home, in light and in dark, with its unread dot hard-coded on. It will still be there in October.</p>
+<p class="dk-p">The room&#8217;s own &ldquo;Browse Picks for This Room&rdquo; opens the same unfiltered grid, with no room name on it. An $850 colour decision &mdash; &ldquo;Rug color - Natural vs Sand&rdquo; &mdash; is two text cards with no colour on either. The home card says &ldquo;0 pieces saved&rdquo; in the same session where Saved lists one, and that piece&#8217;s price reads &ldquo;$4200&rdquo; in one place and &ldquo;$4,200&rdquo; in another. Deadlines print on the list card and vanish on the detail screen the client acts on.</p>
+<p class="f-chips">
+<span class="f-chip f-chip--s1">F131 <span>The editorial well holds three stories</span></span>
+<span class="f-chip f-chip--s1">F123 <span>Home says zero pieces saved while Saved holds one</span></span>
+<span class="f-chip f-chip--s1">F92 <span>Deadlines shown on the list, dropped on the detail</span></span>
+<span class="f-chip f-chip--s1">F65</span>
+<span class="f-chip f-chip--s1">F73</span>
+<span class="f-chip f-chip--s2">F44 <span>A colour decision shows no colour</span></span>
+<span class="f-chip f-chip--s2">F171</span>
+<span class="f-chip f-chip--s3">F203</span>
+</p>
+</div>
+
+<div class="dk-stage">
+<div class="ev-grid ev-grid--wide">
+<figure class="ev-fig">
+<div class="ev-fig__shot"><img data-shot="c-08-project-detail.png" alt="Project detail with a CLIENT VIEW stat and a portal instruction"></div>
+<figcaption class="ev-fig__cap">
+<b>c-08 &middot; Project detail</b>
+Three stats, an Invoices row, a portal link. &ldquo;CLIENT VIEW / Milestone&rdquo; is the raw column shown to the client it governs; the boxed line under it was written for the designer.
+<span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><span class="f-chip f-chip--s2">F171</span><span class="f-chip f-chip--s0">F20</span></span>
+</figcaption>
+</figure>
+</div>
+<blockquote class="voice">
+<p class="voice__q">It will be the Grain Whisperer tomorrow, next week, and in October, and its &ldquo;unread&rdquo; dot is hard-coded on, so it will keep telling me it is new every morning until an editor publishes something.</p>
+<p class="voice__who"><span class="voice__seat">H3</span><span class="voice__role">Walt, 63, Madison &middot; downsizing to a two-bedroom condo &middot; simulated seat</span></p>
+</blockquote>
+</div>
+</div>
+
+<hr class="dk-rule">
+
+<!-- REACH -->
+<div class="dk-grid">
+<div class="dk-prose">
+<p class="dk-h4">Reach &middot; 15 findings</p>
+<h3 class="dk-h3">What the thumb cannot reach, and who cannot be reached</h3>
+<p class="dk-p">The room form&#8217;s unit toggles measure 12 &times; 13 and 6 &times; 13 points, and the only feedback on flipping feet to metres is a change of text colour. A room typed as 18 by 14 came back as &ldquo;46 ft&rdquo; &times; &ldquo;59 ft&rdquo; and &ldquo;2713 SQUARE FEET&rdquo;, and that number then followed the account everywhere. The fixed status bar draws over scrolled content with no inset reserved, and the Companion orb sits on top of the primary act on several screens &mdash; clipping &ldquo;Sign proposal&rdquo; to &ldquo;Sign proposa&rdquo;.</p>
+<p class="dk-p">The other reach is the person. There are exactly three ShareLink sites, all sharing the same single-product URL: no room, no board, no status, no household, no second seat. And the link the app does hand out cannot open the app &mdash; <code>Info.plist</code> registers only the <code>patina</code> scheme and there is no associated-domains entitlement, so the recipient lands in a browser.</p>
+<p class="f-chips">
+<span class="f-chip f-chip--s1">F40 <span>A 6-point-wide toggle silently corrupts room data</span></span>
+<span class="f-chip f-chip--s1">F97</span>
+<span class="f-chip f-chip--s1">F114 <span>Status bar draws over scrolled content</span></span>
+<span class="f-chip f-chip--s1">F49 <span>The orb covers the button it should help with</span></span>
+<span class="f-chip f-chip--s1">F107</span>
+<span class="f-chip f-chip--s1">F57</span>
+<span class="f-chip f-chip--s2">F168</span>
+<span class="f-chip f-chip--s2">F169 <span>Shared links can&#8217;t open the app even when installed (no associated domains)</span></span>
+</p>
+<p class="dk-note"><span class="lvl lvl--code">code-read</span> F168, F169 &mdash; <code>Patina/Info.plist:15-27</code>, <code>Patina.entitlements:4-11</code>. F18 (18 &times; 14 ft stored as 59&#8242; &times; 46&#8242;) is filed contested: the toggle&#8217;s state at the moment of entry could not be re-confirmed from the shots alone. F57 above is contested too &mdash; the Studio rows do expose a button role at Dynamic Type XXL, so the judges did not count it against either direction.</p>
+</div>
+
+<div class="dk-stage">
+<div class="ev-grid ev-grid--wide">
+<figure class="ev-fig">
+<div class="ev-fig__shot"><img data-shot="x-05-proposal-detail.png" alt="Proposal detail at XXL type with body text running into the Companion button"></div>
+<figcaption class="ev-fig__cap">
+<b>x-05 &middot; Proposal detail, Dynamic Type XXL</b>
+The &ldquo;Space Plan&rdquo; paragraph runs into the fixed circular Companion button at the bottom edge. No safe area is reserved for a control the app draws itself.
+<span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><span class="f-chip f-chip--s1">F49</span><span class="f-chip f-chip--s1">F137</span></span>
+</figcaption>
+</figure>
+</div>
+<blockquote class="voice">
+<p class="voice__q">The app respects the settings in general, then loses exactly the two things (Pay, proposal title) I&#8217;d be reaching for at those settings specifically.</p>
+<p class="voice__who"><span class="voice__seat">H2</span><span class="voice__role">Ruth, 47, Des Moines &middot; engaged a designer three months ago &middot; simulated seat</span></p>
+</blockquote>
+</div>
+</div>
+
+<hr class="dk-rule">
+
+<!-- THE TWELVE -->
+<div class="dk-grid dk-grid--even">
+<div class="dk-prose dk-prose--static">
+<h3 class="dk-h3">The twelve that matter most</h3>
+<p class="dk-p">Ranked by severity &times; seat count &times; confidence across all 213 findings. Nine of the twelve are S0. Nine were also raised independently by five seats or more, and every one of those nine is a sentence the app says out loud &mdash; a label, a count, a promise &mdash; that the account behind it does not support. Read the seat column as coverage, not as a vote: D1, H1 and U3 arriving at one finding means a designer, a homeowner and a commerce lens reached it from different tasks.</p>
+</div>
+<div class="dk-stage">
+<blockquote class="voice voice--wide">
+<p class="voice__q">Eleven taps, one app kill, and no screen that would take my money for a chair. Taps to money: there is no number. There is no path.</p>
+<p class="voice__who"><span class="voice__seat">H3</span><span class="voice__role">Walt, 63, Madison &middot; downsizing to a two-bedroom condo &middot; simulated seat</span></p>
+</blockquote>
+</div>
+</div>
+
+<div class="dk-tablewrap">
+<table class="dk-table">
+<caption>The twelve &middot; severity, the seats that raised each, and what the screen does</caption>
+<thead><tr><th>#</th><th>Finding</th><th>Sev</th><th>Seats</th><th>What the screen does</th></tr></thead>
+<tbody>
+<tr><td class="dk-num">1</td><th class="dk-row-h"><span class="f-chip f-chip--s0">F01</span> Sharing a piece hands over the designer portal</th><td class="dk-num">S0</td><td class="dk-num">7 &middot; D1 D2 D3 H1 H3 U1 U3</td><td>The share sheet from a product card offers &ldquo;Patina Designer Portal&rdquo; / &ldquo;app.patina.cloud&rdquo; as the thing being shared.</td></tr>
+<tr><td class="dk-num">2</td><th class="dk-row-h"><span class="f-chip f-chip--s0">F05</span> Browse grid renders off-canvas, unreadable cards</th><td class="dk-num">S0</td><td class="dk-num">6 &middot; D1 D3 H1 H3 U2 U3</td><td>Cards at four different sizes, the left column cropped by the screen edge: &ldquo;M &amp; BOARD&rdquo;, &ldquo;rloom Oak / ing Table&rdquo;, &ldquo;,200&rdquo;.</td></tr>
+<tr><td class="dk-num">3</td><th class="dk-row-h"><span class="f-chip f-chip--s0">F02</span> Proposals list mislabels an accepted proposal &ldquo;SIGNED&rdquo;</th><td class="dk-num">S0</td><td class="dk-num">6 &middot; D1 D2 D3 H2 H3 U3</td><td>&ldquo;SIGNED (1)&rdquo; heads a $100,000.00 proposal whose status is accepted. The seed holds zero signed proposals.</td></tr>
+<tr><td class="dk-num">4</td><th class="dk-row-h"><span class="f-chip f-chip--s0">F03</span> The signature sheet restates nothing</th><td class="dk-num">S0</td><td class="dk-num">6 &middot; D1 D2 D3 H2 H3 U3</td><td>The e-sign sheet carries the project title and a name field. No amount, no line items, no terms, no date, no agreement box &mdash; against $18,500.00 and non-refundable deposits.</td></tr>
+<tr><td class="dk-num">5</td><th class="dk-row-h"><span class="f-chip f-chip--s0">F07</span> Push never fires for proposals, invoices or decisions</th><td class="dk-num">S0</td><td class="dk-num">6 &middot; D1 D2 H1 H2 H3 U3</td><td><code>apns-send</code>&#8217;s only callers are three design-request triggers, an operator-pressed fulfilment send and a site-request dispatch. No money event reaches the phone.</td></tr>
+<tr><td class="dk-num">6</td><th class="dk-row-h"><span class="f-chip f-chip--s0">F08</span> Notifications empty while four items are due</th><td class="dk-num">S0</td><td class="dk-num">5 &middot; D1 D3 H3 U1 U3</td><td>&ldquo;Nothing yet&rdquo; on the same device, the same minute, as two decisions overdue since Aug 22, $4,250.00 due Sep 1 and a proposal to review by Sep 8.</td></tr>
+<tr><td class="dk-num">7</td><th class="dk-row-h"><span class="f-chip f-chip--s1">F04</span> Every piece detail fails and traps the user</th><td class="dk-num">S1</td><td class="dk-num">6 &middot; D1 D3 H1 H3 U2 U3</td><td>Every product tap in every lane returns &ldquo;Couldn&#8217;t load product&rdquo;. Retry fails identically, the edge-swipe back does nothing, one element remains.</td></tr>
+<tr><td class="dk-num">8</td><th class="dk-row-h"><span class="f-chip f-chip--s1">F41</span> Three disagreeing attention counts on one screen</th><td class="dk-num">S1</td><td class="dk-num">6 &middot; D1 D2 D3 H2 H3 U1</td><td>&ldquo;4 things need your eye&rdquo; and &ldquo;4 THINGS NEED YOUR EYE&rdquo; sit directly above &ldquo;Awaiting you 3&rdquo;, while Today and the Companion both say &ldquo;2 project decisions waiting&rdquo;.</td></tr>
+<tr><td class="dk-num">9</td><th class="dk-row-h"><span class="f-chip f-chip--s1">F42</span> Saved opens on boards that can never fill</th><td class="dk-num">S1</td><td class="dk-num">6 &middot; H1 H2 H3 U1 U2 U3</td><td>Saved defaults to &ldquo;Boards&rdquo; / &ldquo;No boards yet&rdquo; while the Companion reports &ldquo;1 SAVED PIECE&rdquo;. A created board stays empty: <code>addToBoard</code> has no call site.</td></tr>
+<tr><td class="dk-num">10</td><th class="dk-row-h"><span class="f-chip f-chip--s0">F09</span> The designer is named once, on the bill</th><td class="dk-num">S0</td><td class="dk-num">4 &middot; D1 D3 H2 H3</td><td>&ldquo;Aspen Loft Refresh &middot; from Leah Hartwell&rdquo; on the invoice detail. No photograph, no studio, no credentials, no way to reach her &mdash; anywhere.</td></tr>
+<tr><td class="dk-num">11</td><th class="dk-row-h"><span class="f-chip f-chip--s0">F12</span> Buying ends at &ldquo;Add to Room / Saved &#10003;&rdquo;</th><td class="dk-num">S0</td><td class="dk-num">4 &middot; D1 H1 H3 U3</td><td>No cart, no checkout, no &ldquo;Buy&rdquo;, no quote, no vendor link. The only Stripe rail in the app belongs to designer invoices.</td></tr>
+<tr><td class="dk-num">12</td><th class="dk-row-h"><span class="f-chip f-chip--s0">F10</span> The engaged home is the guest home</th><td class="dk-num">S0</td><td class="dk-num">4 &middot; D1 H1 H3 U1</td><td>A lead accepted and claimed on Aug 18 is greeted by &ldquo;Bring your first room into Patina&rdquo;, a Studio of five zeroes, and the first-launch tour firing again.</td></tr>
+</tbody>
+</table>
+</div>
+
+<p class="dk-note">Ranks are the review&#8217;s own arithmetic over <code>research/31-verified-findings.json</code>, not a measured priority. Nothing in this section rests on usage data, because none was available. Camera, LiDAR and AR claims elsewhere in this deck are code-read only.</p>
+</div>
+</section>

@@ -1,0 +1,13 @@
+<table class="sheet-table">
+  <caption>M4 &middot; The room &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> 220 pt hero on the room-type gradient (living &rarr; <code>warm</code>) &middot; <b>2</b> name and the honest capture label &middot; <b>3</b> the stat row, with no AR cell &middot; <b>4</b> the pieces in the room &middot; <b>5</b> one room-scoped browse act &middot; <b>6</b> the two acts that make the numbers correctable &middot; <b>7</b> tab bar, Spaces active.</td></tr>
+  <tr><th>Purpose</th><td>The room is the thing that gets better with use &mdash; and the numbers on it must be correctable.</td></tr>
+  <tr><th>Entry</th><td>Tab <code>Spaces</code> &middot; the room rail on Today &middot; <code>patina://room/&lt;id&gt;</code>.</td></tr>
+  <tr><th>Components</th><td><code>RoomProjectView</code> (existing, trimmed) &middot; <code>RoomSettingsView</code> (existing, now reachable) &middot; <code>RoomBudgetSheet</code> (<b>new</b>, 6).</td></tr>
+  <tr><th>Copy</th><td>As drawn. <code>TYPED, NOT SCANNED</code> replaces the <code>JUST SCANNED</code> / <code>MANUAL ENTRY</code> pair (F51); the stat is labelled <code>SAVED PIECES</code>, never spend. Dimensions and budget are <i>example copy</i>.</td></tr>
+  <tr><th>Data</th><td>Local <code>RoomModel</code> (budget written locally first, mirrored to <code>rooms.budget_cents</code> on sync) &middot; <code>saved_items</code> scoped by <code>room_id</code> &middot; <code>project_rooms</code> where a project owns the room, in which case the stat reads <code>committed_cents</code> and is labelled as such.</td></tr>
+  <tr><th>States</th><td>No pieces &rarr; &ldquo;Nothing in this room yet.&rdquo; and the one browse act &middot; no budget &rarr; the ghost act, never a <code>&mdash;</code> &middot; unsynced room &rarr; the budget still saves, locally.</td></tr>
+  <tr><th>Interactions</th><td><code>house_room_opened</code> &middot; <code>room_budget_set</code> &middot; <code>room_dimensions_edited</code> &middot; <code>room_browse_tapped</code>.</td></tr>
+  <tr><th>Tier</th><td>Identical at every tier; a project&#8217;s name appears only when the room belongs to one.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>The pieces grid, the budget, <code>Edit dimensions</code>, the honest capture label, and the removal of <code>0 IN AR</code> (F64, F110, F193).</td></tr>
+</table>

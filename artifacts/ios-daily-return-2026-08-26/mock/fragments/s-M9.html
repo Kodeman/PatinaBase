@@ -1,0 +1,65 @@
+<!-- s-M9 · Return surfaces — a Live Activity for a delivery, drawn as the two things it is at once:
+     the compact activity wrapped around the Dynamic Island (which it replaces) and the expanded card
+     on the Lock Screen. Proposed by neither direction as wave-1 work: Direction A declines Live
+     Activities outright; Direction B admits one only at W6, once a line is really shipped and an ETA
+     is real. The step names are the transitions fulfillment-notify already sends.
+     Additions to the kit, scoped under .sp-live: __eta, __notifs. -->
+<div class="frame-wrap sp-live">
+  <style>
+    .sp-live .sp-live__notifs { margin-top:auto; margin-bottom:96px; }
+    .sp-live .sp-live__eta { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+      letter-spacing:.5px; color:var(--pat-clay); }
+    .sp-live .live-card__head { justify-content:space-between; }
+    .sp-live .live-card__bar > i { width:74%; }
+    .sp-live .live-pill { min-width:0; width:172px; }
+  </style>
+
+  <div class="frame" data-scheme="dark" data-battery="charging">
+    <div class="frame__screen">
+
+      <div class="lockscreen">
+        <div class="lockscreen__clock">
+          <div class="lockscreen__date">Thursday, September 10</div>
+          <div class="lockscreen__time">9:41</div>
+        </div>
+
+        <div class="sp-live__notifs">
+          <div class="live-card">
+            <div class="live-card__head">
+              <span class="live-card__app">Patina &middot; Delivery</span>
+              <span class="sp-live__eta">Arriving 2&ndash;4 PM</span>
+            </div>
+            <div>
+              <div class="live-card__title">Heirloom Oak Dining Table</div>
+              <div class="live-card__meta">Nordic Atelier &middot; white-glove delivery, Living Room</div>
+            </div>
+            <div class="live-card__bar"><i></i></div>
+            <div class="live-card__steps">
+              <span>Confirmed</span><span>In production</span><span>Shipped</span><span>Delivered</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="live-pill">
+        <span class="live-pill__mark"><span class="strata strata--clay"><i></i><i></i><i></i></span></span>
+        <span class="live-pill__label">Delivery</span>
+        <span class="live-pill__value">2&ndash;4 PM</span>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:61px;left:300px">1</span>
+  <span class="callout-n" style="top:661px;right:2px">2</span>
+  <span class="callout-n" style="top:735px;right:2px">3</span>
+  <span class="callout-n callout-n--clay" style="top:790px;right:2px">4</span>
+</div>

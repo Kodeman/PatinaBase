@@ -1,0 +1,125 @@
+<section id="ask" class="dk-sec reg-paper" data-index-title="The ask" data-day="morning">
+  <div class="dk-wrap">
+    <p class="hour"><b>07:40</b> &middot; Morning</p>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h2 class="dk-h2">What was asked, and how it was answered</h2>
+        <p class="dk-lede">One brief, six assumptions taken rather than asked, and a plain account of what this review could see and what it could not.</p>
+        <p class="dk-p">The session ran without a person in it, so every choice the brief left open was decided here and written down. Read the six below before the findings; they are the terms the rest of the deck is bound by.</p>
+        <p class="dk-p">The panel is nine simulated seats. Their words are quoted verbatim throughout, and they are labelled as simulated everywhere they speak.</p>
+      </div>
+
+      <div class="dk-stage">
+        <div class="dk-plate dk-plate--tint">
+          <p class="dk-h4">The ask, verbatim</p>
+          <p class="dk-p">&ldquo;Assemble a team of interior designers, home owners and UX UI designers. Review the Patina iOS application and create a presentation outlining how the UI and UX flow could be updated to make the application more sticky and make users want to return and use it everyday. And eventually purchase through the app. The presentation should be an html presentation including mockups and UI Screen details.&rdquo;</p>
+          <p class="dk-note">Kody, 26 August 2026. Spelling and spacing as written.</p>
+        </div>
+
+        <h3 class="dk-h3">Six assumptions, stated rather than asked</h3>
+        <dl class="dk-kv">
+          <dt>The app</dt>
+          <dd>&ldquo;The Patina iOS application&rdquo; is read as the <b>client</b> app, <code>apps/mobile/Patina</code> (<code>cloud.patina.app</code>). Patina Field, the designer and trades app, is out of scope except where a client-side flow depends on it.</dd>
+
+          <dt>The evidence</dt>
+          <dd>An iPhone 17 Pro simulator on iOS 26.5 against the local Supabase stack, guest and signed-in walks, at main <code>3cd84ecb3</code>. No physical device and no production walk; camera, LiDAR and AR are read from source only, and labelled so.</dd>
+
+          <dt>The panel</dt>
+          <dd>Simulated seats playing named Midwest homeowners, interior designers and UX/UI practitioners as review lenses. No quote is presented as customer research.</dd>
+
+          <dt>The directions</dt>
+          <dd>Direction A stays inside what has already been ruled &mdash; no tab bar, a marketplace-first home, the Companion as the second door. Direction B may amend that canon, and every amendment is named, priced and given a way back.</dd>
+
+          <dt>Purchase</dt>
+          <dd>&ldquo;Purchase through the app&rdquo; is read as direct orders of maker pieces plus the money rail that already exists: proposals to sign, invoices paid through hosted Stripe Checkout. Physical goods cannot ride Apple&#8217;s in-app purchase (App Store Review Guideline 3.1.3(e) / 3.1.5(a)); external payment is the compliant rail.</dd>
+
+          <dt>Sticky</dt>
+          <dd>Read through the brand &mdash; <i>Where Time Adds Value</i>. Rituals worth returning to: the room, the piece, the maker, the designer&#8217;s work, the season. Never a streak, a badge or a confetti loop.</dd>
+        </dl>
+
+        <hr class="dk-rule">
+
+        <h3 class="dk-h3">What could be seen, and what could not</h3>
+        <div class="dk-tablewrap">
+          <table class="dk-table">
+            <caption>The instruments this review had, and the three it did not</caption>
+            <thead>
+              <tr><th style="width:20%">Instrument</th><th>What it gave</th><th style="width:19%">Level</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th class="dk-row-h">The walk</th>
+                <td>155 screenshots &mdash; 145 across four walk lanes (guest, signed-in client, dark mode, Dynamic Type at extra-extra-large) plus ten harness and restore frames &mdash; every frame 402 &times; 874 pt at 3&times;.</td>
+                <td><span class="lvl lvl--sim">sim-verified</span></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">The repo</th>
+                <td>Swift, SQL and edge-function source at the commit the walked build came from, so every mechanism claim resolves to a <code>file:line</code>.</td>
+                <td><span class="lvl lvl--code">code-read</span></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">The database</th>
+                <td>Migrations, policies, functions and seed rows read against the local stack &mdash; what the app could show, next to what it does show.</td>
+                <td><span class="lvl lvl--code">code-read</span></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">Product analytics</th>
+                <td>Nothing. Authorizing the analytics account needed a person, and the app emits no return-specific event at all &mdash; nothing beyond an <code>app_open</code> to have counted anyway. <a class="f-chip f-chip--s2" href="#found">F190</a></td>
+                <td><span class="lvl lvl--code">code-read</span></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">Production</th>
+                <td>Nothing. No counts, no live rows, no prod walk &mdash; there is no read path from this session without a secret it was not given.</td>
+                <td>&mdash;</td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">A device</th>
+                <td>Nothing. Apple Pay inside the hosted checkout, push arriving on a Lock Screen, and every camera, LiDAR and AR path went unwalked and are argued from source alone. <a class="f-chip f-chip--s1" href="#found">F64</a></td>
+                <td><span class="lvl lvl--code">code-read</span></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">The local edge runtime</th>
+                <td>Every function returned 503, so the Companion&#8217;s server-backed replies and the checkout hand-off were never seen running. The dead ends the walk did hit are the app&#8217;s own. <a class="f-chip f-chip--s1" href="#found">F31</a></td>
+                <td><span class="lvl lvl--sim">sim-verified</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="dk-note">A dash is an instrument that produced nothing. Where a number would have helped, this deck says no usage data was available rather than estimating one.</p>
+
+        <hr class="dk-rule">
+
+        <h3 class="dk-h3">How to read this deck</h3>
+
+        <p class="dk-h4">Two registers</p>
+        <p class="dk-p">Analysis and proposal sit on paper. Evidence sits in a darkroom, because a screenshot is a photograph of a lit screen and should never pretend to be a drawing. A phone mock is therefore always on paper; a simulator shot is always in the dark. Where the two must be compared, the shot sits in a band beneath the mock, not beside it.</p>
+
+        <p class="dk-h4">Three levels, on every claim</p>
+        <ul class="dk-ul">
+          <li><span class="lvl lvl--sim">sim-verified</span> &mdash; a screenshot in this review&#8217;s own ledger shows it.</li>
+          <li><span class="lvl lvl--code">code-read</span> &mdash; a line of source says it; the caption names the file. Camera, LiDAR and AR claims are only ever this.</li>
+          <li><span class="lvl lvl--inf">inferred</span> &mdash; reasoned from the two above, and the sentence says from what.</li>
+        </ul>
+
+        <p class="dk-h4">Findings, and how hard they bite</p>
+        <p class="dk-p">213 findings were raised and 199 verified against the code, the canon and a second run on the booted simulator. Each carries an id that resolves in the findings file, and a severity:</p>
+        <p class="f-chips">
+          <span class="f-chip f-chip--s0">S0 <span>breaks return, purchase or trust</span></span>
+          <span class="f-chip f-chip--s1">S1 <span>major friction</span></span>
+          <span class="f-chip f-chip--s2">S2 <span>hesitation</span></span>
+          <span class="f-chip f-chip--s3">S3 <span>polish</span></span>
+        </p>
+
+        <p class="dk-h4">A day, not a set of chapters</p>
+        <p class="dk-p">The eyebrow at the top of each part is an hour, and three of them belong to the panel: Walt opens the app at <b>07:40</b> over coffee, Ruth checks on her house at <b>12:30</b>, Maya browses at <b>21:10</b> on the couch. Everyone comes back <b>two weeks later</b>, which is where the judges sit. Time of day is the argument, so it is the spine.</p>
+
+        <div class="dk-disclosure">
+          <b>What this panel is</b>
+          Nine simulated seats, written by language models against a fixed task script. Quotes are
+          synthesized reviews, not customer research. No usage data was available to this review.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

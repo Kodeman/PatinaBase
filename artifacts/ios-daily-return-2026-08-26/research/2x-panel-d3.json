@@ -1,0 +1,580 @@
+[
+  {
+    "id": "D3-01",
+    "seat": "D3",
+    "task_ids": ["T3"],
+    "key": "browse-pieces|all|grid-geometry-broken",
+    "surface": "Browse pieces",
+    "tier": "all",
+    "class": "purchase",
+    "title": "Browse grid is broken, cards off-screen",
+    "observation": "\"Browse pieces / 10 pieces curated for your space\": the left card is clipped off the left edge — visible copy reads \"M & BOARD\", \"rloom Oak\", \"ing Table\", \",200\" where \"ROOM & BOARD\", \"Heirloom Oak Dining Table\", \"$4,200\" belong — while card sizes vary (284x294 to 240x304 per describe_screen) so no two cards in the 2-column grid match.",
+    "why_it_matters": "This is the app's only browse surface for a purchase I'd be recommending at trade margin; a client can't read the maker or price on the first card they'd see, which undercuts the provenance story that justifies my markup before they ever open a piece.",
+    "evidence": {
+      "shots": ["g-15-browse-pieces-grid.png", "g-16-filter-chip-seating.png", "d-03-browse-pieces.png", "x-03-browse-pieces.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:134-234"]
+    },
+    "severity": "S1",
+    "confidence": 0.95,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Fix the 2-column LazyVGrid card sizing so every card shares one frame before any copy or filter work lands."
+  },
+  {
+    "id": "D3-02",
+    "seat": "D3",
+    "task_ids": ["T3"],
+    "key": "browse-pieces|all|photo-does-not-match-piece",
+    "surface": "Browse pieces",
+    "tier": "all",
+    "class": "trust",
+    "title": "Product photo doesn't match the piece",
+    "observation": "\"Live-Edge Coffee Table\" by Lee Industries, $2,100, shows a photograph of an old wooden ladder-back chair on grass, not a coffee table. A separate card in the same grid is attributed to \"UNKNOWN MAKER.\"",
+    "why_it_matters": "I sell provenance and photography at trade margin; a client who catches a mismatched photo on their own has no reason to trust any maker-story card the app shows them next, and that doubt lands on me, not on Patina.",
+    "evidence": {
+      "shots": ["g-15-browse-pieces-grid.png"],
+      "refs": []
+    },
+    "severity": "S1",
+    "confidence": 0.9,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Audit image_url against product name/vendor for the local catalog and gate the card render on a matched asset, not just a non-null URL."
+  },
+  {
+    "id": "D3-03",
+    "seat": "D3",
+    "task_ids": ["T3", "T6", "T7"],
+    "key": "piece-detail|all|hard-fail-pgrst201",
+    "surface": "Piece Detail",
+    "tier": "all",
+    "class": "purchase",
+    "title": "Every piece detail hard-fails on load",
+    "observation": "Tapping any product card returns \"Couldn't load product / Let's try that again\" with no Back, no nav, and Companion absent from the accessibility tree — the only escape is force-quitting the app. Kong logs GET /rest/v1/products?...&select=*,vendors(...) returning HTTP 300 PGRST201 (ambiguous embed: products has two FKs to vendors).",
+    "why_it_matters": "This is the app's only path from a piece to a decision, a share, or a designer question; with it dead, nothing I'd want a client doing between meetings around a specific piece is reachable at all — I can't even preview what they'd see.",
+    "evidence": {
+      "shots": ["g-17-piece-detail-top.png", "c-25-piece-detail-client.png", "d-04-piece-detail.png", "x-04-piece-detail.png"],
+      "refs": ["apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:99"]
+    },
+    "severity": "S0",
+    "confidence": 0.95,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Qualify the embed as vendors!products_vendor_id_fkey(...) at ProductAPIClient.swift:99."
+  },
+  {
+    "id": "D3-04",
+    "seat": "D3",
+    "task_ids": ["T3", "T7"],
+    "key": "piece-detail|all|missing-trust-fields",
+    "surface": "Piece Detail",
+    "tier": "all",
+    "class": "trust",
+    "title": "No dimensions, lead time, shipping, or liability fields",
+    "observation": "products.dimensions JSONB exists in the schema but is neither returned by get_recommendations nor decoded by the app; there is no lead_time, stock, shipping, returns, or \"who is responsible\" field anywhere on the product model or the detail screen.",
+    "why_it_matters": "This is exactly the information a client needs before I'd let them commit to a $2,000+ piece, and it's exactly what I get asked about when something arrives wrong — the app has nowhere to put the answer even if the detail screen worked.",
+    "evidence": {
+      "shots": [],
+      "refs": [
+        "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:12-66",
+        "supabase/migrations/00001_initial_schema.sql:35",
+        "supabase/migrations/00246_aesthete_quiz_bridge.sql:199-214"
+      ]
+    },
+    "severity": "S1",
+    "confidence": 0.8,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Return and decode dimensions at minimum; add a shipping/returns/responsibility field to the product surface before any buy path ships."
+  },
+  {
+    "id": "D3-05",
+    "seat": "D3",
+    "task_ids": ["T6"],
+    "key": "share-sheet|all|branded-to-designer-portal",
+    "surface": "Share sheet",
+    "tier": "all",
+    "class": "trust",
+    "title": "Share sheet brands the piece to the designer portal",
+    "observation": "Sharing a piece from the client app opens the iOS share sheet with the title card \"Patina Designer Portal — app.patina.cloud,\" linking to https://app.patina.cloud/library/<productId>.",
+    "why_it_matters": "When a client shares a piece with their spouse for a second opinion, the link that lands hands the recipient a page branded to a portal that isn't theirs and isn't mine — it's the wrong front door for either of us, and it's not a link I can point a spouse toward with confidence.",
+    "evidence": {
+      "shots": ["g-19-share-sheet.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Shared/PatinaPortalLinks.swift:16-22"]
+    },
+    "severity": "S1",
+    "confidence": 0.9,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Give the client app its own share link/branding, distinct from the designer-portal Library route."
+  },
+  {
+    "id": "D3-06",
+    "seat": "D3",
+    "task_ids": ["T6"],
+    "key": "piece-detail|all|no-ask-designer-control",
+    "surface": "Piece Detail",
+    "tier": "all",
+    "class": "purchase",
+    "title": "No \"ask my designer\" control on the piece itself",
+    "observation": "The piece-detail action bar has back / ? / Share / heart, and a primary \"Add to Room\" button — no \"Get design help\" control. The CTA exists on 11 other surfaces in the app but not on the screen where a client is looking at one specific piece; reaching it costs 2 acts through the Companion menu instead.",
+    "why_it_matters": "The moment a client is deciding on a specific piece is exactly when I want them routed to me instead of buying elsewhere — that's the whole point of the relationship — and the app puts that option two menu levels away from the one screen where the decision is actually happening.",
+    "evidence": {
+      "shots": ["g-20-card-more-menu.png"],
+      "refs": [
+        "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:338-399",
+        "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionAreaBuilders.swift:65-70"
+      ]
+    },
+    "severity": "S1",
+    "confidence": 0.8,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Add \"Get design help\" to the piece-detail action bar, pre-scoped to the piece the same way the room CTA is scoped to a room."
+  },
+  {
+    "id": "D3-07",
+    "seat": "D3",
+    "task_ids": ["T6"],
+    "key": "piece-detail|all|no-compare-feature",
+    "surface": "Piece Detail",
+    "tier": "all",
+    "class": "content",
+    "title": "No compare feature anywhere in the app",
+    "observation": "Grepped: no compare surface exists anywhere in the client app — a client cannot set two pieces side by side on any screen.",
+    "why_it_matters": "Procurement decisions on furniture are almost always A-vs-B between two real candidates; without compare, that comparison either doesn't happen or happens with me on the phone, which is the exact inbox load a self-serve tool should be reducing.",
+    "evidence": {
+      "shots": [],
+      "refs": ["apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:89-138"]
+    },
+    "severity": "S2",
+    "confidence": 0.75,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Add a lightweight compare (2-3 saved pieces side by side) reachable from Saved."
+  },
+  {
+    "id": "D3-08",
+    "seat": "D3",
+    "task_ids": ["T6"],
+    "key": "piece-detail|all|notes-field-unused",
+    "surface": "Piece Detail",
+    "tier": "all",
+    "class": "content",
+    "title": "Notes field exists in data, never exposed in UI",
+    "observation": "TableItemModel.notes and CreateSavedItemPayload.notes both exist in the data model; no view anywhere writes to either field.",
+    "why_it_matters": "A client jotting \"ask about this in oak instead\" against a saved piece is exactly the kind of self-serve prep that would make my client meetings faster; the field is built and dead.",
+    "evidence": {
+      "shots": [],
+      "refs": ["apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:42"]
+    },
+    "severity": "S2",
+    "confidence": 0.75,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Add a notes field to the saved-item card and detail; the model already supports it end to end."
+  },
+  {
+    "id": "D3-09",
+    "seat": "D3",
+    "task_ids": ["T6"],
+    "key": "decision-detail|activeproject|no-image-no-confirm",
+    "surface": "Decision Detail",
+    "tier": "activeProject",
+    "class": "trust",
+    "title": "Decision detail: two $850 options, no image, no confirm",
+    "observation": "\"Rug color - Natural vs Sand\" presents \"Natural\" (badged \"Recommended\") and \"Sand,\" both priced at $850, both with no product image, each with its own identical black \"Choose this\" button and no confirmation step before the choice is committed.",
+    "why_it_matters": "A color decision with no color shown, made irreversible on one tap with no \"are you sure,\" is the kind of thing that gets contested after the fact on a real job — I'd rather my client call me first than tap blind on an $850 line item.",
+    "evidence": {
+      "shots": ["c-18-decision-detail.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:280-309"]
+    },
+    "severity": "S1",
+    "confidence": 0.9,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Require an image per option and a one-tap confirm step before a decision is committed and irreversible."
+  },
+  {
+    "id": "D3-10",
+    "seat": "D3",
+    "task_ids": ["T7", "T14"],
+    "key": "backend|all|direct-orders-no-designer-attribution",
+    "surface": "Backend — direct_orders",
+    "tier": "all",
+    "class": "purchase",
+    "title": "Buy-now backend built with zero designer attribution",
+    "observation": "public.direct_orders (00276_direct_orders.sql) is a complete, wired buy-now rail — create_direct_order RPC, create-checkout-session dispatch, stripe-webhook settle branch, receipt emails — with columns id, client_id, product_id, product_name, quantity, unit_price_cents, amount_cents, status, stripe ids, shipping. No designer_id, no project_id, no commission_rate. 00301_marketplace_vitals.sql states outright: \"No designer attribution (client_id is the buyer).\" Zero iOS client code references it.",
+    "why_it_matters": "This is the answer to my own question: if this ships as-is, a client can buy the same piece I sourced directly through Patina, I get zero commission, it never lands on my FF&E schedule, and I find out only when something goes wrong with the delivery — the exact scenario I've already been burned by once, now built into the platform I recommend to clients.",
+    "evidence": {
+      "shots": [],
+      "refs": [
+        "supabase/migrations/00276_direct_orders.sql:41-67",
+        "supabase/migrations/00301_marketplace_vitals.sql:37-40",
+        "supabase/migrations/00277_refund_reconciliation.sql:183-208"
+      ]
+    },
+    "severity": "S0",
+    "confidence": 0.9,
+    "already_ruled": "C24",
+    "july_status": null,
+    "proposal_seed": "Add designer_id/project_id/commission_rate to direct_orders and an earnings-credit branch before any iOS buy-now surface ships."
+  },
+  {
+    "id": "D3-11",
+    "seat": "D3",
+    "task_ids": ["T7"],
+    "key": "invoice-detail|activeproject|pay-failure-no-retry",
+    "surface": "Invoice Detail",
+    "tier": "activeProject",
+    "class": "trust",
+    "title": "Pay-failure UX has no retry, no way to reach a human",
+    "observation": "Tapping \"Pay $4,250.00\" that fails to start renders \"Unable to start payment. Please try again.\" as a single line of red text inserted below the button, shoving \"Pay securely by card or bank transfer.\" half off the bottom edge. The button keeps full enabled styling; there is no spinner, no retry control, and no way to reach support from this screen.",
+    "why_it_matters": "The trigger here is a known local-only edge-function fault, not an app bug — but the response to any payment failure is app-side, and a client staring at a $4,250 deposit that silently won't start, with no next step offered, calls me, not Patina support.",
+    "evidence": {
+      "shots": ["c-14-pay-handoff.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:45-52"]
+    },
+    "severity": "S1",
+    "confidence": 0.85,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "On checkout-session failure, show a retry button and a \"contact your designer\" fallback instead of static red text."
+  },
+  {
+    "id": "D3-12",
+    "seat": "D3",
+    "task_ids": ["T7", "T14"],
+    "key": "sign-sheet|activeproject|restates-nothing",
+    "surface": "Sign Proposal Sheet",
+    "tier": "activeProject",
+    "class": "trust",
+    "title": "Sign sheet restates no amount, terms, or line items",
+    "observation": "The sheet a client legally e-signs reads only \"SIGN PROPOSAL / Aspen Loft — Living Room Refresh / Type your full name to e-sign. Signing confirms the scope and kicks off your project.\" — a Full name field and a Sign button. No total, no line items, no date, no terms. The $18,500 total and the non-refundable-deposit terms live one screen back.",
+    "why_it_matters": "I need the document my client signs to actually restate what they're agreeing to; a sheet that shows nothing but a name field is a liability problem for me the day a client disputes what they thought they signed.",
+    "evidence": {
+      "shots": ["c-11c-sign-sheet.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalSignSheet.swift:40"]
+    },
+    "severity": "S1",
+    "confidence": 0.9,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Restate total, key terms, and date on the sign sheet itself, not just the screen behind it."
+  },
+  {
+    "id": "D3-13",
+    "seat": "D3",
+    "task_ids": ["T7", "T8"],
+    "key": "invoice-detail|activeproject|no-fulfillment-status",
+    "surface": "Invoice Detail",
+    "tier": "activeProject",
+    "class": "content",
+    "title": "No fulfillment/shipping status on any line item",
+    "observation": "Invoice line items (\"Dining table — deposit (50%)\", \"Primary bedroom nightstands (pair) — deposit (50%)\") carry no shipped/delivered/damaged status. invoices (00178) and direct_orders (00276) both stop at paid/void — there is no fulfillment_status column on either.",
+    "why_it_matters": "This is my exact question — \"does it show up on my FF&E schedule, and can my client see where a specific piece stands\" — and today the answer is no on both counts; a client with a shipped-but-not-arrived table has no way to check that from inside the app, so they call me.",
+    "evidence": {
+      "shots": ["c-13b-invoice-detail-scrolled.png"],
+      "refs": ["supabase/migrations/00178_invoices_v1.sql:29-57", "supabase/migrations/00276_direct_orders.sql:41-63"]
+    },
+    "severity": "S1",
+    "confidence": 0.75,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Add a fulfillment_status column (unfulfilled/shipped/delivered) to the payable rail and surface it per line item."
+  },
+  {
+    "id": "D3-14",
+    "seat": "D3",
+    "task_ids": ["T8"],
+    "key": "today|activeproject|no-proposal-or-invoice-branch",
+    "surface": "Today",
+    "tier": "activeProject",
+    "class": "wayfinding",
+    "title": "Today never surfaces a proposal or invoice",
+    "observation": "The Next Move ladder branches only on decisions and messages (TodayExperience.swift:95-118); there is no branch for a pending proposal or an unpaid invoice. Today for this account reads \"Review a project decision / 2 decisions need your eye\" with no mention of the $4,250 invoice or the four proposals.",
+    "why_it_matters": "The two acts I most need a client to take without my prompting — sign, pay — are invisible on the one screen they open by default; if the app can't put money in front of them, I'm still the one who has to say \"go check your invoice.\"",
+    "evidence": {
+      "shots": ["c-03-home-top-activeproject.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:48-160"]
+    },
+    "severity": "S1",
+    "confidence": 0.85,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Add a proposal/invoice branch to the Next Move ladder, ranked alongside decisions and messages."
+  },
+  {
+    "id": "D3-15",
+    "seat": "D3",
+    "task_ids": ["T8"],
+    "key": "studio-hub|activeproject|buried-behind-monogram",
+    "surface": "Studio Hub",
+    "tier": "activeProject",
+    "class": "wayfinding",
+    "title": "Money rail buried 3-4 acts behind an unlabeled monogram",
+    "observation": "The real Studio hub (Awaiting you / In progress / Conversation / Money & documents / Archive) is reached only via the unlabeled top-right monogram avatar into Profile, then a scroll. The Companion's own \"Your studio / PROJECTS · MESSAGES · DECISIONS\" row instead jumps to a bare projects list, not this hub.",
+    "why_it_matters": "Everything I want a client managing between meetings — decisions, invoices, proposals — sits behind a control with no label and no hint it leads anywhere; if a client doesn't already know it's there, they won't find it, and the app's own \"nav\" (the Companion) actively misroutes them.",
+    "evidence": {
+      "shots": ["c-04b-your-studio-hub.png", "c-06b-studio-awaiting-you.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Profile/Views/ProfileView.swift:123"]
+    },
+    "severity": "S1",
+    "confidence": 0.9,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Point the Companion's \"Your studio\" row at the real Studio hub, not the bare projects list, and label the monogram."
+  },
+  {
+    "id": "D3-16",
+    "seat": "D3",
+    "task_ids": ["T8"],
+    "key": "studio-hub|activeproject|three-different-counts",
+    "surface": "Studio Hub",
+    "tier": "activeProject",
+    "class": "trust",
+    "title": "Three different \"things waiting\" counts, one screen",
+    "observation": "The Studio hub subhead reads \"4 things need your eye,\" directly above a section titled \"Awaiting you 3,\" directly above a footer reading \"4 THINGS NEED YOUR EYE\" — while Home and the Companion both separately say \"2 project decisions waiting.\"",
+    "why_it_matters": "If I can't tell my client how many things are actually waiting on them from one screen, they can't either, and the number they'd quote back to me on the phone won't match what I see in The Document.",
+    "evidence": {
+      "shots": ["c-06b-studio-awaiting-you.png"],
+      "refs": []
+    },
+    "severity": "S2",
+    "confidence": 0.9,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Compute one attention count from one source and reuse it in the header, the section label, and the footer."
+  },
+  {
+    "id": "D3-17",
+    "seat": "D3",
+    "task_ids": ["T8"],
+    "key": "studio-hub|activeproject|deadlines-dropped-on-detail",
+    "surface": "Studio Hub",
+    "tier": "activeProject",
+    "class": "content",
+    "title": "Deadlines shown on the list, dropped on the detail",
+    "observation": "\"Due Sep 1, 2026\" appears on the invoices list and is absent on the invoice detail; \"Expires Sep 8\" appears on the proposals list and is absent on the proposal detail; \"Overdue · Aug 22\" appears on the Studio hub and is absent on the decisions list.",
+    "why_it_matters": "The screen a client acts on — pay, sign, decide — is exactly the screen that drops the date that would tell them how urgent the act is; that's backwards for anyone managing a real procurement timeline against my schedule.",
+    "evidence": {
+      "shots": ["c-12-invoices-list.png", "c-13-invoice-detail.png", "c-09-proposals-list.png", "c-10-proposal-detail-top.png", "c-06b-studio-awaiting-you.png", "c-17-decisions-list.png"],
+      "refs": []
+    },
+    "severity": "S1",
+    "confidence": 0.85,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Carry the due/expiry/overdue date from each list card onto its own detail screen."
+  },
+  {
+    "id": "D3-18",
+    "seat": "D3",
+    "task_ids": ["T8"],
+    "key": "notifications|activeproject|empty-while-overdue",
+    "surface": "Notifications",
+    "tier": "activeProject",
+    "class": "return",
+    "title": "Notifications empty while money and decisions are overdue",
+    "observation": "Notifications reads \"Nothing yet / Updates from your designer will land here\" with a \"Get design help\" acquisition button, for a client with an existing designer, two overdue decisions, an invoice due Sep 1, and a proposal expiring Sep 8.",
+    "why_it_matters": "There is no push send for any of this and nothing computes staleness, so the client's only way to learn something is waiting is to already know to go look — the app cannot do the reminding job I'd want it doing for me.",
+    "evidence": {
+      "shots": ["c-21-notifications-signed-in.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:24-157"]
+    },
+    "severity": "S1",
+    "confidence": 0.9,
+    "already_ruled": "C26",
+    "july_status": null,
+    "proposal_seed": "Wire a push/notification-log trigger for proposal-sent and invoice-due, and swap the CTA to match whether the client has a designer."
+  },
+  {
+    "id": "D3-19",
+    "seat": "D3",
+    "task_ids": ["T8"],
+    "key": "budget|activeproject|shows-one-of-three-projects",
+    "surface": "Budget",
+    "tier": "activeProject",
+    "class": "trust",
+    "title": "Budget screen shows one of three projects as \"the budget\"",
+    "observation": "\"Your budget — ACROSS YOUR PROJECTS\" shows $4,250 billed for the Aspen Loft Refresh project only; the client's other two projects (Marrow & Vale Residence $420,000, Birch Hollow $185,000, per the projects list) do not appear anywhere on this screen.",
+    "why_it_matters": "A screen titled \"across your projects\" that shows one of three is worse than not having a budget screen at all — a client who trusts the label thinks $4,250 is the whole financial picture on a $725,000 relationship.",
+    "evidence": {
+      "shots": ["c-15-budget.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Budget/Views/BudgetView.swift:37"]
+    },
+    "severity": "S1",
+    "confidence": 0.9,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Either roll up all projects into the budget total or rename the screen to name the one project it actually covers."
+  },
+  {
+    "id": "D3-20",
+    "seat": "D3",
+    "task_ids": ["T8", "T14"],
+    "key": "proposals-list|activeproject|signed-mislabel",
+    "surface": "Proposals List",
+    "tier": "activeProject",
+    "class": "trust",
+    "title": "Proposals list mislabels an accepted proposal \"SIGNED\"",
+    "observation": "\"SIGNED (1)\" headers a card reading \"Sample accepted proposal / $100,000.00\"; the seed data has zero signed proposals — the proposal's actual status is accepted. Two screens away, the Studio hub's own \"Money & documents\" block correctly reads \"2 shared proposals / 1 accepted.\"",
+    "why_it_matters": "This is a legal word applied to a six-figure document, and the app disagrees with itself about which word is true on two different screens — I will not put my name on a proposal an app can't consistently describe as signed or not.",
+    "evidence": {
+      "shots": ["c-09-proposals-list.png", "c-19-messages-empty.png"],
+      "refs": []
+    },
+    "severity": "S0",
+    "confidence": 0.9,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Rename the \"SIGNED\" section header to match the actual status enum (accepted vs signed) and use one word app-wide."
+  },
+  {
+    "id": "D3-21",
+    "seat": "D3",
+    "task_ids": ["T14"],
+    "key": "invoice-detail|activeproject|designer-named-once",
+    "surface": "Invoice Detail",
+    "tier": "activeProject",
+    "class": "trust",
+    "title": "Designer named exactly once, no photo or contact",
+    "observation": "\"Aspen Loft Refresh · from Leah Hartwell\" on the invoice detail is the only place the designer's name appears anywhere in the app, at any tier — no photo, no studio name, no bio, no tappable contact affordance.",
+    "why_it_matters": "My whole value to a client is the relationship; an app that names me once, in passing, on an invoice, and nowhere else — not home, not the project, not the proposal I wrote — does nothing to keep me present in my client's daily use of it.",
+    "evidence": {
+      "shots": ["c-13b-invoice-detail-scrolled.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Projects/Views/StudioIdentityLine.swift:18-41"]
+    },
+    "severity": "S1",
+    "confidence": 0.9,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Show designer name + avatar on Home, the project detail, and the proposal — not only the invoice."
+  },
+  {
+    "id": "D3-22",
+    "seat": "D3",
+    "task_ids": ["T8", "T14"],
+    "key": "project-detail|activeproject|ffe-instruction-leaked-to-client",
+    "surface": "Project Detail",
+    "tier": "activeProject",
+    "class": "trust",
+    "title": "Client screen shows a designer-only FF&E instruction",
+    "observation": "The project detail renders \"Set up phases, payments, and FF&E in the portal →\" as a boxed link under the client's Invoices row. It is a StaticText, not a button, so it looks tappable and is not.",
+    "why_it_matters": "This line is written for me, about my own portal workflow, and it's landing in front of the homeowner it's not addressed to — the exact kind of internal leak that makes a client ask me a question I have no good answer for.",
+    "evidence": {
+      "shots": ["c-08-project-detail.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:143"]
+    },
+    "severity": "S1",
+    "confidence": 0.9,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Delete or gate the portal-setup line behind a designer role check so it never renders for a client."
+  },
+  {
+    "id": "D3-23",
+    "seat": "D3",
+    "task_ids": ["T8", "T14"],
+    "key": "project-detail|activeproject|raw-column-exposed",
+    "surface": "Project Detail",
+    "tier": "activeProject",
+    "class": "content",
+    "title": "Raw internal column \"CLIENT VIEW / Milestone\" shown to client",
+    "observation": "A stat labeled \"CLIENT VIEW / Milestone\" on the project detail exposes the raw client_visibility_tier column value as if it were content, on the same screen the column is meant to govern.",
+    "why_it_matters": "This is internal plumbing rendered as a fact to the person it's supposed to be invisible to — it reads like a label mistake, and it's the kind of thing a sharp client (Tom's version of a client) would screenshot and ask about.",
+    "evidence": {
+      "shots": ["c-08-project-detail.png"],
+      "refs": []
+    },
+    "severity": "S2",
+    "confidence": 0.85,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Remove the CLIENT VIEW stat from the client-facing project detail or replace it with a plain-language phase label."
+  },
+  {
+    "id": "D3-24",
+    "seat": "D3",
+    "task_ids": ["T14"],
+    "key": "proposal-detail|activeproject|companion-clips-sign-button",
+    "surface": "Proposal Detail",
+    "tier": "activeProject",
+    "class": "wayfinding",
+    "title": "Companion bubble clips the \"Sign proposal\" button",
+    "observation": "On the proposal detail, the Companion bubble (\"4 THINGS NEED YOUR EYE\") sits directly on top of the \"Sign proposal\" button, visually clipping its label.",
+    "why_it_matters": "This is the exact control that starts procurement on a job; the app's own persistent chrome sitting on top of it is a friction point on the single most important tap a client takes in the whole app.",
+    "evidence": {
+      "shots": ["c-11-proposal-detail-scrolled.png", "c-11b-proposal-sign-act.png"],
+      "refs": []
+    },
+    "severity": "S2",
+    "confidence": 0.85,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Reserve bottom safe-area padding on ProposalDetailView so the Companion hearth never overlaps the primary CTA."
+  },
+  {
+    "id": "D3-25",
+    "seat": "D3",
+    "task_ids": ["T14"],
+    "key": "studio-hub|activeproject|messaging-dead-stub",
+    "surface": "Studio Hub — Conversation",
+    "tier": "activeProject",
+    "class": "content",
+    "title": "Messaging is a dead stub — no compose, no thread",
+    "observation": "\"Conversation / 0 / No project conversations yet.\" is the entire messaging surface for a client with an overdue decision, an unpaid invoice, and an expiring proposal — no compose control, no thread list, nothing to open.",
+    "why_it_matters": "Fine by me if my client keeps calling — but it means the app takes zero email volume off my plate today despite having the routes (threadList/threadDetail) built for it; I'd rather know that clearly than assume it's doing work it isn't.",
+    "evidence": {
+      "shots": ["c-19-messages-empty.png"],
+      "refs": ["apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadDetailView.swift:266"]
+    },
+    "severity": "S1",
+    "confidence": 0.85,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Either ship a compose/thread entry point from the Studio hub or drop the messaging block until there's a real thread to show."
+  },
+  {
+    "id": "D3-26",
+    "seat": "D3",
+    "task_ids": ["T14"],
+    "key": "proposal-detail|activeproject|selections-no-photo-no-price",
+    "surface": "Proposal Detail — Selections",
+    "tier": "activeProject",
+    "class": "trust",
+    "title": "Proposal selections show logo placeholders, no per-item price",
+    "observation": "The proposal's \"SELECTIONS\" list — \"Walnut sectional sofa,\" \"Hand-knotted wool rug,\" \"Walnut coffee table,\" \"Reading lounge chair Qty 2,\" \"Floor lamp Qty 2\" — illustrates every item with the Patina wordmark glyph instead of a photo, and shows no price against any line; the $18,500 total is never broken down.",
+    "why_it_matters": "I sell photography and provenance at trade margin; a proposal that shows my client five unpriced logo tiles for an $18,500 scope undersells the exact thing I'm charging for, on the document meant to close the job.",
+    "evidence": {
+      "shots": ["c-11c-sign-sheet.png", "c-11-proposal-detail-scrolled.png"],
+      "refs": []
+    },
+    "severity": "S1",
+    "confidence": 0.85,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Render the selection's actual product image and unit price when the proposal item is linked to a catalog product."
+  },
+  {
+    "id": "D3-27",
+    "seat": "D3",
+    "task_ids": ["T7", "T14"],
+    "key": "backend|activeproject|sign-proposal-no-confirmation-email",
+    "surface": "Backend — sign_proposal",
+    "tier": "activeProject",
+    "class": "trust",
+    "title": "sign_proposal sends no confirmation email",
+    "observation": "sign_proposal (00400_proposal_signature_authority.sql) resolves the signature and kicks off the project server-side, but the client's own API layer carries a carry-forward code comment stating the RPC does not send a confirmation email on sign.",
+    "why_it_matters": "If true, neither I nor my client gets a written record the instant a six-figure scope is signed — the only way I'd know is checking The Document myself, which defeats the point of a client-facing sign flow.",
+    "evidence": {
+      "shots": [],
+      "refs": ["apps/mobile/Patina/Patina/Services/API/ProposalsAPIClient.swift:403"]
+    },
+    "severity": "S2",
+    "confidence": 0.6,
+    "already_ruled": null,
+    "july_status": null,
+    "proposal_seed": "Add a signature-confirmation email/notification on sign_proposal's success path, to both client and designer. What would settle this: trigger a live sign against the local stack and check the Resend/notification_log rows for a send."
+  }
+]

@@ -1,0 +1,97 @@
+<!-- s-M6 · Shared planks — what the partner actually receives.
+     SP-03 (the share names the piece, the link opens the app). The phone here is not running Patina:
+     it is iOS Messages, drawn to Apple's chrome, so its greys and its blue are system values, not
+     Patina tokens — the only Patina ink on the screen is inside the link preview.
+     Additions to the kit, all scoped under .sp-share: .sp-share__nav/__thread/__bubble/__link/__bar. -->
+<div class="frame-wrap sp-share">
+  <style>
+    .sp-share .sp-share__screen { position:absolute; inset:0; background:#FFFFFF; }
+    .sp-share .sp-share__nav { position:absolute; top:0; left:0; right:0;
+      height:calc(var(--pat-safe-top) + 48px); background:rgba(249,249,249,.94);
+      backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+      border-bottom:.5px solid rgba(60,60,67,.24);
+      display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+      padding-bottom:6px; }
+    .sp-share .sp-share__back { position:absolute; left:12px; bottom:16px; color:#007AFF; }
+    .sp-share .sp-share__back svg { width:19px; height:19px; }
+    .sp-share .sp-share__who { display:flex; flex-direction:column; align-items:center; gap:2px; }
+    .sp-share .sp-share__name { font:400 11px/1.2 var(--pat-sans); color:#000; }
+    .sp-share .sp-share__thread { position:absolute; top:calc(var(--pat-safe-top) + 48px);
+      left:0; right:0; bottom:88px; padding:14px 16px; display:flex; flex-direction:column; gap:6px; }
+    .sp-share .sp-share__stamp { text-align:center; font:400 11px/1.4 var(--pat-sans);
+      color:rgba(60,60,67,.6); padding:4px 0 10px; }
+    .sp-share .sp-share__stamp b { font-weight:600; color:rgba(60,60,67,.85); }
+    .sp-share .sp-share__link { width:268px; border-radius:18px; overflow:hidden;
+      background:#E9E9EB; }
+    .sp-share .sp-share__linkart { height:150px; }
+    .sp-share .sp-share__linkart img { width:100%; height:100%; object-fit:cover; display:block; }
+    .sp-share .sp-share__linkfoot { padding:9px 12px 11px; display:flex; flex-direction:column; gap:2px; }
+    .sp-share .sp-share__linktitle { font:600 13px/1.3 var(--pat-sans); color:#000; }
+    .sp-share .sp-share__linksub { font:400 13px/1.3 var(--pat-sans); color:rgba(60,60,67,.7); }
+    .sp-share .sp-share__linkdom { font:400 11px/1.3 var(--pat-sans); color:rgba(60,60,67,.55);
+      text-transform:lowercase; padding-top:3px; }
+    .sp-share .sp-share__bubble { max-width:268px; padding:8px 14px; border-radius:18px;
+      background:#E9E9EB; color:#000; font:400 16px/1.3 var(--pat-sans); }
+    .sp-share .sp-share__bar { position:absolute; left:0; right:0; bottom:0; height:88px;
+      padding:10px 16px 0; display:flex; align-items:flex-start; gap:10px;
+      border-top:.5px solid rgba(60,60,67,.18); background:rgba(249,249,249,.94); }
+    .sp-share .sp-share__plus { width:32px; height:32px; border-radius:50%; background:#E9E9EB;
+      display:flex; align-items:center; justify-content:center; color:rgba(60,60,67,.7); flex:0 0 auto; }
+    .sp-share .sp-share__plus svg { width:17px; height:17px; }
+    .sp-share .sp-share__field { flex:1 1 auto; height:32px; border-radius:16px;
+      border:.5px solid rgba(60,60,67,.28); display:flex; align-items:center; padding:0 12px;
+      font:400 15px/1 var(--pat-sans); color:rgba(60,60,67,.5); }
+  </style>
+
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="sp-share__screen">
+
+        <div class="sp-share__nav">
+          <span class="sp-share__back"><svg><use href="#i-chev-l"/></svg></span>
+          <span class="sp-share__who">
+            <span class="monogram monogram--sm">M</span>
+            <span class="sp-share__name">Maya</span>
+          </span>
+        </div>
+
+        <div class="sp-share__thread">
+          <div class="sp-share__stamp"><b>Today</b> 9:38 PM</div>
+
+          <div class="sp-share__link">
+            <div class="sp-share__linkart">
+              <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table">
+            </div>
+            <div class="sp-share__linkfoot">
+              <span class="sp-share__linktitle">Heirloom Oak Dining Table</span>
+              <span class="sp-share__linksub">Nordic Atelier &middot; $4,200</span>
+              <span class="sp-share__linkdom">patina.cloud</span>
+            </div>
+          </div>
+
+          <div class="sp-share__bubble">Heirloom Oak Dining Table by Nordic Atelier on Patina</div>
+        </div>
+
+        <div class="sp-share__bar">
+          <span class="sp-share__plus"><svg><use href="#i-plus-circle"/></svg></span>
+          <span class="sp-share__field">iMessage</span>
+        </div>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:328px;right:24px">1</span>
+  <span class="callout-n" style="top:366px;right:24px">2</span>
+  <span class="callout-n" style="top:404px;right:24px">3</span>
+  <span class="callout-n callout-n--clay" style="top:220px;right:24px">4</span>
+</div>

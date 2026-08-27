@@ -1,0 +1,78 @@
+<div class="frame-wrap a-m3">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="detail-hero">
+          <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table">
+          <div class="detail-hero__bar">
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-chev-l"/></svg></span>
+            <span class="spacer"></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-q"/></svg></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-share"/></svg></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-heart"/></svg></span>
+          </div>
+        </div>
+        <div class="detail-body">
+          <div class="detail-maker">Nordic Atelier &middot; Aarhus, Denmark</div>
+          <div class="detail-name">Heirloom Oak Dining Table</div>
+          <div class="detail-materials">Quarter-sawn white oak &middot; Hand-rubbed tung oil</div>
+          <div class="detail-price-row"><span class="detail-price">$4,200</span></div>
+          <div class="a-facts">
+            <span class="a-facts__line">38&Prime; W &times; 20&Prime; D &times; 30&Prime; H</span>
+            <span class="a-facts__line">38&Prime; wide &middot; your Living Room is 18 &times; 14 ft</span>
+            <span class="a-facts__line">Ships in 10&ndash;12 weeks</span>
+          </div>
+          <div class="a-desc">Solid quarter-sawn white oak with hand-rubbed tung oil finish. Each table is made to order by a three-person workshop outside Aarhus.</div>
+        </div>
+      </div>
+      <div class="a-dock--min" style="bottom:151px">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+      </div>
+      <div class="a-actbar">
+        <span class="btn btn--primary">Buy it &middot; $4,200</span>
+        <span class="a-actbar__note">Payment opens securely in Safari.</span>
+        <span class="btn btn--ghost btn--pill-sm a-actbar__ghost">Get design help with this room</span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time" style="color:var(--pat-charcoal)">9:41</span>
+        <span class="statusbar__right" style="color:var(--pat-charcoal)">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator" style="background:var(--pat-charcoal);opacity:.4"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:78px;right:2px">1</span>
+  <span class="callout-n" style="top:400px;left:2px">2</span>
+  <span class="callout-n callout-n--clay" style="top:470px;right:2px">3</span>
+  <span class="callout-n" style="top:540px;left:2px">4</span>
+  <span class="callout-n" style="top:740px;right:2px">5</span>
+  <span class="callout-n" style="top:812px;left:2px">6</span>
+</div>
+<style>
+/* the three lines under the price — each omitted entirely when null */
+.a-m3 .a-facts { display:flex; flex-direction:column; gap:4px; padding-bottom:12px; }
+.a-m3 .detail-body { padding-top:20px; }
+.a-m3 .detail-materials { padding-bottom:12px; }
+.a-m3 .detail-price-row { padding-bottom:10px; }
+.a-m3 .a-facts__line { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-2); }
+.a-m3 .a-desc { font:400 14px/1.6 var(--pat-sans); color:var(--pat-text-2); }
+
+/* A's act bar: one primary verb, one caption, one ghost — replaces the shipped
+   single-CTA .detail-bar */
+.a-m3 .a-actbar { position:absolute; left:0; right:0; bottom:0; z-index:20;
+  display:flex; flex-direction:column; align-items:stretch; gap:8px;
+  padding:16px 24px 30px; border-top:.5px solid var(--pat-pearl);
+  background:rgba(250,247,242,.86);
+  backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+.a-m3 [data-scheme="dark"] .a-actbar { background:rgba(33,30,27,.86); }
+.a-m3 .a-actbar__note { text-align:center; font:400 12px/1.4 var(--pat-sans);
+  color:var(--pat-text-muted); }
+.a-m3 .a-actbar__ghost { align-self:center; }
+
+/* the Hearth in .minimal mode — bottom-trailing, no hint
+   (CompanionOverlay.swift:386-391), which is what pushed screens show */
+.a-m3 .a-dock--min { position:absolute; right:20px; z-index:30; }
+</style>

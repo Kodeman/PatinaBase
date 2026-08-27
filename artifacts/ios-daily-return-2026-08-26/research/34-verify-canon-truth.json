@@ -1,0 +1,1089 @@
+[
+ {
+  "id": "F01",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F02",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F03",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C10 (the sign_proposal rail is ruled; the sheet's contents are not) | C10' - accurate."
+ },
+ {
+  "id": "F04",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C27 \u2014 named as genuinely app-side and fair game | C27 names this as genuinely app-side, distinct from the local edge-function 503s | C27 names this explicitly as app-side and fair game (distinct from the local edge-function 503s) | C19 (screen-chrome exemption is deliberate for the success state; this finding is about the error state having no exit of its own, not about the exemption itself)' - accurate."
+ },
+ {
+  "id": "F05",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F06",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C23 Option B contract: \"the app does not invent or mislabel imagery\" | C23 (Option B contract: \"the app does not invent or mislabel imagery\")' - accurate."
+ },
+ {
+  "id": "F07",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C14/C26 \u2014 C26 corrects the stub framing; the money-rail gap is the finding | C26 (instruments.md \u00a76b) \u2014 push send is real and wired, but not for any payable table. | C26 corrects C14 \u2014 apns-send is complete and provisioned; none of its five callers touches invoices, proposals, decisions or orders | C26 | C26 (corrects C14: push send is real; none of it fires for money) | C14 (corrected by C26)' - accurate."
+ },
+ {
+  "id": "F08",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C26' - accurate."
+ },
+ {
+  "id": "F09",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F10",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C23 \u2014 Option B's Today contract permits exactly one next move; which move is not ruled | C5 \u2014 tier never demotes on failure; this is the tier resolving but the home never reading it | C2/C23 (tier morphing is ruled; the Today ladder shipped without the engaged branch reaching this account)' - accurate."
+ },
+ {
+  "id": "F11",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C1/C23 \u2014 no tab bar is ruled, and Option B's Today is accepted; the Studio's placement two acts behind the monogram is not itself ruled | C1 (no tab bar), C23 (Option B's Today = four modules; the orphaned StudioHubSection is one mount away) \u2014 flagged as the open C2-vs-C23 conflict, not a tab-bar proposal' - accurate."
+ },
+ {
+  "id": "F12",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C11 \u2014 direct orders are a ratified backlog item, not yet designed | C11 \u2014 direct orders are a ratified backlog item, sequenced but not designed; C24 \u2014 the direct_orders rail exists on the backend with zero iOS client code | C11 (direct orders are a ratified backlog item, not yet designed), C24 (backend exists, no iOS client, no designer attribution) | C11' - accurate."
+ },
+ {
+  "id": "F13",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C23 \u2014 Option B's Today contract (one next move, one story, one active room) was accepted; this finding is about what makes those three honestly new, not about replacing them | C23 (Option B's Today contract: exactly one next move, one real story, one active room) \u2014 the contract is accepted; the finding is that none of the three is time-keyed | C23 (Option B Today contract: one next move, one story, one active room)' - accurate."
+ },
+ {
+  "id": "F14",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C1 \u2014 no tab bar; the Companion and the hub rail are the navigation | C1 (Companion + hub rail are the nav) \u2014 this is the row's own gate, not a tab-bar proposal | C1 (Companion is the nav)' - accurate. july_status citation checked against DELIVERY.md/canon digest SS2: 'U09/U24 DELIVERED \u2014 the MarketplaceLinksSection that carried the permanent Saved door is now orphaned (C23) | regression \u2014 U09/U24 gave Saved a permanent home on the marketplace links block, now unmounted' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F15",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C28 (AddToRoomSheet/AddedToRoomToast exist with no presenter)' - accurate. july_status citation checked against DELIVERY.md/canon digest SS2: 'residual \u2014 DELIVERY.md's own follow-up list names \"Add-to-Room (+ Add) gives no visible feedback and no confirmed saved_items row\"' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F16",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C23 \u2014 Option B's Today contract permits a truthful fallback, which is what a \"nothing new\" line would be' - accurate."
+ },
+ {
+  "id": "F17",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F18",
+  "verdict": "adjusted",
+  "note": "Confirmed real defect (screenshot g-25-manual-room-entry-metric.png shows 'ft / m' toggle, typed 18/14, and the math checks: entering 18/14 while unit==.meters skips conversion, then downstream display multiplies by 3.28084 -> 59.05x45.93ft = ~2713 sqft, matching the finding exactly). BUT evidence.refs cites the wrong file: apps/mobile/Patina/Patina/Features/Rooms/Views/ManualRoomEntryView.swift has NO unit toggle at all (verified at both HEAD and the reviewed commit 3cd84ecb3 - its 'Dimensions' group is hardcoded feet-only, used only for the Rooms-tab NewRoomSheet flow per that file's own header comment). The actual screen in the shot is ScanFallbackEntryView.swift (Features/RoomScan/Views/), which explicitly documents itself as distinct from ManualRoomEntryView to avoid this exact confusion. Its unitToggle (lines ~139-162) and submit() conversion (lines ~265-269: `unit == .feet ? (l/3.28084, w/3.28084) : (l, w)`) verify the claim precisely.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:139-162 (unitToggle)",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:265-269 (conversion bug)"
+  ]
+ },
+ {
+  "id": "F19",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C24 (direct_orders status vocabulary is only pending_payment/paid/canceled)' - accurate."
+ },
+ {
+  "id": "F20",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F21",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F22",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C11/C24 \u2014 the rail is ratified backlog and the attribution decision is explicitly still open' - accurate."
+ },
+ {
+  "id": "F23",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C27 \u2014 named as genuinely app-side and fair game' - accurate."
+ },
+ {
+  "id": "F24",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F25",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F26",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C24' - accurate."
+ },
+ {
+  "id": "F27",
+  "verdict": "adjusted",
+  "note": "Valid finding (design-request flow's final 'Send request' throws AuthSheet with no Cancel/X), C9 citation for 'presents over context, never ejects' stands. BUT july_status mislabels this as 'U21's Studio-row entry variant' - per 11-canon-digest.md SS2/SS6 correction, the specific named-but-unwalked U21 residual is the STUDIO-ROW entry point into AuthSheet (vs. the walked Notifications entry point), not the design-request-flow entry point this finding describes. Those are two different, both-unexercised entry points into the same AuthSheet plumbing. F112 (near-duplicate of this same defect) correctly calls it 'the design-request variant, unwalked in July' without the Studio-row mislabel - use F112's framing."
+ },
+ {
+  "id": "F28",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C9 \u2014 guests browse behind a soft wall' - accurate."
+ },
+ {
+  "id": "F29",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C27 names the device-scoped local store adopted by whichever account signs in next as genuinely app-side' - accurate."
+ },
+ {
+  "id": "F30",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F31",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C27' - accurate."
+ },
+ {
+  "id": "F32",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F33",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F34",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F35",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F36",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C9 (guests browse; soft wall)' - accurate."
+ },
+ {
+  "id": "F37",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C23 (Today = exactly one next move) \u2014 the conflict with C2's tier-morphing home is open' - accurate."
+ },
+ {
+  "id": "F38",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C26 corrects C14 \u2014 push send is real and provisioned; nothing money-shaped calls it' - accurate."
+ },
+ {
+  "id": "F39",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F40",
+  "verdict": "adjusted",
+  "note": "Same underlying bug as F18, confirmed real and confirmed by source (see F18 note) - the toggle Buttons in ScanFallbackEntryView.swift are bare Text() with mono font and no explicit frame/padding, consistent with a tap target well under 44pt. BUT evidence.refs cites ManualRoomEntryView.swift:32-113, which has no unit toggle at all - wrong file. Correct file is ScanFallbackEntryView.swift.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:139-162"
+  ]
+ },
+ {
+  "id": "F41",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F42",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C28 names boards-never-hold-a-piece as fair game | C28 | C28 (already named: boards can be created but never hold a piece)' - accurate."
+ },
+ {
+  "id": "F43",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F44",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F45",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F46",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C5 honesty rule; C28 names the hard-coded isUnread as fair game | C28 | C5 (honesty: no fabricated signals), C28 (already named as an honesty candidate) | C5 (no fabricated signals); C28 names the hard-coded dot' - accurate."
+ },
+ {
+  "id": "F47",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C28 names the single unexplained prompt as fair game | C28 (permission asked once, only after a design request, no pre-permission copy) | C28 names the single-prompt behaviour' - accurate."
+ },
+ {
+  "id": "F48",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F49",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C23 \u2014 Option B reserves the hearth as layout space; app content is not meant to render beneath the Companion | C23 Option B contract: \"The Hearth is reserved layout space\u2026 App content does not render beneath the active Companion shape.\" \u2014 this is that contract not being honoured | C23 (Option B: \"App content does not render beneath the active Companion shape\") \u2014 the contract is ruled and violated here' - accurate."
+ },
+ {
+  "id": "F50",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F51",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C5 honesty; C12 as corrected \u2014 the manual route is a first-class path, not a degraded scan | C12 (manual entry is the ruled non-LiDAR fallback) \u2014 the fallback is ruled, the scan vocabulary on it is not' - accurate."
+ },
+ {
+  "id": "F52",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F53",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C28 (no associated domains named as a standing gap)' - accurate."
+ },
+ {
+  "id": "F54",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F55",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C5 \u2014 no dead controls | C5 (no dead controls)' - accurate. july_status citation checked against DELIVERY.md/canon digest SS2: 'regression-class \u2014 U05 delivered \"all 7 named dead controls wired or removed\"; this row is inert on the walked build | U05 DELIVERED-CODE (all 7 named dead controls wired or removed) \u2014 this is a regression or a site not in that set' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F56",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F57",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F58",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C23 \u2014 Option B's Today is exactly one next move; the ladder's ordering is not itself ruled | C23' - accurate."
+ },
+ {
+  "id": "F59",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F60",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F61",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C3 (editorial feel of the Daily Room is ruled) \u2014 this asks for cadence, not a different module' - accurate."
+ },
+ {
+  "id": "F62",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C5 (honesty), C6 (designers/makers are the intelligence layer)' - accurate."
+ },
+ {
+  "id": "F63",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C28 names re-saving duplicates rows | C28 (named: re-saving duplicates rows)' - accurate."
+ },
+ {
+  "id": "F64",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C28 names usdz_url always NULL so AR never renders' - accurate."
+ },
+ {
+  "id": "F65",
+  "verdict": "confirmed",
+  "note": "july_status citation checked against DELIVERY.md/canon digest SS2: 'residual \u2014 U07 delivered room-scoped routing for this CTA; a local-only room still falls back to the unscoped marketplace' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F66",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C24 \u2014 direct orders exist on the backend with no iOS client and no designer attribution; C11 sequences them as a ratified backlog item | C11 (direct orders are a ratified backlog item); C24 (backend exists, no iOS client, no designer attribution)' - accurate."
+ },
+ {
+  "id": "F67",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C28' - accurate."
+ },
+ {
+  "id": "F68",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C27 (the 503 itself is a local-environment fault and is NOT claimed here)' - accurate. july_status citation checked against DELIVERY.md/canon digest SS2: 'U29/U30 DELIVERED-CODE (PatinaErrorState + one retry label) \u2014 this site renders a bespoke red line instead' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F69",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C5 (honesty; no dead controls)' - accurate."
+ },
+ {
+  "id": "F70",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F71",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F72",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C4/U08 \u2014 the wording \"Get design help\" is canonical; its audience is not ruled' - accurate."
+ },
+ {
+  "id": "F73",
+  "verdict": "confirmed",
+  "note": "july_status citation checked against DELIVERY.md/canon digest SS2: 'U22 delivered the empty-state copy; the missing fact \u2014 the accepted lead \u2014 is new' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F74",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F75",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F76",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F77",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F78",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C27 \u2014 the underlying 503 is a local environment fault; only the failure UX is claimed here' - accurate."
+ },
+ {
+  "id": "F79",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F80",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F81",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F82",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F83",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F84",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F85",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F86",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F87",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F88",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F89",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F90",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F91",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F92",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F93",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F94",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F95",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F96",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C4 \u2014 one name per concept' - accurate."
+ },
+ {
+  "id": "F97",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C23 Option B contract: \"a minimum 44\u00d744 point interactive target\"' - accurate."
+ },
+ {
+  "id": "F98",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C1 no tab bar; C23 \u2014 MarketplaceLinksSection is orphaned, not ruled against, and is one mount away' - accurate. july_status citation checked against DELIVERY.md/canon digest SS2: 'residual \u2014 U24 delivered MarketplaceLinksSection persisting at every tier above discovering; it is no longer mounted by anything' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F99",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C27' - accurate."
+ },
+ {
+  "id": "F100",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F101",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F102",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F103",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F104",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F105",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F106",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F107",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F108",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C9 (auth = Supabase, passwordless-first + soft wall, guests browse) \u2014 the soft wall is ruled; the gate-first-screen ordering is shipped behaviour, not ruled copy' - accurate."
+ },
+ {
+  "id": "F109",
+  "verdict": "adjusted",
+  "note": "Same file-citation error as F18/F40: evidence.refs cites ManualRoomEntryView.swift:32-113, which has no ft/m toggle. The actual control (confirmed by source read) is ScanFallbackEntryView.swift's unitToggle (~lines 139-162) - two bare-text Buttons with no explicit hit-target frame. Underlying claim (6pt-wide silent unit toggle) is real, already_ruled C23 citation (44x44pt contract) stands.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:139-162"
+  ]
+ },
+ {
+  "id": "F110",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C28 (usdz_url always NULL so AR never renders)' - accurate."
+ },
+ {
+  "id": "F111",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F112",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C9 (auth sheet presents over context and never ejects) \u2014 the ejection half holds; the missing dismiss and generic copy do not' - accurate. july_status citation checked against DELIVERY.md/canon digest SS2: 'U21 DELIVERED-VERIFIED for the Notifications entry point; this is the design-request variant, unwalked in July' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F113",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F114",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C23 (Option B: touched screens recompose at accessibility text sizes)' - accurate."
+ },
+ {
+  "id": "F115",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F116",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F117",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C9 (passwordless-first + soft wall; guests browse)' - accurate."
+ },
+ {
+  "id": "F118",
+  "verdict": "adjusted",
+  "note": "Valid, evidenced (FirstLaunchTour.swift refs check out) - C18 citation for tour-copy-is-canonical is accurate. Incomplete citation: canon digest C28 (11-canon-digest.md SS6, and instruments.md SS6b) already names this exact gap verbatim - 'tour step 2 anchor mounts nowhere' - as a found, fair-game honesty candidate. Add C28 to already_ruled so Lane A doesn't present this as a fresh discovery.",
+  "corrected_refs": [
+   "C28 (instruments.md SS6b / 11-canon-digest.md SS6: 'tour step 2 anchor mounts nowhere')"
+  ]
+ },
+ {
+  "id": "F119",
+  "verdict": "unable",
+  "note": "Evidence is inconclusive, not confirmatory. g-08b-quiz-result-scrolled.png (the cited 'scrolled to the end' shot) shows the 'Tune the portrait / Tune this' card, but a partially-visible black rounded-rect element is cut off at the very bottom edge, just above the Companion orb overlay - meaning the capture may not actually reach the true bottom of the scroll, and that element could be (or could occlude) a 'see your recommendations' CTA. The finding's own july_status already flags this uncertainty and asks for 'a fresh capture of StyleResultView's full scroll with scan_ui, listing every button on screen' - that request stands unmet. Cannot confirm or refute the core claim (no door to the pieces) from the evidence on file; treat as open pending a full-scroll scan_ui capture, not as a settled S1 finding."
+ },
+ {
+  "id": "F120",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C3 (room scan stays prominent); C23 (Today = exactly one next move)' - accurate."
+ },
+ {
+  "id": "F121",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C23 (Option B accepted; the July rail is orphaned, not ruled over \u2014 C2 vs C23 is an open ruling for Kody)' - accurate. july_status citation checked against DELIVERY.md/canon digest SS2: 'regression \u2014 U24 (MarketplaceLinksSection persists at every tier), U23 (\"All rooms \u2192\" chip on home) and U44 (home footer links) were DELIVERED-VERIFIED and are unmounted at 3cd84ecb3' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F122",
+  "verdict": "confirmed",
+  "note": "july_status citation checked against DELIVERY.md/canon digest SS2: 'residual \u2014 DELIVERY.md names \"Add-to-Room gives no visible feedback and no confirmed saved_items row\" as an open follow-up' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F123",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F124",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F125",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F126",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C1 (no tab bar; Companion + hub rail are the nav)' - accurate."
+ },
+ {
+  "id": "F127",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F128",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F129",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F130",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C28 (no widget/App Intent/Live Activity/associated-domains)' - accurate."
+ },
+ {
+  "id": "F131",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C3 (editorial feel of the Daily Room)' - accurate."
+ },
+ {
+  "id": "F132",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C8 correction (canon digest \u00a76): sequencing is aspirational, not delivered; DELIVERY.md residual, unaddressed through the final hardening wave' - accurate."
+ },
+ {
+  "id": "F133",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F134",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F135",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F136",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F137",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F138",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F139",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F140",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F141",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F142",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F143",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F144",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F145",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F146",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F147",
+  "verdict": "confirmed",
+  "note": "july_status citation checked against DELIVERY.md/canon digest SS2: 'residual \u2014 DELIVERY.md names \"Add-to-Room (+ Add) gives no visible feedback and no confirmed saved_items row\" as an open follow-up' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F148",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F149",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F150",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C4' - accurate."
+ },
+ {
+  "id": "F151",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C24' - accurate."
+ },
+ {
+  "id": "F152",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C24' - accurate."
+ },
+ {
+  "id": "F153",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F154",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C24' - accurate."
+ },
+ {
+  "id": "F155",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F156",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F157",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F158",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'U02 established that match scores are real, not fabricated \u2014 this is about legibility, not honesty | U02/U43 \u2014 the fabricated-number half is closed; this is the unexplained-label half | C5 (no fabricated stats); U43 replaced the old \"47% Style Confidence\"' - accurate. july_status citation checked against DELIVERY.md/canon digest SS2: 'residual \u2014 U43 replaced the fabricated \"47% Style Confidence\"; the Profile MATCH stat and the unlabelled portrait bar were not part of that fix | U02 DELIVERED-VERIFIED (real varying scores), U43 DELIVERED-VERIFIED (qualitative copy) \u2014 residual is the bare percentage on the card | residual \u2014 same class as U43, on a different stat' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F159",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F160",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C17 (tier-narration empty copy is ratified) \u2014 the copy is ruled; showing the acquisition CTA at activeProject is the finding | C17 (tier-narration copy is canonical) \u2014 the copy is ruled, the tier selection is not' - accurate. july_status citation checked against DELIVERY.md/canon digest SS2: 'U22 DELIVERED-CODE (empty states name trigger + conditional CTA) \u2014 the conditional is not conditioned on tier here' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F161",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F162",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F163",
+  "verdict": "adjusted",
+  "note": "Visual claim confirmed by shot (g-09-home-tour-step1.png): the Step-1 bubble does substantially cover the Next Move card behind it (only a trailing arrow icon and a card edge peek out), and Skip/Next do render in iOS system blue against an otherwise blue-free palette. C18 citation (tour copy is canonical, this is placement/tint not wording) is accurate. BUT july_status overreaches: it attributes this to 'the Companion-intro/tour collision' that DELIVERY.md names as still-open (per canon digest SS2/SS6 C8 correction). That named residual is a SEQUENCING defect (the Companion intro bubble pre-empting tour step 2's mount, see F132/F207) - a different mechanism from this finding's claim, which is spatial OVERLAP of each coach mark with the card it is describing. Don't cite the DELIVERY.md Companion-intro residual here; this specific overlap/tint observation is not named anywhere in canon and should stand on C18 alone as a fresh finding.",
+  "corrected_refs": [
+   "C18 only - drop the DELIVERY.md Companion-intro/tour-collision citation, which names a distinct sequencing defect (see F132/F207)"
+  ]
+ },
+ {
+  "id": "F164",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F165",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F166",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F167",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F168",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F169",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F170",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F171",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F172",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F173",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F174",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F175",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F176",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F177",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C7 \u2014 dynamic dark mode via PatinaColors; camera/AR chrome is the deliberate exception and this is not that' - accurate."
+ },
+ {
+  "id": "F178",
+  "verdict": "adjusted",
+  "note": "Same as F118 - valid finding, but already_ruled cites only C18; should also cite C28, which already names 'tour step 2 anchor mounts nowhere' as a found honesty candidate. july_status's 'regression-class' framing is reasonable (U32 fixed the tour's copy/renumbering; this is the anchor, a different mechanism).",
+  "corrected_refs": [
+   "C28 (tour step 2 anchor mounts nowhere - already named in canon digest SS6)"
+  ]
+ },
+ {
+  "id": "F179",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C28' - accurate."
+ },
+ {
+  "id": "F180",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F181",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F182",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C28' - accurate."
+ },
+ {
+  "id": "F183",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F184",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F185",
+  "verdict": "adjusted",
+  "note": "Same as F118/F178 - valid, but already_ruled should add C28 (names this exact residual verbatim) alongside C18. The 'dropped anchor is a named residual, not a re-proposal' framing in already_ruled is correct in substance, it just doesn't cite C28 by number.",
+  "corrected_refs": [
+   "C28 (tour step 2 anchor mounts nowhere)"
+  ]
+ },
+ {
+  "id": "F186",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F187",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C7 (dynamic dark mode via PatinaDesignKit tokens; camera/AR chrome is the only deliberate exception)' - accurate."
+ },
+ {
+  "id": "F188",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F189",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C8 (coaching phases and label decay are ruled)' - accurate."
+ },
+ {
+  "id": "F190",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F191",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F192",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F193",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F194",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F195",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F196",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F197",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F198",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C26' - accurate."
+ },
+ {
+  "id": "F199",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F200",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C25' - accurate."
+ },
+ {
+  "id": "F201",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F202",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F203",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F204",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F205",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F206",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F207",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C8 (11-canon-digest.md \u00a76 correction) \u2014 DELIVERY.md names this as an open, unaddressed residual, not settled as delivered.' - accurate. july_status citation checked against DELIVERY.md/canon digest SS2: 'residual per DELIVERY.md (not U34's scope)' - accurate, correctly distinguishes this from the delivered fix (residual/regression/new-gap, not a re-report)."
+ },
+ {
+  "id": "F208",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F209",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F210",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F211",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F212",
+  "verdict": "confirmed",
+  "note": "No already_ruled/july_status citation on file; cross-checked against instruments.md SS6 (C1-C29) and canon digest SS1-SS6 (R01-R33, U01-U46) - this does not re-report any DELIVERED-VERIFIED/DELIVERED-CODE July item, does not contradict a Kody ruling, and is not named in DELIVERY.md's residual list. Fresh finding for this program."
+ },
+ {
+  "id": "F213",
+  "verdict": "adjusted",
+  "note": "already_ruled citation checked against instruments.md SS6 / canon digest: 'C6' - accurate."
+ }
+]

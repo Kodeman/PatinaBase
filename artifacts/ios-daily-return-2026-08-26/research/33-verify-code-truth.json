@@ -1,0 +1,2089 @@
+[
+ {
+  "id": "F01",
+  "verdict": "confirmed",
+  "note": "Verified: PatinaDeepLinks.productURL builds https://app.patina.cloud/library/<id> — the designer-portal host and its Library route (the file's own header says so). Patina.entitlements has no com.apple.developer.associated-domains key, so the link can only open Safari. Ref line range was off by two.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Shared/PatinaPortalLinks.swift:14-22",
+   "apps/mobile/Patina/Patina/Patina.entitlements:4-11"
+  ]
+ },
+ {
+  "id": "F02",
+  "verdict": "confirmed",
+  "note": "Standing verification (c) CONFIRMED. ProposalListView renders section(\"Signed\", viewModel.accepted) and statusLabel maps case \"accepted\" -> \"Signed\"; viewModel.accepted filters status == \"accepted\" only. proposals carries signed_at / signed_by_name (00063:45-46), distinct columns the app never consults — so a proposal a designer marked accepted in the portal, never signed, prints SIGNED. Legally loaded mislabel confirmed at code level.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalListView.swift:59",
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalListView.swift:165-172",
+   "apps/mobile/Patina/Patina/Features/Proposals/ViewModels/ProposalsViewModel.swift:26-28",
+   "supabase/migrations/00063_proposal_system_v2.sql:45-46"
+  ]
+ },
+ {
+  "id": "F03",
+  "verdict": "confirmed",
+  "note": "ProposalSignSheet takes only (proposalTitle, isSigning, errorMessage, onSign, onCancel) — no amount, no items, no terms, no date, no agreement checkbox anywhere in the view. Copy quoted verbatim at :40. Confirmed exactly as written.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalSignSheet.swift:13-77"
+  ]
+ },
+ {
+  "id": "F04",
+  "verdict": "confirmed",
+  "note": "Standing verification (a) CONFIRMED on main: products has TWO FKs to vendors — vendor_id (00001_initial_schema.sql:39) and retailer_id (00011_add_retailer_id.sql:6, never dropped) — so the unqualified vendors(...) embed at ProductAPIClient.swift:99 is genuinely ambiguous and returns PGRST201. This is a shipped bug, not a local artifact. The TRAP has a separate, better-named cause: ProductDetailView applies .toolbar(.hidden, for: .navigationBar) to the whole Group (:44), while the Back chevron lives only inside productContent — so the errorView branch has no back control at all. Cited ref :78-138 points at the success-state top bar, not the trap.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:99",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:36-44",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:413-430",
+   "supabase/migrations/00001_initial_schema.sql:39",
+   "supabase/migrations/00011_add_retailer_id.sql:6"
+  ]
+ },
+ {
+  "id": "F05",
+  "verdict": "confirmed",
+  "note": "Confirmed on the shot: g-15 shows the left column cropped past the screen edge ('M & BOARD', 'rloom Oak / ing Table', ',200') beside a full-width right card, and row 2 shifted further left. The grid declaration itself is correct (two .flexible() columns, 12pt spacing, 24pt horizontal padding), so the cited ref does not contain the bug. Best available mechanism: PatinaAsyncImage applies .resizable().aspectRatio(contentMode: .fill) with no internal .clipped(), and the card sets .frame(height:160).frame(maxWidth:.infinity).clipped() — an image wider than the column can widen the grid's content, which a vertical ScrollView then centres, pushing both edges off-canvas. Mechanism is NOT proven; the behaviour is.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:134-147",
+   "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:197-210",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaAsyncImage.swift:30-35"
+  ]
+ },
+ {
+  "id": "F06",
+  "verdict": "adjusted",
+  "note": "The mismatch is real on the shot, but it is NOT an app or platform defect: the images are hard-coded Unsplash stock URLs in the LOCAL DEV SEED (supabase/seed/products.sql:6-14 — 'Live-Edge Coffee Table' -> photo-1506439773649, 'Heirloom Oak Dining Table' -> photo-1617806118233). No production catalog was available to this review, so this cannot be reported as shipped product behaviour. Cited ref 00246:272-300 is the RPC's image_url projection, which faithfully returns products.images[1]. Reclassify as seed-data hygiene.",
+  "corrected_refs": [
+   "supabase/seed/products.sql:6-14",
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:281-282"
+  ],
+  "corrected_severity": "S3",
+  "corrected_observation": "The local dev seed illustrates catalog rows with unrelated Unsplash stock photography (supabase/seed/products.sql), so the browse grid shows a ladder-back chair for 'Live-Edge Coffee Table' and green velvet chairs for 'Heirloom Oak Dining Table'. Seed-data defect; no production catalog was observed."
+ },
+ {
+  "id": "F07",
+  "verdict": "adjusted",
+  "note": "The push half is CONFIRMED: apns-send has no caller touching invoices, proposals, decisions or direct_orders, and notification-dispatch's push branch writes a log row. But 'a designer raising an invoice has no way to reach the client's phone' is too strong — the client-facing EMAIL rails are live and cron-scheduled: invoice-reminders (pg_cron daily 15:00 UTC, 00181) sends the client a staged A/R cadence, decision-reminders runs daily 09:00 UTC (00092), and proposal-nudge exists. Narrow the claim to push specifically, and to the in-app feed.",
+  "corrected_refs": [
+   "supabase/functions/apns-send/index.ts",
+   "supabase/functions/notification-dispatch/index.ts:183-186",
+   "supabase/functions/invoice-reminders/index.ts:17-45",
+   "supabase/migrations/00181_invoice_reminders_cron.sql:4-30",
+   "supabase/migrations/00092_decision_cron.sql:16-19"
+  ],
+  "corrected_observation": "No APNs push fires for a proposal, an invoice, a decision or a direct order — apns-send's only callers are three design-request triggers, fulfillment-notify (operator-initiated, BOH rail) and site-request-dispatch. Email reminders to the client DO exist and are cron-scheduled (invoice-reminders daily, decision-reminders daily, proposal-nudge), so the gap is the phone, not the client."
+ },
+ {
+  "id": "F08",
+  "verdict": "adjusted",
+  "note": "The empty bell beside four due items is confirmed on the shots, and NotificationFeedView reads notification_log filtered to channel in (in_app,push). But 'structurally incapable' is wrong for proposals: 00388_proposal_send_dispatch_guard.sql:1258-1278 writes an in_app notification_log row of type 'proposal_sent' with a deep_link when a proposal is SENT through the dispatch path. The seeded proposal was flipped to status='sent' by a direct UPDATE (supabase/seed/proposals.sql:117-121), bypassing that path — which is why the bell was empty. Genuinely absent for the client: invoices and decisions (00397:866 writes invoice_draft_created to the DESIGNER; 00333:112 writes discovery_call_picked to the DESIGNER).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Network/NotificationsAPIClient.swift:57-62",
+   "supabase/migrations/00388_proposal_send_dispatch_guard.sql:1258-1278",
+   "supabase/migrations/00397_billing_checkout_integrity.sql:864-870",
+   "supabase/seed/proposals.sql:117-121"
+  ]
+ },
+ {
+  "id": "F09",
+  "verdict": "adjusted",
+  "note": "'The designer is named once' is true on the shots, but the app is NOT missing a designer slot on the project screen: ProjectDetailView.swift:70 mounts StudioIdentityLine, which resolves via the resolve_studio_identity RPC and renders a logo/monogram plus the studio-or-designer name. It rendered nothing because that RPC gates its profile fallback on profiles.is_designer (00320:82-86), and is_designer defaults false (00030:9) and is never set by supabase/seed/dev-accounts.sql:109-121 for Leah Hartwell. The invoice line is a separate path (invoice.designer?.displayName, InvoiceDetailView.swift:89-91). The finding's broader half — no photo, no bio, no contact, no designer on Today/proposal/decisions — survives.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:70",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/StudioIdentityLine.swift:18-40",
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:89-91",
+   "supabase/migrations/00320_studio_branding_read_and_logos.sql:77-99",
+   "supabase/migrations/00030_add_is_designer_to_profiles.sql:9",
+   "supabase/seed/dev-accounts.sql:109-121"
+  ]
+ },
+ {
+  "id": "F10",
+  "verdict": "adjusted",
+  "note": "Root cause found and it is upstream of every finding in this family: DesignRequestStatusService.fetchLeadRows() queries /rest/v1/leads with client_request_id=not.is.null (:733-740), so ONLY app-originated requests are ever visible. The seeded leads carry no client_request_id (supabase/seed/leads_room_scans.sql:119-126), therefore promotedRequest == nil, EngagementTier.resolve returns .discovering (requests empty, zero projects/proposals/invoices/decisions for that account) — the app never saw james.okafor as engaged at all. The matched-designer surface that would have shown is fully built: cardTitle 'You're matched with <designer>', subtitle naming the studio, a promoted Today card branch (TodayExperience.swift:80-91), and a designRequests status route. The observation stands; the CAUSE is the lead-visibility filter, not a home-composition decision. Any proposal must fix the filter, not add a home module.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:733-740",
+   "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:396-404",
+   "apps/mobile/Patina/Patina/Core/State/EngagementTier.swift:111-125",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:80-91",
+   "supabase/seed/leads_room_scans.sql:119-126"
+  ]
+ },
+ {
+  "id": "F11",
+  "verdict": "confirmed",
+  "note": "Verified: DailyRoomView.content is exactly DailyGreetingHeader + TodayNextMoveCard + editorialModule + optional TodayActiveRoomCard + a 120pt Spacer (:104-145) — nothing else, so the screen genuinely has no further content to scroll to. HomeStudioBlock / StudioHubSection / MarketplaceLinksSection exist but have NO call site outside #Preview blocks (grep), confirming C23's orphaned rail. The monogram at DailyGreetingHeader onMonogramTap -> .profile is the only Studio door.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:104-145",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomStateBlocks.swift:25-45",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyGreetingHeader.swift:59-99"
+  ]
+ },
+ {
+  "id": "F12",
+  "verdict": "confirmed",
+  "note": "Verified: ProductDetailView's bottomBar is an optional AR circle plus one primary button whose label is viewModel.isSaved ? 'Saved ✓' : 'Add to Room' (:369-380). No cart, no checkout, no quote, no vendor link, no source_url anywhere in the app (grep). direct_orders / create_direct_order / 'buy now' have zero iOS references.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:338-399",
+   "supabase/migrations/00276_direct_orders.sql:41-63"
+  ]
+ },
+ {
+  "id": "F13",
+  "verdict": "confirmed",
+  "note": "Verified in TodayExperience: nextMove() = continuationMove -> projectMove -> roomMove, and projectMove branches ONLY on pendingDecisionCount and unreadMessageCount (:95-118). There is no proposal branch and no invoice branch anywhere in the file. Once both counts hit zero it falls through to roomMove and ends at 'Return to <Room>' (:153-159). No last-visit timestamp exists for the feed, the story, the room or the saved list.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:48-55",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:95-118",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:120-159"
+  ]
+ },
+ {
+  "id": "F14",
+  "verdict": "confirmed",
+  "note": "Verified: CompanionActionRows.collectionsRow returns nil when context.tableItemCount == 0 (:219), and it is the only Saved door — CompanionAreaBuilders appends it conditionally in both home branches (:34, :43). With zero saves there is no route to .table anywhere.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionActionRows.swift:217-222",
+   "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionAreaBuilders.swift:28-49"
+  ]
+ },
+ {
+  "id": "F15",
+  "verdict": "confirmed",
+  "note": "Confirmed: AddToRoomSheet exists in Features/Home but has no call site, and RecommendationsView.cardMenuActions offers only Save / Share / Not for me / View details (:304-335) — no add-to-room, in any entry context.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/AddToRoomSheet.swift",
+   "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:304-335"
+  ]
+ },
+ {
+  "id": "F16",
+  "verdict": "confirmed",
+  "note": "Verified in TodayExperience: nextMove() = continuationMove -> projectMove -> roomMove, and projectMove branches ONLY on pendingDecisionCount and unreadMessageCount (:95-118). There is no proposal branch and no invoice branch anywhere in the file. Once both counts hit zero it falls through to roomMove and ends at 'Return to <Room>' (:153-159). No last-visit timestamp exists for the feed, the story, the room or the saved list.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:48-55",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:95-118",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:120-159"
+  ]
+ },
+ {
+  "id": "F17",
+  "verdict": "confirmed",
+  "note": "Verified on both sides: products.dimensions jsonb exists (00001:35), get_recommendations does not project it (00246:273-300 returns id/name/price/match/maker/image/usdz/style/material/badges/category/tier only), and Product's CodingKeys and init(from:) have no dimensions, lead time, stock, shipping or returns field (ProductModel.swift:28-58). Minor scope note: lead_time_weeks and a dimensions string ARE decoded — but only on RemoteProposalItem / RemoteProposalScopeRoom, i.e. the proposal rail, never the catalog.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:12-58",
+   "supabase/migrations/00001_initial_schema.sql:35",
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:273-300",
+   "apps/mobile/Patina/Patina/Services/API/ProposalsAPIClient.swift:97"
+  ]
+ },
+ {
+  "id": "F18",
+  "verdict": "adjusted",
+  "note": "Standing verification (b): the manual room entry does NOT convert feet as meters. The screen the walk actually used is ScanFallbackEntryView (RoomScan), not ManualRoomEntryView (Rooms) — the cited file has no ft/m toggle, no steppers and no emoji, and its label reads 'Dimensions (feet)'. ScanFallbackEntryView.submit() converts CORRECTLY: unit == .feet ? (l/3.28084, w/3.28084) : (l, w) (:265-270), and every downstream surface stores metres and prints feet (RoomCreationCoordinator:112-114 x0.3048; SpatialMetadataRow:46-50 /0.3048). 59'x46' from 18x14 is only reachable with the toggle on 'm' — which the guest lane says it tapped. The REAL defect is the toggle, and it is worse than filed: 'ft'/'m' are bare Text buttons whose only activation feedback is a muted->primary colour change, the fields carry no unit suffix, and the choice PERSISTS in UserDefaults key 'patina.scan.manual_entry.unit' and is restored onAppear — so a later session silently starts in metres.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:28-32",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:71-78",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:140-166",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:265-280",
+   "apps/mobile/Patina/Patina/Features/Rooms/Components/SpatialMetadataRow.swift:46-50"
+  ],
+  "corrected_observation": "The room-dimensions step (ScanFallbackEntryView) puts a 'ft / m' toggle in the section header whose only activation feedback is a text-colour change from muted to primary, at roughly 12x13pt and 6x13pt; the LENGTH/WIDTH fields carry no unit suffix; and the chosen unit persists across sessions in UserDefaults ('patina.scan.manual_entry.unit') and is restored silently onAppear. Entering 18 x 14 with the toggle on 'm' stores 18m x 14m and every downstream surface prints 59' x 46' / 2713 SQ FT. The conversion arithmetic itself is correct."
+ },
+ {
+  "id": "F19",
+  "verdict": "confirmed",
+  "note": "Confirmed: no order object reaches the client app, the Studio's sections are project/proposal/invoice/decision only, and neither invoices nor direct_orders carries a fulfillment status.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift:12-36",
+   "supabase/migrations/00276_direct_orders.sql:41-67"
+  ]
+ },
+ {
+  "id": "F20",
+  "verdict": "confirmed",
+  "note": "Both leaks verified in ProjectDetailView. overviewFacts appends ('Client view', client_visibility_tier capitalised) whenever the column is non-empty (:120-124). portalHintCard is a plain Text('Set up <sections> in the portal ->') with a stroked rounded rect and no Button (:139-151) — the file's own comment says 'setup happens in the portal, so there is no tap target on iOS'. Cited :143 lands inside portalHintCard; :64 is the phase line, not a leak.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:108-126",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:128-151"
+  ]
+ },
+ {
+  "id": "F21",
+  "verdict": "refuted",
+  "note": "REFUTED as written. A complete messaging surface ships: ThreadListView (with an inline search field) and ThreadDetailView — whose own header calls it 'Conversation view: bubbles + simple composer' — plus MessagingViewModel and MessagingAPIClient writing comms_threads/comms_messages. A 'Message your designer' Companion row (route .threadList) is offered on project detail, decision detail, documents, notifications and design-requests (CompanionAreaBuilders.swift:219-294). What the walkers saw (c-19) is the Studio hub, not a messages screen: the 'Conversation' block is the only Studio block drawn WITHOUT a chevron, and they never opened .threadList. The defensible finding is narrower: a client cannot START a thread (ThreadListView's empty state CTA is 'Get design help', not 'New message'), the Studio's Conversation block is a dead row, and the home Companion carries no message row.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadDetailView.swift:5-10",
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadListView.swift:96",
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadListView.swift:181-194",
+   "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionAreaBuilders.swift:213-294",
+   "apps/mobile/Patina/Patina/Core/Network/MessagingAPIClient.swift:132-165"
+  ]
+ },
+ {
+  "id": "F22",
+  "verdict": "confirmed",
+  "note": "Backend read verified against main's migrations: direct_orders has no designer_id, no project_id, no commission_rate and no FF&E link, and 00301_marketplace_vitals.sql:37-40 states 'No designer attribution (client_id is the buyer)'. Matches C24.",
+  "corrected_refs": [
+   "supabase/migrations/00276_direct_orders.sql:41-67",
+   "supabase/migrations/00301_marketplace_vitals.sql:37-40"
+  ]
+ },
+ {
+  "id": "F23",
+  "verdict": "confirmed",
+  "note": "Consistent with the code: rooms and saved pieces live in the device-scoped SwiftData store (RoomStore / TableItemModel), the Companion and Profile read them with an unfiltered fetchCount over that store (CompanionOverlay.swift:190-195), and nothing scopes those fetches by user id — so whichever account signs in next inherits them, and 'SAVED ON THIS PHONE' on Your Spaces is the only surface telling the truth. Matches C27's second fair-game item.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:190-195",
+   "apps/mobile/Patina/Patina/Core/Persistence/LocalStoreReset.swift",
+   "apps/mobile/Patina/Patina/Core/Persistence/RoomStore.swift"
+  ]
+ },
+ {
+  "id": "F24",
+  "verdict": "adjusted",
+  "note": "Root cause found and it is upstream of every finding in this family: DesignRequestStatusService.fetchLeadRows() queries /rest/v1/leads with client_request_id=not.is.null (:733-740), so ONLY app-originated requests are ever visible. The seeded leads carry no client_request_id (supabase/seed/leads_room_scans.sql:119-126), therefore promotedRequest == nil, EngagementTier.resolve returns .discovering (requests empty, zero projects/proposals/invoices/decisions for that account) — the app never saw james.okafor as engaged at all. The matched-designer surface that would have shown is fully built: cardTitle 'You're matched with <designer>', subtitle naming the studio, a promoted Today card branch (TodayExperience.swift:80-91), and a designRequests status route. So 'Get design help' opens the intake flow (DesignRequestFlowView, steps pickScans->details->review->sending->success) rather than the status route, because promotedRequest is nil. The duplicate-lead risk is real but downstream of the same filter.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:733-740",
+   "apps/mobile/Patina/Patina/Features/DesignServices/DesignRequestFlowView.swift:60-99",
+   "apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:125-138"
+  ]
+ },
+ {
+  "id": "F25",
+  "verdict": "adjusted",
+  "note": "Root cause found and it is upstream of every finding in this family: DesignRequestStatusService.fetchLeadRows() queries /rest/v1/leads with client_request_id=not.is.null (:733-740), so ONLY app-originated requests are ever visible. The seeded leads carry no client_request_id (supabase/seed/leads_room_scans.sql:119-126), therefore promotedRequest == nil, EngagementTier.resolve returns .discovering (requests empty, zero projects/proposals/invoices/decisions for that account) — the app never saw james.okafor as engaged at all. The matched-designer surface that would have shown is fully built: cardTitle 'You're matched with <designer>', subtitle naming the studio, a promoted Today card branch (TodayExperience.swift:80-91), and a designRequests status route. The observation stands; the CAUSE is the lead-visibility filter, not a home-composition decision. Any proposal must fix the filter, not add a home module.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:733-740",
+   "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:396-404",
+   "apps/mobile/Patina/Patina/Core/State/EngagementTier.swift:111-125",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:80-91",
+   "supabase/seed/leads_room_scans.sql:119-126"
+  ]
+ },
+ {
+  "id": "F26",
+  "verdict": "confirmed",
+  "note": "Backend read verified against main's migrations: direct_orders has no designer_id, no project_id, no commission_rate and no FF&E link, and 00301_marketplace_vitals.sql:37-40 states 'No designer attribution (client_id is the buyer)'. Matches C24.",
+  "corrected_refs": [
+   "supabase/migrations/00276_direct_orders.sql:41-67",
+   "supabase/migrations/00301_marketplace_vitals.sql:37-40"
+  ]
+ },
+ {
+  "id": "F27",
+  "verdict": "confirmed",
+  "note": "Verified: AuthSheet passes showGuest: false to AuthScreenView (:41), which is what removes 'Look around first ->', and AuthSheet adds no Cancel or ✕ of its own — the only dismissal is the sheet's own drag. The full gate (AuthScreenView :100-112) does render the guest affordance. Confirmed exactly as filed.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Authentication/Views/AuthSheet.swift:21-43",
+   "apps/mobile/Patina/Patina/Features/Authentication/Views/AuthScreenView.swift:100-112"
+  ]
+ },
+ {
+  "id": "F28",
+  "verdict": "confirmed",
+  "note": "The three-surfaces-disagree half now has a proven mechanism — see the two-store split: Root cause verified: there are two independent taste stores and two independent quizzes. Features/StyleQuiz (the Companion quiz) writes only StylePreferenceStore -> the SwiftData StylePreferenceModel (StyleQuizViewModel.swift:288), which feeds the Profile badge and the browse rationale. Features/StyleConversation (the post-room 'Style Discovery') writes StyleProfileStore -> UserDefaults keys patina.style_profile_response.v1 / patina.style_profile_completed.v1 (StyleConversationViewModel.swift:229). CompanionOverlay reads ONLY StyleProfileStore.hasCompletedProfile (CompanionOverlay.swift:188). So finishing the Companion quiz leaves hasCompletedProfile false — which is exactly why Profile shows 'Warm Modern' while the Companion still says 'TAKE THE QUIZ FIRST' on the same launch.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:173-197",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Shared/Services/StyleProfileStore.swift:29-45",
+   "apps/mobile/Patina/Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift:288"
+  ]
+ },
+ {
+  "id": "F29",
+  "verdict": "confirmed",
+  "note": "Consistent with the code: rooms and saved pieces live in the device-scoped SwiftData store (RoomStore / TableItemModel), the Companion and Profile read them with an unfiltered fetchCount over that store (CompanionOverlay.swift:190-195), and nothing scopes those fetches by user id — so whichever account signs in next inherits them, and 'SAVED ON THIS PHONE' on Your Spaces is the only surface telling the truth. Matches C27's second fair-game item.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:190-195",
+   "apps/mobile/Patina/Patina/Core/Persistence/LocalStoreReset.swift",
+   "apps/mobile/Patina/Patina/Core/Persistence/RoomStore.swift"
+  ]
+ },
+ {
+  "id": "F30",
+  "verdict": "confirmed",
+  "note": "Verified in TodayExperience: nextMove() = continuationMove -> projectMove -> roomMove, and projectMove branches ONLY on pendingDecisionCount and unreadMessageCount (:95-118). There is no proposal branch and no invoice branch anywhere in the file. Once both counts hit zero it falls through to roomMove and ends at 'Return to <Room>' (:153-159). No last-visit timestamp exists for the feed, the story, the room or the saved list.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:48-55",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:95-118",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:120-159"
+  ]
+ },
+ {
+  "id": "F31",
+  "verdict": "confirmed",
+  "note": "Same defect as F04, verified independently. Add refs: the missing back control is the Group-level .toolbar(.hidden) at ProductDetailView.swift:44 combined with errorView at :413-430; root cause is the two-FK ambiguous embed at ProductAPIClient.swift:99.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:99",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:36-44",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:413-430"
+  ]
+ },
+ {
+  "id": "F32",
+  "verdict": "confirmed",
+  "note": "Verified: ProductDetailView's bottomBar is an optional AR circle plus one primary button whose label is viewModel.isSaved ? 'Saved ✓' : 'Add to Room' (:369-380). No cart, no checkout, no quote, no vendor link, no source_url anywhere in the app (grep). direct_orders / create_direct_order / 'buy now' have zero iOS references.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:338-399",
+   "supabase/migrations/00276_direct_orders.sql:41-63"
+  ]
+ },
+ {
+  "id": "F33",
+  "verdict": "refuted",
+  "note": "REFUTED as written. A complete messaging surface ships: ThreadListView (with an inline search field) and ThreadDetailView — whose own header calls it 'Conversation view: bubbles + simple composer' — plus MessagingViewModel and MessagingAPIClient writing comms_threads/comms_messages. A 'Message your designer' Companion row (route .threadList) is offered on project detail, decision detail, documents, notifications and design-requests (CompanionAreaBuilders.swift:219-294). What the walkers saw (c-19) is the Studio hub, not a messages screen: the 'Conversation' block is the only Studio block drawn WITHOUT a chevron, and they never opened .threadList. The defensible finding is narrower: a client cannot START a thread (ThreadListView's empty state CTA is 'Get design help', not 'New message'), the Studio's Conversation block is a dead row, and the home Companion carries no message row.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadDetailView.swift:5-10",
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadListView.swift:96",
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadListView.swift:181-194",
+   "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionAreaBuilders.swift:213-294",
+   "apps/mobile/Patina/Patina/Core/Network/MessagingAPIClient.swift:132-165"
+  ]
+ },
+ {
+  "id": "F34",
+  "verdict": "confirmed",
+  "note": "Verified in TodayExperience: nextMove() = continuationMove -> projectMove -> roomMove, and projectMove branches ONLY on pendingDecisionCount and unreadMessageCount (:95-118). There is no proposal branch and no invoice branch anywhere in the file. Once both counts hit zero it falls through to roomMove and ends at 'Return to <Room>' (:153-159). No last-visit timestamp exists for the feed, the story, the room or the saved list.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:48-55",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:95-118",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:120-159"
+  ]
+ },
+ {
+  "id": "F35",
+  "verdict": "refuted",
+  "note": "REFUTED as written. A complete messaging surface ships: ThreadListView (with an inline search field) and ThreadDetailView — whose own header calls it 'Conversation view: bubbles + simple composer' — plus MessagingViewModel and MessagingAPIClient writing comms_threads/comms_messages. A 'Message your designer' Companion row (route .threadList) is offered on project detail, decision detail, documents, notifications and design-requests (CompanionAreaBuilders.swift:219-294). What the walkers saw (c-19) is the Studio hub, not a messages screen: the 'Conversation' block is the only Studio block drawn WITHOUT a chevron, and they never opened .threadList. The defensible finding is narrower: a client cannot START a thread (ThreadListView's empty state CTA is 'Get design help', not 'New message'), the Studio's Conversation block is a dead row, and the home Companion carries no message row.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadDetailView.swift:5-10",
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadListView.swift:96",
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadListView.swift:181-194",
+   "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionAreaBuilders.swift:213-294",
+   "apps/mobile/Patina/Patina/Core/Network/MessagingAPIClient.swift:132-165"
+  ]
+ },
+ {
+  "id": "F36",
+  "verdict": "confirmed",
+  "note": "The three-surfaces-disagree half now has a proven mechanism — see the two-store split: Root cause verified: there are two independent taste stores and two independent quizzes. Features/StyleQuiz (the Companion quiz) writes only StylePreferenceStore -> the SwiftData StylePreferenceModel (StyleQuizViewModel.swift:288), which feeds the Profile badge and the browse rationale. Features/StyleConversation (the post-room 'Style Discovery') writes StyleProfileStore -> UserDefaults keys patina.style_profile_response.v1 / patina.style_profile_completed.v1 (StyleConversationViewModel.swift:229). CompanionOverlay reads ONLY StyleProfileStore.hasCompletedProfile (CompanionOverlay.swift:188). So finishing the Companion quiz leaves hasCompletedProfile false — which is exactly why Profile shows 'Warm Modern' while the Companion still says 'TAKE THE QUIZ FIRST' on the same launch.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:173-197",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Shared/Services/StyleProfileStore.swift:29-45",
+   "apps/mobile/Patina/Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift:288"
+  ]
+ },
+ {
+  "id": "F37",
+  "verdict": "confirmed",
+  "note": "Verified in TodayExperience: nextMove() = continuationMove -> projectMove -> roomMove, and projectMove branches ONLY on pendingDecisionCount and unreadMessageCount (:95-118). There is no proposal branch and no invoice branch anywhere in the file. Once both counts hit zero it falls through to roomMove and ends at 'Return to <Room>' (:153-159). No last-visit timestamp exists for the feed, the story, the room or the saved list.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:48-55",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:95-118",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:120-159"
+  ]
+ },
+ {
+  "id": "F38",
+  "verdict": "adjusted",
+  "note": "Same correction as F07: push confirmed absent for money/decision events; email rails to the client exist. Cited notification-dispatch:183-186 and 00330:182 check out.",
+  "corrected_refs": [
+   "supabase/functions/notification-dispatch/index.ts:183-186",
+   "supabase/functions/invoice-reminders/index.ts:17-45",
+   "supabase/migrations/00092_decision_cron.sql:16-19"
+  ]
+ },
+ {
+  "id": "F39",
+  "verdict": "refuted",
+  "note": "REFUTED. The claim rests on tableItemCount being the room-scoped sum written by DailyRoomView:265 — but the Companion never reads that value. CompanionOverlay.enrichedContext OVERWRITES it on every panel open with a live fetchCount(FetchDescriptor<TableItemModel>()) over the whole store (:173-197), and expandedView binds enrichedContext before building the rows (:522-527). The file even documents that updateTableItemCount has no effective callers. A piece hearted on the browse grid or the piece detail therefore DOES surface the Saved row. F14 (no row at zero) is the true version of this finding.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:155-197",
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:521-527"
+  ]
+ },
+ {
+  "id": "F40",
+  "verdict": "adjusted",
+  "note": "Standing verification (b): the manual room entry does NOT convert feet as meters. The screen the walk actually used is ScanFallbackEntryView (RoomScan), not ManualRoomEntryView (Rooms) — the cited file has no ft/m toggle, no steppers and no emoji, and its label reads 'Dimensions (feet)'. ScanFallbackEntryView.submit() converts CORRECTLY: unit == .feet ? (l/3.28084, w/3.28084) : (l, w) (:265-270), and every downstream surface stores metres and prints feet (RoomCreationCoordinator:112-114 x0.3048; SpatialMetadataRow:46-50 /0.3048). 59'x46' from 18x14 is only reachable with the toggle on 'm' — which the guest lane says it tapped. The REAL defect is the toggle, and it is worse than filed: 'ft'/'m' are bare Text buttons whose only activation feedback is a muted->primary colour change, the fields carry no unit suffix, and the choice PERSISTS in UserDefaults key 'patina.scan.manual_entry.unit' and is restored onAppear — so a later session silently starts in metres.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:28-32",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:71-78",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:140-166",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:265-280",
+   "apps/mobile/Patina/Patina/Features/Rooms/Components/SpatialMetadataRow.swift:46-50"
+  ],
+  "corrected_observation": "The room-dimensions step (ScanFallbackEntryView) puts a 'ft / m' toggle in the section header whose only activation feedback is a text-colour change from muted to primary, at roughly 12x13pt and 6x13pt; the LENGTH/WIDTH fields carry no unit suffix; and the chosen unit persists across sessions in UserDefaults ('patina.scan.manual_entry.unit') and is restored silently onAppear. Entering 18 x 14 with the toggle on 'm' stores 18m x 14m and every downstream surface prints 59' x 46' / 2713 SQ FT. The conversion arithmetic itself is correct."
+ },
+ {
+  "id": "F41",
+  "verdict": "confirmed",
+  "note": "Verified and the mechanism is exact: StudioAttentionSummary.awaitingCount sums ITEMS — pendingDecisions.count + pendingProposals.count + payableInvoices.count = 4 — and hint renders '4 things need your eye' (StudioQueueModels.swift:93-95), while the 'Awaiting you' section badge counts ROWS, and awaitingRows collapses those four items into three grouped rows (one invoice row, one decisions row, one proposal row) at StudioQueueBuilder.swift:72-80. Today and the Companion print the decision count alone.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Profile/ViewModels/StudioQueueModels.swift:93-103",
+   "apps/mobile/Patina/Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift:26-31",
+   "apps/mobile/Patina/Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift:72-80"
+  ]
+ },
+ {
+  "id": "F42",
+  "verdict": "confirmed",
+  "note": "Verified both halves. CollectionsViewModel.activeTab defaults to \"Boards\" (:18), and CollectionsViewModel.addToBoard(_:productId:) at :101 has ZERO call sites app-wide (grep) — a board can be created and can never hold a piece. Empty-state copy quoted verbatim at CollectionsView.swift:156-176.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:18",
+   "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:101",
+   "apps/mobile/Patina/Patina/Features/Collections/Views/CollectionsView.swift:149-179"
+  ]
+ },
+ {
+  "id": "F43",
+  "verdict": "adjusted",
+  "note": "The CATALOG half is confirmed and the mechanism is sharper than filed: fetchRecommendations is only ever called as fetchRecommendations(roomId:) (RecommendationsViewModel.swift:105), so the RPC's p_category is never sent even though ProductAPIClient supports it (:56), and filteredProducts filters the <=20 already-fetched rows client-side (:48-51). But 'no search exists anywhere in the app' is FALSE — ProjectListView and ThreadListView both ship Patina-styled inline search fields (:96 in each), and an unused search_products endpoint is declared at APIConfiguration.swift:193,231.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:48-51",
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:105",
+   "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:40-58",
+   "apps/mobile/Patina/Patina/Services/API/APIConfiguration.swift:193",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectListView.swift:96"
+  ],
+  "corrected_observation": "There is no catalog/product search: the only entry to the commerce surface is the Companion's 'Your recommendations' row into a <=20-row feed with five client-side chips. get_recommendations accepts p_category and the app never sends it; a search_products endpoint is declared and never called. (Search fields DO exist on the projects list and the thread list.)"
+ },
+ {
+  "id": "F44",
+  "verdict": "adjusted",
+  "note": "REFUTED at the UI level: DecisionDetailView.optionCard renders PatinaAsyncImage(url: option.resolvedImageURL) at 180pt whenever an image resolves (:120-125), and prints 'Details unavailable — view in portal' for a contentless option. The rug decision showed no colour because the SEEDED options carry no image_url (supabase/seed/decisions.sql:119-120). The real gap is narrower: nothing requires or prompts a designer to attach an image to a colour decision, and there is no swatch primitive.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:111-145",
+   "supabase/seed/decisions.sql:110-120"
+  ],
+  "corrected_severity": "S2"
+ },
+ {
+  "id": "F45",
+  "verdict": "adjusted",
+  "note": "Half REFUTED, and the correction makes the finding stronger. A Sign Out control DOES ship — AccountView.swift:149-152 renders PatinaButton('Sign Out') behind an 'Are you sure' alert (:52-70) calling AuthService.signOut(). It is unreachable only because the Settings 'Account' row does not navigate. That row is NOT unwired: SettingsView.swift:50-58 is a real NavigationLink { AccountView() } inside a NavigationStack — so the defect is a push that does not happen, not a missing destination, and 'wire it up' is the wrong fix. Delete Account IS genuinely absent from the UI: a deleteAccount endpoint -> /rest/v1/rpc/delete_user_account is declared at APIConfiguration.swift:182,220 with no caller and no screen.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:48-66",
+   "apps/mobile/Patina/Patina/Features/Account/AccountView.swift:52-70",
+   "apps/mobile/Patina/Patina/Features/Account/AccountView.swift:147-153",
+   "apps/mobile/Patina/Patina/Services/API/APIConfiguration.swift:182"
+  ],
+  "corrected_observation": "Sign Out exists (AccountView) but is stranded behind the Settings 'Account' row, which is a real NavigationLink to AccountView and nevertheless does not navigate — reproduced three times across guest and signed-in tiers. Delete Account has no UI at all; a delete_user_account endpoint is declared and never called. Guest Settings shows the same ACCOUNT section to someone with no account."
+ },
+ {
+  "id": "F46",
+  "verdict": "confirmed",
+  "note": "Verified both halves. fetchTodaysStory queries editorial_stories with order=sort_order.desc,published_at.desc&limit=1 and no per-day or per-user selection (:72-90), and DailyRoomViewModel calls DailyStory(from: $0) with no isUnread argument, so the init default isUnread: true (:119) applies on every render — the clay dot is hard-coded new. DailyStoryCard gates the dot on story.isUnread (:80).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Network/EditorialStoriesAPIClient.swift:71-90",
+   "apps/mobile/Patina/Patina/Core/Network/EditorialStoriesAPIClient.swift:117-131",
+   "apps/mobile/Patina/Patina/Features/Home/ViewModels/DailyRoomViewModel.swift:196-201",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyStoryCard.swift:80-87"
+  ]
+ },
+ {
+  "id": "F47",
+  "verdict": "confirmed",
+  "note": "Consistent with the code: the only push authorization request is in PushTokenService and it fires after a design-request submission with no pre-permission screen; SettingsView's 'Notifications' toggle writes SettingsService.notificationsEnabled (a profile preference), not the OS grant, and is offered to guests (:71-78).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/API/PushTokenService.swift:87-108",
+   "apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:68-80"
+  ]
+ },
+ {
+  "id": "F48",
+  "verdict": "confirmed",
+  "note": "Confirmed on six shots and consistent with the code: InvoiceDetailView consumes due_date only inside isOverdue(_:) to derive the words 'Past due' (:227-235) and never prints the date; the list card does (InvoiceListView.swift:189-192). Same shape on proposals and decisions.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:225-240",
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceListView.swift:189-192"
+  ]
+ },
+ {
+  "id": "F49",
+  "verdict": "confirmed",
+  "note": "Confirmed on shot c-11 — 'Sign proposal' is cut in half at the bottom edge — but the mechanism in the finding is wrong and the fix follows from the right one. A Hearth reservation DOES exist and IS applied to the whole navigation stack (ContentView.swift:166 -> companionHearthReservation, 120pt via CompanionHearthMetrics.reservedHeight). It is implemented as safeAreaInset(edge:.bottom) whose content paints an OPAQUE PatinaColors.Background.primary with .ignoresSafeArea(edges:.bottom) — so on pushed destinations the scrolled content is drawn under it and painted over, rather than inset out of it. The proposal screen already pads .bottom 140 after its own Sign footer, so adding padding is not the fix.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/ContentView.swift:166",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Components/CompanionSafeArea.swift:37-50",
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:33",
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:137-151"
+  ]
+ },
+ {
+  "id": "F50",
+  "verdict": "confirmed",
+  "note": "Verified: CompanionActionRows.studioRow's hint is the 'PROJECTS · MESSAGES · DECISIONS' promise while its route is the projects list, and the real Studio hub (StudioHubView) mounts only under ProfileView. Confirmed on shot c-04b.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionAreaBuilders.swift:213-231",
+   "apps/mobile/Patina/Patina/Features/Profile/Views/StudioHubView.swift:44-67"
+  ]
+ },
+ {
+  "id": "F51",
+  "verdict": "confirmed",
+  "note": "Confirmed across surfaces on the shots; consistent with the code — the Next Move copy 'A short scan gives the Companion a real space to work from.' is hard-coded in TodayExperience.roomMove (:120-128) and opens the typed fallback form, and the summary step is titled 'Here's what I see.' with a Rescan action (ScanFloorPlanPreviewView:27,57).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:120-128",
+   "apps/mobile/Patina/Patina/Features/StyleReveal/Views/ScanFloorPlanPreviewView.swift:27-60",
+   "apps/mobile/Patina/Patina/Features/Rooms/Views/RoomProjectView.swift:219-228"
+  ]
+ },
+ {
+  "id": "F52",
+  "verdict": "confirmed",
+  "note": "Verified: ProductDetailView's chrome is back / ? / ShareLink / heart plus the single 'Add to Room' primary (:89-138, :338-399) — no 'Get design help' control, no compare surface anywhere in the app (grep), and TableItemModel.notes (:42) has no writer in any view.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:86-138",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:338-399",
+   "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:41-42"
+  ]
+ },
+ {
+  "id": "F53",
+  "verdict": "confirmed",
+  "note": "Verified: Info.plist registers CFBundleURLSchemes = ['patina'] only (:15-27) and Patina.entitlements contains just aps-environment and applesignin — no com.apple.developer.associated-domains. The shared https://app.patina.cloud/library/<id> URL can only open Safari.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Info.plist:15-27",
+   "apps/mobile/Patina/Patina/Patina.entitlements:4-11",
+   "apps/mobile/Patina/Patina/Features/Shared/PatinaPortalLinks.swift:14-22"
+  ]
+ },
+ {
+  "id": "F54",
+  "verdict": "confirmed",
+  "note": "Verified: every ShareLink in the app shares PatinaDeepLinks.productURL for a single product (product detail top bar, recommendations card menu, collections row); nothing shares a room, a board, the Saved list, a decision, a proposal or an invoice, and there is no invite/household/second-seat concept in the client.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:117-130",
+   "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:304-335",
+   "apps/mobile/Patina/Patina/Features/Collections/Views/CollectionsView.swift:285"
+  ]
+ },
+ {
+  "id": "F55",
+  "verdict": "confirmed",
+  "note": "Half REFUTED, and the correction makes the finding stronger. A Sign Out control DOES ship — AccountView.swift:149-152 renders PatinaButton('Sign Out') behind an 'Are you sure' alert (:52-70) calling AuthService.signOut(). It is unreachable only because the Settings 'Account' row does not navigate. That row is NOT unwired: SettingsView.swift:50-58 is a real NavigationLink { AccountView() } inside a NavigationStack — so the defect is a push that does not happen, not a missing destination, and 'wire it up' is the wrong fix. Delete Account IS genuinely absent from the UI: a deleteAccount endpoint -> /rest/v1/rpc/delete_user_account is declared at APIConfiguration.swift:182,220 with no caller and no screen.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:48-66",
+   "apps/mobile/Patina/Patina/Features/Account/AccountView.swift:147-153"
+  ]
+ },
+ {
+  "id": "F56",
+  "verdict": "confirmed",
+  "note": "Verified: the Budget screen is an INVOICE rollup plus accepted-proposal investment lines, never a project-budget view. BudgetMath.rollup sums total_cents over visible (non-draft, non-void) invoices; projects.budget_cents never enters it. So 'Your budget / Across your projects' can print $4,250 for a client whose three projects total $725,000. Cited path was wrong (there is no Features/Budget/Views/ directory).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:36-42",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:104",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetViewModel.swift:5-24",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetViewModel.swift:37-52"
+  ]
+ },
+ {
+  "id": "F57",
+  "verdict": "refuted",
+  "note": "REFUTED. The Studio rows ARE accessible controls: StudioHubView wraps each row in a Button with .accessibilityElement(children:.ignore), .accessibilityLabel(row.accessibilityLabel), .accessibilityHint(\"Opens ...\") and .accessibilityIdentifier(\"StudioHub.Row.<id>\") (:243-251), and that annotation block is OUTSIDE the Dynamic-Type branch — the two branches in rowLabel differ only in layout (:254-286). Identical a11y at every text size means the scan_ui discrepancy is a harness artifact, not a product defect; the walkers' own notes say scan_ui misses non-interactive-typed elements (it also missed the product cards). Do not ship this as 'VoiceOver cannot reach the money rail' without a real VoiceOver pass.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Profile/Views/StudioHubView.swift:241-287"
+  ]
+ },
+ {
+  "id": "F58",
+  "verdict": "confirmed",
+  "note": "Verified in TodayExperience: nextMove() = continuationMove -> projectMove -> roomMove, and projectMove branches ONLY on pendingDecisionCount and unreadMessageCount (:95-118). There is no proposal branch and no invoice branch anywhere in the file. Once both counts hit zero it falls through to roomMove and ends at 'Return to <Room>' (:153-159). No last-visit timestamp exists for the feed, the story, the room or the saved list.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:48-55",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:95-118",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:120-159"
+  ]
+ },
+ {
+  "id": "F59",
+  "verdict": "adjusted",
+  "note": "REFUTED on the confirmation claim. 'Choose this' calls viewModel.beginSelection(optionId:) which sets pendingOptionId and presents DecisionConsentSheet (.sheet at DecisionDetailView.swift:44-61) — a real confirm step headed 'CONFIRM YOUR CHOICE' with the option title, the line 'Approving sends your decision to your designer and unblocks any work waiting on it.', an optional 'Add my signature' e-sign toggle, an Approve button and Cancel. The walk's '3 taps, no confirmation' count is wrong. A 'talk it over' affordance also exists (discussAction -> .threadDetail), but only renders when the decision resolves a project comms thread — the seed has none. What survives: no defer, no 'neither', and no visible way to ask when there is no thread. Filed as 'no way to ask a question or defer' — the defer/'neither' half is CONFIRMED; the 'no exit but a commitment' half is not (there is a Cancel in the consent sheet, and a conditional discuss link).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:44-61",
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:206-232"
+  ]
+ },
+ {
+  "id": "F60",
+  "verdict": "confirmed",
+  "note": "Both leaks verified in ProjectDetailView. overviewFacts appends ('Client view', client_visibility_tier capitalised) whenever the column is non-empty (:120-124). portalHintCard is a plain Text('Set up <sections> in the portal ->') with a stroked rounded rect and no Button (:139-151) — the file's own comment says 'setup happens in the portal, so there is no tap target on iOS'. Cited :143 lands inside portalHintCard; :64 is the phase line, not a leak.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:108-126",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:128-151"
+  ]
+ },
+ {
+  "id": "F61",
+  "verdict": "confirmed",
+  "note": "Verified both halves. fetchTodaysStory queries editorial_stories with order=sort_order.desc,published_at.desc&limit=1 and no per-day or per-user selection (:72-90), and DailyRoomViewModel calls DailyStory(from: $0) with no isUnread argument, so the init default isUnread: true (:119) applies on every render — the clay dot is hard-coded new. DailyStoryCard gates the dot on story.isUnread (:80).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Network/EditorialStoriesAPIClient.swift:71-90",
+   "apps/mobile/Patina/Patina/Core/Network/EditorialStoriesAPIClient.swift:117-131",
+   "apps/mobile/Patina/Patina/Features/Home/ViewModels/DailyRoomViewModel.swift:196-201",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyStoryCard.swift:80-87"
+  ]
+ },
+ {
+  "id": "F62",
+  "verdict": "confirmed",
+  "note": "Verified in code, not just data: get_recommendations FABRICATES the maker line — COALESCE(v.name, 'Unknown Maker') (00246:278) — so a product with no vendor prints an authoritative-looking 'UNKNOWN MAKER' rather than omitting the line. The data condition behind it on this stack is dev seed.",
+  "corrected_refs": [
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:277-278",
+   "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:50"
+  ]
+ },
+ {
+  "id": "F63",
+  "verdict": "confirmed",
+  "note": "Verified precisely, and there is a fourth defect the findings miss. ProductDetailViewModel.isSaved is declared `= false` (:18) and is set true only by toggleSave/addToAttachedRoom — it is NEVER seeded from storage, unlike the browse grid which does seed (RecommendationsViewModel.seedSavedState:74-89). toggleSave inserts a TableItemModel on true and does NOT delete on false (:104-118), so unsaving orphans the row and re-saving duplicates. The remote saved_items mirror exists only on addToAttachedRoom, which needs a room context the plain .pieceDetail(pieceId:) route never passes (ContentView.swift:292-294).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/ViewModels/ProductDetailViewModel.swift:18",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/ViewModels/ProductDetailViewModel.swift:44-78",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/ViewModels/ProductDetailViewModel.swift:104-125",
+   "apps/mobile/Patina/Patina/ContentView.swift:292-294",
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:74-89"
+  ]
+ },
+ {
+  "id": "F64",
+  "verdict": "confirmed",
+  "note": "Verified on both code paths: get_recommendations projects NULL::text AS usdz_url (00246:283) and ProductAPIClient's direct RawProductWithVendor mapping hard-codes usdzURL: nil (:192). Product.hasARModel (ProductModel.swift:110) is therefore false for every product, so the AR button at ProductDetailView.swift:346 never draws and RoomProjectView's 'In AR' cell (:235-243) can only ever read 0.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:192",
+   "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:110",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:344-368",
+   "apps/mobile/Patina/Patina/Features/Rooms/Views/RoomProjectView.swift:235-243",
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:283"
+  ]
+ },
+ {
+  "id": "F65",
+  "verdict": "adjusted",
+  "note": "REFUTED as an unconditional claim. 'Browse Picks for This Room' routes to .roomEmergence(roomId:) when room.remoteId != nil and only falls back to the unscoped .emergence(pieceId: nil) for a LOCAL-ONLY room (RoomProjectView.swift:313-322); the room-scoped route passes p_room_id to get_recommendations. The guest's room had never synced (Your Spaces flagged it 'SAVED ON THIS PHONE'), so the fallback fired. The residual finding is real but different: the fallback is silent — same header, same '10 pieces curated for your space', no room name, no notice that the room-aware edit was unavailable.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Rooms/Views/RoomProjectView.swift:302-327",
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:99-110"
+  ]
+ },
+ {
+  "id": "F66",
+  "verdict": "confirmed",
+  "note": "Confirmed: no order object reaches the client app, the Studio's sections are project/proposal/invoice/decision only, and neither invoices nor direct_orders carries a fulfillment status.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift:12-36",
+   "supabase/migrations/00276_direct_orders.sql:41-67"
+  ]
+ },
+ {
+  "id": "F67",
+  "verdict": "confirmed",
+  "note": "Verified precisely, and there is a fourth defect the findings miss. ProductDetailViewModel.isSaved is declared `= false` (:18) and is set true only by toggleSave/addToAttachedRoom — it is NEVER seeded from storage, unlike the browse grid which does seed (RecommendationsViewModel.seedSavedState:74-89). toggleSave inserts a TableItemModel on true and does NOT delete on false (:104-118), so unsaving orphans the row and re-saving duplicates. The remote saved_items mirror exists only on addToAttachedRoom, which needs a room context the plain .pieceDetail(pieceId:) route never passes (ContentView.swift:292-294).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/ViewModels/ProductDetailViewModel.swift:18",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/ViewModels/ProductDetailViewModel.swift:44-78",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/ViewModels/ProductDetailViewModel.swift:104-125",
+   "apps/mobile/Patina/Patina/ContentView.swift:292-294",
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:74-89"
+  ]
+ },
+ {
+  "id": "F68",
+  "verdict": "adjusted",
+  "note": "Mostly confirmed with one factual correction: there IS a spinner. InvoiceDetailView's pay button is PatinaButton(..., isLoading: viewModel.isStartingCheckout) (:203-211), and startCheckout sets that flag around the call (InvoicesViewModel.swift:112-125). Confirmed: the failure is one line of PatinaColors.error caption text inserted below a button that keeps full enabled styling (:212-216), the only retry is re-tapping the same button, and there is no support affordance on the screen. The 'Pay securely...' caption being shoved off the bottom edge is the Hearth overpaint of F49, not a layout bug of this screen. The 503 that triggered it is the known local edge-runtime fault (C27) — the failure UX is the finding. Cited :45-52 is the SafariView fullScreenCover, not the failure UI.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:195-222",
+   "apps/mobile/Patina/Patina/Features/Invoices/ViewModels/InvoicesViewModel.swift:110-126"
+  ]
+ },
+ {
+  "id": "F69",
+  "verdict": "confirmed",
+  "note": "Both leaks verified in ProjectDetailView. overviewFacts appends ('Client view', client_visibility_tier capitalised) whenever the column is non-empty (:120-124). portalHintCard is a plain Text('Set up <sections> in the portal ->') with a stroked rounded rect and no Button (:139-151) — the file's own comment says 'setup happens in the portal, so there is no tap target on iOS'. Cited :143 lands inside portalHintCard; :64 is the phase line, not a leak.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:108-126",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:128-151"
+  ]
+ },
+ {
+  "id": "F70",
+  "verdict": "confirmed",
+  "note": "Both leaks verified in ProjectDetailView. overviewFacts appends ('Client view', client_visibility_tier capitalised) whenever the column is non-empty (:120-124). portalHintCard is a plain Text('Set up <sections> in the portal ->') with a stroked rounded rect and no Button (:139-151) — the file's own comment says 'setup happens in the portal, so there is no tap target on iOS'. Cited :143 lands inside portalHintCard; :64 is the phase line, not a leak.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:108-126",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:128-151"
+  ]
+ },
+ {
+  "id": "F71",
+  "verdict": "adjusted",
+  "note": "REFUTED as a UI gap and replaced by a stronger, real one. ProposalSelectionsBlock DOES render a 48pt PatinaAsyncImage and the line total for every item (ProposalDetailBlocks.swift:126-157), and the seed gives every item a line_total_cents (650000/420000/280000/370000/130000) and a vendor_name. The prices are stripped SERVER-SIDE: get_client_proposal_bundle nulls unit_sell_price, line_total_cents and vendor_name unless proposals.client_visibility_tier = 'full' (00390:1622-1650), and that column DEFAULTS to 'milestone' (00141:14-16). So every proposal a designer does not explicitly set to 'full' asks the client to sign for a total with no line prices. Images are blank because the seed sets no image_url.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailBlocks.swift:126-157",
+   "supabase/migrations/00390_proposal_copy_immutability.sql:1622-1650",
+   "supabase/migrations/00141_proposal_client_visibility_tier.sql:14-16",
+   "supabase/seed/proposals.sql:101-115"
+  ],
+  "corrected_observation": "The proposal detail's SELECTIONS block renders a thumbnail and a line total for each item, but get_client_proposal_bundle nulls unit_sell_price, line_total_cents and vendor_name for any proposal whose client_visibility_tier is not 'full' — and that column defaults to 'milestone'. The client is therefore asked to e-sign an 'INVESTMENT $18,500.00' with five unpriced, unattributed lines by default."
+ },
+ {
+  "id": "F72",
+  "verdict": "confirmed",
+  "note": "Verified: NotificationFeedView's studioCTATitle falls back to 'Get design help' -> route .designerConsultation whenever DesignRequestStatusService.shared.promotedRequest is nil, with no check for an existing project/designer. For every seeded activeProject client promotedRequest is nil (see F10), so the acquisition CTA is what an engaged client sees.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:125-138"
+  ]
+ },
+ {
+  "id": "F73",
+  "verdict": "adjusted",
+  "note": "Root cause found and it is upstream of every finding in this family: DesignRequestStatusService.fetchLeadRows() queries /rest/v1/leads with client_request_id=not.is.null (:733-740), so ONLY app-originated requests are ever visible. The seeded leads carry no client_request_id (supabase/seed/leads_room_scans.sql:119-126), therefore promotedRequest == nil, EngagementTier.resolve returns .discovering (requests empty, zero projects/proposals/invoices/decisions for that account) — the app never saw james.okafor as engaged at all. The matched-designer surface that would have shown is fully built: cardTitle 'You're matched with <designer>', subtitle naming the studio, a promoted Today card branch (TodayExperience.swift:80-91), and a designRequests status route. The five zeroes are the correct render of an account the app resolved as .discovering with no server-side projects/proposals/invoices. StudioQueueBuilder ref checks out.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift:12-36",
+   "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:733-740"
+  ]
+ },
+ {
+  "id": "F74",
+  "verdict": "adjusted",
+  "note": "Root cause found and it is upstream of every finding in this family: DesignRequestStatusService.fetchLeadRows() queries /rest/v1/leads with client_request_id=not.is.null (:733-740), so ONLY app-originated requests are ever visible. The seeded leads carry no client_request_id (supabase/seed/leads_room_scans.sql:119-126), therefore promotedRequest == nil, EngagementTier.resolve returns .discovering (requests empty, zero projects/proposals/invoices/decisions for that account) — the app never saw james.okafor as engaged at all. The matched-designer surface that would have shown is fully built: cardTitle 'You're matched with <designer>', subtitle naming the studio, a promoted Today card branch (TodayExperience.swift:80-91), and a designRequests status route. So 'Get design help' opens the intake flow (DesignRequestFlowView, steps pickScans->details->review->sending->success) rather than the status route, because promotedRequest is nil. The duplicate-lead risk is real but downstream of the same filter.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:733-740",
+   "apps/mobile/Patina/Patina/Features/DesignServices/DesignRequestFlowView.swift:60-99",
+   "apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:125-138"
+  ]
+ },
+ {
+  "id": "F75",
+  "verdict": "refuted",
+  "note": "REFUTED on the confirmation claim. 'Choose this' calls viewModel.beginSelection(optionId:) which sets pendingOptionId and presents DecisionConsentSheet (.sheet at DecisionDetailView.swift:44-61) — a real confirm step headed 'CONFIRM YOUR CHOICE' with the option title, the line 'Approving sends your decision to your designer and unblocks any work waiting on it.', an optional 'Add my signature' e-sign toggle, an Approve button and Cancel. The walk's '3 taps, no confirmation' count is wrong. A 'talk it over' affordance also exists (discussAction -> .threadDetail), but only renders when the decision resolves a project comms thread — the seed has none. What survives: no defer, no 'neither', and no visible way to ask when there is no thread.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:44-61",
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:186-199",
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:254-320"
+  ]
+ },
+ {
+  "id": "F76",
+  "verdict": "adjusted",
+  "note": "REFUTED as 'the screen discards data it rendered'. ProjectDetailView conditionally renders phasesSection, milestonesSection, ffeSection, ProjectDocumentsLink and ProjectProposalLink whenever the corresponding array is non-empty (:26-31), and the portal hint only appears for the sections that ARE empty — the walk saw all three named, so all three arrays were empty in the view model. The likely mechanism is upstream and worth naming: ProjectsViewModel loads each list with `(try? await ...) ?? []` (:58-60), so a decode mismatch or an RLS-empty result is swallowed silently and is indistinguishable from 'not set up yet'. Cannot be settled without the local DB; do not report as a render bug.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:19-36",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:128-138",
+   "apps/mobile/Patina/Patina/Features/Projects/ViewModels/ProjectsViewModel.swift:56-72"
+  ]
+ },
+ {
+  "id": "F77",
+  "verdict": "adjusted",
+  "note": "REFUTED as 'no document surface'. DocumentListView ships ('DOCUMENTS / Shared with you'), the .documentList route is wired in ContentView:376 and reachable from ProjectDetailView:422, the Companion's project/documents contexts, and a Studio row — StudioQueueBuilder.documentRecordRow, which is guarded by `guard !documents.isEmpty` (:308-310). The account had zero client_visible project_documents, so the row correctly did not render. Residual finding: the section named 'Money & documents' silently omits the documents door rather than showing an empty one.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Documents/DocumentListView.swift:53-58",
+   "apps/mobile/Patina/Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift:308-335",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:422"
+  ]
+ },
+ {
+  "id": "F78",
+  "verdict": "adjusted",
+  "note": "Mostly confirmed with one factual correction: there IS a spinner. InvoiceDetailView's pay button is PatinaButton(..., isLoading: viewModel.isStartingCheckout) (:203-211), and startCheckout sets that flag around the call (InvoicesViewModel.swift:112-125). Confirmed: the failure is one line of PatinaColors.error caption text inserted below a button that keeps full enabled styling (:212-216), the only retry is re-tapping the same button, and there is no support affordance on the screen. The 'Pay securely...' caption being shoved off the bottom edge is the Hearth overpaint of F49, not a layout bug of this screen. The 503 that triggered it is the known local edge-runtime fault (C27) — the failure UX is the finding. Cited :45-52 is the SafariView fullScreenCover, not the failure UI.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:195-222",
+   "apps/mobile/Patina/Patina/Features/Invoices/ViewModels/InvoicesViewModel.swift:110-126"
+  ]
+ },
+ {
+  "id": "F79",
+  "verdict": "adjusted",
+  "note": "Confirmed that DailyRoomView's content is exactly header + Next Move + editorial + Active Room + a 120pt spacer, with no designer/studio identity anywhere (:104-145). Note for the authors: unlike the project screen, Today has no designer slot at all — StudioIdentityLine is mounted only from ProjectDetailView:70.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:104-145",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/StudioIdentityLine.swift:18-40"
+  ]
+ },
+ {
+  "id": "F80",
+  "verdict": "confirmed",
+  "note": "Verified in TodayExperience: nextMove() = continuationMove -> projectMove -> roomMove, and projectMove branches ONLY on pendingDecisionCount and unreadMessageCount (:95-118). There is no proposal branch and no invoice branch anywhere in the file. Once both counts hit zero it falls through to roomMove and ends at 'Return to <Room>' (:153-159). No last-visit timestamp exists for the feed, the story, the room or the saved list.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:48-55",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:95-118",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:120-159"
+  ]
+ },
+ {
+  "id": "F81",
+  "verdict": "confirmed",
+  "note": "Confirmed on shot c-11 — 'Sign proposal' is cut in half at the bottom edge — but the mechanism in the finding is wrong and the fix follows from the right one. A Hearth reservation DOES exist and IS applied to the whole navigation stack (ContentView.swift:166 -> companionHearthReservation, 120pt via CompanionHearthMetrics.reservedHeight). It is implemented as safeAreaInset(edge:.bottom) whose content paints an OPAQUE PatinaColors.Background.primary with .ignoresSafeArea(edges:.bottom) — so on pushed destinations the scrolled content is drawn under it and painted over, rather than inset out of it. The proposal screen already pads .bottom 140 after its own Sign footer, so adding padding is not the fix.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/ContentView.swift:166",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Components/CompanionSafeArea.swift:37-50",
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:33",
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:137-151"
+  ]
+ },
+ {
+  "id": "F82",
+  "verdict": "refuted",
+  "note": "REFUTED as written. A complete messaging surface ships: ThreadListView (with an inline search field) and ThreadDetailView — whose own header calls it 'Conversation view: bubbles + simple composer' — plus MessagingViewModel and MessagingAPIClient writing comms_threads/comms_messages. A 'Message your designer' Companion row (route .threadList) is offered on project detail, decision detail, documents, notifications and design-requests (CompanionAreaBuilders.swift:219-294). What the walkers saw (c-19) is the Studio hub, not a messages screen: the 'Conversation' block is the only Studio block drawn WITHOUT a chevron, and they never opened .threadList. The defensible finding is narrower: a client cannot START a thread (ThreadListView's empty state CTA is 'Get design help', not 'New message'), the Studio's Conversation block is a dead row, and the home Companion carries no message row.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadDetailView.swift:5-10",
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadListView.swift:96",
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadListView.swift:181-194",
+   "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionAreaBuilders.swift:213-294",
+   "apps/mobile/Patina/Patina/Core/Network/MessagingAPIClient.swift:132-165"
+  ]
+ },
+ {
+  "id": "F83",
+  "verdict": "adjusted",
+  "note": "Mostly confirmed with one factual correction: there IS a spinner. InvoiceDetailView's pay button is PatinaButton(..., isLoading: viewModel.isStartingCheckout) (:203-211), and startCheckout sets that flag around the call (InvoicesViewModel.swift:112-125). Confirmed: the failure is one line of PatinaColors.error caption text inserted below a button that keeps full enabled styling (:212-216), the only retry is re-tapping the same button, and there is no support affordance on the screen. The 'Pay securely...' caption being shoved off the bottom edge is the Hearth overpaint of F49, not a layout bug of this screen. The 503 that triggered it is the known local edge-runtime fault (C27) — the failure UX is the finding. Cited :45-52 is the SafariView fullScreenCover, not the failure UI.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:195-222",
+   "apps/mobile/Patina/Patina/Features/Invoices/ViewModels/InvoicesViewModel.swift:110-126"
+  ]
+ },
+ {
+  "id": "F84",
+  "verdict": "confirmed",
+  "note": "Both leaks verified in ProjectDetailView. overviewFacts appends ('Client view', client_visibility_tier capitalised) whenever the column is non-empty (:120-124). portalHintCard is a plain Text('Set up <sections> in the portal ->') with a stroked rounded rect and no Button (:139-151) — the file's own comment says 'setup happens in the portal, so there is no tap target on iOS'. Cited :143 lands inside portalHintCard; :64 is the phase line, not a leak.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:108-126",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:128-151"
+  ]
+ },
+ {
+  "id": "F85",
+  "verdict": "adjusted",
+  "note": "Empty-bell-with-'Get design help' is confirmed (see F72 for the exact branch). Correct the mechanism per F08: an in_app 'proposal_sent' row IS emitted by the real proposal-send path; the seed bypassed it. Invoices and decisions genuinely emit nothing client-facing in-app.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:125-138",
+   "supabase/migrations/00388_proposal_send_dispatch_guard.sql:1258-1278"
+  ]
+ },
+ {
+  "id": "F86",
+  "verdict": "confirmed",
+  "note": "Verified on both sides: products.dimensions jsonb exists (00001:35), get_recommendations does not project it (00246:273-300 returns id/name/price/match/maker/image/usdz/style/material/badges/category/tier only), and Product's CodingKeys and init(from:) have no dimensions, lead time, stock, shipping or returns field (ProductModel.swift:28-58). Minor scope note: lead_time_weeks and a dimensions string ARE decoded — but only on RemoteProposalItem / RemoteProposalScopeRoom, i.e. the proposal rail, never the catalog.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:12-58",
+   "supabase/migrations/00001_initial_schema.sql:35",
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:273-300",
+   "apps/mobile/Patina/Patina/Services/API/ProposalsAPIClient.swift:97"
+  ]
+ },
+ {
+  "id": "F87",
+  "verdict": "confirmed",
+  "note": "Verified: ProductDetailView's chrome is back / ? / ShareLink / heart plus the single 'Add to Room' primary (:89-138, :338-399) — no 'Get design help' control, no compare surface anywhere in the app (grep), and TableItemModel.notes (:42) has no writer in any view.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:86-138",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:338-399",
+   "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:41-42"
+  ]
+ },
+ {
+  "id": "F88",
+  "verdict": "refuted",
+  "note": "REFUTED on the confirmation claim. 'Choose this' calls viewModel.beginSelection(optionId:) which sets pendingOptionId and presents DecisionConsentSheet (.sheet at DecisionDetailView.swift:44-61) — a real confirm step headed 'CONFIRM YOUR CHOICE' with the option title, the line 'Approving sends your decision to your designer and unblocks any work waiting on it.', an optional 'Add my signature' e-sign toggle, an Approve button and Cancel. The walk's '3 taps, no confirmation' count is wrong. A 'talk it over' affordance also exists (discussAction -> .threadDetail), but only renders when the decision resolves a project comms thread — the seed has none. What survives: no defer, no 'neither', and no visible way to ask when there is no thread.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:44-61",
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:186-199",
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:254-320"
+  ]
+ },
+ {
+  "id": "F89",
+  "verdict": "adjusted",
+  "note": "Mostly confirmed with one factual correction: there IS a spinner. InvoiceDetailView's pay button is PatinaButton(..., isLoading: viewModel.isStartingCheckout) (:203-211), and startCheckout sets that flag around the call (InvoicesViewModel.swift:112-125). Confirmed: the failure is one line of PatinaColors.error caption text inserted below a button that keeps full enabled styling (:212-216), the only retry is re-tapping the same button, and there is no support affordance on the screen. The 'Pay securely...' caption being shoved off the bottom edge is the Hearth overpaint of F49, not a layout bug of this screen. The 503 that triggered it is the known local edge-runtime fault (C27) — the failure UX is the finding. Cited :45-52 is the SafariView fullScreenCover, not the failure UI.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:195-222",
+   "apps/mobile/Patina/Patina/Features/Invoices/ViewModels/InvoicesViewModel.swift:110-126"
+  ]
+ },
+ {
+  "id": "F90",
+  "verdict": "confirmed",
+  "note": "Confirmed: no order object reaches the client app, the Studio's sections are project/proposal/invoice/decision only, and neither invoices nor direct_orders carries a fulfillment status.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Profile/ViewModels/StudioQueueBuilder.swift:12-36",
+   "supabase/migrations/00276_direct_orders.sql:41-67"
+  ]
+ },
+ {
+  "id": "F91",
+  "verdict": "confirmed",
+  "note": "Verified in TodayExperience: nextMove() = continuationMove -> projectMove -> roomMove, and projectMove branches ONLY on pendingDecisionCount and unreadMessageCount (:95-118). There is no proposal branch and no invoice branch anywhere in the file. Once both counts hit zero it falls through to roomMove and ends at 'Return to <Room>' (:153-159). No last-visit timestamp exists for the feed, the story, the room or the saved list.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:48-55",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:95-118",
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:120-159"
+  ]
+ },
+ {
+  "id": "F92",
+  "verdict": "confirmed",
+  "note": "Confirmed on six shots and consistent with the code: InvoiceDetailView consumes due_date only inside isOverdue(_:) to derive the words 'Past due' (:227-235) and never prints the date; the list card does (InvoiceListView.swift:189-192). Same shape on proposals and decisions.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:225-240",
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceListView.swift:189-192"
+  ]
+ },
+ {
+  "id": "F93",
+  "verdict": "confirmed",
+  "note": "Verified: the Budget screen is an INVOICE rollup plus accepted-proposal investment lines, never a project-budget view. BudgetMath.rollup sums total_cents over visible (non-draft, non-void) invoices; projects.budget_cents never enters it. So 'Your budget / Across your projects' can print $4,250 for a client whose three projects total $725,000. Cited path was wrong (there is no Features/Budget/Views/ directory).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:36-42",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:104",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetViewModel.swift:5-24",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetViewModel.swift:37-52"
+  ]
+ },
+ {
+  "id": "F94",
+  "verdict": "refuted",
+  "note": "REFUTED as written. A complete messaging surface ships: ThreadListView (with an inline search field) and ThreadDetailView — whose own header calls it 'Conversation view: bubbles + simple composer' — plus MessagingViewModel and MessagingAPIClient writing comms_threads/comms_messages. A 'Message your designer' Companion row (route .threadList) is offered on project detail, decision detail, documents, notifications and design-requests (CompanionAreaBuilders.swift:219-294). What the walkers saw (c-19) is the Studio hub, not a messages screen: the 'Conversation' block is the only Studio block drawn WITHOUT a chevron, and they never opened .threadList. The defensible finding is narrower: a client cannot START a thread (ThreadListView's empty state CTA is 'Get design help', not 'New message'), the Studio's Conversation block is a dead row, and the home Companion carries no message row.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadDetailView.swift:5-10",
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadListView.swift:96",
+   "apps/mobile/Patina/Patina/Features/Messaging/Views/ThreadListView.swift:181-194",
+   "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionAreaBuilders.swift:213-294",
+   "apps/mobile/Patina/Patina/Core/Network/MessagingAPIClient.swift:132-165"
+  ]
+ },
+ {
+  "id": "F95",
+  "verdict": "adjusted",
+  "note": "REFUTED as a UI gap and replaced by a stronger, real one. ProposalSelectionsBlock DOES render a 48pt PatinaAsyncImage and the line total for every item (ProposalDetailBlocks.swift:126-157), and the seed gives every item a line_total_cents (650000/420000/280000/370000/130000) and a vendor_name. The prices are stripped SERVER-SIDE: get_client_proposal_bundle nulls unit_sell_price, line_total_cents and vendor_name unless proposals.client_visibility_tier = 'full' (00390:1622-1650), and that column DEFAULTS to 'milestone' (00141:14-16). So every proposal a designer does not explicitly set to 'full' asks the client to sign for a total with no line prices. Images are blank because the seed sets no image_url.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailBlocks.swift:126-157",
+   "supabase/migrations/00390_proposal_copy_immutability.sql:1622-1650",
+   "supabase/migrations/00141_proposal_client_visibility_tier.sql:14-16",
+   "supabase/seed/proposals.sql:101-115"
+  ],
+  "corrected_observation": "The proposal detail's SELECTIONS block renders a thumbnail and a line total for each item, but get_client_proposal_bundle nulls unit_sell_price, line_total_cents and vendor_name for any proposal whose client_visibility_tier is not 'full' — and that column defaults to 'milestone'. The client is therefore asked to e-sign an 'INVESTMENT $18,500.00' with five unpriced, unattributed lines by default."
+ },
+ {
+  "id": "F96",
+  "verdict": "confirmed",
+  "note": "Root cause verified: there are two independent taste stores and two independent quizzes. Features/StyleQuiz (the Companion quiz) writes only StylePreferenceStore -> the SwiftData StylePreferenceModel (StyleQuizViewModel.swift:288), which feeds the Profile badge and the browse rationale. Features/StyleConversation (the post-room 'Style Discovery') writes StyleProfileStore -> UserDefaults keys patina.style_profile_response.v1 / patina.style_profile_completed.v1 (StyleConversationViewModel.swift:229). CompanionOverlay reads ONLY StyleProfileStore.hasCompletedProfile (CompanionOverlay.swift:188). So finishing the Companion quiz leaves hasCompletedProfile false — which is exactly why Profile shows 'Warm Modern' while the Companion still says 'TAKE THE QUIZ FIRST' on the same launch.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift:288",
+   "apps/mobile/Patina/Patina/Features/StyleConversation/ViewModels/StyleConversationViewModel.swift:193",
+   "apps/mobile/Patina/Patina/Features/StyleConversation/ViewModels/StyleConversationViewModel.swift:229",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Shared/Services/StyleProfileStore.swift:29-45",
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:188"
+  ]
+ },
+ {
+  "id": "F97",
+  "verdict": "adjusted",
+  "note": "Standing verification (b): the manual room entry does NOT convert feet as meters. The screen the walk actually used is ScanFallbackEntryView (RoomScan), not ManualRoomEntryView (Rooms) — the cited file has no ft/m toggle, no steppers and no emoji, and its label reads 'Dimensions (feet)'. ScanFallbackEntryView.submit() converts CORRECTLY: unit == .feet ? (l/3.28084, w/3.28084) : (l, w) (:265-270), and every downstream surface stores metres and prints feet (RoomCreationCoordinator:112-114 x0.3048; SpatialMetadataRow:46-50 /0.3048). 59'x46' from 18x14 is only reachable with the toggle on 'm' — which the guest lane says it tapped. The REAL defect is the toggle, and it is worse than filed: 'ft'/'m' are bare Text buttons whose only activation feedback is a muted->primary colour change, the fields carry no unit suffix, and the choice PERSISTS in UserDefaults key 'patina.scan.manual_entry.unit' and is restored onAppear — so a later session silently starts in metres. The other measurements in this finding (Boards tab 46x17, retry link 125x17, steppers 32x32) come from describe_screen and are not independently checkable from code; they are consistent with the views as written.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:140-166"
+  ]
+ },
+ {
+  "id": "F98",
+  "verdict": "confirmed",
+  "note": "Same verification: the marketplace/browse block is orphaned (MarketplaceLinksSection has no call site outside its own #Preview at :114), and CompanionAreaBuilders.homeItems offers recommendationsRow whose hint reads 'TAKE THE QUIZ FIRST' until hasStyleProfile is true — and hasStyleProfile reads StyleProfileStore (UserDefaults), which the Companion StyleQuiz never writes (see F96).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomStateBlocks.swift:25-45",
+   "apps/mobile/Patina/Patina/Features/Home/Views/MarketplaceLinksSection.swift:114",
+   "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionAreaBuilders.swift:28-49",
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:188"
+  ]
+ },
+ {
+  "id": "F99",
+  "verdict": "confirmed",
+  "note": "Same device-scoped-store mechanism as F23/F29: the Active Room card and Your Spaces render whatever is in the local store, unconnected to the project's rooms, which the client app never reads.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/TodayModules.swift:158-163",
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:190-195"
+  ]
+ },
+ {
+  "id": "F100",
+  "verdict": "confirmed",
+  "note": "Duplicate of F05, same evidence. Ref-less as filed; adopt F05's refs. Mechanism unproven — do not write it up as a known grid-layout bug.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:134-147",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Components/PatinaAsyncImage.swift:30-35"
+  ]
+ },
+ {
+  "id": "F101",
+  "verdict": "confirmed",
+  "note": "Same device-scoped-store mechanism as F23/F29: the Active Room card and Your Spaces render whatever is in the local store, unconnected to the project's rooms, which the client app never reads.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/TodayModules.swift:158-163",
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:190-195"
+  ]
+ },
+ {
+  "id": "F102",
+  "verdict": "confirmed",
+  "note": "Confirmed on six shots and consistent with the code: InvoiceDetailView consumes due_date only inside isOverdue(_:) to derive the words 'Past due' (:227-235) and never prints the date; the list card does (InvoiceListView.swift:189-192). Same shape on proposals and decisions.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:225-240",
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceListView.swift:189-192"
+  ]
+ },
+ {
+  "id": "F103",
+  "verdict": "confirmed",
+  "note": "Verified: the Budget screen is an INVOICE rollup plus accepted-proposal investment lines, never a project-budget view. BudgetMath.rollup sums total_cents over visible (non-draft, non-void) invoices; projects.budget_cents never enters it. So 'Your budget / Across your projects' can print $4,250 for a client whose three projects total $725,000. Cited path was wrong (there is no Features/Budget/Views/ directory).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:36-42",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:104",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetViewModel.swift:5-24",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetViewModel.swift:37-52"
+  ]
+ },
+ {
+  "id": "F104",
+  "verdict": "adjusted",
+  "note": "Mostly confirmed with one factual correction: there IS a spinner. InvoiceDetailView's pay button is PatinaButton(..., isLoading: viewModel.isStartingCheckout) (:203-211), and startCheckout sets that flag around the call (InvoicesViewModel.swift:112-125). Confirmed: the failure is one line of PatinaColors.error caption text inserted below a button that keeps full enabled styling (:212-216), the only retry is re-tapping the same button, and there is no support affordance on the screen. The 'Pay securely...' caption being shoved off the bottom edge is the Hearth overpaint of F49, not a layout bug of this screen. The 503 that triggered it is the known local edge-runtime fault (C27) — the failure UX is the finding. Cited :45-52 is the SafariView fullScreenCover, not the failure UI.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:195-222",
+   "apps/mobile/Patina/Patina/Features/Invoices/ViewModels/InvoicesViewModel.swift:110-126"
+  ]
+ },
+ {
+  "id": "F105",
+  "verdict": "confirmed",
+  "note": "Verified: every ShareLink in the app shares PatinaDeepLinks.productURL for a single product (product detail top bar, recommendations card menu, collections row); nothing shares a room, a board, the Saved list, a decision, a proposal or an invoice, and there is no invite/household/second-seat concept in the client.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:117-130",
+   "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:304-335",
+   "apps/mobile/Patina/Patina/Features/Collections/Views/CollectionsView.swift:285"
+  ]
+ },
+ {
+  "id": "F106",
+  "verdict": "unable",
+  "note": "Cannot be settled from code or from the single shot. d-08 shows a scroll position, not proof the Pay control is absent in dark mode: payFooter is rendered for any payable, non-void invoice with no colour-scheme branch (InvoiceDetailView.swift:195-222), and the same screen in light mode shows the button. Most likely the shot was taken at a different scroll offset, possibly with the Hearth overpaint of F49 covering it. What would settle it: a dark-mode shot scrolled to the footer, or a describe_screen dump of that screen.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:195-222"
+  ]
+ },
+ {
+  "id": "F107",
+  "verdict": "confirmed",
+  "note": "Confirmed on the shots (c-11 shows 'Timeline'/'Terms' overprinted by 9:41; x-02, x-06, d-02 reproduce it at XXL and on a modal sheet). No code ref names the cause and the cited ProfileView.swift:123 is not it — every affected screen uses .patinaScreen(title: nil) over a ScrollView whose header starts at .padding(.top, 56), i.e. a hand-tuned constant rather than a safe-area inset. Report as a systemic missing top inset, not a per-screen bug.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:34-38",
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:38-41",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:26-31"
+  ]
+ },
+ {
+  "id": "F108",
+  "verdict": "confirmed",
+  "note": "Verified order in AuthScreenView: Apple, then 'Continue with Google' (:82), then 'Continue with email' (:85), then the divider, then 'Look around first' (:106), then 'Have a password? Sign in' (:128). Nothing about a designer or a project appears anywhere in the gate copy.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Authentication/Views/AuthScreenView.swift:75-130"
+  ]
+ },
+ {
+  "id": "F109",
+  "verdict": "adjusted",
+  "note": "Standing verification (b): the manual room entry does NOT convert feet as meters. The screen the walk actually used is ScanFallbackEntryView (RoomScan), not ManualRoomEntryView (Rooms) — the cited file has no ft/m toggle, no steppers and no emoji, and its label reads 'Dimensions (feet)'. ScanFallbackEntryView.submit() converts CORRECTLY: unit == .feet ? (l/3.28084, w/3.28084) : (l, w) (:265-270), and every downstream surface stores metres and prints feet (RoomCreationCoordinator:112-114 x0.3048; SpatialMetadataRow:46-50 /0.3048). 59'x46' from 18x14 is only reachable with the toggle on 'm' — which the guest lane says it tapped. The REAL defect is the toggle, and it is worse than filed: 'ft'/'m' are bare Text buttons whose only activation feedback is a muted->primary colour change, the fields carry no unit suffix, and the choice PERSISTS in UserDefaults key 'patina.scan.manual_entry.unit' and is restored onAppear — so a later session silently starts in metres.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:28-32",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:71-78",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:140-166",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift:265-280",
+   "apps/mobile/Patina/Patina/Features/Rooms/Components/SpatialMetadataRow.swift:46-50"
+  ],
+  "corrected_observation": "The room-dimensions step (ScanFallbackEntryView) puts a 'ft / m' toggle in the section header whose only activation feedback is a text-colour change from muted to primary, at roughly 12x13pt and 6x13pt; the LENGTH/WIDTH fields carry no unit suffix; and the chosen unit persists across sessions in UserDefaults ('patina.scan.manual_entry.unit') and is restored silently onAppear. Entering 18 x 14 with the toggle on 'm' stores 18m x 14m and every downstream surface prints 59' x 46' / 2713 SQ FT. The conversion arithmetic itself is correct."
+ },
+ {
+  "id": "F110",
+  "verdict": "confirmed",
+  "note": "Verified on both code paths: get_recommendations projects NULL::text AS usdz_url (00246:283) and ProductAPIClient's direct RawProductWithVendor mapping hard-codes usdzURL: nil (:192). Product.hasARModel (ProductModel.swift:110) is therefore false for every product, so the AR button at ProductDetailView.swift:346 never draws and RoomProjectView's 'In AR' cell (:235-243) can only ever read 0.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:192",
+   "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:110",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:344-368",
+   "apps/mobile/Patina/Patina/Features/Rooms/Views/RoomProjectView.swift:235-243",
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:283"
+  ]
+ },
+ {
+  "id": "F111",
+  "verdict": "adjusted",
+  "note": "Root cause found and it is upstream of every finding in this family: DesignRequestStatusService.fetchLeadRows() queries /rest/v1/leads with client_request_id=not.is.null (:733-740), so ONLY app-originated requests are ever visible. The seeded leads carry no client_request_id (supabase/seed/leads_room_scans.sql:119-126), therefore promotedRequest == nil, EngagementTier.resolve returns .discovering (requests empty, zero projects/proposals/invoices/decisions for that account) — the app never saw james.okafor as engaged at all. The matched-designer surface that would have shown is fully built: cardTitle 'You're matched with <designer>', subtitle naming the studio, a promoted Today card branch (TodayExperience.swift:80-91), and a designRequests status route. So 'Get design help' opens the intake flow (DesignRequestFlowView, steps pickScans->details->review->sending->success) rather than the status route, because promotedRequest is nil. The duplicate-lead risk is real but downstream of the same filter.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:733-740",
+   "apps/mobile/Patina/Patina/Features/DesignServices/DesignRequestFlowView.swift:60-99",
+   "apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:125-138"
+  ]
+ },
+ {
+  "id": "F112",
+  "verdict": "confirmed",
+  "note": "Verified: AuthSheet passes showGuest: false to AuthScreenView (:41), which is what removes 'Look around first ->', and AuthSheet adds no Cancel or ✕ of its own — the only dismissal is the sheet's own drag. The full gate (AuthScreenView :100-112) does render the guest affordance. Confirmed exactly as filed.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Authentication/Views/AuthSheet.swift:21-43",
+   "apps/mobile/Patina/Patina/Features/Authentication/Views/AuthScreenView.swift:100-112"
+  ]
+ },
+ {
+  "id": "F113",
+  "verdict": "confirmed",
+  "note": "The three-surfaces-disagree half now has a proven mechanism — see the two-store split: Root cause verified: there are two independent taste stores and two independent quizzes. Features/StyleQuiz (the Companion quiz) writes only StylePreferenceStore -> the SwiftData StylePreferenceModel (StyleQuizViewModel.swift:288), which feeds the Profile badge and the browse rationale. Features/StyleConversation (the post-room 'Style Discovery') writes StyleProfileStore -> UserDefaults keys patina.style_profile_response.v1 / patina.style_profile_completed.v1 (StyleConversationViewModel.swift:229). CompanionOverlay reads ONLY StyleProfileStore.hasCompletedProfile (CompanionOverlay.swift:188). So finishing the Companion quiz leaves hasCompletedProfile false — which is exactly why Profile shows 'Warm Modern' while the Companion still says 'TAKE THE QUIZ FIRST' on the same launch.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:173-197",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Shared/Services/StyleProfileStore.swift:29-45",
+   "apps/mobile/Patina/Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift:288"
+  ]
+ },
+ {
+  "id": "F114",
+  "verdict": "confirmed",
+  "note": "Confirmed on the shots (c-11 shows 'Timeline'/'Terms' overprinted by 9:41; x-02, x-06, d-02 reproduce it at XXL and on a modal sheet). No code ref names the cause and the cited ProfileView.swift:123 is not it — every affected screen uses .patinaScreen(title: nil) over a ScrollView whose header starts at .padding(.top, 56), i.e. a hand-tuned constant rather than a safe-area inset. Report as a systemic missing top inset, not a per-screen bug.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:34-38",
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:38-41",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:26-31"
+  ]
+ },
+ {
+  "id": "F115",
+  "verdict": "confirmed",
+  "note": "Verified: the Budget screen is an INVOICE rollup plus accepted-proposal investment lines, never a project-budget view. BudgetMath.rollup sums total_cents over visible (non-draft, non-void) invoices; projects.budget_cents never enters it. So 'Your budget / Across your projects' can print $4,250 for a client whose three projects total $725,000. Cited path was wrong (there is no Features/Budget/Views/ directory).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:36-42",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:104",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetViewModel.swift:5-24",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetViewModel.swift:37-52"
+  ]
+ },
+ {
+  "id": "F116",
+  "verdict": "refuted",
+  "note": "REFUTED on the confirmation claim. 'Choose this' calls viewModel.beginSelection(optionId:) which sets pendingOptionId and presents DecisionConsentSheet (.sheet at DecisionDetailView.swift:44-61) — a real confirm step headed 'CONFIRM YOUR CHOICE' with the option title, the line 'Approving sends your decision to your designer and unblocks any work waiting on it.', an optional 'Add my signature' e-sign toggle, an Approve button and Cancel. The walk's '3 taps, no confirmation' count is wrong. A 'talk it over' affordance also exists (discussAction -> .threadDetail), but only renders when the decision resolves a project comms thread — the seed has none. What survives: no defer, no 'neither', and no visible way to ask when there is no thread.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:44-61",
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:186-199",
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:254-320"
+  ]
+ },
+ {
+  "id": "F117",
+  "verdict": "confirmed",
+  "note": "Verified order in AuthScreenView: Apple, then 'Continue with Google' (:82), then 'Continue with email' (:85), then the divider, then 'Look around first' (:106), then 'Have a password? Sign in' (:128). Nothing about a designer or a project appears anywhere in the gate copy.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Authentication/Views/AuthScreenView.swift:75-130"
+  ]
+ },
+ {
+  "id": "F118",
+  "verdict": "confirmed",
+  "note": "Verified exactly. FirstLaunchTourModel.defaultSteps declares three steps; step 2's anchor is .addToRoom (:238) and .firstLaunchTourAnchor(.addToRoom) is applied in exactly ONE place app-wide — inside a #if DEBUG #Preview block (FirstLaunchTour.swift:852). anchorMountGracePeriod = 1.5s then drops the step (:190-195). Shipped tour is 'Step 1 of 2' / 'Step 2 of 2', and the '+ Add' control the dropped copy names does not exist on the shipped home.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:186-196",
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:227-253",
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:838-856"
+  ]
+ },
+ {
+  "id": "F119",
+  "verdict": "confirmed",
+  "note": "Verified: StyleResultView's only trailing action is the 'Tune this' adjustment control (:187-202); there is no route to recommendations from the result screen.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/StyleQuiz/Views/StyleResultView.swift:185-205"
+  ]
+ },
+ {
+  "id": "F120",
+  "verdict": "confirmed",
+  "note": "Verified: TodayExperience.roomMove's zero-room branch is the single hard-coded 'Bring your first room into Patina' / 'A short scan gives the Companion a real space to work from.' (:120-128) — the only act on a first home.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Models/TodayExperience.swift:120-128"
+  ]
+ },
+ {
+  "id": "F121",
+  "verdict": "confirmed",
+  "note": "Verified: DailyRoomView.content is exactly DailyGreetingHeader + TodayNextMoveCard + editorialModule + optional TodayActiveRoomCard + a 120pt Spacer (:104-145) — nothing else, so the screen genuinely has no further content to scroll to. HomeStudioBlock / StudioHubSection / MarketplaceLinksSection exist but have NO call site outside #Preview blocks (grep), confirming C23's orphaned rail. The monogram at DailyGreetingHeader onMonogramTap -> .profile is the only Studio door.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:104-145",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomStateBlocks.swift:25-45",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyGreetingHeader.swift:59-99"
+  ]
+ },
+ {
+  "id": "F122",
+  "verdict": "confirmed",
+  "note": "Verified precisely, and there is a fourth defect the findings miss. ProductDetailViewModel.isSaved is declared `= false` (:18) and is set true only by toggleSave/addToAttachedRoom — it is NEVER seeded from storage, unlike the browse grid which does seed (RecommendationsViewModel.seedSavedState:74-89). toggleSave inserts a TableItemModel on true and does NOT delete on false (:104-118), so unsaving orphans the row and re-saving duplicates. The remote saved_items mirror exists only on addToAttachedRoom, which needs a room context the plain .pieceDetail(pieceId:) route never passes (ContentView.swift:292-294).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/ViewModels/ProductDetailViewModel.swift:18",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/ViewModels/ProductDetailViewModel.swift:44-78",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/ViewModels/ProductDetailViewModel.swift:104-125",
+   "apps/mobile/Patina/Patina/ContentView.swift:292-294",
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:74-89"
+  ]
+ },
+ {
+  "id": "F123",
+  "verdict": "confirmed",
+  "note": "Verified and the mechanism is a store split worth naming: the Active Room card counts room.items.count — room-scoped SavedItem rows (TodayModules.swift:160-161) — while Saved/All items lists TableItemModel rows, which is what the heart and the piece detail insert. Two stores, so 'ACTIVE ROOM ... 0 pieces saved' and 'Saved: 1' are both truthful and contradictory.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/TodayModules.swift:158-163",
+   "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:41-52"
+  ]
+ },
+ {
+  "id": "F124",
+  "verdict": "confirmed",
+  "note": "Consistent with the code: rooms and saved pieces live in the device-scoped SwiftData store (RoomStore / TableItemModel), the Companion and Profile read them with an unfiltered fetchCount over that store (CompanionOverlay.swift:190-195), and nothing scopes those fetches by user id — so whichever account signs in next inherits them, and 'SAVED ON THIS PHONE' on Your Spaces is the only surface telling the truth. Matches C27's second fair-game item.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:190-195",
+   "apps/mobile/Patina/Patina/Core/Persistence/LocalStoreReset.swift",
+   "apps/mobile/Patina/Patina/Core/Persistence/RoomStore.swift"
+  ]
+ },
+ {
+  "id": "F125",
+  "verdict": "adjusted",
+  "note": "REFUTED as 'the screen discards data it rendered'. ProjectDetailView conditionally renders phasesSection, milestonesSection, ffeSection, ProjectDocumentsLink and ProjectProposalLink whenever the corresponding array is non-empty (:26-31), and the portal hint only appears for the sections that ARE empty — the walk saw all three named, so all three arrays were empty in the view model. The likely mechanism is upstream and worth naming: ProjectsViewModel loads each list with `(try? await ...) ?? []` (:58-60), so a decode mismatch or an RLS-empty result is swallowed silently and is indistinguishable from 'not set up yet'. Cannot be settled without the local DB; do not report as a render bug.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:19-36",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:128-138",
+   "apps/mobile/Patina/Patina/Features/Projects/ViewModels/ProjectsViewModel.swift:56-72"
+  ]
+ },
+ {
+  "id": "F126",
+  "verdict": "confirmed",
+  "note": "Verified: DailyRoomView.content is exactly DailyGreetingHeader + TodayNextMoveCard + editorialModule + optional TodayActiveRoomCard + a 120pt Spacer (:104-145) — nothing else, so the screen genuinely has no further content to scroll to. HomeStudioBlock / StudioHubSection / MarketplaceLinksSection exist but have NO call site outside #Preview blocks (grep), confirming C23's orphaned rail. The monogram at DailyGreetingHeader onMonogramTap -> .profile is the only Studio door.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:104-145",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomStateBlocks.swift:25-45",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyGreetingHeader.swift:59-99"
+  ]
+ },
+ {
+  "id": "F127",
+  "verdict": "confirmed",
+  "note": "Both halves verified: the due date is dropped on the detail (see F48), and a grep for UNNotificationRequest / UNTimeIntervalNotificationTrigger / UNCalendarNotificationTrigger across the whole app returns ZERO hits — the app cannot schedule a local reminder of any kind.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:225-240"
+  ]
+ },
+ {
+  "id": "F128",
+  "verdict": "adjusted",
+  "note": "Root cause found and it is upstream of every finding in this family: DesignRequestStatusService.fetchLeadRows() queries /rest/v1/leads with client_request_id=not.is.null (:733-740), so ONLY app-originated requests are ever visible. The seeded leads carry no client_request_id (supabase/seed/leads_room_scans.sql:119-126), therefore promotedRequest == nil, EngagementTier.resolve returns .discovering (requests empty, zero projects/proposals/invoices/decisions for that account) — the app never saw james.okafor as engaged at all. The matched-designer surface that would have shown is fully built: cardTitle 'You're matched with <designer>', subtitle naming the studio, a promoted Today card branch (TodayExperience.swift:80-91), and a designRequests status route. So 'Get design help' opens the intake flow (DesignRequestFlowView, steps pickScans->details->review->sending->success) rather than the status route, because promotedRequest is nil. The duplicate-lead risk is real but downstream of the same filter.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:733-740",
+   "apps/mobile/Patina/Patina/Features/DesignServices/DesignRequestFlowView.swift:60-99",
+   "apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:125-138"
+  ]
+ },
+ {
+  "id": "F129",
+  "verdict": "confirmed",
+  "note": "Verified: every ShareLink in the app shares PatinaDeepLinks.productURL for a single product (product detail top bar, recommendations card menu, collections row); nothing shares a room, a board, the Saved list, a decision, a proposal or an invoice, and there is no invite/household/second-seat concept in the client.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:117-130",
+   "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:304-335",
+   "apps/mobile/Patina/Patina/Features/Collections/Views/CollectionsView.swift:285"
+  ]
+ },
+ {
+  "id": "F130",
+  "verdict": "confirmed",
+  "note": "Verified exactly: Patina.xcodeproj/project.pbxproj declares three productType entries — com.apple.product-type.application (:177), .bundle.unit-test (:200), .bundle.ui-testing (:223) — and zero app-extension/widgetkit-extension types. Combined with the UNNotificationRequest grep (F127) and the missing associated-domains entitlement, the app owns no surface outside itself.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina.xcodeproj/project.pbxproj:177-223",
+   "apps/mobile/Patina/Patina/Patina.entitlements:4-11"
+  ]
+ },
+ {
+  "id": "F131",
+  "verdict": "confirmed",
+  "note": "Verified both halves. fetchTodaysStory queries editorial_stories with order=sort_order.desc,published_at.desc&limit=1 and no per-day or per-user selection (:72-90), and DailyRoomViewModel calls DailyStory(from: $0) with no isUnread argument, so the init default isUnread: true (:119) applies on every render — the clay dot is hard-coded new. DailyStoryCard gates the dot on story.isUnread (:80).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Network/EditorialStoriesAPIClient.swift:71-90",
+   "apps/mobile/Patina/Patina/Core/Network/EditorialStoriesAPIClient.swift:117-131",
+   "apps/mobile/Patina/Patina/Features/Home/ViewModels/DailyRoomViewModel.swift:196-201",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyStoryCard.swift:80-87"
+  ]
+ },
+ {
+  "id": "F132",
+  "verdict": "confirmed",
+  "note": "Verified exactly. FirstLaunchTourModel.defaultSteps declares three steps; step 2's anchor is .addToRoom (:238) and .firstLaunchTourAnchor(.addToRoom) is applied in exactly ONE place app-wide — inside a #if DEBUG #Preview block (FirstLaunchTour.swift:852). anchorMountGracePeriod = 1.5s then drops the step (:190-195). Shipped tour is 'Step 1 of 2' / 'Step 2 of 2', and the '+ Add' control the dropped copy names does not exist on the shipped home.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:186-196",
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:227-253",
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:838-856"
+  ]
+ },
+ {
+  "id": "F133",
+  "verdict": "confirmed",
+  "note": "Verified both halves. CollectionsViewModel.activeTab defaults to \"Boards\" (:18), and CollectionsViewModel.addToBoard(_:productId:) at :101 has ZERO call sites app-wide (grep) — a board can be created and can never hold a piece. Empty-state copy quoted verbatim at CollectionsView.swift:156-176.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:18",
+   "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:101",
+   "apps/mobile/Patina/Patina/Features/Collections/Views/CollectionsView.swift:149-179"
+  ]
+ },
+ {
+  "id": "F134",
+  "verdict": "confirmed",
+  "note": "Verified: DailyRoomView.content is exactly DailyGreetingHeader + TodayNextMoveCard + editorialModule + optional TodayActiveRoomCard + a 120pt Spacer (:104-145) — nothing else, so the screen genuinely has no further content to scroll to. HomeStudioBlock / StudioHubSection / MarketplaceLinksSection exist but have NO call site outside #Preview blocks (grep), confirming C23's orphaned rail. The monogram at DailyGreetingHeader onMonogramTap -> .profile is the only Studio door.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:104-145",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomStateBlocks.swift:25-45",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyGreetingHeader.swift:59-99"
+  ]
+ },
+ {
+  "id": "F135",
+  "verdict": "confirmed",
+  "note": "Confirmed on the shots (c-11 shows 'Timeline'/'Terms' overprinted by 9:41; x-02, x-06, d-02 reproduce it at XXL and on a modal sheet). No code ref names the cause and the cited ProfileView.swift:123 is not it — every affected screen uses .patinaScreen(title: nil) over a ScrollView whose header starts at .padding(.top, 56), i.e. a hand-tuned constant rather than a safe-area inset. Report as a systemic missing top inset, not a per-screen bug.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:34-38",
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:38-41",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:26-31"
+  ]
+ },
+ {
+  "id": "F136",
+  "verdict": "confirmed",
+  "note": "XXL chip-row overflow is visible on x-03 and consistent with the code: the filter row is a plain HStack of chips with no ScrollView(.horizontal) wrapper.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:134-147"
+  ]
+ },
+ {
+  "id": "F137",
+  "verdict": "confirmed",
+  "note": "Confirmed on shot c-11 — 'Sign proposal' is cut in half at the bottom edge — but the mechanism in the finding is wrong and the fix follows from the right one. A Hearth reservation DOES exist and IS applied to the whole navigation stack (ContentView.swift:166 -> companionHearthReservation, 120pt via CompanionHearthMetrics.reservedHeight). It is implemented as safeAreaInset(edge:.bottom) whose content paints an OPAQUE PatinaColors.Background.primary with .ignoresSafeArea(edges:.bottom) — so on pushed destinations the scrolled content is drawn under it and painted over, rather than inset out of it. The proposal screen already pads .bottom 140 after its own Sign footer, so adding padding is not the fix.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/ContentView.swift:166",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Components/CompanionSafeArea.swift:37-50",
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:33",
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:137-151"
+  ]
+ },
+ {
+  "id": "F138",
+  "verdict": "confirmed",
+  "note": "Verified: DailyRoomView.content is exactly DailyGreetingHeader + TodayNextMoveCard + editorialModule + optional TodayActiveRoomCard + a 120pt Spacer (:104-145) — nothing else, so the screen genuinely has no further content to scroll to. HomeStudioBlock / StudioHubSection / MarketplaceLinksSection exist but have NO call site outside #Preview blocks (grep), confirming C23's orphaned rail. The monogram at DailyGreetingHeader onMonogramTap -> .profile is the only Studio door.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:104-145",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomStateBlocks.swift:25-45",
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyGreetingHeader.swift:59-99"
+  ]
+ },
+ {
+  "id": "F139",
+  "verdict": "adjusted",
+  "note": "Half REFUTED, and the correction makes the finding stronger. A Sign Out control DOES ship — AccountView.swift:149-152 renders PatinaButton('Sign Out') behind an 'Are you sure' alert (:52-70) calling AuthService.signOut(). It is unreachable only because the Settings 'Account' row does not navigate. That row is NOT unwired: SettingsView.swift:50-58 is a real NavigationLink { AccountView() } inside a NavigationStack — so the defect is a push that does not happen, not a missing destination, and 'wire it up' is the wrong fix. Delete Account IS genuinely absent from the UI: a deleteAccount endpoint -> /rest/v1/rpc/delete_user_account is declared at APIConfiguration.swift:182,220 with no caller and no screen.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:48-66",
+   "apps/mobile/Patina/Patina/Features/Account/AccountView.swift:52-70",
+   "apps/mobile/Patina/Patina/Features/Account/AccountView.swift:147-153",
+   "apps/mobile/Patina/Patina/Services/API/APIConfiguration.swift:182"
+  ],
+  "corrected_observation": "Sign Out exists (AccountView) but is stranded behind the Settings 'Account' row, which is a real NavigationLink to AccountView and nevertheless does not navigate — reproduced three times across guest and signed-in tiers. Delete Account has no UI at all; a delete_user_account endpoint is declared and never called. Guest Settings shows the same ACCOUNT section to someone with no account."
+ },
+ {
+  "id": "F140",
+  "verdict": "confirmed",
+  "note": "Root cause verified: there are two independent taste stores and two independent quizzes. Features/StyleQuiz (the Companion quiz) writes only StylePreferenceStore -> the SwiftData StylePreferenceModel (StyleQuizViewModel.swift:288), which feeds the Profile badge and the browse rationale. Features/StyleConversation (the post-room 'Style Discovery') writes StyleProfileStore -> UserDefaults keys patina.style_profile_response.v1 / patina.style_profile_completed.v1 (StyleConversationViewModel.swift:229). CompanionOverlay reads ONLY StyleProfileStore.hasCompletedProfile (CompanionOverlay.swift:188). So finishing the Companion quiz leaves hasCompletedProfile false — which is exactly why Profile shows 'Warm Modern' while the Companion still says 'TAKE THE QUIZ FIRST' on the same launch.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/StyleQuiz/ViewModels/StyleQuizViewModel.swift:288",
+   "apps/mobile/Patina/Patina/Features/StyleConversation/ViewModels/StyleConversationViewModel.swift:193",
+   "apps/mobile/Patina/Patina/Features/StyleConversation/ViewModels/StyleConversationViewModel.swift:229",
+   "apps/mobile/Patina/Patina/Features/RoomScan/Shared/Services/StyleProfileStore.swift:29-45",
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:188"
+  ]
+ },
+ {
+  "id": "F141",
+  "verdict": "confirmed",
+  "note": "Verified: AuthSheet passes showGuest: false to AuthScreenView (:41), which is what removes 'Look around first ->', and AuthSheet adds no Cancel or ✕ of its own — the only dismissal is the sheet's own drag. The full gate (AuthScreenView :100-112) does render the guest affordance. Confirmed exactly as filed.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Authentication/Views/AuthSheet.swift:21-43",
+   "apps/mobile/Patina/Patina/Features/Authentication/Views/AuthScreenView.swift:100-112"
+  ]
+ },
+ {
+  "id": "F142",
+  "verdict": "confirmed",
+  "note": "Verified on both sides: products.dimensions jsonb exists (00001:35), get_recommendations does not project it (00246:273-300 returns id/name/price/match/maker/image/usdz/style/material/badges/category/tier only), and Product's CodingKeys and init(from:) have no dimensions, lead time, stock, shipping or returns field (ProductModel.swift:28-58). Minor scope note: lead_time_weeks and a dimensions string ARE decoded — but only on RemoteProposalItem / RemoteProposalScopeRoom, i.e. the proposal rail, never the catalog.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:12-58",
+   "supabase/migrations/00001_initial_schema.sql:35",
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:273-300",
+   "apps/mobile/Patina/Patina/Services/API/ProposalsAPIClient.swift:97"
+  ]
+ },
+ {
+  "id": "F143",
+  "verdict": "adjusted",
+  "note": "Code/schema half confirmed: the RPC does not project lead_time_weeks and Product does not decode it. The live-catalog count ('populated on 1 of 21 rows') could not be re-run in this seat — treat as unverified.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:12-58",
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:273-300"
+  ]
+ },
+ {
+  "id": "F144",
+  "verdict": "confirmed",
+  "note": "Verified: products (00001:29-45) has no shipping/delivery/returns/liability column, and no app screen prints any. The only policy text in the client is the proposal's seeded terms block (supabase/seed/proposals.sql:95-97).",
+  "corrected_refs": [
+   "supabase/migrations/00001_initial_schema.sql:29-45",
+   "supabase/seed/proposals.sql:95-97"
+  ]
+ },
+ {
+  "id": "F145",
+  "verdict": "adjusted",
+  "note": "The structural claim is confirmed: the seed carries a distinct brand per product ('Nordic Atelier' for the Heirloom Oak Dining Table, supabase/seed/products.sql:6) and get_recommendations returns v.name from the joined vendors row instead (00246:278), so the byline names the vendor/retailer, not the brand. The '14 of 21 have no vendor_id' count could not be re-run. Note the seed context: on this stack the byline data is dev seed, not production catalog.",
+  "corrected_refs": [
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:277-282",
+   "supabase/seed/products.sql:6-14"
+  ]
+ },
+ {
+  "id": "F146",
+  "verdict": "adjusted",
+  "note": "The render path is confirmed (maker location and story come from vendors.made_in / vendors.brand_story via the RPC), and supabase/seed/vendors.sql sets neither column — so the provenance layer is empty on this stack for seed reasons. The '0 of 104' live counts could not be re-run, and no production catalog was observed.",
+  "corrected_refs": [
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:277-282",
+   "supabase/seed/vendors.sql"
+  ]
+ },
+ {
+  "id": "F147",
+  "verdict": "adjusted",
+  "note": "REFUTED as 'no confirmation'. saveProduct inserts the item, adds the id to savedProductIds (which drives the filled heart) and fires HapticManager.notification(.success) (:138-196). What the dark lane hit is a different and more interesting behaviour: when the browse is room-scoped, a failed remote saved_items mirror triggers U29's DELIBERATE revert — the local item is deleted, savedProductIds is rolled back and saveFailureMessage 'Couldn't save — check your connection and try again.' is shown for 4s (:169-184, :230-238). Against the local stack that revert is expected. Rewrite as 'a save that silently un-saves itself on a network failure, with a 4-second caption as the only notice'.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:138-196",
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:230-238",
+   "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:55-57"
+  ]
+ },
+ {
+  "id": "F148",
+  "verdict": "confirmed",
+  "note": "Verified both halves. CollectionsViewModel.activeTab defaults to \"Boards\" (:18), and CollectionsViewModel.addToBoard(_:productId:) at :101 has ZERO call sites app-wide (grep) — a board can be created and can never hold a piece. Empty-state copy quoted verbatim at CollectionsView.swift:156-176.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:18",
+   "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:101",
+   "apps/mobile/Patina/Patina/Features/Collections/Views/CollectionsView.swift:149-179"
+  ]
+ },
+ {
+  "id": "F149",
+  "verdict": "refuted",
+  "note": "REFUTED. The claim rests on tableItemCount being the room-scoped sum written by DailyRoomView:265 — but the Companion never reads that value. CompanionOverlay.enrichedContext OVERWRITES it on every panel open with a live fetchCount(FetchDescriptor<TableItemModel>()) over the whole store (:173-197), and expandedView binds enrichedContext before building the rows (:522-527). The file even documents that updateTableItemCount has no effective callers. A piece hearted on the browse grid or the piece detail therefore DOES surface the Saved row. F14 (no row at zero) is the true version of this finding.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:155-197",
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:521-527"
+  ]
+ },
+ {
+  "id": "F150",
+  "verdict": "confirmed",
+  "note": "Verified: ProductDetailView's chrome is back / ? / ShareLink / heart plus the single 'Add to Room' primary (:89-138, :338-399) — no 'Get design help' control, no compare surface anywhere in the app (grep), and TableItemModel.notes (:42) has no writer in any view.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:86-138",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:338-399",
+   "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:41-42"
+  ]
+ },
+ {
+  "id": "F151",
+  "verdict": "confirmed",
+  "note": "Backend read verified: the direct-order rail (RPC, checkout dispatch, webhook settle, receipt mail) is complete and its status vocabulary stops at pending_payment/paid/canceled (+refunded), with no fulfillment/shipped/delivered/tracking/ETA column. The live catalog counts inside these findings ('19 of 21 patina_managed') could not be re-run — code/schema half confirmed only.",
+  "corrected_refs": [
+   "supabase/migrations/00276_direct_orders.sql:41-200",
+   "supabase/migrations/00277_refund_reconciliation.sql:183-208"
+  ]
+ },
+ {
+  "id": "F152",
+  "verdict": "confirmed",
+  "note": "Backend read verified against main's migrations: direct_orders has no designer_id, no project_id, no commission_rate and no FF&E link, and 00301_marketplace_vitals.sql:37-40 states 'No designer attribution (client_id is the buyer)'. Matches C24.",
+  "corrected_refs": [
+   "supabase/migrations/00276_direct_orders.sql:41-67",
+   "supabase/migrations/00301_marketplace_vitals.sql:37-40"
+  ]
+ },
+ {
+  "id": "F153",
+  "verdict": "adjusted",
+  "note": "Confirmed that products.source_url exists (00001:37, NOT NULL) and is neither projected by get_recommendations nor decoded by Product, and that no 'where to buy' / maker page exists in the app. The '9 of 21 populated' count could not be re-run.",
+  "corrected_refs": [
+   "supabase/migrations/00001_initial_schema.sql:37",
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:273-300",
+   "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:12-58"
+  ]
+ },
+ {
+  "id": "F154",
+  "verdict": "confirmed",
+  "note": "Backend read verified: the direct-order rail (RPC, checkout dispatch, webhook settle, receipt mail) is complete and its status vocabulary stops at pending_payment/paid/canceled (+refunded), with no fulfillment/shipped/delivered/tracking/ETA column. The live catalog counts inside these findings ('19 of 21 patina_managed') could not be re-run — code/schema half confirmed only.",
+  "corrected_refs": [
+   "supabase/migrations/00276_direct_orders.sql:41-200",
+   "supabase/migrations/00277_refund_reconciliation.sql:183-208"
+  ]
+ },
+ {
+  "id": "F155",
+  "verdict": "confirmed",
+  "note": "Verified: the Budget screen is an INVOICE rollup plus accepted-proposal investment lines, never a project-budget view. BudgetMath.rollup sums total_cents over visible (non-draft, non-void) invoices; projects.budget_cents never enters it. So 'Your budget / Across your projects' can print $4,250 for a client whose three projects total $725,000. Cited path was wrong (there is no Features/Budget/Views/ directory).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:36-42",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:104",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetViewModel.swift:5-24",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetViewModel.swift:37-52"
+  ]
+ },
+ {
+  "id": "F156",
+  "verdict": "confirmed",
+  "note": "Confirmed on six shots and consistent with the code: InvoiceDetailView consumes due_date only inside isOverdue(_:) to derive the words 'Past due' (:227-235) and never prints the date; the list card does (InvoiceListView.swift:189-192). Same shape on proposals and decisions.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:225-240",
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceListView.swift:189-192"
+  ]
+ },
+ {
+  "id": "F157",
+  "verdict": "confirmed",
+  "note": "Verified and it is exactly as described — a false statement about the client's money. startPolling sets confirmState = .achPending unconditionally when the 60s deadline elapses (InvoicesViewModel.swift:148-150), with no check of the payment method and no check that a payment was attempted; InvoiceDetailView then renders the warning banner 'Your bank transfer has been started...' (:103-104). A card payer, or someone who abandoned Checkout, sees it.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/ViewModels/InvoicesViewModel.swift:135-157",
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:96-110"
+  ]
+ },
+ {
+  "id": "F158",
+  "verdict": "adjusted",
+  "note": "Half REFUTED: both stats ARE explained in-app. ProfileView wraps the Saved and Match tiles in HelpTooltip with fallback copy — Match: 'Match is the average score Patina has computed for the pieces you've seen — it goes up as the app learns your taste and the room context tightens.' (:213-221). The residual finding is that the explanation is behind a tap-to-reveal with no visible affordance, and the number moved between sessions with no narrative.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Profile/Views/ProfileView.swift:203-222"
+  ]
+ },
+ {
+  "id": "F159",
+  "verdict": "confirmed",
+  "note": "XXL chip-row overflow is visible on x-03 and consistent with the code: the filter row is a plain HStack of chips with no ScrollView(.horizontal) wrapper.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:134-147"
+  ]
+ },
+ {
+  "id": "F160",
+  "verdict": "adjusted",
+  "note": "Empty-bell-with-'Get design help' is confirmed (see F72 for the exact branch). Correct the mechanism per F08: an in_app 'proposal_sent' row IS emitted by the real proposal-send path; the seed bypassed it. Invoices and decisions genuinely emit nothing client-facing in-app.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:125-138",
+   "supabase/migrations/00388_proposal_send_dispatch_guard.sql:1258-1278"
+  ]
+ },
+ {
+  "id": "F161",
+  "verdict": "confirmed",
+  "note": "The ordering is on the shot and ProjectsViewModel applies no client-side sort — the list renders in whatever order list_client_projects returns, so a Completed project can lead. The 'Install' half is a configured shortLabel, not a truncation (see F205).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Projects/ViewModels/ProjectsViewModel.swift",
+   "apps/mobile/Patina/Patina/Core/Models/PhaseDisplay.swift:57-58"
+  ]
+ },
+ {
+  "id": "F162",
+  "verdict": "confirmed",
+  "note": "Verified: ProductDetailView's chrome is back / ? / ShareLink / heart plus the single 'Add to Room' primary (:89-138, :338-399) — no 'Get design help' control, no compare surface anywhere in the app (grep), and TableItemModel.notes (:42) has no writer in any view.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:86-138",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:338-399",
+   "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:41-42"
+  ]
+ },
+ {
+  "id": "F163",
+  "verdict": "confirmed",
+  "note": "Occlusion and the system-blue Skip/Next are visible on g-09/g-10/g-11 and not disputed by code. No code ref pins the colour; treat as shot-verified craft findings.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:227-253"
+  ]
+ },
+ {
+  "id": "F164",
+  "verdict": "confirmed",
+  "note": "Confirmed on six shots and consistent with the code: InvoiceDetailView consumes due_date only inside isOverdue(_:) to derive the words 'Past due' (:227-235) and never prints the date; the list card does (InvoiceListView.swift:189-192). Same shape on proposals and decisions.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:225-240",
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceListView.swift:189-192"
+  ]
+ },
+ {
+  "id": "F165",
+  "verdict": "confirmed",
+  "note": "Verified order in AuthScreenView: Apple, then 'Continue with Google' (:82), then 'Continue with email' (:85), then the divider, then 'Look around first' (:106), then 'Have a password? Sign in' (:128). Nothing about a designer or a project appears anywhere in the gate copy.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Authentication/Views/AuthScreenView.swift:75-130"
+  ]
+ },
+ {
+  "id": "F166",
+  "verdict": "refuted",
+  "note": "REFUTED on the confirmation claim. 'Choose this' calls viewModel.beginSelection(optionId:) which sets pendingOptionId and presents DecisionConsentSheet (.sheet at DecisionDetailView.swift:44-61) — a real confirm step headed 'CONFIRM YOUR CHOICE' with the option title, the line 'Approving sends your decision to your designer and unblocks any work waiting on it.', an optional 'Add my signature' e-sign toggle, an Approve button and Cancel. The walk's '3 taps, no confirmation' count is wrong. A 'talk it over' affordance also exists (discussAction -> .threadDetail), but only renders when the decision resolves a project comms thread — the seed has none. What survives: no defer, no 'neither', and no visible way to ask when there is no thread.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:44-61",
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:186-199",
+   "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:254-320"
+  ]
+ },
+ {
+  "id": "F167",
+  "verdict": "confirmed",
+  "note": "Consistent with the code: the only push authorization request is in PushTokenService and it fires after a design-request submission with no pre-permission screen; SettingsView's 'Notifications' toggle writes SettingsService.notificationsEnabled (a profile preference), not the OS grant, and is offered to guests (:71-78).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/API/PushTokenService.swift:87-108",
+   "apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:68-80"
+  ]
+ },
+ {
+  "id": "F168",
+  "verdict": "confirmed",
+  "note": "Verified: every ShareLink in the app shares PatinaDeepLinks.productURL for a single product (product detail top bar, recommendations card menu, collections row); nothing shares a room, a board, the Saved list, a decision, a proposal or an invoice, and there is no invite/household/second-seat concept in the client.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:117-130",
+   "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:304-335",
+   "apps/mobile/Patina/Patina/Features/Collections/Views/CollectionsView.swift:285"
+  ]
+ },
+ {
+  "id": "F169",
+  "verdict": "confirmed",
+  "note": "Verified: Info.plist registers CFBundleURLSchemes = ['patina'] only (:15-27) and Patina.entitlements contains just aps-environment and applesignin — no com.apple.developer.associated-domains. The shared https://app.patina.cloud/library/<id> URL can only open Safari.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Info.plist:15-27",
+   "apps/mobile/Patina/Patina/Patina.entitlements:4-11",
+   "apps/mobile/Patina/Patina/Features/Shared/PatinaPortalLinks.swift:14-22"
+  ]
+ },
+ {
+  "id": "F170",
+  "verdict": "confirmed",
+  "note": "Verified by grep: TableItemModel.notes and CreateSavedItemPayload.notes exist and every call site passes notes: nil — no view writes either. The Saved row carries no room, date, note or availability.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:41-42",
+   "apps/mobile/Patina/Patina/Core/Network/RoomsAPIClient.swift:125"
+  ]
+ },
+ {
+  "id": "F171",
+  "verdict": "confirmed",
+  "note": "Both leaks verified in ProjectDetailView. overviewFacts appends ('Client view', client_visibility_tier capitalised) whenever the column is non-empty (:120-124). portalHintCard is a plain Text('Set up <sections> in the portal ->') with a stroked rounded rect and no Button (:139-151) — the file's own comment says 'setup happens in the portal, so there is no tap target on iOS'. Cited :143 lands inside portalHintCard; :64 is the phase line, not a leak.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:108-126",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:128-151"
+  ]
+ },
+ {
+  "id": "F172",
+  "verdict": "confirmed",
+  "note": "Confirmed on shot c-11 — 'Sign proposal' is cut in half at the bottom edge — but the mechanism in the finding is wrong and the fix follows from the right one. A Hearth reservation DOES exist and IS applied to the whole navigation stack (ContentView.swift:166 -> companionHearthReservation, 120pt via CompanionHearthMetrics.reservedHeight). It is implemented as safeAreaInset(edge:.bottom) whose content paints an OPAQUE PatinaColors.Background.primary with .ignoresSafeArea(edges:.bottom) — so on pushed destinations the scrolled content is drawn under it and painted over, rather than inset out of it. The proposal screen already pads .bottom 140 after its own Sign footer, so adding padding is not the fix.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/ContentView.swift:166",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Components/CompanionSafeArea.swift:37-50",
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:33",
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:137-151"
+  ]
+ },
+ {
+  "id": "F173",
+  "verdict": "confirmed",
+  "note": "Verified verbatim: ProposalsAPIClient.signProposal carries the comment 'CARRY-FORWARD: sign_proposal does NOT send the confirmation email.' and the client itself invokes the proposal-sign-confirmation edge function afterwards as a best-effort call whose failure is swallowed (:388-412) — so the record depends on an edge function the app fires and ignores.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/API/ProposalsAPIClient.swift:388-412"
+  ]
+ },
+ {
+  "id": "F174",
+  "verdict": "confirmed",
+  "note": "Verified both halves. CollectionsViewModel.activeTab defaults to \"Boards\" (:18), and CollectionsViewModel.addToBoard(_:productId:) at :101 has ZERO call sites app-wide (grep) — a board can be created and can never hold a piece. Empty-state copy quoted verbatim at CollectionsView.swift:156-176.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:18",
+   "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:101",
+   "apps/mobile/Patina/Patina/Features/Collections/Views/CollectionsView.swift:149-179"
+  ]
+ },
+ {
+  "id": "F175",
+  "verdict": "adjusted",
+  "note": "Root cause found and it is upstream of every finding in this family: DesignRequestStatusService.fetchLeadRows() queries /rest/v1/leads with client_request_id=not.is.null (:733-740), so ONLY app-originated requests are ever visible. The seeded leads carry no client_request_id (supabase/seed/leads_room_scans.sql:119-126), therefore promotedRequest == nil, EngagementTier.resolve returns .discovering (requests empty, zero projects/proposals/invoices/decisions for that account) — the app never saw james.okafor as engaged at all. The matched-designer surface that would have shown is fully built: cardTitle 'You're matched with <designer>', subtitle naming the studio, a promoted Today card branch (TodayExperience.swift:80-91), and a designRequests status route. So 'Get design help' opens the intake flow (DesignRequestFlowView, steps pickScans->details->review->sending->success) rather than the status route, because promotedRequest is nil. The duplicate-lead risk is real but downstream of the same filter.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:733-740",
+   "apps/mobile/Patina/Patina/Features/DesignServices/DesignRequestFlowView.swift:60-99",
+   "apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:125-138"
+  ]
+ },
+ {
+  "id": "F176",
+  "verdict": "confirmed",
+  "note": "Confirmed on the shots (c-11 shows 'Timeline'/'Terms' overprinted by 9:41; x-02, x-06, d-02 reproduce it at XXL and on a modal sheet). No code ref names the cause and the cited ProfileView.swift:123 is not it — every affected screen uses .patinaScreen(title: nil) over a ScrollView whose header starts at .padding(.top, 56), i.e. a hand-tuned constant rather than a safe-area inset. Report as a systemic missing top inset, not a per-screen bug.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalDetailView.swift:34-38",
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:38-41",
+   "apps/mobile/Patina/Patina/Features/Budget/BudgetView.swift:26-31"
+  ]
+ },
+ {
+  "id": "F177",
+  "verdict": "confirmed",
+  "note": "Confirmed and the cause is precise — better than the cited token file. The room-summary step is Features/StyleReveal/Views/ScanFloorPlanPreviewView, and it paints with RAW brand constants instead of the dynamic semantic tokens: PatinaColors.offWhite as the ground (:22) and PatinaColors.charcoal / .pearl for text and rules (:46,51,59,62,87,132,144). Only the semantic tokens go through Color.patinaDynamic(light:dark:) (PatinaColors.swift:154-166), so this screen cannot respond to appearance at all.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/StyleReveal/Views/ScanFloorPlanPreviewView.swift:22",
+   "apps/mobile/Patina/Patina/Features/StyleReveal/Views/ScanFloorPlanPreviewView.swift:44-64",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Tokens/PatinaColors.swift:154-166"
+  ]
+ },
+ {
+  "id": "F178",
+  "verdict": "confirmed",
+  "note": "Verified exactly. FirstLaunchTourModel.defaultSteps declares three steps; step 2's anchor is .addToRoom (:238) and .firstLaunchTourAnchor(.addToRoom) is applied in exactly ONE place app-wide — inside a #if DEBUG #Preview block (FirstLaunchTour.swift:852). anchorMountGracePeriod = 1.5s then drops the step (:190-195). Shipped tour is 'Step 1 of 2' / 'Step 2 of 2', and the '+ Add' control the dropped copy names does not exist on the shipped home.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:186-196",
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:227-253",
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:838-856"
+  ]
+ },
+ {
+  "id": "F179",
+  "verdict": "confirmed",
+  "note": "Verified on both sides: products.dimensions jsonb exists (00001:35), get_recommendations does not project it (00246:273-300 returns id/name/price/match/maker/image/usdz/style/material/badges/category/tier only), and Product's CodingKeys and init(from:) have no dimensions, lead time, stock, shipping or returns field (ProductModel.swift:28-58). Minor scope note: lead_time_weeks and a dimensions string ARE decoded — but only on RemoteProposalItem / RemoteProposalScopeRoom, i.e. the proposal rail, never the catalog.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:12-58",
+   "supabase/migrations/00001_initial_schema.sql:35",
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:273-300",
+   "apps/mobile/Patina/Patina/Services/API/ProposalsAPIClient.swift:97"
+  ]
+ },
+ {
+  "id": "F180",
+  "verdict": "confirmed",
+  "note": "Verified both halves. CollectionsViewModel.activeTab defaults to \"Boards\" (:18), and CollectionsViewModel.addToBoard(_:productId:) at :101 has ZERO call sites app-wide (grep) — a board can be created and can never hold a piece. Empty-state copy quoted verbatim at CollectionsView.swift:156-176.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:18",
+   "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:101",
+   "apps/mobile/Patina/Patina/Features/Collections/Views/CollectionsView.swift:149-179"
+  ]
+ },
+ {
+  "id": "F181",
+  "verdict": "refuted",
+  "note": "REFUTED. The claim rests on tableItemCount being the room-scoped sum written by DailyRoomView:265 — but the Companion never reads that value. CompanionOverlay.enrichedContext OVERWRITES it on every panel open with a live fetchCount(FetchDescriptor<TableItemModel>()) over the whole store (:173-197), and expandedView binds enrichedContext before building the rows (:522-527). The file even documents that updateTableItemCount has no effective callers. A piece hearted on the browse grid or the piece detail therefore DOES surface the Saved row. F14 (no row at zero) is the true version of this finding.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:155-197",
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:521-527"
+  ]
+ },
+ {
+  "id": "F182",
+  "verdict": "confirmed",
+  "note": "Verified on both code paths: get_recommendations projects NULL::text AS usdz_url (00246:283) and ProductAPIClient's direct RawProductWithVendor mapping hard-codes usdzURL: nil (:192). Product.hasARModel (ProductModel.swift:110) is therefore false for every product, so the AR button at ProductDetailView.swift:346 never draws and RoomProjectView's 'In AR' cell (:235-243) can only ever read 0.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:192",
+   "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:110",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:344-368",
+   "apps/mobile/Patina/Patina/Features/Rooms/Views/RoomProjectView.swift:235-243",
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:283"
+  ]
+ },
+ {
+  "id": "F183",
+  "verdict": "confirmed",
+  "note": "Verified: Info.plist registers CFBundleURLSchemes = ['patina'] only (:15-27) and Patina.entitlements contains just aps-environment and applesignin — no com.apple.developer.associated-domains. The shared https://app.patina.cloud/library/<id> URL can only open Safari.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Info.plist:15-27",
+   "apps/mobile/Patina/Patina/Patina.entitlements:4-11",
+   "apps/mobile/Patina/Patina/Features/Shared/PatinaPortalLinks.swift:14-22"
+  ]
+ },
+ {
+  "id": "F184",
+  "verdict": "confirmed",
+  "note": "Verified: AuthButton renders icon 'G' as a bare typed letter for Google and '✉' as a stock emoji for email, adjacent to the real Apple mark — three icon systems in three stacked buttons.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Authentication/Views/AuthScreenView.swift:78-88"
+  ]
+ },
+ {
+  "id": "F185",
+  "verdict": "confirmed",
+  "note": "Verified exactly. FirstLaunchTourModel.defaultSteps declares three steps; step 2's anchor is .addToRoom (:238) and .firstLaunchTourAnchor(.addToRoom) is applied in exactly ONE place app-wide — inside a #if DEBUG #Preview block (FirstLaunchTour.swift:852). anchorMountGracePeriod = 1.5s then drops the step (:190-195). Shipped tour is 'Step 1 of 2' / 'Step 2 of 2', and the '+ Add' control the dropped copy names does not exist on the shipped home.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:186-196",
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:227-253",
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:838-856"
+  ]
+ },
+ {
+  "id": "F186",
+  "verdict": "confirmed",
+  "note": "Verified: DailyGreetingHeader prints the literal word 'Today' under an uppercased date, with no time-of-day branch (:35-45), and TimeOfDay is never referenced from Features/Home.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyGreetingHeader.swift:35-48",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Tokens/TimeOfDay.swift"
+  ]
+ },
+ {
+  "id": "F187",
+  "verdict": "confirmed",
+  "note": "Confirmed and the cause is precise — better than the cited token file. The room-summary step is Features/StyleReveal/Views/ScanFloorPlanPreviewView, and it paints with RAW brand constants instead of the dynamic semantic tokens: PatinaColors.offWhite as the ground (:22) and PatinaColors.charcoal / .pearl for text and rules (:46,51,59,62,87,132,144). Only the semantic tokens go through Color.patinaDynamic(light:dark:) (PatinaColors.swift:154-166), so this screen cannot respond to appearance at all.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/StyleReveal/Views/ScanFloorPlanPreviewView.swift:22",
+   "apps/mobile/Patina/Patina/Features/StyleReveal/Views/ScanFloorPlanPreviewView.swift:44-64",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Tokens/PatinaColors.swift:154-166"
+  ]
+ },
+ {
+  "id": "F188",
+  "verdict": "confirmed",
+  "note": "Verified: DailyGreetingHeader prints the literal word 'Today' under an uppercased date, with no time-of-day branch (:35-45), and TimeOfDay is never referenced from Features/Home.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyGreetingHeader.swift:35-48",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Tokens/TimeOfDay.swift"
+  ]
+ },
+ {
+  "id": "F189",
+  "verdict": "confirmed",
+  "note": "Verified: DesignRequestStatus.isVisibleForPromotion hides a terminal/matched request beyond a 14*86_400 window (:351-359) with no on-screen explanation. The Companion's 14-day graduation is at the cited CompanionCoachingModel range.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/DesignServices/DesignRequestStatusService.swift:340-359",
+   "apps/mobile/Patina/Patina/Features/Companion/Models/CompanionCoachingModel.swift:56-73"
+  ]
+ },
+ {
+  "id": "F190",
+  "verdict": "confirmed",
+  "note": "Verified by grep: no push_received, push_opened or notification_permission event exists anywhere in the app.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Services/Analytics/PostHogService.swift"
+  ]
+ },
+ {
+  "id": "F191",
+  "verdict": "confirmed",
+  "note": "Occlusion and the system-blue Skip/Next are visible on g-09/g-10/g-11 and not disputed by code. No code ref pins the colour; treat as shot-verified craft findings.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:227-253"
+  ]
+ },
+ {
+  "id": "F192",
+  "verdict": "confirmed",
+  "note": "Verified: p_category is never sent (fetchRecommendations is only called with roomId), so the chips filter the already-fetched page and 'Seating' can print '3 pieces'.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:48-51",
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:105",
+   "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:40-58"
+  ]
+ },
+ {
+  "id": "F193",
+  "verdict": "confirmed",
+  "note": "Verified on both code paths: get_recommendations projects NULL::text AS usdz_url (00246:283) and ProductAPIClient's direct RawProductWithVendor mapping hard-codes usdzURL: nil (:192). Product.hasARModel (ProductModel.swift:110) is therefore false for every product, so the AR button at ProductDetailView.swift:346 never draws and RoomProjectView's 'In AR' cell (:235-243) can only ever read 0.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:192",
+   "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:110",
+   "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:344-368",
+   "apps/mobile/Patina/Patina/Features/Rooms/Views/RoomProjectView.swift:235-243",
+   "supabase/migrations/00246_aesthete_quiz_bridge.sql:283"
+  ]
+ },
+ {
+  "id": "F194",
+  "verdict": "confirmed",
+  "note": "Verified: RoomProjectView.emptyBlock stacks body copy 'We've already found pieces that would fit this space. Browse your Daily Room to start building this room.', the primary 'Browse Picks for This Room', and a separate SEE RECOMMENDATIONS link (:302-327).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Rooms/Views/RoomProjectView.swift:302-330"
+  ]
+ },
+ {
+  "id": "F195",
+  "verdict": "confirmed",
+  "note": "Confirmed and the cause is precise — better than the cited token file. The room-summary step is Features/StyleReveal/Views/ScanFloorPlanPreviewView, and it paints with RAW brand constants instead of the dynamic semantic tokens: PatinaColors.offWhite as the ground (:22) and PatinaColors.charcoal / .pearl for text and rules (:46,51,59,62,87,132,144). Only the semantic tokens go through Color.patinaDynamic(light:dark:) (PatinaColors.swift:154-166), so this screen cannot respond to appearance at all.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/StyleReveal/Views/ScanFloorPlanPreviewView.swift:22",
+   "apps/mobile/Patina/Patina/Features/StyleReveal/Views/ScanFloorPlanPreviewView.swift:44-64",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Tokens/PatinaColors.swift:154-166"
+  ]
+ },
+ {
+  "id": "F196",
+  "verdict": "confirmed",
+  "note": "Verified: p_category is never sent (fetchRecommendations is only called with roomId), so the chips filter the already-fetched page and 'Seating' can print '3 pieces'.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:48-51",
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:105",
+   "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:40-58"
+  ]
+ },
+ {
+  "id": "F197",
+  "verdict": "confirmed",
+  "note": "Verified by grep: TableItemModel.notes and CreateSavedItemPayload.notes exist and every call site passes notes: nil — no view writes either. The Saved row carries no room, date, note or availability.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:41-42",
+   "apps/mobile/Patina/Patina/Core/Network/RoomsAPIClient.swift:125"
+  ]
+ },
+ {
+  "id": "F198",
+  "verdict": "confirmed",
+  "note": "Matches C26 and the grounding: fulfillment-notify covers confirmed/in_production/shipped/delivered/eta_change/substitution on the BOH fulfillment_orders rail, operator-initiated, and never touches direct_orders.",
+  "corrected_refs": [
+   "supabase/functions/_shared/fulfillment-templates.ts:31-37",
+   "supabase/functions/fulfillment-notify/index.ts:3-8"
+  ]
+ },
+ {
+  "id": "F199",
+  "verdict": "confirmed",
+  "note": "Verified verbatim: NotificationRouter maps entity types 'proposal' and 'invoice' to routes and carries the comment 'no edge function emits entity_type \"proposal\" yet' / '\"invoice\" yet' (:66-73); DeepLinkHandler's patina:// switch handles only auth, room and piece before falling to path-based handling (:78-89).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/App/DeepLinking/NotificationRouter.swift:60-88",
+   "apps/mobile/Patina/Patina/App/DeepLinking/DeepLinkHandler.swift:75-92"
+  ]
+ },
+ {
+  "id": "F200",
+  "verdict": "confirmed",
+  "note": "Verified in the app: the only payment-method statement is the caption 'Pay securely by card or bank transfer.' at InvoiceDetailView.swift:217-219, with no Apple Pay or card marks and no surcharge preview. Consistent with C25 (Apple Pay is already inside the hosted Checkout).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:213-221"
+  ]
+ },
+ {
+  "id": "F201",
+  "verdict": "confirmed",
+  "note": "Consistent with the code read: the only payments UI is the PAYMENTS block and the settle banner pointing the receipt at the inbox (InvoiceDetailView.swift:96-110); there is no receipts list or paid section.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:96-110"
+  ]
+ },
+ {
+  "id": "F202",
+  "verdict": "confirmed",
+  "note": "Consistent with everything else verified: invoice line items exist only as text on the invoice; no piece, room or order object anywhere in the client corresponds to them.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:195-222",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:19-36"
+  ]
+ },
+ {
+  "id": "F203",
+  "verdict": "confirmed",
+  "note": "Verified with a corrected ref — the cited ProductCard.swift:192 is a context menu, not the price. The split is between two formatters: TableItemModel.formattedPrice uses String(format: \"$%.0f\") -> '$4200' (:105-109), while Product/SavedItem use NumberFormatter .decimal -> '$4,200' (SavedItem.swift:86-89).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:104-109",
+   "apps/mobile/Patina/Patina/Core/Models/SavedItem.swift:78-90"
+  ]
+ },
+ {
+  "id": "F204",
+  "verdict": "adjusted",
+  "note": "The blank-white first frame is on the shots, but SplashView is NOT the cause and the cited ref does not support the finding: SplashView paints PatinaColors.Background.primary and animates a 'PATINA' wordmark plus the strata mark (:19-35). The white screen is iOS's generated launch screen — the target sets INFOPLIST_KEY_UILaunchScreen_Generation = YES (project.pbxproj:521,569) with no launch storyboard or background colour, so the system paints plain white before SplashView mounts. Fix is a launch-screen background/asset, not SplashView.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina.xcodeproj/project.pbxproj:521",
+   "apps/mobile/Patina/Patina/Features/Splash/Views/SplashView.swift:18-36"
+  ]
+ },
+ {
+  "id": "F205",
+  "verdict": "adjusted",
+  "note": "REFUTED as a truncation. 'Install' is a deliberate configured shortLabel — PhaseDisplay.configs maps .installation to (label: 'Installation & Styling', shortLabel: 'Install', clientLabel: 'Installation') — and ProjectListView asks for shortLabel by name (:166). Nothing is being cut off, and the cited StudioQueueBuilder:178 uses clientLabel ('Installation'), a different surface. The residual point (a noun rendered as a verb) is a copy choice, S3.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Models/PhaseDisplay.swift:48-61",
+   "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectListView.swift:166"
+  ]
+ },
+ {
+  "id": "F206",
+  "verdict": "adjusted",
+  "note": "The blank-white first frame is on the shots, but SplashView is NOT the cause and the cited ref does not support the finding: SplashView paints PatinaColors.Background.primary and animates a 'PATINA' wordmark plus the strata mark (:19-35). The white screen is iOS's generated launch screen — the target sets INFOPLIST_KEY_UILaunchScreen_Generation = YES (project.pbxproj:521,569) with no launch storyboard or background colour, so the system paints plain white before SplashView mounts. Fix is a launch-screen background/asset, not SplashView.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina.xcodeproj/project.pbxproj:521",
+   "apps/mobile/Patina/Patina/Features/Splash/Views/SplashView.swift:18-36"
+  ]
+ },
+ {
+  "id": "F207",
+  "verdict": "confirmed",
+  "note": "Verified exactly. FirstLaunchTourModel.defaultSteps declares three steps; step 2's anchor is .addToRoom (:238) and .firstLaunchTourAnchor(.addToRoom) is applied in exactly ONE place app-wide — inside a #if DEBUG #Preview block (FirstLaunchTour.swift:852). anchorMountGracePeriod = 1.5s then drops the step (:190-195). Shipped tour is 'Step 1 of 2' / 'Step 2 of 2', and the '+ Add' control the dropped copy names does not exist on the shipped home.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:186-196",
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:227-253",
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:838-856"
+  ]
+ },
+ {
+  "id": "F208",
+  "verdict": "confirmed",
+  "note": "The circular 'Sign in' control with an overflowing label is visible on g-29; the guest empty state passes ctaTitle 'Sign in' to PatinaEmptyState (NotificationFeedView.swift:145-152), so the defect belongs to PatinaEmptyState's CTA shape, not the feed.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:140-155"
+  ]
+ },
+ {
+  "id": "F209",
+  "verdict": "confirmed",
+  "note": "Verified: DailyGreetingHeader prints the literal word 'Today' under an uppercased date, with no time-of-day branch (:35-45), and TimeOfDay is never referenced from Features/Home.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Home/Views/DailyGreetingHeader.swift:35-48",
+   "apps/mobile/PatinaDesignKit/Sources/PatinaDesignKit/Tokens/TimeOfDay.swift"
+  ]
+ },
+ {
+  "id": "F210",
+  "verdict": "confirmed",
+  "note": "Occlusion and the system-blue Skip/Next are visible on g-09/g-10/g-11 and not disputed by code. No code ref pins the colour; treat as shot-verified craft findings.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Help/FirstLaunchTour.swift:227-253"
+  ]
+ },
+ {
+  "id": "F211",
+  "verdict": "confirmed",
+  "note": "Verified with a corrected ref — the cited ProductCard.swift:192 is a context menu, not the price. The split is between two formatters: TableItemModel.formattedPrice uses String(format: \"$%.0f\") -> '$4200' (:105-109), while Product/SavedItem use NumberFormatter .decimal -> '$4,200' (SavedItem.swift:86-89).",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:104-109",
+   "apps/mobile/Patina/Patina/Core/Models/SavedItem.swift:78-90"
+  ]
+ },
+ {
+  "id": "F212",
+  "verdict": "confirmed",
+  "note": "Two panel titles for one menu is visible across g-14b / d-09 / x-09 and comes from CompanionActionProvider.panelTitle branching on context; no code claim to dispute.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Companion/Views/CompanionOverlay.swift:221-231"
+  ]
+ },
+ {
+  "id": "F213",
+  "verdict": "confirmed",
+  "note": "Verified verbatim: RecommendationsViewModel.headerSubtitle builds 'curated for this room' / 'curated for your space' (:53-59) — 'curated' is on the brand-voice avoid list.",
+  "corrected_refs": [
+   "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:52-59"
+  ]
+ }
+]

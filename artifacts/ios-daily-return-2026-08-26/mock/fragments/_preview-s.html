@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<base href="../">
+<title>s-M preview</title>
+<link rel="stylesheet" href="kit.css">
+<style>
+  body { background:var(--pat-bg); padding:40px; font-family:var(--pat-sans); }
+  .sheetgrid { display:flex; flex-wrap:wrap; gap:56px 40px; align-items:flex-start; }
+  .cell { display:flex; flex-direction:column; gap:14px; width:428px; }
+  .sheetbox { width:428px; }
+  .cap { font:400 11px/1.4 var(--pat-mono); text-transform:uppercase; letter-spacing:.5px;
+         color:var(--pat-text-muted); margin:0; }
+</style>
+</head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<g id="s" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></g>
+<symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5c0 4-1.5 5.4-2.2 6.1a.6.6 0 0 0 .4 1h14.6a.6.6 0 0 0 .4-1c-.7-.7-2.2-2.1-2.2-6.1A5.5 5.5 0 0 0 12 3Z"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></g></symbol>
+<symbol id="i-qcircle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.8c0 1.7-2.4 2-2.4 3.6"/><circle cx="12" cy="17.2" r=".9" fill="currentColor" stroke="none"/></g></symbol>
+<symbol id="i-q" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 8.8a3.5 3.5 0 0 1 6.8 1.1c0 2.4-3.4 2.7-3.4 5"/><circle cx="12" cy="18.6" r="1.1" fill="currentColor" stroke="none"/></g></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></g></symbol>
+<symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol>
+<symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol>
+<symbol id="i-arrow-ur" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 17.5 17.5 6.5"/><path d="M8.5 6.5h9v9"/></g></symbol>
+<symbol id="i-arrow-r" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13.5 6.5 19 12l-5.5 5.5"/></g></symbol>
+<symbol id="i-camera-vf" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5.4A2.4 2.4 0 0 1 5.4 3H8M16 3h2.6A2.4 2.4 0 0 1 21 5.4V8M21 16v2.6a2.4 2.4 0 0 1-2.4 2.4H16M8 21H5.4A2.4 2.4 0 0 1 3 18.6V16"/><circle cx="12" cy="12" r="3.1"/><path d="M9.7 8.4l.8-1.3h3l.8 1.3"/></g></symbol>
+<symbol id="i-viewfinder" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5.4A2.4 2.4 0 0 1 5.4 3H8M16 3h2.6A2.4 2.4 0 0 1 21 5.4V8M21 16v2.6a2.4 2.4 0 0 1-2.4 2.4H16M8 21H5.4A2.4 2.4 0 0 1 3 18.6V16"/></g></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" d="M12 20s-7.4-4.5-7.4-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.4 2.6C19.4 15.5 12 20 12 20Z"/></symbol>
+<symbol id="i-heart-fill" viewBox="0 0 24 24"><path fill="currentColor" d="M12 20s-7.4-4.5-7.4-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.4 2.6C19.4 15.5 12 20 12 20Z"/></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></g></symbol>
+<symbol id="i-plus-circle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></g></symbol>
+<symbol id="i-stack" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="4" y="9.5" width="16" height="11" rx="2.2"/><path d="M6.2 7h11.6M7.6 4.5h8.8"/></g></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3.5 13.6 9 19 10.6 13.6 12.2 12 17.7 10.4 12.2 5 10.6 10.4 9Z"/><path d="M18.4 15.2l.7 2.2 2.2.7-2.2.7-.7 2.2-.7-2.2-2.2-.7 2.2-.7Z"/></g></symbol>
+<symbol id="i-palette" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3.2a8.8 8.8 0 0 0 0 17.6c1.3 0 1.9-.8 1.9-1.7 0-1.4-1-1.7-1-2.7 0-.8.7-1.4 1.6-1.4h1.6a4.7 4.7 0 0 0 4.7-4.7c0-4-3.9-7.1-8.8-7.1Z"/><circle cx="8" cy="9" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="7.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.8" cy="9.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="7.4" cy="13.4" r="1.1" fill="currentColor" stroke="none"/></g></symbol>
+<symbol id="i-person-plus" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10.5" cy="8" r="3.4"/><path d="M4.4 19.6a6.1 6.1 0 0 1 12.2 0"/><path d="M18.6 5.4v5M21.1 7.9h-5"/></g></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><g fill="currentColor"><rect x="5" y="10.4" width="14" height="10" rx="2.6"/></g><path fill="none" stroke="currentColor" stroke-width="1.8" d="M8.3 10.4V7.8a3.7 3.7 0 0 1 7.4 0v2.6"/></symbol>
+<symbol id="i-share" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6v11"/><path d="M8.4 7.2 12 3.6l3.6 3.6"/><path d="M6 12.4H5a1.6 1.6 0 0 0-1.6 1.6v5a1.6 1.6 0 0 0 1.6 1.6h14a1.6 1.6 0 0 0 1.6-1.6v-5a1.6 1.6 0 0 0-1.6-1.6h-1"/></g></symbol>
+<symbol id="i-cube" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6Z"/><path d="M4 7.6 12 12l8-4.4M12 12v8.8"/></g></symbol>
+<symbol id="i-info-fill" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="12" cy="12" r="9"/></g><g fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M12 11v5.4"/><path d="M12 7.6v.1"/></g></symbol>
+<symbol id="i-check-fill" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/><path fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="m8 12.2 2.7 2.7L16 9.6"/></symbol>
+<symbol id="i-warn-fill" viewBox="0 0 24 24"><path fill="currentColor" d="M11.1 4.1a1 1 0 0 1 1.8 0l8 14a1 1 0 0 1-.9 1.5H4a1 1 0 0 1-.9-1.5Z"/><g fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M12 9.4v4.2"/><path d="M12 16.6v.1"/></g></symbol>
+<symbol id="i-x-fill" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/><path fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" d="M9 9l6 6M15 9l-6 6"/></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3.1"/><path d="M12 3.4v2.1M12 18.5v2.1M20.6 12h-2.1M5.5 12H3.4M18.1 5.9l-1.5 1.5M7.4 16.6l-1.5 1.5M18.1 18.1l-1.5-1.5M7.4 7.4 5.9 5.9"/></g></symbol>
+<symbol id="i-message" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M4 6.4A2.4 2.4 0 0 1 6.4 4h11.2A2.4 2.4 0 0 1 20 6.4v7.2a2.4 2.4 0 0 1-2.4 2.4H10l-4.6 3.6a.5.5 0 0 1-.8-.4v-3.2H6.4A2.4 2.4 0 0 1 4 13.6Z"/></symbol>
+<symbol id="i-doc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6 3.6h7.4L18.6 9v11.4H6Z"/><path d="M13.2 3.8V9h5.2"/><path d="M8.6 13h6.8M8.6 16.4h4.6"/></g></symbol>
+<symbol id="i-card" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3.2" y="5.6" width="17.6" height="12.8" rx="2.4"/><path d="M3.2 10h17.6"/></g></symbol>
+<symbol id="i-rooms" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.6 10.4 12 4l8.4 6.4v9.2H3.6Z"/><path d="M9.6 19.6v-5.4h4.8v5.4"/></g></symbol>
+</defs></svg>
+<div class="sheetgrid">
+<div class="cell"><p class="cap">s-M1 · Piece detail, repaired — SP-01/10/13/14/19</p><!-- s-M1 · Shared planks — the piece that says what it is.
+     SP-01 (it loads) · SP-10 (maker, dimensions, lead time) · SP-13 (an ask on the piece)
+     · SP-14 (save confirmed, once) · SP-18 (the match carries its reason) · SP-19 (the act is not covered).
+     Additions to the kit, all scoped under .sp-detail: .sp-detail__why, .sp-detail__spec. -->
+<div class="frame-wrap sp-detail">
+  <style>
+    .sp-detail .sp-detail__spec { display:block; font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-2); }
+    .sp-detail .sp-detail__spec + .sp-detail__spec { padding-top:4px; }
+    .sp-detail .sp-detail__specs { padding-bottom:16px; }
+    .sp-detail .toast { bottom:112px; }
+    .sp-detail .detail-bar .btn--primary { width:auto; flex:1 1 auto; }
+    .sp-detail .circ-btn--saved { color:var(--pat-clay); }
+    .sp-detail .maker-story__role { display:block; }
+  </style>
+
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+
+      <div class="screen-body screen-body--scroll">
+        <div class="detail-hero">
+          <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table, quarter-sawn white oak">
+          <div class="detail-hero__bar">
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-chev-l"/></svg></span>
+            <span class="spacer"></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-qcircle"/></svg></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-share"/></svg></span>
+            <span class="circ-btn circ-btn--lg circ-btn--saved"><svg><use href="#i-heart-fill"/></svg></span>
+          </div>
+        </div>
+
+        <div class="detail-body">
+          <span class="detail-maker">Nordic Atelier</span>
+          <span class="detail-name">Heirloom Oak Dining Table</span>
+          <span class="detail-materials">Quarter-sawn white oak &middot; Hand-rubbed tung oil</span>
+
+          <div class="detail-price-row">
+            <span class="detail-price">$4,200</span>
+            <span class="match-pill--detail">48% match</span>
+          </div>
+          <div class="sp-detail__specs">
+            <span class="sp-detail__spec">38&Prime; W &times; 20&Prime; D &times; 30&Prime; H</span>
+            <span class="sp-detail__spec">Ships in 10&ndash;12 weeks</span>
+          </div>
+
+          <div class="maker-story">
+            <div class="maker-story__head">
+              <span class="maker-story__avatar"></span>
+              <span>
+                <span class="maker-story__name">Nordic Atelier</span>
+                <span class="mono-label mono-label--sm maker-story__role">Maker</span>
+              </span>
+            </div>
+            <span class="maker-story__quote">&ldquo;Each table is made to order by a three-person workshop outside Aarhus.&rdquo;</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="toast">Saved<span class="toast__act">See all</span></div>
+
+      <div class="detail-bar">
+        <span class="btn btn--ghost">Get design help</span>
+        <span class="btn btn--primary">Add to Room</span>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:213px;right:24px">1</span>
+  <span class="callout-n" style="top:378px;right:24px">2</span>
+  <span class="callout-n" style="top:483px;right:24px">3</span>
+  <span class="callout-n" style="top:533px;right:24px">4</span>
+  <span class="callout-n" style="top:633px;right:24px">5</span>
+  <span class="callout-n callout-n--clay" style="top:734px;right:2px">6</span>
+  <span class="callout-n" style="top:803px;right:24px">7</span>
+</div>
+<div class="sheetbox"><table class="sheet-table">
+  <caption>s-M1 &middot; Piece detail, repaired &middot; screen sheet</caption>
+  <tr><th>Purpose</th><td>Let a person decide about a $4,200 object: who made it, how big it is, when it would arrive, and who to ask. Today the same screen fails to load at all, and when it loads it carries no dimension, no lead time and often the retailer&rsquo;s name instead of the maker&rsquo;s.</td></tr>
+  <tr><th>Entry points</th><td>A browse card &middot; a Saved row &middot; a board tile &middot; <code>patina://piece/&lt;id&gt;</code> &middot; a shared link once SP-03 lands.</td></tr>
+  <tr><th>Components</th><td><b>Existing:</b> <code>ProductDetailView</code> (hero, floating bar, maker line, name, materials, price + match pill, maker-story card), <code>ProductDetailViewModel</code>, <code>PatinaAsyncImage</code>. <b>New:</b> the two spec lines under the price; the <code>Get design help</code> act in the bottom bar; the save toast; the Hearth yielding on a screen that owns a primary act.</td></tr>
+  <tr><th>Copy</th><td>&ldquo;Nordic Atelier&rdquo; &middot; &ldquo;Heirloom Oak Dining Table&rdquo; &middot; &ldquo;Quarter-sawn white oak &middot; Hand-rubbed tung oil&rdquo; &middot; &ldquo;$4,200&rdquo; &middot; &ldquo;48% match&rdquo; &middot; &ldquo;38&Prime; W &times; 20&Prime; D &times; 30&Prime; H&rdquo; <i>[example]</i> &middot; &ldquo;Ships in 10&ndash;12 weeks&rdquo; <i>[example]</i> &middot; &ldquo;Each table is made to order by a three-person workshop outside Aarhus.&rdquo; &middot; &ldquo;Saved&rdquo; / &ldquo;See all&rdquo; &middot; &ldquo;Get design help&rdquo; &middot; &ldquo;Add to Room&rdquo;. Error copy is unchanged: &ldquo;Couldn&rsquo;t load product&rdquo; / &ldquo;Let&rsquo;s try that again.&rdquo;</td></tr>
+  <tr><th>Data</th><td><code>products</code> direct fetch with the vendor embed qualified as <code>vendors!products_vendor_id_fkey</code> (<code>ProductAPIClient.swift:99</code>); maker from <code>products.brand</code> (&ldquo;Nordic Atelier&rdquo; is the seed&rsquo;s own value) with the vendor as fallback; <code>dimensions</code> (jsonb, <code>00001</code>) and <code>lead_time_weeks</code> widen <code>get_recommendations</code> (<code>00246:273-300</code>) and are decoded by <code>ProductModel</code>. Both are <b>null on every seeded catalog row</b>, so the two spec values are example copy. The maker story renders <code>vendors.brand_story</code>, populated on <b>0 of 104</b> vendors &mdash; drawn here from the piece&rsquo;s own seeded description. Match and its price are the seed&rsquo;s (48%, $4,200); the photograph is a real crop of the walk&rsquo;s own catalog.</td></tr>
+  <tr><th>States</th><td>Loading &mdash; the Strata placeholder on <code>Background.secondary</code>, never a grey box. Error &mdash; the existing copy <b>with a back chevron</b>, so a failure is not a trap. No dimension / no lead time / no maker story &mdash; each line is omitted entirely, never zeroed or filled with a placeholder. No maker resolves &mdash; the piece is withheld from the feed rather than shipped as &ldquo;Unknown Maker&rdquo;. Already saved &mdash; the heart is filled on appear and a second tap does not write a second row.</td></tr>
+  <tr><th>Interactions</th><td>Back &middot; help &middot; share (SP-03) &middot; heart = save. <code>Add to Room</code> opens the existing <code>AddToRoomSheet</code>; <code>Get design help</code> opens a thread with the piece named (<code>rpc_start_project_thread</code> / <code>rpc_start_direct_thread</code>, both already granted to <code>authenticated</code>). Analytics: existing <code>trackInteraction</code> types <code>view</code> / <code>save</code> / <code>share</code>; new <code>product_ask_tapped</code>, <code>product_saved</code>.</td></tr>
+  <tr><th>Tier</th><td>Drawn at <b>discovering</b>, signed in, at least one room on the device. At engaged / activeProject the ghost act reads <b>&ldquo;Message your designer&rdquo;</b> instead of &ldquo;Get design help&rdquo; (SP-13). Guest: identical, and the save is device-local until the claim step (SP-06).</td></tr>
+  <tr><th>Callouts</th><td>1 &middot; it loads at all &mdash; the ambiguous-embed <code>PGRST201</code> is qualified, and the error state keeps this chevron (SP-01). 2 &middot; the maker is the maker: <code>brand</code>, not the vendor the card prints today (SP-10). 3 &middot; price and the shipped match pill, unchanged. 4 &middot; size and lead time, the two lines a $4,200 decision needs (SP-10) &mdash; example values. 5 &middot; the maker story, drawn only when there is one to draw. 6 &middot; the save is confirmed once: filled heart, one line, and a door to Saved (SP-14). 7 &middot; the acts sit in a bar the Companion does not cover &mdash; the Hearth yields on a screen that owns a primary act (SP-19), and the ask lives here (SP-13).</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>The dimension and lead-time lines, the maker line&rsquo;s source, the maker-story content contract, the ask in the action bar, the save confirmation, and the Hearth yielding. The load fix and the back chevron on the error state are repairs, not additions.</td></tr>
+</table>
+</div></div>
+<div class="cell"><p class="cap">s-M2 · Saved · All items — SP-12/14</p><!-- s-M2 · Shared planks — Saved, opened where the pieces are.
+     SP-12 (a door, and the right tab) · SP-14 (saved once, one currency formatter).
+     Additions to the kit, scoped under .sp-saved: .sp-saved__new, .sp-saved__list, .saved-row__maker. -->
+<div class="frame-wrap sp-saved">
+  <style>
+    .sp-saved .screen-head__title { font:400 26px/1.18 var(--pat-serif); }
+    .sp-saved .sp-saved__new { color:var(--pat-text-link); }
+    .sp-saved .sp-saved__new svg { width:22px; height:22px; }
+    .sp-saved .sp-saved__list { padding:24px; display:flex; flex-direction:column; gap:12px; }
+    .sp-saved .saved-row__maker { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+      letter-spacing:.4px; color:var(--pat-text-muted); }
+    .sp-saved .saved-row__thumb .tile-placeholder { border-radius:var(--pat-r-md); }
+  </style>
+
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+
+      <div class="screen-body screen-body--scroll">
+        <div class="screen-head">
+          <div class="screen-head__row">
+            <span class="screen-head__title">Saved</span>
+            <span class="icon-btn sp-saved__new"><svg><use href="#i-plus-circle"/></svg></span>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <span class="tab"><span class="tab__label">Boards</span><span class="tab__rule"></span></span>
+          <span class="tab tab--active"><span class="tab__label">All items</span><span class="tab__rule"></span></span>
+        </div>
+
+        <div class="sp-saved__list">
+          <div class="saved-row">
+            <span class="saved-row__thumb"><img src="img/heirloom-thumb.jpg" alt="Heirloom Oak Dining Table"></span>
+            <span class="saved-row__copy">
+              <span class="saved-row__maker">Nordic Atelier</span>
+              <span class="saved-row__name">Heirloom Oak Dining Table</span>
+              <span class="saved-row__price">$4,200</span>
+            </span>
+            <span class="saved-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+
+          <div class="saved-row">
+            <span class="saved-row__thumb"><img src="img/live-edge-coffee-table.jpg" alt="Live-Edge Coffee Table"></span>
+            <span class="saved-row__copy">
+              <span class="saved-row__maker">Heritage Lumber</span>
+              <span class="saved-row__name">Live-Edge Coffee Table</span>
+              <span class="saved-row__price">$2,100</span>
+            </span>
+            <span class="saved-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+
+          <div class="saved-row">
+            <span class="saved-row__thumb">
+              <span class="tile-placeholder"><span class="strata strata--clay"><i></i><i></i><i></i></span></span>
+            </span>
+            <span class="saved-row__copy">
+              <span class="saved-row__maker">Studio Piet</span>
+              <span class="saved-row__name">Woven Jute Area Rug 8x10</span>
+              <span class="saved-row__price">$1,450</span>
+            </span>
+            <span class="saved-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+        </div>
+
+        <div class="pad-hearth"></div>
+      </div>
+
+      <div class="screen-chrome">
+        <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+      </div>
+
+      <div class="companion-dock">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:190px;right:24px">1</span>
+  <span class="callout-n" style="top:250px;right:24px">2</span>
+  <span class="callout-n" style="top:300px;right:24px">3</span>
+  <span class="callout-n" style="top:493px;right:24px">4</span>
+  <span class="callout-n callout-n--clay" style="top:773px;right:24px">5</span>
+</div>
+<div class="sheetbox"><table class="sheet-table">
+  <caption>s-M2 &middot; Saved &middot; All items &middot; screen sheet</caption>
+  <tr><th>Purpose</th><td>Show a person what they have chosen. Today Saved is reachable only from one Companion row that is withheld until something is already saved, and it opens on the empty Boards tab while the piece just saved sits one tab over.</td></tr>
+  <tr><th>Entry points</th><td>The Companion&rsquo;s &ldquo;Saved&rdquo; row &mdash; now offered <b>unconditionally</b>, with the count as its hint &middot; the &ldquo;See all&rdquo; act on the save toast (s-M1) &middot; back chevron returns.</td></tr>
+  <tr><th>Components</th><td><b>Existing:</b> <code>CollectionsView</code> header + tabs, <code>ProductCard</code> (list variant) as the saved row, <code>PatinaScreenChrome</code>, <code>CompanionHearthView</code>. <b>New:</b> the default-tab rule, the Companion row&rsquo;s unconditional return, one currency formatter across both surfaces.</td></tr>
+  <tr><th>Copy</th><td>&ldquo;Saved&rdquo; &middot; tabs &ldquo;Boards&rdquo; / &ldquo;All items&rdquo; &middot; &ldquo;Nordic Atelier&rdquo; / &ldquo;Heirloom Oak Dining Table&rdquo; / &ldquo;$4,200&rdquo; &middot; &ldquo;Heritage Lumber&rdquo; / &ldquo;Live-Edge Coffee Table&rdquo; / &ldquo;$2,100&rdquo; &middot; &ldquo;Studio Piet&rdquo; / &ldquo;Woven Jute Area Rug 8x10&rdquo; / &ldquo;$1,450&rdquo;. All three pieces, makers and prices are seed rows.</td></tr>
+  <tr><th>Data</th><td><code>TableItemModel</code> in the local store, reconciled against <code>saved_items</code> (<code>room_id</code> is nullable, <code>00055</code>) so a save survives a reinstall and reaches a second device. Prices route through the one formatter &mdash; today the row prints <code>$4200</code> where the grid prints <code>$4,200</code>. <b>Three saved pieces is example state:</b> the walk&rsquo;s guest account held one and <code>client@patina.dev</code> holds none.</td></tr>
+  <tr><th>States</th><td>Nothing saved &mdash; the empty state, still reachable, because the door no longer depends on the count. Image not yet loaded or failed &mdash; the Strata placeholder (row 3). Saved on this phone but not yet mirrored &mdash; the row carries <code>SAVED ON THIS PHONE</code>. Boards empty &mdash; this tab is the default.</td></tr>
+  <tr><th>Interactions</th><td>Row &rarr; piece detail (<code>pieceDetail(pieceId:)</code>). <code>+</code> &rarr; the existing New Board alert. Pull to refresh re-reads the store and the remote reconciliation. Analytics: <code>saved_opened</code> (<code>tab</code>), <code>saved_item_tapped</code> &mdash; both new; the app fires nothing here today.</td></tr>
+  <tr><th>Tier</th><td>Every tier. A guest&rsquo;s saves are device-local until the claim step at first sign-in (SP-06); nothing on this screen is designer-gated.</td></tr>
+  <tr><th>Callouts</th><td>1 &middot; Saved opens where the pieces are &mdash; All items whenever the board count is zero (SP-12). 2 &middot; the piece saved on the detail screen is here, once: <code>toggleSave</code> is idempotent on <code>productId</code> (SP-14). 3 &middot; one currency formatter, so the row and the grid agree (SP-14). 4 &middot; a piece whose image has not arrived draws the Strata placeholder, never a grey box. 5 &middot; the Companion still owns the bottom 120 pt: this screen has no primary act to cover.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>The unconditional Saved row, the default tab, the remote mirror of every save, and the single price formatter. The screen, the tabs and the row layout all ship today.</td></tr>
+</table>
+</div></div>
+<div class="cell"><p class="cap">s-M3 · Saved · Boards — SP-12</p><!-- s-M3 · Shared planks — Saved, Boards: a board that actually holds pieces.
+     SP-12 (either wire the save path to addToBoard, or take Boards out of the app).
+     Additions to the kit, scoped under .sp-boards: .sp-boards__new, .sp-boards__body. -->
+<div class="frame-wrap sp-boards">
+  <style>
+    .sp-boards .screen-head__title { font:400 26px/1.18 var(--pat-serif); }
+    .sp-boards .sp-boards__new { color:var(--pat-text-link); }
+    .sp-boards .sp-boards__new svg { width:22px; height:22px; }
+    .sp-boards .sp-boards__body { padding:24px; display:flex; flex-direction:column; gap:12px; }
+  </style>
+
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+
+      <div class="screen-body screen-body--scroll">
+        <div class="screen-head">
+          <div class="screen-head__row">
+            <span class="screen-head__title">Saved</span>
+            <span class="icon-btn sp-boards__new"><svg><use href="#i-plus-circle"/></svg></span>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <span class="tab tab--active"><span class="tab__label">Boards</span><span class="tab__rule"></span></span>
+          <span class="tab"><span class="tab__label">All items</span><span class="tab__rule"></span></span>
+        </div>
+
+        <div class="sp-boards__body">
+          <div class="board-head">
+            <span class="board-head__name">Living Room</span>
+            <span class="mono-label">3 items</span>
+          </div>
+
+          <div class="board-tile">
+            <span class="board-tile__cell">
+              <img src="img/heirloom-thumb.jpg" alt="Heirloom Oak Dining Table">
+              <span class="board-tile__price">$4,200</span>
+            </span>
+            <span class="board-tile__cell">
+              <img src="img/live-edge-coffee-table.jpg" alt="Live-Edge Coffee Table">
+              <span class="board-tile__price">$2,100</span>
+            </span>
+            <span class="board-tile__cell">
+              <span class="tile-placeholder"><span class="strata strata--clay"><i></i><i></i><i></i></span></span>
+              <span class="board-tile__price">$1,450</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="pad-hearth"></div>
+      </div>
+
+      <div class="screen-chrome">
+        <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+      </div>
+
+      <div class="companion-dock">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:190px;right:24px">1</span>
+  <span class="callout-n" style="top:251px;left:150px">2</span>
+  <span class="callout-n" style="top:300px;right:24px">3</span>
+  <span class="callout-n callout-n--clay" style="top:100px;right:24px">4</span>
+</div>
+<div class="sheetbox"><table class="sheet-table">
+  <caption>s-M3 &middot; Saved &middot; Boards &middot; screen sheet</caption>
+  <tr><th>Purpose</th><td>A board that actually holds pieces. Today Boards is the default tab, it is the first thing a new reader sees, and it can never fill: <code>addToBoard</code> is not called from anywhere in the app.</td></tr>
+  <tr><th>Entry points</th><td>The Boards tab &middot; the Companion&rsquo;s &ldquo;Saved&rdquo; row when at least one board exists.</td></tr>
+  <tr><th>Components</th><td><b>Existing:</b> <code>CollectionsView.boardSection</code> (name, mono count, three-up grid of <code>ProductCard</code> tiles), the New Board alert. <b>New:</b> the wiring &mdash; the save path calls <code>addToBoard</code>, or Boards comes out of the app until it holds something.</td></tr>
+  <tr><th>Copy</th><td>&ldquo;Saved&rdquo; &middot; &ldquo;Boards&rdquo; / &ldquo;All items&rdquo; &middot; board name &ldquo;Living Room&rdquo; <i>[example &mdash; a board name is the reader&rsquo;s own]</i> &middot; &ldquo;3 items&rdquo; &middot; tile prices &ldquo;$4,200&rdquo; / &ldquo;$2,100&rdquo; / &ldquo;$1,450&rdquo;. The empty state keeps its shipped copy: &ldquo;No boards yet&rdquo; / &ldquo;Save pieces from recommendations to create your first board&rdquo; / &ldquo;Create Board&rdquo;.</td></tr>
+  <tr><th>Data</th><td><code>BoardModel</code> in the local store; tiles resolve through <code>itemsByProductId</code> to the same <code>TableItemModel</code> rows the All items tab reads. Boards are device-local today &mdash; a remote mirror is direction work, not this plank, and the deck should not imply one.</td></tr>
+  <tr><th>States</th><td>No boards &mdash; the empty state, and All items becomes the default tab. A board with no items &mdash; the head draws, the grid does not. Tile image missing &mdash; the Strata placeholder, with the price still legible.</td></tr>
+  <tr><th>Interactions</th><td>Tile &rarr; piece detail. <code>+</code> &rarr; New Board alert (existing, unchanged). Analytics: <code>board_created</code>, <code>board_opened</code> &mdash; both new.</td></tr>
+  <tr><th>Tier</th><td>Every tier, including guest. Nothing here is designer-gated.</td></tr>
+  <tr><th>Callouts</th><td>1 &middot; Boards is the default only once a board exists (SP-12). 2 &middot; the count is the board&rsquo;s own, and it can be non-zero because saving now writes to the board. 3 &middot; a tile with no image is the honest placeholder, price still readable. 4 &middot; <code>+</code> is the shipped board-creation alert &mdash; the only part of Boards that works today.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>Everything that makes a board fill. The screen, the head, the grid and the alert exist; the path from a save to a board does not.</td></tr>
+</table>
+</div></div>
+<div class="cell"><p class="cap">s-M4 · The permission moment — SP-08</p><!-- s-M4 · Shared planks — the permission moment, explained before it is asked.
+     SP-08 (the sentence is verbatim; the ask moves to the first event a client would want to hear about).
+     Headline and buttons follow Direction A M8; Direction B words the headline "Four things, and nothing
+     else." and names a fourth event (an order moving).
+     Additions to the kit, scoped under .sp-primer. -->
+<div class="frame-wrap sp-primer">
+  <style>
+    .sp-primer .sp-primer__body { padding:calc(var(--pat-safe-top) + 72px) var(--pat-gutter-push) 0;
+      display:flex; flex-direction:column; }
+    .sp-primer .sp-primer__mark { padding-bottom:28px; }
+    .sp-primer .sp-primer__title { font:400 26px/1.18 var(--pat-serif); color:var(--pat-text);
+      padding-bottom:14px; }
+    .sp-primer .sp-primer__promise { font:400 16px/1.45 var(--pat-sans); color:var(--pat-text-2);
+      padding-bottom:28px; }
+    .sp-primer .sp-primer__list { display:flex; flex-direction:column; gap:14px; }
+    .sp-primer .sp-primer__item { display:flex; align-items:center; gap:12px; }
+    .sp-primer .sp-primer__dot { width:6px; height:6px; border-radius:50%;
+      background:var(--pat-clay); flex:0 0 auto; }
+    .sp-primer .sp-primer__acts { position:absolute; left:var(--pat-gutter-push);
+      right:var(--pat-gutter-push); bottom:44px; display:flex; flex-direction:column;
+      align-items:center; gap:8px; }
+  </style>
+
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+
+      <div class="screen-body">
+        <div class="sp-primer__body">
+          <span class="sp-primer__mark"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+          <span class="sp-primer__title">Only when something needs you.</span>
+          <span class="sp-primer__promise">We&rsquo;ll tell you when your designer sends something that needs
+            you &mdash; a decision, a proposal, or an invoice. Nothing else.</span>
+
+          <div class="sp-primer__list">
+            <span class="sp-primer__item"><span class="sp-primer__dot"></span><span class="mono-label">A decision to make</span></span>
+            <span class="sp-primer__item"><span class="sp-primer__dot"></span><span class="mono-label">A proposal to read</span></span>
+            <span class="sp-primer__item"><span class="sp-primer__dot"></span><span class="mono-label">An invoice coming due</span></span>
+          </div>
+        </div>
+
+        <div class="sp-primer__acts">
+          <span class="btn btn--primary">Turn on notifications</span>
+          <span class="btn btn--ghost">Not now</span>
+        </div>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:147px;right:24px">1</span>
+  <span class="callout-n" style="top:200px;right:24px">2</span>
+  <span class="callout-n" style="top:390px;right:24px">3</span>
+  <span class="callout-n" style="top:743px;right:24px">4</span>
+  <span class="callout-n callout-n--clay" style="top:803px;right:24px">5</span>
+</div>
+<div class="sheetbox"><table class="sheet-table">
+  <caption>s-M4 &middot; The permission moment &middot; screen sheet</caption>
+  <tr><th>Purpose</th><td>Spend the one grant well. Authorization is requested exactly once per install, and today it fires silently the moment a design request is submitted &mdash; unrelated to money, with no copy at all. This screen is the sentence that earns it, shown before the system asks.</td></tr>
+  <tr><th>Entry points</th><td>The first client-facing <code>notification_log</code> row of type proposal, decision or invoice &mdash; not cold launch, and not the design-request submit. Settings also reaches it while the grant is still unspent.</td></tr>
+  <tr><th>Components</th><td><b>New:</b> this screen. <b>Existing:</b> <code>PushTokenService</code> (the request itself, <code>:87-108</code>), <code>PatinaButton</code>, <code>MonoLabel</code>, the Strata mark.</td></tr>
+  <tr><th>Copy</th><td>Headline &ldquo;Only when something needs you.&rdquo; &middot; body, <b>verbatim from SP-08 and the only version of it anywhere</b>: &ldquo;We&rsquo;ll tell you when your designer sends something that needs you &mdash; a decision, a proposal, or an invoice. Nothing else.&rdquo; &middot; three mono lines: &ldquo;A decision to make&rdquo;, &ldquo;A proposal to read&rdquo;, &ldquo;An invoice coming due&rdquo; &middot; &ldquo;Turn on notifications&rdquo; &middot; &ldquo;Not now&rdquo;. The headline and the two buttons follow Direction A&rsquo;s M8; Direction B words the headline &ldquo;Four things, and nothing else.&rdquo; and adds a fourth line, an order moving.</td></tr>
+  <tr><th>Data</th><td>None &mdash; copy only. What follows it does have data: <code>apns-send</code> is complete and provisioned, <code>device_push_tokens</code> is live, and <code>NotificationRouter</code> already routes <code>proposal</code>, <code>invoice</code> and <code>decision</code> payloads nobody emits yet.</td></tr>
+  <tr><th>States</th><td>Never asked &mdash; this screen. Declined here &mdash; we do not ask again; Settings carries the switch. Denied at the system prompt &mdash; iOS will not show it again this install, and the Settings row deep-links to the iOS setting. Already granted &mdash; the screen never appears.</td></tr>
+  <tr><th>Interactions</th><td>&ldquo;Turn on notifications&rdquo; &rarr; the system prompt (s-M5). &ldquo;Not now&rdquo; dismisses and is a real button, the same weight as the other. Analytics: <code>push_permission_prompted</code> (<code>trigger</code>, <code>outcome</code>) &mdash; new.</td></tr>
+  <tr><th>Tier</th><td>Engaged and activeProject only. A discovering reader or a guest is never asked, because nothing can yet be sent to them that this sentence promises.</td></tr>
+  <tr><th>Callouts</th><td>1 &middot; the mark, and no chrome &mdash; this is a moment, not a settings page. 2 &middot; the promise, in the app&rsquo;s own voice, before the system&rsquo;s. 3 &middot; the three events named, so the sentence can be checked against what actually arrives. 4 &middot; the ask. 5 &middot; the refusal, weighted like a choice and not a trap.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>All of it. The app has no pre-permission copy anywhere, and asks at the wrong moment.</td></tr>
+</table>
+</div></div>
+<div class="cell"><p class="cap">s-M5 · The system prompt, after the primer — SP-08</p><!-- s-M5 · Shared planks — the system prompt, once, and only after the screen that explains it.
+     SP-08. Apple's alert is drawn to Apple's own copy and metrics (kit .sys-alert); nothing in it is ours.
+     Additions to the kit, scoped under .sp-primer (shared with s-M4). -->
+<div class="frame-wrap sp-primer">
+  <style>
+    .sp-primer .sp-primer__body { padding:calc(var(--pat-safe-top) + 72px) var(--pat-gutter-push) 0;
+      display:flex; flex-direction:column; }
+    .sp-primer .sp-primer__mark { padding-bottom:28px; }
+    .sp-primer .sp-primer__title { font:400 26px/1.18 var(--pat-serif); color:var(--pat-text);
+      padding-bottom:14px; }
+    .sp-primer .sp-primer__promise { font:400 16px/1.45 var(--pat-sans); color:var(--pat-text-2);
+      padding-bottom:28px; }
+    .sp-primer .sp-primer__list { display:flex; flex-direction:column; gap:14px; }
+    .sp-primer .sp-primer__item { display:flex; align-items:center; gap:12px; }
+    .sp-primer .sp-primer__dot { width:6px; height:6px; border-radius:50%;
+      background:var(--pat-clay); flex:0 0 auto; }
+    .sp-primer .sp-primer__acts { position:absolute; left:var(--pat-gutter-push);
+      right:var(--pat-gutter-push); bottom:44px; display:flex; flex-direction:column;
+      align-items:center; gap:8px; }
+  </style>
+
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+
+      <div class="screen-body">
+        <div class="sp-primer__body">
+          <span class="sp-primer__mark"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+          <span class="sp-primer__title">Only when something needs you.</span>
+          <span class="sp-primer__promise">We&rsquo;ll tell you when your designer sends something that needs
+            you &mdash; a decision, a proposal, or an invoice. Nothing else.</span>
+
+          <div class="sp-primer__list">
+            <span class="sp-primer__item"><span class="sp-primer__dot"></span><span class="mono-label">A decision to make</span></span>
+            <span class="sp-primer__item"><span class="sp-primer__dot"></span><span class="mono-label">A proposal to read</span></span>
+            <span class="sp-primer__item"><span class="sp-primer__dot"></span><span class="mono-label">An invoice coming due</span></span>
+          </div>
+        </div>
+
+        <div class="sp-primer__acts">
+          <span class="btn btn--primary">Turn on notifications</span>
+          <span class="btn btn--ghost">Not now</span>
+        </div>
+      </div>
+
+      <div class="sys-alert-scrim">
+        <div class="sys-alert">
+          <div class="sys-alert__body">
+            <div class="sys-alert__title">&ldquo;Patina&rdquo; Would Like to Send You Notifications</div>
+            <div class="sys-alert__msg">Notifications may include alerts, sounds and icon badges. These can be configured in Settings.</div>
+          </div>
+          <div class="sys-alert__actions">
+            <button class="sys-alert__btn">Don&rsquo;t Allow</button>
+            <button class="sys-alert__btn">Allow</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:379px;left:20px">1</span>
+  <span class="callout-n" style="top:496px;left:20px">2</span>
+  <span class="callout-n callout-n--clay" style="top:496px;right:20px">3</span>
+</div>
+<div class="sheetbox"><table class="sheet-table">
+  <caption>s-M5 &middot; The system prompt &middot; screen sheet</caption>
+  <tr><th>Purpose</th><td>Show what the primer buys: one iOS prompt, once per install, arriving after a person already knows what they are being asked for.</td></tr>
+  <tr><th>Entry points</th><td>&ldquo;Turn on notifications&rdquo; on s-M4 &mdash; the only path. iOS shows this alert once; there is no second chance in the same install.</td></tr>
+  <tr><th>Components</th><td><b>System:</b> <code>UNUserNotificationCenter.requestAuthorization</code>&rsquo;s alert, drawn to Apple&rsquo;s metrics (270 pt, 14 pt radius, hairline-split buttons, <code>#007AFF</code>, the right-hand button semibold). <b>Existing:</b> <code>PushTokenService.requestAuthorization</code> and its one-per-install guard.</td></tr>
+  <tr><th>Copy</th><td>Apple&rsquo;s, not ours: &ldquo;&lsquo;Patina&rsquo; Would Like to Send You Notifications&rdquo; / &ldquo;Notifications may include alerts, sounds and icon badges. These can be configured in Settings.&rdquo; / &ldquo;Don&rsquo;t Allow&rdquo; &middot; &ldquo;Allow&rdquo;. The only copy we control is the screen behind it.</td></tr>
+  <tr><th>Data</th><td>On Allow: the APNs token registers into <code>device_push_tokens</code> through the existing service. Nothing else is written.</td></tr>
+  <tr><th>States</th><td>Allow &rarr; token stored, the pushes SP-08 describes can send. Don&rsquo;t Allow &rarr; nothing is sent; the in-app feed and email carry the same events, which is why declining is cheap. The one-per-install guard is kept, so a silent prompt that never fires is a regression to watch for.</td></tr>
+  <tr><th>Interactions</th><td>Two buttons, Apple&rsquo;s. Analytics: the same <code>push_permission_prompted</code> event carries the <code>outcome</code>.</td></tr>
+  <tr><th>Tier</th><td>Engaged and activeProject only &mdash; the prompt is reached only through s-M4.</td></tr>
+  <tr><th>Callouts</th><td>1 &middot; Apple&rsquo;s alert, Apple&rsquo;s words &mdash; nothing here can be tuned, which is the whole argument for the screen behind it. 2 &middot; the decline is not a dead end: the feed and email still carry every event. 3 &middot; and it is final for this install &mdash; iOS will not ask twice, so the primer is the only lever we have.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>Only the moment it fires. Today this same alert appears immediately after a design-request submission, with nothing in front of it.</td></tr>
+</table>
+</div></div>
+<div class="cell"><p class="cap">s-M6 · What the partner receives — SP-03</p><!-- s-M6 · Shared planks — what the partner actually receives.
+     SP-03 (the share names the piece, the link opens the app). The phone here is not running Patina:
+     it is iOS Messages, drawn to Apple's chrome, so its greys and its blue are system values, not
+     Patina tokens — the only Patina ink on the screen is inside the link preview.
+     Additions to the kit, all scoped under .sp-share: .sp-share__nav/__thread/__bubble/__link/__bar. -->
+<div class="frame-wrap sp-share">
+  <style>
+    .sp-share .sp-share__screen { position:absolute; inset:0; background:#FFFFFF; }
+    .sp-share .sp-share__nav { position:absolute; top:0; left:0; right:0;
+      height:calc(var(--pat-safe-top) + 48px); background:rgba(249,249,249,.94);
+      backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+      border-bottom:.5px solid rgba(60,60,67,.24);
+      display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+      padding-bottom:6px; }
+    .sp-share .sp-share__back { position:absolute; left:12px; bottom:16px; color:#007AFF; }
+    .sp-share .sp-share__back svg { width:19px; height:19px; }
+    .sp-share .sp-share__who { display:flex; flex-direction:column; align-items:center; gap:2px; }
+    .sp-share .sp-share__name { font:400 11px/1.2 var(--pat-sans); color:#000; }
+    .sp-share .sp-share__thread { position:absolute; top:calc(var(--pat-safe-top) + 48px);
+      left:0; right:0; bottom:88px; padding:14px 16px; display:flex; flex-direction:column; gap:6px; }
+    .sp-share .sp-share__stamp { text-align:center; font:400 11px/1.4 var(--pat-sans);
+      color:rgba(60,60,67,.6); padding:4px 0 10px; }
+    .sp-share .sp-share__stamp b { font-weight:600; color:rgba(60,60,67,.85); }
+    .sp-share .sp-share__link { width:268px; border-radius:18px; overflow:hidden;
+      background:#E9E9EB; }
+    .sp-share .sp-share__linkart { height:150px; }
+    .sp-share .sp-share__linkart img { width:100%; height:100%; object-fit:cover; display:block; }
+    .sp-share .sp-share__linkfoot { padding:9px 12px 11px; display:flex; flex-direction:column; gap:2px; }
+    .sp-share .sp-share__linktitle { font:600 13px/1.3 var(--pat-sans); color:#000; }
+    .sp-share .sp-share__linksub { font:400 13px/1.3 var(--pat-sans); color:rgba(60,60,67,.7); }
+    .sp-share .sp-share__linkdom { font:400 11px/1.3 var(--pat-sans); color:rgba(60,60,67,.55);
+      text-transform:lowercase; padding-top:3px; }
+    .sp-share .sp-share__bubble { max-width:268px; padding:8px 14px; border-radius:18px;
+      background:#E9E9EB; color:#000; font:400 16px/1.3 var(--pat-sans); }
+    .sp-share .sp-share__bar { position:absolute; left:0; right:0; bottom:0; height:88px;
+      padding:10px 16px 0; display:flex; align-items:flex-start; gap:10px;
+      border-top:.5px solid rgba(60,60,67,.18); background:rgba(249,249,249,.94); }
+    .sp-share .sp-share__plus { width:32px; height:32px; border-radius:50%; background:#E9E9EB;
+      display:flex; align-items:center; justify-content:center; color:rgba(60,60,67,.7); flex:0 0 auto; }
+    .sp-share .sp-share__plus svg { width:17px; height:17px; }
+    .sp-share .sp-share__field { flex:1 1 auto; height:32px; border-radius:16px;
+      border:.5px solid rgba(60,60,67,.28); display:flex; align-items:center; padding:0 12px;
+      font:400 15px/1 var(--pat-sans); color:rgba(60,60,67,.5); }
+  </style>
+
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="sp-share__screen">
+
+        <div class="sp-share__nav">
+          <span class="sp-share__back"><svg><use href="#i-chev-l"/></svg></span>
+          <span class="sp-share__who">
+            <span class="monogram monogram--sm">M</span>
+            <span class="sp-share__name">Maya</span>
+          </span>
+        </div>
+
+        <div class="sp-share__thread">
+          <div class="sp-share__stamp"><b>Today</b> 9:38 PM</div>
+
+          <div class="sp-share__link">
+            <div class="sp-share__linkart">
+              <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table">
+            </div>
+            <div class="sp-share__linkfoot">
+              <span class="sp-share__linktitle">Heirloom Oak Dining Table</span>
+              <span class="sp-share__linksub">Nordic Atelier &middot; $4,200</span>
+              <span class="sp-share__linkdom">patina.cloud</span>
+            </div>
+          </div>
+
+          <div class="sp-share__bubble">Heirloom Oak Dining Table by Nordic Atelier on Patina</div>
+        </div>
+
+        <div class="sp-share__bar">
+          <span class="sp-share__plus"><svg><use href="#i-plus-circle"/></svg></span>
+          <span class="sp-share__field">iMessage</span>
+        </div>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:328px;right:24px">1</span>
+  <span class="callout-n" style="top:366px;right:24px">2</span>
+  <span class="callout-n" style="top:404px;right:24px">3</span>
+  <span class="callout-n callout-n--clay" style="top:220px;right:24px">4</span>
+</div>
+<div class="sheetbox"><table class="sheet-table">
+  <caption>s-M6 &middot; What the partner receives &middot; screen sheet</caption>
+  <tr><th>Purpose</th><td>The most-cited finding in the programme, drawn from the receiving end. A homeowner shares a $4,200 table with her husband; today he is handed a card titled <b>&ldquo;Patina Designer Portal&rdquo;</b> on <b>app.patina.cloud</b>, and tapping it cannot open the app even when the app is installed.</td></tr>
+  <tr><th>Entry points</th><td>The share glyph in the piece-detail floating bar (<code>ShareLink</code>, <code>ProductDetailView:117-121</code>). This phone is the recipient&rsquo;s, running Messages &mdash; not Patina.</td></tr>
+  <tr><th>Components</th><td><b>Existing:</b> the app&rsquo;s <code>ShareLink</code> and its message. <b>New:</b> a client-facing piece route with its own Open Graph title and image; <code>com.apple.developer.associated-domains</code> in <code>Patina.entitlements</code>; the piece path routed into the existing <code>DeepLinkHandler</code>. The Messages chrome is iOS, drawn to Apple&rsquo;s greys and blue.</td></tr>
+  <tr><th>Copy</th><td>Message, <b>unchanged and verbatim</b>: &ldquo;Heirloom Oak Dining Table by Nordic Atelier on Patina&rdquo;. Preview title &ldquo;Heirloom Oak Dining Table&rdquo;, subtitle &ldquo;Nordic Atelier &middot; $4,200&rdquo;, domain &ldquo;patina.cloud&rdquo;. Today the same preview reads &ldquo;Patina Designer Portal&rdquo; / &ldquo;app.patina.cloud&rdquo;.</td></tr>
+  <tr><th>Data</th><td>The share URL comes from <code>PatinaPortalLinks.swift:14-22</code> and points at <code>app.patina.cloud/library/&lt;productId&gt;</code> &mdash; the designer portal&rsquo;s Library route, which is why the preview carries the portal&rsquo;s title. The repair is portal-side (a client piece route + an <code>/.well-known/apple-app-site-association</code> file) plus the entitlement; no migration, no edge function. The photograph and the price are the seed&rsquo;s.</td></tr>
+  <tr><th>States</th><td>App installed &rarr; the link opens the piece in Patina. App not installed &rarr; the web piece page, which is a real page and not a login wall. Preview not yet fetched &rarr; Messages shows the bare link; nothing in the app depends on it. iOS caches the association file, so this is verified on a device, never in the Simulator.</td></tr>
+  <tr><th>Interactions</th><td>Tap the preview &rarr; universal link &rarr; <code>DeepLinkHandler</code> &rarr; piece detail. Analytics: existing <code>share</code> interaction on the sender&rsquo;s side; new <code>deep_link_opened</code> (<code>kind: piece</code>) on the receiver&rsquo;s.</td></tr>
+  <tr><th>Tier</th><td>Every tier, including guest &mdash; sharing is the one act in the app that reaches someone who has never opened it.</td></tr>
+  <tr><th>Callouts</th><td>1 &middot; the preview is the piece and its maker, not the designer portal. 2 &middot; the domain is a client-facing route on patina.cloud, not <code>app.patina.cloud/library/&lt;id&gt;</code>. 3 &middot; the message text is unchanged: &ldquo;{name} by {maker} on Patina&rdquo;. 4 &middot; tapping it opens the app, because the entitlement and the association file exist &mdash; today the app declares only the <code>patina://</code> scheme, so the link always lands in a browser.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>The route the link points at, its Open Graph title, and the associated-domains entitlement that lets an installed app catch it. The share sheet and its message already ship.</td></tr>
+</table>
+</div></div>
+<div class="cell"><p class="cap">s-M7 · Lock Screen push + widget (dark)</p><!-- s-M7 · Return surfaces — the Lock Screen: one banner, and a widget that says what moved.
+     SP-08 (the events that earn the permission) · SP-03 (the link opens the app).
+     Direction A M6 and Direction B 6a both draw this moment; the body copy here is B's wording
+     ("· review by Sep 8"), A words the same line "Read it by Sep 8."
+     Neither direction puts a count on the Lock Screen.
+     Additions to the kit, scoped under .sp-lock: .sp-lock__acc, .sp-lock__notifs. -->
+<div class="frame-wrap sp-lock">
+  <style>
+    .sp-lock .sp-lock__acc { width:340px; margin-top:34px; padding:10px 14px; border-radius:16px;
+      background:rgba(255,255,255,.14); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+      display:flex; flex-direction:column; gap:3px; }
+    .sp-lock .sp-lock__acclabel { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+      letter-spacing:.5px; color:rgba(255,255,255,.6); }
+    .sp-lock .sp-lock__accline { font:500 15px/1.3 var(--pat-sans); color:#FFFFFF; }
+    .sp-lock .sp-lock__notifs { margin-top:auto; margin-bottom:96px; }
+  </style>
+
+  <div class="frame" data-scheme="dark" data-battery="charging">
+    <div class="frame__screen">
+
+      <div class="lockscreen">
+        <div class="lockscreen__clock">
+          <div class="lockscreen__date">Wednesday, August 26</div>
+          <div class="lockscreen__time">9:41</div>
+        </div>
+
+        <div class="sp-lock__acc">
+          <span class="sp-lock__acclabel">Patina</span>
+          <span class="sp-lock__accline">Rug colour &mdash; asked Aug 22</span>
+        </div>
+
+        <div class="sp-lock__notifs">
+          <div class="push-banner">
+            <span class="push-banner__icon"><span class="strata"><i></i><i></i><i></i></span></span>
+            <div class="push-banner__copy">
+              <div class="push-banner__app">Patina</div>
+              <div class="push-banner__title">Leah sent a proposal</div>
+              <div class="push-banner__body">Aspen Loft &mdash; Living Room Refresh &middot; review by Sep 8.</div>
+            </div>
+            <span class="push-banner__time">now</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:250px;right:4px">1</span>
+  <span class="callout-n" style="top:706px;right:4px">2</span>
+  <span class="callout-n callout-n--clay" style="top:752px;right:4px">3</span>
+</div>
+<div class="sheetbox"><table class="sheet-table">
+  <caption>s-M7 &middot; Lock Screen: the push and the widget &middot; screen sheet</caption>
+  <tr><th>Purpose</th><td>The one honest interruption. Both directions send on the same events and both refuse a count on the Lock Screen: the surface says what moved, and the app it opens agrees with it.</td></tr>
+  <tr><th>Entry points</th><td>An APNs alert from <code>apns-send</code>, fired on a proposal sent, a decision raised, or an invoice sent or overdue. The widget refreshes on app foreground and by timeline policy &mdash; a delivered alert does not run app code, so the widget can be one open behind, and the directions say so rather than promising otherwise.</td></tr>
+  <tr><th>Components</th><td><b>New:</b> a WidgetKit extension &mdash; the app declares three targets and no extension of any kind, so this is an App Group, a second bundle id, and a second thing to keep in review. <b>Existing:</b> <code>apns-send</code> (complete, provisioned, five callers, none of which touch money), <code>device_push_tokens</code>, <code>NotificationRouter</code> (<code>:60-88</code> already routes <code>proposal</code>, <code>invoice</code>, <code>decision</code>).</td></tr>
+  <tr><th>Copy</th><td>Banner: &ldquo;Leah sent a proposal&rdquo; / &ldquo;Aspen Loft &mdash; Living Room Refresh &middot; review by Sep 8.&rdquo; (Direction B&rsquo;s wording; Direction A words the second line &ldquo;Read it by Sep 8.&rdquo;). Lock Screen widget: &ldquo;PATINA&rdquo; / &ldquo;Rug colour &mdash; asked Aug 22&rdquo;. Every push names the person and the object &mdash; never &ldquo;you have an update&rdquo;. Dates are seed dates: the proposal reviews by Sep 8, the rug decision has been waiting since Aug 22.</td></tr>
+  <tr><th>Data</th><td>Each call site passes a <code>notification_log_id</code>, which <code>apns-send</code> updates with delivery status, so the banner and the bell can never disagree. Proposal and invoice sends ride the existing edge functions; a decision needs one new SECURITY DEFINER trigger, because <code>00092</code> is a cron schedule and nothing fires on decision creation. The widget reads a small App Group snapshot written on every badge refresh.</td></tr>
+  <tr><th>States</th><td>Permission not granted &mdash; no push; the in-app feed and email carry the same events. Nothing waiting &mdash; the widget reads its empty line (&ldquo;Nothing moved since Thursday.&rdquo; / &ldquo;NOTHING NEEDS YOU&rdquo;), never a zero. Signed out &mdash; the wordmark and nothing else. Recurring reminders &mdash; the push rides the <i>transition</i> into sent, raised or overdue, once per entity, so a studio&rsquo;s reminder cadence cannot buzz a client daily.</td></tr>
+  <tr><th>Interactions</th><td>Tap the banner &rarr; <code>NotificationRouter</code> &rarr; the proposal. Tap the widget &rarr; the app, plain. Analytics: <code>push_received</code>, <code>push_opened</code> (<code>entity_type</code>), <code>widget_tapped</code> &mdash; all new.</td></tr>
+  <tr><th>Tier</th><td>Money and decision pushes at activeProject and engaged only. Discovering and guest are never sent one and are never asked for the permission.</td></tr>
+  <tr><th>Callouts</th><td>1 &middot; the Lock Screen widget carries what moved and its date &mdash; no badge, no tally of chores. 2 &middot; the banner names the person and the object, and carries the date the client is being held to. 3 &middot; it fires once per entity transition, guarded by the same <code>notification_log</code> row the in-app bell reads.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>The sends for money and decisions (five push callers exist; none touches an invoice, a proposal, a decision or an order), the widget target, and the pairing of the push with the screen it opens.</td></tr>
+</table>
+</div></div>
+<div class="cell"><p class="cap">s-M8 · Home Screen widgets, small + medium (dark)</p><!-- s-M8 · Return surfaces — the Home Screen: a small and a medium widget, drawn dark.
+     Both directions require a new WidgetKit target (the app has three targets and no extension of any
+     kind) and both forbid a count on the widget: it carries what moved, not what is owed.
+     Copy: A's "LEAH SENT A PROPOSAL / Tuesday", B's eyebrow "SINCE THU".
+     Additions to the kit, scoped under .sp-widgets: __wall, __grid, __row, __when, __icon, __dots. -->
+<div class="frame-wrap sp-widgets">
+  <style>
+    .sp-widgets .sp-widgets__wall { position:absolute; inset:0; }
+    .sp-widgets .widget { background:var(--pat-bg-2); }
+    .sp-widgets .sp-widgets__grid { position:absolute; left:19px; right:19px;
+      top:calc(var(--pat-safe-top) + 62px); display:flex; flex-direction:column; gap:26px; }
+    .sp-widgets .sp-widgets__pair { display:flex; align-items:flex-start; gap:24px; }
+    .sp-widgets .sp-widgets__rows { display:flex; flex-direction:column; gap:12px; margin-top:auto; }
+    .sp-widgets .sp-widgets__row { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+    .sp-widgets .sp-widgets__line { font:500 15px/1.3 var(--pat-sans); color:var(--pat-text); }
+    .sp-widgets .sp-widgets__when { font:400 9px/1.4 var(--pat-mono); text-transform:uppercase;
+      letter-spacing:.4px; color:var(--pat-text-muted); flex:0 0 auto; }
+    .sp-widgets .sp-widgets__hr { height:1px; background:var(--pat-pearl); opacity:.5; }
+    .sp-widgets .sp-widgets__app { display:flex; flex-direction:column; align-items:center; gap:6px;
+      width:60px; margin-top:6px; }
+    .sp-widgets .sp-widgets__icon { width:60px; height:60px; border-radius:14px;
+      background:var(--pat-bg-dark); display:flex; align-items:center; justify-content:center;
+      box-shadow:0 8px 24px rgba(0,0,0,.28); }
+    .sp-widgets .sp-widgets__label { font:400 11px/1.2 var(--pat-sans); color:#FFFFFF; }
+    .sp-widgets .sp-widgets__dots { position:absolute; left:0; right:0; bottom:56px;
+      display:flex; justify-content:center; gap:7px; }
+    .sp-widgets .sp-widgets__dots i { width:6px; height:6px; border-radius:50%;
+      background:rgba(255,255,255,.35); }
+    .sp-widgets .sp-widgets__dots i:first-child { background:rgba(255,255,255,.9); }
+  </style>
+
+  <div class="frame" data-scheme="dark" data-battery="charging">
+    <div class="frame__screen">
+      <div class="lockscreen sp-widgets__wall"></div>
+
+      <div class="sp-widgets__grid">
+        <div class="widget widget--md">
+          <div class="widget__head">
+            <span class="widget__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="widget__eyebrow">Since Thu</span>
+          </div>
+          <div class="sp-widgets__rows">
+            <div class="sp-widgets__row">
+              <span class="sp-widgets__line">Leah sent a proposal</span>
+              <span class="sp-widgets__when">Tue</span>
+            </div>
+            <div class="sp-widgets__hr"></div>
+            <div class="sp-widgets__row">
+              <span class="sp-widgets__line">Leah asked about the rug colour</span>
+              <span class="sp-widgets__when">Aug 22</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sp-widgets__pair">
+          <div class="widget widget--sm">
+            <div class="widget__head">
+              <span class="widget__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+              <span class="widget__eyebrow">Since Thu</span>
+            </div>
+            <span class="widget__title">Leah sent a proposal</span>
+            <span class="widget__meta">Tuesday</span>
+          </div>
+
+          <div class="sp-widgets__app">
+            <span class="sp-widgets__icon"><span class="strata strata--clay"><i></i><i></i><i></i></span></span>
+            <span class="sp-widgets__label">Patina</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sp-widgets__dots"><i></i><i></i></div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:150px;left:133px">1</span>
+  <span class="callout-n" style="top:225px;left:293px">2</span>
+  <span class="callout-n" style="top:330px;left:163px">3</span>
+  <span class="callout-n callout-n--clay" style="top:330px;left:296px">4</span>
+</div>
+<div class="sheetbox"><table class="sheet-table">
+  <caption>s-M8 &middot; Home Screen widgets &middot; screen sheet</caption>
+  <tr><th>Purpose</th><td>Give a person a reason to come back without asking them to open anything: a small and a medium widget that carry the record of what moved since they were last here.</td></tr>
+  <tr><th>Entry points</th><td>The iOS widget gallery. Tapping either opens the app; the deck draws the Home Screen, not the gallery.</td></tr>
+  <tr><th>Components</th><td><b>New:</b> one WidgetKit extension serving both families (and the Lock Screen rectangular on s-M7) &mdash; an App Group entitlement, its own bundle id under the existing ASC app, and a timeline provider. <b>Existing:</b> the badge refresh that already computes the counts this snapshot is written from.</td></tr>
+  <tr><th>Copy</th><td>Eyebrow &ldquo;SINCE THU&rdquo; &middot; &ldquo;Leah sent a proposal&rdquo; / &ldquo;Tue&rdquo; &middot; &ldquo;Leah asked about the rug colour&rdquo; / &ldquo;Aug 22&rdquo; &middot; small: &ldquo;Leah sent a proposal&rdquo; / &ldquo;Tuesday&rdquo;. Empty: &ldquo;Nothing moved since Thursday.&rdquo; (B) or &ldquo;NOTHING NEEDS YOU&rdquo; over the room (A). Signed out: the wordmark and the mark, nothing else. <i>The weekday labels are example dates; the rug decision&rsquo;s Aug 22 is the seed&rsquo;s.</i></td></tr>
+  <tr><th>Data</th><td>An App Group snapshot written on app foreground &mdash; the same queue the Studio and the bell read (<code>BadgeCountService</code>, <code>StudioQueueBuilder</code>). No network call from the extension. A delivered push does not run app code and adding <code>content-available</code> would change the payload for every existing <code>apns-send</code> caller, so the widget is allowed to be one open behind by design.</td></tr>
+  <tr><th>States</th><td>Nothing moved &mdash; the empty line, never a zero and never a count. Signed out &mdash; the wordmark. No data yet &mdash; &ldquo;Open Patina to see your house.&rdquo; Stale &mdash; the eyebrow always names the window it is describing, so an old snapshot reads as a date rather than as a lie.</td></tr>
+  <tr><th>Interactions</th><td>Tap &rarr; the app (<code>patina://</code>), landing on Today. Analytics: <code>widget_tapped</code> / <code>widget_opened</code> &mdash; new.</td></tr>
+  <tr><th>Tier</th><td>The widget renders only for a signed-in account. At discovering it can still carry a room and a save; the money and designer lines belong to engaged and above.</td></tr>
+  <tr><th>Callouts</th><td>1 &middot; the eyebrow dates the window &mdash; &ldquo;since Thursday&rdquo;, not &ldquo;4 items&rdquo;. 2 &middot; two rows of what moved, each with its own date; both directions forbid a running tally of chores on this surface. 3 &middot; the small family carries the same top line and nothing more. 4 &middot; the extension itself is the cost: the app has three targets and no extension today, so this is a bundle id, an App Group and an engineer-week, not a free win.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>All of it. There is no widget, no extension target and no App Group in the project.</td></tr>
+</table>
+</div></div>
+<div class="cell"><p class="cap">s-M9 · Live Activity, a delivery (dark)</p><!-- s-M9 · Return surfaces — a Live Activity for a delivery, drawn as the two things it is at once:
+     the compact activity wrapped around the Dynamic Island (which it replaces) and the expanded card
+     on the Lock Screen. Proposed by neither direction as wave-1 work: Direction A declines Live
+     Activities outright; Direction B admits one only at W6, once a line is really shipped and an ETA
+     is real. The step names are the transitions fulfillment-notify already sends.
+     Additions to the kit, scoped under .sp-live: __eta, __notifs. -->
+<div class="frame-wrap sp-live">
+  <style>
+    .sp-live .sp-live__notifs { margin-top:auto; margin-bottom:96px; }
+    .sp-live .sp-live__eta { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+      letter-spacing:.5px; color:var(--pat-clay); }
+    .sp-live .live-card__head { justify-content:space-between; }
+    .sp-live .live-card__bar > i { width:74%; }
+    .sp-live .live-pill { min-width:0; width:172px; }
+  </style>
+
+  <div class="frame" data-scheme="dark" data-battery="charging">
+    <div class="frame__screen">
+
+      <div class="lockscreen">
+        <div class="lockscreen__clock">
+          <div class="lockscreen__date">Thursday, September 10</div>
+          <div class="lockscreen__time">9:41</div>
+        </div>
+
+        <div class="sp-live__notifs">
+          <div class="live-card">
+            <div class="live-card__head">
+              <span class="live-card__app">Patina &middot; Delivery</span>
+              <span class="sp-live__eta">Arriving 2&ndash;4 PM</span>
+            </div>
+            <div>
+              <div class="live-card__title">Heirloom Oak Dining Table</div>
+              <div class="live-card__meta">Nordic Atelier &middot; white-glove delivery, Living Room</div>
+            </div>
+            <div class="live-card__bar"><i></i></div>
+            <div class="live-card__steps">
+              <span>Confirmed</span><span>In production</span><span>Shipped</span><span>Delivered</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="live-pill">
+        <span class="live-pill__mark"><span class="strata strata--clay"><i></i><i></i><i></i></span></span>
+        <span class="live-pill__label">Delivery</span>
+        <span class="live-pill__value">2&ndash;4 PM</span>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:61px;left:300px">1</span>
+  <span class="callout-n" style="top:661px;right:2px">2</span>
+  <span class="callout-n" style="top:735px;right:2px">3</span>
+  <span class="callout-n callout-n--clay" style="top:790px;right:2px">4</span>
+</div>
+<div class="sheetbox"><table class="sheet-table">
+  <caption>s-M9 &middot; Live Activity: a delivery &middot; screen sheet</caption>
+  <tr><th>Purpose</th><td>Draw the one thing a Live Activity is actually for &mdash; a delivery window &mdash; so the cost of it can be seen and judged. <b>Neither direction ships this in wave one:</b> Direction A declines Live Activities outright, because its order&rsquo;s status derives from line states no vendor has acknowledged; Direction B admits one only at W6, once a line is really shipped and an ETA is real.</td></tr>
+  <tr><th>Entry points</th><td>Started by the app when a designer-sourced order reaches <code>shipped</code>; shown on the Lock Screen and, compact, in place of the Dynamic Island.</td></tr>
+  <tr><th>Components</th><td><b>New:</b> an ActivityKit activity, its per-activity push token, and a <code>liveactivity</code> push-type branch in <code>apns-send</code> &mdash; which today resolves <code>device_push_tokens</code> and sends one alert shape to a single topic. Without that branch the activity updates only in the foreground and goes stale when the app is closed. <b>Existing:</b> <code>fulfillment_orders</code> and <code>fulfillment-notify</code>, which already sends the six transitions to a homeowner&rsquo;s device.</td></tr>
+  <tr><th>Copy</th><td>&ldquo;PATINA &middot; DELIVERY&rdquo; &middot; &ldquo;Heirloom Oak Dining Table&rdquo; &middot; &ldquo;Nordic Atelier &middot; white-glove delivery, Living Room&rdquo; &middot; step names &ldquo;Confirmed&rdquo;, &ldquo;In production&rdquo;, &ldquo;Shipped&rdquo;, &ldquo;Delivered&rdquo; &mdash; four of the six transitions <code>fulfillment-notify</code> already sends (the others are an ETA change and a substitution). &ldquo;Arriving 2&ndash;4 PM&rdquo; and the compact &ldquo;2&ndash;4 PM&rdquo; are <i>[example]</i>.</td></tr>
+  <tr><th>Data</th><td><code>fulfillment_orders</code> and its line states, pushed by <code>fulfillment-notify</code> &mdash; which fires only when an admin operator presses send, and only on the designer-sourced rail, never on a client&rsquo;s direct order. <b>No table carries a delivery window or an ETA today</b>, which is exactly why both directions defer this: the bar and the step marker are real, the clock face on it is not.</td></tr>
+  <tr><th>States</th><td>No ETA &mdash; the activity does not start; the record and the push carry the transition instead. Shipped without a window &mdash; the step advances, the time line is absent rather than guessed. Stale &mdash; without the push-type branch the activity holds its last state; it must never show a countdown it cannot update. Ended &mdash; the activity is dismissed on <code>delivered</code>.</td></tr>
+  <tr><th>Interactions</th><td>Tap &rarr; the order. Analytics: <code>live_activity_started</code>, <code>live_activity_opened</code> &mdash; new.</td></tr>
+  <tr><th>Tier</th><td>activeProject only, and only for a designer-sourced order that has really shipped.</td></tr>
+  <tr><th>Callouts</th><td>1 &middot; the compact activity replaces the Dynamic Island &mdash; the only Patina surface that changes without the app being opened. 2 &middot; the arrival window is example copy: no column holds it. 3 &middot; the steps are the transitions the fulfilment rail already emits; nothing here invents a status. 4 &middot; and this is the one mock in the set that neither direction proposes for wave one &mdash; A declines it, B gates it at W6 behind a real ETA and an ActivityKit push token.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>All of it, and it is the most expensive surface in the set for the least verified data. It is drawn so the cost is legible, not because it is recommended.</td></tr>
+</table>
+</div></div>
+</div>
+</body></html>

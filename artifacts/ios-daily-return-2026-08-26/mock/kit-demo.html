@@ -1,0 +1,1535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patina iOS mock kit — component demo</title>
+<link rel="stylesheet" href="kit.css">
+<style>
+  html { background:var(--pat-bg); }
+  body { margin:0; font-family:var(--pat-sans); color:var(--pat-text); background:var(--pat-bg); }
+  .page { max-width:1360px; margin:0 auto; padding:56px 40px 120px; }
+  .page > header { border-bottom:1px solid var(--pat-pearl); padding-bottom:28px; margin-bottom:8px; }
+  h1 { font:500 40px/1.12 var(--pat-serif); margin:0 0 10px; }
+  .lede { font:400 16px/1.55 var(--pat-sans); color:var(--pat-text-2); max-width:70ch; margin:0; }
+  section { padding:48px 0 8px; border-top:1px solid var(--pat-pearl); }
+  section:first-of-type { border-top:0; }
+  h2 { font:400 26px/1.18 var(--pat-serif); margin:0 0 4px; }
+  h3 { font:600 12px/1.3 var(--pat-sans); text-transform:uppercase; letter-spacing:1.5px;
+       color:var(--pat-text-muted); margin:32px 0 12px; }
+  .note { font:400 14px/1.5 var(--pat-sans); color:var(--pat-text-muted); max-width:76ch; margin:0 0 24px; }
+  .src { font:400 11px/1.5 var(--pat-mono); color:var(--pat-text-muted); }
+  .rail { display:flex; flex-wrap:wrap; gap:40px; align-items:flex-start; }
+  .rail--tight { gap:24px; }
+  .panel { width:420px; flex:0 0 auto; padding:24px; border-radius:16px; background:var(--pat-bg-2); }
+  .panel--dark { background:#211E1B; }
+  .cap { font:400 10px/1.5 var(--pat-mono); text-transform:uppercase; letter-spacing:.5px;
+         color:var(--pat-text-muted); margin-bottom:10px; }
+  .swatches { display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:12px; }
+  .sw { border:1px solid var(--pat-pearl); border-radius:10px; overflow:hidden; }
+  .sw__chip { height:52px; }
+  .sw__meta { padding:8px 10px; }
+  .sw__name { font:400 10px/1.5 var(--pat-mono); text-transform:uppercase; letter-spacing:.4px; color:var(--pat-text); }
+  .sw__val { font:400 10px/1.5 var(--pat-mono); color:var(--pat-text-muted); }
+  .typelist > div { padding:10px 0; border-bottom:1px solid var(--pat-pearl); display:flex;
+                    align-items:baseline; gap:20px; }
+  .typelist .k { flex:0 0 210px; font:400 10px/1.5 var(--pat-mono); text-transform:uppercase;
+                 letter-spacing:.4px; color:var(--pat-text-muted); }
+  .sheetwrap { max-width:640px; }
+  .scroll-x { overflow-x:auto; padding-bottom:8px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<g id="s" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></g>
+<symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5c0 4-1.5 5.4-2.2 6.1a.6.6 0 0 0 .4 1h14.6a.6.6 0 0 0 .4-1c-.7-.7-2.2-2.1-2.2-6.1A5.5 5.5 0 0 0 12 3Z"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></g></symbol>
+<symbol id="i-qcircle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.8c0 1.7-2.4 2-2.4 3.6"/><circle cx="12" cy="17.2" r=".9" fill="currentColor" stroke="none"/></g></symbol>
+<symbol id="i-q" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 8.8a3.5 3.5 0 0 1 6.8 1.1c0 2.4-3.4 2.7-3.4 5"/><circle cx="12" cy="18.6" r="1.1" fill="currentColor" stroke="none"/></g></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></g></symbol>
+<symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol>
+<symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol>
+<symbol id="i-arrow-ur" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 17.5 17.5 6.5"/><path d="M8.5 6.5h9v9"/></g></symbol>
+<symbol id="i-arrow-r" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13.5 6.5 19 12l-5.5 5.5"/></g></symbol>
+<symbol id="i-camera-vf" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5.4A2.4 2.4 0 0 1 5.4 3H8M16 3h2.6A2.4 2.4 0 0 1 21 5.4V8M21 16v2.6a2.4 2.4 0 0 1-2.4 2.4H16M8 21H5.4A2.4 2.4 0 0 1 3 18.6V16"/><circle cx="12" cy="12" r="3.1"/><path d="M9.7 8.4l.8-1.3h3l.8 1.3"/></g></symbol>
+<symbol id="i-viewfinder" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5.4A2.4 2.4 0 0 1 5.4 3H8M16 3h2.6A2.4 2.4 0 0 1 21 5.4V8M21 16v2.6a2.4 2.4 0 0 1-2.4 2.4H16M8 21H5.4A2.4 2.4 0 0 1 3 18.6V16"/></g></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" d="M12 20s-7.4-4.5-7.4-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.4 2.6C19.4 15.5 12 20 12 20Z"/></symbol>
+<symbol id="i-heart-fill" viewBox="0 0 24 24"><path fill="currentColor" d="M12 20s-7.4-4.5-7.4-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.4 2.6C19.4 15.5 12 20 12 20Z"/></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></g></symbol>
+<symbol id="i-plus-circle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></g></symbol>
+<symbol id="i-stack" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="4" y="9.5" width="16" height="11" rx="2.2"/><path d="M6.2 7h11.6M7.6 4.5h8.8"/></g></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3.5 13.6 9 19 10.6 13.6 12.2 12 17.7 10.4 12.2 5 10.6 10.4 9Z"/><path d="M18.4 15.2l.7 2.2 2.2.7-2.2.7-.7 2.2-.7-2.2-2.2-.7 2.2-.7Z"/></g></symbol>
+<symbol id="i-palette" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3.2a8.8 8.8 0 0 0 0 17.6c1.3 0 1.9-.8 1.9-1.7 0-1.4-1-1.7-1-2.7 0-.8.7-1.4 1.6-1.4h1.6a4.7 4.7 0 0 0 4.7-4.7c0-4-3.9-7.1-8.8-7.1Z"/><circle cx="8" cy="9" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="7.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.8" cy="9.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="7.4" cy="13.4" r="1.1" fill="currentColor" stroke="none"/></g></symbol>
+<symbol id="i-person-plus" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10.5" cy="8" r="3.4"/><path d="M4.4 19.6a6.1 6.1 0 0 1 12.2 0"/><path d="M18.6 5.4v5M21.1 7.9h-5"/></g></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><g fill="currentColor"><rect x="5" y="10.4" width="14" height="10" rx="2.6"/></g><path fill="none" stroke="currentColor" stroke-width="1.8" d="M8.3 10.4V7.8a3.7 3.7 0 0 1 7.4 0v2.6"/></symbol>
+<symbol id="i-share" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6v11"/><path d="M8.4 7.2 12 3.6l3.6 3.6"/><path d="M6 12.4H5a1.6 1.6 0 0 0-1.6 1.6v5a1.6 1.6 0 0 0 1.6 1.6h14a1.6 1.6 0 0 0 1.6-1.6v-5a1.6 1.6 0 0 0-1.6-1.6h-1"/></g></symbol>
+<symbol id="i-cube" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6Z"/><path d="M4 7.6 12 12l8-4.4M12 12v8.8"/></g></symbol>
+<symbol id="i-info-fill" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="12" cy="12" r="9"/></g><g fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M12 11v5.4"/><path d="M12 7.6v.1"/></g></symbol>
+<symbol id="i-check-fill" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/><path fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="m8 12.2 2.7 2.7L16 9.6"/></symbol>
+<symbol id="i-warn-fill" viewBox="0 0 24 24"><path fill="currentColor" d="M11.1 4.1a1 1 0 0 1 1.8 0l8 14a1 1 0 0 1-.9 1.5H4a1 1 0 0 1-.9-1.5Z"/><g fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M12 9.4v4.2"/><path d="M12 16.6v.1"/></g></symbol>
+<symbol id="i-x-fill" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/><path fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" d="M9 9l6 6M15 9l-6 6"/></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3.1"/><path d="M12 3.4v2.1M12 18.5v2.1M20.6 12h-2.1M5.5 12H3.4M18.1 5.9l-1.5 1.5M7.4 16.6l-1.5 1.5M18.1 18.1l-1.5-1.5M7.4 7.4 5.9 5.9"/></g></symbol>
+<symbol id="i-message" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M4 6.4A2.4 2.4 0 0 1 6.4 4h11.2A2.4 2.4 0 0 1 20 6.4v7.2a2.4 2.4 0 0 1-2.4 2.4H10l-4.6 3.6a.5.5 0 0 1-.8-.4v-3.2H6.4A2.4 2.4 0 0 1 4 13.6Z"/></symbol>
+<symbol id="i-doc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6 3.6h7.4L18.6 9v11.4H6Z"/><path d="M13.2 3.8V9h5.2"/><path d="M8.6 13h6.8M8.6 16.4h4.6"/></g></symbol>
+<symbol id="i-card" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3.2" y="5.6" width="17.6" height="12.8" rx="2.4"/><path d="M3.2 10h17.6"/></g></symbol>
+<symbol id="i-rooms" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.6 10.4 12 4l8.4 6.4v9.2H3.6Z"/><path d="M9.6 19.6v-5.4h4.8v5.4"/></g></symbol>
+</defs></svg>
+
+<div class="page">
+<header>
+  <h1>Patina iOS mock kit</h1>
+  <p class="lede">Every token, component and phone-frame class the Daily Return deck draws with. Values come from
+  <span class="src">PatinaDesignKit</span> and the shipped <span class="src">Features/…</span> views at
+  <span class="src">main @ 3cd84ecb3</span>; look and copy come from the 2026-08-26 simulator walk in
+  <span class="src">shots/</span>. Frames are 402 × 874 CSS px — one point, one pixel.
+  Reference sheet: <span class="src">KIT.md</span>.</p>
+</header>
+
+<!-- ====================================================================== -->
+<section>
+  <h2>Calibration replicas</h2>
+  <p class="note">Two shipped screens redrawn from the kit, side by side in light and dark, measured pixel-for-pixel against
+  <span class="src">shots/g-12-home-discovering-top.png</span> and <span class="src">shots/g-15-browse-pieces-grid.png</span>.
+  Photography is cropped from those same shots; nothing here is stock.</p>
+
+  <div class="rail">
+
+    <!-- ---------------- g-12: Today, guest / discovering ---------------- -->
+    <div>
+      <p class="cap">g-12 · Daily Room · guest / discovering · light</p>
+      <div class="frame" id="cal-today" data-scheme="light" data-battery="charging">
+        <div class="frame__screen">
+          <div class="screen-body">
+            <div class="home-header">
+              <div class="home-header__stack">
+                <div class="home-header__date">Wednesday · Aug 26</div>
+                <div class="home-header__titlerow">
+                  <span class="home-header__title">Today</span>
+                  <span class="home-header__title-help"><svg><use href="#i-qcircle"/></svg></span>
+                </div>
+              </div>
+              <div class="home-header__actions">
+                <span class="icon-btn"><svg><use href="#i-bell"/></svg></span>
+                <span class="icon-btn"><svg><use href="#i-qcircle"/></svg></span>
+              </div>
+              <span class="monogram">G</span>
+            </div>
+
+            <div class="next-move">
+              <span class="next-move__icon"><svg><use href="#i-camera-vf"/></svg></span>
+              <span class="next-move__body">
+                <span class="mono-label mono-label--sm">Next Move</span>
+                <span class="next-move__title">Bring your first room<br>into Patina</span>
+                <span class="next-move__detail">A short scan gives the Companion a real space to work from.</span>
+              </span>
+              <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+            </div>
+
+            <div class="story-card g-hero">
+              <span class="story-card__pill">4 min read</span>
+              <span class="story-card__dot"></span>
+              <div class="story-card__body">
+                <div class="story-card__tag">Maker Spotlight</div>
+                <div class="story-card__title">The Grain Whisperer of Maine</div>
+                <div class="story-card__sub">Jonathan Chilton on 40 years of listening to wood</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="companion-intro" style="position:absolute;left:50%;transform:translateX(-50%);bottom:165px;z-index:29">
+            <div class="companion-intro__title">I'm your Companion.</div>
+            <div class="companion-intro__body">Tap me any time, anywhere in Patina — I'll show you the way to what's next.</div>
+            <div class="companion-intro__acts">
+              <span class="btn btn--clay btn--pill-sm">Show me</span>
+              <span class="btn btn--ghost btn--pill-sm">Later</span>
+            </div>
+          </div>
+
+          <div class="companion-dock">
+            <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="companion-hint">Next steps</span>
+          </div>
+
+          <div class="statusbar">
+            <span class="statusbar__time">9:41</span>
+            <span class="statusbar__right">
+              <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+              <span class="sb-wifi"></span><span class="sb-battery"></span>
+            </span>
+          </div>
+          <div class="island"></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------------- g-12 dark ---------------- -->
+    <div>
+      <p class="cap">g-12 · same screen · dark</p>
+      <div class="frame" data-scheme="dark" data-battery="charging">
+        <div class="frame__screen">
+          <div class="screen-body">
+            <div class="home-header">
+              <div class="home-header__stack">
+                <div class="home-header__date">Wednesday · Aug 26</div>
+                <div class="home-header__titlerow">
+                  <span class="home-header__title">Today</span>
+                  <span class="home-header__title-help"><svg><use href="#i-qcircle"/></svg></span>
+                </div>
+              </div>
+              <div class="home-header__actions">
+                <span class="icon-btn"><svg><use href="#i-bell"/></svg><span class="icon-btn__dot"></span></span>
+                <span class="icon-btn"><svg><use href="#i-qcircle"/></svg></span>
+              </div>
+              <span class="monogram">G</span>
+            </div>
+
+            <div class="next-move">
+              <span class="next-move__icon"><svg><use href="#i-camera-vf"/></svg></span>
+              <span class="next-move__body">
+                <span class="mono-label mono-label--sm">Next Move</span>
+                <span class="next-move__title">Bring your first room<br>into Patina</span>
+                <span class="next-move__detail">A short scan gives the Companion a real space to work from.</span>
+              </span>
+              <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+            </div>
+
+            <div class="story-card g-hero">
+              <span class="story-card__pill">4 min read</span>
+              <span class="story-card__dot"></span>
+              <div class="story-card__body">
+                <div class="story-card__tag">Maker Spotlight</div>
+                <div class="story-card__title">The Grain Whisperer of Maine</div>
+                <div class="story-card__sub">Jonathan Chilton on 40 years of listening to wood</div>
+              </div>
+            </div>
+
+            <div class="pad-hearth"></div>
+          </div>
+
+          <div class="companion-dock">
+            <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="companion-hint">Next steps</span>
+          </div>
+
+          <div class="statusbar">
+            <span class="statusbar__time">9:41</span>
+            <span class="statusbar__right">
+              <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+              <span class="sb-wifi"></span><span class="sb-battery"></span>
+            </span>
+          </div>
+          <div class="island"></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------------- g-15: Browse pieces ---------------- -->
+    <div>
+      <p class="cap">g-15 · Browse pieces · light</p>
+      <div class="frame" id="cal-browse" data-scheme="light" data-battery="charging">
+        <div class="frame__screen">
+          <div class="screen-body">
+            <div class="screen-head">
+              <div class="screen-head__title">Browse pieces</div>
+              <div class="screen-head__sub">10 pieces curated for your space</div>
+            </div>
+            <div class="chip-row">
+              <span class="chip chip--active">All</span>
+              <span class="chip">Seating</span>
+              <span class="chip">Tables</span>
+              <span class="chip">Lighting</span>
+              <span class="chip">Storage</span>
+            </div>
+            <div class="grid-2">
+              <div class="product-card">
+                <div class="product-card__art">
+                  <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table in a dining room">
+                  <span class="match-pill">48% match</span>
+                  <span class="product-card__actions">
+                    <span class="circ-btn"><svg><use href="#i-heart"/></svg></span>
+                    <span class="circ-btn"><svg><use href="#i-dots"/></svg></span>
+                  </span>
+                </div>
+                <div class="product-card__info">
+                  <span class="product-card__maker">Room &amp; Board</span>
+                  <span class="product-card__name">Heirloom Oak Dining Table</span>
+                  <span class="product-card__price">$4,200</span>
+                  <span class="product-card__why">Weathered Oak matches the material you chose.</span>
+                </div>
+              </div>
+              <div class="product-card">
+                <div class="product-card__art">
+                  <img src="img/live-edge-coffee-table.jpg" alt="Live-Edge Coffee Table photographed on grass">
+                  <span class="match-pill">46% match</span>
+                  <span class="product-card__actions">
+                    <span class="circ-btn"><svg><use href="#i-heart"/></svg></span>
+                    <span class="circ-btn"><svg><use href="#i-dots"/></svg></span>
+                  </span>
+                </div>
+                <div class="product-card__info">
+                  <span class="product-card__maker">Lee Industries</span>
+                  <span class="product-card__name">Live-Edge Coffee Table</span>
+                  <span class="product-card__price">$2,100</span>
+                  <span class="product-card__why">Its style tags connect to your Warm Modern portrait.</span>
+                </div>
+              </div>
+              <div class="product-card">
+                <div class="product-card__art">
+                  <span class="tile-placeholder tile-placeholder--gradient g-leather">
+                    <span class="strata"><i></i><i></i><i></i></span>
+                    <span class="tile-placeholder__label">Room &amp; Board · Linen</span>
+                  </span>
+                  <span class="match-pill">43% match</span>
+                  <span class="product-card__actions">
+                    <span class="circ-btn"><svg><use href="#i-heart"/></svg></span>
+                    <span class="circ-btn"><svg><use href="#i-dots"/></svg></span>
+                  </span>
+                </div>
+                <div class="product-card__info">
+                  <span class="product-card__maker">Room &amp; Board</span>
+                  <span class="product-card__name">Meadow Linen Sectional</span>
+                  <span class="product-card__price">$6,800</span>
+                  <span class="product-card__why">Its style tags connect to your Warm Modern portrait.</span>
+                </div>
+              </div>
+              <div class="product-card">
+                <div class="product-card__art">
+                  <span class="tile-placeholder tile-placeholder--gradient g-warm">
+                    <span class="strata"><i></i><i></i><i></i></span>
+                    <span class="tile-placeholder__label">Holly Hunt · Velvet</span>
+                  </span>
+                  <span class="match-pill">41% match</span>
+                  <span class="product-card__actions">
+                    <span class="circ-btn"><svg><use href="#i-heart"/></svg></span>
+                    <span class="circ-btn"><svg><use href="#i-dots"/></svg></span>
+                  </span>
+                </div>
+                <div class="product-card__info">
+                  <span class="product-card__maker">Holly Hunt</span>
+                  <span class="product-card__name">Velvet Club Chair</span>
+                  <span class="product-card__price">$1,250</span>
+                </div>
+              </div>
+            </div>
+            <div class="pad-hearth"></div>
+          </div>
+
+          <div class="screen-chrome">
+            <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+          </div>
+          <div class="companion-dock">
+            <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="companion-hint">Next steps</span>
+          </div>
+          <div class="statusbar">
+            <span class="statusbar__time">9:41</span>
+            <span class="statusbar__right">
+              <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+              <span class="sb-wifi"></span><span class="sb-battery"></span>
+            </span>
+          </div>
+          <div class="island"></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="cap">g-15 · Browse pieces · dark</p>
+      <div class="frame" data-scheme="dark" data-battery="charging">
+        <div class="frame__screen">
+          <div class="screen-body">
+            <div class="screen-head">
+              <div class="screen-head__title">Browse pieces</div>
+              <div class="screen-head__sub">10 pieces curated for your space</div>
+            </div>
+            <div class="chip-row">
+              <span class="chip chip--active">All</span>
+              <span class="chip">Seating</span>
+              <span class="chip">Tables</span>
+              <span class="chip">Lighting</span>
+              <span class="chip">Storage</span>
+            </div>
+            <div class="grid-2">
+              <div class="product-card">
+                <div class="product-card__art">
+                  <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table in a dining room">
+                  <span class="match-pill">48% match</span>
+                  <span class="product-card__actions">
+                    <span class="circ-btn"><svg><use href="#i-heart-fill"/></svg></span>
+                    <span class="circ-btn"><svg><use href="#i-dots"/></svg></span>
+                  </span>
+                </div>
+                <div class="product-card__info">
+                  <span class="product-card__maker">Room &amp; Board</span>
+                  <span class="product-card__name">Heirloom Oak Dining Table</span>
+                  <span class="product-card__price">$4,200</span>
+                  <span class="product-card__why">Weathered Oak matches the material you chose.</span>
+                </div>
+              </div>
+              <div class="product-card">
+                <div class="product-card__art">
+                  <img src="img/live-edge-coffee-table.jpg" alt="Live-Edge Coffee Table photographed on grass">
+                  <span class="match-pill">46% match</span>
+                  <span class="product-card__actions">
+                    <span class="circ-btn"><svg><use href="#i-heart"/></svg></span>
+                    <span class="circ-btn"><svg><use href="#i-dots"/></svg></span>
+                  </span>
+                </div>
+                <div class="product-card__info">
+                  <span class="product-card__maker">Lee Industries</span>
+                  <span class="product-card__name">Live-Edge Coffee Table</span>
+                  <span class="product-card__price">$2,100</span>
+                  <span class="product-card__why">Its style tags connect to your Warm Modern portrait.</span>
+                </div>
+              </div>
+              <div class="product-card">
+                <div class="product-card__art">
+                  <span class="tile-placeholder tile-placeholder--gradient g-leather">
+                    <span class="strata"><i></i><i></i><i></i></span>
+                    <span class="tile-placeholder__label">Room &amp; Board · Linen</span>
+                  </span>
+                  <span class="match-pill">43% match</span>
+                  <span class="product-card__actions">
+                    <span class="circ-btn"><svg><use href="#i-heart"/></svg></span>
+                    <span class="circ-btn"><svg><use href="#i-dots"/></svg></span>
+                  </span>
+                </div>
+                <div class="product-card__info">
+                  <span class="product-card__maker">Room &amp; Board</span>
+                  <span class="product-card__name">Meadow Linen Sectional</span>
+                  <span class="product-card__price">$6,800</span>
+                  <span class="product-card__why">Its style tags connect to your Warm Modern portrait.</span>
+                </div>
+              </div>
+              <div class="product-card">
+                <div class="product-card__art">
+                  <span class="tile-placeholder tile-placeholder--gradient g-warm">
+                    <span class="strata"><i></i><i></i><i></i></span>
+                    <span class="tile-placeholder__label">Holly Hunt · Velvet</span>
+                  </span>
+                  <span class="match-pill">41% match</span>
+                  <span class="product-card__actions">
+                    <span class="circ-btn"><svg><use href="#i-heart"/></svg></span>
+                    <span class="circ-btn"><svg><use href="#i-dots"/></svg></span>
+                  </span>
+                </div>
+                <div class="product-card__info">
+                  <span class="product-card__maker">Holly Hunt</span>
+                  <span class="product-card__name">Velvet Club Chair</span>
+                  <span class="product-card__price">$1,250</span>
+                </div>
+              </div>
+            </div>
+            <div class="pad-hearth"></div>
+          </div>
+
+          <div class="screen-chrome">
+            <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+          </div>
+          <div class="companion-dock">
+            <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="companion-hint">Next steps</span>
+          </div>
+          <div class="statusbar">
+            <span class="statusbar__time">9:41</span>
+            <span class="statusbar__right">
+              <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+              <span class="sb-wifi"></span><span class="sb-battery"></span>
+            </span>
+          </div>
+          <div class="island"></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<section>
+  <h2>Full screens from the kit</h2>
+  <p class="note">Piece detail, the Companion panel, Saved, and a bottom sheet — each drawn only with kit classes.</p>
+  <div class="rail">
+
+    <div>
+      <p class="cap">Piece detail · light</p>
+      <div class="frame" data-scheme="light">
+        <div class="frame__screen">
+          <div class="screen-body screen-body--scroll">
+            <div class="detail-hero">
+              <img src="img/live-edge-coffee-table.jpg" alt="Live-Edge Coffee Table">
+              <div class="detail-hero__bar">
+                <span class="circ-btn circ-btn--lg"><svg><use href="#i-chev-l"/></svg></span>
+                <span class="spacer"></span>
+                <span class="circ-btn circ-btn--lg"><svg><use href="#i-q"/></svg></span>
+                <span class="circ-btn circ-btn--lg"><svg><use href="#i-share"/></svg></span>
+                <span class="circ-btn circ-btn--lg"><svg><use href="#i-heart"/></svg></span>
+              </div>
+            </div>
+            <div class="detail-body">
+              <div class="detail-maker">Lee Industries · Hickory, North Carolina</div>
+              <div class="detail-name">Live-Edge Coffee Table</div>
+              <div class="detail-materials">Walnut · Blackened Steel</div>
+              <div class="detail-price-row">
+                <span class="detail-price">$2,100</span>
+                <span class="match-pill--detail">46% match</span>
+              </div>
+              <div class="row" style="gap:4px;padding-bottom:6px">
+                <span class="t-caption c-text-2">Place in your room</span>
+                <span style="color:var(--pat-text-muted);display:flex"><svg width="12" height="12"><use href="#i-qcircle"/></svg></span>
+              </div>
+              <div class="spatial-row">
+                <span class="spatial-pill">Fits the 9' wall</span>
+                <span class="spatial-pill">Reads warm at dusk</span>
+                <span class="spatial-pill">Low profile</span>
+              </div>
+              <div class="prov-head">
+                <span class="mono-label">Provenance</span>
+                <span style="color:var(--pat-text-muted);display:flex"><svg width="12" height="12"><use href="#i-qcircle"/></svg></span>
+              </div>
+              <div class="badge-row">
+                <span class="prov-badge">FSC Certified</span>
+                <span class="prov-badge">Handcrafted</span>
+                <span class="prov-badge">Made in USA</span>
+              </div>
+              <div class="spec-list">
+                <div class="spec-row"><span class="spec-row__key">Dimensions</span><span class="spec-row__val">48" W × 26" D × 17" H</span></div>
+                <div class="spec-row"><span class="spec-row__key">Materials</span><span class="spec-row__val">Solid black walnut, blackened steel</span></div>
+                <div class="spec-row"><span class="spec-row__key">Lead time</span><span class="spec-row__val">Not published for this piece</span></div>
+              </div>
+              <div class="acts-row">
+                <span class="act"><svg><use href="#i-heart"/></svg>Save</span>
+                <span class="act"><svg><use href="#i-share"/></svg>Share</span>
+                <span class="act"><svg><use href="#i-message"/></svg>Ask a designer</span>
+                <span class="act"><svg><use href="#i-cube"/></svg>See it in the room</span>
+              </div>
+              <div class="maker-story">
+                <div class="maker-story__head">
+                  <span class="maker-story__avatar"></span>
+                  <span>
+                    <span class="maker-story__name">Lee Industries</span>
+                    <span class="mono-label mono-label--sm" style="display:block">Hickory, North Carolina</span>
+                  </span>
+                </div>
+                <div class="maker-story__quote">“We still cut every top from one board, so the grain runs
+                  straight through the piece. It takes longer. It looks like it took longer.”</div>
+              </div>
+              <div class="pad-hearth"></div>
+            </div>
+          </div>
+          <div class="detail-bar">
+            <span class="detail-bar__ar"><svg width="18" height="18"><use href="#i-cube"/></svg></span>
+            <span class="btn btn--primary">Add to Room</span>
+          </div>
+          <div class="statusbar">
+            <span class="statusbar__time" style="color:var(--pat-off-white)">9:41</span>
+            <span class="statusbar__right" style="color:var(--pat-off-white)">
+              <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+              <span class="sb-wifi"></span><span class="sb-battery"></span>
+            </span>
+          </div>
+          <div class="island"></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="cap">Companion panel · expanded (≤6 rows)</p>
+      <div class="frame" data-scheme="light">
+        <div class="frame__screen">
+          <div class="screen-body">
+            <div class="home-header">
+              <div class="home-header__stack">
+                <div class="home-header__date">Wednesday · Aug 26</div>
+                <div class="home-header__titlerow"><span class="home-header__title">Today</span></div>
+              </div>
+              <div class="home-header__actions"><span class="icon-btn"><svg><use href="#i-bell"/></svg></span></div>
+              <span class="monogram">G</span>
+            </div>
+            <div class="next-move">
+              <span class="next-move__icon"><svg><use href="#i-camera-vf"/></svg></span>
+              <span class="next-move__body">
+                <span class="mono-label mono-label--sm">Next Move</span>
+                <span class="next-move__title">Bring your first room into Patina</span>
+              </span>
+              <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+            </div>
+          </div>
+          <div class="sheet-scrim"></div>
+          <div style="position:absolute;left:0;right:0;bottom:28px;padding:0 12px;z-index:26">
+            <div class="companion-panel">
+              <div class="companion-panel__head">
+                <span class="companion-panel__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+                <span class="companion-panel__copy">
+                  <span class="companion-panel__title">Where to begin?</span>
+                  <span class="companion-panel__detail">A considered next move, based on where you are.</span>
+                </span>
+                <span class="companion-panel__btn"><svg><use href="#i-q"/></svg></span>
+                <span class="companion-panel__btn"><svg><use href="#i-x"/></svg></span>
+              </div>
+              <div class="companion-panel__rows">
+                <div class="companion-row companion-row--suggested">
+                  <span class="companion-row__icon"><svg><use href="#i-viewfinder"/></svg></span>
+                  <span class="companion-row__copy">
+                    <span class="companion-row__title">Add your first space</span>
+                    <span class="companion-row__meta">Capture your first room</span>
+                  </span>
+                  <span class="companion-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+                </div>
+                <div class="companion-row">
+                  <span class="companion-row__icon"><svg><use href="#i-palette"/></svg></span>
+                  <span class="companion-row__copy">
+                    <span class="companion-row__title">Style quiz</span>
+                    <span class="companion-row__meta">Discover your style</span>
+                  </span>
+                  <span class="companion-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+                </div>
+                <div class="companion-row">
+                  <span class="companion-row__icon"><svg><use href="#i-sparkles"/></svg></span>
+                  <span class="companion-row__copy">
+                    <span class="companion-row__title">Your recommendations</span>
+                    <span class="companion-row__meta">Take the quiz first</span>
+                  </span>
+                  <span class="companion-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+                </div>
+                <div class="companion-row">
+                  <span class="companion-row__icon"><svg><use href="#i-person-plus"/></svg></span>
+                  <span class="companion-row__copy">
+                    <span class="companion-row__title">Sign in</span>
+                    <span class="companion-row__meta">Save rooms · Sync across devices</span>
+                  </span>
+                  <span class="companion-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="statusbar">
+            <span class="statusbar__time">9:41</span>
+            <span class="statusbar__right">
+              <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+              <span class="sb-wifi"></span><span class="sb-battery"></span>
+            </span>
+          </div>
+          <div class="island"></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="cap">Saved · Boards empty + All items · light</p>
+      <div class="frame" data-scheme="light">
+        <div class="frame__screen">
+          <div class="screen-body">
+            <div class="screen-head">
+              <div class="screen-head__row">
+                <span class="screen-head__title">Saved</span>
+                <span class="icon-btn" style="color:var(--pat-text-link)"><svg><use href="#i-plus-circle"/></svg></span>
+              </div>
+            </div>
+            <div class="tabs">
+              <span class="tab tab--active"><span class="tab__label">Boards</span><span class="tab__rule"></span></span>
+              <span class="tab"><span class="tab__label">All items</span><span class="tab__rule"></span></span>
+            </div>
+            <div class="empty-state" style="padding-top:56px">
+              <span class="empty-state__icon" style="color:rgba(196,165,123,.5)"><svg><use href="#i-stack"/></svg></span>
+              <span class="empty-state__copy">
+                <span class="empty-state__title">No boards yet</span>
+                <span class="empty-state__msg">Save pieces from recommendations to create your first board</span>
+              </span>
+              <span class="btn btn--primary btn--compact">Create Board</span>
+            </div>
+            <div class="pad-push" style="margin-top:24px">
+              <div class="board-head" style="margin-bottom:12px">
+                <span class="board-head__name">Living Room</span>
+                <span class="mono-label">3 items</span>
+              </div>
+              <div class="board-tile">
+                <span class="board-tile__cell"><img src="img/heirloom-thumb.jpg" alt="Heirloom Oak Dining Table"><span class="board-tile__price">$4,200</span></span>
+                <span class="board-tile__cell"><img src="img/pendant-lamp.jpg" alt="Pendant lamp"><span class="board-tile__price">$480</span></span>
+                <span class="board-tile__cell g-linen"></span>
+              </div>
+            </div>
+            <div class="pad-hearth"></div>
+          </div>
+          <div class="screen-chrome"><span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span></div>
+          <div class="companion-dock">
+            <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="companion-hint">Find more pieces →</span>
+          </div>
+          <div class="statusbar">
+            <span class="statusbar__time">9:41</span>
+            <span class="statusbar__right">
+              <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+              <span class="sb-wifi"></span><span class="sb-battery"></span>
+            </span>
+          </div>
+          <div class="island"></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="cap">Add-to-Room sheet · medium detent · dark</p>
+      <div class="frame" data-scheme="dark">
+        <div class="frame__screen">
+          <div class="screen-body">
+            <div class="detail-hero" style="height:300px">
+              <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table">
+            </div>
+            <div class="detail-body">
+              <div class="detail-maker">Room &amp; Board · Minneapolis, Minnesota</div>
+              <div class="detail-name">Heirloom Oak Dining Table</div>
+              <div class="detail-materials">Weathered Oak · Brass</div>
+            </div>
+          </div>
+          <div class="sheet-scrim"></div>
+          <div class="sheet sheet--medium">
+            <span class="sheet__handle"></span>
+            <div class="sheet__head">
+              <span class="sheet__title">Add to Room</span>
+              <span class="sheet__eyebrow">Choose destination</span>
+            </div>
+            <div class="sheet__body">
+              <div class="sheet-row sheet-row--selected">
+                <span class="sheet-row__thumb g-warm"></span>
+                <span class="sheet-row__copy">
+                  <span class="sheet-row__name">Living Room</span>
+                  <span class="sheet-row__meta">3 items · 218 sq ft</span>
+                </span>
+                <span class="sheet-row__plus">+</span>
+              </div>
+              <div class="sheet-row">
+                <span class="sheet-row__thumb g-earth"></span>
+                <span class="sheet-row__copy">
+                  <span class="sheet-row__name">Dining Room</span>
+                  <span class="sheet-row__meta">0 items · 164 sq ft</span>
+                </span>
+                <span class="sheet-row__plus">+</span>
+              </div>
+              <div class="sheet-row">
+                <span class="sheet-row__thumb g-dusk"></span>
+                <span class="sheet-row__copy">
+                  <span class="sheet-row__name">Bedroom</span>
+                  <span class="sheet-row__meta">1 item · 190 sq ft</span>
+                </span>
+                <span class="sheet-row__plus">+</span>
+              </div>
+            </div>
+            <div class="sheet__foot" style="text-align:center">
+              <span class="btn btn--ghost btn--pill-sm">+ New Room</span>
+            </div>
+          </div>
+          <div class="statusbar">
+            <span class="statusbar__time" style="color:var(--pat-off-white)">9:41</span>
+            <span class="statusbar__right" style="color:var(--pat-off-white)">
+              <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+              <span class="sb-wifi"></span><span class="sb-battery"></span>
+            </span>
+          </div>
+          <div class="island"></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="cap">Full-height sheet + toast · light · <span class="src">.frame--bare</span></p>
+      <div class="frame frame--bare" data-scheme="light">
+        <div class="frame__screen">
+          <div class="screen-body">
+            <div class="screen-head"><div class="screen-head__title">Your Studio</div></div>
+          </div>
+          <div class="sheet-scrim"></div>
+          <div class="sheet sheet--full">
+            <span class="sheet__handle"></span>
+            <div class="sheet__head">
+              <span class="sheet__title">Order this piece</span>
+              <span class="sheet__eyebrow">Review before you pay</span>
+            </div>
+            <div class="sheet__body stack-12" style="padding-bottom:24px">
+              <div class="saved-row">
+                <span class="saved-row__thumb"><img src="img/heirloom-thumb.jpg" alt="Heirloom Oak Dining Table"></span>
+                <span class="saved-row__copy">
+                  <span class="mono-label mono-label--sm">Room &amp; Board</span>
+                  <span class="saved-row__name">Heirloom Oak Dining Table</span>
+                  <span class="saved-row__price">$4,200</span>
+                </span>
+              </div>
+              <div class="spec-list" style="margin-bottom:0">
+                <div class="spec-row"><span class="spec-row__key">Ships to</span><span class="spec-row__val">Living Room · Minneapolis, MN</span></div>
+                <div class="spec-row"><span class="spec-row__key">Lead time</span><span class="spec-row__val">Not published for this piece</span></div>
+                <div class="spec-row"><span class="spec-row__key">Total</span><span class="spec-row__val">$4,200</span></div>
+              </div>
+              <div class="field">
+                <span class="field__label">Email for the receipt</span>
+                <span class="field__box"><span class="field__icon"><svg><use href="#i-doc"/></svg></span>walt@example.com</span>
+              </div>
+            </div>
+            <div class="sheet__foot"><span class="btn btn--primary">Continue to payment</span></div>
+          </div>
+          <div class="toast">
+            <span>Saved to Living Room.</span>
+            <span class="toast__act">Undo</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<section>
+  <h2>Tokens</h2>
+  <p class="note">Semantic roles first — those are what a mock should reach for. A role showing one value is
+  static by design and must be drawn identically in both themes.
+  <span class="src">Tokens/PatinaColors.swift</span></p>
+  <div class="swatches">
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-bg)"></div><div class="sw__meta"><div class="sw__name">--pat-bg</div><div class="sw__val">#FAF7F2 / #211E1B</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-bg-2)"></div><div class="sw__meta"><div class="sw__name">--pat-bg-2</div><div class="sw__val">#F5F2ED / #2C2926</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-bg-dark)"></div><div class="sw__meta"><div class="sw__name">--pat-bg-dark</div><div class="sw__val">#2C2926 static</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-text)"></div><div class="sw__meta"><div class="sw__name">--pat-text</div><div class="sw__val">#2C2926 / #F2EDE6</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-text-2)"></div><div class="sw__meta"><div class="sw__name">--pat-text-2</div><div class="sw__val">#5C4A3C / #D8C9B4</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-text-muted)"></div><div class="sw__meta"><div class="sw__name">--pat-text-muted</div><div class="sw__val">#8B7355 / #B5A487</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-text-link)"></div><div class="sw__meta"><div class="sw__name">--pat-text-link</div><div class="sw__val">#9F7E48 / #C4A57B</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-accent)"></div><div class="sw__meta"><div class="sw__name">--pat-accent</div><div class="sw__val">#C4A57B static</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-active-fill)"></div><div class="sw__meta"><div class="sw__name">--pat-active-fill</div><div class="sw__val">#2C2926 / #F2EDE6</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-pearl)"></div><div class="sw__meta"><div class="sw__name">--pat-pearl</div><div class="sw__val">#E5E2DD both themes</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-success)"></div><div class="sw__meta"><div class="sw__name">--pat-success</div><div class="sw__val">#7A9B76</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-warning)"></div><div class="sw__meta"><div class="sw__name">--pat-warning</div><div class="sw__val">#D4A574</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-error)"></div><div class="sw__meta"><div class="sw__name">--pat-error</div><div class="sw__val">#C77B6E</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-dusty-blue)"></div><div class="sw__meta"><div class="sw__name">--pat-dusty-blue</div><div class="sw__val">#8B9CAD</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-sage)"></div><div class="sw__meta"><div class="sw__name">--pat-sage</div><div class="sw__val">#A8B5A0</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-terracotta)"></div><div class="sw__meta"><div class="sw__name">--pat-terracotta</div><div class="sw__val">#D4A090</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-golden)"></div><div class="sw__meta"><div class="sw__name">--pat-golden</div><div class="sw__val">#E8C547</div></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--pat-mocha)"></div><div class="sw__meta"><div class="sw__name">--pat-mocha</div><div class="sw__val">#5C4A3C · every shadow</div></div></div>
+  </div>
+
+  <h3>Gradients — <span class="src">Tokens/PatinaGradients.swift:12-131</span></h3>
+  <div class="swatches">
+    <div class="sw"><div class="sw__chip g-warm"></div><div class="sw__meta"><div class="sw__name">warm</div><div class="sw__val">living rooms · card fallback</div></div></div>
+    <div class="sw"><div class="sw__chip g-dusk"></div><div class="sw__meta"><div class="sw__name">dusk</div><div class="sw__val">bedroom</div></div></div>
+    <div class="sw"><div class="sw__chip g-earth"></div><div class="sw__meta"><div class="sw__name">earth</div><div class="sw__val">dining · avatars</div></div></div>
+    <div class="sw"><div class="sw__chip g-sage"></div><div class="sw__meta"><div class="sw__name">sageGradient</div><div class="sw__val">office</div></div></div>
+    <div class="sw"><div class="sw__chip g-rattan"></div><div class="sw__meta"><div class="sw__name">rattan</div><div class="sw__val">kitchen · storage</div></div></div>
+    <div class="sw"><div class="sw__chip g-linen"></div><div class="sw__meta"><div class="sw__name">linen</div><div class="sw__val">default room · decor</div></div></div>
+    <div class="sw"><div class="sw__chip g-leather"></div><div class="sw__meta"><div class="sw__name">leather</div><div class="sw__val">seating placeholder</div></div></div>
+    <div class="sw"><div class="sw__chip g-wood"></div><div class="sw__meta"><div class="sw__name">wood</div><div class="sw__val">tables placeholder</div></div></div>
+    <div class="sw"><div class="sw__chip g-metal"></div><div class="sw__meta"><div class="sw__name">metal</div><div class="sw__val">lighting placeholder</div></div></div>
+    <div class="sw"><div class="sw__chip g-hero"></div><div class="sw__meta"><div class="sw__name">hero</div><div class="sw__val">editorial story default</div></div></div>
+  </div>
+
+  <h3>Shadows — <span class="src">Tokens/PatinaShadows.swift:11-62</span> · Today cards are flat</h3>
+  <div class="rail rail--tight">
+    <div style="width:150px;height:74px;border-radius:12px;background:var(--pat-bg);box-shadow:var(--pat-sh-sm);display:flex;align-items:center;justify-content:center" class="src">sm</div>
+    <div style="width:150px;height:74px;border-radius:12px;background:var(--pat-bg);box-shadow:var(--pat-sh-md);display:flex;align-items:center;justify-content:center" class="src">md</div>
+    <div style="width:150px;height:74px;border-radius:12px;background:var(--pat-bg);box-shadow:var(--pat-sh-lg);display:flex;align-items:center;justify-content:center" class="src">lg</div>
+    <div style="width:150px;height:74px;border-radius:12px;background:var(--pat-bg);box-shadow:var(--pat-sh-xl);display:flex;align-items:center;justify-content:center" class="src">xl</div>
+    <div style="width:150px;height:74px;border-radius:12px;background:var(--pat-bg);box-shadow:var(--pat-sh-daily);display:flex;align-items:center;justify-content:center" class="src">dailyCard</div>
+    <div style="width:150px;height:74px;border-radius:12px;background:var(--pat-bg);box-shadow:var(--pat-sh-companion);display:flex;align-items:center;justify-content:center" class="src">companion</div>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<section>
+  <h2>Typography</h2>
+  <p class="note">Playfair Display (display), Inter (body), DM Mono (labels, data) — the three families the app
+  registers at launch. Every DM Mono label is uppercase; Playfair headings never track.
+  <span class="src">Tokens/PatinaTypography.swift:21-116</span></p>
+  <div class="typelist">
+    <div><span class="k">display1 · Playfair 56/500</span><span class="t-display1">Today</span></div>
+    <div><span class="k">display2 · Playfair 40/500</span><span class="t-display2">The Grain Whisperer</span></div>
+    <div><span class="k">displaySmall · 28/500</span><span class="t-display-sm">$2,100</span></div>
+    <div><span class="k">h1 · Playfair 32/500</span><span class="t-h1">Your Spaces</span></div>
+    <div><span class="k">h2 · Playfair 26/400</span><span class="t-h2">Live-Edge Coffee Table</span></div>
+    <div><span class="k">h3 · Playfair 24/400</span><span class="t-h3">Awaiting payment</span></div>
+    <div><span class="k">h4 · Playfair 22/400</span><span class="t-h4">Browse pieces</span></div>
+    <div><span class="k">h5 · Playfair 18/500</span><span class="t-h5">Bring your first room into Patina</span></div>
+    <div><span class="k">headlineMedium · Inter 18/600</span><span class="t-headline-md">Your Studio begins with a project.</span></div>
+    <div><span class="k">bodyLarge · Inter 18/400</span><span class="t-body-lg">Sign in to see conversations and decisions.</span></div>
+    <div><span class="k">body · Inter 16/400</span><span class="t-body">Save pieces from recommendations to create your first board</span></div>
+    <div><span class="k">bodySmall · Inter 14/400</span><span class="t-body-sm">Nothing needs your attention right now.</span></div>
+    <div><span class="k">bodySmallMedium · 14/500</span><span class="t-body-sm-md">Room &amp; Board</span></div>
+    <div><span class="k">caption · Inter 12/500</span><span class="t-caption">A short scan gives the Companion a real space to work from.</span></div>
+    <div><span class="k">captionMedium · 12/600</span><span class="t-caption-md">Awaiting payment</span></div>
+    <div><span class="k">mono · DM Mono 10</span><span class="t-mono">Maker Spotlight</span></div>
+    <div><span class="k">monoSmall · DM Mono 9</span><span class="t-mono-sm">Capture your first room</span></div>
+    <div><span class="k">monoTiny · DM Mono 8 (deprecated, still live)</span><span class="t-mono-tiny">Room scan</span></div>
+    <div><span class="k">eyebrow · Inter 12/600 +1.5</span><span class="t-eyebrow">One more thought</span></div>
+    <div><span class="k">patinaVoice · Playfair italic 18</span><span class="t-voice">I'm your Companion.</span></div>
+    <div><span class="k">patinaVoiceLarge · italic 22</span><span class="t-voice-lg">Let's talk about investment.</span></div>
+    <div><span class="k">uiAction · Inter 15/500</span><span class="t-ui-action">Add to Room</span></div>
+    <div><span class="k">uiSmall · Inter 13/500</span><span class="t-ui-small">10 pieces curated for your space</span></div>
+    <div><span class="k">wordmark · Playfair 38/500 +6</span><span class="t-wordmark">PATINA</span></div>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<section>
+  <h2>Components — light and dark</h2>
+
+  <h3>Buttons · every shipped style + disabled</h3>
+  <div class="rail">
+    <div class="panel" data-scheme="light">
+      <p class="cap">light</p>
+      <div class="stack-12">
+        <span class="btn btn--primary">Add to Room</span>
+        <span class="btn btn--secondary">Not right now</span>
+        <span class="btn btn--clay">Show me</span>
+        <span class="btn btn--destructive">Remove from Saved</span>
+        <span class="btn btn--primary is-disabled">Add to Room</span>
+        <span class="btn btn--ghost">Later</span>
+        <span class="btn btn--auth btn--secondary">Continue with email</span>
+      </div>
+    </div>
+    <div class="panel panel--dark" data-scheme="dark">
+      <p class="cap">dark</p>
+      <div class="stack-12">
+        <span class="btn btn--primary">Add to Room</span>
+        <span class="btn btn--secondary">Not right now</span>
+        <span class="btn btn--clay">Show me</span>
+        <span class="btn btn--destructive">Remove from Saved</span>
+        <span class="btn btn--primary is-disabled">Add to Room</span>
+        <span class="btn btn--ghost">Later</span>
+        <span class="btn btn--auth btn--secondary">Continue with email</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>Text fields, badges, pills, empty state</h3>
+  <div class="rail">
+    <div class="panel" data-scheme="light">
+      <p class="cap">light</p>
+      <div class="stack-16">
+        <div class="field">
+          <span class="field__label">Room name</span>
+          <span class="field__box"><span class="field__ph">Living Room</span></span>
+          <span class="field__help">You can rename this later.</span>
+        </div>
+        <div class="field">
+          <span class="field__label">Square feet</span>
+          <span class="field__box field__box--focused">218</span>
+        </div>
+        <div class="field">
+          <span class="field__label">Email</span>
+          <span class="field__box field__box--error"><span class="field__ph">walt@</span></span>
+          <span class="field__err">That address doesn't look complete.</span>
+        </div>
+        <div class="row" style="flex-wrap:wrap;gap:8px">
+          <span class="status-badge status-badge--info"><svg><use href="#i-info-fill"/></svg>Finding</span>
+          <span class="status-badge status-badge--success"><svg><use href="#i-check-fill"/></svg>Matched</span>
+          <span class="status-badge status-badge--warning"><svg><use href="#i-warn-fill"/></svg>Expired</span>
+          <span class="status-badge status-badge--error"><svg><use href="#i-x-fill"/></svg>Declined</span>
+        </div>
+        <div class="row" style="gap:10px">
+          <span class="tier-pill">Designer selection</span>
+          <span class="match-pill--detail">46% match</span>
+          <span class="mono-label">Room &amp; Board</span>
+          <span class="eyebrow">One more thought</span>
+        </div>
+        <div class="empty-state">
+          <span class="empty-state__icon"><svg><use href="#i-sparkles"/></svg></span>
+          <span class="empty-state__copy">
+            <span class="empty-state__title">Nothing here yet</span>
+            <span class="empty-state__msg">Save pieces you love or take the style quiz to tune what shows up.</span>
+          </span>
+          <span class="btn btn--secondary btn--compact">Take the style quiz</span>
+        </div>
+      </div>
+    </div>
+    <div class="panel panel--dark" data-scheme="dark">
+      <p class="cap">dark</p>
+      <div class="stack-16">
+        <div class="field">
+          <span class="field__label">Room name</span>
+          <span class="field__box"><span class="field__ph">Living Room</span></span>
+          <span class="field__help">You can rename this later.</span>
+        </div>
+        <div class="field">
+          <span class="field__label">Square feet</span>
+          <span class="field__box field__box--focused">218</span>
+        </div>
+        <div class="field">
+          <span class="field__label">Email</span>
+          <span class="field__box field__box--error"><span class="field__ph">walt@</span></span>
+          <span class="field__err">That address doesn't look complete.</span>
+        </div>
+        <div class="row" style="flex-wrap:wrap;gap:8px">
+          <span class="status-badge status-badge--info"><svg><use href="#i-info-fill"/></svg>Finding</span>
+          <span class="status-badge status-badge--success"><svg><use href="#i-check-fill"/></svg>Matched</span>
+          <span class="status-badge status-badge--warning"><svg><use href="#i-warn-fill"/></svg>Expired</span>
+          <span class="status-badge status-badge--error"><svg><use href="#i-x-fill"/></svg>Declined</span>
+        </div>
+        <div class="row" style="gap:10px">
+          <span class="tier-pill">Designer selection</span>
+          <span class="match-pill--detail">46% match</span>
+          <span class="mono-label">Room &amp; Board</span>
+          <span class="eyebrow">One more thought</span>
+        </div>
+        <div class="empty-state">
+          <span class="empty-state__icon"><svg><use href="#i-sparkles"/></svg></span>
+          <span class="empty-state__copy">
+            <span class="empty-state__title">Nothing here yet</span>
+            <span class="empty-state__msg">Save pieces you love or take the style quiz to tune what shows up.</span>
+          </span>
+          <span class="btn btn--secondary btn--compact">Take the style quiz</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Today modules, chips, cards</h3>
+  <div class="rail">
+    <div class="panel" style="padding:24px 4px" data-scheme="light">
+      <p class="cap" style="padding-left:20px">light</p>
+      <div style="width:402px">
+        <div class="next-move" style="margin-top:0">
+          <span class="next-move__icon"><svg><use href="#i-message"/></svg></span>
+          <span class="next-move__body">
+            <span class="mono-label mono-label--sm">Next Move</span>
+            <span class="next-move__title">Review a project decision</span>
+            <span class="next-move__detail">2 decisions need your eye.</span>
+          </span>
+          <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+        </div>
+        <div class="story-card g-hero2">
+          <span class="story-card__pill">4 min read</span><span class="story-card__dot"></span>
+          <div class="story-card__body">
+            <div class="story-card__tag">Maker Spotlight</div>
+            <div class="story-card__title">The Grain Whisperer of Maine</div>
+            <div class="story-card__sub">Jonathan Chilton on 40 years of listening to wood</div>
+          </div>
+        </div>
+        <div class="room-card">
+          <div class="room-card__art g-warm"><span class="room-card__chip">Room scan</span></div>
+          <div class="room-card__body">
+            <span class="room-card__copy">
+              <span class="mono-label mono-label--sm">Active Room</span>
+              <span class="room-card__name">Living Room</span>
+              <span class="room-card__meta">218 sq ft · South light · 3 pieces saved</span>
+            </span>
+            <span class="room-card__chev"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+        </div>
+        <div class="chip-row" style="padding-top:20px">
+          <span class="chip chip--active">All</span><span class="chip">Seating</span>
+          <span class="chip">Tables</span><span class="chip">Lighting</span><span class="chip">Storage</span>
+        </div>
+        <div class="pad-push"><div class="space-card">
+          <div class="space-card__art g-dusk"></div>
+          <div class="space-card__body">
+            <span class="grow"><span class="space-card__name">Bedroom</span>
+            <span class="space-card__meta">190 sq ft · 1 piece saved</span></span>
+            <span class="room-card__chev" style="padding-top:0"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+        </div></div>
+      </div>
+    </div>
+    <div class="panel panel--dark" style="padding:24px 4px" data-scheme="dark">
+      <p class="cap" style="padding-left:20px">dark</p>
+      <div style="width:402px">
+        <div class="next-move" style="margin-top:0">
+          <span class="next-move__icon"><svg><use href="#i-message"/></svg></span>
+          <span class="next-move__body">
+            <span class="mono-label mono-label--sm">Next Move</span>
+            <span class="next-move__title">Review a project decision</span>
+            <span class="next-move__detail">2 decisions need your eye.</span>
+          </span>
+          <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+        </div>
+        <div class="story-card g-hero2">
+          <span class="story-card__pill">4 min read</span><span class="story-card__dot"></span>
+          <div class="story-card__body">
+            <div class="story-card__tag">Maker Spotlight</div>
+            <div class="story-card__title">The Grain Whisperer of Maine</div>
+            <div class="story-card__sub">Jonathan Chilton on 40 years of listening to wood</div>
+          </div>
+        </div>
+        <div class="room-card">
+          <div class="room-card__art g-warm"><span class="room-card__chip">Room scan</span></div>
+          <div class="room-card__body">
+            <span class="room-card__copy">
+              <span class="mono-label mono-label--sm">Active Room</span>
+              <span class="room-card__name">Living Room</span>
+              <span class="room-card__meta">218 sq ft · South light · 3 pieces saved</span>
+            </span>
+            <span class="room-card__chev"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+        </div>
+        <div class="chip-row" style="padding-top:20px">
+          <span class="chip chip--active">All</span><span class="chip">Seating</span>
+          <span class="chip">Tables</span><span class="chip">Lighting</span><span class="chip">Storage</span>
+        </div>
+        <div class="pad-push"><div class="space-card">
+          <div class="space-card__art g-dusk"></div>
+          <div class="space-card__body">
+            <span class="grow"><span class="space-card__name">Bedroom</span>
+            <span class="space-card__meta">190 sq ft · 1 piece saved</span></span>
+            <span class="room-card__chev" style="padding-top:0"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Studio rows, notifications, money summaries, list rows</h3>
+  <div class="rail">
+    <div class="panel" data-scheme="light">
+      <p class="cap">light</p>
+      <div class="studio-row">
+        <span class="studio-row__icon"><svg><use href="#i-doc"/></svg></span>
+        <span class="studio-row__copy">
+          <span class="studio-row__title">Proposals</span>
+          <span class="studio-row__meta">1 awaiting your signature</span>
+        </span>
+        <span class="studio-row__count">4</span>
+        <span class="studio-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+      </div>
+      <hr class="hr--soft hr">
+      <div class="studio-row studio-row--locked">
+        <span class="studio-row__copy">
+          <span class="studio-row__title">Invoices</span>
+          <span class="studio-row__meta">Opens with your first project</span>
+        </span>
+        <span class="studio-row__lock"><svg><use href="#i-lock"/></svg></span>
+      </div>
+      <hr class="hr--soft hr">
+      <div class="stack-8" style="margin-top:16px">
+        <div class="action-row">
+          <span class="action-row__icon"><svg><use href="#i-palette"/></svg></span>
+          <span class="action-row__title">Retake Style Quiz</span>
+          <span class="action-row__chev"><svg width="13" height="13"><use href="#i-chev-r"/></svg></span>
+        </div>
+        <div class="action-row">
+          <span class="action-row__icon"><svg><use href="#i-gear"/></svg></span>
+          <span class="action-row__title">Settings</span>
+          <span class="action-row__chev"><svg width="13" height="13"><use href="#i-chev-r"/></svg></span>
+        </div>
+      </div>
+      <div style="margin:20px -24px 0">
+        <div class="notif-row notif-row--unread">
+          <span class="notif-row__icon notif-row__icon--clay"><svg width="17" height="17"><use href="#i-doc"/></svg></span>
+          <span class="notif-row__copy">
+            <span class="notif-row__title">A proposal is waiting</span>
+            <span class="notif-row__body">Leah sent Living Room · Phase 1 for your signature.</span>
+          </span>
+          <span class="notif-row__trail"><span class="notif-row__dot"></span><span class="notif-row__time">2h</span></span>
+          <span class="notif-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+        <div class="notif-row">
+          <span class="notif-row__icon"><svg width="17" height="17"><use href="#i-message"/></svg></span>
+          <span class="notif-row__copy">
+            <span class="notif-row__title">Your designer replied</span>
+            <span class="notif-row__body">About the Heirloom Oak Dining Table.</span>
+          </span>
+          <span class="notif-row__trail"><span class="notif-row__time">Yesterday</span></span>
+          <span class="notif-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+      </div>
+      <div class="stack-12" style="margin-top:20px">
+        <div class="summary-card">
+          <div class="summary-card__top">
+            <span>
+              <span class="summary-card__stamp">Awaiting payment</span>
+              <span class="summary-card__title" style="display:block">INV-2026-0142</span>
+            </span>
+            <span class="summary-card__right">
+              <span class="summary-card__amount">$4,250.00</span>
+              <span class="summary-card__due">Due Sep 9</span>
+            </span>
+          </div>
+          <span class="summary-card__project">Living Room · Phase 1</span>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card__top">
+            <span>
+              <span class="summary-card__stamp">Signed</span>
+              <span class="summary-card__title" style="display:block">Living Room · Phase 1</span>
+            </span>
+            <span class="summary-card__right">
+              <span class="summary-card__amount">$18,400.00</span>
+              <span class="summary-card__due">Signed Aug 12</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div style="margin:20px -24px 0">
+        <div class="list-row"><span class="list-row__label">Account</span><span class="list-row__value">walt@example.com</span><span class="studio-row__chev"><svg><use href="#i-chev-r"/></svg></span></div>
+        <div class="list-row"><span class="list-row__label">Sign in on the web</span><span class="studio-row__chev"><svg><use href="#i-chev-r"/></svg></span></div>
+        <div class="list-row"><span class="list-row__label">Notifications</span><span class="list-row__value">Off</span><span class="studio-row__chev"><svg><use href="#i-chev-r"/></svg></span></div>
+      </div>
+    </div>
+    <div class="panel panel--dark" data-scheme="dark">
+      <p class="cap">dark</p>
+      <div class="studio-row">
+        <span class="studio-row__icon"><svg><use href="#i-doc"/></svg></span>
+        <span class="studio-row__copy">
+          <span class="studio-row__title">Proposals</span>
+          <span class="studio-row__meta">1 awaiting your signature</span>
+        </span>
+        <span class="studio-row__count">4</span>
+        <span class="studio-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+      </div>
+      <hr class="hr--soft hr">
+      <div class="studio-row studio-row--locked">
+        <span class="studio-row__copy">
+          <span class="studio-row__title">Invoices</span>
+          <span class="studio-row__meta">Opens with your first project</span>
+        </span>
+        <span class="studio-row__lock"><svg><use href="#i-lock"/></svg></span>
+      </div>
+      <hr class="hr--soft hr">
+      <div class="stack-8" style="margin-top:16px">
+        <div class="action-row">
+          <span class="action-row__icon"><svg><use href="#i-palette"/></svg></span>
+          <span class="action-row__title">Retake Style Quiz</span>
+          <span class="action-row__chev"><svg width="13" height="13"><use href="#i-chev-r"/></svg></span>
+        </div>
+        <div class="action-row">
+          <span class="action-row__icon"><svg><use href="#i-gear"/></svg></span>
+          <span class="action-row__title">Settings</span>
+          <span class="action-row__chev"><svg width="13" height="13"><use href="#i-chev-r"/></svg></span>
+        </div>
+      </div>
+      <div style="margin:20px -24px 0">
+        <div class="notif-row notif-row--unread">
+          <span class="notif-row__icon notif-row__icon--clay"><svg width="17" height="17"><use href="#i-doc"/></svg></span>
+          <span class="notif-row__copy">
+            <span class="notif-row__title">A proposal is waiting</span>
+            <span class="notif-row__body">Leah sent Living Room · Phase 1 for your signature.</span>
+          </span>
+          <span class="notif-row__trail"><span class="notif-row__dot"></span><span class="notif-row__time">2h</span></span>
+          <span class="notif-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+        <div class="notif-row">
+          <span class="notif-row__icon"><svg width="17" height="17"><use href="#i-message"/></svg></span>
+          <span class="notif-row__copy">
+            <span class="notif-row__title">Your designer replied</span>
+            <span class="notif-row__body">About the Heirloom Oak Dining Table.</span>
+          </span>
+          <span class="notif-row__trail"><span class="notif-row__time">Yesterday</span></span>
+          <span class="notif-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+        </div>
+      </div>
+      <div class="stack-12" style="margin-top:20px">
+        <div class="summary-card">
+          <div class="summary-card__top">
+            <span>
+              <span class="summary-card__stamp">Awaiting payment</span>
+              <span class="summary-card__title" style="display:block">INV-2026-0142</span>
+            </span>
+            <span class="summary-card__right">
+              <span class="summary-card__amount">$4,250.00</span>
+              <span class="summary-card__due">Due Sep 9</span>
+            </span>
+          </div>
+          <span class="summary-card__project">Living Room · Phase 1</span>
+        </div>
+      </div>
+      <div style="margin:20px -24px 0">
+        <div class="list-row"><span class="list-row__label">Account</span><span class="list-row__value">walt@example.com</span><span class="studio-row__chev"><svg><use href="#i-chev-r"/></svg></span></div>
+        <div class="list-row"><span class="list-row__label">Sign in on the web</span><span class="studio-row__chev"><svg><use href="#i-chev-r"/></svg></span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Artwork fallbacks — what an unloaded or image-less piece looks like</h3>
+  <p class="note">Never a grey box. <span class="src">PatinaAsyncImage</span> draws a clay Strata mark on
+  <span class="src">Background.secondary</span> while loading or on failure; a piece with no image URL at all
+  falls back to its category gradient (<span class="src">ProductModel.swift:115-124</span>). The labelled
+  variant is the honest placeholder for a mock: maker plus material, never a stock photograph.</p>
+  <div class="rail rail--tight">
+    <div style="width:190px">
+      <p class="cap">loading / failed · light</p>
+      <div style="height:160px;border-radius:14px;overflow:hidden" data-scheme="light">
+        <span class="tile-placeholder"><span class="strata strata--clay"><i></i><i></i><i></i></span></span>
+      </div>
+    </div>
+    <div style="width:190px">
+      <p class="cap">loading / failed · dark</p>
+      <div style="height:160px;border-radius:14px;overflow:hidden" data-scheme="dark">
+        <span class="tile-placeholder"><span class="strata strata--clay"><i></i><i></i><i></i></span></span>
+      </div>
+    </div>
+    <div style="width:190px">
+      <p class="cap">no image · seating → leather</p>
+      <div style="height:160px;border-radius:14px;overflow:hidden">
+        <span class="tile-placeholder tile-placeholder--gradient g-leather">
+          <span class="strata"><i></i><i></i><i></i></span>
+          <span class="tile-placeholder__label">Holly Hunt · Velvet</span>
+        </span>
+      </div>
+    </div>
+    <div style="width:190px">
+      <p class="cap">no image · lighting → metal</p>
+      <div style="height:160px;border-radius:14px;overflow:hidden">
+        <span class="tile-placeholder tile-placeholder--gradient g-metal">
+          <span class="strata"><i></i><i></i><i></i></span>
+          <span class="tile-placeholder__label">Mitchell Gold + Bob Williams · Enamel</span>
+        </span>
+      </div>
+    </div>
+    <div style="width:190px">
+      <p class="cap">real seed crop · shots/g-15b</p>
+      <div style="height:160px;border-radius:14px;overflow:hidden">
+        <img src="img/pendant-lamp.jpg" alt="Grey enamel pendant lamp" style="width:100%;height:100%;object-fit:cover;display:block">
+      </div>
+    </div>
+  </div>
+
+  <h3>The Companion mark, hearth and hint</h3>
+  <div class="rail rail--tight">
+    <div class="panel" style="width:300px" data-scheme="light">
+      <p class="cap">collapsed hearth · light ground</p>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:16px 0">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+        <span class="companion-hint">Next steps</span>
+      </div>
+    </div>
+    <div class="panel panel--dark" style="width:300px" data-scheme="dark">
+      <p class="cap">collapsed hearth · dark ground</p>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:16px 0">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+        <span class="companion-hint">Two decisions need your eye</span>
+      </div>
+    </div>
+    <div class="panel" style="width:300px" data-scheme="light">
+      <p class="cap">StrataMarkView · spec colours</p>
+      <div style="display:flex;align-items:center;justify-content:center;gap:32px;padding:24px 0">
+        <span class="strata strata--spec"><i></i><i></i><i></i></span>
+        <span class="strata strata--spec" style="transform:scale(1.8);transform-origin:center"><i></i><i></i><i></i></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<section>
+  <h2>iOS system set — return surfaces outside the app</h2>
+  <p class="note">Drawn to Apple's metrics, not Patina's, except the app icon and the copy inside a widget.
+  Nothing here ships today: there is no widget, App Intent, Live Activity or associated-domains entitlement in
+  the client app, and the only push permission prompt fires after a design request. These are proposal art.</p>
+
+  <div class="rail">
+    <div>
+      <p class="cap">Lock Screen banner</p>
+      <div class="frame" data-scheme="dark">
+        <div class="frame__screen ios-dark">
+          <div class="lockscreen">
+            <div class="lockscreen__clock">
+              <div class="lockscreen__date">Wednesday, August 26</div>
+              <div class="lockscreen__time">9:41</div>
+            </div>
+            <div style="margin-top:56px">
+              <div class="push-banner">
+                <span class="push-banner__icon"><span class="strata"><i></i><i></i><i></i></span></span>
+                <span class="push-banner__copy">
+                  <span class="push-banner__app">Patina</span>
+                  <span class="push-banner__title" style="display:block">Leah sent a proposal</span>
+                  <span class="push-banner__body" style="display:block">Living Room · Phase 1 — $18,400. Open to read it before you sign.</span>
+                </span>
+                <span class="push-banner__time">now</span>
+              </div>
+            </div>
+          </div>
+          <div class="statusbar"><span class="statusbar__time" style="color:#fff">9:41</span>
+            <span class="statusbar__right" style="color:#fff">
+              <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+              <span class="sb-wifi"></span><span class="sb-battery"></span></span></div>
+          <div class="island"></div>
+          <div class="home-indicator" style="background:#fff"></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="cap">Live Activity — compact pill and expanded card</p>
+      <div class="frame" data-scheme="light">
+        <div class="frame__screen">
+          <div class="screen-body">
+            <div class="home-header" style="padding-top:calc(var(--pat-safe-top) + 56px)">
+              <div class="home-header__stack">
+                <div class="home-header__date">Wednesday · Aug 26</div>
+                <div class="home-header__titlerow"><span class="home-header__title">Today</span></div>
+              </div>
+              <span class="monogram">W</span>
+            </div>
+            <div style="padding:24px 20px 0">
+              <div class="live-card">
+                <div class="live-card__head">
+                  <span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center"><span class="strata"><i></i><i></i><i></i></span></span>
+                  <span class="live-card__app">Patina · Order 4471</span>
+                </div>
+                <div>
+                  <div class="live-card__title">Heirloom Oak Dining Table</div>
+                  <div class="live-card__meta">In production at Room &amp; Board · Minneapolis</div>
+                </div>
+                <div class="live-card__bar"><i style="width:56%"></i></div>
+                <div class="live-card__steps">
+                  <span>Ordered</span><span>In production</span><span>Shipped</span><span>Delivered</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="live-pill">
+            <span class="live-pill__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="live-pill__label">In production</span>
+            <span class="live-pill__value">Wk 3 of 6</span>
+          </div>
+          <div class="statusbar">
+            <span class="statusbar__time">9:41</span>
+            <span class="statusbar__right">
+              <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+              <span class="sb-wifi"></span><span class="sb-battery"></span></span>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="cap">Notification permission — Apple's two-button alert</p>
+      <div class="frame" data-scheme="light">
+        <div class="frame__screen">
+          <div class="screen-body">
+            <div class="screen-head"><div class="screen-head__title">Get design help</div>
+              <div class="screen-head__sub">Your request is with three designers.</div></div>
+            <div class="pad-push"><div class="card">
+              <span class="mono-label" style="display:block;margin-bottom:6px">Before we ask</span>
+              <span class="t-body-sm c-text-2" style="display:block">We'll only send you the four things that
+              actually change: a designer replies, a proposal arrives, an invoice comes due, a piece ships.</span>
+            </div></div>
+          </div>
+          <div class="sys-alert-scrim">
+            <div class="sys-alert">
+              <div class="sys-alert__body">
+                <div class="sys-alert__title">“Patina” Would Like to Send You Notifications</div>
+                <div class="sys-alert__msg">Notifications may include alerts, sounds, and icon badges. These can be configured in Settings.</div>
+              </div>
+              <div class="sys-alert__actions">
+                <button class="sys-alert__btn">Don't Allow</button>
+                <button class="sys-alert__btn">Allow</button>
+              </div>
+            </div>
+          </div>
+          <div class="statusbar">
+            <span class="statusbar__time">9:41</span>
+            <span class="statusbar__right">
+              <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+              <span class="sb-wifi"></span><span class="sb-battery"></span></span>
+          </div>
+          <div class="island"></div>
+          <div class="home-indicator"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Home Screen widgets</h3>
+  <div class="rail rail--tight" style="align-items:flex-start;background:linear-gradient(160deg,#3A342E,#1C1917);padding:28px;border-radius:20px">
+    <div>
+      <p class="cap" style="color:#B5A487">small · 2 × 2</p>
+      <div class="widget" data-scheme="light">
+        <div class="widget__head">
+          <span class="widget__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+          <span class="widget__eyebrow">Today</span>
+        </div>
+        <div class="widget__title">The Grain Whisperer of Maine</div>
+        <div class="widget__meta">4 min read · Maker Spotlight</div>
+      </div>
+    </div>
+    <div>
+      <p class="cap" style="color:#B5A487">medium · 4 × 2</p>
+      <div class="widget widget--md" data-scheme="light">
+        <div class="widget__split">
+          <span class="widget__art"><img src="img/heirloom-thumb.jpg" alt="Heirloom Oak Dining Table"></span>
+          <span class="grow" style="display:flex;flex-direction:column">
+            <span class="widget__head">
+              <span class="widget__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+              <span class="widget__eyebrow">Living Room</span>
+            </span>
+            <span class="widget__title">Heirloom Oak Dining Table</span>
+            <span class="widget__meta">Saved Aug 24 · Room &amp; Board · $4,200</span>
+          </span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p class="cap" style="color:#B5A487">small · dark</p>
+      <div class="widget" data-scheme="dark">
+        <div class="widget__head">
+          <span class="widget__mark" style="background:var(--pat-clay)"><span class="strata"><i></i><i></i><i></i></span></span>
+          <span class="widget__eyebrow">Your Studio</span>
+        </div>
+        <div class="widget__title">One invoice due</div>
+        <div class="widget__meta">INV-2026-0142 · $4,250 · Sep 9</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<section>
+  <h2>Deck utilities</h2>
+  <p class="note">Deck furniture, not app furniture: numbered callouts that sit on a frame, and the screen-sheet
+  table that runs beside every mock.</p>
+
+  <div class="rail">
+    <div class="frame-wrap">
+      <p class="cap">callout numbers on a frame</p>
+      <div class="frame frame--bare" data-scheme="light" style="width:402px;height:340px">
+        <div class="frame__screen">
+          <div class="screen-body">
+            <div class="home-header" style="padding-top:24px">
+              <div class="home-header__stack">
+                <div class="home-header__date">Wednesday · Aug 26</div>
+                <div class="home-header__titlerow"><span class="home-header__title">Today</span></div>
+              </div>
+              <span class="monogram">W</span>
+            </div>
+            <div class="next-move">
+              <span class="next-move__icon"><svg><use href="#i-camera-vf"/></svg></span>
+              <span class="next-move__body">
+                <span class="mono-label mono-label--sm">Next Move</span>
+                <span class="next-move__title">Bring your first room into Patina</span>
+                <span class="next-move__detail">A short scan gives the Companion a real space to work from.</span>
+              </span>
+              <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <span class="callout-n" style="top:52px;left:-12px">1</span>
+      <span class="callout-n callout-n--clay" style="top:154px;left:-12px">2</span>
+      <span class="callout-n" style="top:186px;right:-12px">3</span>
+    </div>
+
+    <div class="sheetwrap grow">
+      <p class="cap">screen sheet</p>
+      <table class="sheet-table">
+        <caption>Screen sheet — Daily Room, discovering</caption>
+        <tbody>
+          <tr><th>Purpose</th><td>Give a guest one honest next move before asking for anything.</td></tr>
+          <tr><th>Entry points</th><td>App launch · Companion “Add your first space” · deep link <span class="mono">patina://home</span></td></tr>
+          <tr><th>Components</th><td><span class="mono">DailyGreetingHeader</span> · <span class="mono">TodayNextMoveCard</span> · <span class="mono">DailyStoryCard</span> · <span class="mono">TodayActiveRoomCard</span> (existing) · <span class="is-new">room-progress strip (new)</span></td></tr>
+          <tr><th>Copy</th><td>“Bring your first room into Patina” / “A short scan gives the Companion a real space to work from.”</td></tr>
+          <tr><th>Data source</th><td><span class="mono">editorial_stories</span> (PostgREST) · <span class="mono">get_recommendations</span> RPC · local <span class="mono">RoomModel</span></td></tr>
+          <tr><th>States</th><td>Loading “One moment…” · empty = guest Next Move · error = “Let's try that again”</td></tr>
+          <tr><th>Interactions</th><td>Tap card → <span class="mono">scanFlow</span> · <span class="mono">today_editorial_story_tapped</span> · <span class="mono">today_active_room_tapped</span></td></tr>
+          <tr><th>Tier</th><td>guest / discovering · engaged adds the designer line · activeProject adds the Studio queue</td></tr>
+          <tr><th>New vs today</th><td class="is-new">The story rotates per person per day; today every caller sees the same row.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

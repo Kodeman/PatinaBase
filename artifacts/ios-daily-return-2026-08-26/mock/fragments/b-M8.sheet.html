@@ -1,0 +1,13 @@
+<table class="sheet-table">
+  <caption>M8 &middot; Studio &rarr; Ordered &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> a pushed screen, not a tab root &middot; <b>2</b> the piece the client bought &middot; <b>3</b> the four-step rail, current step in charcoal &middot; <b>4</b> the carrier and the designer, one tap each &middot; <b>5</b> the piece <i>Leah</i> bought, on the same list.</td></tr>
+  <tr><th>Purpose</th><td>Answer T8 &mdash; &ldquo;where is it&rdquo; &mdash; in one screen, for everything on the job, not only what you bought yourself.</td></tr>
+  <tr><th>Entry</th><td>Tab <code>Studio</code> &rarr; <code>Ordered</code> &middot; the record&#8217;s MOVED rows &middot; an order push.</td></tr>
+  <tr><th>Components</th><td><code>OrderListView</code> / <code>OrderDetailCard</code> (<b>new</b>) &middot; <code>PatinaStatusBadge</code> (existing).</td></tr>
+  <tr><th>Copy</th><td>The states are <code>_shared/fulfillment-templates.ts:31-37</code>&#8217;s six transitions, verbatim. Dates, the ETA and &ldquo;Leah updates this as it moves.&rdquo; are <i>example copy</i>.</td></tr>
+  <tr><th>Data</th><td>One list over <code>fulfillment_orders</code> + <code>fulfillment_order_items</code> + <code>fulfillment_shipments</code> scoped to <code>client_profile_id = auth.uid()</code> &mdash; <b>the new client-scoped SELECT policy</b>; today those tables are admin- and agent-read only (<code>00350:316-325</code>). <code>direct_orders</code> supplies the paid-but-not-yet-intaken window. &ldquo;Track with the carrier&rdquo; resolves <code>carrier</code> + <code>tracking</code> through a client-side carrier&rarr;URL map; no <code>tracking_url</code> column exists and none is added.</td></tr>
+  <tr><th>States</th><td>No orders &rarr; the section does not render &middot; paid but not yet on the rail &rarr; &ldquo;Paid Sep 3. We&#8217;ll tell you when it ships.&rdquo; &middot; refunded &rarr; &ldquo;Refunded Sep 20&rdquo; &middot; designer-sourced &rarr; &ldquo;Leah updates this as it moves.&rdquo; rather than a blank rail.</td></tr>
+  <tr><th>Interactions</th><td><code>order_status_opened</code> &middot; <code>order_track_tapped</code>.</td></tr>
+  <tr><th>Tier</th><td>Any tier that has ordered, or whose designer has.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>No order object exists anywhere in the client app (F19, F66); the state machine stops at <code>paid</code> (F154); the shipping push exists and reaches nobody (F198).</td></tr>
+</table>

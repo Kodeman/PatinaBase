@@ -1,0 +1,124 @@
+<section id="purchase" class="dk-sec reg-paper" data-index-title="The purchase path" data-day="evening">
+  <div class="dk-wrap">
+    <p class="hour"><b>21:10</b> &middot; Evening</p>
+
+    <h2 class="dk-h2">The purchase path, both ways</h2>
+    <p class="dk-lede">Money moves through the same hosted Checkout in either direction. What differs is who is owed a name when it settles.</p>
+    <p class="dk-p">Both directions build on the rail that already ships &mdash; <code>public.direct_orders</code>, <code>create_direct_order</code>, and <code>create-checkout-session</code>&rsquo;s existing direct-order branch &mdash; rather than a second one. Money is taken in hosted Stripe Checkout inside <code>SFSafariViewController</code>, the same container the invoice screen already opens, and Apple Pay is already inside it (C25). Neither direction proposes a native PaymentSheet: it buys one fewer context switch and costs an SPM dependency, a merchant-id entitlement and a re-do of ACH and settle-polling that already works. On compliance the two are a tie on substance &mdash; physical goods, external payment, no IAP (App Review 3.1.3(e) / 3.1.5(a)); Sign in with Apple already ships, so 4.8 is satisfied; neither direction sells a digital good in-app, so 3.1.1 stays shut &mdash; and Direction A alone spends a sentence arguing it, naming the design-fee invoice already on this same Checkout as a service under 3.1.3(d)/(e) rather than asserting there is no service in the app. Both correctly flag SP-20&rsquo;s account deletion (5.1.1(v)) as release-gating regardless of which way this goes.</p>
+
+    <div class="dk-tablewrap">
+      <table class="dk-table dk-table--compare">
+        <caption>Where the two directions actually differ, once the shared rail is subtracted</caption>
+        <thead><tr><th>Dimension</th><th>Direction A</th><th>Direction B</th></tr></thead>
+        <tbody>
+          <tr>
+            <th class="dk-row-h">Attribution</th>
+            <td>Resolved at settle, riding the Checkout session metadata. <strong>Zero new columns</strong> on <code>direct_orders</code>.</td>
+            <td>Three columns snapshotted <strong>at create</strong> &mdash; <code>designer_id</code>, <code>project_id</code>, <code>commission_rate</code> &mdash; immutable once paid.</td>
+          </tr>
+          <tr>
+            <th class="dk-row-h">Money on the sheet</th>
+            <td>Freight folds into <code>amount_cents</code>; the printed <code>Total $4,550.00</code> equals the session&rsquo;s real <code>amount_total</code>.</td>
+            <td>&ldquo;Delivery and tax are added at payment&rdquo; &mdash; a first-time buyer reaches Safari before seeing a number.</td>
+          </tr>
+          <tr>
+            <th class="dk-row-h">The roster case</th>
+            <td>A designer with no accepted lead who only sent the client here is still credited, at <code>products.commission_rate</code> or the platform default (16%).</td>
+            <td>Credit requires an engaged relationship; the same roster send earns nothing.</td>
+          </tr>
+          <tr>
+            <th class="dk-row-h">What the designer learns</th>
+            <td>A wave-2 <em>prerequisite</em> &mdash; confirm the notify already covers sign / pay / decide / thread-opened &mdash; not shipped on day one.</td>
+            <td>A settle-time system message into the project thread, the day the order lands: &ldquo;&hellip;credited at the piece&rsquo;s trade rate.&rdquo;</td>
+          </tr>
+          <tr>
+            <th class="dk-row-h">Paid by card vs. bank</th>
+            <td>The poll-timeout copy does not branch on settled method.</td>
+            <td>Branches explicitly when <code>us_bank_account</code> is the method that actually cleared.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="dk-note">Compared against Judge J2&rsquo;s purchase-and-trust cell (7/10 &middot; 8/10, B ahead) &mdash; the full score sits in Compare + judges. Neither column is invented copy: A&rsquo;s figures are direction-a.md &sect;5, B&rsquo;s are direction-b.md &sect;5, both against <code>research/12-backend-reality.md</code> &sect;5.</p>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h3 class="dk-h3">The state machine, shared by both</h3>
+        <ul class="dk-ul">
+          <li><code>create_direct_order</code> &rarr; <code>pending_payment</code> &rarr; <code>canceled</code>, or <code>checkout.session.completed</code> &rarr; <code>paid</code> &rarr; <code>refunded</code> (an existing trigger, 00277).</li>
+          <li>Settle enqueues <code>fulfillment_intake</code>, which mints the fulfillment row idempotently from the PaymentIntent.</li>
+          <li><code>fulfillment_orders</code> status is <strong>derived</strong> from line state, never a text column: intake &rarr; transmitted &rarr; acknowledged &rarr; in production &rarr; shipped &rarr; delivered &rarr; settled.</li>
+          <li>A damage claim lands in <code>fulfillment_exceptions</code>, with an evidence window on the rail the order already joined.</li>
+        </ul>
+        <p class="dk-p">Today that machine stops at <code>paid</code> and no client-readable order exists at all &mdash; the client rail is unbuilt in both documents, so every purchase claim here is a read against migrations and edge functions, not a walk.</p>
+
+        <blockquote class="voice">
+          <p class="voice__q">The day a &lsquo;Buy now&rsquo; button appears on that piece detail, my client buys the $3,200 sideboard I specified, at retail, from inside the app I sent them to, and I get nothing. Not the margin, not the line on the schedule, not the notice. Then it arrives damaged and they call me anyway.</p>
+          <p class="voice__who">
+            <span class="voice__seat">D1</span>
+            <span class="voice__role">Leah, 38, Columbus &middot; solo residential designer &middot; simulated seat</span>
+          </p>
+        </blockquote>
+
+        <p class="f-chips">
+          <a class="f-chip f-chip--s0" href="#found">F19 <span>No order object anywhere in the client app</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F22 <span>A direct order would credit the designer nothing</span></a>
+          <span class="f-chip f-chip--s1">F144</span>
+          <span class="f-chip f-chip--s1">F151</span>
+          <span class="f-chip f-chip--s1">F157</span>
+          <span class="f-chip f-chip--s2">F198</span>
+          <span class="f-chip f-chip--s2">F202</span>
+        </p>
+      </div>
+
+      <div class="dk-stage">
+        <p class="dk-h4">Direction A &middot; discovering, no live designer relationship</p>
+        <div class="dk-screen dk-screen--under">
+          <div class="dk-screen__stage">
+            <div class="dk-frames frames-3">
+              <div class="dk-frame-slot">
+                <div class="dk-frame-fit"><!-- include:fragments/a-M5a.html --></div>
+                <p class="dk-frame-cap"><b>5a</b> &middot; Order sheet &middot; money, fit, the damage claim</p>
+              </div>
+              <div class="dk-frame-slot">
+                <div class="dk-frame-fit"><!-- include:fragments/a-M5b.html --></div>
+                <p class="dk-frame-cap"><b>5b</b> &middot; Payment hand-off &middot; Safari, not Patina</p>
+              </div>
+              <div class="dk-frame-slot">
+                <div class="dk-frame-fit"><!-- include:fragments/a-M5c.html --></div>
+                <p class="dk-frame-cap"><b>5c</b> &middot; Order placed &middot; credited variant below the frame</p>
+              </div>
+            </div>
+          </div>
+          <div class="dk-screen__sheet">
+            <div class="dk-sheet"><!-- include:fragments/a-M5.sheet.html --></div>
+          </div>
+        </div>
+        <p class="dk-note">Not re-drawn: the third Safari panel &mdash; <code>successUrl</code> points at the client portal today, so the buyer taps <b>Done</b> to come back. The sheet above narrates it; wave 2 repoints it at a universal link.</p>
+
+        <p class="dk-h4">Direction B &middot; engaged, buying alongside &ldquo;Ask Leah to source this&rdquo;</p>
+        <div class="dk-screen dk-screen--under">
+          <div class="dk-screen__stage">
+            <div class="dk-frames frames-3">
+              <div class="dk-frame-slot">
+                <div class="dk-frame-fit"><!-- include:fragments/b-M5a.html --></div>
+                <p class="dk-frame-cap"><b>5a</b> &middot; Order sheet &middot; responsibility paragraph, attribution line</p>
+              </div>
+              <div class="dk-frame-slot">
+                <div class="dk-frame-fit"><!-- include:fragments/b-M5b.html --></div>
+                <p class="dk-frame-cap"><b>5b</b> &middot; Payment hand-off &middot; the app waiting behind Safari</p>
+              </div>
+              <div class="dk-frame-slot">
+                <div class="dk-frame-fit"><!-- include:fragments/b-M5c.html --></div>
+                <p class="dk-frame-cap"><b>5c</b> &middot; Order placed &middot; the opt-in Notify me row</p>
+              </div>
+            </div>
+          </div>
+          <div class="dk-screen__sheet">
+            <div class="dk-sheet"><!-- include:fragments/b-M5.sheet.html --></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

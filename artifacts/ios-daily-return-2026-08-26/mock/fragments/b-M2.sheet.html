@@ -1,0 +1,13 @@
+<table class="sheet-table">
+  <caption>M2 &middot; Today, discovering &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> header at 9:10pm &mdash; &ldquo;Good evening.&rdquo; from <code>TimeOfDay</code> &middot; <b>2</b> the record, MOVED only &middot; <b>3</b> the room the person made, with its own dated state line &middot; <b>4</b> NEW THIS WEEK, drawn only at three or more rows &middot; <b>7</b> the tab bar. Blocks <b>5</b> (the Saved summary row) and <b>6</b> (the story) continue below the fold.</td></tr>
+  <tr><th>Purpose</th><td>Give a person with no designer an honest reason to open &mdash; and an honest silence when there isn&#8217;t one.</td></tr>
+  <tr><th>Entry</th><td>Cold launch &middot; tab <code>Today</code>.</td></tr>
+  <tr><th>Components</th><td><code>HouseRecordCard</code> (<b>new</b>, 2) &middot; <code>RoomHeroCard</code> (<b>new</b>, 3) &middot; <code>NewThisWeekRail</code> (<b>new</b>, reuses <code>ProductCard</code>, 4) &middot; <code>DailyStoryCard</code> (existing).</td></tr>
+  <tr><th>Copy</th><td>As drawn. &ldquo;The Brass Arc Floor Lamp you saved is $100 less than when you saved it.&rdquo; states both numbers and never a countdown, a scarcity count or a was/now strike. &ldquo;Three pieces joined Patina this week.&rdquo; sits under NEW THIS WEEK, not on the record &mdash; the catalogue is not a person. Room, price and lamp lines are <i>example copy</i>: the walk accounts carry 0 rooms and 0 saved items.</td></tr>
+  <tr><th>Data</th><td><code>get_recommendations</code> widened with <code>description</code> + <code>published_at</code> (SP-10&#8217;s DROP/recreate) &middot; <code>saved_items</code> + <code>price_cents_at_save</code> &middot; <code>products.deleted_at</code> &middot; local <code>RoomModel</code>.</td></tr>
+  <tr><th>States</th><td>No room &rarr; <b>Start with a room</b> with &ldquo;Type the dimensions&rdquo; and &ldquo;Scan it&rdquo;, the light act first. Fewer than three genuinely new pieces &rarr; the block does not draw and is never padded. Nothing moved &rarr; &ldquo;Nothing moved since Thursday.&rdquo; drawn on the card, not hidden.</td></tr>
+  <tr><th>Interactions</th><td><code>house_add_room_tapped {method}</code> &middot; <code>piece_card_tapped</code> &middot; <code>today_record_line_tapped {kind}</code>.</td></tr>
+  <tr><th>Tier</th><td>guest = identical minus the saved rows, plus one quiet line: &ldquo;Sign in to keep this on every device.&rdquo; No wall, no sheet.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>Everything above the story. Today a discovering user sees the same four blocks as a guest and as an activeProject client (F13). Dark variant drawn as <b>M2d</b>.</td></tr>
+</table>

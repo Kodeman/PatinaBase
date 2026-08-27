@@ -1,0 +1,60 @@
+<!-- s-M7 · Return surfaces — the Lock Screen: one banner, and a widget that says what moved.
+     SP-08 (the events that earn the permission) · SP-03 (the link opens the app).
+     Direction A M6 and Direction B 6a both draw this moment; the body copy here is B's wording
+     ("· review by Sep 8"), A words the same line "Read it by Sep 8."
+     Neither direction puts a count on the Lock Screen.
+     Additions to the kit, scoped under .sp-lock: .sp-lock__acc, .sp-lock__notifs. -->
+<div class="frame-wrap sp-lock">
+  <style>
+    .sp-lock .sp-lock__acc { width:340px; margin-top:34px; padding:10px 14px; border-radius:16px;
+      background:rgba(255,255,255,.14); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+      display:flex; flex-direction:column; gap:3px; }
+    .sp-lock .sp-lock__acclabel { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+      letter-spacing:.5px; color:rgba(255,255,255,.6); }
+    .sp-lock .sp-lock__accline { font:500 15px/1.3 var(--pat-sans); color:#FFFFFF; }
+    .sp-lock .sp-lock__notifs { margin-top:auto; margin-bottom:96px; }
+  </style>
+
+  <div class="frame" data-scheme="dark" data-battery="charging">
+    <div class="frame__screen">
+
+      <div class="lockscreen">
+        <div class="lockscreen__clock">
+          <div class="lockscreen__date">Wednesday, August 26</div>
+          <div class="lockscreen__time">9:41</div>
+        </div>
+
+        <div class="sp-lock__acc">
+          <span class="sp-lock__acclabel">Patina</span>
+          <span class="sp-lock__accline">Rug colour &mdash; asked Aug 22</span>
+        </div>
+
+        <div class="sp-lock__notifs">
+          <div class="push-banner">
+            <span class="push-banner__icon"><span class="strata"><i></i><i></i><i></i></span></span>
+            <div class="push-banner__copy">
+              <div class="push-banner__app">Patina</div>
+              <div class="push-banner__title">Leah sent a proposal</div>
+              <div class="push-banner__body">Aspen Loft &mdash; Living Room Refresh &middot; review by Sep 8.</div>
+            </div>
+            <span class="push-banner__time">now</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:250px;right:4px">1</span>
+  <span class="callout-n" style="top:706px;right:4px">2</span>
+  <span class="callout-n callout-n--clay" style="top:752px;right:4px">3</span>
+</div>

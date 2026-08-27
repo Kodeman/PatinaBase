@@ -1,0 +1,16 @@
+<div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M6 &middot; The return moment &mdash; Lock Screen push + the Today it opens</caption>
+    <tr><th>Callouts</th><td><b>1</b> the Lock Screen <code>accessoryRectangular</code> widget: <b>what moved</b>, not what is owed. <b>2</b> one notification card &mdash; the app icon, the sender, the fact. <b>3</b> the body names the project and the date the reply is wanted. <b>4</b> the Today it opens, with the block carrying the same sentence &mdash; <b>the failure mode we design against is a notification that opens a screen which knows nothing about it</b>. <b>5</b> the one Next Move, already holding the proposal. <b>6</b> the hearth hint, agreeing with both.</td></tr>
+    <tr><th>Purpose</th><td>The one honest interruption.</td></tr>
+    <tr><th>Entry points</th><td><code>notify_client_attention</code> &rarr; <code>apns-send</code>; the widget timeline.</td></tr>
+    <tr><th>Components</th><td>System notification; <b>new</b> widget extension; <code>NotificationRouter</code> (existing, already handles <code>proposal</code>).</td></tr>
+    <tr><th>Copy</th><td>Push: &ldquo;Leah sent a proposal&rdquo; / &ldquo;Aspen Loft Refresh &mdash; read it by Sep 8.&rdquo; Widget: <span class="mono">LEAH SENT A PROPOSAL</span> / &ldquo;Tuesday&rdquo;. The Today it opens carries M1&rsquo;s line verbatim.</td></tr>
+    <tr><th>Data source</th><td><code>notification_log</code> + <code>device_push_tokens</code>; the widget reads a small App Group cache written on every badge refresh.</td></tr>
+    <tr><th>States</th><td>Permission not granted &rarr; no push; the feed and email carry it. Nothing waiting &rarr; <span class="mono">NOTHING NEEDS YOU</span> / the room. Signed out &rarr; wordmark only.</td></tr>
+    <tr><th>Interactions</th><td><code>push_received</code> &middot; <code>push_opened</code> (<code>entity_type</code>) &middot; <code>widget_tapped</code>.</td></tr>
+    <tr><th>Tier behaviour</th><td>Engaged gets only the design-request pushes that already fire; discovering and guest get none and are never asked.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The send for money and decisions; the widget target; the pre-permission screen (M8).</td></tr>
+    <tr><th>Drawn vs manifest</th><td>The widget is placed under the clock and the notification near the bottom, which is where iOS puts them; the manifest&rsquo;s &ldquo;below it&rdquo; is deck reading order. The push body names the seeded project <b>Aspen Loft Refresh</b>; the seeded proposal titles are dev fixtures (&ldquo;Sample accepted proposal&rdquo;), so no proposal name is printed. <b>None of this ships today</b>: the client app has no widget extension and no associated-domains entitlement, and the only notification prompt fires after a design request with no pre-permission copy (C28).</td></tr>
+  </table>
+</div>

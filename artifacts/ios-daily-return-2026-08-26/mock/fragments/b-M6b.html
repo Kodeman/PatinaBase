@@ -1,0 +1,64 @@
+<!-- b-M6b — Direction B · M6b · The Home Screen widget, drawn twice: with a record row, and
+     with none. The app has no extension target today (F130). -->
+<div class="frame-wrap bx-m6b">
+<style>
+.bx-m6b .homescreen{position:absolute;inset:0;background:linear-gradient(165deg,#3B342C,#1E1B18 55%,#0F0E0D);
+  padding:calc(var(--pat-safe-top) + 44px) 22px 0;display:flex;flex-direction:column;gap:26px;
+  align-items:center;}
+.bx-m6b .hs-row{display:flex;gap:18px;}
+.bx-m6b .hs-icons{display:flex;gap:26px;}
+.bx-m6b .hs-app{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.bx-m6b .hs-icon{width:60px;height:60px;border-radius:14px;background:var(--pat-charcoal);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 6px 18px rgba(0,0,0,.3);}
+.bx-m6b .hs-label{font:400 11px/1.2 var(--pat-sans);color:rgba(255,255,255,.9);}
+.bx-m6b .widget--sm{width:158px;height:158px;padding:14px;}
+.bx-m6b .widget__line{font:500 15px/1.35 var(--pat-sans);color:var(--pat-text);margin-top:auto;}
+.bx-m6b .widget__empty{font:500 15px/1.35 var(--pat-sans);color:var(--pat-text-muted);margin-top:auto;}
+.bx-m6b .widget__foot{display:flex;justify-content:flex-end;margin-top:10px;}
+</style>
+
+<div class="frame" data-scheme="dark" data-battery="charging">
+  <div class="frame__screen">
+    <div class="homescreen">
+      <div class="hs-row">
+        <div class="widget widget--sm">
+          <div class="widget__head">
+            <span class="widget__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="widget__eyebrow">Since Thu</span>
+          </div>
+          <span class="widget__line">Leah asked about the rug colour.</span>
+        </div>
+        <div class="widget widget--sm">
+          <div class="widget__head">
+            <span class="widget__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="widget__eyebrow">Since Thu</span>
+          </div>
+          <span class="widget__empty">Nothing moved since Thursday.</span>
+        </div>
+      </div>
+
+      <div class="hs-icons">
+        <span class="hs-app">
+          <span class="hs-icon"><span class="strata strata--clay"><i></i><i></i><i></i></span></span>
+          <span class="hs-label">Patina</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n callout-n--ondark" style="top:126px;left:2px">1</span>
+<span class="callout-n callout-n--clay callout-n--ondark" style="top:126px;right:2px">2</span>
+<span class="callout-n callout-n--ondark" style="top:326px;left:2px">3</span>
+</div>

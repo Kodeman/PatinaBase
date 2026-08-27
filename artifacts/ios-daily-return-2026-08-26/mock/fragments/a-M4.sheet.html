@@ -1,0 +1,16 @@
+<div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M4 &middot; The room &mdash; Living Room &middot; light</caption>
+    <tr><th>Callouts</th><td><b>1</b> the room, named, over a 240 pt room-type gradient. <b>2</b> the stat row: <b>two</b> tiles, not three &mdash; <span class="mono">IN AR</span> and the bare <span class="mono">MATCH</span> are gone (SP-18; <code>shots/c-24</code> shows all three, two of them reading 0 and &mdash;). <b>3</b> one plain line, no track: a bar that fills as her money leaves is a meter, and she asked for figures. <b>4</b> <span class="mono">YOUR ITEMS</span>, three real seed rows. <b>5</b> the save date on the row (F197, F203). <b>6</b> one primary act, where three used to be (SP-11).</td></tr>
+    <tr><th>Purpose</th><td>The object of return &mdash; a room that visibly fills.</td></tr>
+    <tr><th>Entry points</th><td>Active Room card, Your Spaces, <code>patina://room/&lt;uuid&gt;</code>, push <code>room</code>.</td></tr>
+    <tr><th>Components</th><td><code>RoomProjectView</code> (existing; SP-11 / SP-18 do most of this) + <b>new</b> range line and save dates.</td></tr>
+    <tr><th>Copy</th><td>&ldquo;Living Room&rdquo; / <span class="mono">18 &times; 14 FT &middot; NORTH-FACING &middot; 2 WINDOWS &middot; ENTERED AUG 24</span> &mdash; <b>entered, not scanned</b> (F51) / <span class="mono">3 ITEMS</span> &middot; <span class="mono">$3,590 SAVED</span> / <span class="mono">YOUR RANGE &middot; $5K+ &middot; FROM YOUR QUIZ ANSWER</span> / <span class="mono">YOUR ITEMS</span> / &ldquo;Velvet Club Chair &middot; Article &middot; $1,250 &middot; saved Aug 24&rdquo;, &ldquo;Brass Arc Floor Lamp &middot; Schoolhouse &middot; $890 &middot; saved Aug 22&rdquo;, &ldquo;Woven Jute Area Rug 8x10 &middot; Studio Piet &middot; $1,450 &middot; saved Sunday&rdquo; / &ldquo;Browse pieces for the Living Room&rdquo;.</td></tr>
+    <tr><th>Data source</th><td><code>RoomStore</code> (SwiftData <code>RoomModel</code>), <code>saved_items</code>, <code>StylePreferenceModel.budgetRange</code> label. The three pieces, their makers and their prices are real rows in <code>supabase/seed/products.sql</code> and sum to the $3,590 drawn.</td></tr>
+    <tr><th>States</th><td>Empty room &rarr; &ldquo;A blank canvas&rdquo; + one CTA (the shipped copy, <code>shots/c-24</code>). Unsynced &rarr; <span class="mono">SAVED ON THIS PHONE</span>. Band <code>TBD</code> &rarr; the range line is absent, not zeroed.</td></tr>
+    <tr><th>Interactions</th><td><code>room_channel_viewed</code> &middot; <code>product_detail_opened</code> &middot; <code>marketplace_row_tapped</code>.</td></tr>
+    <tr><th>Tier behaviour</th><td>Identical at every tier.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The honest stat row; the range line; the save dates; one CTA instead of three.</td></tr>
+    <tr><th>Drawn vs manifest</th><td>Item thumbnails are drawn as the app&rsquo;s own no-image fallback &mdash; the bare category gradient (<code>ProductModel.swift:115-124</code>) &mdash; because this review holds no crop of those three seed photographs; never a stock image. Room name, dimensions, orientation, window count and the entered / saved dates are <i>example</i>: <code>rooms</code> has 0 rows locally and rooms are device-local.</td></tr>
+  </table>
+</div>

@@ -1,0 +1,84 @@
+<!-- s-M1 · Shared planks — the piece that says what it is.
+     SP-01 (it loads) · SP-10 (maker, dimensions, lead time) · SP-13 (an ask on the piece)
+     · SP-14 (save confirmed, once) · SP-18 (the match carries its reason) · SP-19 (the act is not covered).
+     Additions to the kit, all scoped under .sp-detail: .sp-detail__why, .sp-detail__spec. -->
+<div class="frame-wrap sp-detail">
+  <style>
+    .sp-detail .sp-detail__spec { display:block; font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-2); }
+    .sp-detail .sp-detail__spec + .sp-detail__spec { padding-top:4px; }
+    .sp-detail .sp-detail__specs { padding-bottom:16px; }
+    .sp-detail .toast { bottom:112px; }
+    .sp-detail .detail-bar .btn--primary { width:auto; flex:1 1 auto; }
+    .sp-detail .circ-btn--saved { color:var(--pat-clay); }
+    .sp-detail .maker-story__role { display:block; }
+  </style>
+
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+
+      <div class="screen-body screen-body--scroll">
+        <div class="detail-hero">
+          <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table, quarter-sawn white oak">
+          <div class="detail-hero__bar">
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-chev-l"/></svg></span>
+            <span class="spacer"></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-qcircle"/></svg></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-share"/></svg></span>
+            <span class="circ-btn circ-btn--lg circ-btn--saved"><svg><use href="#i-heart-fill"/></svg></span>
+          </div>
+        </div>
+
+        <div class="detail-body">
+          <span class="detail-maker">Nordic Atelier</span>
+          <span class="detail-name">Heirloom Oak Dining Table</span>
+          <span class="detail-materials">Quarter-sawn white oak &middot; Hand-rubbed tung oil</span>
+
+          <div class="detail-price-row">
+            <span class="detail-price">$4,200</span>
+            <span class="match-pill--detail">48% match</span>
+          </div>
+          <div class="sp-detail__specs">
+            <span class="sp-detail__spec">38&Prime; W &times; 20&Prime; D &times; 30&Prime; H</span>
+            <span class="sp-detail__spec">Ships in 10&ndash;12 weeks</span>
+          </div>
+
+          <div class="maker-story">
+            <div class="maker-story__head">
+              <span class="maker-story__avatar"></span>
+              <span>
+                <span class="maker-story__name">Nordic Atelier</span>
+                <span class="mono-label mono-label--sm maker-story__role">Maker</span>
+              </span>
+            </div>
+            <span class="maker-story__quote">&ldquo;Each table is made to order by a three-person workshop outside Aarhus.&rdquo;</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="toast">Saved<span class="toast__act">See all</span></div>
+
+      <div class="detail-bar">
+        <span class="btn btn--ghost">Get design help</span>
+        <span class="btn btn--primary">Add to Room</span>
+      </div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:213px;right:24px">1</span>
+  <span class="callout-n" style="top:378px;right:24px">2</span>
+  <span class="callout-n" style="top:483px;right:24px">3</span>
+  <span class="callout-n" style="top:533px;right:24px">4</span>
+  <span class="callout-n" style="top:633px;right:24px">5</span>
+  <span class="callout-n callout-n--clay" style="top:734px;right:2px">6</span>
+  <span class="callout-n" style="top:803px;right:24px">7</span>
+</div>

@@ -1,0 +1,16 @@
+<div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M8 &middot; The permission moment <i>(extra, wave 2)</i></caption>
+    <tr><th>Callouts</th><td><b>1</b> the Strata mark at 32 pt, leading-aligned like everything else in the app. <b>2</b> the promise, in one sentence, and the only version of it in the direction. <b>3</b> the three things that will ever wake her phone &mdash; and nothing else. <b>4</b> the ask, and a real way to decline.</td></tr>
+    <tr><th>Purpose</th><td>Spend the one grant well.</td></tr>
+    <tr><th>Entry points</th><td>The first client-facing <code>notification_log</code> row of type proposal / decision / invoice.</td></tr>
+    <tr><th>Components</th><td><b>New</b> screen; existing <code>PushTokenService</code>.</td></tr>
+    <tr><th>Copy</th><td>&ldquo;Only when something needs you.&rdquo; / &ldquo;We&rsquo;ll tell you when your designer sends something that needs you &mdash; a decision, a proposal, or an invoice. Nothing else.&rdquo; / <span class="mono">A DECISION TO MAKE</span> &middot; <span class="mono">A PROPOSAL TO READ</span> &middot; <span class="mono">AN INVOICE COMING DUE</span> / <b>Turn on notifications</b> / ghost <b>Not now</b>.</td></tr>
+    <tr><th>Data source</th><td>None &mdash; copy only.</td></tr>
+    <tr><th>States</th><td><b>Declined our screen &rarr; never asked again</b>; Settings carries the switch. Denied the system prompt &rarr; iOS will not show it again this install, and the Settings row deep-links there.</td></tr>
+    <tr><th>Interactions</th><td><code>push_permission_prompted</code> (<code>trigger</code>, <code>outcome</code>).</td></tr>
+    <tr><th>Tier behaviour</th><td>Engaged and activeProject only.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The app has no pre-permission copy anywhere; the only prompt fires after a design request, cold.</td></tr>
+    <tr><th>Drawn vs manifest</th><td>Drawn as spec&rsquo;d. The following Apple alert is the two-button system prompt in <code>kit.css</code> &sect;14 (<code>.sys-alert</code>) and is not redrawn here.</td></tr>
+  </table>
+</div>

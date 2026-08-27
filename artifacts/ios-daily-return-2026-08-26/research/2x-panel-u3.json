@@ -1,0 +1,1357 @@
+[
+ {
+  "id": "U3-01",
+  "seat": "U3",
+  "task_ids": [
+   "T3"
+  ],
+  "key": "browse|all|no-search-anywhere",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "purchase",
+  "title": "No search anywhere in the marketplace",
+  "observation": "\"Browse pieces\" / \"10 pieces curated for your space\" over five hard-coded chips \"All \u00b7 Seating \u00b7 Tables \u00b7 Lighting \u00b7 Storage\". There is no search field on this screen or any other; grep finds no search UI and no p_query parameter.",
+  "why_it_matters": "A shopper who arrives with a specific intent (\"a sofa for the living room\") cannot express it, so the only way to buy is to accept whatever twenty rows the feed returns.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png",
+    "g-16-filter-chip-seating.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:44"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Add one search field to Browse pieces that sends p_category and a text term server-side."
+ },
+ {
+  "id": "U3-02",
+  "seat": "U3",
+  "task_ids": [
+   "T3"
+  ],
+  "key": "browse|all|grid-geometry-broken",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "purchase",
+  "title": "Browse grid runs off the left edge of the screen",
+  "observation": "The left column is clipped past the screen edge: the first card reads \"M & BOARD\" / \"rloom Oak\" / \"ing Table\" / \",200\" where it should read \"ROOM & BOARD / Heirloom Oak Dining Table / $4,200\". describe_screen reports card frames at x = -32.7 and x = -10.7 and a fourth card ending at x = 412.7 on a 402 pt screen, at four different sizes (284x294, 171x341, 240x293, 240x304).",
+  "why_it_matters": "The app's only commerce surface hides half of every other product's name and price, so a shopper cannot even read what is for sale.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png",
+    "g-15b-browse-grid-settled.png",
+    "d-03-browse-pieces.png",
+    "x-03-browse-pieces.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:134-234"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.95,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Replace the hand-sized cards with one LazyVGrid item size and a single horizontal gutter."
+ },
+ {
+  "id": "U3-03",
+  "seat": "U3",
+  "task_ids": [
+   "T3",
+   "T4",
+   "T6",
+   "T7"
+  ],
+  "key": "piece-detail|all|load-failure-hard-trap",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "purchase",
+  "title": "Product detail never renders and traps the user",
+  "observation": "Every product tap lands on \"Couldn't load product\" / \"Let's try that again\". scan_ui returns exactly one element for the whole screen \u2014 the retry link. No Back, no nav bar, the Companion greyed out and absent from the accessibility tree, edge-swipe-back dead; the only escape is force-quitting.",
+  "why_it_matters": "The single screen where a piece states its price, maker, materials and provenance has never rendered in any lane, so no purchase decision can begin.",
+  "evidence": {
+   "shots": [
+    "g-17-piece-detail-top.png",
+    "g-17b-piece-detail-after-retry.png",
+    "g-17c-after-edge-swipe-back.png",
+    "c-25-piece-detail-client.png",
+    "d-04-piece-detail.png",
+    "x-04-piece-detail.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:99"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.95,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Disambiguate the embed to vendors!products_vendor_id_fkey(...) and give the error state a Back control."
+ },
+ {
+  "id": "U3-04",
+  "seat": "U3",
+  "task_ids": [
+   "T3",
+   "T6"
+  ],
+  "key": "piece-detail|all|dimensions-absent",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "trust",
+  "title": "Dimensions exist as a column and nowhere else",
+  "observation": "products.dimensions jsonb {width,height,depth,unit} exists in the schema; get_recommendations does not return it, ProductModel does not decode it, and no product surface prints a measurement. A live count over the local catalog returns dimensions on 0 of 21 rows.",
+  "why_it_matters": "Nobody buys a sectional they cannot measure against a wall, so the absence of dimensions blocks the highest-value purchases outright.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png"
+   ],
+   "refs": [
+    "supabase/migrations/00001_initial_schema.sql:35",
+    "supabase/migrations/00246_aesthete_quiz_bridge.sql:193-214",
+    "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:30-41"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Return dimensions from get_recommendations, decode it, and print one W x D x H line under the price."
+ },
+ {
+  "id": "U3-05",
+  "seat": "U3",
+  "task_ids": [
+   "T3",
+   "T6"
+  ],
+  "key": "piece-detail|all|lead-time-absent",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "trust",
+  "title": "Lead time never reaches the shopper",
+  "observation": "products.lead_time_weeks exists but is CHECK-required only for layer='studio'; the catalog layer the client app reads has no lead-time guarantee. The RPC does not return it, the app does not decode it, and locally it is populated on 1 of 21 rows.",
+  "why_it_matters": "\"When would it arrive\" is the question that decides a furniture purchase, and the app cannot answer it for any piece.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png"
+   ],
+   "refs": [
+    "supabase/migrations/00152_three_layer_catalog.sql:83-95",
+    "supabase/migrations/00246_aesthete_quiz_bridge.sql:193-214"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Require lead_time_weeks on catalog-layer rows and print it as a range beside the price."
+ },
+ {
+  "id": "U3-06",
+  "seat": "U3",
+  "task_ids": [
+   "T3",
+   "T7"
+  ],
+  "key": "piece-detail|all|no-shipping-returns-responsibility",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "trust",
+  "title": "No shipping, returns or responsibility copy exists",
+  "observation": "No column on products carries shipping, delivery, returns or liability, and no screen in the app prints any of it. The closest thing to a policy anywhere in the client is the proposal's terms: \"Deposits are non-refundable once procurement begins. Custom items are final sale.\"",
+  "why_it_matters": "A homeowner asked to spend thousands cannot see who is responsible when a piece arrives damaged, which is the exact risk that keeps people on a retailer they already trust.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png",
+    "c-13b-invoice-detail-scrolled.png"
+   ],
+   "refs": [
+    "supabase/migrations/00001_initial_schema.sql:29-45",
+    "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:141-267"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Add one shipping-and-returns block to the piece detail, sourced from a per-vendor policy row."
+ },
+ {
+  "id": "U3-07",
+  "seat": "U3",
+  "task_ids": [
+   "T3",
+   "T6"
+  ],
+  "key": "piece-detail|all|retailer-shown-as-maker",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "trust",
+  "title": "The maker line shows the retailer, not the maker",
+  "observation": "The card for \"Heirloom Oak Dining Table\" is labelled \"ROOM & BOARD\"; the same row's products.brand column reads \"Nordic Atelier\" and is never returned or shown. Fourteen of twenty-one local products have no vendor_id at all and render \"UNKNOWN MAKER\".",
+  "why_it_matters": "On a marketplace whose whole pitch is provenance, the byline names a national retailer or nobody, which is the opposite of the trust the brand is selling.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png",
+    "g-22b-saved-all-items.png"
+   ],
+   "refs": [
+    "supabase/migrations/00246_aesthete_quiz_bridge.sql:272-300",
+    "supabase/migrations/00060_product_catalog_columns.sql:6-18"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.75,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Source maker_name from products.brand with the vendor as fallback, and never print \"Unknown Maker\" on a published piece."
+ },
+ {
+  "id": "U3-08",
+  "seat": "U3",
+  "task_ids": [
+   "T3",
+   "T6"
+  ],
+  "key": "piece-detail|all|provenance-fields-empty",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "trust",
+  "title": "Provenance layer renders empty on every product",
+  "observation": "The detail's maker-location tag and \"maker story\" card read from vendors.made_in and vendors.brand_story. A live count over the local stack returns 0 of 104 vendors carrying made_in and 0 of 104 carrying brand_story, so both surfaces have nothing to render for any of the 21 products.",
+  "why_it_matters": "Provenance is the reason to buy here instead of the maker's own site, and there is no provenance content behind the component that is supposed to carry it.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png",
+    "g-16-filter-chip-seating.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:232-267",
+    "supabase/migrations/00246_aesthete_quiz_bridge.sql:272-300"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.7,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Make made_in and brand_story required before a vendor's products can be published to the catalog layer. What would settle this: the same two counts against Strata, which this program could not read."
+ },
+ {
+  "id": "U3-09",
+  "seat": "U3",
+  "task_ids": [
+   "T3"
+  ],
+  "key": "browse|all|client-side-filters-over-twenty-rows",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "purchase",
+  "title": "Filters are client-side over twenty rows",
+  "observation": "Tapping \"Seating\" changes the subtitle to \"3 pieces curated for your space\" \u2014 the chips filter the twenty rows already fetched rather than sending p_category, and there is no price filter, no sort and no pagination control.",
+  "why_it_matters": "A shopper who filters to a category sees three pieces and concludes the marketplace is empty, when the catalog simply was not queried.",
+  "evidence": {
+   "shots": [
+    "g-16-filter-chip-seating.png",
+    "g-15-browse-pieces-grid.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:44,48-51"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Send p_category to the RPC on chip change and page the results."
+ },
+ {
+  "id": "U3-10",
+  "seat": "U3",
+  "task_ids": [
+   "T3"
+  ],
+  "key": "browse|all|filter-chips-clip-at-xxl",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "reach",
+  "title": "Filter chips clip at large text sizes",
+  "observation": "At Dynamic Type XXL the chip row \"All / Seating / Tables / Lighting / Storage\" overflows the screen width with no scroll affordance \u2014 \"Storage\" is clipped to \"Stor\" at the right edge.",
+  "why_it_matters": "The one navigation control on the shopping surface becomes unreachable for the older, higher-budget buyer most likely to use large text.",
+  "evidence": {
+   "shots": [
+    "x-03-browse-pieces.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:134-234"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Put the chip row in a horizontal ScrollView with a leading fade."
+ },
+ {
+  "id": "U3-11",
+  "seat": "U3",
+  "task_ids": [
+   "T3",
+   "T4"
+  ],
+  "key": "browse|all|room-scope-dropped-silently",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "content",
+  "title": "\"Browse Picks for This Room\" silently drops the room",
+  "observation": "Entering the grid from a room's own \"Browse Picks for This Room\" produces the unscoped header \"10 pieces curated for your space\" with no room name and no filtering, because the room had never synced a remoteId; when a room is synced the same grid claims \"Selected from Patina's room-aware edit for Living Room.\"",
+  "why_it_matters": "The strongest commerce promise the app makes \u2014 pieces chosen for this actual room \u2014 quietly becomes the generic feed with no explanation.",
+  "evidence": {
+   "shots": [
+    "g-27b-room-picks.png",
+    "g-27c-card-menu-in-room-context.png",
+    "d-check10-after-heart-tap.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:106-111,263-272"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.8,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "When a room has no remoteId, say so in the subtitle and offer to sync it rather than falling back silently."
+ },
+ {
+  "id": "U3-12",
+  "seat": "U3",
+  "task_ids": [
+   "T3",
+   "T6"
+  ],
+  "key": "browse|all|photography-does-not-match-product",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "trust",
+  "title": "Product photography does not match the product",
+  "observation": "\"Live-Edge Coffee Table\" by \"LEE INDUSTRIES\" shows an old ladder-back chair standing on grass; \"Heirloom Oak Dining Table\" shows green velvet chairs around a white table; the third Seating card renders as a blank brown gradient with no image at all.",
+  "why_it_matters": "A shopper who sees the wrong object in the photograph stops believing anything else on the card, including the price.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png",
+    "g-16-filter-chip-seating.png",
+    "c-22b-saved-all-items.png"
+   ],
+   "refs": [
+    "supabase/migrations/00246_aesthete_quiz_bridge.sql:272-300"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Gate publication on at least one image that has passed a human check, and show the honest branded fallback rather than a bare gradient."
+ },
+ {
+  "id": "U3-13",
+  "seat": "U3",
+  "task_ids": [
+   "T3"
+  ],
+  "key": "browse|all|curated-marketplace-speak",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "content",
+  "title": "Marketplace copy says \"curated\"",
+  "observation": "The Browse header subtitle reads \"10 pieces curated for your space\" (and \"curated for this room\" when scoped).",
+  "why_it_matters": "The brand voice rules the deck is written against name \"curated\" as marketplace haze to avoid, on the one screen where the app is asking to be trusted with money.",
+  "evidence": {
+   "shots": [
+    "g-15-browse-pieces-grid.png",
+    "g-16-filter-chip-seating.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:53-59",
+    ".claude/skills/patina-brand-voice/SKILL.md"
+   ]
+  },
+  "severity": "S3",
+  "confidence": 0.8,
+  "already_ruled": "C6",
+  "july_status": null,
+  "proposal_seed": "Rewrite the subtitle in plain Midwest English, e.g. \"10 pieces chosen for this room\"."
+ },
+ {
+  "id": "U3-14",
+  "seat": "U3",
+  "task_ids": [
+   "T4"
+  ],
+  "key": "browse|all|save-has-no-confirmation",
+  "surface": "Browse pieces",
+  "tier": "all",
+  "class": "purchase",
+  "title": "Saving a piece gives no visible confirmation",
+  "observation": "After tapping a card's heart the icon stays outlined and unfilled, with no toast, no count change and no \"saved to\" line; the dark lane tapped hearts twice and Saved stayed empty.",
+  "why_it_matters": "The one investment the app asks for on the commerce path gives no receipt, so the shopper cannot trust that tomorrow's list will hold anything.",
+  "evidence": {
+   "shots": [
+    "d-check10-after-heart-tap.png",
+    "d-check11.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift:138-196"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": "residual \u2014 DELIVERY.md names \"Add-to-Room (+ Add) gives no visible feedback and no confirmed saved_items row\" as an open follow-up",
+  "proposal_seed": "Fill the heart optimistically and show one line of confirmation naming where it was saved."
+ },
+ {
+  "id": "U3-15",
+  "seat": "U3",
+  "task_ids": [
+   "T4"
+  ],
+  "key": "saved|all|default-tab-denies-the-save",
+  "surface": "Saved",
+  "tier": "all",
+  "class": "return",
+  "title": "Saved opens on an empty tab while an item exists",
+  "observation": "Saved opens on \"Boards\", which reads \"No boards yet / Save pieces from recommendations to create your first board\" and a \"Create Board\" button, while the Companion row that led here said \"Saved / 1 SAVED PIECE\" and the item sits one tab over under \"All items\".",
+  "why_it_matters": "The screen a returning shopper opens to find yesterday's piece tells them they have saved nothing.",
+  "evidence": {
+   "shots": [
+    "c-22-saved-signed-in.png",
+    "c-22b-saved-all-items.png",
+    "g-21-saved-empty-boards-tab.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:18-22"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Default to \"All items\" whenever there are saved pieces and no boards."
+ },
+ {
+  "id": "U3-16",
+  "seat": "U3",
+  "task_ids": [
+   "T4",
+   "T6"
+  ],
+  "key": "saved|all|boards-can-never-hold-a-piece",
+  "surface": "Saved",
+  "tier": "all",
+  "class": "return",
+  "title": "A board can be created but never filled",
+  "observation": "\"Create Board\" makes a board; the board then reads \"This board is empty\" with a \"Browse pieces\" link, permanently \u2014 CollectionsViewModel.addToBoard has no call site anywhere in the app.",
+  "why_it_matters": "The app invites the deepest investment a shopper can make and then cannot accept it, which is the exact opposite of an investment that earns a return visit.",
+  "evidence": {
+   "shots": [
+    "c-22-saved-signed-in.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Collections/ViewModels/CollectionsViewModel.swift:101",
+    "apps/mobile/Patina/Patina/Features/Collections/Views/CollectionsView.swift:227-245"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": "C28",
+  "july_status": null,
+  "proposal_seed": "Either wire \"Add to board\" into the card menu or remove boards until they can hold a piece."
+ },
+ {
+  "id": "U3-17",
+  "seat": "U3",
+  "task_ids": [
+   "T4",
+   "T6"
+  ],
+  "key": "saved|all|rows-carry-no-context",
+  "surface": "Saved",
+  "tier": "all",
+  "class": "return",
+  "title": "Saved rows carry no note, room or save date",
+  "observation": "The only saved row reads \"ROOM & BOARD / Heirloom Oak Dining Table / $4200\" with a chevron. No room, no date saved, no note, no availability, no price-change marker \u2014 and TableItemModel.notes exists with no UI that writes it.",
+  "why_it_matters": "A saved list that records nothing about why a piece was saved gives a returning shopper no reason to reopen it.",
+  "evidence": {
+   "shots": [
+    "c-22b-saved-all-items.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:42,51"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Print the room and the save date on each row and let a tap-and-hold add a note."
+ },
+ {
+  "id": "U3-18",
+  "seat": "U3",
+  "task_ids": [
+   "T4"
+  ],
+  "key": "saved|all|price-missing-thousands-separator",
+  "surface": "Saved",
+  "tier": "all",
+  "class": "trust",
+  "title": "Saved price renders without a thousands separator",
+  "observation": "The same piece reads \"$4,200\" on the browse card and \"$4200\" in Saved.",
+  "why_it_matters": "Inconsistent money formatting on the two screens a shopper compares is a small crack in the one number that has to be exact.",
+  "evidence": {
+   "shots": [
+    "c-22b-saved-all-items.png",
+    "g-22b-saved-all-items.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Shared/Views/ProductCard.swift:192"
+   ]
+  },
+  "severity": "S3",
+  "confidence": 0.95,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Route every price through PatinaCurrency.format."
+ },
+ {
+  "id": "U3-19",
+  "seat": "U3",
+  "task_ids": [
+   "T4",
+   "T7"
+  ],
+  "key": "saved|all|every-row-leads-to-the-trap",
+  "surface": "Saved",
+  "tier": "all",
+  "class": "purchase",
+  "title": "Every saved piece leads back into the trap",
+  "observation": "Tapping the saved row \"Heirloom Oak Dining Table\" opens the product detail, which fails with \"Couldn't load product\" and exposes only the retry link \u2014 recovery required force-quitting the app.",
+  "why_it_matters": "Saving is only worth doing if the piece can be opened again, and today the save leads straight back to the one screen that cannot open.",
+  "evidence": {
+   "shots": [
+    "c-22b-saved-all-items.png",
+    "c-25-piece-detail-client.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Core/Network/ProductAPIClient.swift:99"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Fix the embed, then give Saved rows an inline price-and-maker peek so a save is useful even when the detail fails."
+ },
+ {
+  "id": "U3-20",
+  "seat": "U3",
+  "task_ids": [
+   "T4"
+  ],
+  "key": "piece-detail|all|save-local-only-and-duplicating",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "return",
+  "title": "Piece-detail saves are local-only and duplicate",
+  "observation": "On the standard .pieceDetail(pieceId:) route no room context is passed, so both the heart and the primary \"Add to Room\" button run the same local toggleSave \u2014 a TableItemModel insert with no saved_items mirror and no room. isSaved is never seeded from storage, so the same piece shows \"Add to Room\" again the next day and a second row is inserted.",
+  "why_it_matters": "A save that never reaches the server does not survive a reinstall or reach a second device, so the shopper's whole shortlist is one uninstall from gone.",
+  "evidence": {
+   "shots": [],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/ProductDetail/ViewModels/ProductDetailViewModel.swift:104-125",
+    "apps/mobile/Patina/Patina/App/ContentView.swift:292-294",
+    "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:369-377"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": "C28",
+  "july_status": null,
+  "proposal_seed": "Mirror every save to saved_items with a null room, and seed isSaved from storage on appear."
+ },
+ {
+  "id": "U3-21",
+  "seat": "U3",
+  "task_ids": [
+   "T4"
+  ],
+  "key": "companion|all|saved-door-disappears",
+  "surface": "Companion panel",
+  "tier": "all",
+  "class": "wayfinding",
+  "title": "The Saved door vanishes for pieces saved from Browse",
+  "observation": "The Companion's \"Saved\" row is returned only when context.tableItemCount > 0, and that count is computed as the sum of room SavedItems, not TableItemModel rows \u2014 so a piece saved from Browse or from the piece detail does not increment it, and the row never appears.",
+  "why_it_matters": "Saved has no other door anywhere in the app, so the exact shopper the app invited to save can lose the ability to reach their saves at all.",
+  "evidence": {
+   "shots": [
+    "c-05-companion-panel-client.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionActionRows.swift:217-223",
+    "apps/mobile/Patina/Patina/Features/Home/Views/DailyRoomView.swift:265"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.8,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Count TableItemModel rows in tableItemCount and keep the Saved row standing once anything is saved."
+ },
+ {
+  "id": "U3-22",
+  "seat": "U3",
+  "task_ids": [
+   "T6"
+  ],
+  "key": "piece-detail|all|no-compare-no-notes",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "purchase",
+  "title": "No compare and no notes on any piece",
+  "observation": "The card menu offers only \"Save \u00b7 Share \u00b7 Not for me \u00b7 View details\"; there is no compare surface anywhere in the app, and although TableItemModel.notes and CreateSavedItemPayload.notes both exist, no UI writes either.",
+  "why_it_matters": "Choosing between two sofas is the actual job, and the app supports neither holding two of them side by side nor recording why one was rejected.",
+  "evidence": {
+   "shots": [
+    "g-20-card-more-menu.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Core/Models/TableItemModel.swift:42",
+    "apps/mobile/Patina/Patina/Features/Recommendations/Views/RecommendationsView.swift:304-335"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Let Saved select two pieces and show them side by side with price, maker and materials."
+ },
+ {
+  "id": "U3-23",
+  "seat": "U3",
+  "task_ids": [
+   "T6",
+   "T12"
+  ],
+  "key": "piece-detail|all|share-hands-over-designer-portal",
+  "surface": "Share sheet",
+  "tier": "all",
+  "class": "trust",
+  "title": "Sharing a piece hands over the designer portal",
+  "observation": "The iOS share sheet is titled \"Patina Designer Portal\" / \"app.patina.cloud\" with no product name, image or price in the preview; the URL is https://app.patina.cloud/library/<productId>.",
+  "why_it_matters": "The second person in the household \u2014 the one who has to agree to a $6,800 sofa \u2014 receives a link to a trade tool under a trade name, and it cannot open the app because no associated domain is declared.",
+  "evidence": {
+   "shots": [
+    "g-19-share-sheet.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Shared/PatinaPortalLinks.swift:16-22",
+    "apps/mobile/Patina/Patina/Patina.entitlements:5-10"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.95,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Share a homeowner-facing patina.cloud piece URL with Open Graph title and image, and add the associated-domains entitlement."
+ },
+ {
+  "id": "U3-24",
+  "seat": "U3",
+  "task_ids": [
+   "T6"
+  ],
+  "key": "piece-detail|all|no-ask-a-designer-from-the-piece",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "purchase",
+  "title": "No \"ask my designer\" on the piece surface",
+  "observation": "The piece-detail screen carries only back, \"?\", Share and heart; the ratified CTA \"Get design help\" appears on eleven other surfaces and not on this one. Reaching a human about the piece being looked at costs two acts through the Companion, and only if the orb is known to be a menu.",
+  "why_it_matters": "The moment a shopper hesitates over a piece is the moment the designer relationship is worth most, and the app routes them away from it.",
+  "evidence": {
+   "shots": [
+    "g-20-card-more-menu.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:89-138",
+    "apps/mobile/Patina/Patina/Features/Companion/Services/CompanionAreaBuilders.swift:65-70"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": "C4",
+  "july_status": null,
+  "proposal_seed": "Put \"Get design help\" in the piece-detail action bar, carrying the product id into the request."
+ },
+ {
+  "id": "U3-25",
+  "seat": "U3",
+  "task_ids": [
+   "T6",
+   "T8"
+  ],
+  "key": "decision-detail|activeProject|colour-choice-without-colour",
+  "surface": "Decision detail",
+  "tier": "activeProject",
+  "class": "trust",
+  "title": "An $850 colour decision shown without colour",
+  "observation": "\"DECISION / Rug color - Natural vs Sand / The jute rug from Studio Piet. Natural is warmer, Sand is more neutral.\" Two options, \"Natural\" (badged \"Recommended\") and \"Sand\", both priced \"$850\", both with no image and no swatch, each under an identical black \"Choose this\" button.",
+  "why_it_matters": "The client is asked to commit $850 to a colour they cannot see, on the surface the designer relationship depends on most.",
+  "evidence": {
+   "shots": [
+    "c-18-decision-detail.png",
+    "c-17-decisions-list.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Decisions/Views/DecisionDetailView.swift:280-309"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Require an image per decision option and show the price difference rather than repeating the same number."
+ },
+ {
+  "id": "U3-26",
+  "seat": "U3",
+  "task_ids": [
+   "T7"
+  ],
+  "key": "piece-detail|all|purchase-dead-end",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "purchase",
+  "title": "Every browse path ends at \"Saved \u2713\"",
+  "observation": "The whole commercial vocabulary of the piece detail's action bar is one button reading \"Add to Room\", which becomes \"Saved \u2713\" once tapped, with back, \"?\", Share and heart in the top bar. There is no cart, no \"Buy\", no \"Request a quote\", no vendor link, no source_url and no price inquiry anywhere in the app.",
+  "why_it_matters": "Every browse path terminates without a way to spend money, so the marketplace cannot convert a single visitor.",
+  "evidence": {
+   "shots": [
+    "g-20-card-more-menu.png",
+    "g-15-browse-pieces-grid.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:338-399",
+    "apps/mobile/Patina/Patina/Features/ProductDetail/Views/ProductDetailView.swift:377"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.95,
+  "already_ruled": "C11",
+  "july_status": null,
+  "proposal_seed": "Add one \"Buy\" act to the piece detail that mints a direct order and opens the existing hosted Checkout."
+ },
+ {
+  "id": "U3-27",
+  "seat": "U3",
+  "task_ids": [
+   "T7"
+  ],
+  "key": "piece-detail|all|buy-now-armed-server-side-unbuilt-on-ios",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "purchase",
+  "title": "Buy-now is armed on the backend and unbuilt on iOS",
+  "observation": "create_direct_order, create-checkout-session's direct_order_id branch, the stripe-webhook settle branch and the receipt and failure emails are all live; a live count over the local catalog shows 19 of 21 products are patina_managed and therefore already pass the RPC's buyability gate. Grep finds zero iOS references to direct_order, create_direct_order or \"buy now\".",
+  "why_it_matters": "The single highest-value gap in the product is a screen and a button, not a platform build, and every day it stays unbuilt the marketplace earns nothing.",
+  "evidence": {
+   "shots": [],
+   "refs": [
+    "supabase/migrations/00276_direct_orders.sql:41-200",
+    "supabase/functions/create-checkout-session/index.ts:1131-1140",
+    "supabase/functions/stripe-webhook/index.ts:1056-1387"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": "C24",
+  "july_status": null,
+  "proposal_seed": "Ship an order sheet on the piece detail that calls create_direct_order then reuses the invoice Safari-plus-poll pattern."
+ },
+ {
+  "id": "U3-28",
+  "seat": "U3",
+  "task_ids": [
+   "T7",
+   "T14"
+  ],
+  "key": "orders|all|no-designer-attribution",
+  "surface": "direct_orders",
+  "tier": "activeProject",
+  "class": "trust",
+  "title": "A direct order credits the designer nothing",
+  "observation": "direct_orders carries no designer_id, no project_id, no commission_rate and no FF&E link; 00301_marketplace_vitals.sql:37-40 states it outright \u2014 \"No designer attribution (client_id is the buyer)\" \u2014 and the only designer_earnings credit path reads invoice_payments, never direct_orders.",
+  "why_it_matters": "If a client buys a $3,200 sideboard in the app while a designer is engaged, the designer is paid nothing and never sees it, which is precisely the reason a designer would stop sending clients here.",
+  "evidence": {
+   "shots": [],
+   "refs": [
+    "supabase/migrations/00276_direct_orders.sql:48-67",
+    "supabase/migrations/00301_marketplace_vitals.sql:37-40",
+    "supabase/migrations/00277_refund_reconciliation.sql:183-208"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": "C24",
+  "july_status": null,
+  "proposal_seed": "Add designer_id, project_id and a snapshotted commission_rate to direct_orders in the same migration that ships buy-now, before any order rows exist."
+ },
+ {
+  "id": "U3-29",
+  "seat": "U3",
+  "task_ids": [
+   "T7"
+  ],
+  "key": "piece-detail|all|no-outbound-vendor-path",
+  "surface": "Piece detail",
+  "tier": "all",
+  "class": "purchase",
+  "title": "No vendor link or price inquiry to leave toward",
+  "observation": "products.source_url exists and is populated on 9 of 21 local rows; it is never returned by the RPC, never decoded and never shown. There is no \"where to buy\", no \"ask about this piece\" and no maker page anywhere in the app.",
+  "why_it_matters": "A shopper who cannot buy in the app and cannot see who sells the piece leaves to a search engine, and the app loses the attribution and the relationship at once.",
+  "evidence": {
+   "shots": [
+    "g-20-card-more-menu.png"
+   ],
+   "refs": [
+    "supabase/migrations/00001_initial_schema.sql:29-45",
+    "apps/mobile/Patina/Patina/Core/Models/ProductModel.swift:12-66"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Until buy-now ships, give every piece one honest outbound act \u2014 \"Ask about this piece\" \u2014 that files a scoped request."
+ },
+ {
+  "id": "U3-30",
+  "seat": "U3",
+  "task_ids": [
+   "T8"
+  ],
+  "key": "studio|activeProject|no-order-object",
+  "surface": "Your Studio",
+  "tier": "activeProject",
+  "class": "return",
+  "title": "No order object anywhere in the client app",
+  "observation": "\"Where is it?\" resolves only to project, proposal, invoice and decision state. The project detail is three stats (\"BUDGET $120,000\", \"STATUS In Progress\", \"CLIENT VIEW Milestone\"), an \"Invoices / View and pay your invoices\" row and a portal link \u2014 no items, no orders, no deliveries, no dates.",
+  "why_it_matters": "Post-purchase tracking is the strongest honest reason to reopen a furnishing app, and there is nothing in the client for it to show.",
+  "evidence": {
+   "shots": [
+    "c-08-project-detail.png",
+    "c-13b-invoice-detail-scrolled.png",
+    "c-06b-studio-awaiting-you.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:64,143",
+    "supabase/migrations/00276_direct_orders.sql:48-67"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Introduce one client-visible order row per purchased or procured piece and hang its status on the project."
+ },
+ {
+  "id": "U3-31",
+  "seat": "U3",
+  "task_ids": [
+   "T8"
+  ],
+  "key": "orders|all|state-machine-stops-at-paid",
+  "surface": "direct_orders",
+  "tier": "all",
+  "class": "return",
+  "title": "The order state machine stops at \"paid\"",
+  "observation": "direct_orders.status is CHECK-constrained to pending_payment, paid and canceled (plus refunded from 00277). There is no fulfillment status, no shipped_at, no delivered_at, no tracking number and no ETA column.",
+  "why_it_matters": "Without shipping states there is nothing to notify about and nothing to come back for after the money moves.",
+  "evidence": {
+   "shots": [],
+   "refs": [
+    "supabase/migrations/00276_direct_orders.sql:60-67",
+    "supabase/functions/_shared/fulfillment-templates.ts:31-37"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": "C24",
+  "july_status": null,
+  "proposal_seed": "One migration adding fulfillment_status with the fulfillment-notify vocabulary plus shipped_at, delivered_at and tracking_number."
+ },
+ {
+  "id": "U3-32",
+  "seat": "U3",
+  "task_ids": [
+   "T8",
+   "T14"
+  ],
+  "key": "project-detail|activeProject|designer-instruction-shown-to-client",
+  "surface": "Project detail",
+  "tier": "activeProject",
+  "class": "trust",
+  "title": "Designer-facing FF&E instruction rendered to the client",
+  "observation": "The homeowner's project screen prints a boxed line reading \"Set up phases, payments, and FF&E in the portal \u2192\" and a stat labelled \"CLIENT VIEW / Milestone\", the raw client_visibility_tier value shown to the client it governs. The boxed line is static text, not a button.",
+  "why_it_matters": "The client sees the machinery of their own designer's tooling, which reads as unfinished software on the screen that is supposed to prove the project is under control.",
+  "evidence": {
+   "shots": [
+    "c-08-project-detail.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:143"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.95,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Replace both with client-language empty copy that names what the designer is still preparing."
+ },
+ {
+  "id": "U3-33",
+  "seat": "U3",
+  "task_ids": [
+   "T8"
+  ],
+  "key": "budget|activeProject|two-budgets-one-project",
+  "surface": "Budget",
+  "tier": "activeProject",
+  "class": "trust",
+  "title": "Two budgets for one project, both labelled budget",
+  "observation": "\"BUDGET $120,000\" appears on the Aspen Loft project detail while \"BUDGET / Your budget \u2014 ACROSS YOUR PROJECTS\" reports \"$4,250 BILLED / $0 PAID / $4,250 OUTSTANDING\" for a client whose three projects total $725,000. Formats mix on one card: \"$4,250\" above \"$4,250.00\".",
+  "why_it_matters": "When the app gives two different answers to \"what does this cost me\", every other number it shows becomes negotiable.",
+  "evidence": {
+   "shots": [
+    "c-15-budget.png",
+    "c-08-project-detail.png",
+    "c-07-projects-list.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Budget/Views/BudgetView.swift:37"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Rename the billing summary \"Billed to date\" and give budget its own project-scoped figure."
+ },
+ {
+  "id": "U3-34",
+  "seat": "U3",
+  "task_ids": [
+   "T8",
+   "T10"
+  ],
+  "key": "invoice-detail|activeProject|due-date-dropped-on-the-pay-screen",
+  "surface": "Invoice detail",
+  "tier": "activeProject",
+  "class": "trust",
+  "title": "Due date dropped from the pay screen",
+  "observation": "\"Due Sep 1, 2026\" is printed on the invoices list and does not appear on the invoice detail; the detail uses due_date only to compute the word \"Past due\". The same omission repeats on proposals (\"Expires Sep 8\" on the list, absent on the detail) and decisions (\"Overdue \u00b7 Aug 22\" on the Studio hub, absent on the decisions list).",
+  "why_it_matters": "The deadline is the reason to act now, and it is dropped from every screen where the action actually happens.",
+  "evidence": {
+   "shots": [
+    "c-12-invoices-list.png",
+    "c-13-invoice-detail.png",
+    "c-13b-invoice-detail-scrolled.png",
+    "c-09-proposals-list.png",
+    "c-10-proposal-detail-top.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:229-235",
+    "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceListView.swift:189-192"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Print the due date under the invoice header and above the Pay button."
+ },
+ {
+  "id": "U3-35",
+  "seat": "U3",
+  "task_ids": [
+   "T8",
+   "T10"
+  ],
+  "key": "notifications|activeProject|empty-while-four-things-overdue",
+  "surface": "Notifications",
+  "tier": "activeProject",
+  "class": "return",
+  "title": "Notifications empty while four things are overdue",
+  "observation": "\"Notifications / Nothing yet / Updates from your designer will land here.\" with a \"Get design help\" button \u2014 shown to a client whose Studio one screen away reads \"Decisions \u00b7 Overdue \u00b7 Aug 22\", \"Invoice \u00b7 $4,250.00 remaining \u00b7 Due Sep 1\" and \"Proposal \u00b7 Review by Sep 8\".",
+  "why_it_matters": "The one surface a returning client checks for what changed is empty by construction, and it offers to find them a designer they already have.",
+  "evidence": {
+   "shots": [
+    "c-21-notifications-signed-in.png",
+    "c-06b-studio-awaiting-you.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Notifications/Views/NotificationFeedView.swift:24-157"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Write a notification_log row whenever a proposal, invoice or decision reaches the client, and drop the acquisition CTA for clients who have a designer."
+ },
+ {
+  "id": "U3-36",
+  "seat": "U3",
+  "task_ids": [
+   "T8",
+   "T10"
+  ],
+  "key": "orders|all|shipping-push-never-reaches-a-client-order",
+  "surface": "Push",
+  "tier": "all",
+  "class": "return",
+  "title": "Shipping push exists but never reaches a client order",
+  "observation": "fulfillment-notify can push \"confirmed | in_production | shipped | delivered | eta_change | substitution\" to a homeowner's device, but only when an admin operator presses send in the admin portal, and only for fulfillment_orders on the designer-sourced BOH rail \u2014 never for direct_orders.",
+  "why_it_matters": "The exact message that would bring a buyer back after a purchase already exists and is pointed at a rail the client app cannot reach.",
+  "evidence": {
+   "shots": [],
+   "refs": [
+    "supabase/functions/fulfillment-notify/index.ts:3-8,42",
+    "supabase/functions/_shared/fulfillment-templates.ts:31-37"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.85,
+  "already_ruled": "C26",
+  "july_status": null,
+  "proposal_seed": "Point the same templates at direct_orders' fulfillment_status once it exists, and fire on transition rather than on an operator's click."
+ },
+ {
+  "id": "U3-37",
+  "seat": "U3",
+  "task_ids": [
+   "T10"
+  ],
+  "key": "push|activeProject|nothing-money-shaped-notifies",
+  "surface": "Push",
+  "tier": "activeProject",
+  "class": "return",
+  "title": "No push fires for invoices, proposals or decisions",
+  "observation": "apns-send is complete and provisioned and has five callers \u2014 three design-request SQL triggers plus fulfillment-notify and site-request-dispatch. None touches invoices, proposals, decisions or direct_orders; the money and document rails are email plus an in-app row only, and the app learns about both by polling.",
+  "why_it_matters": "The client's answer to \"how do I find out a payment is due\" is to open the app and hope the Next Move card changed.",
+  "evidence": {
+   "shots": [
+    "c-21-notifications-signed-in.png",
+    "c-29-relaunch-returning-client.png"
+   ],
+   "refs": [
+    "supabase/migrations/00330_accept_design_request.sql:182",
+    "supabase/functions/notification-dispatch/index.ts:183-186",
+    "apps/mobile/Patina/Patina/Services/Badges/BadgeCountService.swift:17-20"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.9,
+  "already_ruled": "C14 (corrected by C26)",
+  "july_status": null,
+  "proposal_seed": "Add one invoke_edge_function('apns-send', \u2026) call at proposal-sent, invoice-sent and decision-created, on the pattern already proven three times."
+ },
+ {
+  "id": "U3-38",
+  "seat": "U3",
+  "task_ids": [
+   "T10"
+  ],
+  "key": "push|all|permission-asked-once-after-a-lead-form",
+  "surface": "Push permission",
+  "tier": "all",
+  "class": "return",
+  "title": "Push permission asked once, only after a lead form",
+  "observation": "Authorization is requested exactly once per install, from the first successful design-request submission, with no pre-permission screen and no rationale copy; the Settings row \"Notifications\" writes a profile preference, not the OS grant. A user who never files a request is never asked.",
+  "why_it_matters": "The permission that would carry \"your invoice is due\" and \"your table shipped\" is spent on the one moment that has nothing to notify about yet.",
+  "evidence": {
+   "shots": [],
+   "refs": [
+    "apps/mobile/Patina/Patina/Services/API/PushTokenService.swift:87-108",
+    "apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:73"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Ask at the first money-shaped moment \u2014 \"tell me when this ships\" or \"remind me before it's due\" \u2014 with one line of rationale first."
+ },
+ {
+  "id": "U3-39",
+  "seat": "U3",
+  "task_ids": [
+   "T10"
+  ],
+  "key": "push|all|money-routes-exist-but-nothing-emits",
+  "surface": "Push routing",
+  "tier": "all",
+  "class": "wayfinding",
+  "title": "Push routes exist for money that nothing emits",
+  "observation": "NotificationRouter handles entity types proposal and invoice, and the code states no edge function emits them yet; the patina:// scheme reaches only auth, room and piece, so an emailed or texted link can never open an invoice or a proposal.",
+  "why_it_matters": "Even when the money notification is finally sent, the tap has nowhere to land unless the deep-link table grows with it.",
+  "evidence": {
+   "shots": [],
+   "refs": [
+    "apps/mobile/Patina/Patina/App/DeepLinking/NotificationRouter.swift:60-88",
+    "apps/mobile/Patina/Patina/App/DeepLinking/DeepLinkHandler.swift:79-92"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.8,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Extend the deep-link hosts to invoice, proposal and order alongside the first money push."
+ },
+ {
+  "id": "U3-40",
+  "seat": "U3",
+  "task_ids": [
+   "T10"
+  ],
+  "key": "sign-sheet|activeProject|restates-nothing",
+  "surface": "Sign proposal sheet",
+  "tier": "activeProject",
+  "class": "trust",
+  "title": "Sign sheet restates no amount, terms or date",
+  "observation": "\"SIGN PROPOSAL / Aspen Loft \u2014 Living Room Refresh / Type your full name to e-sign. Signing confirms the scope and kicks off your project.\" plus a \"Full name\" field, a disabled \"Sign proposal\" button and \"Cancel\" \u2014 no amount, no date, no line items, no terms and no acknowledgement checkbox, while the screen behind it reads \"Deposits are non-refundable once procurement begins. Custom items are final sale.\"",
+  "why_it_matters": "The client types their legal name into a box that restates none of what they are binding themselves to on an $18,500 agreement.",
+  "evidence": {
+   "shots": [
+    "c-11c-sign-sheet.png",
+    "c-11-proposal-detail-scrolled.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalSignSheet.swift:40",
+    "apps/mobile/Patina/Patina/Services/API/ProposalsAPIClient.swift:385-403"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.9,
+  "already_ruled": "C10",
+  "july_status": null,
+  "proposal_seed": "Restate the total, the date and the two binding terms above the signature field, with an explicit acknowledgement."
+ },
+ {
+  "id": "U3-41",
+  "seat": "U3",
+  "task_ids": [
+   "T10"
+  ],
+  "key": "proposals|activeProject|accepted-labelled-signed",
+  "surface": "Proposals list",
+  "tier": "activeProject",
+  "class": "trust",
+  "title": "Accepted proposal labelled \"SIGNED\" at $100,000",
+  "observation": "\"SIGNED (1)\" heads a card reading \"SIGNED / Sample accepted proposal / $100,000.00\" for a proposal whose status is accepted; the seed carries zero signed proposals.",
+  "why_it_matters": "Telling a client they signed a six-figure document they did not sign is a legally loaded claim on the surface that has to be exact.",
+  "evidence": {
+   "shots": [
+    "c-09-proposals-list.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Proposals/Views/ProposalListView.swift",
+    "supabase/migrations/00400_proposal_signature_authority.sql:408-437"
+   ]
+  },
+  "severity": "S0",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Key the section and badge on signed_at, and call an accepted-but-unsigned proposal \"Accepted\"."
+ },
+ {
+  "id": "U3-42",
+  "seat": "U3",
+  "task_ids": [
+   "T10",
+   "T7"
+  ],
+  "key": "invoice-detail|activeProject|payment-failure-ux",
+  "surface": "Invoice detail",
+  "tier": "activeProject",
+  "class": "trust",
+  "title": "Payment failure is a red line under a live button",
+  "observation": "After tapping \"Pay $4,250.00\" the screen shows one line of red body text, \"Unable to start payment. Please try again.\", inserted below a button that keeps its full enabled styling, pushing \"Pay securely by card or bank transfer.\" half off the bottom edge. No spinner, no retry affordance and no way to reach a human.",
+  "why_it_matters": "The moment a $4,250 payment fails is the moment trust is decided, and the app offers a sentence and no exit.",
+  "evidence": {
+   "shots": [
+    "c-14-pay-handoff.png",
+    "c-13b-invoice-detail-scrolled.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:203-222",
+    "apps/mobile/Patina/Patina/Features/Invoices/ViewModels/InvoicesViewModel.swift:109-126"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.9,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Render the failure as a PatinaErrorState above the button with a retry and a \"contact your designer\" act."
+ },
+ {
+  "id": "U3-43",
+  "seat": "U3",
+  "task_ids": [
+   "T10"
+  ],
+  "key": "invoice-detail|activeProject|ach-copy-on-a-card-timeout",
+  "surface": "Invoice detail",
+  "tier": "activeProject",
+  "class": "trust",
+  "title": "Card payers are told a bank transfer has started",
+  "observation": "When the 60-second post-Checkout poll expires, confirmState is set to .achPending unconditionally and the banner reads \"Your bank transfer has been started. Bank transfers take 3\u20135 business days to clear \u2014 we'll email your receipt as soon as it lands.\" \u2014 regardless of which rail the payer used, and regardless of whether they paid at all.",
+  "why_it_matters": "A client who paid by card, or who abandoned Checkout without paying, is told a bank transfer is in flight, which is a false statement about their money.",
+  "evidence": {
+   "shots": [
+    "c-13b-invoice-detail-scrolled.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Invoices/ViewModels/InvoicesViewModel.swift:145-152",
+    "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:99-104"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.8,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Branch the timeout copy on the settled payment method, and default to \"We haven't seen this payment yet\" when none is recorded."
+ },
+ {
+  "id": "U3-44",
+  "seat": "U3",
+  "task_ids": [
+   "T10",
+   "T7"
+  ],
+  "key": "invoice-detail|activeProject|no-payment-marks-before-handoff",
+  "surface": "Invoice detail",
+  "tier": "activeProject",
+  "class": "trust",
+  "title": "No payment marks before the Checkout hand-off",
+  "observation": "The only statement of how payment works is the caption \"Pay securely by card or bank transfer.\" \u2014 no Apple Pay mark, no card marks, no mention that payment opens a Stripe page, and no surcharge preview before the hand-off.",
+  "why_it_matters": "Apple Pay is already available in the Checkout the app opens, and the client is given no reason to expect the fastest, most trusted way to pay.",
+  "evidence": {
+   "shots": [
+    "c-13b-invoice-detail-scrolled.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:218",
+    "supabase/functions/create-checkout-session/index.ts:935-961"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.7,
+  "already_ruled": "C25",
+  "july_status": null,
+  "proposal_seed": "Show the accepted-method marks under the Pay button and say the payment opens securely in Safari. What would settle this: one device pass with a card in Wallet on a real invoice."
+ },
+ {
+  "id": "U3-45",
+  "seat": "U3",
+  "task_ids": [
+   "T8",
+   "T10"
+  ],
+  "key": "invoice-detail|activeProject|no-receipts-or-history",
+  "surface": "Invoice detail",
+  "tier": "activeProject",
+  "class": "return",
+  "title": "No receipts or payment history in the app",
+  "observation": "The only payments UI is \"PAYMENTS / No payments recorded yet.\"; there is no receipts list, no paid-invoice section on the list (\"AWAITING PAYMENT (1)\" is the only section), and the settle banner says the receipt \"is on its way to your inbox.\"",
+  "why_it_matters": "The record of what a household has spent lives in email rather than in the app, removing the most durable reason to keep the app installed after a project ends.",
+  "evidence": {
+   "shots": [
+    "c-13-invoice-detail.png",
+    "c-13b-invoice-detail-scrolled.png",
+    "c-12-invoices-list.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Invoices/Views/InvoiceDetailView.swift:99-104"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Add a paid section to the invoices list and keep every receipt openable in the app."
+ },
+ {
+  "id": "U3-46",
+  "seat": "U3",
+  "task_ids": [
+   "T10"
+  ],
+  "key": "settings|all|no-delete-account-path",
+  "surface": "Settings",
+  "tier": "all",
+  "class": "trust",
+  "title": "No delete-account path for an in-app account",
+  "observation": "Settings lists ACCOUNT (\"Account\", \"Sign in on the web\"), PREFERENCES, PRIVACY & MEMORY and SUPPORT, with no Delete Account and no Sign Out; the \"Account >\" row is inert in all three reproductions, so the AccountView that holds sign-out is unreachable.",
+  "why_it_matters": "An app that creates accounts in-app and takes payments must offer account deletion under App Store rule 5.1.1(v), so this is a review risk on the same build that would first sell something.",
+  "evidence": {
+   "shots": [
+    "c-28-settings-client.png",
+    "c-28b-settings-scrolled.png",
+    "c-27-account-row-inert.png",
+    "g-02b-settings-account-inert.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Settings/Views/SettingsView.swift:73",
+    "apps/mobile/Patina/Patina/Features/Account/AccountView.swift:52-70"
+   ]
+  },
+  "severity": "S1",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Fix the Account row's navigation and add an account-deletion request to it before any purchase ships."
+ },
+ {
+  "id": "U3-47",
+  "seat": "U3",
+  "task_ids": [
+   "T8"
+  ],
+  "key": "invoice-detail|activeProject|deposit-for-an-invisible-piece",
+  "surface": "Invoice detail",
+  "tier": "activeProject",
+  "class": "return",
+  "title": "The deposit is for a table the app never shows",
+  "observation": "\"WHAT'S INCLUDED / Dining table \u2014 deposit (50%) $2,650.00 / Primary bedroom nightstands (pair) \u2014 deposit (50%) $1,600.00\". Neither the dining table nor the nightstands appear anywhere else in the app \u2014 not on the project, not in a room, not as a piece, not as an order.",
+  "why_it_matters": "The client pays half the price of a table and then has no object in the app to check on, which is exactly the return visit a furnishing app should own.",
+  "evidence": {
+   "shots": [
+    "c-13b-invoice-detail-scrolled.png",
+    "c-08-project-detail.png"
+   ],
+   "refs": [
+    "apps/mobile/Patina/Patina/Features/Projects/Views/ProjectDetailView.swift:64,143"
+   ]
+  },
+  "severity": "S2",
+  "confidence": 0.85,
+  "already_ruled": null,
+  "july_status": null,
+  "proposal_seed": "Link invoice line items to the FF&E selections they pay for and give each one a status the client can open."
+ }
+]

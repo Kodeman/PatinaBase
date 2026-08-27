@@ -1,0 +1,1607 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<base href="../">
+<title>Direction A — mock render check</title>
+<link rel="stylesheet" href="kit.css">
+<style>
+  body { background:var(--pat-bg); margin:0; padding:40px; font-family:var(--pat-sans); }
+  .rail { display:flex; gap:56px; align-items:flex-start; flex-wrap:nowrap; }
+  figure { margin:0; }
+  figcaption { font:600 12px/1.4 var(--pat-sans); text-transform:uppercase; letter-spacing:1.5px;
+    color:var(--pat-text-muted); padding:0 0 14px 13px; white-space:nowrap; }
+  .sheets { max-width:900px; margin-top:64px; }
+  .sheet-block { margin-bottom:44px; }
+</style></head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<g id="s" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></g>
+<symbol id="i-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5c0 4-1.5 5.4-2.2 6.1a.6.6 0 0 0 .4 1h14.6a.6.6 0 0 0 .4-1c-.7-.7-2.2-2.1-2.2-6.1A5.5 5.5 0 0 0 12 3Z"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></g></symbol>
+<symbol id="i-qcircle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.8c0 1.7-2.4 2-2.4 3.6"/><circle cx="12" cy="17.2" r=".9" fill="currentColor" stroke="none"/></g></symbol>
+<symbol id="i-q" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 8.8a3.5 3.5 0 0 1 6.8 1.1c0 2.4-3.4 2.7-3.4 5"/><circle cx="12" cy="18.6" r="1.1" fill="currentColor" stroke="none"/></g></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></g></symbol>
+<symbol id="i-chev-r" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol>
+<symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol>
+<symbol id="i-arrow-ur" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 17.5 17.5 6.5"/><path d="M8.5 6.5h9v9"/></g></symbol>
+<symbol id="i-arrow-r" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13.5 6.5 19 12l-5.5 5.5"/></g></symbol>
+<symbol id="i-camera-vf" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5.4A2.4 2.4 0 0 1 5.4 3H8M16 3h2.6A2.4 2.4 0 0 1 21 5.4V8M21 16v2.6a2.4 2.4 0 0 1-2.4 2.4H16M8 21H5.4A2.4 2.4 0 0 1 3 18.6V16"/><circle cx="12" cy="12" r="3.1"/><path d="M9.7 8.4l.8-1.3h3l.8 1.3"/></g></symbol>
+<symbol id="i-viewfinder" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5.4A2.4 2.4 0 0 1 5.4 3H8M16 3h2.6A2.4 2.4 0 0 1 21 5.4V8M21 16v2.6a2.4 2.4 0 0 1-2.4 2.4H16M8 21H5.4A2.4 2.4 0 0 1 3 18.6V16"/></g></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" d="M12 20s-7.4-4.5-7.4-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.4 2.6C19.4 15.5 12 20 12 20Z"/></symbol>
+<symbol id="i-heart-fill" viewBox="0 0 24 24"><path fill="currentColor" d="M12 20s-7.4-4.5-7.4-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7.4 2.6C19.4 15.5 12 20 12 20Z"/></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></g></symbol>
+<symbol id="i-plus-circle" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></g></symbol>
+<symbol id="i-stack" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="4" y="9.5" width="16" height="11" rx="2.2"/><path d="M6.2 7h11.6M7.6 4.5h8.8"/></g></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3.5 13.6 9 19 10.6 13.6 12.2 12 17.7 10.4 12.2 5 10.6 10.4 9Z"/><path d="M18.4 15.2l.7 2.2 2.2.7-2.2.7-.7 2.2-.7-2.2-2.2-.7 2.2-.7Z"/></g></symbol>
+<symbol id="i-palette" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3.2a8.8 8.8 0 0 0 0 17.6c1.3 0 1.9-.8 1.9-1.7 0-1.4-1-1.7-1-2.7 0-.8.7-1.4 1.6-1.4h1.6a4.7 4.7 0 0 0 4.7-4.7c0-4-3.9-7.1-8.8-7.1Z"/><circle cx="8" cy="9" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="7.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.8" cy="9.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="7.4" cy="13.4" r="1.1" fill="currentColor" stroke="none"/></g></symbol>
+<symbol id="i-person-plus" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10.5" cy="8" r="3.4"/><path d="M4.4 19.6a6.1 6.1 0 0 1 12.2 0"/><path d="M18.6 5.4v5M21.1 7.9h-5"/></g></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><g fill="currentColor"><rect x="5" y="10.4" width="14" height="10" rx="2.6"/></g><path fill="none" stroke="currentColor" stroke-width="1.8" d="M8.3 10.4V7.8a3.7 3.7 0 0 1 7.4 0v2.6"/></symbol>
+<symbol id="i-share" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6v11"/><path d="M8.4 7.2 12 3.6l3.6 3.6"/><path d="M6 12.4H5a1.6 1.6 0 0 0-1.6 1.6v5a1.6 1.6 0 0 0 1.6 1.6h14a1.6 1.6 0 0 0 1.6-1.6v-5a1.6 1.6 0 0 0-1.6-1.6h-1"/></g></symbol>
+<symbol id="i-cube" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6Z"/><path d="M4 7.6 12 12l8-4.4M12 12v8.8"/></g></symbol>
+<symbol id="i-info-fill" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="12" cy="12" r="9"/></g><g fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M12 11v5.4"/><path d="M12 7.6v.1"/></g></symbol>
+<symbol id="i-check-fill" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/><path fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="m8 12.2 2.7 2.7L16 9.6"/></symbol>
+<symbol id="i-warn-fill" viewBox="0 0 24 24"><path fill="currentColor" d="M11.1 4.1a1 1 0 0 1 1.8 0l8 14a1 1 0 0 1-.9 1.5H4a1 1 0 0 1-.9-1.5Z"/><g fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M12 9.4v4.2"/><path d="M12 16.6v.1"/></g></symbol>
+<symbol id="i-x-fill" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor"/><path fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" d="M9 9l6 6M15 9l-6 6"/></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3.1"/><path d="M12 3.4v2.1M12 18.5v2.1M20.6 12h-2.1M5.5 12H3.4M18.1 5.9l-1.5 1.5M7.4 16.6l-1.5 1.5M18.1 18.1l-1.5-1.5M7.4 7.4 5.9 5.9"/></g></symbol>
+<symbol id="i-message" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M4 6.4A2.4 2.4 0 0 1 6.4 4h11.2A2.4 2.4 0 0 1 20 6.4v7.2a2.4 2.4 0 0 1-2.4 2.4H10l-4.6 3.6a.5.5 0 0 1-.8-.4v-3.2H6.4A2.4 2.4 0 0 1 4 13.6Z"/></symbol>
+<symbol id="i-doc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6 3.6h7.4L18.6 9v11.4H6Z"/><path d="M13.2 3.8V9h5.2"/><path d="M8.6 13h6.8M8.6 16.4h4.6"/></g></symbol>
+<symbol id="i-card" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3.2" y="5.6" width="17.6" height="12.8" rx="2.4"/><path d="M3.2 10h17.6"/></g></symbol>
+<symbol id="i-rooms" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.6 10.4 12 4l8.4 6.4v9.2H3.6Z"/><path d="M9.6 19.6v-5.4h4.8v5.4"/></g></symbol>
+</defs></svg>
+<div class="rail">
+<figure><figcaption>M1 · Today — activeProject (Ruth) · light</figcaption>
+<div class="frame-wrap a-m1">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="home-header">
+          <div class="home-header__stack">
+            <div class="home-header__date">Wednesday &middot; Aug 26</div>
+            <div class="home-header__titlerow">
+              <span class="home-header__title">Today</span>
+              <span class="home-header__title-help"><svg><use href="#i-qcircle"/></svg></span>
+            </div>
+          </div>
+          <div class="home-header__actions">
+            <span class="icon-btn"><svg><use href="#i-bell"/></svg><span class="icon-btn__dot"></span></span>
+            <span class="icon-btn"><svg><use href="#i-qcircle"/></svg></span>
+          </div>
+          <span class="monogram">C</span>
+        </div>
+        <div class="a-moved">
+          <span class="a-moved__label">What moved</span>
+          <span class="a-moved__line">Leah moved Aspen Loft Refresh into Installation &amp; Styling on Monday. A proposal arrived Thursday.</span>
+        </div>
+        <div class="next-move a-nm--hero">
+          <span class="next-move__icon"><svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.1 11.4V4.7a1.3 1.3 0 0 1 2.6 0v5.5"/><path d="M11.7 10.2V3.7a1.3 1.3 0 0 1 2.6 0v6.4"/><path d="M14.3 10.1V5.6a1.3 1.3 0 0 1 2.6 0v7.7"/><path d="M9.1 11.4V8.7a1.3 1.3 0 0 0-2.6 0v4.9c0 4 2.3 6.8 5.9 6.8 3.5 0 4.5-2.7 4.5-6.5"/></g></svg></span>
+          <span class="next-move__body">
+            <span class="a-nm__label">Next move</span>
+            <span class="next-move__title">Leah is waiting on two things</span>
+            <span class="next-move__detail">A rug colour since Aug 22 &middot; a proposal by Sep 8 &middot; your invoice is due Sep 1</span>
+          </span>
+          <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+        </div>
+        <div class="a-story-row">
+          <span class="a-story-row__art g-hero"></span>
+          <span class="a-story-row__copy">
+            <span class="a-story-row__tag">Maker Spotlight</span>
+            <span class="a-story-row__title">The Grain Whisperer of Maine</span>
+            <span class="a-story-row__meta">4 min read</span>
+          </span>
+          <span class="a-story-row__dot"></span>
+        </div>
+      </div>
+      <div class="companion-dock">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+        <span class="companion-hint">Leah Hartwell &middot; your designer</span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:184px;left:2px">1</span>
+  <span class="callout-n callout-n--clay" style="top:300px;left:2px">2</span>
+  <span class="callout-n" style="top:430px;right:2px">3</span>
+  <span class="callout-n" style="top:534px;left:2px">4</span>
+  <span class="callout-n" style="top:640px;right:2px">5</span>
+  <span class="callout-n" style="top:756px;left:2px">6</span>
+</div>
+<style>
+/* WHAT MOVED — new block, lives inside DailyGreetingHeader's stack */
+.a-m1 .a-moved { padding:0 var(--pat-gutter-home); margin-top:4px; }
+.a-m1 .a-moved__label { display:block; font:400 10px/1.6 var(--pat-mono);
+  text-transform:uppercase; letter-spacing:.5px; color:var(--pat-text-muted); }
+.a-m1 .a-moved__line { display:block; margin-top:5px; font:400 14px/1.45 var(--pat-sans);
+  color:var(--pat-text-2); }
+
+.a-m1 .a-nm__label { font:400 10px/1.6 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+
+/* Next Move at hero weight — A's content-driven card weight */
+.a-m1 .a-nm--hero { padding:20px 14px 20px 20px; margin-top:24px; gap:14px; }
+.a-m1 .a-nm--hero .next-move__icon { width:48px; height:48px; align-self:flex-start;
+  margin-top:4px; }
+.a-m1 .a-nm--hero .next-move__icon svg { width:22px; height:22px; }
+.a-m1 .a-nm--hero .next-move__title { font:400 30px/1.18 var(--pat-serif); }
+.a-m1 .a-nm--hero .next-move__detail { font:400 14px/1.45 var(--pat-sans);
+  color:var(--pat-text-2); padding-top:2px; }
+
+/* DailyStoryCard as a 96pt row — A's compact variant */
+.a-m1 .a-story-row { position:relative; display:flex; align-items:center; gap:14px;
+  height:96px; padding:12px; margin:16px var(--pat-gutter-home) 0;
+  background:var(--pat-bg-2); border-radius:var(--pat-r-xl); }
+.a-m1 .a-story-row__art { width:72px; height:72px; flex:0 0 auto;
+  border-radius:var(--pat-r-lg); }
+.a-m1 .a-story-row__copy { display:flex; flex-direction:column; gap:2px;
+  flex:1 1 auto; min-width:0; }
+.a-m1 .a-story-row__tag { font:400 9px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.6px; color:var(--pat-text-link); }
+.a-m1 .a-story-row__title { font:400 18px/1.24 var(--pat-serif); color:var(--pat-text); }
+.a-m1 .a-story-row__meta { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+.a-m1 .a-story-row__dot { position:absolute; top:14px; right:14px; width:7px; height:7px;
+  border-radius:50%; background:var(--pat-clay); }
+</style>
+</figure>
+<figure><figcaption>M1 · Today — activeProject · dark</figcaption>
+<div class="frame-wrap a-m1d">
+  <div class="frame" data-scheme="dark" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="home-header">
+          <div class="home-header__stack">
+            <div class="home-header__date">Wednesday &middot; Aug 26</div>
+            <div class="home-header__titlerow">
+              <span class="home-header__title">Today</span>
+              <span class="home-header__title-help"><svg><use href="#i-qcircle"/></svg></span>
+            </div>
+          </div>
+          <div class="home-header__actions">
+            <span class="icon-btn"><svg><use href="#i-bell"/></svg><span class="icon-btn__dot"></span></span>
+            <span class="icon-btn"><svg><use href="#i-qcircle"/></svg></span>
+          </div>
+          <span class="monogram">C</span>
+        </div>
+        <div class="a-moved">
+          <span class="a-moved__label">What moved</span>
+          <span class="a-moved__line">Leah moved Aspen Loft Refresh into Installation &amp; Styling on Monday. A proposal arrived Thursday.</span>
+        </div>
+        <div class="next-move a-nm--hero">
+          <span class="next-move__icon"><svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.1 11.4V4.7a1.3 1.3 0 0 1 2.6 0v5.5"/><path d="M11.7 10.2V3.7a1.3 1.3 0 0 1 2.6 0v6.4"/><path d="M14.3 10.1V5.6a1.3 1.3 0 0 1 2.6 0v7.7"/><path d="M9.1 11.4V8.7a1.3 1.3 0 0 0-2.6 0v4.9c0 4 2.3 6.8 5.9 6.8 3.5 0 4.5-2.7 4.5-6.5"/></g></svg></span>
+          <span class="next-move__body">
+            <span class="a-nm__label">Next move</span>
+            <span class="next-move__title">Leah is waiting on two things</span>
+            <span class="next-move__detail">A rug colour since Aug 22 &middot; a proposal by Sep 8 &middot; your invoice is due Sep 1</span>
+          </span>
+          <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+        </div>
+        <div class="a-story-row">
+          <span class="a-story-row__art g-hero"></span>
+          <span class="a-story-row__copy">
+            <span class="a-story-row__tag">Maker Spotlight</span>
+            <span class="a-story-row__title">The Grain Whisperer of Maine</span>
+            <span class="a-story-row__meta">4 min read</span>
+          </span>
+          <span class="a-story-row__dot"></span>
+        </div>
+      </div>
+      <div class="companion-dock">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+        <span class="companion-hint">Leah Hartwell &middot; your designer</span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n callout-n--ondark" style="top:184px;left:2px">1</span>
+  <span class="callout-n callout-n--clay callout-n--ondark" style="top:300px;left:2px">2</span>
+  <span class="callout-n callout-n--ondark" style="top:404px;right:2px">3</span>
+  <span class="callout-n callout-n--ondark" style="top:756px;left:2px">6</span>
+</div>
+<style>
+/* WHAT MOVED — new block, lives inside DailyGreetingHeader's stack */
+.a-m1d .a-moved { padding:0 var(--pat-gutter-home); margin-top:4px; }
+.a-m1d .a-moved__label { display:block; font:400 10px/1.6 var(--pat-mono);
+  text-transform:uppercase; letter-spacing:.5px; color:var(--pat-text-muted); }
+.a-m1d .a-moved__line { display:block; margin-top:5px; font:400 14px/1.45 var(--pat-sans);
+  color:var(--pat-text-2); }
+
+.a-m1d .a-nm__label { font:400 10px/1.6 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+
+/* Next Move at hero weight — A's content-driven card weight */
+.a-m1d .a-nm--hero { padding:20px 14px 20px 20px; margin-top:24px; gap:14px; }
+.a-m1d .a-nm--hero .next-move__icon { width:48px; height:48px; align-self:flex-start;
+  margin-top:4px; }
+.a-m1d .a-nm--hero .next-move__icon svg { width:22px; height:22px; }
+.a-m1d .a-nm--hero .next-move__title { font:400 30px/1.18 var(--pat-serif); }
+.a-m1d .a-nm--hero .next-move__detail { font:400 14px/1.45 var(--pat-sans);
+  color:var(--pat-text-2); padding-top:2px; }
+
+/* DailyStoryCard as a 96pt row — A's compact variant */
+.a-m1d .a-story-row { position:relative; display:flex; align-items:center; gap:14px;
+  height:96px; padding:12px; margin:16px var(--pat-gutter-home) 0;
+  background:var(--pat-bg-2); border-radius:var(--pat-r-xl); }
+.a-m1d .a-story-row__art { width:72px; height:72px; flex:0 0 auto;
+  border-radius:var(--pat-r-lg); }
+.a-m1d .a-story-row__copy { display:flex; flex-direction:column; gap:2px;
+  flex:1 1 auto; min-width:0; }
+.a-m1d .a-story-row__tag { font:400 9px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.6px; color:var(--pat-text-link); }
+.a-m1d .a-story-row__title { font:400 18px/1.24 var(--pat-serif); color:var(--pat-text); }
+.a-m1d .a-story-row__meta { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+.a-m1d .a-story-row__dot { position:absolute; top:14px; right:14px; width:7px; height:7px;
+  border-radius:50%; background:var(--pat-clay); }
+</style>
+</figure>
+<figure><figcaption>M2 · Today — discovering (Maya) · light</figcaption>
+<div class="frame-wrap a-m2">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="home-header">
+          <div class="home-header__stack">
+            <div class="home-header__date">Wednesday &middot; Aug 26</div>
+            <div class="home-header__titlerow">
+              <span class="home-header__title">Today</span>
+              <span class="home-header__title-help"><svg><use href="#i-qcircle"/></svg></span>
+            </div>
+          </div>
+          <div class="home-header__actions">
+            <span class="icon-btn"><svg><use href="#i-bell"/></svg></span>
+            <span class="icon-btn"><svg><use href="#i-qcircle"/></svg></span>
+          </div>
+          <span class="monogram">M</span>
+        </div>
+        <div class="a-moved">
+          <span class="a-moved__label">What moved</span>
+          <span class="a-moved__line">The jute rug has been in the Living Room since Sunday.</span>
+        </div>
+        <div class="next-move" style="margin-top:24px">
+          <span class="next-move__icon"><svg><use href="#i-sparkles"/></svg></span>
+          <span class="next-move__body">
+            <span class="a-nm__label">Next move</span>
+            <span class="next-move__title">Return to the Living Room</span>
+            <span class="next-move__detail">Three pieces are gathering there.</span>
+          </span>
+          <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+        </div>
+        <div class="a-story-row">
+          <span class="a-story-row__art g-walnut"></span>
+          <span class="a-story-row__copy">
+            <span class="a-story-row__tag">Editor&rsquo;s Note</span>
+            <span class="a-story-row__title">Patina: The slow shape of home</span>
+            <span class="a-story-row__meta">3 min read</span>
+          </span>
+          <span class="a-story-row__dot"></span>
+        </div>
+        <div class="room-card a-room--compact" style="margin-top:18px">
+          <div class="room-card__art g-warm"></div>
+          <div class="room-card__body">
+            <div class="room-card__copy">
+              <span class="mono-label">Active room</span>
+              <span class="room-card__name">Living Room</span>
+              <span class="room-card__meta">18 &times; 14 ft &middot; 3 pieces saved</span>
+              <span class="a-fill">$3,590 saved &middot; your range $5K+</span>
+            </div>
+            <span class="room-card__chev"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+        </div>
+      </div>
+      <div class="companion-dock">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+        <span class="companion-hint">Living Room &middot; 3 saved</span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:184px;left:2px">1</span>
+  <span class="callout-n" style="top:288px;left:2px">2</span>
+  <span class="callout-n" style="top:400px;left:2px">3</span>
+  <span class="callout-n" style="top:520px;right:2px">4</span>
+  <span class="callout-n callout-n--clay" style="top:718px;left:2px">5</span>
+</div>
+<style>
+/* WHAT MOVED — new block, lives inside DailyGreetingHeader's stack */
+.a-m2 .a-moved { padding:0 var(--pat-gutter-home); margin-top:4px; }
+.a-m2 .a-moved__label { display:block; font:400 10px/1.6 var(--pat-mono);
+  text-transform:uppercase; letter-spacing:.5px; color:var(--pat-text-muted); }
+.a-m2 .a-moved__line { display:block; margin-top:5px; font:400 14px/1.45 var(--pat-sans);
+  color:var(--pat-text-2); }
+
+.a-m2 .a-nm__label { font:400 10px/1.6 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+
+/* DailyStoryCard as a 96pt row — A's compact variant */
+.a-m2 .a-story-row { position:relative; display:flex; align-items:center; gap:14px;
+  height:96px; padding:12px; margin:16px var(--pat-gutter-home) 0;
+  background:var(--pat-bg-2); border-radius:var(--pat-r-xl); }
+.a-m2 .a-story-row__art { width:72px; height:72px; flex:0 0 auto;
+  border-radius:var(--pat-r-lg); }
+.a-m2 .a-story-row__copy { display:flex; flex-direction:column; gap:2px;
+  flex:1 1 auto; min-width:0; }
+.a-m2 .a-story-row__tag { font:400 9px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.6px; color:var(--pat-text-link); }
+.a-m2 .a-story-row__title { font:400 18px/1.24 var(--pat-serif); color:var(--pat-text); }
+.a-m2 .a-story-row__meta { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+.a-m2 .a-story-row__dot { position:absolute; top:14px; right:14px; width:7px; height:7px;
+  border-radius:50%; background:var(--pat-clay); }
+
+/* the room's fill line — spend beside the quiz's own band label */
+.a-m2 .a-fill { font:400 10px/1.6 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-2); }
+
+/* the quiet-day Active Room card: kit .room-card__art is 150; at 150 this
+   composition's last 30pt sit under the hearth at 402x874 */
+.a-m2 .a-room--compact .room-card__art { height:118px; }
+.a-m2 .a-room--compact .room-card__copy { gap:4px; }
+</style>
+</figure>
+<figure><figcaption>M3 · Piece detail — discovering · light</figcaption>
+<div class="frame-wrap a-m3">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="detail-hero">
+          <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table">
+          <div class="detail-hero__bar">
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-chev-l"/></svg></span>
+            <span class="spacer"></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-q"/></svg></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-share"/></svg></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-heart"/></svg></span>
+          </div>
+        </div>
+        <div class="detail-body">
+          <div class="detail-maker">Nordic Atelier &middot; Aarhus, Denmark</div>
+          <div class="detail-name">Heirloom Oak Dining Table</div>
+          <div class="detail-materials">Quarter-sawn white oak &middot; Hand-rubbed tung oil</div>
+          <div class="detail-price-row"><span class="detail-price">$4,200</span></div>
+          <div class="a-facts">
+            <span class="a-facts__line">38&Prime; W &times; 20&Prime; D &times; 30&Prime; H</span>
+            <span class="a-facts__line">38&Prime; wide &middot; your Living Room is 18 &times; 14 ft</span>
+            <span class="a-facts__line">Ships in 10&ndash;12 weeks</span>
+          </div>
+          <div class="a-desc">Solid quarter-sawn white oak with hand-rubbed tung oil finish. Each table is made to order by a three-person workshop outside Aarhus.</div>
+        </div>
+      </div>
+      <div class="a-dock--min" style="bottom:151px">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+      </div>
+      <div class="a-actbar">
+        <span class="btn btn--primary">Buy it &middot; $4,200</span>
+        <span class="a-actbar__note">Payment opens securely in Safari.</span>
+        <span class="btn btn--ghost btn--pill-sm a-actbar__ghost">Get design help with this room</span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time" style="color:var(--pat-charcoal)">9:41</span>
+        <span class="statusbar__right" style="color:var(--pat-charcoal)">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator" style="background:var(--pat-charcoal);opacity:.4"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:78px;right:2px">1</span>
+  <span class="callout-n" style="top:400px;left:2px">2</span>
+  <span class="callout-n callout-n--clay" style="top:470px;right:2px">3</span>
+  <span class="callout-n" style="top:540px;left:2px">4</span>
+  <span class="callout-n" style="top:740px;right:2px">5</span>
+  <span class="callout-n" style="top:812px;left:2px">6</span>
+</div>
+<style>
+/* the three lines under the price — each omitted entirely when null */
+.a-m3 .a-facts { display:flex; flex-direction:column; gap:4px; padding-bottom:12px; }
+.a-m3 .detail-body { padding-top:20px; }
+.a-m3 .detail-materials { padding-bottom:12px; }
+.a-m3 .detail-price-row { padding-bottom:10px; }
+.a-m3 .a-facts__line { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-2); }
+.a-m3 .a-desc { font:400 14px/1.6 var(--pat-sans); color:var(--pat-text-2); }
+
+/* A's act bar: one primary verb, one caption, one ghost — replaces the shipped
+   single-CTA .detail-bar */
+.a-m3 .a-actbar { position:absolute; left:0; right:0; bottom:0; z-index:20;
+  display:flex; flex-direction:column; align-items:stretch; gap:8px;
+  padding:16px 24px 30px; border-top:.5px solid var(--pat-pearl);
+  background:rgba(250,247,242,.86);
+  backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+.a-m3 [data-scheme="dark"] .a-actbar { background:rgba(33,30,27,.86); }
+.a-m3 .a-actbar__note { text-align:center; font:400 12px/1.4 var(--pat-sans);
+  color:var(--pat-text-muted); }
+.a-m3 .a-actbar__ghost { align-self:center; }
+
+/* the Hearth in .minimal mode — bottom-trailing, no hint
+   (CompanionOverlay.swift:386-391), which is what pushed screens show */
+.a-m3 .a-dock--min { position:absolute; right:20px; z-index:30; }
+</style>
+</figure>
+<figure><figcaption>M3 · Piece detail — activeProject · dark</figcaption>
+<div class="frame-wrap a-m3d">
+  <div class="frame" data-scheme="dark" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="detail-hero">
+          <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table">
+          <div class="detail-hero__bar">
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-chev-l"/></svg></span>
+            <span class="spacer"></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-q"/></svg></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-share"/></svg></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-heart"/></svg></span>
+          </div>
+        </div>
+        <div class="detail-body">
+          <div class="detail-maker">Nordic Atelier &middot; Aarhus, Denmark</div>
+          <div class="detail-name">Heirloom Oak Dining Table</div>
+          <div class="detail-materials">Quarter-sawn white oak &middot; Hand-rubbed tung oil</div>
+          <div class="detail-price-row"><span class="detail-price">$4,200</span></div>
+          <div class="a-facts">
+            <span class="a-facts__line">38&Prime; W &times; 20&Prime; D &times; 30&Prime; H</span>
+            <span class="a-facts__line">38&Prime; wide &middot; your Living Room is 18 &times; 14 ft</span>
+            <span class="a-facts__line">Ships in 10&ndash;12 weeks</span>
+          </div>
+          <div class="a-desc">Solid quarter-sawn white oak with hand-rubbed tung oil finish. Each table is made to order by a three-person workshop outside Aarhus.</div>
+        </div>
+      </div>
+      <div class="a-dock--min" style="bottom:126px">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+      </div>
+      <div class="a-actbar">
+        <span class="btn btn--primary">Ask Leah to source this</span>
+        <span class="btn btn--ghost btn--pill-sm a-actbar__ghost">Save to the Living Room</span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time" style="color:var(--pat-charcoal)">9:41</span>
+        <span class="statusbar__right" style="color:var(--pat-charcoal)">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n callout-n--ondark" style="top:400px;left:2px">2</span>
+  <span class="callout-n callout-n--clay callout-n--ondark" style="top:470px;right:2px">3</span>
+  <span class="callout-n callout-n--ondark" style="top:756px;right:2px">7</span>
+</div>
+<style>
+/* the three lines under the price — each omitted entirely when null */
+.a-m3d .a-facts { display:flex; flex-direction:column; gap:4px; padding-bottom:12px; }
+.a-m3d .detail-body { padding-top:20px; }
+.a-m3d .detail-materials { padding-bottom:12px; }
+.a-m3d .detail-price-row { padding-bottom:10px; }
+.a-m3d .a-facts__line { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-2); }
+.a-m3d .a-desc { font:400 14px/1.6 var(--pat-sans); color:var(--pat-text-2); }
+
+/* A's act bar: one primary verb, one caption, one ghost — replaces the shipped
+   single-CTA .detail-bar */
+.a-m3d .a-actbar { position:absolute; left:0; right:0; bottom:0; z-index:20;
+  display:flex; flex-direction:column; align-items:stretch; gap:8px;
+  padding:16px 24px 30px; border-top:.5px solid var(--pat-pearl);
+  background:rgba(250,247,242,.86);
+  backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+.a-m3d [data-scheme="dark"] .a-actbar { background:rgba(33,30,27,.86); }
+.a-m3d .a-actbar__note { text-align:center; font:400 12px/1.4 var(--pat-sans);
+  color:var(--pat-text-muted); }
+.a-m3d .a-actbar__ghost { align-self:center; }
+
+/* the Hearth in .minimal mode — bottom-trailing, no hint
+   (CompanionOverlay.swift:386-391), which is what pushed screens show */
+.a-m3d .a-dock--min { position:absolute; right:20px; z-index:30; }
+</style>
+</figure>
+<figure><figcaption>M4 · The room — Living Room</figcaption>
+<div class="frame-wrap a-m4">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="a-roomhero g-warm"></div>
+        <div class="pad-push" style="padding-top:12px">
+          <div class="t-h1">Living Room</div>
+          <div class="mono-label" style="display:block;margin-top:2px">18 &times; 14 ft &middot; North-facing &middot; 2 windows &middot; Entered Aug 24</div>
+          <div class="a-stats" style="margin-top:14px">
+            <span class="a-stat"><span class="a-stat__val">3</span><span class="a-stat__key">Items</span></span>
+            <span class="a-stat"><span class="a-stat__val">$3,590</span><span class="a-stat__key">Saved</span></span>
+          </div>
+          <div class="a-fill" style="margin-top:10px">Your range &middot; $5K+ &middot; from your quiz answer</div>
+          <div class="mono-label" style="display:block;margin-top:16px">Your items</div>
+          <div style="margin-top:6px">
+          <div class="a-item">
+            <span class="a-item__thumb tile-placeholder tile-placeholder--gradient g-leather"></span>
+            <span class="a-item__copy">
+              <span class="a-item__name">Velvet Club Chair</span>
+              <span class="a-item__maker">Article</span>
+            </span>
+            <span class="a-item__right">
+              <span class="a-item__price">$1,250</span>
+              <span class="a-item__saved">Saved Aug 24</span>
+            </span>
+          </div>
+          <div class="a-item">
+            <span class="a-item__thumb tile-placeholder tile-placeholder--gradient g-metal"></span>
+            <span class="a-item__copy">
+              <span class="a-item__name">Brass Arc Floor Lamp</span>
+              <span class="a-item__maker">Schoolhouse</span>
+            </span>
+            <span class="a-item__right">
+              <span class="a-item__price">$890</span>
+              <span class="a-item__saved">Saved Aug 22</span>
+            </span>
+          </div>
+          <div class="a-item">
+            <span class="a-item__thumb tile-placeholder tile-placeholder--gradient g-linen"></span>
+            <span class="a-item__copy">
+              <span class="a-item__name">Woven Jute Area Rug 8x10</span>
+              <span class="a-item__maker">Studio Piet</span>
+            </span>
+            <span class="a-item__right">
+              <span class="a-item__price">$1,450</span>
+              <span class="a-item__saved">Saved Sunday</span>
+            </span>
+          </div>
+          </div>
+          <div style="margin-top:14px"><span class="btn btn--primary">Browse pieces for the Living Room</span></div>
+        </div>
+      </div>
+      <div class="screen-chrome">
+        <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+      </div>
+      <span class="circ-btn circ-btn--lg a-gear"><svg><use href="#i-gear"/></svg></span>
+      <div class="companion-dock">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+        <span class="companion-hint">Living Room &middot; 3 saved</span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:268px;left:2px">1</span>
+  <span class="callout-n callout-n--clay" style="top:330px;right:2px">2</span>
+  <span class="callout-n" style="top:400px;left:2px">3</span>
+  <span class="callout-n" style="top:452px;right:2px">4</span>
+  <span class="callout-n" style="top:530px;right:2px">5</span>
+  <span class="callout-n" style="top:672px;left:2px">6</span>
+</div>
+<style>
+/* the room's stat tiles — two, not three (SP-18 takes IN AR and bare MATCH down) */
+.a-m4 .a-stats { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.a-m4 .a-stat { background:var(--pat-bg-2); border-radius:var(--pat-r-xl);
+  padding:11px 12px; display:flex; flex-direction:column; align-items:center; gap:3px; }
+.a-m4 .a-stat__val { font:400 22px/1.2 var(--pat-serif); color:var(--pat-text); }
+.a-m4 .a-stat__key { font:400 10px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+
+/* the room's item rows — thumbnail, name, maker, price, and the save date */
+.a-m4 .a-item { display:flex; align-items:center; gap:12px; padding:2px 0; }
+.a-m4 .a-item + .a-item { border-top:1px solid var(--pat-pearl); }
+.a-m4 .a-item__thumb { width:64px; height:64px; flex:0 0 auto; overflow:hidden;
+  border-radius:var(--pat-r-md); position:relative; }
+.a-m4 .a-item__copy { display:flex; flex-direction:column; gap:2px; flex:1 1 auto; min-width:0; }
+.a-m4 .a-item__name { font:500 13px/1.35 var(--pat-sans); color:var(--pat-text); }
+.a-m4 .a-item__maker { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+.a-m4 .a-item__right { margin-left:auto; display:flex; flex-direction:column;
+  align-items:flex-end; gap:2px; }
+.a-m4 .a-item__price { font:500 18px/1.28 var(--pat-serif); color:var(--pat-text); }
+.a-m4 .a-item__saved { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+
+/* the room's fill line — spend beside the quiz's own band label */
+.a-m4 .a-fill { font:400 10px/1.6 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-2); }
+
+.a-m4 .a-roomhero { height:240px; }
+.a-m4 .a-gear { position:absolute; top:calc(var(--pat-safe-top) + 11px); right:18px; z-index:20; }
+</style>
+</figure>
+<figure><figcaption>M5a · Order sheet</figcaption>
+<div class="frame-wrap a-m5a">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="detail-hero">
+          <img src="img/heirloom-oak-dining-table.jpg" alt="Heirloom Oak Dining Table">
+          <div class="detail-hero__bar">
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-chev-l"/></svg></span>
+            <span class="spacer"></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-q"/></svg></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-share"/></svg></span>
+            <span class="circ-btn circ-btn--lg"><svg><use href="#i-heart"/></svg></span>
+          </div>
+        </div>
+        <div class="detail-body">
+          <div class="detail-maker">Nordic Atelier &middot; Aarhus, Denmark</div>
+          <div class="detail-name">Heirloom Oak Dining Table</div>
+        </div>
+      </div>
+      <div class="sheet-scrim"></div>
+      <div class="sheet a-sheet--order">
+        <span class="sheet__handle"></span>
+        <div class="sheet__head">
+          <span class="sheet__title">Heirloom Oak Dining Table</span>
+          <span class="sheet__eyebrow">Nordic Atelier &middot; Made to order</span>
+        </div>
+        <div class="sheet__body">
+          <div class="row" style="gap:14px">
+            <span class="a-thumb56"><img src="img/heirloom-oak-dining-table.jpg" alt=""></span>
+            <span class="a-note">Quarter-sawn white oak</span>
+          </div>
+          <div class="a-money" style="margin-top:8px">
+            <div class="a-money__row"><span class="a-money__k">Piece</span><span class="a-money__v">$4,200.00</span></div>
+            <div class="a-money__row"><span class="a-money__k">White-glove delivery</span><span class="a-money__v">$350.00</span></div>
+            <div class="a-money__row"><span class="a-money__k">Sales tax</span><span class="a-money__v">added at checkout</span></div>
+            <div class="a-money__row a-money__row--total"><span class="a-money__k">Total</span><span class="a-money__v">$4,550.00 plus tax</span></div>
+          </div>
+          <div class="stack" style="gap:6px;margin-top:12px">
+            <span class="a-note">38&Prime; wide &middot; your Living Room is 18 &times; 14 ft</span>
+            <span class="a-note">Ships in 10&ndash;12 weeks.</span>
+            <span class="a-note">If it arrives damaged, Patina handles the claim with Nordic Atelier &mdash; one number, in your receipt.</span>
+          </div>
+        </div>
+        <div class="sheet__foot">
+          <span class="btn btn--primary">Continue to payment</span>
+          <span class="a-actbar__note" style="display:block;margin-top:8px">Payment opens securely in Safari. Apple Pay works there if it&rsquo;s set up on this iPhone.</span>
+          <span style="display:flex;justify-content:center;margin-top:6px"><span class="btn btn--ghost btn--pill-sm">Get design help with this room</span></span>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time" style="color:var(--pat-charcoal)">9:41</span>
+        <span class="statusbar__right" style="color:var(--pat-charcoal)">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:268px;left:2px">1</span>
+  <span class="callout-n callout-n--clay" style="top:398px;right:2px">2</span>
+  <span class="callout-n" style="top:470px;left:2px">3</span>
+  <span class="callout-n" style="top:560px;right:2px">4</span>
+  <span class="callout-n" style="top:712px;left:2px">5</span>
+  <div class="a-inset">
+    <span class="a-inset__label">Inset &middot; the credited variant</span>
+    <span class="a-inset__line">Credited to Leah Hartwell.</span>
+    <span class="a-inset__line" style="color:var(--pat-text-muted);font-size:12px;margin-top:4px">Prints on this sheet only in the roster case &mdash; a designer sent him here and is credited without being engaged.</span>
+  </div>
+</div>
+<style>
+/* the order sheet's money block — label left, figure right, pearl hairlines */
+.a-m5a .a-money { border-top:1px solid var(--pat-pearl); }
+.a-m5a .a-money__row { display:flex; align-items:baseline; justify-content:space-between;
+  gap:16px; padding:9px 0; border-bottom:1px solid var(--pat-pearl); }
+.a-m5a .a-money__k { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-2); }
+.a-m5a .a-money__v { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text); }
+.a-m5a .a-money__row--total { border-bottom:0; padding-top:12px; }
+.a-m5a .a-money__row--total .a-money__k,
+.a-m5a .a-money__row--total .a-money__v { font-weight:600; color:var(--pat-text); }
+.a-m5a .a-note { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-2); }
+.a-m5a .a-thumb56 { width:56px; height:56px; border-radius:var(--pat-r-md);
+  overflow:hidden; flex:0 0 auto; }
+.a-m5a .a-thumb56 img { width:100%; height:100%; object-fit:cover; display:block; }
+
+/* A's act bar: one primary verb, one caption, one ghost — replaces the shipped
+   single-CTA .detail-bar */
+.a-m5a .a-actbar { position:absolute; left:0; right:0; bottom:0; z-index:20;
+  display:flex; flex-direction:column; align-items:stretch; gap:8px;
+  padding:16px 24px 30px; border-top:.5px solid var(--pat-pearl);
+  background:rgba(250,247,242,.86);
+  backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+.a-m5a [data-scheme="dark"] .a-actbar { background:rgba(33,30,27,.86); }
+.a-m5a .a-actbar__note { text-align:center; font:400 12px/1.4 var(--pat-sans);
+  color:var(--pat-text-muted); }
+.a-m5a .a-actbar__ghost { align-self:center; }
+
+/* deck furniture, not app UI: the variant inset the manifest calls for */
+.a-m5a .a-inset { width:402px; margin:14px 0 0 13px; padding:12px 14px;
+  border:1px solid var(--pat-pearl); border-radius:var(--pat-r-lg);
+  background:var(--pat-bg); }
+.a-m5a .a-inset__label { display:block; font:600 12px/1.3 var(--pat-sans);
+  text-transform:uppercase; letter-spacing:1.5px; color:var(--pat-text-muted);
+  padding-bottom:5px; }
+.a-m5a .a-inset__line { display:block; font:400 14px/1.45 var(--pat-sans); color:var(--pat-text); }
+
+.a-m5a .a-sheet--order { height:648px; }
+.a-m5a .a-sheet--order .sheet__foot { padding:14px 24px 30px; }
+</style>
+</figure>
+<figure><figcaption>M5b · Payment hand-off</figcaption>
+<div class="frame-wrap a-m5b">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="a-safari">
+        <div class="a-safari__bar">
+          <span class="a-safari__done">Done</span>
+          <span class="a-safari__url"><svg><use href="#i-lock"/></svg>checkout.stripe.com</span>
+        </div>
+        <div class="a-safari__page">
+          <div class="a-co__merch">Patina</div>
+          <div class="a-co__amt">$4,550.00</div>
+          <div style="margin-top:14px">
+            <div class="a-co__line"><span>Heirloom Oak Dining Table &times; 1</span><span>$4,200.00</span></div>
+            <div class="a-co__line"><span>White-glove delivery</span><span>$350.00</span></div>
+            <div class="a-co__line"><span>Sales tax</span><span>Enter address</span></div>
+          </div>
+          <div class="a-co__rule"></div>
+          <div class="a-co__apay">Apple Pay</div>
+          <div class="a-co__or">Or pay with card</div>
+          <div class="a-co__label">Email</div>
+          <div class="a-co__field">walt@&hellip;</div>
+          <div class="a-co__label">Card information</div>
+          <div class="a-co__field">1234 1234 1234 1234</div>
+          <div class="a-co__pair">
+            <div class="a-co__field">MM / YY</div>
+            <div class="a-co__field">CVC</div>
+          </div>
+          <div class="a-co__pay">Pay $4,550.00</div>
+        </div>
+          <div class="a-safari__foot">
+            <span><svg><use href="#i-chev-l"/></svg></span>
+            <span class="is-off"><svg><use href="#i-chev-r"/></svg></span>
+            <span><svg><use href="#i-share"/></svg></span>
+            <span><svg><use href="#i-stack"/></svg></span>
+          </div>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:78px;left:2px">1</span>
+  <span class="callout-n callout-n--clay" style="top:250px;right:2px">2</span>
+  <span class="callout-n" style="top:420px;left:2px">3</span>
+  <span class="callout-n" style="top:790px;right:2px">4</span>
+</div>
+<style>
+.a-m5b .a-safari { position:absolute; inset:0; display:flex; flex-direction:column;
+  background:#FFFFFF; font-family:-apple-system,"Helvetica Neue",Arial,sans-serif; }
+.a-m5b .a-safari__bar { padding:calc(var(--pat-safe-top) + 4px) 16px 10px;
+  background:#F2F2F7; border-bottom:.5px solid rgba(60,60,67,.22);
+  display:flex; align-items:center; gap:12px; flex:0 0 auto; }
+.a-m5b .a-safari__done { font:400 17px/1 -apple-system,sans-serif; color:#007AFF; flex:0 0 auto; }
+.a-m5b .a-safari__url { flex:1 1 auto; height:34px; border-radius:9px; background:#E4E4E9;
+  display:flex; align-items:center; justify-content:center; gap:5px;
+  font:400 14px/1 -apple-system,sans-serif; color:#3C3C43; }
+.a-m5b .a-safari__url svg { width:11px; height:11px; }
+.a-m5b .a-safari__page { flex:1 1 auto; overflow:hidden; padding:26px 22px; color:#1A1A1A; }
+.a-m5b .a-safari__foot { flex:0 0 auto; height:76px; padding-bottom:22px;
+  border-top:.5px solid rgba(60,60,67,.22); background:#F2F2F7;
+  display:flex; align-items:center; justify-content:space-around; color:#007AFF; }
+.a-m5b .a-safari__foot svg { width:19px; height:19px; }
+.a-m5b .a-safari__foot .is-off { color:rgba(60,60,67,.3); }
+.a-m5b .a-co__merch { font:400 13px/1.3 -apple-system,sans-serif; color:#6A6A72; }
+.a-m5b .a-co__amt { font:600 32px/1.2 -apple-system,sans-serif; color:#1A1A1A; margin-top:2px; }
+.a-m5b .a-co__line { display:flex; justify-content:space-between; gap:12px;
+  font:400 13px/1.5 -apple-system,sans-serif; color:#4A4A52; padding:5px 0; }
+.a-m5b .a-co__rule { height:1px; background:#E6E6EA; margin:10px 0 18px; }
+.a-m5b .a-co__apay { height:46px; border-radius:8px; background:#000; color:#fff;
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  font:500 17px/1 -apple-system,sans-serif; }
+.a-m5b .a-co__or { display:flex; align-items:center; gap:10px; margin:16px 0;
+  font:400 12px/1 -apple-system,sans-serif; color:#8A8A92; }
+.a-m5b .a-co__or::before, .a-m5b .a-co__or::after { content:''; height:1px; flex:1 1 auto; background:#E6E6EA; }
+.a-m5b .a-co__label { font:500 12px/1.4 -apple-system,sans-serif; color:#4A4A52; margin-bottom:4px; }
+.a-m5b .a-co__field { height:40px; border:1px solid #DCDCE2; border-radius:6px;
+  background:#fff; padding:0 11px; display:flex; align-items:center;
+  font:400 14px/1 -apple-system,sans-serif; color:#9A9AA2; margin-bottom:11px;
+  box-shadow:0 1px 1px rgba(0,0,0,.03); }
+.a-m5b .a-co__pair { display:flex; gap:11px; }
+.a-m5b .a-co__pair > * { flex:1 1 0; }
+.a-m5b .a-co__pay { height:46px; border-radius:6px; background:#4A4A52; color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font:600 15px/1 -apple-system,sans-serif; margin-top:5px; }
+</style>
+</figure>
+<figure><figcaption>M5b · Safari success page</figcaption>
+<div class="frame-wrap a-m5bs">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="a-safari">
+        <div class="a-safari__bar">
+          <span class="a-safari__done">Done</span>
+          <span class="a-safari__url"><svg><use href="#i-lock"/></svg>client.patina.cloud</span>
+        </div>
+        <div class="a-safari__page">
+          <span class="a-wordmark">Patina</span>
+          <div class="a-ok">
+            <span class="a-ok__mark"><svg><use href="#i-check-fill"/></svg></span>
+            <span class="t-h2" style="color:var(--pat-text)">Payment received</span>
+            <span class="t-body" style="color:var(--pat-text-2)">$4,550.00 &middot; Heirloom Oak Dining Table</span>
+            <span class="t-body-sm" style="color:var(--pat-text-muted)">Your receipt is on its way by email. You can close this window.</span>
+          </div>
+        </div>
+          <div class="a-safari__foot">
+            <span><svg><use href="#i-chev-l"/></svg></span>
+            <span class="is-off"><svg><use href="#i-chev-r"/></svg></span>
+            <span><svg><use href="#i-share"/></svg></span>
+            <span><svg><use href="#i-stack"/></svg></span>
+          </div>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n callout-n--clay" style="top:78px;left:2px">5</span>
+  <span class="callout-n" style="top:300px;right:2px">6</span>
+</div>
+<style>
+.a-m5bs .a-safari { position:absolute; inset:0; display:flex; flex-direction:column;
+  background:#FFFFFF; font-family:-apple-system,"Helvetica Neue",Arial,sans-serif; }
+.a-m5bs .a-safari__bar { padding:calc(var(--pat-safe-top) + 4px) 16px 10px;
+  background:#F2F2F7; border-bottom:.5px solid rgba(60,60,67,.22);
+  display:flex; align-items:center; gap:12px; flex:0 0 auto; }
+.a-m5bs .a-safari__done { font:400 17px/1 -apple-system,sans-serif; color:#007AFF; flex:0 0 auto; }
+.a-m5bs .a-safari__url { flex:1 1 auto; height:34px; border-radius:9px; background:#E4E4E9;
+  display:flex; align-items:center; justify-content:center; gap:5px;
+  font:400 14px/1 -apple-system,sans-serif; color:#3C3C43; }
+.a-m5bs .a-safari__url svg { width:11px; height:11px; }
+.a-m5bs .a-safari__page { flex:1 1 auto; overflow:hidden; padding:26px 22px; color:#1A1A1A; }
+.a-m5bs .a-safari__foot { flex:0 0 auto; height:76px; padding-bottom:22px;
+  border-top:.5px solid rgba(60,60,67,.22); background:#F2F2F7;
+  display:flex; align-items:center; justify-content:space-around; color:#007AFF; }
+.a-m5bs .a-safari__foot svg { width:19px; height:19px; }
+.a-m5bs .a-safari__foot .is-off { color:rgba(60,60,67,.3); }
+.a-m5bs .a-co__merch { font:400 13px/1.3 -apple-system,sans-serif; color:#6A6A72; }
+.a-m5bs .a-co__amt { font:600 32px/1.2 -apple-system,sans-serif; color:#1A1A1A; margin-top:2px; }
+.a-m5bs .a-co__line { display:flex; justify-content:space-between; gap:12px;
+  font:400 13px/1.5 -apple-system,sans-serif; color:#4A4A52; padding:5px 0; }
+.a-m5bs .a-co__rule { height:1px; background:#E6E6EA; margin:10px 0 18px; }
+.a-m5bs .a-co__apay { height:46px; border-radius:8px; background:#000; color:#fff;
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  font:500 17px/1 -apple-system,sans-serif; }
+.a-m5bs .a-co__or { display:flex; align-items:center; gap:10px; margin:16px 0;
+  font:400 12px/1 -apple-system,sans-serif; color:#8A8A92; }
+.a-m5bs .a-co__or::before, .a-m5bs .a-co__or::after { content:''; height:1px; flex:1 1 auto; background:#E6E6EA; }
+.a-m5bs .a-co__label { font:500 12px/1.4 -apple-system,sans-serif; color:#4A4A52; margin-bottom:4px; }
+.a-m5bs .a-co__field { height:40px; border:1px solid #DCDCE2; border-radius:6px;
+  background:#fff; padding:0 11px; display:flex; align-items:center;
+  font:400 14px/1 -apple-system,sans-serif; color:#9A9AA2; margin-bottom:11px;
+  box-shadow:0 1px 1px rgba(0,0,0,.03); }
+.a-m5bs .a-co__pair { display:flex; gap:11px; }
+.a-m5bs .a-co__pair > * { flex:1 1 0; }
+.a-m5bs .a-co__pay { height:46px; border-radius:6px; background:#4A4A52; color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font:600 15px/1 -apple-system,sans-serif; margin-top:5px; }
+
+.a-m5bs .a-ok { display:flex; flex-direction:column; gap:14px; padding-top:26px; }
+.a-m5bs .a-ok__mark { width:44px; height:44px; border-radius:50%;
+  background:rgba(122,155,118,.14); color:var(--pat-success);
+  display:flex; align-items:center; justify-content:center; }
+.a-m5bs .a-ok__mark svg { width:24px; height:24px; }
+
+.a-m5bs .a-safari__page { background:var(--pat-bg); }
+.a-m5bs .a-wordmark { display:block; font:500 20px/1 var(--pat-serif); letter-spacing:4px;
+  color:var(--pat-text); text-transform:uppercase; }
+</style>
+</figure>
+<figure><figcaption>M5c · Order placed</figcaption>
+<div class="frame-wrap a-m5c">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="screen-head">
+          <span class="mono-label" style="display:block">Ordered &middot; Aug 26</span>
+          <div class="t-h2" style="margin-top:8px">Heirloom Oak Dining Table</div>
+          <div class="t-body-sm" style="color:var(--pat-text-muted);margin-top:4px">Nordic Atelier &middot; Aarhus</div>
+          <div style="margin-top:14px"><span class="status-badge status-badge--success"><svg><use href="#i-check-fill"/></svg>Paid</span></div>
+        </div>
+        <div class="pad-push" style="padding-top:8px">
+          <div class="a-money">
+            <div class="a-money__row"><span class="a-money__k">Paid</span><span class="a-money__v">$4,550.00</span></div>
+            <div class="a-money__row"><span class="a-money__k">Receipt</span><span class="a-money__v">Emailed to walt@&hellip;</span></div>
+          </div>
+          <div class="a-note" style="margin-top:16px">Nordic Atelier starts it this week. We&rsquo;ll email you when it ships.</div>
+        </div>
+      </div>
+      <div class="a-acts-foot">
+        <span class="btn btn--primary">Back to Today</span>
+        <span style="display:flex;justify-content:center;margin-top:6px"><span class="btn btn--ghost btn--pill-sm">Your orders</span></span>
+      </div>
+      <div class="a-dock--min" style="bottom:161px">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:170px;left:2px">6</span>
+  <span class="callout-n callout-n--clay" style="top:250px;right:2px">7</span>
+  <span class="callout-n" style="top:378px;left:2px">8</span>
+  <span class="callout-n" style="top:754px;right:2px">9</span>
+  <div class="a-inset">
+    <span class="a-inset__label">Inset &middot; the credited variant</span>
+    <span class="a-inset__line">Leah Hartwell is credited on this order.</span>
+  </div>
+</div>
+<style>
+/* the order sheet's money block — label left, figure right, pearl hairlines */
+.a-m5c .a-money { border-top:1px solid var(--pat-pearl); }
+.a-m5c .a-money__row { display:flex; align-items:baseline; justify-content:space-between;
+  gap:16px; padding:9px 0; border-bottom:1px solid var(--pat-pearl); }
+.a-m5c .a-money__k { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-2); }
+.a-m5c .a-money__v { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text); }
+.a-m5c .a-money__row--total { border-bottom:0; padding-top:12px; }
+.a-m5c .a-money__row--total .a-money__k,
+.a-m5c .a-money__row--total .a-money__v { font-weight:600; color:var(--pat-text); }
+.a-m5c .a-note { font:400 14px/1.45 var(--pat-sans); color:var(--pat-text-2); }
+.a-m5c .a-thumb56 { width:56px; height:56px; border-radius:var(--pat-r-md);
+  overflow:hidden; flex:0 0 auto; }
+.a-m5c .a-thumb56 img { width:100%; height:100%; object-fit:cover; display:block; }
+
+/* deck furniture, not app UI: the variant inset the manifest calls for */
+.a-m5c .a-inset { width:402px; margin:14px 0 0 13px; padding:12px 14px;
+  border:1px solid var(--pat-pearl); border-radius:var(--pat-r-lg);
+  background:var(--pat-bg); }
+.a-m5c .a-inset__label { display:block; font:600 12px/1.3 var(--pat-sans);
+  text-transform:uppercase; letter-spacing:1.5px; color:var(--pat-text-muted);
+  padding-bottom:5px; }
+.a-m5c .a-inset__line { display:block; font:400 14px/1.45 var(--pat-sans); color:var(--pat-text); }
+
+/* the Hearth in .minimal mode — bottom-trailing, no hint
+   (CompanionOverlay.swift:386-391), which is what pushed screens show */
+.a-m5c .a-dock--min { position:absolute; right:20px; z-index:30; }
+
+.a-m5c .a-acts-foot { position:absolute; left:0; right:0; bottom:0; z-index:20;
+  padding:0 24px calc(var(--pat-safe-bottom) + 24px); }
+</style>
+</figure>
+<figure><figcaption>M6 · Lock Screen push + widget</figcaption>
+<div class="frame-wrap a-m6a">
+  <div class="frame" data-scheme="dark" data-battery="charging">
+    <div class="frame__screen">
+      <div class="lockscreen">
+        <div class="lockscreen__clock">
+          <div class="lockscreen__date">Wednesday, August 26</div>
+          <div class="lockscreen__time">9:41</div>
+        </div>
+        <div style="margin-top:18px">
+          <div class="a-lsw">
+            <span class="a-lsw__head">
+              <span class="a-lsw__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+              <span class="a-lsw__label">Patina</span>
+            </span>
+            <span class="a-lsw__title">Leah sent a proposal</span>
+            <span class="a-lsw__meta">Tuesday</span>
+          </div>
+        </div>
+        <div style="margin-top:auto;margin-bottom:104px">
+          <div class="push-banner">
+            <span class="push-banner__icon"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="push-banner__copy">
+              <span class="push-banner__app">Patina</span>
+              <span class="push-banner__title" style="display:block">Leah sent a proposal</span>
+              <span class="push-banner__body" style="display:block">Aspen Loft Refresh &mdash; read it by Sep 8.</span>
+            </span>
+            <span class="push-banner__time">now</span>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time" style="color:#fff">9:41</span>
+        <span class="statusbar__right" style="color:#fff">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator" style="background:#fff;opacity:.4"></div>
+    </div>
+  </div>
+  <span class="callout-n callout-n--ondark" style="top:270px;left:2px">1</span>
+  <span class="callout-n callout-n--clay callout-n--ondark" style="top:706px;left:2px">2</span>
+  <span class="callout-n callout-n--ondark" style="top:766px;right:2px">3</span>
+</div>
+<style>
+/* Lock Screen accessoryRectangular widget — Apple's metrics, Patina's copy */
+.a-m6a .a-lsw { width:172px; padding:9px 11px; border-radius:14px;
+  background:rgba(255,255,255,.16); color:#fff;
+  display:flex; flex-direction:column; gap:3px; }
+.a-m6a .a-lsw__head { display:flex; align-items:center; gap:5px; }
+.a-m6a .a-lsw__mark { width:13px; height:13px; border-radius:3px; background:rgba(255,255,255,.9);
+  display:flex; align-items:center; justify-content:center; }
+.a-m6a .a-lsw__mark .strata i { height:1px; background:var(--pat-charcoal); }
+.a-m6a .a-lsw__mark .strata i:nth-child(1){width:7px;}
+.a-m6a .a-lsw__mark .strata i:nth-child(2){width:5.5px;}
+.a-m6a .a-lsw__mark .strata i:nth-child(3){width:4px;}
+.a-m6a .a-lsw__label { font:400 9px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; opacity:.7; }
+.a-m6a .a-lsw__title { font:600 15px/1.22 var(--pat-sans); }
+.a-m6a .a-lsw__meta { font:400 12px/1.3 var(--pat-sans); opacity:.72; }
+</style>
+</figure>
+<figure><figcaption>M6 · the Today it opens</figcaption>
+<div class="frame-wrap a-m6b">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="home-header">
+          <div class="home-header__stack">
+            <div class="home-header__date">Wednesday &middot; Aug 26</div>
+            <div class="home-header__titlerow">
+              <span class="home-header__title">Today</span>
+              <span class="home-header__title-help"><svg><use href="#i-qcircle"/></svg></span>
+            </div>
+          </div>
+          <div class="home-header__actions">
+            <span class="icon-btn"><svg><use href="#i-bell"/></svg><span class="icon-btn__dot"></span></span>
+            <span class="icon-btn"><svg><use href="#i-qcircle"/></svg></span>
+          </div>
+          <span class="monogram">C</span>
+        </div>
+        <div class="a-moved">
+          <span class="a-moved__label">What moved</span>
+          <span class="a-moved__line">Leah moved Aspen Loft Refresh into Installation &amp; Styling on Monday. A proposal arrived Thursday.</span>
+        </div>
+        <div class="next-move a-nm--hero">
+          <span class="next-move__icon"><svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.1 11.4V4.7a1.3 1.3 0 0 1 2.6 0v5.5"/><path d="M11.7 10.2V3.7a1.3 1.3 0 0 1 2.6 0v6.4"/><path d="M14.3 10.1V5.6a1.3 1.3 0 0 1 2.6 0v7.7"/><path d="M9.1 11.4V8.7a1.3 1.3 0 0 0-2.6 0v4.9c0 4 2.3 6.8 5.9 6.8 3.5 0 4.5-2.7 4.5-6.5"/></g></svg></span>
+          <span class="next-move__body">
+            <span class="a-nm__label">Next move</span>
+            <span class="next-move__title">Leah is waiting on two things</span>
+            <span class="next-move__detail">A rug colour since Aug 22 &middot; a proposal by Sep 8 &middot; your invoice is due Sep 1</span>
+          </span>
+          <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+        </div>
+        <div class="a-story-row">
+          <span class="a-story-row__art g-hero"></span>
+          <span class="a-story-row__copy">
+            <span class="a-story-row__tag">Maker Spotlight</span>
+            <span class="a-story-row__title">The Grain Whisperer of Maine</span>
+            <span class="a-story-row__meta">4 min read</span>
+          </span>
+          <span class="a-story-row__dot"></span>
+        </div>
+      </div>
+      <div class="companion-dock">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+        <span class="companion-hint">Leah Hartwell &middot; your designer</span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n callout-n--clay" style="top:184px;left:2px">4</span>
+  <span class="callout-n" style="top:300px;left:2px">5</span>
+  <span class="callout-n" style="top:756px;right:2px">6</span>
+</div>
+<style>
+/* WHAT MOVED — new block, lives inside DailyGreetingHeader's stack */
+.a-m6b .a-moved { padding:0 var(--pat-gutter-home); margin-top:4px; }
+.a-m6b .a-moved__label { display:block; font:400 10px/1.6 var(--pat-mono);
+  text-transform:uppercase; letter-spacing:.5px; color:var(--pat-text-muted); }
+.a-m6b .a-moved__line { display:block; margin-top:5px; font:400 14px/1.45 var(--pat-sans);
+  color:var(--pat-text-2); }
+
+.a-m6b .a-nm__label { font:400 10px/1.6 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+
+/* Next Move at hero weight — A's content-driven card weight */
+.a-m6b .a-nm--hero { padding:20px 14px 20px 20px; margin-top:24px; gap:14px; }
+.a-m6b .a-nm--hero .next-move__icon { width:48px; height:48px; align-self:flex-start;
+  margin-top:4px; }
+.a-m6b .a-nm--hero .next-move__icon svg { width:22px; height:22px; }
+.a-m6b .a-nm--hero .next-move__title { font:400 30px/1.18 var(--pat-serif); }
+.a-m6b .a-nm--hero .next-move__detail { font:400 14px/1.45 var(--pat-sans);
+  color:var(--pat-text-2); padding-top:2px; }
+
+/* DailyStoryCard as a 96pt row — A's compact variant */
+.a-m6b .a-story-row { position:relative; display:flex; align-items:center; gap:14px;
+  height:96px; padding:12px; margin:16px var(--pat-gutter-home) 0;
+  background:var(--pat-bg-2); border-radius:var(--pat-r-xl); }
+.a-m6b .a-story-row__art { width:72px; height:72px; flex:0 0 auto;
+  border-radius:var(--pat-r-lg); }
+.a-m6b .a-story-row__copy { display:flex; flex-direction:column; gap:2px;
+  flex:1 1 auto; min-width:0; }
+.a-m6b .a-story-row__tag { font:400 9px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.6px; color:var(--pat-text-link); }
+.a-m6b .a-story-row__title { font:400 18px/1.24 var(--pat-serif); color:var(--pat-text); }
+.a-m6b .a-story-row__meta { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+.a-m6b .a-story-row__dot { position:absolute; top:14px; right:14px; width:7px; height:7px;
+  border-radius:50%; background:var(--pat-clay); }
+</style>
+</figure>
+<figure><figcaption>M7 · Companion, expanded</figcaption>
+<div class="frame-wrap a-m7">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="home-header">
+          <div class="home-header__stack">
+            <div class="home-header__date">Wednesday &middot; Aug 26</div>
+            <div class="home-header__titlerow">
+              <span class="home-header__title">Today</span>
+              <span class="home-header__title-help"><svg><use href="#i-qcircle"/></svg></span>
+            </div>
+          </div>
+          <div class="home-header__actions">
+            <span class="icon-btn"><svg><use href="#i-bell"/></svg><span class="icon-btn__dot"></span></span>
+            <span class="icon-btn"><svg><use href="#i-qcircle"/></svg></span>
+          </div>
+          <span class="monogram">C</span>
+        </div>
+        <div class="a-moved">
+          <span class="a-moved__label">What moved</span>
+          <span class="a-moved__line">Leah moved Aspen Loft Refresh into Installation &amp; Styling on Monday. A proposal arrived Thursday.</span>
+        </div>
+        <div class="next-move a-nm--hero">
+          <span class="next-move__icon"><svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.1 11.4V4.7a1.3 1.3 0 0 1 2.6 0v5.5"/><path d="M11.7 10.2V3.7a1.3 1.3 0 0 1 2.6 0v6.4"/><path d="M14.3 10.1V5.6a1.3 1.3 0 0 1 2.6 0v7.7"/><path d="M9.1 11.4V8.7a1.3 1.3 0 0 0-2.6 0v4.9c0 4 2.3 6.8 5.9 6.8 3.5 0 4.5-2.7 4.5-6.5"/></g></svg></span>
+          <span class="next-move__body">
+            <span class="a-nm__label">Next move</span>
+            <span class="next-move__title">Leah is waiting on two things</span>
+            <span class="next-move__detail">A rug colour since Aug 22 &middot; a proposal by Sep 8 &middot; your invoice is due Sep 1</span>
+          </span>
+          <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+        </div>
+      </div>
+      <div class="sheet-scrim"></div>
+      <div class="a-panel-dock">
+        <div class="companion-panel">
+          <div class="companion-panel__head">
+            <span class="a-dhead">
+              <span class="a-dhead__mono">L</span>
+              <span class="a-dhead__copy">
+                <span class="a-dhead__name">Leah Hartwell</span>
+                <span class="a-dhead__meta">Your designer &middot; Hartwell &amp; Co &middot; NCIDQ</span>
+              </span>
+            </span>
+            <span style="flex:1 1 auto"></span>
+            <span class="companion-panel__btn"><svg><use href="#i-x"/></svg></span>
+          </div>
+          <div class="companion-panel__rows">
+          <div class="companion-row companion-row--suggested">
+            <span class="companion-row__icon"><svg><use href="#i-doc"/></svg></span>
+            <span class="companion-row__copy">
+              <span class="companion-row__title">What&rsquo;s waiting</span>
+              <span class="companion-row__meta">Rug colour, proposal, invoice</span>
+            </span>
+            <span class="a-count">3</span>
+            <span class="companion-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+          <div class="companion-row">
+            <span class="companion-row__icon"><svg><use href="#i-message"/></svg></span>
+            <span class="companion-row__copy">
+              <span class="companion-row__title">Message Leah</span>
+              <span class="companion-row__meta">Start the conversation</span>
+            </span>
+            <span class="companion-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+          <div class="companion-row">
+            <span class="companion-row__icon"><svg><use href="#i-stack"/></svg></span>
+            <span class="companion-row__copy">
+              <span class="companion-row__title">Your Studio</span>
+              <span class="companion-row__meta">Projects &middot; proposals &middot; decisions</span>
+            </span>
+            <span class="companion-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+          <div class="companion-row">
+            <span class="companion-row__icon"><svg><use href="#i-heart"/></svg></span>
+            <span class="companion-row__copy">
+              <span class="companion-row__title">Saved</span>
+              <span class="companion-row__meta">3 saved pieces</span>
+            </span>
+            <span class="companion-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+          <div class="companion-row">
+            <span class="companion-row__icon"><svg><use href="#i-person-plus"/></svg></span>
+            <span class="companion-row__copy">
+              <span class="companion-row__title">Your profile</span>
+              <span class="companion-row__meta">Style &middot; settings &middot; portal</span>
+            </span>
+            <span class="companion-row__chev"><svg><use href="#i-chev-r"/></svg></span>
+          </div>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n callout-n--clay callout-n--ondark" style="top:404px;left:2px">1</span>
+  <span class="callout-n callout-n--ondark" style="top:490px;left:2px">2</span>
+  <span class="callout-n callout-n--ondark" style="top:490px;right:2px">3</span>
+  <span class="callout-n callout-n--ondark" style="top:640px;left:2px">4</span>
+</div>
+<style>
+/* WHAT MOVED — new block, lives inside DailyGreetingHeader's stack */
+.a-m7 .a-moved { padding:0 var(--pat-gutter-home); margin-top:4px; }
+.a-m7 .a-moved__label { display:block; font:400 10px/1.6 var(--pat-mono);
+  text-transform:uppercase; letter-spacing:.5px; color:var(--pat-text-muted); }
+.a-m7 .a-moved__line { display:block; margin-top:5px; font:400 14px/1.45 var(--pat-sans);
+  color:var(--pat-text-2); }
+
+.a-m7 .a-nm__label { font:400 10px/1.6 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+
+/* Next Move at hero weight — A's content-driven card weight */
+.a-m7 .a-nm--hero { padding:20px 14px 20px 20px; margin-top:24px; gap:14px; }
+.a-m7 .a-nm--hero .next-move__icon { width:48px; height:48px; align-self:flex-start;
+  margin-top:4px; }
+.a-m7 .a-nm--hero .next-move__icon svg { width:22px; height:22px; }
+.a-m7 .a-nm--hero .next-move__title { font:400 30px/1.18 var(--pat-serif); }
+.a-m7 .a-nm--hero .next-move__detail { font:400 14px/1.45 var(--pat-sans);
+  color:var(--pat-text-2); padding-top:2px; }
+
+/* the Companion panel's new header — the designer, named */
+.a-m7 .a-dhead { display:flex; align-items:center; gap:12px; }
+.a-m7 .a-dhead__mono { width:44px; height:44px; border-radius:50%; flex:0 0 auto;
+  background:var(--pat-g-earth); display:flex; align-items:center; justify-content:center;
+  font:500 17px/1 var(--pat-serif); color:var(--pat-off-white); }
+.a-m7 .a-dhead__copy { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.a-m7 .a-dhead__name { font:500 18px/1.28 var(--pat-serif); color:var(--pat-off-white); }
+.a-m7 .a-dhead__meta { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-clay); }
+.a-m7 .a-count { min-width:22px; height:22px; padding:0 8px; border-radius:var(--pat-r-full);
+  background:var(--pat-clay); color:var(--pat-off-white);
+  font:600 12px/22px var(--pat-sans); text-align:center; flex:0 0 auto; }
+
+.a-m7 .a-panel-dock { position:absolute; left:0; right:0; bottom:0; z-index:30;
+  padding:0 24px calc(var(--pat-safe-bottom) + 24px); display:flex; }
+.a-m7 .a-panel-dock .companion-panel { max-width:none; }
+</style>
+</figure>
+<figure><figcaption>M8 · The permission moment</figcaption>
+<div class="frame-wrap a-m8">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="pad-push" style="padding-top:calc(var(--pat-safe-top) + 132px)">
+          <span class="a-mark" style="display:block"><span class="strata"><i></i><i></i><i></i></span></span>
+          <div class="t-h2" style="margin-top:28px">Only when something needs you.</div>
+          <div class="t-body-lg" style="color:var(--pat-text-2);margin-top:14px">We&rsquo;ll tell you when your designer sends something that needs you &mdash; a decision, a proposal, or an invoice. Nothing else.</div>
+          <div class="stack" style="gap:12px;margin-top:30px">
+            <span class="a-perm__row"><span class="a-perm__dot"></span>A decision to make</span>
+            <span class="a-perm__row"><span class="a-perm__dot"></span>A proposal to read</span>
+            <span class="a-perm__row"><span class="a-perm__dot"></span>An invoice coming due</span>
+          </div>
+        </div>
+      </div>
+      <div class="a-perm__foot">
+        <span class="btn btn--primary">Turn on notifications</span>
+        <span style="display:flex;justify-content:center;margin-top:6px"><span class="btn btn--ghost btn--pill-sm">Not now</span></span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:216px;left:2px">1</span>
+  <span class="callout-n callout-n--clay" style="top:290px;right:2px">2</span>
+  <span class="callout-n" style="top:470px;left:2px">3</span>
+  <span class="callout-n" style="top:740px;right:2px">4</span>
+</div>
+<style>
+.a-m8 .a-mark { display:flex; }
+.a-m8 .a-mark .strata { align-items:flex-start; }
+.a-m8 .a-mark .strata i { height:3px; border-radius:2px; background:var(--pat-clay); }
+.a-m8 .a-mark .strata i:nth-child(1){width:32px; opacity:1;}
+.a-m8 .a-mark .strata i:nth-child(2){width:24px; opacity:.7;}
+.a-m8 .a-mark .strata i:nth-child(3){width:16px; opacity:.5;}
+.a-m8 .a-perm__row { display:flex; align-items:center; gap:10px;
+  font:400 10px/1.6 var(--pat-mono); text-transform:uppercase; letter-spacing:.5px;
+  color:var(--pat-text-2); }
+.a-m8 .a-perm__dot { width:6px; height:6px; border-radius:50%; flex:0 0 auto;
+  background:var(--pat-clay); }
+
+.a-m8 .a-perm__foot { position:absolute; left:0; right:0; bottom:0; z-index:20;
+  padding:0 24px calc(var(--pat-safe-bottom) + 24px); }
+</style>
+</figure>
+<figure><figcaption>M9 · Today — engaged (James)</figcaption>
+<div class="frame-wrap a-m9">
+  <div class="frame" data-scheme="light" data-battery="charging">
+    <div class="frame__screen">
+      <div class="screen-body">
+        <div class="home-header">
+          <div class="home-header__stack">
+            <div class="home-header__date">Wednesday &middot; Aug 26</div>
+            <div class="home-header__titlerow">
+              <span class="home-header__title">Today</span>
+              <span class="home-header__title-help"><svg><use href="#i-qcircle"/></svg></span>
+            </div>
+          </div>
+          <div class="home-header__actions">
+            <span class="icon-btn"><svg><use href="#i-bell"/></svg></span>
+            <span class="icon-btn"><svg><use href="#i-qcircle"/></svg></span>
+          </div>
+          <span class="monogram">J</span>
+        </div>
+        <div class="a-moved">
+          <span class="a-moved__label">What moved</span>
+          <span class="a-moved__line">Leah Hartwell picked up your request on the 18th.</span>
+        </div>
+        <div class="next-move" style="margin-top:24px">
+          <span class="next-move__icon"><svg><use href="#i-person-plus"/></svg></span>
+          <span class="next-move__body">
+            <span class="a-nm__label">Next move</span>
+            <span class="next-move__title">You&rsquo;re matched with Leah Hartwell</span>
+            <span class="next-move__detail">You&rsquo;re working with Leah Hartwell.</span>
+          </span>
+          <span class="next-move__arrow"><svg><use href="#i-arrow-ur"/></svg></span>
+        </div>
+        <div class="a-story-row">
+          <span class="a-story-row__art g-hero"></span>
+          <span class="a-story-row__copy">
+            <span class="a-story-row__tag">Maker Spotlight</span>
+            <span class="a-story-row__title">The Grain Whisperer of Maine</span>
+            <span class="a-story-row__meta">4 min read</span>
+          </span>
+          <span class="a-story-row__dot"></span>
+        </div>
+      </div>
+      <div class="companion-dock">
+        <span class="orb"><span class="strata"><i></i><i></i><i></i></span></span>
+        <span class="companion-hint">Leah Hartwell &middot; your designer</span>
+      </div>
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+  <span class="callout-n" style="top:184px;left:2px">1</span>
+  <span class="callout-n callout-n--clay" style="top:290px;left:2px">2</span>
+  <span class="callout-n" style="top:340px;right:2px">3</span>
+  <span class="callout-n" style="top:470px;left:2px">4</span>
+  <span class="callout-n" style="top:756px;right:2px">5</span>
+</div>
+<style>
+/* WHAT MOVED — new block, lives inside DailyGreetingHeader's stack */
+.a-m9 .a-moved { padding:0 var(--pat-gutter-home); margin-top:4px; }
+.a-m9 .a-moved__label { display:block; font:400 10px/1.6 var(--pat-mono);
+  text-transform:uppercase; letter-spacing:.5px; color:var(--pat-text-muted); }
+.a-m9 .a-moved__line { display:block; margin-top:5px; font:400 14px/1.45 var(--pat-sans);
+  color:var(--pat-text-2); }
+
+.a-m9 .a-nm__label { font:400 10px/1.6 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.5px; color:var(--pat-text-muted); }
+
+/* DailyStoryCard as a 96pt row — A's compact variant */
+.a-m9 .a-story-row { position:relative; display:flex; align-items:center; gap:14px;
+  height:96px; padding:12px; margin:16px var(--pat-gutter-home) 0;
+  background:var(--pat-bg-2); border-radius:var(--pat-r-xl); }
+.a-m9 .a-story-row__art { width:72px; height:72px; flex:0 0 auto;
+  border-radius:var(--pat-r-lg); }
+.a-m9 .a-story-row__copy { display:flex; flex-direction:column; gap:2px;
+  flex:1 1 auto; min-width:0; }
+.a-m9 .a-story-row__tag { font:400 9px/1.4 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.6px; color:var(--pat-text-link); }
+.a-m9 .a-story-row__title { font:400 18px/1.24 var(--pat-serif); color:var(--pat-text); }
+.a-m9 .a-story-row__meta { font:400 9px/1.5 var(--pat-mono); text-transform:uppercase;
+  letter-spacing:.4px; color:var(--pat-text-muted); }
+.a-m9 .a-story-row__dot { position:absolute; top:14px; right:14px; width:7px; height:7px;
+  border-radius:50%; background:var(--pat-clay); }
+</style>
+</figure>
+</div>
+<div class="sheets">
+<section class="sheet-block"><div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M1 &middot; Today &mdash; activeProject, 12:30pm (Ruth) &middot; light + dark</caption>
+    <tr><th>Callouts</th><td><b>1</b> the <span class="mono">WHAT MOVED</span> block, inside the greeting header &mdash; it draws only when something moved. <b>2</b> <code>TodayNextMoveCard</code> at hero weight, <code>hand.raised</code> in a 48 pt clay-wash tile. <b>3</b> the whole waiting queue on one card, in date order, one route. <b>4</b> <code>DailyStoryCard</code> demoted to a 96 pt row; the unread dot is real. <b>5</b> no Active Room card &mdash; <code>client@patina.dev</code> has no room, and the module is absent rather than faked. <b>6</b> the hearth hint names the designer.</td></tr>
+    <tr><th>Purpose</th><td>One screen that says what moved and what is owed, in that order.</td></tr>
+    <tr><th>Entry points</th><td>App root; the Companion&rsquo;s &ldquo;Home&rdquo; row.</td></tr>
+    <tr><th>Components</th><td><code>DailyGreetingHeader</code> (existing, + the block) &middot; <code>TodayNextMoveCard</code> (existing, new branches + weight) &middot; <code>DailyStoryCard</code> (existing, compact variant) &middot; <code>CompanionOverlay</code> (existing, new hint). Nothing new is mounted.</td></tr>
+    <tr><th>Copy</th><td><span class="mono">WEDNESDAY &middot; AUG 26</span> / &ldquo;Today&rdquo; / <span class="mono">WHAT MOVED</span> / &ldquo;Leah moved Aspen Loft Refresh into Installation &amp; Styling on Monday. A proposal arrived Thursday.&rdquo; / <span class="mono">NEXT MOVE</span> / &ldquo;Leah is waiting on two things&rdquo; / &ldquo;A rug colour since Aug 22 &middot; a proposal by Sep 8 &middot; your invoice is due Sep 1&rdquo; / <span class="mono">MAKER SPOTLIGHT</span> / &ldquo;The Grain Whisperer of Maine&rdquo; / <span class="mono">4 MIN READ</span> / hint <span class="mono">LEAH HARTWELL &middot; YOUR DESIGNER</span>.</td></tr>
+    <tr><th>Data source</th><td><code>BadgeCountService</code> (decisions / proposals / invoices / threads / projects); <code>projects.current_phase</code> off the same fetch (<code>ProjectsAPIClient.swift:25</code> via <code>BadgeCountService.swift:85</code> &mdash; zero new network calls); <code>StudioQueueBuilder</code> dates; <code>editorial_stories</code>; one device-local last-seen timestamp and last-story-read id.</td></tr>
+    <tr><th>States</th><td>Loading &mdash; cards as skeletons, header immediate. <b>Nothing moved &mdash; the block does not draw at all.</b> Re-opened inside 6 hours &mdash; the block holds its last content until the item is acted on, and never re-dates itself. Empty queue &mdash; the Next Move names the phase (&ldquo;Aspen Loft Refresh is in Installation &amp; Styling&rdquo;). Error &mdash; the existing partial-failure behaviour; never a fabricated line.</td></tr>
+    <tr><th>Interactions</th><td><code>today_next_move_tapped</code> (<code>action_id: openStudioQueue</code>) &rarr; <code>AppRoute.studio</code> &middot; block render &rarr; <code>today_moved_line_shown</code> &middot; story &rarr; <code>today_editorial_story_tapped</code>.</td></tr>
+    <tr><th>Tier behaviour</th><td>activeProject as drawn. Engaged shows the match branch (M9); discovering the room / new-pieces branch (M2); guest gets the room ladder and <b>no block</b> &mdash; a guest&rsquo;s second launch is the gate, so A&rsquo;s day begins at sign-in.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The <span class="mono">WHAT MOVED</span> block; the queue and phase branches on the one Next Move; the content-driven card weights; the designer-named hearth hint.</td></tr>
+    <tr><th>Drawn vs manifest</th><td>&ldquo;Today&rdquo; is drawn at the shipped Playfair 22 (<code>PatinaTypography.h4</code>, <code>DailyGreetingHeader.swift:40</code>), not the manifest&rsquo;s 40 &mdash; &sect;2 of the direction says the header is &ldquo;as today&rdquo; at every tier, and the kit is calibrated to 22. The project is named <b>Aspen Loft Refresh</b>, its seeded name. At 402 pt the detail line runs to three lines, not two. Every date, and the designer&rsquo;s surname, are <i>example</i> &mdash; the seed carries neither. Dark variant: <code>#211E1B</code> ground, <code>#2C2926</code> card, <code>#F2EDE6</code> text, <code>#B5A487</code> mono, clay unchanged; the collapsed orb stays <code>Background.dark</code> in both themes, which is the shipped behaviour, not a drawing error.</td></tr>
+  </table>
+</div>
+</section>
+<section class="sheet-block"><div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M2 &middot; Today &mdash; discovering, 9:10pm (Maya) &middot; light</caption>
+    <tr><th>Callouts</th><td><b>1</b> the block, carrying her own room rather than the catalog &mdash; wave 1. <b>2</b> the Next Move back at ordinary weight: quiet day, weights swap back. <b>3</b> the story row, dot on because she has not opened <i>this</i> story. <b>4</b> <code>TodayActiveRoomCard</code>, <b>no</b> <span class="mono">ROOM SCAN</span> chip &mdash; a typed room, not a scanned one. <b>5</b> the new fill line: her spend beside the band the quiz itself printed.</td></tr>
+    <tr><th>Purpose</th><td>The nightly twenty minutes, with a room visibly closer to done.</td></tr>
+    <tr><th>Entry points</th><td>App root.</td></tr>
+    <tr><th>Components</th><td>As M1, plus <code>TodayActiveRoomCard</code> (existing, one new line).</td></tr>
+    <tr><th>Copy</th><td><span class="mono">WHAT MOVED</span> / &ldquo;The jute rug has been in the Living Room since Sunday.&rdquo; <i>(wave 2 replaces it with &ldquo;Three new pieces for the Living Room.&rdquo;)</i> / <span class="mono">NEXT MOVE</span> / &ldquo;Return to the Living Room&rdquo; / &ldquo;Three pieces are gathering there.&rdquo; / <span class="mono">EDITOR&rsquo;S NOTE</span> / &ldquo;Patina: The slow shape of home&rdquo; / <span class="mono">3 MIN READ</span> / <span class="mono">ACTIVE ROOM</span> / &ldquo;Living Room&rdquo; / &ldquo;18 &times; 14 ft &middot; 3 pieces saved&rdquo; / <span class="mono">$3,590 SAVED &middot; YOUR RANGE $5K+</span> / hint <span class="mono">LIVING ROOM &middot; 3 SAVED</span>.</td></tr>
+    <tr><th>Data source</th><td><code>RoomStore</code> + <code>saved_items</code> for the spend; <code>StylePreferenceModel.budgetRange</code>&rsquo;s <b>display label</b> for the range &mdash; her own answer, printed as she gave it (<code>StyleQuizViewModel.swift:239-247</code>). Wave 2 adds <code>get_recommendations.created_at</code> for the new-pieces count. Story from <code>editorial_stories</code> (<code>00143</code>, row 2, <code>hero_gradient_key 'walnut'</code>).</td></tr>
+    <tr><th>States</th><td>Nothing moved &rarr; no block. Band <code>TBD</code> &rarr; the money half is omitted, not zeroed. Unsynced saves &rarr; <span class="mono">SAVED ON THIS PHONE</span>. No room &rarr; the Active Room card is absent (M1).</td></tr>
+    <tr><th>Interactions</th><td><code>today_next_move_tapped</code> (<code>action_id: exploreRoomNew</code>) &middot; <code>today_active_room_tapped</code> (<code>saved_item_count</code>).</td></tr>
+    <tr><th>Tier behaviour</th><td>Guest is identical minus the money half and the block.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The block; the fill line on the Active Room card.</td></tr>
+    <tr><th>Drawn vs manifest</th><td>The room card&rsquo;s artwork is drawn at 118 pt, not the kit&rsquo;s shipped 150 (<code>TodayModules.swift:166-200</code>): at 150 this composition&rsquo;s last 30 pt sit under the Companion at 402 &times; 874 &mdash; a real cost of adding the block, and one Kody should see. The room name stays at the shipped Playfair 22, not the manifest&rsquo;s 26. Room name, dimensions and dates are <i>example</i> (rooms are device-local; the seed has none). The three saved pieces, their makers and prices are real seed rows and sum to the $3,590 drawn.</td></tr>
+  </table>
+</div>
+</section>
+<section class="sheet-block"><div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M3 &middot; Piece detail &mdash; Heirloom Oak Dining Table &middot; light (discovering) + dark (activeProject)</caption>
+    <tr><th>Callouts</th><td><b>1</b> the floating hero bar &mdash; back, help, share, save as 36 pt glass circles. <b>2</b> maker line from <code>products.brand</code>, in clay. <b>3</b> the price, and <b>no match pill</b>: an unexplained percentage does not sit above a Buy button. <b>4</b> three lines under the price, each omitted entirely when null &mdash; the middle one draws only when a room exists and both values are non-null. <b>5</b> the act bar: one primary verb, one caption, one ghost. <b>6</b> the payment caption. <b>7</b> (dark) the same bar at activeProject: Ask replaces Buy the moment a live designer relationship exists, room or no room.</td></tr>
+    <tr><th>Purpose</th><td>Decide, and act on the decision.</td></tr>
+    <tr><th>Entry points</th><td>Browse card, Saved row, room item, <code>patina://piece/&lt;id&gt;</code>, push <code>product</code>.</td></tr>
+    <tr><th>Components</th><td><code>ProductDetailView</code> (existing; SP-01 fixes the load, SP-10 the fields) + <b>new</b> act bar. The Companion renders in <code>.minimal</code> mode bottom-trailing here (<code>CompanionOverlay.swift:386-391</code>), which is what <code>shots/c-25</code> and <code>d-04</code> show.</td></tr>
+    <tr><th>Copy</th><td><span class="mono">NORDIC ATELIER &middot; AARHUS, DENMARK</span> / &ldquo;Heirloom Oak Dining Table&rdquo; / &ldquo;Quarter-sawn white oak &middot; Hand-rubbed tung oil&rdquo; / &ldquo;$4,200&rdquo; / &ldquo;38&Prime; W &times; 20&Prime; D &times; 30&Prime; H&rdquo; / &ldquo;38&Prime; wide &middot; your Living Room is 18 &times; 14 ft&rdquo; / &ldquo;Ships in 10&ndash;12 weeks&rdquo; / the seed&rsquo;s own description / light: <b>Buy it &middot; $4,200</b> + ghost <b>Get design help with this room</b> + &ldquo;Payment opens securely in Safari.&rdquo; / dark: <b>Ask Leah to source this</b> + ghost <b>Save to the Living Room</b>.</td></tr>
+    <tr><th>Data source</th><td><code>products</code> direct fetch with the qualified vendor embed &mdash; <code>brand</code>, <code>dimensions</code>, <code>lead_time_weeks</code>, <code>shipping_flat_cents</code>, <code>returns_policy_key</code>, <code>photo_verified_at</code>. Name, brand, materials, finish, description and price are the real <code>supabase/seed/products.sql:6</code> row; the hero is a crop of that row&rsquo;s own image from <code>shots/g-15b</code>.</td></tr>
+    <tr><th>States</th><td>Loading &mdash; strata mark on <code>Background.secondary</code>. Error &mdash; &ldquo;Couldn&rsquo;t load product&rdquo; / &ldquo;Let&rsquo;s try that again&rdquo; <b>with a back chevron</b> (SP-01; today it has none &mdash; <code>shots/c-25</code>). Not buyable &rarr; the primary becomes <b>Get design help with this room</b> at discovering, <b>Ask Leah to source this</b> once she has a designer. Guest tapping Buy &rarr; the C9 auth sheet over context; nothing is written until she signs in.</td></tr>
+    <tr><th>Interactions</th><td><code>product_detail_opened</code> &middot; <code>order_path_shown</code> (prop <code>path</code>) &middot; <code>order_started</code> &middot; <code>designer_ask_tapped</code> &middot; <code>product_saved</code>.</td></tr>
+    <tr><th>Tier behaviour</th><td>A live designer relationship &mdash; accepted lead or active project &mdash; replaces Buy with Ask, room or no room. That is the only tier switch on this screen.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The act bar; the three spec lines; the maker line&rsquo;s source; the match pill&rsquo;s removal.</td></tr>
+    <tr><th>Drawn vs manifest</th><td><b>No provenance chips are drawn.</b> <code>ProductDetailView.swift:232-246</code> renders that block only when <code>product.badges</code> is non-empty, and no seeded product carries a badge &mdash; drawing chips would be proposing, not reporting. (The badge display names carry emoji, <code>:437-444</code>, which is a finding.) The maker story is omitted: A itself gates it on the story&harr;product join, a wave-3 delta. <code>vendors.made_in</code> is empty on all 104 rows (F146), so <span class="mono">AARHUS, DENMARK</span> is <i>example</i> &mdash; read out of the seed description&rsquo;s &ldquo;a three-person workshop outside Aarhus&rdquo;. Dimensions and lead time are <i>example</i>: both columns exist server-side and neither is returned or decoded for the catalog layer (C28). The status-bar ink is forced to charcoal because this hero photograph is light at the top.</td></tr>
+  </table>
+</div>
+</section>
+<section class="sheet-block"><div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M4 &middot; The room &mdash; Living Room &middot; light</caption>
+    <tr><th>Callouts</th><td><b>1</b> the room, named, over a 240 pt room-type gradient. <b>2</b> the stat row: <b>two</b> tiles, not three &mdash; <span class="mono">IN AR</span> and the bare <span class="mono">MATCH</span> are gone (SP-18; <code>shots/c-24</code> shows all three, two of them reading 0 and &mdash;). <b>3</b> one plain line, no track: a bar that fills as her money leaves is a meter, and she asked for figures. <b>4</b> <span class="mono">YOUR ITEMS</span>, three real seed rows. <b>5</b> the save date on the row (F197, F203). <b>6</b> one primary act, where three used to be (SP-11).</td></tr>
+    <tr><th>Purpose</th><td>The object of return &mdash; a room that visibly fills.</td></tr>
+    <tr><th>Entry points</th><td>Active Room card, Your Spaces, <code>patina://room/&lt;uuid&gt;</code>, push <code>room</code>.</td></tr>
+    <tr><th>Components</th><td><code>RoomProjectView</code> (existing; SP-11 / SP-18 do most of this) + <b>new</b> range line and save dates.</td></tr>
+    <tr><th>Copy</th><td>&ldquo;Living Room&rdquo; / <span class="mono">18 &times; 14 FT &middot; NORTH-FACING &middot; 2 WINDOWS &middot; ENTERED AUG 24</span> &mdash; <b>entered, not scanned</b> (F51) / <span class="mono">3 ITEMS</span> &middot; <span class="mono">$3,590 SAVED</span> / <span class="mono">YOUR RANGE &middot; $5K+ &middot; FROM YOUR QUIZ ANSWER</span> / <span class="mono">YOUR ITEMS</span> / &ldquo;Velvet Club Chair &middot; Article &middot; $1,250 &middot; saved Aug 24&rdquo;, &ldquo;Brass Arc Floor Lamp &middot; Schoolhouse &middot; $890 &middot; saved Aug 22&rdquo;, &ldquo;Woven Jute Area Rug 8x10 &middot; Studio Piet &middot; $1,450 &middot; saved Sunday&rdquo; / &ldquo;Browse pieces for the Living Room&rdquo;.</td></tr>
+    <tr><th>Data source</th><td><code>RoomStore</code> (SwiftData <code>RoomModel</code>), <code>saved_items</code>, <code>StylePreferenceModel.budgetRange</code> label. The three pieces, their makers and their prices are real rows in <code>supabase/seed/products.sql</code> and sum to the $3,590 drawn.</td></tr>
+    <tr><th>States</th><td>Empty room &rarr; &ldquo;A blank canvas&rdquo; + one CTA (the shipped copy, <code>shots/c-24</code>). Unsynced &rarr; <span class="mono">SAVED ON THIS PHONE</span>. Band <code>TBD</code> &rarr; the range line is absent, not zeroed.</td></tr>
+    <tr><th>Interactions</th><td><code>room_channel_viewed</code> &middot; <code>product_detail_opened</code> &middot; <code>marketplace_row_tapped</code>.</td></tr>
+    <tr><th>Tier behaviour</th><td>Identical at every tier.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The honest stat row; the range line; the save dates; one CTA instead of three.</td></tr>
+    <tr><th>Drawn vs manifest</th><td>Item thumbnails are drawn as the app&rsquo;s own no-image fallback &mdash; the bare category gradient (<code>ProductModel.swift:115-124</code>) &mdash; because this review holds no crop of those three seed photographs; never a stock image. Room name, dimensions, orientation, window count and the entered / saved dates are <i>example</i>: <code>rooms</code> has 0 rows locally and rooms are device-local.</td></tr>
+  </table>
+</div>
+</section>
+<section class="sheet-block"><div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M5 &middot; The purchase &mdash; order sheet &rarr; payment hand-off &rarr; order placed</caption>
+    <tr><th>Callouts</th><td><b>5a</b> &mdash; <b>1</b> the hand-rolled Patina sheet header: drag handle 36&times;4, title first, mono eyebrow second (<code>AddToRoomSheet.swift:24-34</code>), <b>not</b> <code>PatinaSheetHeader</code>, which has zero call sites. <b>2</b> the money block, label left / figure right on pearl hairlines. <b>3</b> <span class="mono">SALES TAX &mdash; ADDED AT CHECKOUT</span>: this line draws only once <code>automatic_tax</code> is enabled, and the Buy control does not ship before that decision is made. <b>4</b> fit, lead time, and who handles a damage claim. <b>5</b> the primary, with the caption that says where the money is taken. &mdash; <b>5b</b> &mdash; <b>1</b> <code>SFSafariViewController</code>, drawn as the system surface it is: no Patina chrome on the page that takes the money. <b>2</b> the total the sheet quoted, unchanged. <b>3</b> Apple Pay above the card form, because it is set up on the phone, not in the app. <b>4</b> Safari&rsquo;s own toolbar. <b>5</b> the success page &mdash; <code>successUrl</code> points at the client portal today (<code>create-checkout-session/index.ts:553</code>), so <b>6</b> the buyer must tap Done to come back. &mdash; <b>5c</b> &mdash; <b>6</b> the order, stated. <b>7</b> what was paid and where the receipt went. <b>8</b> what happens next, in words &mdash; <b>not a fake tracker</b>: the order joins <code>fulfillment_orders</code> at settle and its status derives from line states no vendor has acknowledged. <b>9</b> two ways out.</td></tr>
+    <tr><th>Purpose</th><td>Take money without lying about what happens next.</td></tr>
+    <tr><th>Entry points</th><td>Piece detail, <b>Buy it</b>.</td></tr>
+    <tr><th>Components</th><td><b>All new</b> &mdash; <code>OrderSheet</code>, existing <code>SafariView</code>, <code>OrderPlacedView</code>. Zero iOS code references <code>direct_order</code> at head.</td></tr>
+    <tr><th>Copy</th><td>5a: &ldquo;Heirloom Oak Dining Table&rdquo; / <span class="mono">NORDIC ATELIER &middot; MADE TO ORDER</span> / &ldquo;Piece $4,200.00&rdquo; &middot; &ldquo;White-glove delivery $350.00&rdquo; &middot; &ldquo;Sales tax &mdash; added at checkout&rdquo; &middot; &ldquo;Total $4,550.00 plus tax&rdquo; / &ldquo;38&Prime; wide &middot; your Living Room is 18 &times; 14 ft&rdquo; &middot; &ldquo;Ships in 10&ndash;12 weeks.&rdquo; &middot; &ldquo;If it arrives damaged, Patina handles the claim with Nordic Atelier &mdash; one number, in your receipt.&rdquo; / <b>Continue to payment</b> / &ldquo;Payment opens securely in Safari. Apple Pay works there if it&rsquo;s set up on this iPhone.&rdquo; / ghost <b>Get design help with this room</b>. Inset, roster case only: &ldquo;Credited to Leah Hartwell.&rdquo; &mdash; 5c: <span class="mono">ORDERED &middot; AUG 26</span> / &ldquo;Heirloom Oak Dining Table&rdquo; / &ldquo;Nordic Atelier &middot; Aarhus&rdquo; / <span class="mono">PAID</span> / &ldquo;$4,550.00 paid&rdquo; &middot; &ldquo;Receipt emailed to walt@&hellip;&rdquo; / &ldquo;Nordic Atelier starts it this week. We&rsquo;ll email you when it ships.&rdquo; / <b>Back to Today</b>, ghost <b>Your orders</b>. Inset: &ldquo;Leah Hartwell is credited on this order.&rdquo;</td></tr>
+    <tr><th>Data source</th><td><code>create_direct_order</code> RPC &rarr; <code>create-checkout-session{direct_order_id}</code> &rarr; <code>{url}</code> &rarr; <code>SFSafariViewController</code> &rarr; the invoice rail&rsquo;s 3s/60s poll on <code>direct_orders.status</code> &rarr; <code>fulfillment_orders</code> for everything after. The total is the session&rsquo;s <code>amount_total</code>.</td></tr>
+    <tr><th>States</th><td><b>Not signed in &mdash; the C9 sheet first, over context, and the order is created only after.</b> Creating &mdash; the button dims and spins. Hand-off failure &mdash; the app&rsquo;s own error state <b>above</b> the button with &ldquo;Let&rsquo;s try that again&rdquo; and &ldquo;Get design help with this room&rdquo; (SP-15&rsquo;s shape). Poll timeout &rarr; &ldquo;We haven&rsquo;t seen this payment yet. We&rsquo;ll update this as soon as it clears.&rdquo; &mdash; never an unconditional bank-transfer banner.</td></tr>
+    <tr><th>Interactions</th><td><code>order_started</code> &middot; <code>order_checkout_opened</code> &middot; <code>order_placed</code> &middot; <code>order_failed</code>.</td></tr>
+    <tr><th>Tier behaviour</th><td>The sheet never opens for a client with a live designer relationship &mdash; Path B does. Discovering only; the credited inset is the roster case, where a designer sent him here and is credited without being engaged.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">Everything. There is no order object, no order sheet and no order screen in the client app today.</td></tr>
+    <tr><th>Drawn vs manifest</th><td>The sheet is drawn at 648 pt, not <code>.medium</code>&rsquo;s ~437: the content A specifies does not fit a medium detent at 402 &times; 874, so either the detent grows or the money block scrolls &mdash; <b>an open decision, not a drawing liberty</b>. Safari and Stripe surfaces use Apple&rsquo;s and Stripe&rsquo;s own metrics, system font and system colours, exactly as <code>kit.css</code> &sect;14 draws the iOS system set; no Patina token belongs on them. The success page is the client portal, which is where <code>successUrl</code> lands today. White-glove $350, the ship window and walt@&hellip; are <i>example</i>; the piece, brand and $4,200 are the real seed row.</td></tr>
+  </table>
+</div>
+</section>
+<section class="sheet-block"><div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M6 &middot; The return moment &mdash; Lock Screen push + the Today it opens</caption>
+    <tr><th>Callouts</th><td><b>1</b> the Lock Screen <code>accessoryRectangular</code> widget: <b>what moved</b>, not what is owed. <b>2</b> one notification card &mdash; the app icon, the sender, the fact. <b>3</b> the body names the project and the date the reply is wanted. <b>4</b> the Today it opens, with the block carrying the same sentence &mdash; <b>the failure mode we design against is a notification that opens a screen which knows nothing about it</b>. <b>5</b> the one Next Move, already holding the proposal. <b>6</b> the hearth hint, agreeing with both.</td></tr>
+    <tr><th>Purpose</th><td>The one honest interruption.</td></tr>
+    <tr><th>Entry points</th><td><code>notify_client_attention</code> &rarr; <code>apns-send</code>; the widget timeline.</td></tr>
+    <tr><th>Components</th><td>System notification; <b>new</b> widget extension; <code>NotificationRouter</code> (existing, already handles <code>proposal</code>).</td></tr>
+    <tr><th>Copy</th><td>Push: &ldquo;Leah sent a proposal&rdquo; / &ldquo;Aspen Loft Refresh &mdash; read it by Sep 8.&rdquo; Widget: <span class="mono">LEAH SENT A PROPOSAL</span> / &ldquo;Tuesday&rdquo;. The Today it opens carries M1&rsquo;s line verbatim.</td></tr>
+    <tr><th>Data source</th><td><code>notification_log</code> + <code>device_push_tokens</code>; the widget reads a small App Group cache written on every badge refresh.</td></tr>
+    <tr><th>States</th><td>Permission not granted &rarr; no push; the feed and email carry it. Nothing waiting &rarr; <span class="mono">NOTHING NEEDS YOU</span> / the room. Signed out &rarr; wordmark only.</td></tr>
+    <tr><th>Interactions</th><td><code>push_received</code> &middot; <code>push_opened</code> (<code>entity_type</code>) &middot; <code>widget_tapped</code>.</td></tr>
+    <tr><th>Tier behaviour</th><td>Engaged gets only the design-request pushes that already fire; discovering and guest get none and are never asked.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The send for money and decisions; the widget target; the pre-permission screen (M8).</td></tr>
+    <tr><th>Drawn vs manifest</th><td>The widget is placed under the clock and the notification near the bottom, which is where iOS puts them; the manifest&rsquo;s &ldquo;below it&rdquo; is deck reading order. The push body names the seeded project <b>Aspen Loft Refresh</b>; the seeded proposal titles are dev fixtures (&ldquo;Sample accepted proposal&rdquo;), so no proposal name is printed. <b>None of this ships today</b>: the client app has no widget extension and no associated-domains entitlement, and the only notification prompt fires after a design request with no pre-permission copy (C28).</td></tr>
+  </table>
+</div>
+</section>
+<section class="sheet-block"><div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M7 &middot; The Companion, expanded &mdash; Your Designer <i>(extra)</i></caption>
+    <tr><th>Callouts</th><td><b>1</b> the <b>new</b> header: portrait or clay monogram, the designer&rsquo;s name, her studio and credential. Today this whole view renders nothing when the identity is nil (<code>StudioIdentityLine.swift:15-17</code>) &mdash; under A the name and monogram still draw. <b>2</b> <b>What&rsquo;s waiting</b> is the one suggested row, because the queue is non-empty; when it empties the suggestion moves to <b>Message Leah</b> and this row reads &ldquo;Nothing right now&rdquo;. <b>3</b> one summary count, and no records behind it. <b>4</b> five rows, cap unchanged, &le;1 suggested.</td></tr>
+    <tr><th>Purpose</th><td>Make the relationship layer hold a relationship.</td></tr>
+    <tr><th>Entry points</th><td>The hearth, anywhere.</td></tr>
+    <tr><th>Components</th><td><code>CompanionOverlay</code> (existing) &middot; <code>CompanionAreaBuilders</code> (existing rows) &middot; <b>new</b> header.</td></tr>
+    <tr><th>Copy</th><td>&ldquo;Leah Hartwell&rdquo; / <span class="mono">YOUR DESIGNER &middot; HARTWELL &amp; CO &middot; NCIDQ</span> / <b>What&rsquo;s waiting</b> &middot; <b>Message Leah</b> &middot; <b>Your Studio</b> &middot; <b>Saved</b> &middot; <b>Your profile</b>.</td></tr>
+    <tr><th>Data source</th><td><code>profiles</code>, <code>StudioIdentityService.identity(forDesigner:)</code>, <code>IntroductionInfo</code>, <code>BadgeCountService</code>. <b>Message Leah</b> calls <code>rpc_start_direct_thread</code>.</td></tr>
+    <tr><th>States</th><td>No designer &rarr; today&rsquo;s &ldquo;Where to next?&rdquo; panel, unchanged. <b>Nil identity &rarr; the name and monogram still draw.</b> Loading &rarr; the header reserves its height.</td></tr>
+    <tr><th>Interactions</th><td><code>companion_panel_opened</code> &middot; <code>companion_quick_action_tapped</code>.</td></tr>
+    <tr><th>Tier behaviour</th><td>Header at engaged and above. The engaged variant is identical minus the What&rsquo;s waiting count.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The header; the message row; the state-driven suggestion. The row cap and the &le;1-suggested rule are unchanged.</td></tr>
+    <tr><th>Drawn vs manifest</th><td>Drawn on the <b>shipped dark panel</b> (<code>Background.dark</code>, radius 26, <code>CompanionHearthView.swift:310-338</code>) with the existing <code>.companion-row</code> cards, because A&rsquo;s own component list says &ldquo;existing rows&rdquo;. A&rsquo;s prose also asks for <code>Background.primary</code> with pearl-hairline rows, which would restyle an existing component &mdash; <b>that conflict is A&rsquo;s to resolve, and is drawn the shipped way here rather than silently invented</b>. The studio name and credential are <i>example</i>: no seeded designer identity was read in this review.</td></tr>
+  </table>
+</div>
+</section>
+<section class="sheet-block"><div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M8 &middot; The permission moment <i>(extra, wave 2)</i></caption>
+    <tr><th>Callouts</th><td><b>1</b> the Strata mark at 32 pt, leading-aligned like everything else in the app. <b>2</b> the promise, in one sentence, and the only version of it in the direction. <b>3</b> the three things that will ever wake her phone &mdash; and nothing else. <b>4</b> the ask, and a real way to decline.</td></tr>
+    <tr><th>Purpose</th><td>Spend the one grant well.</td></tr>
+    <tr><th>Entry points</th><td>The first client-facing <code>notification_log</code> row of type proposal / decision / invoice.</td></tr>
+    <tr><th>Components</th><td><b>New</b> screen; existing <code>PushTokenService</code>.</td></tr>
+    <tr><th>Copy</th><td>&ldquo;Only when something needs you.&rdquo; / &ldquo;We&rsquo;ll tell you when your designer sends something that needs you &mdash; a decision, a proposal, or an invoice. Nothing else.&rdquo; / <span class="mono">A DECISION TO MAKE</span> &middot; <span class="mono">A PROPOSAL TO READ</span> &middot; <span class="mono">AN INVOICE COMING DUE</span> / <b>Turn on notifications</b> / ghost <b>Not now</b>.</td></tr>
+    <tr><th>Data source</th><td>None &mdash; copy only.</td></tr>
+    <tr><th>States</th><td><b>Declined our screen &rarr; never asked again</b>; Settings carries the switch. Denied the system prompt &rarr; iOS will not show it again this install, and the Settings row deep-links there.</td></tr>
+    <tr><th>Interactions</th><td><code>push_permission_prompted</code> (<code>trigger</code>, <code>outcome</code>).</td></tr>
+    <tr><th>Tier behaviour</th><td>Engaged and activeProject only.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The app has no pre-permission copy anywhere; the only prompt fires after a design request, cold.</td></tr>
+    <tr><th>Drawn vs manifest</th><td>Drawn as spec&rsquo;d. The following Apple alert is the two-button system prompt in <code>kit.css</code> &sect;14 (<code>.sys-alert</code>) and is not redrawn here.</td></tr>
+  </table>
+</div>
+</section>
+<section class="sheet-block"><div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M9 &middot; Today &mdash; engaged (James) <i>(extra)</i></caption>
+    <tr><th>Callouts</th><td><b>1</b> the block, carrying the request&rsquo;s stage &mdash; the one thing that advances without him. <b>2</b> the Next Move: the stage&rsquo;s own <code>cardTitle</code> in the <i>title</i> slot. Today that string lands in the <b>detail</b> slot under the fixed title &ldquo;See your design request&rdquo; (<code>DailyRoomView.swift:184-191</code>); A swaps them. <b>3</b> the stage&rsquo;s own subtitle, verbatim from <code>DesignRequestStatusService.swift:150-152</code>. <b>4</b> the story row. <b>5</b> the hearth hint &mdash; at engaged the app names the designer for the first time.</td></tr>
+    <tr><th>Purpose</th><td>The tier that is currently byte-identical to guest.</td></tr>
+    <tr><th>Entry points</th><td>App root.</td></tr>
+    <tr><th>Components</th><td>Existing &mdash; <code>TodayExperience.swift:80-91</code> renders this branch already; SP-07&rsquo;s one-line filter fix is what lets it run.</td></tr>
+    <tr><th>Copy</th><td><span class="mono">WHAT MOVED</span> / &ldquo;Leah Hartwell picked up your request on the 18th.&rdquo; / <span class="mono">NEXT MOVE</span> / &ldquo;You&rsquo;re matched with Leah Hartwell&rdquo; / &ldquo;You&rsquo;re working with Leah Hartwell.&rdquo; &mdash; both verbatim from the shipped stage table (<code>cardTitle</code> <code>:182-183</code>, subtitle <code>:150-151</code>).</td></tr>
+    <tr><th>Data source</th><td><code>leads</code> + <code>match_ceremonies</code> via <code>DesignRequestStatusService</code>. <code>james.okafor@example.com</code> is the one local account at this tier: lead <code>status='accepted'</code>, designer matched, 0 projects (C29).</td></tr>
+    <tr><th>States</th><td>Stage advances change the copy from the existing stage table, verbatim (<code>held &rarr; inTouch &rarr; introduced &rarr; booked &rarr; matched</code>). Terminal stages hold for 14 days from <b>last seen</b>, capped at 60 days &mdash; absence stops deleting the one card that explains his designer (F189).</td></tr>
+    <tr><th>Interactions</th><td><code>today_next_move_tapped</code> (<code>action_id: trackDesignRequest</code>).</td></tr>
+    <tr><th>Tier behaviour</th><td>Engaged only. No Active Room card: this account has no room.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The block; the decay re-anchor to last seen; the title / detail swap.</td></tr>
+    <tr><th>Drawn vs manifest</th><td>&ldquo;the 18th&rdquo; and the designer&rsquo;s surname are <i>example</i>. The monogram is drawn as <b>J</b> for the seeded account.</td></tr>
+  </table>
+</div>
+</section>
+</div>
+</body></html>

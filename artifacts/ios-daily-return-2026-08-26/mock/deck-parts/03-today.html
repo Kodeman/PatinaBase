@@ -1,0 +1,155 @@
+<section id="today" class="dk-sec reg-dark" data-index-title="The app today" data-day="morning">
+  <div class="dk-wrap">
+    <p class="hour"><b>07:40</b> &middot; Morning</p>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h2 class="dk-h2">What a homeowner opens, before either direction touches it</h2>
+        <p class="dk-lede">The same four blocks, in the same order, at every tier &mdash; including a guest who has never signed in.</p>
+        <p class="dk-p">The Daily Room mounts a greeting, one Next Move card, one editorial story and one Active Room card. Nothing else. There is no tab bar and no nav bar (ruled R29) &mdash; the only way anywhere else in the app is the Companion orb, which appends the same Home / Profile / Sign&#8209;in tail to whatever six rows it is showing.</p>
+        <p class="dk-p">The Studio &mdash; projects, proposals, invoices, decisions, messages &mdash; lives two acts below this screen: the monogram opens Profile, and Profile opens <code>StudioHubView</code>. Three engagement tiers resolve underneath all of it &mdash; <code>discovering</code>, <code>engaged</code>, <code>activeProject</code> &mdash; and the home reads none of them.</p>
+        <p class="f-chips">
+          <a class="f-chip f-chip--s1" href="#found">F98 <span>No Browse door on the home or in the orb</span></a>
+          <a class="f-chip f-chip--s1" href="#found">F126 <span>The whole Studio hides behind a 36pt monogram</span></a>
+        </p>
+        <p class="dk-note">Every fact on this page traces to <code>main @ 3cd84ecb3</code>, 26 Aug&nbsp;2026 (research/10-code-anatomy.md &sect;&sect;A1&ndash;A3, A10, A20). Structure is code-read; the screens below are the walk that shot it. <span class="lvl lvl--code">code-read</span></p>
+      </div>
+
+      <div class="dk-stage">
+        <p class="dk-h4">The anatomy, in one picture</p>
+        <dl class="dk-kv">
+          <div><dt>1 &middot; Header</dt><dd><code>DailyGreetingHeader</code> &mdash; the date line, the word &ldquo;Today,&rdquo; a bell, a monogram. <code>DailyRoomView.swift:107&ndash;114</code></dd></div>
+          <div><dt>2 &middot; Next Move</dt><dd><code>TodayNextMoveCard</code> &mdash; one hero card, resolved from eight local and remote signals. <code>TodayExperience.swift:48&ndash;160</code></dd></div>
+          <div><dt>3 &middot; Story</dt><dd><code>DailyStoryCard</code> &mdash; the top row of <code>editorial_stories</code>, unread forever by a hard-coded flag. <code>DailyRoomView.swift:148&ndash;177</code></dd></div>
+          <div><dt>4 &middot; Active Room</dt><dd><code>TodayActiveRoomCard</code> &mdash; local device data only; absent at zero rooms. <code>TodayModules.swift:104&ndash;211</code></dd></div>
+          <div><dt>The Companion</dt><dd>The orb and its panel are the only nav in the app. Six rows at most, one suggested. <code>CompanionContextProvider.swift:97&ndash;111</code></dd></div>
+          <div><dt>The Studio</dt><dd>Two acts deep &mdash; monogram &rarr; Profile &rarr; <code>StudioHubView</code>. Nothing about it appears on Today. <code>ProfileView.swift:123</code></dd></div>
+          <div><dt>The tiers</dt><dd><code>discovering</code> &middot; <code>engaged</code> &middot; <code>activeProject</code> resolve live; <code>DailyRoomView</code> reads none of them. <code>EngagementTier.swift:111&ndash;125</code></dd></div>
+        </dl>
+      </div>
+
+      <div class="dk-full">
+        <p class="dk-h4">Ten screens, the same walk</p>
+        <div class="dk-shotstrip">
+          <figure class="ev-fig">
+            <div class="ev-fig__shot"><img data-shot="g-12-home-discovering-top.png" alt="Guest Daily Room, discovering tier"></div>
+            <figcaption class="ev-fig__cap">
+              <b>g-12 &middot; Guest home</b>
+              Four blocks, no room card, no door to Browse anywhere on the screen.
+              <span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><a class="f-chip f-chip--s1" href="#found">F98</a></span>
+            </figcaption>
+          </figure>
+          <figure class="ev-fig">
+            <div class="ev-fig__shot"><img data-shot="c-03-home-top-activeproject.png" alt="Client Daily Room, activeProject tier"></div>
+            <figcaption class="ev-fig__cap">
+              <b>c-03 &middot; Client home</b>
+              Same four blocks for a client with three projects &mdash; plus an Active Room that belongs to a different account.
+              <span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><a class="f-chip f-chip--s1" href="#found">F99</a></span>
+            </figcaption>
+          </figure>
+          <figure class="ev-fig">
+            <div class="ev-fig__shot"><img data-shot="g-15-browse-pieces-grid.png" alt="Browse pieces grid, cards off canvas"></div>
+            <figcaption class="ev-fig__cap">
+              <b>g-15 &middot; Browse grid</b>
+              The app&#8217;s one browse surface; the left column runs off the screen edge.
+              <span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><a class="f-chip f-chip--s0" href="#found">F05</a></span>
+            </figcaption>
+          </figure>
+          <figure class="ev-fig">
+            <div class="ev-fig__shot"><img data-shot="g-17-piece-detail-top.png" alt="Piece detail, Couldn't load product error"></div>
+            <figcaption class="ev-fig__cap">
+              <b>g-17 &middot; Piece detail</b>
+              &ldquo;Couldn&#8217;t load product&rdquo; &mdash; every piece detail fails this way, no Back, no Companion.
+              <span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><a class="f-chip f-chip--s1" href="#found">F31</a></span>
+            </figcaption>
+          </figure>
+          <figure class="ev-fig">
+            <div class="ev-fig__shot"><img data-shot="g-22b-saved-all-items.png" alt="Saved, All items tab, one piece"></div>
+            <figcaption class="ev-fig__cap">
+              <b>g-22b &middot; Saved</b>
+              All items, opened by hand &mdash; one piece, priced &ldquo;$4200,&rdquo; no thousands separator.
+              <span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><a class="f-chip f-chip--s3" href="#found">F203</a></span>
+            </figcaption>
+          </figure>
+          <figure class="ev-fig">
+            <div class="ev-fig__shot"><img data-shot="c-24-room-detail.png" alt="Room detail, Living Room, wrong dimensions"></div>
+            <figcaption class="ev-fig__cap">
+              <b>c-24 &middot; The room</b>
+              Living Room, typed not scanned: 18&nbsp;&times;&nbsp;14&nbsp;ft is stored back as 59&#8217;&nbsp;&times;&nbsp;46&#8217;. The toggle&#8217;s state at entry is contested; the stored figures are not.
+              <span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><a class="f-chip f-chip--s0" href="#found">F18</a></span>
+            </figcaption>
+          </figure>
+          <figure class="ev-fig">
+            <div class="ev-fig__shot"><img data-shot="c-06b-studio-awaiting-you.png" alt="Studio hub, Awaiting you section"></div>
+            <figcaption class="ev-fig__cap">
+              <b>c-06b &middot; Studio hub</b>
+              Two acts below Today; its own inbox counted three different ways on one screen.
+              <span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><a class="f-chip f-chip--s1" href="#found">F41</a></span>
+            </figcaption>
+          </figure>
+          <figure class="ev-fig">
+            <div class="ev-fig__shot"><img data-shot="c-10-proposal-detail-top.png" alt="Proposal detail, Aspen Loft, $18,500"></div>
+            <figcaption class="ev-fig__cap">
+              <b>c-10 &middot; Proposal</b>
+              &ldquo;INVESTMENT $18,500.00&rdquo; &mdash; the list&#8217;s &ldquo;Expires Sep 8&rdquo; does not travel to this screen.
+              <span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><a class="f-chip f-chip--s1" href="#found">F92</a></span>
+            </figcaption>
+          </figure>
+          <figure class="ev-fig">
+            <div class="ev-fig__shot"><img data-shot="c-13-invoice-detail.png" alt="Invoice detail, INV-2026-0142"></div>
+            <figcaption class="ev-fig__cap">
+              <b>c-13 &middot; Invoice</b>
+              Designer Leah Hartwell named once, on the bill &mdash; which then drops its own due date.
+              <span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><a class="f-chip f-chip--s1" href="#found">F156</a></span>
+            </figcaption>
+          </figure>
+          <figure class="ev-fig">
+            <div class="ev-fig__shot"><img data-shot="d-01-home-top.png" alt="Daily Room top, dark mode"></div>
+            <figcaption class="ev-fig__cap">
+              <b>d-01 &middot; Dark home</b>
+              Clean contrast, the same four blocks, the same silence.
+              <span class="ev-fig__meta"><span class="lvl lvl--sim">sim-verified</span><a class="f-chip f-chip--s1" href="#found">F138</a><a class="f-chip f-chip--s0" href="#found">F13</a></span>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <div class="dk-full">
+        <h3 class="dk-h3">What changes between two mornings</h3>
+        <p class="dk-p">Two weeks away and one hour away produce the same first screen, apart from the date string. Four things on Today can move; nothing else does.</p>
+        <p class="f-chips">
+          <a class="f-chip f-chip--s0" href="#found">F13 <span>Only the date changes from one morning to the next</span></a>
+          <a class="f-chip f-chip--s0" href="#found">F16 <span>Two weeks away looks like one hour away</span></a>
+        </p>
+        <div class="dk-tablewrap">
+          <table class="dk-table dk-table--fixed">
+            <caption>Every cell is code-read against 10-code-anatomy.md &sect;A20 <span class="lvl lvl--code">code-read</span></caption>
+            <thead>
+              <tr><th style="width:16%">Interval</th><th style="width:21%">Date string</th><th style="width:21%">Story row</th><th style="width:21%">Next Move</th><th style="width:21%">Bell badge</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th class="dk-row-h">One hour later</th>
+                <td>Unchanged &mdash; the line reads per calendar day, not per visit.</td>
+                <td>Unchanged &mdash; the same <code>editorial_stories</code> row, permanently marked unread.</td>
+                <td>Unchanged unless a draft, scan, request, decision or message state actually advanced.</td>
+                <td>Unchanged unless <code>notification_log</code> gained a row in the interval.</td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">Two weeks later</th>
+                <td><strong>Updates</strong> &mdash; the only guaranteed difference on the whole screen.</td>
+                <td>Still the same row, unless an editor published or reordered one in between.</td>
+                <td>Still the same card &mdash; no decay, no recency, no &ldquo;since your last visit.&rdquo;</td>
+                <td>Still zero unless the backend wrote a row; no push has ever fired one (C26, correcting C14).</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="dk-note">
+          <code>DailyRoomViewModel.swift:85&ndash;89</code> (date) &middot; <code>EditorialStoriesAPIClient.swift:72&ndash;90,119</code> (story) &middot;
+          <code>TodayExperience.swift:48&ndash;160</code> (Next Move) &middot; <code>DailyRoomView.swift:113</code>, <code>NotificationsViewModel.swift</code> (bell).
+        </p>
+      </div>
+    </div>
+  </div>
+</section>

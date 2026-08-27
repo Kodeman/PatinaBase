@@ -1,0 +1,13 @@
+<table class="sheet-table">
+  <caption>s-M5 &middot; The system prompt &middot; screen sheet</caption>
+  <tr><th>Purpose</th><td>Show what the primer buys: one iOS prompt, once per install, arriving after a person already knows what they are being asked for.</td></tr>
+  <tr><th>Entry points</th><td>&ldquo;Turn on notifications&rdquo; on s-M4 &mdash; the only path. iOS shows this alert once; there is no second chance in the same install.</td></tr>
+  <tr><th>Components</th><td><b>System:</b> <code>UNUserNotificationCenter.requestAuthorization</code>&rsquo;s alert, drawn to Apple&rsquo;s metrics (270 pt, 14 pt radius, hairline-split buttons, <code>#007AFF</code>, the right-hand button semibold). <b>Existing:</b> <code>PushTokenService.requestAuthorization</code> and its one-per-install guard.</td></tr>
+  <tr><th>Copy</th><td>Apple&rsquo;s, not ours: &ldquo;&lsquo;Patina&rsquo; Would Like to Send You Notifications&rdquo; / &ldquo;Notifications may include alerts, sounds and icon badges. These can be configured in Settings.&rdquo; / &ldquo;Don&rsquo;t Allow&rdquo; &middot; &ldquo;Allow&rdquo;. The only copy we control is the screen behind it.</td></tr>
+  <tr><th>Data</th><td>On Allow: the APNs token registers into <code>device_push_tokens</code> through the existing service. Nothing else is written.</td></tr>
+  <tr><th>States</th><td>Allow &rarr; token stored, the pushes SP-08 describes can send. Don&rsquo;t Allow &rarr; nothing is sent; the in-app feed and email carry the same events, which is why declining is cheap. The one-per-install guard is kept, so a silent prompt that never fires is a regression to watch for.</td></tr>
+  <tr><th>Interactions</th><td>Two buttons, Apple&rsquo;s. Analytics: the same <code>push_permission_prompted</code> event carries the <code>outcome</code>.</td></tr>
+  <tr><th>Tier</th><td>Engaged and activeProject only &mdash; the prompt is reached only through s-M4.</td></tr>
+  <tr><th>Callouts</th><td>1 &middot; Apple&rsquo;s alert, Apple&rsquo;s words &mdash; nothing here can be tuned, which is the whole argument for the screen behind it. 2 &middot; the decline is not a dead end: the feed and email still carry every event. 3 &middot; and it is final for this install &mdash; iOS will not ask twice, so the primer is the only lever we have.</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>Only the moment it fires. Today this same alert appears immediately after a design-request submission, with nothing in front of it.</td></tr>
+</table>

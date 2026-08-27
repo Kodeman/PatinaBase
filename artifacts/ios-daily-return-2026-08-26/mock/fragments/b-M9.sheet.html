@@ -1,0 +1,13 @@
+<table class="sheet-table">
+  <caption>M9 &middot; The Pieces tab, and Saved as its own door &middot; screen sheet</caption>
+  <tr><th>Callouts</th><td><b>1</b> the tab root, gutter 20 &middot; <b>2</b> the labelled Saved row that cannot hide &middot; <b>3</b> category chips, server-side &middot; <b>4</b> one card size (SP-02) &middot; <b>5</b> the tab bar, Pieces active. <b>M9b</b>: <b>6</b> Saved keeps its own Boards / All items surface &middot; <b>7</b> every row now prints its price, its room, its save date and the note the data model has always held.</td></tr>
+  <tr><th>Purpose</th><td>Give browsing a door that cannot hide, and keep Saved a canonical surface rather than a segment.</td></tr>
+  <tr><th>Entry</th><td>Tab <code>Pieces</code> &middot; the Saved summary row on Today &middot; a <code>patina://piece/&lt;id&gt;</code> back path.</td></tr>
+  <tr><th>Components</th><td><code>EmergenceView</code> (existing) &middot; <code>SavedRow</code> (<b>new</b>, 7) &middot; <code>TableView</code> (the existing Saved surface, 6).</td></tr>
+  <tr><th>Copy</th><td>Tab label <code>Pieces</code>; screen title &ldquo;Browse pieces&rdquo;; row label &ldquo;Saved&rdquo; &mdash; the two canonical names stay distinct, and the tab&#8217;s VoiceOver label is &ldquo;Browse pieces&rdquo; alone (B-7). The note &ldquo;too deep for the alcove&rdquo; and the save dates are <i>example copy</i>.</td></tr>
+  <tr><th>Data</th><td><code>get_recommendations</code> with <code>p_category</code> &mdash; a parameter nobody sends today &middot; <code>saved_items</code> with <code>saved_at</code>, <code>room_id</code>, <code>note</code> (F197, F170).</td></tr>
+  <tr><th>States</th><td>Nothing saved &rarr; the row reads &ldquo;Saved&rdquo; / &ldquo;Nothing yet&rdquo; and still draws (F14) &middot; no results for a chip &rarr; &ldquo;Nothing here yet.&rdquo; and the chip stays selected.</td></tr>
+  <tr><th>Interactions</th><td><code>browse_category_selected {category}</code> &middot; <code>saved_opened</code> &middot; <code>saved_note_edited</code>.</td></tr>
+  <tr><th>Tier</th><td>Identical at every tier; guest saves are local and belong to the guest (SP-06).</td></tr>
+  <tr class="is-new"><th>New vs today</th><td>Browse has no door on the home or in the orb (F98); Saved&#8217;s door disappears at zero (F14); a saved row carries no date, room or note (F197). The match pill comes off the grid with the percentage (F158).</td></tr>
+</table>

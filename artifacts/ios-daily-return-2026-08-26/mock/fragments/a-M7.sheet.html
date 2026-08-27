@@ -1,0 +1,16 @@
+<div class="sheet-wrap" style="overflow-x:auto">
+  <table class="sheet-table">
+    <caption>M7 &middot; The Companion, expanded &mdash; Your Designer <i>(extra)</i></caption>
+    <tr><th>Callouts</th><td><b>1</b> the <b>new</b> header: portrait or clay monogram, the designer&rsquo;s name, her studio and credential. Today this whole view renders nothing when the identity is nil (<code>StudioIdentityLine.swift:15-17</code>) &mdash; under A the name and monogram still draw. <b>2</b> <b>What&rsquo;s waiting</b> is the one suggested row, because the queue is non-empty; when it empties the suggestion moves to <b>Message Leah</b> and this row reads &ldquo;Nothing right now&rdquo;. <b>3</b> one summary count, and no records behind it. <b>4</b> five rows, cap unchanged, &le;1 suggested.</td></tr>
+    <tr><th>Purpose</th><td>Make the relationship layer hold a relationship.</td></tr>
+    <tr><th>Entry points</th><td>The hearth, anywhere.</td></tr>
+    <tr><th>Components</th><td><code>CompanionOverlay</code> (existing) &middot; <code>CompanionAreaBuilders</code> (existing rows) &middot; <b>new</b> header.</td></tr>
+    <tr><th>Copy</th><td>&ldquo;Leah Hartwell&rdquo; / <span class="mono">YOUR DESIGNER &middot; HARTWELL &amp; CO &middot; NCIDQ</span> / <b>What&rsquo;s waiting</b> &middot; <b>Message Leah</b> &middot; <b>Your Studio</b> &middot; <b>Saved</b> &middot; <b>Your profile</b>.</td></tr>
+    <tr><th>Data source</th><td><code>profiles</code>, <code>StudioIdentityService.identity(forDesigner:)</code>, <code>IntroductionInfo</code>, <code>BadgeCountService</code>. <b>Message Leah</b> calls <code>rpc_start_direct_thread</code>.</td></tr>
+    <tr><th>States</th><td>No designer &rarr; today&rsquo;s &ldquo;Where to next?&rdquo; panel, unchanged. <b>Nil identity &rarr; the name and monogram still draw.</b> Loading &rarr; the header reserves its height.</td></tr>
+    <tr><th>Interactions</th><td><code>companion_panel_opened</code> &middot; <code>companion_quick_action_tapped</code>.</td></tr>
+    <tr><th>Tier behaviour</th><td>Header at engaged and above. The engaged variant is identical minus the What&rsquo;s waiting count.</td></tr>
+    <tr><th>New vs today</th><td class="is-new">The header; the message row; the state-driven suggestion. The row cap and the &le;1-suggested rule are unchanged.</td></tr>
+    <tr><th>Drawn vs manifest</th><td>Drawn on the <b>shipped dark panel</b> (<code>Background.dark</code>, radius 26, <code>CompanionHearthView.swift:310-338</code>) with the existing <code>.companion-row</code> cards, because A&rsquo;s own component list says &ldquo;existing rows&rdquo;. A&rsquo;s prose also asks for <code>Background.primary</code> with pearl-hairline rows, which would restyle an existing component &mdash; <b>that conflict is A&rsquo;s to resolve, and is drawn the shipped way here rather than silently invented</b>. The studio name and credential are <i>example</i>: no seeded designer identity was read in this review.</td></tr>
+  </table>
+</div>

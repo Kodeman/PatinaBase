@@ -1,0 +1,126 @@
+<!-- b-M4 — Direction B · M4 · The room (activeProject, Living Room, three pieces). -->
+<div class="frame-wrap bx-m4">
+<style>
+.bx-m4 .tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;z-index:31;display:flex;
+  align-items:flex-start;padding:0 6px;border-top:1px solid var(--pat-pearl);background:var(--pat-bg);}
+.bx-m4 .tabbar__item{flex:1 1 0;height:49px;display:flex;align-items:center;justify-content:center;
+  font:500 13px/1.3 var(--pat-sans);color:var(--pat-text-muted);}
+.bx-m4 .tabbar__item--active{color:var(--pat-text);}
+.bx-m4 .tabbar__comp{flex:0 0 54px;height:49px;display:flex;align-items:center;justify-content:center;}
+.bx-m4 .tabbar__comp .strata{transform:scale(.8);}
+.bx-m4 .pad-tabbar{height:100px;}
+.bx-m4 .room-hero{height:220px;}
+.bx-m4 .room-body{padding:12px var(--pat-gutter-push) 0;}
+.bx-m4 .room-title{display:block;font:400 26px/1.18 var(--pat-serif);color:var(--pat-text);}
+.bx-m4 .room-sub{display:block;font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;
+  letter-spacing:.5px;color:var(--pat-text-muted);padding-top:6px;}
+.bx-m4 .statrow{display:flex;gap:20px;margin-top:10px;padding:8px 0;
+  border-top:1px solid var(--pat-pearl);border-bottom:1px solid var(--pat-pearl);}
+.bx-m4 .stat{font:400 10px/1.4 var(--pat-mono);text-transform:uppercase;letter-spacing:.5px;
+  color:var(--pat-text-2);}
+.bx-m4 .roomsec{display:block;padding:10px var(--pat-gutter-push) 6px;font:400 10px/1.4 var(--pat-mono);
+  text-transform:uppercase;letter-spacing:.5px;color:var(--pat-text-muted);}
+.bx-m4 .grid-2{gap:8px;}
+.bx-m4 .product-card--compact .product-card__art{height:88px;}
+.bx-m4 .product-card--compact .product-card__info{padding:8px 10px;}
+.bx-m4 .product-card--compact .product-card__name{padding-top:0;}
+.bx-m4 .product-card--compact .product-card__price{padding-top:3px;}
+.bx-m4 .room-acts{padding:12px var(--pat-gutter-push) 0;}
+.bx-m4 .room-acts2{display:flex;gap:10px;padding:8px var(--pat-gutter-push) 0;}
+.bx-m4 .room-acts2 .btn{flex:1 1 0;height:44px;}
+</style>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><symbol id="i-chev-l" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol></svg>
+
+<div class="frame" data-scheme="light" data-battery="charging">
+  <div class="frame__screen">
+    <div class="screen-body screen-body--scroll">
+
+      <div class="room-hero g-warm"></div>
+
+      <div class="room-body">
+        <span class="room-title">Living Room</span>
+        <span class="room-sub">18 &times; 14 ft &middot; 252 sq ft &middot; Typed, not scanned</span>
+        <div class="statrow">
+          <span class="stat">3 saved pieces</span>
+          <span class="stat">$2,400 of $9,000 budget</span>
+        </div>
+      </div>
+
+      <span class="roomsec">In this room</span>
+      <div class="grid-2">
+        <div class="product-card product-card--compact">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-warm">
+              <span class="tile-placeholder__label">Studio Piet &middot; Jute</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__name">Woven Jute Area Rug 8x10</span>
+            <span class="product-card__price">$1,450</span>
+          </div>
+        </div>
+        <div class="product-card product-card--compact">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-metal">
+              <span class="tile-placeholder__label">Schoolhouse &middot; Brass</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__name">Brass Arc Floor Lamp</span>
+            <span class="product-card__price">$890</span>
+          </div>
+        </div>
+        <div class="product-card product-card--compact">
+          <div class="product-card__art">
+            <span class="tile-placeholder tile-placeholder--gradient g-leather">
+              <span class="tile-placeholder__label">Article &middot; Velvet</span>
+            </span>
+          </div>
+          <div class="product-card__info">
+            <span class="product-card__name">Velvet Club Chair</span>
+            <span class="product-card__price">$1,250</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="room-acts"><span class="btn btn--primary">Browse pieces for the Living Room</span></div>
+      <div class="room-acts2">
+        <span class="btn btn--secondary">Edit dimensions</span>
+        <span class="btn btn--secondary">Set a budget</span>
+      </div>
+
+      <div class="pad-tabbar"></div>
+    </div>
+
+    <div class="screen-chrome">
+      <span class="back-chevron"><svg><use href="#i-chev-l"/></svg></span>
+    </div>
+
+    <div class="tabbar">
+      <span class="tabbar__item">Today</span>
+      <span class="tabbar__item tabbar__item--active">Spaces</span>
+      <span class="tabbar__item">Pieces</span>
+      <span class="tabbar__item">Studio</span>
+      <span class="tabbar__comp"><span class="strata strata--spec"><i></i><i></i><i></i></span></span>
+    </div>
+
+    <div class="statusbar">
+      <span class="statusbar__time">9:41</span>
+      <span class="statusbar__right">
+        <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+        <span class="sb-wifi"></span><span class="sb-battery"></span>
+      </span>
+    </div>
+    <div class="island"></div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<span class="callout-n" style="top:120px;left:2px">1</span>
+<span class="callout-n" style="top:236px;left:2px">2</span>
+<span class="callout-n callout-n--clay" style="top:296px;left:2px">3</span>
+<span class="callout-n" style="top:352px;left:2px">4</span>
+<span class="callout-n" style="top:684px;left:2px">5</span>
+<span class="callout-n callout-n--clay" style="top:742px;left:2px">6</span>
+<span class="callout-n" style="bottom:44px;right:2px">7</span>
+</div>

@@ -1,0 +1,90 @@
+<!-- s-M8 · Return surfaces — the Home Screen: a small and a medium widget, drawn dark.
+     Both directions require a new WidgetKit target (the app has three targets and no extension of any
+     kind) and both forbid a count on the widget: it carries what moved, not what is owed.
+     Copy: A's "LEAH SENT A PROPOSAL / Tuesday", B's eyebrow "SINCE THU".
+     Additions to the kit, scoped under .sp-widgets: __wall, __grid, __row, __when, __icon, __dots. -->
+<div class="frame-wrap sp-widgets">
+  <style>
+    .sp-widgets .sp-widgets__wall { position:absolute; inset:0; }
+    .sp-widgets .widget { background:var(--pat-bg-2); }
+    .sp-widgets .sp-widgets__grid { position:absolute; left:19px; right:19px;
+      top:calc(var(--pat-safe-top) + 62px); display:flex; flex-direction:column; gap:26px; }
+    .sp-widgets .sp-widgets__pair { display:flex; align-items:flex-start; gap:24px; }
+    .sp-widgets .sp-widgets__rows { display:flex; flex-direction:column; gap:12px; margin-top:auto; }
+    .sp-widgets .sp-widgets__row { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+    .sp-widgets .sp-widgets__line { font:500 15px/1.3 var(--pat-sans); color:var(--pat-text); }
+    .sp-widgets .sp-widgets__when { font:400 9px/1.4 var(--pat-mono); text-transform:uppercase;
+      letter-spacing:.4px; color:var(--pat-text-muted); flex:0 0 auto; }
+    .sp-widgets .sp-widgets__hr { height:1px; background:var(--pat-pearl); opacity:.5; }
+    .sp-widgets .sp-widgets__app { display:flex; flex-direction:column; align-items:center; gap:6px;
+      width:60px; margin-top:6px; }
+    .sp-widgets .sp-widgets__icon { width:60px; height:60px; border-radius:14px;
+      background:var(--pat-bg-dark); display:flex; align-items:center; justify-content:center;
+      box-shadow:0 8px 24px rgba(0,0,0,.28); }
+    .sp-widgets .sp-widgets__label { font:400 11px/1.2 var(--pat-sans); color:#FFFFFF; }
+    .sp-widgets .sp-widgets__dots { position:absolute; left:0; right:0; bottom:56px;
+      display:flex; justify-content:center; gap:7px; }
+    .sp-widgets .sp-widgets__dots i { width:6px; height:6px; border-radius:50%;
+      background:rgba(255,255,255,.35); }
+    .sp-widgets .sp-widgets__dots i:first-child { background:rgba(255,255,255,.9); }
+  </style>
+
+  <div class="frame" data-scheme="dark" data-battery="charging">
+    <div class="frame__screen">
+      <div class="lockscreen sp-widgets__wall"></div>
+
+      <div class="sp-widgets__grid">
+        <div class="widget widget--md">
+          <div class="widget__head">
+            <span class="widget__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+            <span class="widget__eyebrow">Since Thu</span>
+          </div>
+          <div class="sp-widgets__rows">
+            <div class="sp-widgets__row">
+              <span class="sp-widgets__line">Leah sent a proposal</span>
+              <span class="sp-widgets__when">Tue</span>
+            </div>
+            <div class="sp-widgets__hr"></div>
+            <div class="sp-widgets__row">
+              <span class="sp-widgets__line">Leah asked about the rug colour</span>
+              <span class="sp-widgets__when">Aug 22</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sp-widgets__pair">
+          <div class="widget widget--sm">
+            <div class="widget__head">
+              <span class="widget__mark"><span class="strata"><i></i><i></i><i></i></span></span>
+              <span class="widget__eyebrow">Since Thu</span>
+            </div>
+            <span class="widget__title">Leah sent a proposal</span>
+            <span class="widget__meta">Tuesday</span>
+          </div>
+
+          <div class="sp-widgets__app">
+            <span class="sp-widgets__icon"><span class="strata strata--clay"><i></i><i></i><i></i></span></span>
+            <span class="sp-widgets__label">Patina</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sp-widgets__dots"><i></i><i></i></div>
+
+      <div class="statusbar">
+        <span class="statusbar__time">9:41</span>
+        <span class="statusbar__right">
+          <span class="sb-signal"><i></i><i></i><i></i><i></i></span>
+          <span class="sb-wifi"></span><span class="sb-battery"></span>
+        </span>
+      </div>
+      <div class="island"></div>
+      <div class="home-indicator"></div>
+    </div>
+  </div>
+
+  <span class="callout-n" style="top:150px;left:133px">1</span>
+  <span class="callout-n" style="top:225px;left:293px">2</span>
+  <span class="callout-n" style="top:330px;left:163px">3</span>
+  <span class="callout-n callout-n--clay" style="top:330px;left:296px">4</span>
+</div>

@@ -1,0 +1,300 @@
+<section id="why-buy" class="dk-sec reg-paper" data-index-title="Why they buy" data-day="midday">
+  <div class="dk-wrap">
+    <p class="hour"><b>12:30</b> &middot; Midday</p>
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h2 class="dk-h2">Why anyone would buy here</h2>
+        <p class="dk-lede">The money rail is built, armed, and pointed at a button nobody drew. What is missing is not the payment. It is everything a person needs to know before they make one.</p>
+
+        <p class="dk-p">Every browse path in the app ends in the same place. The piece screen&#8217;s whole commercial vocabulary is one primary button reading <b>&ldquo;Add to Room&rdquo;</b>, which once tapped reads <b>&ldquo;Saved &#10003;&rdquo;</b>, with a back chevron, a <code>?</code>, share and a heart above it. No cart, no &ldquo;Buy&rdquo;, no &ldquo;Request a quote&rdquo;, no stock, no link to the maker&#8217;s own page.</p>
+
+        <p class="dk-p">In this walk nobody reached that button. Every product tap in every lane returned &ldquo;Couldn&#8217;t load product&rdquo; / &ldquo;Let&#8217;s try that again&rdquo;, and the failed screen exposes exactly one control &mdash; the retry link. There is no back chevron. The way out is to force-quit.</p>
+
+        <p class="dk-p">So the dead end has two floors: a screen that will not open, and, behind it, a screen that would have nothing to sell if it did.</p>
+
+        <p class="f-chips">
+          <a class="f-chip f-chip--s0" href="#found">F12 <span>Buying ends at &ldquo;Add to Room / Saved &#10003;&rdquo;</span></a>
+          <a class="f-chip f-chip--s1" href="#found">F32 <span>Buy it &mdash; the dead end, verbatim</span></a>
+          <a class="f-chip f-chip--s1" href="#found">F04 <span>Every piece detail fails and traps the user</span></a>
+        </p>
+      </div>
+
+      <div class="dk-stage">
+        <div class="dk-plate">
+          <p class="dk-h4">The dead end, verbatim</p>
+          <p class="dk-p"><b>&ldquo;Add to Room&rdquo;</b> &mdash; and, once tapped &mdash; <b>&ldquo;Saved &#10003;&rdquo;</b></p>
+          <p class="dk-note">The action bar at <code>Features/ProductDetail/Views/ProductDetailView.swift:338-399</code>. The card&#8217;s own menu offers four verbs and no fifth: &ldquo;Save &middot; Share &middot; Not for me &middot; View details&rdquo;.
+            <span class="ev-fig__meta"><span class="lvl lvl--code">code-read</span><span class="lvl lvl--sim">sim-verified</span></span>
+          </p>
+        </div>
+
+        <div class="dk-band reg-dark">
+          <p class="dk-h4">What the walk showed</p>
+          <div class="ev-grid">
+            <figure class="ev-fig">
+              <div class="ev-fig__shot">
+                <img data-shot="g-20-card-more-menu.png" alt="The browse card menu: Save, Share, Not for me, View details">
+              </div>
+              <figcaption class="ev-fig__cap">
+                <b>g-20 &middot; The card menu</b>
+                Four verbs on a $4,200 table, and none of them is buying.
+                <span class="ev-fig__meta">
+                  <span class="lvl lvl--sim">sim-verified</span>
+                  <a class="f-chip f-chip--s0" href="#found">F12</a>
+                  <a class="f-chip f-chip--s1" href="#found">F52</a>
+                </span>
+              </figcaption>
+            </figure>
+            <figure class="ev-fig">
+              <div class="ev-fig__shot">
+                <img data-shot="c-25-piece-detail-client.png" alt="Piece detail failed: Couldn't load product, Let's try that again">
+              </div>
+              <figcaption class="ev-fig__cap">
+                <b>c-25 &middot; The piece, as reached</b>
+                &ldquo;Couldn&#8217;t load product&rdquo; / &ldquo;Let&#8217;s try that again&rdquo;. One tappable element on the whole screen, and no way back.
+                <span class="ev-fig__meta">
+                  <span class="lvl lvl--sim">sim-verified</span>
+                  <a class="f-chip f-chip--s1" href="#found">F04</a>
+                </span>
+              </figcaption>
+            </figure>
+          </div>
+          <p class="dk-note">Cause, read in code: the detail fetch embeds <code>vendors(...)</code> against a table carrying two foreign keys to it, so PostgREST answers <code>PGRST201</code> &mdash; <code>Core/Network/ProductAPIClient.swift:99</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <blockquote class="voice voice--wide">
+      <p class="voice__q">Taps to money: there is no number. There is no path.</p>
+      <p class="voice__who">
+        <span class="voice__seat">H3</span>
+        <span class="voice__role">Walt, 63, Madison &middot; downsizing to a two-bedroom condo &middot; simulated seat</span>
+      </p>
+    </blockquote>
+
+    <hr class="dk-rule">
+
+    <div class="dk-grid dk-grid--flip">
+      <div class="dk-prose">
+        <h3 class="dk-h3">The rail is already armed</h3>
+        <p class="dk-p">A client-facing order table, an RPC that writes one, a Checkout branch that bills it, a webhook that settles it and emails the receipt &mdash; all of it shipped, none of it reachable from a phone. Nineteen of the twenty-one pieces in the local catalog already pass the RPC&#8217;s own buyability gate.</p>
+        <p class="dk-p">Three things are genuinely absent, and only one of them is a screen: the designer&#8217;s share of the sale, any state after &ldquo;paid&rdquo;, and the iOS act itself.</p>
+        <p class="dk-note">Stripe is configured on Strata &mdash; both secret names are present &mdash; but a name cannot tell a test key from a live one, and no device pass was available to this review. Treat the rail as configured and unverified-live.</p>
+      </div>
+
+      <div class="dk-stage">
+        <div class="dk-tablewrap">
+          <table class="dk-table">
+            <caption>The purchase rail, part by part</caption>
+            <thead><tr><th style="width:22%">Part</th><th style="width:14%">State</th><th>Where it lives</th><th style="width:20%">Evidence</th></tr></thead>
+            <tbody>
+              <tr>
+                <th class="dk-row-h">The order row</th><td>Built</td>
+                <td><code>public.direct_orders</code>, money snapshotted at create so a later price edit never moves an order &mdash; <code>00276_direct_orders.sql:41-63</code>.</td>
+                <td><span class="lvl lvl--code">code-read</span></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">Creating one</th><td>Built</td>
+                <td><code>create_direct_order(product_id, quantity)</code>, with its own buyability gate; 19 of 21 local rows pass it.</td>
+                <td><span class="lvl lvl--code">code-read</span> <a class="f-chip f-chip--s1" href="#found">F151</a></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">Taking the money</th><td>Built</td>
+                <td><code>create-checkout-session</code> dispatches on <code>{ direct_order_id }</code> &mdash; the same hosted Checkout the invoice screen opens in <code>SFSafariViewController</code>.</td>
+                <td><span class="lvl lvl--code">code-read</span></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">Apple Pay</th><td>There, unproven</td>
+                <td>Both session paths accept <code>card</code>, nothing suppresses wallets, and Apple Pay on the web works in that container. Nobody has opened one on a device.</td>
+                <td><span class="lvl lvl--code">code-read</span> <span class="lvl lvl--inf">inferred</span></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">Settling, and the receipt</th><td>Built</td>
+                <td><code>stripe-webhook</code>&#8217;s direct-order branch: guarded settle, receipt email, ops email, failure email.</td>
+                <td><span class="lvl lvl--code">code-read</span></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">The designer&#8217;s share</th><td>Absent</td>
+                <td>No <code>designer_id</code>, no <code>project_id</code>, no <code>commission_rate</code>. The platform&#8217;s own migration says it: &ldquo;No designer attribution (client_id is the buyer)&rdquo;. The earnings ledger credits from invoice payments only.</td>
+                <td><span class="lvl lvl--code">code-read</span> <a class="f-chip f-chip--s0" href="#found">F22</a> <a class="f-chip f-chip--s0" href="#found">F26</a></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">Where it is</th><td>Absent</td>
+                <td>Status is <code>pending_payment / paid / canceled</code> (plus <code>refunded</code>). No fulfilment state, no shipped date, no carrier, no tracking number, no ETA.</td>
+                <td><span class="lvl lvl--code">code-read</span> <a class="f-chip f-chip--s1" href="#found">F154</a> <a class="f-chip f-chip--s0" href="#found">F19</a></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">Saying it shipped</th><td>Half</td>
+                <td><code>fulfillment-notify</code> already speaks confirmed, in&nbsp;production, shipped, delivered, ETA change and substitution &mdash; but only when an operator presses send, and only on the designer-sourced rail. Never on a direct order.</td>
+                <td><span class="lvl lvl--code">code-read</span> <a class="f-chip f-chip--s2" href="#found">F198</a></td>
+              </tr>
+              <tr>
+                <th class="dk-row-h">The act on the phone</th><td>Absent</td>
+                <td>The client app carries no reference to a direct order, the RPC, or a buy of any kind.</td>
+                <td><span class="lvl lvl--code">code-read</span> <a class="f-chip f-chip--s1" href="#found">F151</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <hr class="dk-rule">
+
+    <div class="dk-grid dk-grid--even">
+      <div class="dk-prose dk-prose--static">
+        <h3 class="dk-h3">The Apple rule, and why it is not in the way</h3>
+        <p class="dk-p">Physical goods are not sold through in-app purchase. They are paid for outside it &mdash; guidelines 3.1.3(e) and 3.1.5(a) &mdash; and the compliant container is the one already on the phone: Stripe&#8217;s hosted Checkout, opened in <code>SFSafariViewController</code>, the rail the invoice screen has ridden since it shipped.</p>
+        <p class="dk-p">A sofa, then, costs nothing in review risk. The only line worth naming is the one neither direction crosses: a digital service sold inside the app &mdash; a consultation, say &mdash; would be a separate 3.1.1 conversation. The design fee the app hands to that same Checkout today is a service billed externally, and stays where it is.</p>
+        <p class="dk-note">Canon C15, against App Store Review Guidelines 3.1.3(e) / 3.1.5(a). <span class="lvl lvl--code">code-read</span></p>
+      </div>
+
+      <div class="dk-stage">
+        <div class="dk-plate dk-plate--tint">
+          <p class="dk-h4">What Apple decides, and what it does not</p>
+          <ul class="dk-ul">
+            <li><b>Decides:</b> money for a physical piece leaves the app. Payment opens in Safari, and comes back with a receipt.</li>
+            <li><b>Decides:</b> Apple Pay is a wallet inside that page, not a second integration. It is already accepted there.</li>
+            <li><b>Does not decide:</b> who is credited for the sale, what the buyer is told before it, or what he is told after. Those are ours.</li>
+          </ul>
+          <p class="dk-note">A native payment sheet would buy one fewer context switch and cost a dependency, a merchant entitlement, a new backend mode and a rewritten settle. It would not buy Apple Pay, which is already there.</p>
+        </div>
+      </div>
+    </div>
+
+    <hr class="dk-rule">
+
+    <div class="dk-full">
+      <h3 class="dk-h3">Before the money: what Walt has to see</h3>
+      <p class="dk-p">Walt walked in with one bar &mdash; <i>&ldquo;does this respect my time, and would I trust it with a four-thousand-dollar chair?&rdquo;</i> Ordered by what would stop him first, most of these ten are absent or half-present. The app can tell him the price and one line of materials.</p>
+
+      <div class="dk-tablewrap">
+        <table class="dk-table">
+          <caption>The pre-payment checklist &middot; U3, commerce lens</caption>
+          <thead><tr><th style="width:30%">What he must see</th><th>The app today</th><th style="width:24%">Evidence</th></tr></thead>
+          <tbody>
+            <tr><th class="dk-row-h">The full delivered price</th><td>One number. No shipping line, no tax line, no total, and the Checkout branch sets neither automatic tax nor shipping options.</td><td><span class="lvl lvl--code">code-read</span></td></tr>
+            <tr><th class="dk-row-h">Dimensions</th><td>A <code>dimensions</code> column exists, is never returned by the recommendation RPC, never decoded, never printed &mdash; and is empty on all 21 local rows.</td><td><span class="lvl lvl--code">code-read</span> <a class="f-chip f-chip--s0" href="#found">F17</a> <a class="f-chip f-chip--s1" href="#found">F142</a></td></tr>
+            <tr><th class="dk-row-h">Who made it, and where</th><td>The maker tag prints the retailer: &ldquo;ROOM &amp; BOARD&rdquo; over a row whose brand reads &ldquo;Nordic Atelier&rdquo;. Fourteen of 21 pieces read &ldquo;UNKNOWN MAKER&rdquo;, and no vendor in the local set carries a place or a story.</td><td><span class="lvl lvl--sim">sim-verified</span> <a class="f-chip f-chip--s1" href="#found">F145</a> <a class="f-chip f-chip--s1" href="#found">F146</a></td></tr>
+            <tr><th class="dk-row-h">When it arrives</th><td><code>lead_time_weeks</code> is required only for the studio layer, never returned to the catalog the app reads, and populated on 1 of 21 rows.</td><td><span class="lvl lvl--code">code-read</span> <a class="f-chip f-chip--s1" href="#found">F143</a></td></tr>
+            <tr><th class="dk-row-h">Who is responsible if it arrives damaged</th><td>No column, no copy, nowhere. The nearest thing to a policy in the client is a proposal&#8217;s terms: &ldquo;Deposits are non-refundable once procurement begins. Custom items are final sale.&rdquo;</td><td><span class="lvl lvl--code">code-read</span> <a class="f-chip f-chip--s1" href="#found">F144</a></td></tr>
+            <tr><th class="dk-row-h">Materials and finish, in words</th><td>Half. Materials exist on 14 of 21 rows and render as a joined subtitle, not a spec.</td><td><span class="lvl lvl--code">code-read</span></td></tr>
+            <tr><th class="dk-row-h">A photograph of this piece</th><td>&ldquo;Live-Edge Coffee Table&rdquo; is a ladder-back chair in grass. The pictures are not of the pieces.</td><td><span class="lvl lvl--sim">sim-verified</span> <a class="f-chip f-chip--s3" href="#found">F06</a></td></tr>
+            <tr><th class="dk-row-h">What happens after he pays</th><td>Half, and only on the designer&#8217;s rail: &ldquo;Payment received &mdash; thank you! A receipt is on its way to your inbox.&rdquo; The piece rail has nothing to say, because there is no order.</td><td><span class="lvl lvl--sim">sim-verified</span> <a class="f-chip f-chip--s0" href="#found">F19</a></td></tr>
+            <tr><th class="dk-row-h">The deadline, on the screen taking the money</th><td>&ldquo;Due Sep 1, 2026&rdquo; is printed on the list and dropped on the detail that asks for $4,250.00.</td><td><span class="lvl lvl--sim">sim-verified</span> <a class="f-chip f-chip--s1" href="#found">F156</a></td></tr>
+            <tr><th class="dk-row-h">A human, named, one tap away</th><td>The designer is named once in the whole signed-in app, in small type under a bill: &ldquo;Aspen Loft Refresh &middot; from Leah Hartwell&rdquo;. No photograph, no studio, no way to reach her.</td><td><span class="lvl lvl--sim">sim-verified</span> <a class="f-chip f-chip--s0" href="#found">F09</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="dk-note">Two of the ten &mdash; dimensions and lead time &mdash; are the two facts a person leads with, and both exist as columns the client app has never been shown. Neither is a build. Both are a data pass and a returned field.</p>
+    </div>
+
+    <hr class="dk-rule">
+
+    <div class="dk-grid">
+      <div class="dk-prose">
+        <h3 class="dk-h3">After the money: what Tom has to know</h3>
+        <p class="dk-p">The designer&#8217;s checklist starts where the buyer&#8217;s ends. Tom came in with three questions about a $3,200 sideboard bought inside his own client&#8217;s phone &mdash; who gets paid, who is responsible when it arrives damaged, and does it show up on his FF&amp;E schedule &mdash; and found all three answered in the schema before he reached a screen.</p>
+        <p class="dk-p">Today the absence protects him: there is nothing to buy. What does not protect him is a finished rail with no column for his name on it.</p>
+        <p class="f-chips">
+          <a class="f-chip f-chip--s0" href="#found">F26 <span>Buy-now backend built with zero designer attribution</span></a>
+          <a class="f-chip f-chip--s1" href="#found">F152</a>
+          <a class="f-chip f-chip--s2" href="#found">F202</a>
+        </p>
+      </div>
+
+      <div class="dk-stage">
+        <div class="dk-tablewrap">
+          <table class="dk-table">
+            <caption>The after-purchase checklist &middot; D3, procurement</caption>
+            <thead><tr><th style="width:34%">What he has to know</th><th>The answer today</th><th style="width:18%">Evidence</th></tr></thead>
+            <tbody>
+              <tr><th class="dk-row-h">Who gets paid</th><td>The buyer is the only party on the row. No commission, no earnings credit, no rate &mdash; and adding the columns before the client ships is free, while adding them after means backfilling money.</td><td><span class="lvl lvl--code">code-read</span></td></tr>
+              <tr><th class="dk-row-h">Who is responsible if it arrives damaged</th><td>Nobody, in writing. No returns, shipping or liability copy exists on any surface.</td><td><span class="lvl lvl--code">code-read</span></td></tr>
+              <tr><th class="dk-row-h">Does it reach the FF&amp;E schedule</th><td>No project link on the order, so no line, no schedule, no reconciliation.</td><td><span class="lvl lvl--code">code-read</span></td></tr>
+              <tr><th class="dk-row-h">How he learns it happened</th><td>He does not. No notification, no thread, no row on his rail &mdash; and the client app&#8217;s own message surface is &ldquo;Conversation / 0 / No project conversations yet.&rdquo;</td><td><span class="lvl lvl--sim">sim-verified</span></td></tr>
+              <tr><th class="dk-row-h">What the client sees of him meanwhile</th><td>His invoice, which is the best money screen in the app: itemised, dated, attributed. &ldquo;Dining table &mdash; deposit (50%) $2,650.00&rdquo; &mdash; for a dining table that appears nowhere else in the app.</td><td><span class="lvl lvl--sim">sim-verified</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="dk-band reg-dark">
+          <div class="ev-grid ev-grid--wide">
+            <figure class="ev-fig">
+              <div class="ev-fig__shot">
+                <img data-shot="c-13b-invoice-detail-scrolled.png" alt="Invoice detail, scrolled: deposit line items for a dining table and nightstands">
+              </div>
+              <figcaption class="ev-fig__cap">
+                <b>c-13b &middot; The deposit</b>
+                The one screen that is honest about what it is &mdash; a designer&#8217;s work, priced, dated, attributed. The table it charges for exists on no other screen.
+                <span class="ev-fig__meta">
+                  <span class="lvl lvl--sim">sim-verified</span>
+                  <a class="f-chip f-chip--s2" href="#found">F202</a>
+                  <a class="f-chip f-chip--s0" href="#found">F09</a>
+                </span>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <blockquote class="voice voice--wide">
+      <p class="voice__q">The day someone flips it on without answering the attribution question first, a client can buy the &ldquo;same&rdquo; sideboard direct through Patina, off my FF&amp;E schedule entirely, and the first I&#8217;ll hear about it is the damage call.</p>
+      <p class="voice__who">
+        <span class="voice__seat">D3</span>
+        <span class="voice__role">Tom, 51, Milwaukee &middot; kitchen, bath and furnishings &middot; simulated seat</span>
+      </p>
+    </blockquote>
+
+    <hr class="dk-rule">
+
+    <div class="dk-full">
+      <h3 class="dk-h3">Three paths, and the thing that picks between them</h3>
+      <p class="dk-p">A piece can be bought, sourced, or asked about. Which one a person is offered is not a badge on their account &mdash; it is whether a designer is already working for them. Both directions arrive at the same three paths and split on one line of it, which is a ruling, not a design.</p>
+
+      <div class="dk-tablewrap">
+        <table class="dk-table dk-table--compare">
+          <caption>The three purchase paths, by tier</caption>
+          <thead><tr><th>Path</th><th>Who sees it</th><th>When it applies</th><th>What exists today</th><th>What it would take</th></tr></thead>
+          <tbody>
+            <tr>
+              <th class="dk-row-h">A &middot; Buy it</th>
+              <td>guest, at a sign-in wall on the tap &middot; discovering &middot; any client with no designer working for them</td>
+              <td>The piece is sellable by Patina, and nobody is already sourcing for this person.</td>
+              <td>The whole rail: order row, RPC, Checkout branch, settle, receipt.</td>
+              <td>Client-side: an order sheet, a button, and the poll-on-dismiss pattern invoices already use. Plus attribution columns, which are free now.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">B &middot; Ask your designer to source it</th>
+              <td>engaged &middot; activeProject</td>
+              <td>A designer is on the job. The piece belongs on her schedule and the margin is hers.</td>
+              <td>Nothing on the piece. Her rail is proposals, invoices and the same hosted Checkout, raised in the portal.</td>
+              <td>A structured message into the project thread naming the piece, its price and the room.</td>
+            </tr>
+            <tr>
+              <th class="dk-row-h">C &middot; Ask about this piece</th>
+              <td>any tier</td>
+              <td>The price is missing, the piece is made to order, or it fails the sellable test.</td>
+              <td>Nothing. There is no price inquiry, no maker link, and no &ldquo;ask&rdquo; anywhere on a piece.</td>
+              <td>The same sheet, writing to the existing lead rail with the piece attached &mdash; and, where a designer exists, into her thread rather than a second lead.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="dk-p">Both directions state the rule the same way: a live designer relationship decides the path, not the tier. They differ on what happens next. One never draws Buy for a client who has a designer; the other draws it underneath &ldquo;Ask Leah to source this&rdquo;, with a line saying she is credited and his price is unchanged. That difference is <a href="#recommendation">put to a ruling</a>, with the attribution columns landing either way.</p>
+
+      <p class="f-chips">
+        <a class="f-chip f-chip--s1" href="#found">F150 <span>No &ldquo;ask my designer&rdquo; on the piece surface</span></a>
+        <a class="f-chip f-chip--s1" href="#found">F153 <span>No vendor link or price inquiry to leave toward</span></a>
+        <a class="f-chip f-chip--s1" href="#found">F66 <span>Nothing in the app answers &ldquo;where is it&rdquo;</span></a>
+        <a class="f-chip f-chip--s2" href="#found">F201 <span>No receipts or payment history in the app</span></a>
+      </p>
+
+      <p class="dk-note">What this section could not settle: Apple Pay inside the hosted Checkout was never opened on a device, and no installable build existed to open one; Stripe on Strata is configured but unverified as live; and no usage data was available to this review, so nothing here is a conversion claim. The catalog counts are from the local stack of 21 products and 104 vendors, not production. <span class="lvl lvl--inf">inferred</span></p>
+    </div>
+  </div>
+</section>
