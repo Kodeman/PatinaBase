@@ -35,13 +35,26 @@ struct RecommendationsView: View {
     @State private var roomName: String?
     @State private var tastePortrait: TastePortrait?
 
+    /// SP-11: the piece the reader chose "Add to room" for, and the rooms the
+    /// sheet can offer. `AddToRoomSheet` has existed and been unmounted since
+    /// it was written — this is the mount.
+    @State private var pieceAwaitingRoom: Product?
+    @State private var roomOptions: [RoomSummary] = []
+    /// SP-11: a room that has not synced has no `remoteId`, so the save cannot
+    /// be mirrored. The old silent fallback to the generic feed is what
+    /// produced the mismatch; say it instead.
+    @State private var addToRoomMessage: String?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             VStack(alignment: .leading, spacing: 4) {
                 // Glossary: "Browse pieces" replaces "Perfect for your
                 // space" as this screen's H2; the subtitle stays.
-                Text("Browse pieces")
+                // SP-11: a room-scoped browse says whose room it is. The
+                // generic title on a room's own "browse picks" is what made
+                // the scoping invisible.
+                Text(scopedTitle)
                     .font(PatinaTypography.h4)
                     .foregroundStyle(PatinaColors.Text.primary)
 
@@ -58,6 +71,22 @@ struct RecommendationsView: View {
             // shows.
             if let saveFailureMessage = viewModel.saveFailureMessage {
                 Text(saveFailureMessage)
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(PatinaColors.Background.secondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 8)
+                    .transition(.opacity)
+            }
+
+            // SP-11: the outcome of "Add to room" — including the honest
+            // failure when the room has not synced yet.
+            if let addToRoomMessage {
+                Text(addToRoomMessage)
                     .font(PatinaTypography.uiSmall)
                     .foregroundStyle(PatinaColors.Text.secondary)
                     .padding(.horizontal, 12)
@@ -106,9 +135,69 @@ struct RecommendationsView: View {
             // U29 fix: seed already-saved state (prior visit, another
             // screen, another device) before the grid renders, so the
             // heart/menu never offer "Save" on something already saved.
+            roomOptions = RoomStore(context: modelContext).allRooms().map(RoomSummary.init(from:))
             async let seed: Void = viewModel.seedSavedState(context: modelContext)
             async let load: Void = viewModel.loadRecommendations(roomId: roomRemoteId)
             _ = await (seed, load)
+        }
+        // SP-11: the loop the app invited and then closed — a piece can now be
+        // put into a room from the card menu.
+        .sheet(item: $pieceAwaitingRoom) { piece in
+            AddToRoomSheet(
+                product: piece,
+                rooms: roomOptions,
+                onSelect: { room in
+                    pieceAwaitingRoom = nil
+                    addPiece(piece, to: room)
+                },
+                onNewRoom: {
+                    pieceAwaitingRoom = nil
+                    coordinator.navigate(to: .manualRoomEntry)
+                }
+            )
+        }
+    }
+
+    /// The local room id a scoped browse saves into, so a save made here
+    /// counts on the room's own screen and on Today.
+    private var scopedRoomLocalId: UUID? {
+        guard roomRemoteId != nil, let roomId else { return nil }
+        return UUID(uuidString: roomId)
+    }
+
+    /// SP-11: names the room a scoped browse belongs to.
+    private var scopedTitle: String {
+        guard roomRemoteId != nil, let roomName else { return "Browse pieces" }
+        return roomName
+    }
+
+    /// SP-11: writes the piece into the room the reader picked — the local
+    /// `SavedItem` the room's own count reads, plus the `saved_items` mirror
+    /// carrying the room. A room that has not synced cannot be mirrored, and
+    /// the screen says so rather than silently doing something else.
+    private func addPiece(_ piece: Product, to room: RoomSummary) {
+        let store = RoomStore(context: modelContext)
+        guard let target = store.room(id: room.id) else { return }
+        _ = store.addItem(piece, matchScore: piece.matchScore, toRoomId: room.id)
+        viewModel.saveProduct(
+            piece,
+            context: modelContext,
+            roomRemoteId: target.remoteId,
+            roomLocalId: room.id
+        )
+        roomOptions = store.allRooms().map(RoomSummary.init(from:))
+        showAddToRoom(
+            target.remoteId == nil
+                ? "Added to \(room.name) on this phone. It will reach your account once the room syncs."
+                : "Added to \(room.name)."
+        )
+    }
+
+    private func showAddToRoom(_ message: String) {
+        addToRoomMessage = message
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            addToRoomMessage = nil
         }
     }
 
@@ -337,7 +426,7 @@ struct RecommendationsView: View {
         if viewModel.isSaved(product) {
             viewModel.unsaveProduct(product, context: modelContext)
         } else {
-            viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
+            viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId, roomLocalId: scopedRoomLocalId)
         }
     }
 
@@ -353,9 +442,19 @@ struct RecommendationsView: View {
             }
         } else {
             Button {
-                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
+                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId, roomLocalId: scopedRoomLocalId)
             } label: {
                 Label("Save", systemImage: "heart")
+            }
+        }
+        // SP-11: there was no way, anywhere in the app, to put a piece into a
+        // room — the app invited the loop and then closed it. Drawn only when
+        // the reader actually has a room.
+        if !roomOptions.isEmpty {
+            Button {
+                pieceAwaitingRoom = product
+            } label: {
+                Label("Add to room", systemImage: "square.grid.2x2")
             }
         }
         ShareLink(
@@ -383,7 +482,7 @@ struct RecommendationsView: View {
             if isSaved {
                 viewModel.unsaveProduct(product, context: modelContext)
             } else {
-                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
+                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId, roomLocalId: scopedRoomLocalId)
             }
         } label: {
             Circle()

@@ -294,17 +294,15 @@ struct RoomProjectView: View {
     }
 
     private func emptyBlock(for room: RoomModel) -> some View {
+        // SP-11: one control, not three. The body copy pointed at the Daily
+        // Room, the button pointed at a generic grid, and a link underneath
+        // pointed somewhere else again — a stacked triple ask for one act.
         VStack(spacing: 8) {
             Text("✦").font(.system(size: 40))
             Text("A blank canvas")
                 .font(.custom("PlayfairDisplay-Regular", size: 18, relativeTo: .title3))
                 .foregroundStyle(PatinaColors.Text.primary)
-            Text("We've already found pieces that would fit this space. Browse your Daily Room to start building this room.")
-                .font(PatinaTypography.caption)
-                .foregroundStyle(PatinaColors.Text.muted)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 240)
-            cta(primary: "Browse Picks for This Room") {
+            cta(primary: "Browse pieces for the \(room.name)") {
                 // U07: this used to root-reset to .heroFrame regardless of
                 // whether the room synced. Once a room has a remote id the
                 // room-scoped emergence carries real context; local-only
