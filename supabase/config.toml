@@ -554,6 +554,14 @@ verify_jwt = true
 [functions.apns-send]
 verify_jwt = true
 
+# Irreversible, self-addressed account closure (SP-20; App Store 5.1.1(v)).
+# Stated explicitly rather than left to the platform default: the gateway must
+# never be relaxed here. The function re-reads the caller through their own
+# Authorization header before constructing any service-role client, and acts on
+# the token's own user id — the request body is never read.
+[functions.delete-account]
+verify_jwt = true
+
 # Immutable Spec Book artifact renderer. Browser and server callers must carry
 # a Supabase JWT; the function additionally performs a caller-scoped artifact
 # read through RLS before using service-role access to render the frozen
