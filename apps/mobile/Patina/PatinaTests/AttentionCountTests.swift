@@ -20,13 +20,15 @@ struct AttentionCountTests {
         try JSONDecoder().decode(T.self, from: Data(json.utf8))
     }
 
-    private func fixtures() throws -> (
-        decisions: [RemoteClientDecision],
-        summaries: [RemoteCommsThreadSummary],
-        proposals: [RemoteProposal],
-        invoices: [RemoteInvoice],
-        projects: [RemoteProject]
-    ) {
+    private struct Fixtures {
+        let decisions: [RemoteClientDecision]
+        let summaries: [RemoteCommsThreadSummary]
+        let proposals: [RemoteProposal]
+        let invoices: [RemoteInvoice]
+        let projects: [RemoteProject]
+    }
+
+    private func fixtures() throws -> Fixtures {
         // Two decisions, one signable proposal, one payable invoice — the
         // shape the review walked: four items collapsing to three rows.
         let decisions = try decode([RemoteClientDecision].self, """
@@ -66,17 +68,20 @@ struct AttentionCountTests {
         [{ "id": "11111111-1111-1111-1111-111111111111", "name": "Oak Street",
            "status": "active", "updated_at": "2026-08-20T12:00:00Z" }]
         """)
-        return (decisions, summaries, proposals, invoices, projects)
+        return Fixtures(
+            decisions: decisions, summaries: summaries, proposals: proposals,
+            invoices: invoices, projects: projects
+        )
     }
 
     @Test("the attention count sums the three queues that actually need the client")
     func attentionCountSumsTheThreeQueues() throws {
-        let f = try fixtures()
+        let rows = try fixtures()
         let badges = BadgeCountService()
         badges.apply(
-            decisions: f.decisions, summaries: f.summaries,
-            proposals: f.proposals, invoices: f.invoices,
-            projects: f.projects, roster: []
+            decisions: rows.decisions, summaries: rows.summaries,
+            proposals: rows.proposals, invoices: rows.invoices,
+            projects: rows.projects, roster: []
         )
 
         #expect(badges.pendingDecisionCount == 2)
@@ -88,12 +93,12 @@ struct AttentionCountTests {
 
     @Test("one thing needing the client reads in the singular")
     func singularHint() throws {
-        let f = try fixtures()
+        let rows = try fixtures()
         let badges = BadgeCountService()
         badges.apply(
-            decisions: [], summaries: f.summaries,
-            proposals: [], invoices: f.invoices,
-            projects: f.projects, roster: []
+            decisions: [], summaries: rows.summaries,
+            proposals: [], invoices: rows.invoices,
+            projects: rows.projects, roster: []
         )
         #expect(badges.attentionCount == 1)
         #expect(badges.attentionHint == "1 thing needs your eye")
@@ -101,12 +106,12 @@ struct AttentionCountTests {
 
     @Test("nothing needing the client prints no count at all")
     func emptyHintIsNil() throws {
-        let f = try fixtures()
+        let rows = try fixtures()
         let badges = BadgeCountService()
         badges.apply(
-            decisions: [], summaries: f.summaries,
+            decisions: [], summaries: rows.summaries,
             proposals: [], invoices: [],
-            projects: f.projects, roster: []
+            projects: rows.projects, roster: []
         )
         #expect(badges.attentionCount == 0)
         #expect(badges.attentionHint == nil)
@@ -116,12 +121,12 @@ struct AttentionCountTests {
     /// string now, because they all derive it from one number.
     @Test("the Studio subhead, the footer/Companion and the Daily Room agree")
     func everyConsumerPrintsTheSameCount() throws {
-        let f = try fixtures()
+        let rows = try fixtures()
         let badges = BadgeCountService()
         badges.apply(
-            decisions: f.decisions, summaries: f.summaries,
-            proposals: f.proposals, invoices: f.invoices,
-            projects: f.projects, roster: []
+            decisions: rows.decisions, summaries: rows.summaries,
+            proposals: rows.proposals, invoices: rows.invoices,
+            projects: rows.projects, roster: []
         )
 
         let expected = StudioAttentionSummary.attentionHint(count: badges.attentionCount)
@@ -131,12 +136,12 @@ struct AttentionCountTests {
         // than recomputing it from a different fetch.
         let snapshot = StudioQueueBuilder.build(
             StudioQueueInput(
-                projects: f.projects,
-                decisions: f.decisions,
-                proposals: f.proposals,
-                invoices: f.invoices,
+                projects: rows.projects,
+                decisions: rows.decisions,
+                proposals: rows.proposals,
+                invoices: rows.invoices,
                 documents: [],
-                threads: f.summaries,
+                threads: rows.summaries,
                 notifications: [],
                 currentUserId: "client",
                 now: try #require(ISO8601DateFormatter().date(from: "2026-07-29T16:00:00Z"))
@@ -149,12 +154,12 @@ struct AttentionCountTests {
 
     @Test("the fetched rows are retained for the Record")
     func refreshRetainsTheFetchedRows() throws {
-        let f = try fixtures()
+        let rows = try fixtures()
         let badges = BadgeCountService()
         badges.apply(
-            decisions: f.decisions, summaries: f.summaries,
-            proposals: f.proposals, invoices: f.invoices,
-            projects: f.projects,
+            decisions: rows.decisions, summaries: rows.summaries,
+            proposals: rows.proposals, invoices: rows.invoices,
+            projects: rows.projects,
             roster: [RosterDesigner(designerId: UUID(), addedAt: Date())]
         )
 
