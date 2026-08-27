@@ -9,6 +9,10 @@ struct DailyStoryCard: View {
     let story: DailyStory
     var namespace: Namespace.ID? = nil
     var isExpanded: Bool = false
+    /// Card weight follows content (B, synthesis §5): the story keeps the hero
+    /// footprint on a quiet day and drops to a row when the Record carried the
+    /// screen. `HomeComposition.storyWeight` decides which.
+    var height: CGFloat = 180
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -86,7 +90,7 @@ struct DailyStoryCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
         }
-        .frame(height: 180)
+        .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
         .padding(.top, PatinaSpacing.md)
         .padding(.horizontal, PatinaSpacing.mdLarge)
