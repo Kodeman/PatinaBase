@@ -62,4 +62,41 @@ struct ChromeReachTests {
         #expect(CompanionHearthMetrics.hintAllowance == 36)
         #expect(CompanionHearthMetrics.verticalSpacing == 20)
     }
+
+    // MARK: - SP-19 · the unit control
+
+    /// F40, narrowed: the conversion was never wrong. The control was — "ft"
+    /// measured 12×13 pt and "m" 6×13, their only feedback was a colour
+    /// change, the fields carried no unit, and the choice persisted in
+    /// `UserDefaults` and was restored on appear, so a later session silently
+    /// started in metres and 18×14 became 59'×46'.
+    @Test("ft/m is a segmented control that does not persist silently")
+    func unitToggleIsSegmentedAndNotPersisted() throws {
+        let source = try SourcePin.read("Patina/Features/RoomScan/Views/ScanFallbackEntryView.swift")
+        #expect(source.contains(".pickerStyle(.segmented)"))
+        #expect(!source.contains("UserDefaults"))
+        #expect(source.contains("frame(width: 44, height: 44)"))
+    }
+
+    @Test("the unit enum still converts feet to metres, unchanged")
+    func feetStillConvertToMetres() {
+        #expect(ScanFallbackEntryView.Unit.feet.rawValue == "ft")
+        #expect(ScanFallbackEntryView.Unit.meters.rawValue == "m")
+        #expect(ScanFallbackEntryView.metres(from: 18, unit: .feet) == 18 / 3.28084)
+        #expect(ScanFallbackEntryView.metres(from: 18, unit: .meters) == 18)
+    }
+
+    // MARK: - SP-19 · the one screen that ignored the appearance override
+
+    /// F187: only the semantic tokens resolve through `Color.patinaDynamic`,
+    /// so a screen painted with the raw brand constants cannot respond to
+    /// appearance at all — this was the single cream-on-black surface in a
+    /// fully dark walk.
+    @Test("the room-summary step goes through the dynamic tokens")
+    func floorPlanPreviewRespectsAppearance() throws {
+        let source = try SourcePin.read("Patina/Features/StyleReveal/Views/ScanFloorPlanPreviewView.swift")
+        #expect(!source.contains("PatinaColors.offWhite."))
+        #expect(!source.contains("PatinaColors.charcoal"))
+        #expect(!source.contains("PatinaColors.pearl"))
+    }
 }
