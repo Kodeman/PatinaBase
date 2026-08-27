@@ -58,6 +58,18 @@ public final class DeepLinkHandler {
     /// - Returns: Whether the URL was handled
     @discardableResult
     public func handle(_ url: URL) -> Bool {
+        // SP-03: universal links arrive here through SwiftUI's `.onOpenURL`
+        // with scheme `https`, so the custom-scheme guard below dropped every
+        // one of them before the path switch was ever reached.
+        if let route = Self.route(forUniversalLink: url) {
+            if let coordinator, coordinator.phase == .launching {
+                coordinator.pendingDeepLink = url
+            } else {
+                coordinator?.navigate(to: route)
+            }
+            return true
+        }
+
         // Check scheme
         guard url.scheme == APIConfiguration.appURLScheme else {
             return false
@@ -186,6 +198,35 @@ public final class DeepLinkHandler {
 
         coordinator?.navigate(to: .pieceDetail(pieceId: pieceId))
         return true
+    }
+
+    // MARK: - Universal Links
+
+    /// Map an `https://client.patina.cloud/<kind>/<id>` link to its route.
+    /// Pure — no coordinator, no side effects — so the table is unit-testable
+    /// and cannot drift from the paths the AASA file publishes.
+    ///
+    /// Only the client host is honoured. `app.patina.cloud` is the designer
+    /// portal and the app has no business opening its routes.
+    public static func route(forUniversalLink url: URL) -> AppRoute? {
+        guard url.scheme == "https", url.host == PatinaDeepLinks.clientHost else { return nil }
+        let parts = url.pathComponents.filter { $0 != "/" }
+        guard parts.count >= 2 else { return nil }
+        let id = parts[1]
+        guard !id.isEmpty else { return nil }
+
+        switch parts[0] {
+        case "piece":
+            return .pieceDetail(pieceId: id)
+        case "invoice":
+            return .invoiceDetail(invoiceId: id)
+        case "proposal":
+            return .proposalDetail(proposalId: id)
+        case "decision":
+            return .decisionDetail(decisionId: id)
+        default:
+            return nil
+        }
     }
 
     // MARK: - Path-Based URLs
