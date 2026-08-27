@@ -42,6 +42,11 @@ final class DailyRoomViewModel {
     /// repriced rows over them.
     var savedItems: [TableItemModel] = []
 
+    /// The rows NEW THIS WEEK may draw — already filtered to the seven-day
+    /// window and already emptied when the supply floor is not met, so the
+    /// view has no way to pad it.
+    var newThisWeek: [Product] = []
+
     /// The designer's rooms on the client's projects — read-only cards on the
     /// house rail. Empty for anyone with no project, and after a failed read:
     /// the rail then draws the rooms the person made, and nothing invented.
@@ -350,6 +355,20 @@ final class DailyRoomViewModel {
             },
             paint: { [weak self] painted in self?.record = painted }
         )
+    }
+
+    /// The catalogue's genuinely new rows. A guest sees this block too, so the
+    /// read is not gated on a session; a failure simply leaves the block dark.
+    func refreshNewThisWeek() async {
+        do {
+            let response = try await ProductAPIClient.shared.fetchRecommendations(limit: 24)
+            newThisWeek = NewThisWeek.rows(from: response.items)
+        } catch {
+            #if DEBUG
+            PatinaLog.ui.error("[DailyRoomVM] new-this-week fetch failed: \(error)")
+            #endif
+            newThisWeek = []
+        }
     }
 
     /// The client's project rooms. RLS has allowed this read since 00066; the
