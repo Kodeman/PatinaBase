@@ -30,6 +30,9 @@ public struct CompanionOverlay: View {
     @State private var state: CompanionState = .button
     @State private var voiceInputState: VoiceInputState = .idle
 
+    /// SP-06: the first-sign-in claim, waiting on the account's answer.
+    @State private var localStoreClaim = LocalStoreClaim.shared
+
     @State private var showingAuthPanel = false
     @State private var isAuthenticated = AuthService.shared.isAuthenticated
     @State private var panelOpenTime: Date?
@@ -474,6 +477,18 @@ public struct CompanionOverlay: View {
             isPresented: $isHelpPanelPresented,
             surfaceKey: SurfaceKeys.IOSApp.Companion.root
         )
+        // SP-06: the first-sign-in claim. Hosted here because the Companion is
+        // the one surface always mounted in the `.main` phase, which is exactly
+        // where the app lands the moment the claim decision is due.
+        .sheet(isPresented: Binding(
+            get: { localStoreClaim.isAsking },
+            set: { if !$0 { localStoreClaim.keep() } }
+        )) {
+            LocalStoreClaimSheet(
+                onKeep: { localStoreClaim.keep() },
+                onStartFresh: { localStoreClaim.startFresh() }
+            )
+        }
     }
 
     // MARK: - State 1: Resting

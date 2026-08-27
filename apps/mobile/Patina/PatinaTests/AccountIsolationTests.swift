@@ -30,4 +30,32 @@ struct AccountIsolationTests {
         // A → B is the reported privacy leak: B must not see A's rooms.
         #expect(AuthService.shouldWipeLocalStore(previousOwner: "userA", incomingUser: "userB") == true)
     }
+
+    // MARK: - SP-06: the claim is asked, not assumed
+
+    /// The guest scanned a room and saved a piece; the account signing in on
+    /// this phone gets to say whether that work is theirs.
+    @Test
+    func firstSignInWithGuestWorkAsks() {
+        #expect(LocalStoreClaim.shouldAsk(previousOwner: nil, hasGuestWork: true))
+    }
+
+    /// Nothing to claim, nothing to ask about.
+    @Test
+    func firstSignInWithAnEmptyStoreDoesNotAsk() {
+        #expect(LocalStoreClaim.shouldAsk(previousOwner: nil, hasGuestWork: false) == false)
+    }
+
+    /// A second account is not asked — that case wipes, and asking would
+    /// offer one person the option of keeping another person's rooms.
+    @Test
+    func aSecondAccountIsNotAskedToClaim() {
+        #expect(LocalStoreClaim.shouldAsk(previousOwner: "userA", hasGuestWork: true) == false)
+    }
+
+    /// The same account relaunching is not re-asked.
+    @Test
+    func theSameAccountIsNotAskedAgain() {
+        #expect(LocalStoreClaim.shouldAsk(previousOwner: "userA", hasGuestWork: false) == false)
+    }
 }
