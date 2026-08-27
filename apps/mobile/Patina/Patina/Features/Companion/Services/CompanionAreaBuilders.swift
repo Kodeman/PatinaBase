@@ -252,13 +252,13 @@ extension CompanionActionProvider {
                 messageDesignerRow(label: "Message your designer", suggested: true),
                 item("checkmark.seal", "All decisions", "Back to the list",
                      route: .decisionList, id: "decisions"),
-                budgetRow(label: "Your budget")
+                budgetRow(label: "Billed to date")
             ]
         }
         return [
             messageDesignerRow(label: "Talk an option through", suggested: true),
             projectsRow(),
-            budgetRow(label: "Your budget")
+            budgetRow(label: "Billed to date")
         ]
     }
 
@@ -320,20 +320,20 @@ extension CompanionActionProvider {
         case .proposalDetail:
             return [
                 messageDesignerRow(label: "Questions? Message your designer", suggested: true),
-                budgetRow(label: "See your budget"),
+                budgetRow(label: "See what's been billed"),
                 item("doc.text", "All proposals", "Back to the list",
                      route: .proposalList, id: "proposals")
             ]
         case .invoiceList:
             return [
-                budgetRow(label: "Your budget", suggested: true),
+                budgetRow(label: "Billed to date", suggested: true),
                 messageDesignerRow(label: "Message your designer"),
                 proposalsRow()
             ]
         case .invoiceDetail:
             return [
                 messageDesignerRow(label: "Question? Message your designer", suggested: true),
-                budgetRow(label: "Your budget"),
+                budgetRow(label: "Billed to date"),
                 item("creditcard", "All invoices", "Back to the list",
                      route: .invoiceList, id: "invoices")
             ]
@@ -346,7 +346,7 @@ extension CompanionActionProvider {
         default: // .proposalList
             return [
                 messageDesignerRow(label: "Questions? Message your designer", suggested: true),
-                budgetRow(label: "Your budget"),
+                budgetRow(label: "Billed to date"),
                 invoicesRow(label: "Invoices")
             ]
         }

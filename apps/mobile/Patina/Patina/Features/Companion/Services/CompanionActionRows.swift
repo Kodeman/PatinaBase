@@ -64,7 +64,7 @@ extension CompanionActionProvider {
     }
 
     static func budgetRow(label: String, suggested: Bool = false) -> CompanionActionItem {
-        item("chart.pie", label, "Your spend", route: .budget, id: "budget", suggested: suggested)
+        item("chart.pie", label, "What's been billed", route: .budget, id: "budget", suggested: suggested)
     }
 
     static func proposalsRow(suggested: Bool = false) -> CompanionActionItem {

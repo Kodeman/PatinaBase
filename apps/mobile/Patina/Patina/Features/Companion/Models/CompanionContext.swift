@@ -217,7 +217,7 @@ public struct CompanionContext: Equatable {
         case .invoiceDetail:
             return "Reviewing an invoice"
         case .budget:
-            return "Your budget"
+            return "Billed to date"
         case .documentList:
             return "Your documents"
         }

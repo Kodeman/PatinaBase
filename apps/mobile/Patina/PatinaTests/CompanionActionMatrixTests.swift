@@ -10,6 +10,8 @@
 //  exemplar menus.
 //
 
+// swiftlint:disable file_length
+
 import Testing
 import Foundation
 @testable import Patina
@@ -305,7 +307,7 @@ struct CompanionActionMatrixTests {
         ).map(\.label)
         #expect(labels == [
             "Questions? Message your designer",
-            "See your budget",
+            "See what's been billed",
             "All proposals",
             "Home",
             "Your profile"
