@@ -163,3 +163,91 @@ enum TodayExperience {
         )
     }
 }
+
+// MARK: - Home composition (Direction B §2)
+
+/// One block of the home, top to bottom. The list a tier mounts is a rule, not
+/// a view — so it can be pinned by a test that renders nothing.
+enum HomeBlock: String, Equatable, CaseIterable {
+    case header
+    case record
+    case nextMove
+    case designerSeat
+    case houseRail
+    case startWithARoom
+    case newThisWeek
+    case story
+    case signInLine
+}
+
+/// How much room a card takes. Weight follows content: the record takes the
+/// hero footprint the moment it has something true to say, and the story drops
+/// to a row when it does.
+enum HomeCardWeight: Equatable {
+    case hero
+    case row(CGFloat)
+}
+
+struct HomeCompositionInput: Equatable {
+    var isSignedIn: Bool = false
+    var tier: EngagementTier = .discovering
+    var record: HouseRecord = .empty
+    /// Every room the person's house holds — the rooms they typed or scanned
+    /// AND the project rooms a designer owns. An activeProject client whose
+    /// rooms all live on the project is not an empty house.
+    var roomCount: Int = 0
+    var newThisWeekCount: Int = 0
+    var hasStory: Bool = false
+    var hasDesigner: Bool = false
+}
+
+enum HomeComposition {
+
+    /// `NEW THIS WEEK` renders at three or more genuinely new rows, or not at
+    /// all. It is never padded (B §2, supply floor).
+    static let newThisWeekFloor = 3
+
+    /// The story's demoted height when the record carried the screen.
+    static let storyRowHeight: CGFloat = 96
+
+    /// Honesty (C5), the tier half: at guest and discovering an empty record
+    /// draws NOTHING — an empty half is not drawn, and no "Nothing moved since
+    /// Thursday." is printed to a person with no house on file (synthesis §5,
+    /// which overrides B §2's guest bullet). From engaged upward the truthful
+    /// empties do draw, because there a silence is itself the answer.
+    static func recordDraws(for input: HomeCompositionInput) -> Bool {
+        if !input.record.isEmpty { return true }
+        return input.isSignedIn && input.tier >= .engaged
+    }
+
+    /// The record is the next move whenever it holds one. The Next Move card
+    /// keeps the second slot only when nothing needs the person.
+    static func nextMoveDraws(for input: HomeCompositionInput) -> Bool {
+        guard recordDraws(for: input) else { return true }
+        return input.record.needsYou.isEmpty
+    }
+
+    static func recordWeight(for input: HomeCompositionInput) -> HomeCardWeight {
+        input.record.isEmpty ? .row(storyRowHeight) : .hero
+    }
+
+    static func storyWeight(for input: HomeCompositionInput) -> HomeCardWeight {
+        input.record.isEmpty ? .hero : .row(storyRowHeight)
+    }
+
+    static func blocks(for input: HomeCompositionInput) -> [HomeBlock] {
+        var blocks: [HomeBlock] = [.header]
+        if recordDraws(for: input) { blocks.append(.record) }
+        if nextMoveDraws(for: input) { blocks.append(.nextMove) }
+        // The seat persists from the moment a designer exists until she is
+        // gone — never at discovering, where naming one would be a guess.
+        if input.isSignedIn, input.tier >= .engaged, input.hasDesigner {
+            blocks.append(.designerSeat)
+        }
+        blocks.append(input.roomCount > 0 ? .houseRail : .startWithARoom)
+        if input.newThisWeekCount >= newThisWeekFloor { blocks.append(.newThisWeek) }
+        if input.hasStory { blocks.append(.story) }
+        if !input.isSignedIn { blocks.append(.signInLine) }
+        return blocks
+    }
+}
