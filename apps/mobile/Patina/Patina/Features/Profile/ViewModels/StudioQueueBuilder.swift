@@ -42,6 +42,108 @@ enum StudioQueueBuilder {
         guard let status = project.status?.lowercased() else { return false }
         return ["completed", "cancelled", "canceled", "archived", "inactive"].contains(status)
     }
+
+    /// The same waiting things, one row each, with their own dates and their
+    /// own destinations — what the Record's NEEDS YOU half is built from.
+    ///
+    /// The Studio hub groups ("Decisions · 2 project choices are ready"); the
+    /// Record cannot, because a row on the Record is one thing that happened
+    /// on one date. Both shapes read the same three predicates
+    /// (`!isResolved`, `isAwaitingSignature(now:)`, `isPayable`), so the card
+    /// and the hub can never disagree about what is waiting.
+    ///
+    /// Ordered by the date each was asked, ascending — the Record's order.
+    /// `designerFallback` is used only where the row's own embed brought no
+    /// name; nil leaves the row unattributed rather than guessing.
+    static func itemizedAwaitingRows(
+        decisions: [RemoteClientDecision],
+        proposals: [RemoteProposal],
+        invoices: [RemoteInvoice],
+        designerFallback: String?,
+        now: Date
+    ) -> [StudioQueueItemRow] {
+        let decisionRows = decisions
+            .filter { !$0.isResolved }
+            .map { decision in
+                StudioQueueItemRow(
+                    id: "decision:\(decision.id)",
+                    kind: .decision,
+                    entityId: decision.id,
+                    title: decision.title ?? "A project choice is ready",
+                    detail: decision.project?.name,
+                    askedAt: parsedDate(decision.created_at),
+                    dueAt: parsedDate(decision.due_date),
+                    amountCents: nil,
+                    designerName: decision.project?.designer?.displayName ?? designerFallback,
+                    route: .decisionDetail(decisionId: decision.id)
+                )
+            }
+
+        let proposalRows = proposals
+            .filter { $0.isAwaitingSignature(now: now) }
+            .map { proposal in
+                StudioQueueItemRow(
+                    id: "proposal:\(proposal.id)",
+                    kind: .proposal,
+                    entityId: proposal.id,
+                    title: proposal.title ?? "A proposal is ready to review",
+                    detail: proposal.project?.name,
+                    askedAt: parsedDate(proposal.sent_at ?? proposal.created_at),
+                    dueAt: parsedDate(proposal.valid_until),
+                    amountCents: proposal.total_amount,
+                    // `list_client_proposals()` returns jsonb and takes no
+                    // PostgREST embed, so a proposal has no designer of its
+                    // own to read.
+                    designerName: designerFallback,
+                    route: .proposalDetail(proposalId: proposal.id)
+                )
+            }
+
+        let invoiceRows = invoices
+            .filter(\.isPayable)
+            .map { invoice in
+                StudioQueueItemRow(
+                    id: "invoice:\(invoice.id)",
+                    kind: .invoice,
+                    entityId: invoice.id,
+                    title: invoice.invoice_number ?? "Your invoice",
+                    detail: invoice.project?.name,
+                    askedAt: parsedDate(invoice.sent_at ?? invoice.issue_date ?? invoice.created_at),
+                    dueAt: parsedDate(invoice.due_date),
+                    amountCents: invoice.balanceCents,
+                    designerName: invoice.designer?.displayName ?? designerFallback,
+                    route: .invoiceDetail(invoiceId: invoice.id)
+                )
+            }
+
+        return (decisionRows + proposalRows + invoiceRows).sorted {
+            ($0.askedAt ?? .distantFuture, $0.id) < ($1.askedAt ?? .distantFuture, $1.id)
+        }
+    }
+}
+
+/// One waiting thing, flat. Deliberately not a `StudioQueueRow`: that type
+/// carries a card's presentation (a system image, a section priority) and no
+/// entity id, and the Record needs the entity and its dates.
+struct StudioQueueItemRow: Identifiable, Sendable, Equatable {
+
+    enum Kind: String, Sendable {
+        case decision, proposal, invoice
+    }
+
+    let id: String
+    let kind: Kind
+    let entityId: String
+    let title: String
+    let detail: String?
+    /// When the designer asked — the Record orders NEEDS YOU by this.
+    let askedAt: Date?
+    let dueAt: Date?
+    /// The invoice's remaining balance, or the proposal's total. Nil for a
+    /// decision, which has no one figure.
+    let amountCents: Int?
+    let designerName: String?
+    let route: AppRoute
 }
 
 @MainActor
