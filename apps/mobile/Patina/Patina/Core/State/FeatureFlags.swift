@@ -3,8 +3,9 @@
 //  Patina
 //
 //  The one flag gate for the Daily Return program. Every flag is resolved
-//  ONCE at launch and held for the session, so a root chosen at launch can
-//  never be re-chosen underneath the user when a payload lands late.
+//  ONCE at launch, SYNCHRONOUSLY, before the root is chosen, and held for the
+//  session — so a root chosen at launch can never be re-chosen underneath the
+//  user when a payload lands late.
 //
 //  Precedence, highest first:
 //    1. DEBUG launch argument `-PatinaFlags house-first,direct-orders` — when
@@ -15,10 +16,29 @@
 //       local stack.
 //    2. `--uitesting` — all off unless the launch argument above names them.
 //       (PostHog is not initialized under `--uitesting` at all.)
-//    3. PostHog, read after a flag payload has been delivered, waited at most
-//       1.5 s. PostHog loads flags asynchronously after `setup()`, so reading
-//       without the wait returns `false` on every cold launch.
+//    3. PostHog's own persisted flag payload, read synchronously.
 //    4. `false`.
+//
+//  Why step 3 is a synchronous read and not a bounded wait: PostHog fetches
+//  flags asynchronously after `setup()`, so a first cut waited up to 1.5 s on
+//  `PostHogSDK.didReceiveFeatureFlags` in a detached task. That can never
+//  answer in time — `PatinaApp.init()` returns and `body` mounts the root in
+//  the same runloop turn — so the PostHog branch would have been dead on every
+//  TestFlight and production launch while looking correct on a developer's
+//  machine, where the launch argument answers.
+//
+//  The SDK already solves this: it persists each payload
+//  (`PostHogRemoteConfig.setCachedFeatureFlags` →
+//  `storage.setDictionary(forKey: .enabledFeatureFlags)`) and lazily reads it
+//  back from disk on the first access after `setup()`
+//  (`getCachedFeatureFlags()`, `PostHogRemoteConfig.swift:568-573`, posthog-ios
+//  3.48). `isFeatureEnabled` therefore answers from the last session's payload
+//  with no wait at all.
+//
+//  The cost is explicit and accepted: on the very first launch after install
+//  there is no payload yet, so every flag is off for that session and correct
+//  from the second launch on. A flag that must be honoured on first launch
+//  needs a splash blocked on resolution — a product decision, not this file's.
 //
 
 import Foundation
@@ -27,10 +47,7 @@ import Foundation
 /// only so the resolution order can be tested without a live PostHog.
 @MainActor
 protocol FeatureFlagProvider {
-    /// Return once a flag payload has been delivered, or once `timeout`
-    /// elapses — whichever comes first. Must never outlast `timeout`.
-    /// `true` means a payload arrived and `isEnabled` may be trusted.
-    func waitUntilReady(timeout: Duration) async -> Bool
+    /// The flag's value as the source can answer it *now*, synchronously.
     func isEnabled(_ key: String) -> Bool
 }
 
@@ -49,46 +66,26 @@ final class FeatureFlags {
     /// `Flag` raw values.
     static let launchArgument = "-PatinaFlags"
 
-    /// The bound on the PostHog wait. Named so a walk script and a test can
-    /// cite the same number the plan does.
-    static let postHogTimeout: Duration = .milliseconds(1500)
-
     private(set) var isResolved = false
     private var values: [Flag: Bool] = [:]
-    private var resolution: Task<Void, Never>?
 
     init() {}
 
     func isOn(_ flag: Flag) -> Bool { values[flag] ?? false }
 
-    /// Launch entry point — called from `PatinaApp.init()` before the root is
-    /// chosen. The override and `--uitesting` paths resolve inline; only the
-    /// PostHog path needs the bounded wait, and until it lands every flag
-    /// answers `false`.
+    /// Launch entry point — called from `PatinaApp.init()`, after
+    /// `PostHogService.initialize()` and before the root is chosen. Returns
+    /// with every flag decided.
     func resolveAtLaunch() {
-        guard !isResolved, resolution == nil else { return }
-        let arguments = ProcessInfo.processInfo.arguments
-        if let inline = Self.inlineValues(arguments: arguments) {
-            values = inline
-            isResolved = true
-            logResolution(source: "launch-arguments")
-            return
-        }
-        resolution = Task { [weak self] in
-            await self?.resolveAtLaunch(
-                arguments: arguments,
-                provider: PostHogFeatureFlagProvider(),
-                timeout: Self.postHogTimeout
-            )
-        }
+        resolveAtLaunch(
+            arguments: ProcessInfo.processInfo.arguments,
+            provider: PostHogFeatureFlagProvider()
+        )
     }
 
-    /// The full resolution, awaitable. Idempotent: the first answer is held.
-    func resolveAtLaunch(
-        arguments: [String],
-        provider: FeatureFlagProvider,
-        timeout: Duration
-    ) async {
+    /// The full resolution, with its inputs injected. Idempotent: the first
+    /// answer is held for the session.
+    func resolveAtLaunch(arguments: [String], provider: FeatureFlagProvider) {
         guard !isResolved else { return }
         if let inline = Self.inlineValues(arguments: arguments) {
             values = inline
@@ -96,14 +93,11 @@ final class FeatureFlags {
             logResolution(source: "launch-arguments")
             return
         }
-        let delivered = await provider.waitUntilReady(timeout: timeout)
         values = Dictionary(
-            uniqueKeysWithValues: Flag.allCases.map {
-                ($0, delivered ? provider.isEnabled($0.rawValue) : false)
-            }
+            uniqueKeysWithValues: Flag.allCases.map { ($0, provider.isEnabled($0.rawValue)) }
         )
         isResolved = true
-        logResolution(source: delivered ? "posthog" : "timeout")
+        logResolution(source: "posthog-cache")
     }
 
     /// A walk has no other way to see which flags a launch resolved — nothing
@@ -150,16 +144,14 @@ final class FeatureFlags {
     }
 }
 
-/// PostHog as the flag source. `isEnabled` already answers `false` for every
-/// key when analytics is off (no API key), which is exactly the fallback this
-/// resolution wants.
+/// PostHog as the flag source, read from the payload its SDK persisted on a
+/// previous launch. `isFeatureEnabled` already answers `false` for every key
+/// when analytics is off (no API key) or when no payload has ever been
+/// cached — which is exactly the fallback this resolution wants.
 @MainActor
 struct PostHogFeatureFlagProvider: FeatureFlagProvider {
-    func waitUntilReady(timeout: Duration) async -> Bool {
-        await PostHogService.shared.awaitFeatureFlags(timeout: timeout)
-    }
-
     func isEnabled(_ key: String) -> Bool {
-        PostHogService.shared.isFeatureEnabled(key)
+        guard PostHogService.shared.isFeatureFlagSourceLive else { return false }
+        return PostHogService.shared.isFeatureEnabled(key)
     }
 }
