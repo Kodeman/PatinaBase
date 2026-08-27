@@ -133,41 +133,39 @@ public struct RemoteInvoice: Codable, Sendable, Identifiable {
 
 // MARK: - Errors
 
-/// Friendly checkout failures, mapped from the edge function's error codes
-/// (mirrors `useStartCheckout`'s detail/error extraction).
+/// Checkout failures, mapped from the edge function's error codes.
+///
+/// SP-15 / C5: **no case carries a server or vendor string.** The previous
+/// `.generic(String)` was constructed with the edge function's `detail`, which
+/// put Stripe's "Invalid API Key provided: sk_test_…" on a homeowner's payment
+/// screen (`research/05-rewalk.md` §2b). The words a client reads are chosen
+/// in `MoneyFailureCopy`; `detail` survives only in the DEBUG log.
 public enum CheckoutError: LocalizedError, Sendable {
     case notPayable
     case paymentProcessing
     case nothingDue
     case notConfigured
     case notFound
-    case generic(String)
+    /// Anything else the function returned. Deliberately carries no payload.
+    case unavailable
 
     public var errorDescription: String? {
-        switch self {
-        case .notPayable:
-            return "This invoice can't be paid online right now."
-        case .paymentProcessing:
-            return "A bank transfer for this invoice is already processing. Bank transfers take 3–5 business days to clear."
-        case .nothingDue:
-            return "This invoice has no remaining balance."
-        case .notConfigured:
-            return "Online payment isn't available yet. Please contact your designer."
-        case .notFound:
-            return "We couldn't find this invoice."
-        case .generic(let message):
-            return message
-        }
+        MoneyFailureCopy.checkout(self).sentence
     }
 
     static func from(code: String?, detail: String?) -> CheckoutError {
+        #if DEBUG
+        if let detail, !detail.isEmpty {
+            PatinaLog.ui.error("[Invoices] checkout error detail (never shown): \(detail)")
+        }
+        #endif
         switch code {
         case "invoice_not_payable": return .notPayable
         case "payment_processing": return .paymentProcessing
         case "nothing_due": return .nothingDue
         case "stripe_not_configured": return .notConfigured
         case "invoice_not_found": return .notFound
-        default: return .generic(detail ?? "Unable to start payment. Please try again.")
+        default: return .unavailable
         }
     }
 }
@@ -259,7 +257,7 @@ public actor InvoicesAPIClient {
                 options: FunctionInvokeOptions(body: StartCheckoutBody(invoiceId: invoiceId))
             )
             guard let url = URL(string: response.url) else {
-                throw CheckoutError.generic("No checkout URL returned.")
+                throw CheckoutError.unavailable
             }
             return url
         } catch let FunctionsError.httpError(_, data) {
@@ -268,7 +266,10 @@ public actor InvoicesAPIClient {
         } catch let error as CheckoutError {
             throw error
         } catch {
-            throw CheckoutError.generic("Unable to start payment. Please try again.")
+            #if DEBUG
+            PatinaLog.ui.error("[Invoices] checkout invoke failed: \(error.localizedDescription)")
+            #endif
+            throw CheckoutError.unavailable
         }
     }
 }

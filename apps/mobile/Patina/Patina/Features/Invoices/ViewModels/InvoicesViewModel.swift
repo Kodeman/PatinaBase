@@ -61,9 +61,11 @@ final class InvoiceDetailViewModel {
         case idle
         case confirming
         case confirmed
-        /// Poll timed out — likely a bank transfer (ACH) still clearing, or a
-        /// cancelled checkout. Copy stays soft so it's true either way.
-        case achPending
+        /// Poll timed out. SP-15: the app used to call this a bank transfer
+        /// regardless of method — a card payer was told to expect 3–5 business
+        /// days. The copy now defaults to the truth and names a bank transfer
+        /// only where the payment row actually says so.
+        case unconfirmed
     }
 
     var invoice: RemoteInvoice?
@@ -72,7 +74,8 @@ final class InvoiceDetailViewModel {
 
     // Pay flow.
     var isStartingCheckout: Bool = false
-    var payError: String?
+    /// SP-15: the failure as Patina says it, never as the vendor said it.
+    var payFailure: MoneyFailure?
     /// Drives the SFSafariViewController presentation.
     var checkoutURL: URL?
     var confirmState: ConfirmState = .idle
@@ -111,16 +114,13 @@ final class InvoiceDetailViewModel {
     func startCheckout(invoiceId: String) async {
         guard !isStartingCheckout else { return }
         isStartingCheckout = true
-        payError = nil
+        payFailure = nil
         do {
             let url = try await InvoicesAPIClient.shared.startCheckout(invoiceId: invoiceId)
             self.checkoutURL = url
         } catch {
-            self.payError = (error as? LocalizedError)?.errorDescription
-                ?? "Unable to start payment. Please try again."
-            #if DEBUG
-            PatinaLog.ui.error("[Invoices] checkout failed: \(error.localizedDescription)")
-            #endif
+            MoneyFailureCopy.log("checkout", error)
+            self.payFailure = MoneyFailureCopy.checkout(error)
         }
         isStartingCheckout = false
     }
@@ -129,6 +129,7 @@ final class InvoiceDetailViewModel {
     /// settle the payment server-side (R30: poll-first).
     func checkoutDismissed(invoiceId: String) {
         checkoutURL = nil
+        payFailure = nil
         startPolling(invoiceId: invoiceId)
     }
 
@@ -148,7 +149,7 @@ final class InvoiceDetailViewModel {
                     }
                 }
                 if ContinuousClock.now - start >= (self?.pollDeadline ?? .seconds(60)) {
-                    await MainActor.run { self?.confirmState = .achPending }
+                    await MainActor.run { self?.confirmState = .unconfirmed }
                     return
                 }
                 try? await Task.sleep(for: self?.pollInterval ?? .seconds(3))

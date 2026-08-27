@@ -119,7 +119,9 @@ struct InvoicePaymentsBlock: View {
                 .padding(.horizontal, 24)
             VStack(alignment: .leading, spacing: 0) {
                 if visible.isEmpty {
-                    Text("No payments recorded yet.")
+                    // SP-15: a paid invoice used to read "No payments recorded
+                    // yet." — true of the table, false of the money.
+                    Text(InvoiceSettleCopy.noPayments(invoice))
                         .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.Text.muted)
                         .padding(14)

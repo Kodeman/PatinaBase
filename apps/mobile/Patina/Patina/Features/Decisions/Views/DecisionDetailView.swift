@@ -21,9 +21,20 @@ struct DecisionDetailView: View {
             VStack(alignment: .leading, spacing: 24) {
                 if let decision = viewModel.decision {
                     header(decision)
-                    ForEach(viewModel.options) { option in
-                        optionCard(option)
+                    submitFailureBanner(decision)
+                    if viewModel.hasNoRenderableOptions {
+                        // SP-17: never a stack of blank, untappable cards.
+                        Text(DecisionOptionCopy.allUnavailableLine)
+                            .font(PatinaTypography.bodySmall)
+                            .foregroundStyle(PatinaColors.Text.secondary)
+                            .padding(.horizontal, 24)
+                            .accessibilityIdentifier("decisionDetail.optionsPending")
+                    } else {
+                        ForEach(viewModel.options) { option in
+                            optionCard(option)
+                        }
                     }
+                    deferralActs(decision)
                     if let threadId = viewModel.discussThreadId {
                         discussAction(threadId)
                     }
@@ -34,13 +45,31 @@ struct DecisionDetailView: View {
                         .padding(.top, 80)
                 }
             }
-            .padding(.bottom, 120)
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
+        .moneyScreenTopBand()
         .task { await viewModel.load(decisionId: decisionId) }
+        .sheet(item: $viewModel.pendingDeferral) { deferral in
+            DecisionDeferSheet(
+                deferral: deferral,
+                decisionTitle: viewModel.decision?.title,
+                isSending: viewModel.isSendingDeferral,
+                failure: viewModel.deferralFailure,
+                onSend: { note in
+                    Task {
+                        if let threadId = await viewModel.sendDeferral(note: note) {
+                            coordinator.navigate(to: .threadDetail(threadId: threadId))
+                        }
+                    }
+                },
+                onCancel: { viewModel.cancelDeferral() }
+            )
+            .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: consentSheetBinding) {
             if let option = pendingOption {
                 DecisionConsentSheet(
@@ -89,12 +118,62 @@ struct DecisionDetailView: View {
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.secondary)
             }
+            // SP-15: "Overdue · Aug 22" reached the Studio hub and stopped
+            // there; the decision itself never said it was late.
+            if !viewModel.isResolved, let due = DateDisplay.due(decision.due_date) {
+                Text(due.text)
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(due.isPastDue ? PatinaColors.error : PatinaColors.Text.secondary)
+                    .padding(.top, 2)
+                    .accessibilityIdentifier("decisionDetail.due")
+            }
             if viewModel.isResolved {
                 resolvedBanner
             }
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
+    }
+
+    /// SP-15 / C5: a failed submit is visible, in Patina's voice, where the
+    /// client is looking — with the two acts that follow it.
+    @ViewBuilder
+    private func submitFailureBanner(_ decision: RemoteClientDecision) -> some View {
+        if let failure = viewModel.submitFailure {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(failure.sentence)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 18) {
+                    Button(failure.retryLabel) {
+                        viewModel.retrySelection()
+                    }
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.interactive)
+                    .accessibilityIdentifier("decisionDetail.failure.retry")
+                    if failure.offersDesignerMessage, viewModel.messageRoute != nil {
+                        Button("Message your designer") {
+                            Task {
+                                if let threadId = await viewModel.messageDesigner() {
+                                    coordinator.navigate(to: .threadDetail(threadId: threadId))
+                                }
+                            }
+                        }
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .accessibilityIdentifier("decisionDetail.failure.message")
+                    }
+                }
+                .frame(minHeight: 44)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PatinaColors.error.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 24)
+            .accessibilityIdentifier("decisionDetail.failure")
+        }
     }
 
     private var resolvedBanner: some View {
@@ -137,7 +216,9 @@ struct DecisionDetailView: View {
                                 .foregroundStyle(PatinaColors.Text.muted)
                         }
                     } else {
-                        Text("Details unavailable — view in portal")
+                        // SP-17: client-voiced. The old line sent a homeowner
+                        // to a portal she cannot open.
+                        Text(DecisionOptionCopy.unavailableLine)
                             .font(PatinaTypography.bodySmall)
                             .foregroundStyle(PatinaColors.Text.muted)
                     }
@@ -205,6 +286,40 @@ struct DecisionDetailView: View {
     private static func formattedPrice(cents: Int) -> String {
         let dollars = cents / 100
         return "$\(NumberFormatter.localizedString(from: NSNumber(value: dollars), number: .decimal))"
+    }
+
+    /// SP-17: the two answers a real client gives, alongside the choices.
+    /// Neither resolves the decision — both open a note into the thread with
+    /// her designer and leave the decision `pending`. They draw only where
+    /// there is a thread to reach: a decision with no project and no designer
+    /// relationship has nowhere to send a note, and an act that cannot succeed
+    /// is not offered.
+    @ViewBuilder
+    private func deferralActs(_ decision: RemoteClientDecision) -> some View {
+        if !viewModel.isResolved, viewModel.canDefer {
+            VStack(alignment: .leading, spacing: 10) {
+                if let sent = viewModel.sentDeferral {
+                    Text("You told your designer: \(sent.actLabel.lowercased()). This decision is still open.")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                        .accessibilityIdentifier("decisionDetail.deferralSent")
+                }
+                HStack(spacing: 12) {
+                    ForEach(DecisionDeferral.allCases) { deferral in
+                        Button(deferral.actLabel) {
+                            viewModel.beginDeferral(deferral)
+                        }
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                        .accessibilityIdentifier("decisionDetail.defer.\(deferral.rawValue)")
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+        }
     }
 
     /// Quiet R20 affordance: jump to the project's comms thread to talk the
@@ -329,6 +444,7 @@ private struct DecisionConsentSheet: View {
             .padding(24)
         }
         .background(PatinaColors.Background.primary)
+        .moneyScreenTopBand()
     }
 }
 

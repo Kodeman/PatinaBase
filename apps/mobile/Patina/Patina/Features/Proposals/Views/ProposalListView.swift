@@ -18,12 +18,13 @@ struct ProposalListView: View {
                 header
                 content
             }
-            .padding(.bottom, 120)
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
+        .moneyScreenTopBand()
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
     }
@@ -56,7 +57,11 @@ struct ProposalListView: View {
         } else {
             VStack(alignment: .leading, spacing: 24) {
                 section("Awaiting your review", viewModel.pending, accent: PatinaColors.Text.interactive)
-                section("Signed", viewModel.accepted, accent: PatinaColors.sage)
+                section(
+                    ProposalStatusDisplay.acceptedSectionTitle,
+                    viewModel.accepted,
+                    accent: PatinaColors.sage
+                )
                 section("Archive", viewModel.archived, accent: PatinaColors.Text.muted)
             }
             .padding(.top, 12)
@@ -141,9 +146,9 @@ private struct ProposalRowCard: View {
                             .foregroundStyle(PatinaColors.Text.primary)
                     }
                     if let expiry = expiryLine {
-                        Text(expiry)
+                        Text(expiry.text)
                             .font(PatinaTypography.captionSmall)
-                            .foregroundStyle(PatinaColors.Text.muted)
+                            .foregroundStyle(expiry.isPastDue ? PatinaColors.error : PatinaColors.Text.muted)
                     }
                 }
             }
@@ -162,21 +167,15 @@ private struct ProposalRowCard: View {
     }
 
     private var statusLabel: String {
-        switch proposal.status {
-        case "sent": return "Awaiting your review"
-        case "viewed": return "In review"
-        case "accepted": return "Signed"
-        case "declined": return "Declined"
-        case "expired": return "Expired"
-        default: return proposal.status?.capitalized ?? "Proposal"
-        }
+        ProposalStatusDisplay.rowLabel(proposal)
     }
 
-    private var expiryLine: String? {
-        guard proposal.status != "accepted",
-              let until = proposal.valid_until,
-              let date = ISO8601DateParsing.date(from: until) else { return nil }
-        return "Expires \(DateDisplay.short(date))"
+    /// SP-15: the same expiry line the detail now carries, from the same
+    /// helper — and it says "Expired" once the date has passed instead of
+    /// promising an expiry that already happened.
+    private var expiryLine: DateDisplay.DueLine? {
+        guard proposal.status != "accepted" else { return nil }
+        return DateDisplay.expiry(proposal.valid_until)
     }
 }
 

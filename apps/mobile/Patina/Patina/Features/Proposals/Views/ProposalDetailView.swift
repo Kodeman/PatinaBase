@@ -30,16 +30,21 @@ struct ProposalDetailView: View {
                         .padding(.top, 80)
                 }
             }
-            .padding(.bottom, 140)
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
+        .moneyScreenTopBand()
         .task { await viewModel.load(proposalId: proposalId) }
         .sheet(isPresented: $viewModel.showSignSheet) {
             ProposalSignSheet(
                 proposalTitle: viewModel.proposal?.title ?? "this proposal",
+                terms: ProposalSignTerms.make(
+                    proposal: viewModel.proposal,
+                    milestones: viewModel.milestones
+                ),
                 isSigning: viewModel.isSigning,
                 errorMessage: viewModel.signError,
                 onSign: { name in
@@ -77,9 +82,13 @@ struct ProposalDetailView: View {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(PatinaColors.sage)
-                Text(signedLine(proposal))
-                    .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.sage)
+                // SP-04: "Signed" only where a signature record exists.
+                Text(ProposalStatusDisplay.detailStatusLine(
+                    proposal,
+                    justSigned: viewModel.didSign
+                ))
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.sage)
             }
             .padding(.top, 4)
         } else if proposal.status == "expired" || (!proposal.isSignable && proposal.status != "declined") {
@@ -89,14 +98,6 @@ struct ProposalDetailView: View {
             PatinaStatusBadge(state: .error, text: "Declined")
                 .padding(.top, 4)
         }
-    }
-
-    private func signedLine(_ proposal: RemoteProposal) -> String {
-        let who = proposal.signed_by_name ?? "you"
-        if let signedAt = proposal.signed_at {
-            return "Signed by \(who) on \(DateDisplay.fromTimestamp(signedAt))"
-        }
-        return "Signed by \(who)"
     }
 
     // MARK: - Investment summary
@@ -111,6 +112,13 @@ struct ProposalDetailView: View {
                 Text(terms)
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
+            }
+            // SP-15: "Expires Sep 8" printed on the list and vanished here.
+            if !viewModel.isSigned, let expiry = DateDisplay.expiry(proposal.valid_until) {
+                Text(expiry.text)
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(expiry.isPastDue ? PatinaColors.error : PatinaColors.Text.secondary)
+                    .accessibilityIdentifier("proposalDetail.expiry")
             }
         }
         .padding(16)

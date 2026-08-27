@@ -17,12 +17,13 @@ struct DecisionListView: View {
                 header
                 content
             }
-            .padding(.bottom, 120)
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
+        .moneyScreenTopBand()
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
     }
@@ -98,6 +99,12 @@ struct DecisionListView: View {
                     .foregroundStyle(PatinaColors.Text.muted)
                     .lineLimit(3)
             }
+            // SP-15: the same due line the Studio hub prints.
+            if let due = DateDisplay.due(d.due_date) {
+                Text(due.text)
+                    .font(PatinaTypography.captionSmall)
+                    .foregroundStyle(due.isPastDue ? PatinaColors.error : PatinaColors.Text.muted)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -114,6 +121,7 @@ struct DecisionListView: View {
         if let type = d.decision_type { parts.append(type.capitalized) }
         if let projectName = d.project?.name, !projectName.isEmpty { parts.append(projectName) }
         if let description = d.description, !description.isEmpty { parts.append(description) }
+        if let due = DateDisplay.due(d.due_date) { parts.append(due.text) }
         return parts.joined(separator: ", ")
     }
 

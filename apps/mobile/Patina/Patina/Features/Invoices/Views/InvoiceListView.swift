@@ -18,12 +18,13 @@ struct InvoiceListView: View {
                 header
                 content
             }
-            .padding(.bottom, 120)
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
+        .moneyScreenTopBand()
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
     }
@@ -168,9 +169,9 @@ private struct InvoiceRowCard: View {
                         .font(PatinaTypography.captionSmall)
                         .foregroundStyle(PatinaColors.Text.muted)
                 } else if let due = dueLine {
-                    Text(due)
+                    Text(due.text)
                         .font(PatinaTypography.captionSmall)
-                        .foregroundStyle(PatinaColors.Text.muted)
+                        .foregroundStyle(due.isPastDue ? PatinaColors.error : PatinaColors.Text.muted)
                 }
             }
         }
@@ -186,10 +187,12 @@ private struct InvoiceRowCard: View {
         }
     }
 
-    private var dueLine: String? {
-        guard invoice.status == "sent" || invoice.status == "partially_paid",
-              let due = invoice.due_date else { return nil }
-        return "Due \(DateDisplay.fromDateString(due))"
+    /// SP-15: the same line the detail, the decision list and the Studio hub
+    /// print. It used to format its own "Due Aug 22, 2026" in muted grey while
+    /// the detail one tap later read "Overdue · Aug 22" in red.
+    private var dueLine: DateDisplay.DueLine? {
+        guard invoice.status == "sent" || invoice.status == "partially_paid" else { return nil }
+        return DateDisplay.due(invoice.due_date)
     }
 }
 
