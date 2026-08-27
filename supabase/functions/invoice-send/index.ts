@@ -323,7 +323,11 @@ Deno.serve(async (req: Request) => {
   // the invoice has already been sent and nothing here may change that.
   if (sendType === 'sent' && clientUserId) {
     const dueLine = invoice.due_date
-      ? ` It's due ${new Date(invoice.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
+      // timeZone: 'UTC' is load-bearing (review minor 6). due_date is a DATE,
+      // which new Date() parses as UTC midnight; formatted in a runtime behind
+      // UTC that prints the PREVIOUS day, and a due date off by one is a money
+      // fact stated wrongly.
+      ? ` It's due ${new Date(invoice.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' })}.`
       : '';
     const attention = await notifyClientAttention(admin, {
       userId: clientUserId,

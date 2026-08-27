@@ -16,6 +16,8 @@
 --   4. get_recommendations (anon): still granted + serving (shared neutral
 --      profile at the fixed session key, get-or-created).
 --   5. match_events attribution: shim calls log source='ios'.
+--   6. 00533's widening (SP-10): the ten appended columns exist, in order,
+--      after the fourteen frozen ones.
 --
 -- Uses the seeded dev accounts + the 00244 demo seed (invoked here inside
 -- the transaction; rolled back).
@@ -176,7 +178,11 @@ BEGIN
                   WHERE csp.session_key = v_neutral AND csp.is_current),
     'the fixed neutral profile must exist after an anon call';
 
-  -- ── 5b. 00533 widening (SP-10): the ten appended columns ──
+  -- ── 5. match_events attribution ──
+  ASSERT EXISTS (SELECT 1 FROM match_events me WHERE me.source = 'ios'),
+    'shim calls must log match_events with source=ios';
+
+  -- ── 6. 00533 widening (SP-10): the ten appended columns ──
   ASSERT EXISTS (SELECT 1 FROM information_schema.columns
                   WHERE table_schema = 'public' AND table_name = 'products'
                     AND column_name = 'photo_verified_at'
@@ -199,10 +205,6 @@ BEGIN
     FROM get_recommendations(p_limit := 50) g WHERE g.brand IS NOT NULL;
   ASSERT v_count > 0, '00533 must project products.brand';
   PERFORM pg_temp.reset_role();
-
-  -- ── 5. match_events attribution ──
-  ASSERT EXISTS (SELECT 1 FROM match_events me WHERE me.source = 'ios'),
-    'shim calls must log match_events with source=ios';
 
   RAISE NOTICE 'shim_contract_test: ALL ASSERTIONS PASSED';
 END $$;
