@@ -19,7 +19,12 @@ struct ScanFloorPlanPreviewView: View {
 
     var body: some View {
         ZStack {
-            PatinaColors.offWhite.ignoresSafeArea()
+            // SP-19 / F187: this screen painted with raw brand constants
+            // (offWhite ground, charcoal ink, pearl rules) instead of the
+            // semantic tokens, so it was the one surface in the walk that
+            // stayed cream-on-black inside a fully dark app — only the
+            // semantic tokens resolve through `Color.patinaDynamic`.
+            PatinaColors.Background.primary.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 ConversationHeaderView(
@@ -43,12 +48,12 @@ struct ScanFloorPlanPreviewView: View {
                     Button(action: onRescan) {
                         Text("Rescan")
                             .font(PatinaTypography.uiAction)
-                            .foregroundStyle(PatinaColors.charcoal)
+                            .foregroundStyle(PatinaColors.Text.primary)
                             .padding(.horizontal, 28)
                             .frame(height: 52)
                             .background(
                                 RoundedRectangle(cornerRadius: 26)
-                                    .stroke(PatinaColors.charcoal, lineWidth: 1.5)
+                                    .stroke(PatinaColors.Text.primary, lineWidth: 1.5)
                             )
                     }
                     .buttonStyle(.plain)
@@ -56,10 +61,10 @@ struct ScanFloorPlanPreviewView: View {
                     Button(action: onAccept) {
                         Text("This Looks Right")
                             .font(PatinaTypography.uiAction)
-                            .foregroundStyle(PatinaColors.offWhite)
+                            .foregroundStyle(PatinaColors.Text.inverse)
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
-                            .background(RoundedRectangle(cornerRadius: 26).fill(PatinaColors.charcoal))
+                            .background(RoundedRectangle(cornerRadius: 26).fill(PatinaColors.Interactive.active))
                     }
                     .buttonStyle(.plain)
                 }
@@ -84,7 +89,7 @@ struct ScanFloorPlanPreviewView: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 4)
-                    .stroke(PatinaColors.charcoal, lineWidth: 2)
+                    .stroke(PatinaColors.Text.primary, lineWidth: 2)
                     .frame(width: drawWidth, height: drawHeight)
 
                 dimensionLabels(width: drawWidth, height: drawHeight)
@@ -129,7 +134,7 @@ struct ScanFloorPlanPreviewView: View {
         VStack(spacing: 4) {
             Text(value)
                 .font(PatinaTypography.headlineSerif)
-                .foregroundStyle(PatinaColors.charcoal)
+                .foregroundStyle(PatinaColors.Text.primary)
             Text(label)
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.5)
@@ -141,7 +146,7 @@ struct ScanFloorPlanPreviewView: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(PatinaColors.pearl)
+            .fill(PatinaColors.Text.muted.opacity(0.3))
             .frame(width: 1, height: 36)
     }
 

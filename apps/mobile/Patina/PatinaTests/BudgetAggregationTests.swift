@@ -209,4 +209,39 @@ struct BudgetAggregationTests {
     func budgetRouteName() {
         #expect(AppRoute.budget.displayName == "Budget")
     }
+
+    // MARK: - SP-16 · the designer's figure is carried, never conflated
+
+    @Test
+    func sectionsCarryTheDesignersFigureSeparately() throws {
+        let projects = [try project(#"{"id":"pr-1","name":"Aspen Loft Refresh","budget_cents":12000000}"#)]
+        let invoices = [try invoice(
+            #"{"id":"i-1","project_id":"pr-1","status":"sent","total_cents":425000,"amount_paid_cents":0}"#
+        )]
+        let sections = BudgetMath.buildSections(
+            projects: projects,
+            acceptedProposals: [],
+            milestonesByProposal: [:],
+            visibleInvoices: invoices
+        )
+        #expect(sections.count == 1)
+        #expect(sections[0].designerBudgetCents == 12_000_000)
+        #expect(sections[0].rollup.billedCents == 425_000)
+        #expect(sections[0].rollup.outstandingCents == 425_000)
+    }
+
+    @Test
+    func aProjectWithNoBudgetCarriesNoFigure() throws {
+        let projects = [try project(#"{"id":"pr-2","name":"Cabin"}"#)]
+        let invoices = [try invoice(
+            #"{"id":"i-2","project_id":"pr-2","status":"sent","total_cents":1000,"amount_paid_cents":0}"#
+        )]
+        let sections = BudgetMath.buildSections(
+            projects: projects,
+            acceptedProposals: [],
+            milestonesByProposal: [:],
+            visibleInvoices: invoices
+        )
+        #expect(sections[0].designerBudgetCents == nil)
+    }
 }

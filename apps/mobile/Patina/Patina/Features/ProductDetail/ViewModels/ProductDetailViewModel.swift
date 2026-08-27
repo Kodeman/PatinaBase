@@ -56,6 +56,7 @@ final class ProductDetailViewModel {
                         name: product.name,
                         image_url: product.imageURL,
                         price_in_cents: product.priceCents,
+                        price_cents_at_save: product.priceCents,
                         source: source,
                         notes: nil
                     )
@@ -101,26 +102,100 @@ final class ProductDetailViewModel {
 
     // MARK: - Actions
 
+    /// SP-14: seed `isSaved` from what is actually persisted before the screen
+    /// draws. Without it a piece saved yesterday offers "Add to Room" again
+    /// today, and tapping it writes a second row.
+    @MainActor
+    func seedSavedState(productId: String?, context: ModelContext) {
+        guard let productId else { return }
+        isSaved = !storedItems(productId: productId, context: context).isEmpty
+    }
+
+    /// SP-14: idempotent on `productId`. Saving twice keeps one local row and
+    /// one `saved_items` row; unsaving removes both.
     func toggleSave(context: ModelContext) {
         guard let product else { return }
-        isSaved.toggle()
+        let existing = storedItems(productId: product.id, context: context)
 
-        if isSaved {
-            let item = TableItemModel(
+        if existing.isEmpty {
+            isSaved = true
+            context.insert(TableItemModel(
                 name: product.name,
                 productId: product.id,
                 imageURL: product.imageURL,
-                brandName: product.makerName,
-                priceInCents: product.priceCents
-            )
-            context.insert(item)
+                brandName: product.resolvedMakerName ?? product.makerName,
+                priceInCents: product.priceCents,
+                roomId: roomContextLocalId
+            ))
             HapticManager.shared.notification(.success)
+            // SP-14: the mirror is what makes a save survive a reinstall and
+            // reach a second device. It runs whether or not a room is
+            // attached — `saved_items.room_id` is nullable.
+            Task { await mirrorSave(product: product, roomRemoteId: roomContextRemoteId) }
+        } else {
+            isSaved = false
+            for item in existing { context.delete(item) }
+            Task { await mirrorUnsave(productId: product.id) }
         }
 
+        let saved = isSaved
         Task {
             await ProductAPIClient.shared.trackInteraction(
-                InteractionEvent(productId: product.id, eventType: isSaved ? .save : .skip, metadata: nil)
+                InteractionEvent(productId: product.id, eventType: saved ? .save : .skip, metadata: nil)
             )
+        }
+    }
+
+    @MainActor
+    private func storedItems(productId: String, context: ModelContext) -> [TableItemModel] {
+        let descriptor = FetchDescriptor<TableItemModel>(
+            predicate: #Predicate { $0.productId == productId }
+        )
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    /// Writes the account's `saved_items` row, skipping the insert when one
+    /// already exists for this product — the remote half of "save once".
+    private func mirrorSave(product: Product, roomRemoteId: String?) async {
+        // SP-14's risk note: a guest has no account to mirror into — the local
+        // store stays authoritative until SP-06's claim step.
+        guard SavedItemMirror.shouldAttempt(isAuthenticated: AuthService.shared.isAuthenticated) else { return }
+        do {
+            let userId = try await RoomsAPIClient.shared.resolveUserId()
+            let existing = try await RoomsAPIClient.shared.listItems(forUserId: userId)
+            if existing.contains(where: { $0.product_id == product.id }) { return }
+            _ = try await RoomsAPIClient.shared.createItem(
+                CreateSavedItemPayload(
+                    room_id: roomRemoteId,
+                    user_id: userId,
+                    product_id: product.id,
+                    name: product.name,
+                    image_url: product.imageURL,
+                    price_in_cents: product.priceCents,
+                    price_cents_at_save: product.priceCents,
+                    source: "ios",
+                    notes: nil
+                )
+            )
+        } catch {
+            #if DEBUG
+            PatinaLog.ui.error("[ProductDetail] save mirror failed: \(error.localizedDescription)")
+            #endif
+        }
+    }
+
+    private func mirrorUnsave(productId: String) async {
+        guard SavedItemMirror.shouldAttempt(isAuthenticated: AuthService.shared.isAuthenticated) else { return }
+        do {
+            let userId = try await RoomsAPIClient.shared.resolveUserId()
+            let rows = try await RoomsAPIClient.shared.listItems(forUserId: userId)
+            for row in rows where row.product_id == productId {
+                try await RoomsAPIClient.shared.deleteItem(id: row.id)
+            }
+        } catch {
+            #if DEBUG
+            PatinaLog.ui.error("[ProductDetail] unsave mirror failed: \(error.localizedDescription)")
+            #endif
         }
     }
 

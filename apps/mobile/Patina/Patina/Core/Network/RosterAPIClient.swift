@@ -6,12 +6,12 @@
 //  credits a direct order to the designer who brought the client in, even when
 //  no lead or project is live.
 //
-//  ⚠ `designer_clients` has no client-side SELECT policy today: 00014:110 is
-//  `FOR ALL USING (auth.uid() = designer_id)` and 00316:39 adds the studio
-//  co-member leg — both designer-side. A client's select therefore comes back
-//  empty rather than forbidden, so `.roster` is unreachable in production
-//  until a policy migration lands. The read ships now so the attribution lane
-//  has its seam; W1a carries no backend delta.
+//  The read goes through `public.client_designer_roster` (00536), a definer
+//  view exposing four columns — designer_id, client_id, status, created_at —
+//  already filtered to `client_id = auth.uid() AND status = 'active'`. The base
+//  table stays designer-side only: its row carries the designer's private CRM
+//  fields (notes, satisfaction_score, total_revenue…), which a row-level policy
+//  could not have withheld from the client it names.
 //
 
 import Foundation
@@ -37,7 +37,7 @@ public actor RosterAPIClient {
             throw RoomsAPIError.notAuthenticated
         }
 
-        let url = baseURL.appendingPathComponent("/rest/v1/designer_clients")
+        let url = baseURL.appendingPathComponent("/rest/v1/client_designer_roster")
             .appending(queryItems: [
                 URLQueryItem(name: "select", value: "designer_id,created_at,status"),
                 URLQueryItem(name: "client_id", value: "eq.\(userId)"),

@@ -15,11 +15,22 @@ final class CollectionsViewModel {
 
     var boards: [BoardModel] = []
     var savedItems: [TableItemModel] = []
-    var activeTab: String = "Boards"
+    var activeTab: String = CollectionsViewModel.allItemsTab
     var isCreatingBoard = false
     var newBoardName = ""
 
-    let tabs = ["Boards", "All items"]
+    static let boardsTab = "Boards"
+    static let allItemsTab = "All items"
+
+    let tabs = [CollectionsViewModel.boardsTab, CollectionsViewModel.allItemsTab]
+
+    /// SP-12: Saved opened on `Boards` by default, so the piece the reader had
+    /// just saved sat one tab over under `All items` while the screen read
+    /// "No boards yet". The default is the tab that holds the pieces whenever
+    /// there is no board to show.
+    static func defaultTab(boardCount: Int) -> String {
+        boardCount == 0 ? allItemsTab : boardsTab
+    }
 
     // MARK: - Loading
 
@@ -27,6 +38,7 @@ final class CollectionsViewModel {
         // Fetch boards
         let boardDescriptor = FetchDescriptor<BoardModel>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
         boards = (try? context.fetch(boardDescriptor)) ?? []
+        activeTab = Self.defaultTab(boardCount: boards.count)
 
         // Fetch saved items
         let itemDescriptor = FetchDescriptor<TableItemModel>(sortBy: [SortDescriptor(\.savedAt, order: .reverse)])
@@ -98,6 +110,9 @@ final class CollectionsViewModel {
         boards.removeAll { $0.id == board.id }
     }
 
+    /// SP-12: this is the call that was never made from anywhere, which is
+    /// why a board could never fill. `CollectionsView`'s saved-row menu is now
+    /// its caller.
     func addToBoard(_ board: BoardModel, productId: String) {
         board.addItem(productId)
         HapticManager.shared.impact(.light)

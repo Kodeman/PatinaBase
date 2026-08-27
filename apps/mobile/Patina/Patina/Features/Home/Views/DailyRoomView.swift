@@ -20,6 +20,9 @@ struct DailyRoomView: View {
     @State private var expandedStory: DailyStory?
     @State private var isHelpPanelPresented = false
     @State private var resumableScan: ScanRecoveryService.RecoveryCandidate?
+    /// SP-08 / Q7: the ask arrives here, once, the first time something
+    /// money-shaped is actually waiting for this client.
+    @State private var isPushPrimerPresented = false
     @Namespace private var cardNamespace
 
     private var requestStatus: DesignRequestStatusService {
@@ -68,6 +71,7 @@ struct DailyRoomView: View {
         }
         .task {
             await notificationsViewModel.load()
+            presentPushPrimerIfEarned()
         }
         .task {
             await badges.refresh()
@@ -85,6 +89,14 @@ struct DailyRoomView: View {
         .onChange(of: viewModel.selectedRoomID) { _, _ in
             syncCompanionContext()
         }
+        .onChange(of: AuthService.shared.isAuthenticated) { _, isAuthenticated in
+            guard isAuthenticated else { return }
+            Task {
+                await badges.refresh()
+                await notificationsViewModel.load()
+                presentPushPrimerIfEarned()
+            }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             viewModel.load()
@@ -93,12 +105,29 @@ struct DailyRoomView: View {
                 await badges.refresh()
                 await requestStatus.refresh()
                 syncCompanionContext()
+                // The feed is what the primer trigger reads, and signing in
+                // inside this view's lifetime does not re-run the `.task`
+                // above — so a client who signed in on this screen would not
+                // meet the primer until a relaunch.
+                await notificationsViewModel.load()
+                presentPushPrimerIfEarned()
             }
         }
         .helpPanel(
             isPresented: $isHelpPanelPresented,
             surfaceKey: SurfaceKeys.IOSApp.Home.root
         )
+        .sheet(isPresented: $isPushPrimerPresented) {
+            PushPrimerView { isPushPrimerPresented = false }
+        }
+    }
+
+    /// Arms the once-per-install gate as it presents, so the ask is spent on a
+    /// screen the person actually sees rather than on a background pass.
+    private func presentPushPrimerIfEarned() {
+        guard PushPrimerTrigger.shouldPresent(rows: notificationsViewModel.notifications) else { return }
+        guard PushTokenService.shared.armAuthorizationPromptGate() else { return }
+        isPushPrimerPresented = true
     }
 
     private var content: some View {

@@ -57,6 +57,9 @@ describe('AppChrome', () => {
     '/share/abc123',
     '/rfq/abc123',
     `/plans/${'a'.repeat(64)}`,
+    // SP-03 / review M-D3: the shared piece page is opened from a text message
+    // by someone with no session — it must not wear the Client Portal chrome.
+    '/piece/9c1f0a24-1f2b-4b7e-9a3e-0f2d8a6c5b41',
   ])(
     'renders no header (and never mounts ClientHeader) on the login-less guest path %s',
     (pathname) => {

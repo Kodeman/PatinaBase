@@ -64,8 +64,33 @@ actor ProductAPIClient {
             #endif
             throw ProductAPIError.http(status: http.statusCode)
         }
-        let items = try ProductAPIClient.decodeProducts(from: data)
+        let items = ProductAPIClient.withholdingUnresolvedMakers(
+            try ProductAPIClient.decodeProducts(from: data)
+        )
         return RecommendationsResponse(items: items, total: items.count, roomId: roomId, roomName: nil)
+    }
+
+    /// SP-10: a piece whose maker cannot be resolved is withheld from the feed
+    /// rather than shipped under the RPC's literal `Unknown Maker`
+    /// (00246:278) — on a marketplace whose whole argument is provenance, an
+    /// unattributed piece is not one to offer. Applies to the two feeds that
+    /// read `get_recommendations` (the browse grid and the Daily Room's picks)
+    /// and not to the direct single-piece fetch, so a piece opened by id or by
+    /// link still renders.
+    ///
+    /// The maker resolves from `products.brand` first, so once 00533 returns
+    /// that column a piece with a brand and no vendor is kept and prints its
+    /// brand; before 00533 it is withheld, which is the plank's own preference
+    /// over printing `Unknown Maker`.
+    nonisolated static func withholdingUnresolvedMakers(_ products: [Product]) -> [Product] {
+        let shown = products.filter(\.hasResolvableMaker)
+        #if DEBUG
+        let withheld = products.count - shown.count
+        if withheld > 0 {
+            PatinaLog.ui.debug("[ProductAPI] Withheld \(withheld) piece(s) with no resolvable maker")
+        }
+        #endif
+        return shown
     }
 
     // MARK: - U39: release-gating decode
@@ -169,7 +194,7 @@ actor ProductAPIClient {
 // MARK: - Raw Product Decoder (for PostgREST nested vendor join)
 
 /// Intermediate decoder for products with nested vendor data from PostgREST
-private struct RawProductWithVendor: Codable {
+private struct RawProductWithVendor: Decodable {
     let id: String
     let name: String
     let price_retail: Int?
@@ -181,8 +206,21 @@ private struct RawProductWithVendor: Codable {
     let category: String?
     let status: String?
     let vendors: VendorInfo?
+    // SP-10: the direct fetch already selects `*`, so these `products`
+    // columns are readable on this path today — they do not wait on 00533,
+    // which only widens the RPC's projection.
+    let dimensions: FailableDecodable<ProductDimensions>?
+    let lead_time_weeks: Int?
+    let brand: String?
+    let description: String?
+    let finish: String?
+    let patina_managed: Bool?
+    let source_url: String?
+    let published_at: String?
+    let photo_verified_at: String?
+    let shipping_flat_cents: Int?
 
-    struct VendorInfo: Codable {
+    struct VendorInfo: Decodable {
         let name: String?
         let made_in: String?
         let brand_story: String?  // JSONB — comes as String or object
@@ -206,8 +244,26 @@ private struct RawProductWithVendor: Codable {
             // back to `.decor` for anything not matching the enum's raw
             // values verbatim — e.g. "chair" never matched `.seating`.
             category: ProductCategory(normalizing: category),
-            tier: (quality_score ?? 0) >= 80 ? .designerSelection : .styleMatch
+            tier: (quality_score ?? 0) >= 80 ? .designerSelection : .styleMatch,
+            dimensions: dimensions?.value,
+            leadTimeWeeks: lead_time_weeks,
+            brand: brand,
+            productDescription: description,
+            publishedAt: Self.timestamp(published_at),
+            finish: finish,
+            patinaManaged: patina_managed,
+            photoVerifiedAt: Self.timestamp(photo_verified_at),
+            sourceURL: source_url,
+            shippingFlatCents: shipping_flat_cents
         )
+    }
+
+    private static func timestamp(_ raw: String?) -> Date? {
+        guard let raw else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let parsed = withFraction.date(from: raw) { return parsed }
+        return ISO8601DateFormatter().date(from: raw)
     }
 }
 

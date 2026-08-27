@@ -49,6 +49,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
+import { notifyClientAttention } from '../_shared/client-attention.ts';
 import {
   buildInvoiceArEscalationEmail,
   buildInvoiceFinalNoticeEmail,
@@ -394,6 +395,30 @@ Deno.serve(async (_req: Request) => {
       // Don't escalate off an unstamped row — without the stamp the invoice
       // would re-send this stage next run, so flagging now could double-fire.
       continue;
+    }
+
+    // The client's bell, FIRST STAGE ONLY (SP-08). Stage 0 is the due-3
+    // upcoming-due nudge; the later three stages are a dunning cadence and do
+    // not earn a push each. The in-app row de-duplicates on the invoice id
+    // anyway, so a later stage could only refresh a line the client has already
+    // been shown. Best-effort — the email has already gone.
+    if (stage === 0 && clientUserId) {
+      const attention = await notifyClientAttention(admin, {
+        userId: clientUserId,
+        entityType: 'invoice',
+        entityId: invoice.id,
+        title: 'An invoice is coming due',
+        body: `Invoice ${invoiceNumber} for ${projectName} is due soon.`,
+        metadata: {
+          project_id: invoice.project_id,
+          amount_cents: invoice.total_cents,
+          due_date: invoice.due_date,
+          reminder_stage: stage,
+        },
+      });
+      if (!attention.ok) {
+        console.warn('invoice-reminders: client attention not delivered', invoice.id, attention.error);
+      }
     }
 
     // At the +1 overdue notice, give the DESIGNER in-app visibility that a

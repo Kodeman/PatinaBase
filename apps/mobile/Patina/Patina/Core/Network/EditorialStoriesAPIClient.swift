@@ -70,11 +70,21 @@ public actor EditorialStoriesAPIClient {
     /// Fetch the most recent published editorial story for the home feed.
     /// Ordering: highest `sort_order`, then most recent `published_at`.
     public func fetchTodaysStory() async throws -> RemoteEditorialStory? {
+        try await fetchCandidates(limit: 1).first
+    }
+
+    /// SP-18: the ordered shortlist the home picks from. `fetchTodaysStory`'s
+    /// `limit=1` could only ever return the same single row — which is why the
+    /// same card appeared on the guest home, the engaged home, in dark mode,
+    /// and after every relaunch. The reader's own read record chooses from
+    /// this list; the ordering (`sort_order desc, published_at desc`) is the
+    /// fallback when they have opened all of them.
+    public func fetchCandidates(limit: Int = 5) async throws -> [RemoteEditorialStory] {
         let url = baseURL.appendingPathComponent("/rest/v1/editorial_stories")
             .appending(queryItems: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "order", value: "sort_order.desc,published_at.desc"),
-                URLQueryItem(name: "limit", value: "1")
+                URLQueryItem(name: "limit", value: String(limit))
             ])
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
@@ -85,8 +95,7 @@ public actor EditorialStoriesAPIClient {
                 body: String(data: data, encoding: .utf8) ?? ""
             )
         }
-        let rows = try decoder.decode([RemoteEditorialStory].self, from: data)
-        return rows.first
+        return try decoder.decode([RemoteEditorialStory].self, from: data)
     }
 
     /// Fetch a list of recent published stories (e.g., for an "Inbox" view
@@ -116,7 +125,9 @@ public actor EditorialStoriesAPIClient {
 extension DailyStory {
     /// Build a `DailyStory` from a remote `editorial_stories` row. Falls back
     /// to sensible gradients when the editorial row didn't pin one.
-    init(from remote: RemoteEditorialStory, isUnread: Bool = true) {
+    /// SP-18: `isUnread` comes from the reader's own `StoryReadStore` record —
+    /// it used to be hard-coded `true`, so the dot never came off.
+    init(from remote: RemoteEditorialStory, isUnread: Bool) {
         let hero = PatinaGradients.gradient(forKey: remote.heroGradientKey) ?? PatinaGradients.hero
         let avatar = PatinaGradients.gradient(forKey: remote.makerAvatarGradientKey) ?? PatinaGradients.earth
         self.init(

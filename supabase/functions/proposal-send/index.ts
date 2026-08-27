@@ -19,6 +19,7 @@ import {
   type ProposalSendInstance,
   type ProposalSendSnapshot,
 } from "./handler.ts";
+import { notifyClientAttention } from "../_shared/client-attention.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -364,6 +365,31 @@ function createGateway(authorization: string): ProposalSendGateway {
         p_dispatch_id: dispatchId,
       });
       if (error) throw error;
+
+      // SP-08: the row above is the client PORTAL's inbox entry. The iOS bell
+      // additionally needs a push envelope, and 00534's de-duplication folds
+      // this call onto the row just written rather than stacking a second one
+      // (both now carry metadata.entity_type/entity_id). Best-effort — a
+      // notification must never fail a send.
+      const { data: dispatch } = await admin
+        .from("proposal_send_dispatches")
+        .select("client_id, proposal_id, project_id, proposal_title, sender_name")
+        .eq("id", dispatchId)
+        .maybeSingle();
+      if (dispatch?.client_id && dispatch?.proposal_id) {
+        const sender = dispatch.sender_name?.trim() || "Your designer";
+        const attention = await notifyClientAttention(admin, {
+          userId: dispatch.client_id,
+          entityType: "proposal",
+          entityId: dispatch.proposal_id,
+          title: "A proposal is ready for you",
+          body: `${sender} sent \u201c${dispatch.proposal_title ?? "a proposal"}\u201d for your review.`,
+          metadata: { project_id: dispatch.project_id },
+        });
+        if (!attention.ok) {
+          console.warn("proposal-send: client attention not delivered", attention.error);
+        }
+      }
     },
   };
 }

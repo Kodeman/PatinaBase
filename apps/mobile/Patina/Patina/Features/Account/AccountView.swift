@@ -14,6 +14,11 @@ import Auth
 struct AccountView: View {
     @Environment(\.appCoordinator) private var coordinator
     @State private var showingSignOutAlert = false
+    /// SP-20 / App Store 5.1.1(v). Kept in step with the same two acts in
+    /// Settings so the two surfaces can never offer different answers.
+    @State private var showingDeleteAlert = false
+    @State private var isDeletingAccount = false
+    @State private var deleteFailureMessage: String?
 
     private var authService: AuthService { AuthService.shared }
 
@@ -67,6 +72,35 @@ struct AccountView: View {
             }
         } message: {
             Text("Are you sure you want to sign out?")
+        }
+        .alert(AccountDeletionService.confirmationTitle, isPresented: $showingDeleteAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete account", role: .destructive) { deleteAccount() }
+        } message: {
+            Text(AccountDeletionService.confirmationBody)
+        }
+    }
+
+    // MARK: - Delete account (SP-20)
+
+    private func deleteAccount() {
+        guard !isDeletingAccount else { return }
+        isDeletingAccount = true
+        deleteFailureMessage = nil
+        Task { @MainActor in
+            do {
+                // Ask first, tear the UI down after. A failure must leave the
+                // person on this screen with one sentence, not flash a splash
+                // and bounce back.
+                try await AccountDeletionService.shared.deleteAccount()
+                coordinator.presentedSheet = nil
+                coordinator.beginSplashTransition()
+                try? await AuthService.shared.signOut()
+            } catch {
+                // C5: our sentence, never the server's.
+                deleteFailureMessage = AccountDeletionService.failureCopy
+            }
+            isDeletingAccount = false
         }
     }
 
@@ -149,6 +183,24 @@ struct AccountView: View {
                 if authService.isAuthenticated {
                     PatinaButton("Sign Out", style: .secondary) {
                         showingSignOutAlert = true
+                    }
+
+                    Button("Delete account") {
+                        showingDeleteAlert = true
+                    }
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.terracotta)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+                    .accessibilityIdentifier("AccountView.DeleteAccountButton")
+
+                    if let deleteFailureMessage {
+                        Text(deleteFailureMessage)
+                            .font(PatinaTypography.caption)
+                            .foregroundStyle(PatinaColors.Text.secondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("AccountView.DeleteAccountFailure")
                     }
                 }
             }

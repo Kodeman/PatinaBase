@@ -64,7 +64,7 @@ extension CompanionActionProvider {
     }
 
     static func budgetRow(label: String, suggested: Bool = false) -> CompanionActionItem {
-        item("chart.pie", label, "Your spend", route: .budget, id: "budget", suggested: suggested)
+        item("chart.pie", label, "What's been billed", route: .budget, id: "budget", suggested: suggested)
     }
 
     static func proposalsRow(suggested: Bool = false) -> CompanionActionItem {
@@ -214,11 +214,16 @@ extension CompanionActionProvider {
 
     // MARK: - Collections count row
 
+    /// SP-12: the Companion's `Saved` row is the only route to the Saved
+    /// screen anywhere in the app. Gating it on a non-zero count meant a
+    /// reader with nothing saved could never see the screen that would teach
+    /// them what saving is for. The row draws at every count; the empty count
+    /// is its own hint.
     static func collectionsRow(context: CompanionContext) -> CompanionActionItem? {
-        // `== 0 ? nil` inversion avoids SwiftLint empty_count on a `> 0` form.
-        guard context.tableItemCount != 0 else { return nil }
-        let plural = context.tableItemCount == 1 ? "" : "s"
-        return item("heart", "Saved", "\(context.tableItemCount) saved piece\(plural)",
-                    route: .table, id: "collections")
+        let count = context.tableItemCount
+        let hint = count == 0
+            ? "Nothing saved yet"
+            : "\(count) saved piece\(count == 1 ? "" : "s")"
+        return item("heart", "Saved", hint, route: .table, id: "collections")
     }
 }

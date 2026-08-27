@@ -31,26 +31,28 @@ extension CompanionActionProvider {
         context.designerRelationship?.isLive ?? false
     }
 
+    /// The home menu, composed from ONE fixed priority list rather than two
+    /// hand-built branches, so C8's cap (at most 6 rows *including* the
+    /// provider's tail — the panel has no ScrollView) holds by construction for
+    /// every combination of rooms / designer / request / tier / saved count:
+    ///
+    ///   1. Message your designer — only where a designer is on the job
+    ///   2. Your design request, else Your studio — only where one exists
+    ///   3. Your recommendations
+    ///   4. Saved — unconditional (SP-12)
+    ///   5. Your spaces — at zero rooms this row IS the scan ("Add your first
+    ///      space" → `.scanFlow`), one row rather than two
+    ///   + the tail the provider appends (Your profile, or Sign in) = 6 max.
+    ///
+    /// Two rows were dropped to fit: the standalone "Add another space" scan
+    /// row (scanning lives one tap in, as the suggested row atop Your Spaces)
+    /// and the style-quiz row (the quiz keeps its own Daily Room card, the
+    /// empty-recommendations CTA, and the Profile menu). Rows are appended in
+    /// priority order, so the row that falls if the tail ever grows is the
+    /// lowest-priority one present — `spacesOrScanRow`.
     static func homeItems(context: CompanionContext) -> [CompanionActionItem] {
-        if context.roomCount == 0 {
-            var rows = [
-                spacesOrScanRow(context: context, suggested: true),
-                styleQuizRow(context: context),
-                recommendationsRow(context: context)
-            ]
-            if let collections = collectionsRow(context: context) { rows.append(collections) }
-            if showsMessageDesignerRow(context) {
-                rows.append(messageDesignerRow(label: "Message your designer"))
-            }
-            if showsStudioRow(context) { rows.append(studioRow()) }
-            return rows
-        }
-        var rows = [
-            recommendationsRow(context: context, suggested: true),
-            spacesOrScanRow(context: context),
-            scanRow(label: "Add another space", hint: "Capture another room", reason: .fresh)
-        ]
-        if let collections = collectionsRow(context: context) { rows.append(collections) }
+        let hasRooms = context.roomCount > 0
+        var rows: [CompanionActionItem] = []
         if showsMessageDesignerRow(context) {
             rows.append(messageDesignerRow(label: "Message your designer"))
         }
@@ -59,6 +61,9 @@ extension CompanionActionProvider {
         } else if showsStudioRow(context) {
             rows.append(studioRow())
         }
+        rows.append(recommendationsRow(context: context, suggested: hasRooms))
+        if let collections = collectionsRow(context: context) { rows.append(collections) }
+        rows.append(spacesOrScanRow(context: context, suggested: !hasRooms))
         return rows
     }
 
@@ -252,13 +257,13 @@ extension CompanionActionProvider {
                 messageDesignerRow(label: "Message your designer", suggested: true),
                 item("checkmark.seal", "All decisions", "Back to the list",
                      route: .decisionList, id: "decisions"),
-                budgetRow(label: "Your budget")
+                budgetRow(label: "Billed to date")
             ]
         }
         return [
             messageDesignerRow(label: "Talk an option through", suggested: true),
             projectsRow(),
-            budgetRow(label: "Your budget")
+            budgetRow(label: "Billed to date")
         ]
     }
 
@@ -320,20 +325,20 @@ extension CompanionActionProvider {
         case .proposalDetail:
             return [
                 messageDesignerRow(label: "Questions? Message your designer", suggested: true),
-                budgetRow(label: "See your budget"),
+                budgetRow(label: "See what's been billed"),
                 item("doc.text", "All proposals", "Back to the list",
                      route: .proposalList, id: "proposals")
             ]
         case .invoiceList:
             return [
-                budgetRow(label: "Your budget", suggested: true),
+                budgetRow(label: "Billed to date", suggested: true),
                 messageDesignerRow(label: "Message your designer"),
                 proposalsRow()
             ]
         case .invoiceDetail:
             return [
                 messageDesignerRow(label: "Question? Message your designer", suggested: true),
-                budgetRow(label: "Your budget"),
+                budgetRow(label: "Billed to date"),
                 item("creditcard", "All invoices", "Back to the list",
                      route: .invoiceList, id: "invoices")
             ]
@@ -346,7 +351,7 @@ extension CompanionActionProvider {
         default: // .proposalList
             return [
                 messageDesignerRow(label: "Questions? Message your designer", suggested: true),
-                budgetRow(label: "Your budget"),
+                budgetRow(label: "Billed to date"),
                 invoicesRow(label: "Invoices")
             ]
         }

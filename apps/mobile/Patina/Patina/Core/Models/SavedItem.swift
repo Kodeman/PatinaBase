@@ -83,9 +83,9 @@ public final class SavedItem {
         return "$\(dollars)"
     }
 
+    /// SP-14: the app's one currency formatter.
     public var fullFormattedPrice: String {
-        let dollars = priceCents / 100
-        return "$\(NumberFormatter.localizedString(from: NSNumber(value: dollars), number: .decimal))"
+        PatinaCurrency.formatWholeDollars(cents: priceCents)
     }
 
     /// Rehydrated placeholder gradient matching the owning product's category.
@@ -120,4 +120,27 @@ public final class SavedItem {
             room: room
         )
     }
+}
+
+/// SP-14's guard rail on the `saved_items` mirror.
+///
+/// The plank's own risk note: *"Mirroring every save server-side changes what
+/// 'saved' means for guests, who have no account — keep the local store
+/// authoritative until sign-in and reconcile through SP-06's claim step, or the
+/// two planks will fight."* A guest has no session, so `resolveUserId()` throws
+/// `notAuthenticated` — asking anyway turns every guest save into a failure the
+/// reader is then told about. The mirror is therefore attempted only when there
+/// is an account to mirror into; SP-06's claim step carries the guest's local
+/// work across at sign-in.
+enum SavedItemMirror {
+
+    static func shouldAttempt(isAuthenticated: Bool) -> Bool {
+        isAuthenticated
+    }
+
+    /// Shown only when a signed-in reader's mirror does not land. It states the
+    /// two things the app actually knows — the piece is saved here, and the
+    /// account copy did not get written — and neither blames a connection the
+    /// app cannot see nor promises a retry that does not exist.
+    static let deferredNotice = "Saved on this phone. We couldn't reach your account just now."
 }

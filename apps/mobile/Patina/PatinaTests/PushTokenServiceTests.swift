@@ -11,7 +11,7 @@
 //      reader, no Bundle.main / filesystem dependency.
 //   2. APNs device-token hex encoding.
 //   3. The once-only authorization-prompt gate
-//      (`armFirstSubmissionPromptGate`) — pure UserDefaults arithmetic,
+//      (`armAuthorizationPromptGate`) — pure UserDefaults arithmetic,
 //      deliberately separated from the actual
 //      `requestAuthorizationAndRegister()` call for exactly this reason.
 //
@@ -126,10 +126,10 @@ struct PushTokenServiceTests {
     @Test
     func firstCallArmsTheGateAndReturnsTrue() {
         let defaults = UserDefaults.standard
-        PushTokenService.shared.resetFirstSubmissionPromptGate()
-        defer { PushTokenService.shared.resetFirstSubmissionPromptGate() }
+        PushTokenService.shared.resetAuthorizationPromptGate()
+        defer { PushTokenService.shared.resetAuthorizationPromptGate() }
 
-        let fired = PushTokenService.shared.armFirstSubmissionPromptGate()
+        let fired = PushTokenService.shared.armAuthorizationPromptGate()
 
         #expect(fired, "The first call, on a fresh install, must arm the gate")
         #expect(defaults.bool(forKey: "patina.push.hasPromptedAfterFirstSubmission"))
@@ -137,26 +137,26 @@ struct PushTokenServiceTests {
 
     @Test
     func secondCallNeverReArmsTheGate() {
-        PushTokenService.shared.resetFirstSubmissionPromptGate()
-        defer { PushTokenService.shared.resetFirstSubmissionPromptGate() }
+        PushTokenService.shared.resetAuthorizationPromptGate()
+        defer { PushTokenService.shared.resetAuthorizationPromptGate() }
 
-        let first = PushTokenService.shared.armFirstSubmissionPromptGate()
-        let second = PushTokenService.shared.armFirstSubmissionPromptGate()
-        let third = PushTokenService.shared.armFirstSubmissionPromptGate()
+        let first = PushTokenService.shared.armAuthorizationPromptGate()
+        let second = PushTokenService.shared.armAuthorizationPromptGate()
+        let third = PushTokenService.shared.armAuthorizationPromptGate()
 
-        #expect(first, "First submission ever must arm the gate")
-        #expect(!second, "A second submission must never re-arm it")
+        #expect(first, "The first money moment ever must arm the gate")
+        #expect(!second, "A second money moment must never re-arm it")
         #expect(!third, "Nor a third, nor any later one")
     }
 
     @Test
-    func gateStaysArmedAcrossManySubmissionsUntilExplicitlyReset() {
-        PushTokenService.shared.resetFirstSubmissionPromptGate()
-        defer { PushTokenService.shared.resetFirstSubmissionPromptGate() }
+    func gateStaysArmedAcrossManyMomentsUntilExplicitlyReset() {
+        PushTokenService.shared.resetAuthorizationPromptGate()
+        defer { PushTokenService.shared.resetAuthorizationPromptGate() }
 
-        _ = PushTokenService.shared.armFirstSubmissionPromptGate()
+        _ = PushTokenService.shared.armAuthorizationPromptGate()
         for _ in 0..<10 {
-            #expect(!PushTokenService.shared.armFirstSubmissionPromptGate())
+            #expect(!PushTokenService.shared.armAuthorizationPromptGate())
         }
     }
 
@@ -182,4 +182,67 @@ struct PushTokenServiceTests {
         """
         return Data(plist.utf8)
     }
+
+    // MARK: - The primer (SP-08 / Q7)
+
+    /// Ruling Q7 names the sentence verbatim. It is the promise the app makes
+    /// in exchange for the permission, and it names exactly three things.
+    @Test
+    func primerCopyIsVerbatim() {
+        // Character-for-character against source/rulings-2026-08-27.md Q7:
+        // a STRAIGHT apostrophe (U+0027) and an em dash (U+2014). "Verbatim"
+        // is taken literally here — the glyphs are the ruling's, not the
+        // app's usual typographic apostrophe.
+        #expect(PushPrimerView.sentence == "We'll tell you when your designer sends something that needs you \u{2014} a decision, a proposal, or an invoice. Nothing else.")
+    }
+
+    /// The trigger is money-shaped or it does not fire: a scan-complete row is
+    /// not a reason to ask for the permission this sentence promises.
+    @Test
+    func primerFiresOnlyOnAMoneyMoment() {
+        #expect(PushPrimerTrigger.hasMoneyMoment(in: [Self.row(.invoice)]))
+        #expect(PushPrimerTrigger.hasMoneyMoment(in: [Self.row(.proposal)]))
+        #expect(PushPrimerTrigger.hasMoneyMoment(in: [Self.row(.decision)]))
+        #expect(!PushPrimerTrigger.hasMoneyMoment(in: [Self.row(.scanComplete)]))
+        #expect(!PushPrimerTrigger.hasMoneyMoment(in: [Self.row(.newRecommendations)]))
+        #expect(!PushPrimerTrigger.hasMoneyMoment(in: []))
+    }
+
+    /// Checking whether to present must never consume the one ask — the gate
+    /// is armed by the presenter, not by the predicate.
+    @Test
+    func askingWhetherToPresentDoesNotBurnTheAsk() {
+        PushTokenService.shared.resetAuthorizationPromptGate()
+        defer { PushTokenService.shared.resetAuthorizationPromptGate() }
+
+        #expect(!PushTokenService.shared.hasAskedForAuthorization)
+        _ = PushPrimerTrigger.shouldPresent(rows: [Self.row(.invoice)])
+        #expect(!PushTokenService.shared.hasAskedForAuthorization)
+    }
+
+    /// M19: the ask MOVED rooms — it did not disappear and it did not double.
+    /// The gate key is unchanged, so an install already prompted after a
+    /// design-request submission is never prompted again by the primer.
+    @Test
+    func anAlreadyPromptedInstallIsNeverAskedAgain() {
+        PushTokenService.shared.resetAuthorizationPromptGate()
+        defer { PushTokenService.shared.resetAuthorizationPromptGate() }
+
+        UserDefaults.standard.set(true, forKey: "patina.push.hasPromptedAfterFirstSubmission")
+        #expect(PushTokenService.shared.hasAskedForAuthorization)
+        #expect(!PushTokenService.shared.armAuthorizationPromptGate())
+    }
+
+    /// The old call site is gone: the ask no longer fires after a
+    /// design-request submission, which is the room Q7 moved it out of.
+    @Test
+    func theAskLeftTheWrongRoom() throws {
+        let source = try SourcePin.read("Patina/Services/DesignServices/DesignRequestCoordinator.swift")
+        #expect(!source.contains("promptForAuthorization"))
+    }
+
+    private static func row(_ type: AppNotificationType) -> AppNotification {
+        AppNotification(type: type, title: type.defaultTitle, body: "", timestamp: Date())
+    }
+
 }

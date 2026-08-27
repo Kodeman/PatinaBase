@@ -90,7 +90,13 @@ struct DesignRequestFlowView: View {
             if result != nil { step = .success }
         }
         .sheet(isPresented: $showAuthSheet) {
-            AuthSheet()
+            // SP-09: a soft wall over a flow in progress — it names what it
+            // gates and can be cancelled back to the Review step, where the
+            // request is still intact.
+            AuthSheet(title: DesignRequestAuthCopy.wallTitle)
+        }
+        .onChange(of: showAuthSheet) { _, isPresented in
+            if !isPresented { awaitingAuthToSend = false }
         }
         .alert("Resume your request?", isPresented: resumeAlertBinding) {
             Button("Resume") { resumeExisting() }

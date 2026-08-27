@@ -27,9 +27,19 @@ struct ScanFallbackEntryView: View {
     @State private var doorCount: Int = 1
     @State private var unit: Unit = .feet
 
-    enum Unit: String { case feet = "ft", meters = "m" }
+    enum Unit: String, CaseIterable, Identifiable {
+        case feet = "ft", meters = "m"
+        var id: String { rawValue }
+        var label: String { self == .feet ? "Feet" : "Metres" }
+    }
 
-    private let unitKey = "patina.scan.manual_entry.unit"
+    /// SP-19: the unit is NOT persisted. It used to be written to
+    /// device defaults and restored on appear, so a session that once tapped
+    /// "m" silently opened in metres months later and an 18×14 room became
+    /// 59'×46' (F40). Every visit starts in feet, visibly.
+    static func metres(from value: Float, unit: Unit) -> Float {
+        unit == .feet ? value / 3.28084 : value
+    }
 
     @Namespace private var whisperNamespace
 
@@ -70,10 +80,6 @@ struct ScanFallbackEntryView: View {
         }
         .background(PatinaColors.Background.primary.ignoresSafeArea())
         .onAppear {
-            if let saved = UserDefaults.standard.string(forKey: unitKey),
-               let parsed = Unit(rawValue: saved) {
-                unit = parsed
-            }
             ScanAnalytics.shared.track(.manualEntryStarted)
         }
     }
@@ -137,30 +143,19 @@ struct ScanFallbackEntryView: View {
         .padding(.bottom, 12)
     }
 
+    /// SP-19: was two bare `Text` buttons measuring 12×13 and 6×13 whose only
+    /// activation feedback was a muted→primary colour change. A segmented
+    /// control shows its own state and carries a real target.
     private var unitToggle: some View {
-        HStack(spacing: 4) {
-            Button(action: {
-                unit = .feet
-                UserDefaults.standard.set(unit.rawValue, forKey: unitKey)
-            }) {
-                Text("ft")
-                    .font(PatinaTypography.mono)
-                    .foregroundStyle(unit == .feet ? PatinaColors.Text.primary : PatinaColors.Text.muted)
+        Picker("Units", selection: $unit) {
+            ForEach(Unit.allCases) { option in
+                Text(option.rawValue).tag(option)
             }
-            .buttonStyle(.plain)
-            Text("/")
-                .font(PatinaTypography.mono)
-                .foregroundStyle(PatinaColors.Text.muted)
-            Button(action: {
-                unit = .meters
-                UserDefaults.standard.set(unit.rawValue, forKey: unitKey)
-            }) {
-                Text("m")
-                    .font(PatinaTypography.mono)
-                    .foregroundStyle(unit == .meters ? PatinaColors.Text.primary : PatinaColors.Text.muted)
-            }
-            .buttonStyle(.plain)
         }
+        .pickerStyle(.segmented)
+        .frame(width: 104)
+        .accessibilityLabel("Units")
+        .accessibilityValue(unit.label)
     }
 
     // MARK: - Dimension inputs
@@ -191,7 +186,9 @@ struct ScanFallbackEntryView: View {
                             lineWidth: 1.5
                         )
                 )
-            Text(title.uppercased())
+            // SP-19: the field said nothing about its unit, so the toggle was
+            // the only place the answer lived.
+            Text("\(title.uppercased()) (\(unit.rawValue))")
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.4)
                 .foregroundStyle(PatinaColors.Text.interactive)
@@ -228,8 +225,12 @@ struct ScanFallbackEntryView: View {
                     .foregroundStyle(PatinaColors.Text.primary)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(PatinaColors.Background.secondary))
+                    // SP-19: the circle stays 32; the thumb gets 44.
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Remove one \(title.lowercased())")
             Text("\(value.wrappedValue)")
                 .font(.custom("DMMono-Regular", size: 14, relativeTo: .subheadline))
                 .foregroundStyle(PatinaColors.Text.primary)
@@ -240,11 +241,15 @@ struct ScanFallbackEntryView: View {
                     .foregroundStyle(PatinaColors.Text.primary)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(PatinaColors.Background.secondary))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Add one \(title.lowercased())")
         }
         .padding(.horizontal, 16)
-        .frame(height: 48)
+        // 44pt targets need the room; 48 clipped them.
+        .frame(height: 56)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(PatinaColors.Background.secondary)
@@ -264,9 +269,8 @@ struct ScanFallbackEntryView: View {
 
     private func submit() {
         guard let l = Float(length), let w = Float(width) else { return }
-        let (lengthMeters, widthMeters) = unit == .feet
-            ? (l / 3.28084, w / 3.28084)
-            : (l, w)
+        let lengthMeters = Self.metres(from: l, unit: unit)
+        let widthMeters = Self.metres(from: w, unit: unit)
         let area = lengthMeters * widthMeters
 
         var session = RoomScanSession(

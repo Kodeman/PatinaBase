@@ -350,7 +350,8 @@ private extension StudioQueueBuilder {
         return StudioQueueRow(
             id: "records.budget",
             title: "Budget",
-            detail: "Project totals and payment progress",
+            // SP-16: the row names what the screen computes.
+            detail: "What's been billed, and what's been paid",
             meta: nil,
             systemImage: "chart.pie",
             route: .budget,
@@ -463,13 +464,10 @@ private extension StudioQueueBuilder {
         return 20 + tieBreaker
     }
 
+    /// SP-15: the Studio row and the money detail print the same line, from
+    /// the same place, so they cannot drift.
     static func dueLabel(_ date: Date, now: Date) -> String {
-        let calendar = Calendar.current
-        let due = calendar.startOfDay(for: date)
-        let today = calendar.startOfDay(for: now)
-        if due < today { return "Overdue · \(DateDisplay.short(date))" }
-        if due == today { return "Due today" }
-        return "Due \(DateDisplay.short(date))"
+        DateDisplay.due(date, now: now).text
     }
 
     static func parsedDate(_ raw: String?) -> Date? {
