@@ -19,11 +19,26 @@
 --   4. The bell survives a failed push — apns-send stamps the row it is handed
 --      'failed' on total failure, and 'failed' is excluded from the client's
 --      visible filter. Only the PUSH row's id is ever handed over.
+--  4b. THE SEAM (review B-D1). Exactly ONE in_app row per entity is what the
+--      bell may render. The push envelope sits inside the client's CURRENT
+--      status filter in every non-failed state — including 'queued', which is
+--      the default until apns-send has tokens to send to — so a feed that asks
+--      for channel=in.(in_app,push) reads every attention twice. There is no
+--      non-visible notification_status (00041:14-23), so this side cannot fix
+--      it; the assertion states the contract lane C must narrow to
+--      (channel=eq.in_app), and fails the moment a second in_app row appears.
 --   5. De-duplication on entity id (SP-08's own risk note) — a second call for
 --      the same open entity updates the in-app row rather than stacking one.
---   6. The AFTER INSERT trigger on client_decisions, in the 00289 shape:
---      it fires for a pending decision in the client's court, stays silent for
---      a draft or a designer-court row, and can never unwind the insert.
+--   6. The AFTER INSERT OR UPDATE OF status trigger on client_decisions, in
+--      the 00289 shape: it fires for a pending decision in the client's court,
+--      stays silent for a draft or a designer-court row, and can never unwind
+--      the write.
+--  6b. The UPDATE leg (review M-D1) — the shipped send path is a draft→pending
+--      UPDATE (publish_client_decision, 00399:3505; the project-approval send,
+--      00464:997), not an INSERT, so an INSERT-only trigger would have left
+--      SP-08's decision half writing nothing at all.
+--  6c. The copy follows coordination_kind (review minor 1) — a punch item in
+--      the client's court is not announced as "A decision needs you".
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -142,6 +157,24 @@ BEGIN
     'a failed push must leave the in-app row standing, got ' || v_count || ' visible rows';
   UPDATE public.notification_log SET status = 'queued' WHERE id = v_push;
 
+  -- ── 4b. the seam: ONE bell row, whatever the envelope is doing (B-D1) ──
+  -- The push row is back at 'queued' — the DEFAULT state, since apns-send
+  -- returns early on no_tokens (apns-send/index.ts:205-207) and never stamps
+  -- it. 'queued' is inside the client's status filter, so the ONLY thing
+  -- keeping the envelope out of the bell is the channel predicate. This is
+  -- what lane C must narrow to; it is asserted here so a regression on this
+  -- side (a second in_app row, a bell row handed to apns-send) fails loudly.
+  SELECT count(*) INTO v_count FROM public.notification_log n
+   WHERE n.user_id = u_client AND n.metadata->>'entity_id' = v_invoice::text
+     AND n.channel = 'in_app' AND n.status::text = ANY(v_visible);
+  ASSERT v_count = 1,
+    'exactly one in_app row may be visible per entity — the bell''s whole feed, got ' || v_count;
+  SELECT count(*) INTO v_count FROM public.notification_log n
+   WHERE n.user_id = u_client AND n.metadata->>'entity_id' = v_invoice::text
+     AND n.channel = 'push' AND n.status::text = ANY(v_visible);
+  ASSERT v_count = 1,
+    'and the envelope is visible under the CURRENT client filter — which is why NotificationsAPIClient must ask for channel=eq.in_app (d-notes §2(d))';
+
   -- ── 5. de-duplication on entity id ──
   PERFORM public.notify_client_attention(
     u_client, 'invoice', v_invoice,
@@ -207,6 +240,44 @@ BEGIN
                                       'd5050000-0000-4000-8000-000000000003');
   ASSERT v_count = 0,
     'a draft or designer-court decision must stay silent, got ' || v_count || ' rows';
+
+  -- ── 6b. the UPDATE leg — the path a designer actually sends by (M-D1) ──
+  -- publish_client_decision (00399:3505) and the project-approval send
+  -- (00464:997) both UPDATE draft→pending over a row inserted 'draft'
+  -- (00463:1332). An AFTER INSERT trigger alone never sees them.
+  UPDATE public.client_decisions
+     SET status = 'pending', sent_at = now()
+   WHERE id = 'd5050000-0000-4000-8000-000000000002';
+  SELECT count(*) INTO v_count FROM public.notification_log n
+   WHERE n.user_id = u_client
+     AND n.metadata->>'entity_id' = 'd5050000-0000-4000-8000-000000000002';
+  ASSERT v_count = 2,
+    'a draft published to pending must reach the bell, got ' || v_count || ' rows';
+
+  -- and a write that names status without changing it must not re-ring it
+  UPDATE public.client_decisions
+     SET status = 'pending', title = 'Unsent draft, retitled'
+   WHERE id = 'd5050000-0000-4000-8000-000000000002';
+  SELECT count(*) INTO v_count FROM public.notification_log n
+   WHERE n.user_id = u_client AND n.channel = 'in_app'
+     AND n.metadata->>'entity_id' = 'd5050000-0000-4000-8000-000000000002';
+  ASSERT v_count = 1,
+    'a pending→pending write must not stack a second bell row, got ' || v_count;
+
+  -- ── 6c. the copy follows coordination_kind (minor 1) ──
+  INSERT INTO public.client_decisions (
+    id, designer_client_id, designer_id, project_id, title,
+    decision_type, coordination_kind, court, status, sent_at
+  ) VALUES (
+    'd5050000-0000-4000-8000-000000000005', 'd5030000-0000-4000-8000-000000000001',
+    'd5000000-0000-4000-8000-000000000001', v_project, 'Scuffed baseboard, dining room',
+    'approval', 'punch', 'client', 'pending', now()
+  );
+  SELECT n.metadata INTO v_meta FROM public.notification_log n
+   WHERE n.channel = 'in_app'
+     AND n.metadata->>'entity_id' = 'd5050000-0000-4000-8000-000000000005';
+  ASSERT v_meta->>'title' = 'A punch item needs you',
+    'a punch item must not be announced as a decision, got ' || COALESCE(v_meta->>'title', '(no row)');
 
   -- ── 7. the trigger can never unwind the insert (00289 posture) ──
   -- designer_clients row 2 has client_id NULL: there is nobody to notify.

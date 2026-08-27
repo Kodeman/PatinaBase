@@ -60,16 +60,47 @@
 --      print a SECOND bell row; and without 'body' that row renders blank under
 --      its title, which is the same defect SP-08 exists to close.
 --
---   3. notify_client_decision_raised() + AFTER INSERT trigger on
---      client_decisions, in the 00289 shape: SECURITY DEFINER (the designer's
---      authenticated INSERT cannot satisfy notification_log's service-only
---      policy), guards first, and the whole notification wrapped in
---      BEGIN … EXCEPTION WHEN OTHERS THEN RAISE WARNING so a notification
+--   3. notify_client_decision_raised() + AFTER INSERT OR UPDATE OF status
+--      trigger on client_decisions, in the 00289 shape: SECURITY DEFINER (the
+--      designer's authenticated write cannot satisfy notification_log's
+--      service-only policy), guards first, and the whole notification wrapped
+--      in BEGIN … EXCEPTION WHEN OTHERS THEN RAISE WARNING so a notification
 --      failure can never unwind the decision the designer just raised.
 --      Guards: status = 'pending' (a draft is not sent) AND court = 'client'
 --      (00062 + the 00419 court vocabulary — a designer-court RFI is not the
 --      client's business), and a resolvable designer_clients.client_id (a
 --      not-yet-signed-up client has nobody to notify, 00014:74 nullable).
+--
+--      ⚠ AFTER UPDATE OF status is load-bearing, not belt-and-braces (review
+--      M-D1). The shipped path by which a designer SENDS a decision is a
+--      draft→pending UPDATE, never an INSERT: publish_client_decision
+--      (00399:3505-3509, GRANTed to authenticated at :3521) and the project-
+--      approval send (00464:997-1000) both UPDATE a row inserted 'draft'
+--      (00463:1332-1344). The rows that DO arrive 'pending' on INSERT are the
+--      definer proposal-approval writes (00387:1534, 00390:981, 00400:126),
+--      which insert 'responded' and are filtered out here anyway. An
+--      INSERT-only trigger — which is what the build plan asked for — would
+--      have left SP-08's decision half writing nothing at all. The UPDATE leg
+--      re-checks OLD.status IS DISTINCT FROM NEW.status so a no-op write
+--      cannot re-ring the bell, and the de-duplication in part 1 absorbs the
+--      pending→pending→pending case regardless.
+--
+--      Copy follows coordination_kind (00213:36-37 = selection|rfi|submittal|
+--      signoff|punch, review minor 1): a punch item in the client's court is
+--      not "a decision", and telling her it is would be the same class of
+--      dishonesty SP-08 exists to close.
+--
+-- ⚠ SEAM, NOT A DEFECT IN THIS FILE (review B-D1). The push row below is
+-- channel='push', status='queued', and the iOS bell's filter today is
+-- channel=in.(in_app,push) + status=in.(queued,…,clicked)
+-- (NotificationsAPIClient.swift:64-65). The envelope is therefore INSIDE the
+-- visible set in every non-failed state, so a client on the current build
+-- would read each attention twice. There is no non-visible notification_status
+-- (00041:14-23), so the fix cannot land here: the feed must be narrowed to
+-- channel=eq.in_app in NotificationsAPIClient — lane C, written up as an
+-- integration note in waves/w1b/d-notes.md §2(d), and asserted from this side
+-- in supabase/tests/notifications/client_attention_test.sql §4b, which states
+-- the contract as "exactly ONE in_app row is what the bell may render".
 --
 -- No table shape changes → no generated-types drift expected.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -262,9 +293,16 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_client uuid;
+  v_title  text;
 BEGIN
   -- Only a decision that has actually been put to the client.
   IF NEW.status <> 'pending' OR NEW.court <> 'client' THEN
+    RETURN NEW;
+  END IF;
+
+  -- On the UPDATE leg, only the transition into 'pending' is a send. A write
+  -- that names status without changing it is not one.
+  IF TG_OP = 'UPDATE' AND NOT (OLD.status IS DISTINCT FROM NEW.status) THEN
     RETURN NEW;
   END IF;
 
@@ -278,14 +316,25 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- A punch item is not a decision. coordination_kind (00213:36-37) is
+  -- selection|rfi|submittal|signoff|punch; NULL falls to the decision wording.
+  v_title := CASE NEW.coordination_kind
+               WHEN 'rfi'       THEN 'A question needs you'
+               WHEN 'submittal' THEN 'A submittal needs your review'
+               WHEN 'signoff'   THEN 'A sign-off needs you'
+               WHEN 'punch'     THEN 'A punch item needs you'
+               ELSE 'A decision needs you'
+             END;
+
   BEGIN
     PERFORM public.notify_client_attention(
       v_client,
       'decision',
       NEW.id,
-      'A decision needs you',
+      v_title,
       COALESCE(NULLIF(btrim(NEW.title), ''), 'Your designer needs a decision from you.'),
-      jsonb_build_object('project_id', NEW.project_id, 'due_date', NEW.due_date)
+      jsonb_build_object('project_id', NEW.project_id, 'due_date', NEW.due_date,
+                         'coordination_kind', NEW.coordination_kind)
     );
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'notify_client_decision_raised: notification failed for decision %: %',
@@ -301,6 +350,9 @@ REVOKE ALL ON FUNCTION public.notify_client_decision_raised()
 
 DROP TRIGGER IF EXISTS on_client_decision_raised_notify_client ON public.client_decisions;
 CREATE TRIGGER on_client_decision_raised_notify_client
-  AFTER INSERT ON public.client_decisions
+  AFTER INSERT OR UPDATE OF status ON public.client_decisions
   FOR EACH ROW
   EXECUTE FUNCTION public.notify_client_decision_raised();
+
+COMMENT ON FUNCTION public.notify_client_decision_raised() IS
+  'SP-08: writes the client''s bell row when a decision is actually put to them — on INSERT, and on the draft→pending UPDATE that publish_client_decision (00399:3505) and the project-approval send (00464:997) actually use. Guards: pending, client court, a signed-up client. Never raises; a notification failure cannot unwind the designer''s write.';
