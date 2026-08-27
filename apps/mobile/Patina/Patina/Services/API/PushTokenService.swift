@@ -7,8 +7,9 @@
 //  `PatinaAppDelegate`. This service owns:
 //
 //   1. Requesting notification authorization + calling
-//      `registerForRemoteNotifications()` (never at cold launch — see
-//      `promptForAuthorizationAfterFirstSubmission`).
+//      `registerForRemoteNotifications()` (never at cold launch — the one
+//      sanctioned moment is `PushPrimerView`, presented before the first
+//      money event; see SP-08 / ruling Q7).
 //   2. Hex-encoding the APNs device token and upserting it into
 //      `public.device_push_tokens` (owner-only RLS, unique on `token`).
 //   3. Per-token `aps-environment` detection (I66) — the entitlement is
@@ -46,9 +47,11 @@ final class PushTokenService {
         /// without a fresh `didRegisterForRemoteNotifications` callback in
         /// that session.
         static let lastUploadedTokenHex = "patina.push.lastUploadedTokenHex"
-        /// Set the first time `promptForAuthorizationAfterFirstSubmission`
-        /// runs, so the system prompt fires exactly once per install — never
-        /// re-shown on every design-request submission.
+        /// Set the first time the app asks for authorization, so the system
+        /// prompt fires exactly once per install. The KEY IS UNCHANGED from
+        /// when the ask lived after a design-request submission: an install
+        /// that was already prompted must not be prompted again just because
+        /// the ask moved rooms (SP-08 / Q7).
         static let hasPromptedAfterFirstSubmission = "patina.push.hasPromptedAfterFirstSubmission"
     }
 
@@ -57,9 +60,9 @@ final class PushTokenService {
     /// Request notification authorization and, on grant, register for
     /// remote notifications. NEVER call this at cold launch — the app has no
     /// generic "enable notifications?" onboarding step; the only sanctioned
-    /// call sites are `promptForAuthorizationAfterFirstSubmission()` (first
-    /// design-request success) and `reregisterIfAuthorized()` (foreground,
-    /// no-op prompt for a returning user who already decided).
+    /// call sites are `PushPrimerView` (whose one screen of copy explains the
+    /// ask before the system dialog) and `reregisterIfAuthorized()`
+    /// (foreground, no-op prompt for a returning user who already decided).
     func requestAuthorizationAndRegister() async {
         do {
             let granted = try await UNUserNotificationCenter.current()
@@ -84,23 +87,20 @@ final class PushTokenService {
         UIApplication.shared.registerForRemoteNotifications()
     }
 
-    /// The one authorization "moment": called once, from the first
-    /// successful design-request submission. Guarded by a UserDefaults flag
-    /// so the system prompt fires exactly once per install regardless of how
-    /// many requests this user goes on to submit.
-    func promptForAuthorizationAfterFirstSubmission() {
-        guard armFirstSubmissionPromptGate() else { return }
-        Task { await requestAuthorizationAndRegister() }
+    /// Whether this install has already been asked. Read-only — checking must
+    /// never consume the one ask.
+    var hasAskedForAuthorization: Bool {
+        UserDefaults.standard.bool(forKey: DefaultsKey.hasPromptedAfterFirstSubmission)
     }
 
-    /// The gate itself, isolated from the actual authorization call so it
-    /// can be unit-tested without ever touching the live
+    /// The once-per-install gate, isolated from the actual authorization call
+    /// so it can be unit-tested without ever touching the live
     /// `UNUserNotificationCenter` (which would surface a real system prompt
     /// during a test run). Flips the UserDefaults flag and returns `true`
     /// exactly once per install; every subsequent call returns `false`
     /// without side effects.
     @discardableResult
-    func armFirstSubmissionPromptGate() -> Bool {
+    func armAuthorizationPromptGate() -> Bool {
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: DefaultsKey.hasPromptedAfterFirstSubmission) else { return false }
         defaults.set(true, forKey: DefaultsKey.hasPromptedAfterFirstSubmission)
@@ -108,7 +108,7 @@ final class PushTokenService {
     }
 
     /// Test/debug seam — never used by product code.
-    func resetFirstSubmissionPromptGate() {
+    func resetAuthorizationPromptGate() {
         UserDefaults.standard.removeObject(forKey: DefaultsKey.hasPromptedAfterFirstSubmission)
     }
 
