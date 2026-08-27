@@ -84,7 +84,8 @@ struct CompanionActionMatrixTests {
         roomCount: Int,
         active: Bool,
         tier: EngagementTier? = nil,
-        hasStyleProfile: Bool = false
+        hasStyleProfile: Bool = false,
+        designer: DesignerRelationship? = nil
     ) -> CompanionContext {
         // A viewing piece is supplied so the "Try in your room" arm on discovery
         // screens is exercised (the fuller menu). tableItemCount > 0 so the
@@ -98,9 +99,11 @@ struct CompanionActionMatrixTests {
             hasStyleProfile: hasStyleProfile,
             activeDesignRequest: active ? activeRequest : nil
         )
-        // `engagementTier` is assigned rather than passed: its type is internal,
-        // so it cannot appear in the public memberwise initializer.
+        // `engagementTier` and `designerRelationship` are assigned rather than
+        // passed: their types are internal, so they cannot appear in the public
+        // memberwise initializer.
         context.engagementTier = tier
+        context.designerRelationship = designer
         return context
     }
 
@@ -108,6 +111,13 @@ struct CompanionActionMatrixTests {
     /// derived from the axes already present rather than adding a fourth one —
     /// an active request means engaged, a plain signed-in user is discovering,
     /// and a guest has no resolved tier at all.
+    /// The live-designer arm is an axis in its own right: the row cap broke in
+    /// production precisely because this grid had no designer axis, so a live
+    /// relationship's extra home row was never counted here.
+    fileprivate static let liveDesigner = DesignerRelationship.project(
+        projectId: UUID(), designerId: UUID(), studioName: "Hartwell Studio"
+    )
+
     private static func everyCombination(
         _ body: (_ route: AppRoute, _ signedIn: Bool, _ items: [CompanionActionItem]) -> Void
     ) {
@@ -115,14 +125,17 @@ struct CompanionActionMatrixTests {
             for signedIn in [true, false] {
                 for roomCount in [0, 2] {
                     for active in [true, false] {
-                        let tier: EngagementTier? = active ? .engaged : (signedIn ? .discovering : nil)
-                        let ctx = context(
-                            for: route, roomCount: roomCount, active: active, tier: tier
-                        )
-                        let items = CompanionActionProvider.actions(
-                            for: route, context: ctx, isAuthenticated: signedIn
-                        )
-                        body(route, signedIn, items)
+                        for designer in [nil, liveDesigner] as [DesignerRelationship?] {
+                            let tier: EngagementTier? = active ? .engaged : (signedIn ? .discovering : nil)
+                            let ctx = context(
+                                for: route, roomCount: roomCount, active: active,
+                                tier: tier, designer: designer
+                            )
+                            let items = CompanionActionProvider.actions(
+                                for: route, context: ctx, isAuthenticated: signedIn
+                            )
+                            body(route, signedIn, items)
+                        }
                     }
                 }
             }
@@ -288,13 +301,36 @@ struct CompanionActionMatrixTests {
     func heroFrameSignedInWithRoomsExemplar() {
         // No "Your studio": signed-in is no longer enough for that door — this
         // context has no resolved tier, which reads as `.discovering` (U20).
+        // No "Add another space" and no quiz row either: home is the fixed
+        // priority list now, and scanning lives atop Your Spaces.
         let ctx = Self.context(for: .heroFrame, roomCount: 2, active: false)
         let labels = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true).map(\.label)
         #expect(labels == [
             "Your recommendations",
-            "Your spaces",
-            "Add another space",
             "Saved",
+            "Your spaces",
+            "Your profile"
+        ])
+    }
+
+    /// The exact context that crashed the acceptance walk: `client@patina.dev`
+    /// — signed in, rooms, an active project, a live designer. Seven rows fired
+    /// the DEBUG cap and took the app down at the `.heroFrame` root.
+    @Test
+    func heroFrameWithRoomsAndALiveDesignerFitsTheCap() {
+        let ctx = Self.context(
+            for: .heroFrame, roomCount: 2, active: false,
+            tier: .activeProject, designer: Self.liveDesigner
+        )
+        let labels = CompanionActionProvider.actions(
+            for: .heroFrame, context: ctx, isAuthenticated: true
+        ).map(\.label)
+        #expect(labels == [
+            "Message your designer",
+            "Your studio",
+            "Your recommendations",
+            "Saved",
+            "Your spaces",
             "Your profile"
         ])
     }
@@ -363,11 +399,10 @@ struct CompanionTierAndFreshnessTests {
         let ctx = Fixture.context(for: .heroFrame, roomCount: 2, active: false, tier: .engaged)
         let labels = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true).map(\.label)
         #expect(labels == [
-            "Your recommendations",
-            "Your spaces",
-            "Add another space",
-            "Saved",
             "Your studio",
+            "Your recommendations",
+            "Saved",
+            "Your spaces",
             "Your profile"
         ])
     }
@@ -469,19 +504,22 @@ struct CompanionTierAndFreshnessTests {
         }
     }
 
+    /// Home no longer carries a quiz row — it was the lowest-priority row and
+    /// the cap took it (the quiz keeps its Daily Room card, the
+    /// empty-recommendations CTA, and the Profile menu). The hint on the
+    /// recommendations row still tells the truth about the quiz.
     @Test
-    func quizlessHomeStillPointsAtTheQuiz() {
+    func quizlessHomeStillNamesTheQuizInTheRecommendationHint() {
         let ctx = Fixture.context(for: .heroFrame, roomCount: 0, active: false, hasStyleProfile: false)
         let items = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true)
-        #expect(items.contains { $0.label == "Style quiz" && $0.hint == "Discover your style" })
         #expect(items.contains { $0.analyticsId == "recommendations" && $0.hint == "Take the quiz first" })
+        #expect(!items.contains { $0.analyticsId == "style_quiz" })
     }
 
     @Test
-    func finishedQuizSwapsTheHomeQuizRowAndRecommendationHint() {
+    func finishedQuizSwapsTheHomeRecommendationHint() {
         let ctx = Fixture.context(for: .heroFrame, roomCount: 0, active: false, hasStyleProfile: true)
         let items = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: true)
-        #expect(items.contains { $0.label == "Retake the quiz" && $0.hint == "Refine your style" })
         #expect(items.contains { $0.analyticsId == "recommendations" && $0.hint == "Pieces for your style" })
     }
 
@@ -527,5 +565,133 @@ struct CompanionTierAndFreshnessTests {
     func savedDefaultsToTheTabHoldingThePieces() {
         #expect(CollectionsViewModel.defaultTab(boardCount: 0) == "All items")
         #expect(CollectionsViewModel.defaultTab(boardCount: 2) == "Boards")
+    }
+}
+
+// A third suite for the same type-body-length reason as the second: the home
+// menu is the one menu whose row set moves with five independent inputs, and it
+// is where the ≤6 invariant actually broke, so it gets its own exhaustive grid.
+//
+// `@MainActor` for the same reason as the suites above.
+@MainActor
+struct CompanionHomeMenuMatrixTests {
+
+    private typealias Fixture = CompanionActionMatrixTests
+
+    /// The home menu's priority ladder (C8). A row's rank is its slot in the
+    /// list the builder composes; the tail shares the last rank. The menu must
+    /// read in strictly increasing rank order, which is also the order rows are
+    /// dropped from the bottom if the cap is ever pressed.
+    private static func rank(_ item: CompanionActionItem) -> Int? {
+        switch item.analyticsId {
+        case "message_designer": return 1
+        case "design_request", "your_studio": return 2
+        case "recommendations": return 3
+        case "collections": return 4
+        case "your_spaces", "scan": return 5
+        case "profile", "sign_in": return 6
+        default: return nil
+        }
+    }
+
+    /// rooms × designer × request × tier × saved × signed-in — the whole input
+    /// space of `homeItems`, not a sample of it.
+    private static func everyHomeContext(
+        _ body: (_ ctx: CompanionContext, _ signedIn: Bool, _ items: [CompanionActionItem]) -> Void
+    ) {
+        let designers: [DesignerRelationship?] = [
+            nil,
+            DesignerRelationship.none,
+            .roster(designerId: UUID()),
+            .lead(leadId: UUID(), designerId: UUID(), studioName: "Hartwell Studio"),
+            .project(projectId: UUID(), designerId: UUID(), studioName: nil)
+        ]
+        let tiers: [EngagementTier?] = [nil, .discovering, .engaged, .activeProject]
+        for roomCount in [0, 1, 3] {
+            for designer in designers {
+                for active in [true, false] {
+                    for tier in tiers {
+                        for savedCount in [0, 1, 4] {
+                            for signedIn in [true, false] {
+                                var ctx = Fixture.context(
+                                    for: .heroFrame, roomCount: roomCount, active: active,
+                                    tier: tier, designer: designer
+                                )
+                                ctx.tableItemCount = savedCount
+                                let items = CompanionActionProvider.actions(
+                                    for: .heroFrame, context: ctx, isAuthenticated: signedIn
+                                )
+                                body(ctx, signedIn, items)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static func describe(_ ctx: CompanionContext, _ signedIn: Bool, _ items: [CompanionActionItem]) -> String {
+        "rooms=\(ctx.roomCount) designer=\(String(describing: ctx.designerRelationship)) "
+            + "request=\(ctx.activeDesignRequest != nil) tier=\(String(describing: ctx.engagementTier)) "
+            + "saved=\(ctx.tableItemCount) signedIn=\(signedIn) → \(items.map(\.label))"
+    }
+
+    @Test
+    func everyHomeMenuFitsSixRowsIncludingTail() {
+        Self.everyHomeContext { ctx, signedIn, items in
+            #expect(items.count <= 6, "\(items.count) rows: \(Self.describe(ctx, signedIn, items))")
+        }
+    }
+
+    @Test
+    func everyHomeMenuReadsInPriorityOrder() {
+        Self.everyHomeContext { ctx, signedIn, items in
+            let ranks = items.map { Self.rank($0) }
+            #expect(!ranks.contains(nil), "unranked row: \(Self.describe(ctx, signedIn, items))")
+            let known = ranks.compactMap { $0 }
+            #expect(known == known.sorted(), "out of priority order: \(Self.describe(ctx, signedIn, items))")
+            #expect(Set(known).count == known.count, "two rows share a rank: \(Self.describe(ctx, signedIn, items))")
+        }
+    }
+
+    @Test
+    func everyHomeMenuKeepsTheSavedDoorAndExactlyOneSpacesRow() {
+        Self.everyHomeContext { ctx, signedIn, items in
+            // SP-12: the Saved row is unconditional.
+            #expect(
+                items.contains { $0.analyticsId == "collections" },
+                "no Saved row: \(Self.describe(ctx, signedIn, items))"
+            )
+            // The scan folds INTO the spaces row at zero rooms — one row, never two.
+            let spaces = items.filter { row in
+                row.analyticsId == "your_spaces" || row.analyticsId == "scan"
+            }
+            let dump = "spaces=" + spaces.map { "\($0.analyticsId)/\($0.label)" }.joined(separator: ", ")
+                + " all=" + items.map { "\($0.analyticsId)/\($0.label)" }.joined(separator: " | ")
+            #expect(spaces.count == 1, Comment(rawValue: dump))
+            if ctx.roomCount == 0 {
+                #expect(spaces.map(\.label) == ["Add your first space"], Comment(rawValue: dump))
+                #expect(spaces.compactMap(\.route) == [AppRoute.scanFlow(reason: .fresh)], Comment(rawValue: dump))
+            } else {
+                #expect(spaces.compactMap(\.route) == [AppRoute.yourSpaces], Comment(rawValue: dump))
+            }
+        }
+    }
+
+    @Test
+    func everyHomeMenuOffersTheMessageRowExactlyWhenADesignerIsOnTheJob() {
+        Self.everyHomeContext { ctx, signedIn, items in
+            let hasMessageRow = items.contains { $0.analyticsId == "message_designer" }
+            let isLive = ctx.designerRelationship?.isLive ?? false
+            #expect(hasMessageRow == isLive, "message row=\(hasMessageRow): \(Self.describe(ctx, signedIn, items))")
+        }
+    }
+
+    @Test
+    func everyHomeMenuSuggestsExactlyOneRow() {
+        Self.everyHomeContext { ctx, signedIn, items in
+            let suggested = items.filter(\.isSuggested).count
+            #expect(suggested == 1, "\(suggested) suggested: \(Self.describe(ctx, signedIn, items))")
+        }
     }
 }
