@@ -16,33 +16,41 @@ import Foundation
 enum DesignHelpDestination: Equatable {
     /// Open the request the client already has, at its current stage.
     case existingRequest(leadId: UUID)
+    /// We do not yet know whether the client has a request. Open the request
+    /// list, which refreshes on appear and renders the consultation landing
+    /// when there is genuinely nothing there — so the tap is never lost and
+    /// never files a duplicate.
+    case requestList
     /// Open the compose flow — there is nothing to open instead.
     case newRequest
 
-    /// A client past `.discovering` with a live (non-terminal) promoted
-    /// request is sent to that request. A terminal request is not a
-    /// relationship, so a new one is the honest answer there.
+    /// A client with an open (non-terminal) request is sent to it. A terminal
+    /// request is not a relationship, so a new one is the honest answer there.
+    ///
+    /// The tier arrives as `EngagementTierState`, not `EngagementTier`,
+    /// because `resolve` on an unloaded service sees `requests == []` and
+    /// answers `.discovering` — indistinguishable from a client who really has
+    /// none. On a cold launch that is a tap on "Get design help" filing the
+    /// second lead this guard exists to prevent, so "we do not know yet" has
+    /// to be its own answer.
     static func resolve(
-        tier: EngagementTier,
-        promotedRequest: DesignRequestStatus?
+        state: EngagementTierState,
+        openRequest: DesignRequestStatus?
     ) -> DesignHelpDestination {
-        guard tier >= .engaged,
-              let promotedRequest,
-              !promotedRequest.stage.isTerminal else { return .newRequest }
-        return .existingRequest(leadId: promotedRequest.leadId)
+        switch state {
+        case .unknown:
+            return .requestList
+        case .known(let tier):
+            guard tier >= .engaged, let openRequest else { return .newRequest }
+            return .existingRequest(leadId: openRequest.leadId)
+        }
     }
 
     /// The live inputs, read at the call site so the resolution stays pure.
     static var current: DesignHelpDestination {
         resolve(
-            tier: EngagementTier.resolve(
-                requests: DesignRequestStatusService.shared.requests,
-                projectCount: BadgeCountService.shared.projectCount,
-                proposalCount: BadgeCountService.shared.proposalsAwaitingSignatureCount,
-                invoiceCount: BadgeCountService.shared.payableInvoiceCount,
-                decisionCount: BadgeCountService.shared.pendingDecisionCount
-            ),
-            promotedRequest: DesignRequestStatusService.shared.promotedRequest
+            state: EngagementTier.currentState,
+            openRequest: DesignRequestStatusService.shared.openRequest
         )
     }
 }

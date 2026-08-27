@@ -197,7 +197,7 @@ struct ThreadListView: View {
     /// Companion reads.
     private var designerRelationship: DesignerRelationship {
         DesignerRelationshipResolver.resolve(
-            promotedRequest: DesignRequestStatusService.shared.promotedRequest,
+            lead: DesignRequestStatusService.shared.liveLead,
             projects: BadgeCountService.shared.projects,
             roster: BadgeCountService.shared.roster
         )

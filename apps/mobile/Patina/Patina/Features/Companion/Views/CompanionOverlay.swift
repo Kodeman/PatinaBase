@@ -185,7 +185,7 @@ public struct CompanionOverlay: View {
             decisionCount: BadgeCountService.shared.pendingDecisionCount
         )
         context.designerRelationship = DesignerRelationshipResolver.resolve(
-            promotedRequest: DesignRequestStatusService.shared.promotedRequest,
+            lead: DesignRequestStatusService.shared.liveLead,
             projects: BadgeCountService.shared.projects,
             roster: BadgeCountService.shared.roster
         )

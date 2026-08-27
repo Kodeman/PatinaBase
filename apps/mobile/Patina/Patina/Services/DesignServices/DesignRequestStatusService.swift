@@ -403,8 +403,34 @@ public final class DesignRequestStatusService {
     }
 
     /// Count of requests needing user attention — drives the hub-row badge.
-    public var attentionCount: Int {
+    /// Named for what it counts: `BadgeCountService.attentionCount` is a
+    /// different number (decisions + proposals + invoices) and the two were
+    /// one keystroke apart.
+    public var requestsNeedingAttentionCount: Int {
         requests.filter { $0.stage.needsAttention }.count
+    }
+
+    /// The newest request that is still open, designer or not.
+    ///
+    /// Deliberately NOT `promotedRequest`. That answers "what should the home
+    /// card show", and `isVisibleForPromotion` makes it nil for a request the
+    /// client dismissed at its current stage and for a matched request whose
+    /// stage anchor is more than 14 days old. A relationship does not end
+    /// because a card stopped displaying, so the duplicate-lead guard and the
+    /// designer relationship both read this instead.
+    public var openRequest: DesignRequestStatus? {
+        requests
+            .filter { !$0.stage.isTerminal }
+            .max(by: { $0.createdAt < $1.createdAt })
+    }
+
+    /// The client's live lead — the newest open request a designer is on.
+    /// R3's pre-emption predicate reads this: a client matched a year ago
+    /// still has a designer.
+    public var liveLead: DesignRequestStatus? {
+        requests
+            .filter { !$0.stage.isTerminal && $0.designerId != nil }
+            .max(by: { $0.createdAt < $1.createdAt })
     }
 
     // MARK: Refresh
@@ -731,19 +757,28 @@ public final class DesignRequestStatusService {
         + "match_ceremonies(id,state,intro_text,credential_line,portfolio_url,offered_slots,"
         + "timezone,offered_at,picked_slot_id,picked_slot_starts_at,thread_id,created_at)"
 
+    /// The query items the leads read sends, extracted so SP-07's one change
+    /// is assertable: `select` and `order` and nothing else.
+    ///
+    /// The filter that was here — `client_request_id=not.is.null` — admitted
+    /// only app-originated rows, so a lead created from the designer portal
+    /// never came back and the matched branch Today already renders was
+    /// unreachable. The client scope is unchanged and was never this filter:
+    /// `leads` RLS (00014:58-59) is `auth.uid() = homeowner_id`. Any filter
+    /// added back here narrows what the client can see about their own
+    /// relationship, so the test pins the list rather than the absence of one
+    /// name.
+    static func leadQueryItems() -> [URLQueryItem] {
+        [
+            URLQueryItem(name: "select", value: selectColumns),
+            URLQueryItem(name: "order", value: "created_at.desc")
+        ]
+    }
+
     private func fetchLeadRows() async throws -> [LeadStatusRow] {
         let url = APIConfiguration.apiURL
             .appendingPathComponent("/rest/v1/leads")
-            // SP-07: no `client_request_id` filter. It admitted only
-            // app-originated rows, so a lead created from the designer portal
-            // never came back and the matched branch Today already renders was
-            // unreachable. The client scope is unchanged — `leads` RLS
-            // (00014:58-59) is `auth.uid() = homeowner_id`, which is the
-            // client-relationship scope this read always relied on.
-            .appending(queryItems: [
-                URLQueryItem(name: "select", value: Self.selectColumns),
-                URLQueryItem(name: "order", value: "created_at.desc")
-            ])
+            .appending(queryItems: Self.leadQueryItems())
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(APIConfiguration.anonKey, forHTTPHeaderField: "apikey")

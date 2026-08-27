@@ -16,8 +16,13 @@ struct EngagementTierTests {
 
     /// Build a status whose derived `stage` follows from `(status, designerId)`
     /// — see `DesignRequestStage.from`. Only those two fields matter here.
-    private func request(status: String, designerId: UUID? = nil) -> DesignRequestStatus {
-        DesignRequestStatus(
+    private func request(
+        status: String,
+        designerId: UUID? = nil,
+        anchoredDaysAgo: Int = 0
+    ) -> DesignRequestStatus {
+        let anchor = Date().addingTimeInterval(-Double(anchoredDaysAgo) * 86_400)
+        return DesignRequestStatus(
             leadId: UUID(),
             statusRaw: status,
             designerId: designerId,
@@ -27,8 +32,8 @@ struct EngagementTierTests {
             timeline: nil,
             requestDescription: nil,
             scanCount: 0,
-            createdAt: Date(),
-            updatedAt: nil,
+            createdAt: anchor,
+            updatedAt: anchor,
             dismissedAt: nil,
             dismissedStageRaw: nil
         )
@@ -243,11 +248,11 @@ struct EngagementTierTests {
     func designHelpOpensTheExistingRequestWhenEngaged() {
         let live = request(status: "accepted", designerId: UUID())
         #expect(
-            DesignHelpDestination.resolve(tier: .engaged, promotedRequest: live)
+            DesignHelpDestination.resolve(state: .known(.engaged), openRequest: live)
                 == .existingRequest(leadId: live.leadId)
         )
         #expect(
-            DesignHelpDestination.resolve(tier: .activeProject, promotedRequest: live)
+            DesignHelpDestination.resolve(state: .known(.activeProject), openRequest: live)
                 == .existingRequest(leadId: live.leadId)
         )
     }
@@ -255,30 +260,94 @@ struct EngagementTierTests {
     @Test
     func designHelpComposesWhenDiscovering() {
         #expect(
-            DesignHelpDestination.resolve(tier: .discovering, promotedRequest: nil)
+            DesignHelpDestination.resolve(state: .known(.discovering), openRequest: nil)
                 == .newRequest
+        )
+    }
+
+    @Test
+    func designHelpComposesWhenThereIsNoOpenRequest() {
+        // activeProject with no open request (the project came from elsewhere):
+        // there is no request status to open, so compose.
+        #expect(
+            DesignHelpDestination.resolve(state: .known(.activeProject), openRequest: nil)
+                == .newRequest
+        )
+    }
+
+    /// M2. `EngagementTier.resolve` on an unloaded service sees `requests ==
+    /// []` and answers `.discovering`, which is indistinguishable from a
+    /// client who really has none — so the guard reopened for the length of
+    /// every cold-launch fetch and the tap filed the second lead. `.unknown`
+    /// is now its own answer: the request list, which refreshes on appear and
+    /// renders the consultation landing when there is genuinely nothing.
+    @Test
+    func designHelpDoesNotComposeBeforeTheLeadsHaveLoaded() {
+        #expect(
+            DesignHelpDestination.resolve(state: .unknown, openRequest: nil) == .requestList
+        )
+        // The state the services are actually in on a cold launch.
+        let cold = EngagementTier.resolveState(
+            isAuthenticated: true,
+            badgesLoaded: false,
+            requestsLoaded: false,
+            requests: [],
+            projectCount: 0, proposalCount: 0, invoiceCount: 0, decisionCount: 0
+        )
+        #expect(cold == .unknown)
+        #expect(DesignHelpDestination.resolve(state: cold, openRequest: nil) != .newRequest)
+    }
+
+    /// M3. The guard used to read `promotedRequest`, which
+    /// `isVisibleForPromotion` makes nil past a 14-day window on a matched
+    /// request — so a client matched a month ago was handed the compose sheet
+    /// again. `openRequest` carries no display window.
+    @Test
+    func designHelpOpensARequestOlderThanThePromotionWindow() {
+        let longMatched = request(status: "accepted", designerId: UUID(), anchoredDaysAgo: 30)
+        #expect(longMatched.stage == .matched)
+        #expect(!longMatched.isVisibleForPromotion())
+        #expect(
+            DesignHelpDestination.resolve(state: .known(.engaged), openRequest: longMatched)
+                == .existingRequest(leadId: longMatched.leadId)
         )
     }
 
     @Test
     func designHelpComposesWhenTheOnlyRequestIsTerminal() {
         // A closed request is not a relationship — offering "Get design help"
-        // there is correct, and a second lead is the right outcome.
+        // there is correct, and a second lead is the right outcome. A terminal
+        // request is never an `openRequest`, so this is what the service hands
+        // the resolver.
         let closed = request(status: "declined")
         #expect(closed.stage.isTerminal)
         #expect(
-            DesignHelpDestination.resolve(tier: .engaged, promotedRequest: closed)
+            DesignHelpDestination.resolve(state: .known(.engaged), openRequest: nil)
                 == .newRequest
         )
     }
 
-    @Test
-    func designHelpComposesWhenThereIsNoPromotedRequest() {
-        // activeProject with no live request (the project came from elsewhere):
-        // there is no request status to open, so compose.
-        #expect(
-            DesignHelpDestination.resolve(tier: .activeProject, promotedRequest: nil)
-                == .newRequest
-        )
+    // MARK: - SP-07: the query itself
+
+    /// The whole of SP-07's mechanism is the query item that is no longer
+    /// there. Every other SP-07 test exercises resolvers that were never
+    /// broken and pass on `main` unchanged, so this is the one that would
+    /// have failed before the fix — and the one that fails if any filter is
+    /// added back, not just the name that was removed. The client scope is
+    /// RLS (`leads`, `auth.uid() = homeowner_id`), never a query item.
+    @Test("the leads read sends select and order and nothing else")
+    func theLeadsQueryCarriesNoFilter() throws {
+        let items = DesignRequestStatusService.leadQueryItems()
+
+        #expect(items.map(\.name).sorted() == ["order", "select"])
+        for item in items {
+            #expect(
+                !(item.value ?? "").contains("client_request_id="),
+                "a filter came back inside \(item.name)"
+            )
+        }
+        let select = try #require(items.first { $0.name == "select" }?.value)
+        #expect(select.contains("designer_id"), "the matched branch needs the designer")
+        #expect(try #require(items.first { $0.name == "order" }?.value) == "created_at.desc")
     }
 }

@@ -115,7 +115,7 @@ struct StudioHubSection: View {
     }
 
     private var designerBadge: Int {
-        hasDesignRequests ? requestStatus.attentionCount : 0
+        hasDesignRequests ? requestStatus.requestsNeedingAttentionCount : 0
     }
 
     /// "Your Spaces" row meta — "captured", not "scanned": manual-entry

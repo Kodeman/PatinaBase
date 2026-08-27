@@ -67,8 +67,14 @@ enum DesignerRelationshipResolver {
     /// crediting one over the other, so the answer is `.none` and the order
     /// carries no designer rather than the wrong one. A later wave can replace
     /// this with an explicit "who is on this job" choice.
+    /// `lead` is the client's live lead (`DesignRequestStatusService.liveLead`),
+    /// NOT `promotedRequest`. The promoted one is a display value —
+    /// `isVisibleForPromotion` makes it nil once the client dismisses the card
+    /// or the matched stage is more than 14 days old — so reading it here made
+    /// the longest-lived relationships resolve `.none`, `isLive == false`, and
+    /// would have drawn Buy in W5 for exactly the clients R3 pre-empts.
     static func resolve(
-        promotedRequest: DesignRequestStatus?,
+        lead: DesignRequestStatus?,
         projects: [RemoteProject],
         roster: [RosterDesigner]
     ) -> DesignerRelationship {
@@ -81,13 +87,13 @@ enum DesignerRelationshipResolver {
             return .project(projectId: projectId, designerId: designerId, studioName: nil)
         }
 
-        if let promotedRequest,
-           !promotedRequest.stage.isTerminal,
-           let designerId = promotedRequest.designerId {
+        if let lead,
+           !lead.stage.isTerminal,
+           let designerId = lead.designerId {
             return .lead(
-                leadId: promotedRequest.leadId,
+                leadId: lead.leadId,
                 designerId: designerId,
-                studioName: promotedRequest.studioName
+                studioName: lead.studioName
             )
         }
 

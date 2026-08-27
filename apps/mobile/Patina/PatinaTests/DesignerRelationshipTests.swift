@@ -13,8 +13,15 @@ import Testing
 @MainActor
 struct DesignerRelationshipTests {
 
-    private func lead(status: String, designerId: UUID?, studio: String? = nil) -> DesignRequestStatus {
-        DesignRequestStatus(
+    private func lead(
+        status: String,
+        designerId: UUID?,
+        studio: String? = nil,
+        anchoredDaysAgo: Int = 0,
+        dismissedAtStage: String? = nil
+    ) -> DesignRequestStatus {
+        let anchor = Date().addingTimeInterval(-Double(anchoredDaysAgo) * 86_400)
+        return DesignRequestStatus(
             leadId: UUID(),
             statusRaw: status,
             designerId: designerId,
@@ -24,10 +31,10 @@ struct DesignerRelationshipTests {
             timeline: nil,
             requestDescription: nil,
             scanCount: 0,
-            createdAt: Date(),
-            updatedAt: nil,
-            dismissedAt: nil,
-            dismissedStageRaw: nil,
+            createdAt: anchor,
+            updatedAt: anchor,
+            dismissedAt: dismissedAtStage == nil ? nil : Date(),
+            dismissedStageRaw: dismissedAtStage,
             studioName: studio
         )
     }
@@ -68,7 +75,7 @@ struct DesignerRelationshipTests {
     @Test("no request, no project, no roster resolves to none")
     func noSignalsIsNone() {
         let relationship = DesignerRelationshipResolver.resolve(
-            promotedRequest: nil, projects: [], roster: []
+            lead: nil, projects: [], roster: []
         )
         #expect(relationship == .none)
         #expect(!relationship.isLive)
@@ -80,7 +87,7 @@ struct DesignerRelationshipTests {
         let projectId = UUID()
         let designerId = UUID()
         let relationship = DesignerRelationshipResolver.resolve(
-            promotedRequest: lead(status: "accepted", designerId: UUID()),
+            lead: lead(status: "accepted", designerId: UUID()),
             projects: [project(id: projectId, designerId: designerId)],
             roster: [RosterDesigner(designerId: UUID(), addedAt: day(0))]
         )
@@ -92,7 +99,7 @@ struct DesignerRelationshipTests {
     @Test("an archived project is not a relationship")
     func archivedProjectIsIgnored() {
         let relationship = DesignerRelationshipResolver.resolve(
-            promotedRequest: nil,
+            lead: nil,
             projects: [project(id: UUID(), designerId: UUID(), status: "archived")],
             roster: []
         )
@@ -102,7 +109,7 @@ struct DesignerRelationshipTests {
     @Test("a project with no designer is not a relationship")
     func designerlessProjectIsIgnored() {
         let relationship = DesignerRelationshipResolver.resolve(
-            promotedRequest: nil,
+            lead: nil,
             projects: [project(id: UUID(), designerId: nil)],
             roster: []
         )
@@ -115,7 +122,7 @@ struct DesignerRelationshipTests {
         for status in ["accepted", "contacted", "new", "viewed"] {
             let promoted = lead(status: status, designerId: designerId, studio: "Hartwell Studio")
             let relationship = DesignerRelationshipResolver.resolve(
-                promotedRequest: promoted, projects: [], roster: []
+                lead: promoted, projects: [], roster: []
             )
             #expect(
                 relationship == .lead(
@@ -127,11 +134,43 @@ struct DesignerRelationshipTests {
         }
     }
 
+    /// M3. `promotedRequest` filters on `isVisibleForPromotion`, which is
+    /// false past a 14-day window on a matched request and false once the
+    /// client dismisses the card. Reading it here made the longest-lived
+    /// relationships resolve `.none` — and R3's pre-emption fails open, so in
+    /// W5 Buy would have drawn for a client who has had a designer for a year.
+    @Test("a relationship outlives the card that displays it")
+    func aRelationshipOutlivesItsCard() {
+        let designerId = UUID()
+
+        let longMatched = lead(status: "accepted", designerId: designerId, anchoredDaysAgo: 30)
+        #expect(longMatched.stage == .matched)
+        #expect(
+            !longMatched.isVisibleForPromotion(),
+            "fixture must be past the promotion window, or it proves nothing"
+        )
+        let stillLive = DesignerRelationshipResolver.resolve(
+            lead: longMatched, projects: [], roster: []
+        )
+        #expect(stillLive.isLive)
+        #expect(stillLive.designerId == designerId)
+
+        let dismissed = lead(
+            status: "accepted", designerId: designerId, dismissedAtStage: "matched"
+        )
+        #expect(!dismissed.isVisibleForPromotion())
+        #expect(
+            DesignerRelationshipResolver.resolve(
+                lead: dismissed, projects: [], roster: []
+            ).isLive
+        )
+    }
+
     @Test("a pooled lead with no designer yet is not a relationship")
     func pooledLeadIsNotARelationship() {
         #expect(
             DesignerRelationshipResolver.resolve(
-                promotedRequest: lead(status: "new", designerId: nil),
+                lead: lead(status: "new", designerId: nil),
                 projects: [], roster: []
             ) == .none
         )
@@ -142,7 +181,7 @@ struct DesignerRelationshipTests {
         for status in ["declined", "expired"] {
             #expect(
                 DesignerRelationshipResolver.resolve(
-                    promotedRequest: lead(status: status, designerId: UUID()),
+                    lead: lead(status: status, designerId: UUID()),
                     projects: [], roster: []
                 ) == .none,
                 "status \(status) resolved to a relationship"
@@ -154,7 +193,7 @@ struct DesignerRelationshipTests {
     func rosterIsAttributionOnly() {
         let designerId = UUID()
         let relationship = DesignerRelationshipResolver.resolve(
-            promotedRequest: nil,
+            lead: nil,
             projects: [],
             roster: [RosterDesigner(designerId: designerId, addedAt: day(0))]
         )
@@ -171,12 +210,12 @@ struct DesignerRelationshipTests {
         let newer = RosterDesigner(designerId: UUID(), addedAt: day(3))
         #expect(
             DesignerRelationshipResolver.resolve(
-                promotedRequest: nil, projects: [], roster: [older, newer]
+                lead: nil, projects: [], roster: [older, newer]
             ) == .roster(designerId: newer.designerId)
         )
         #expect(
             DesignerRelationshipResolver.resolve(
-                promotedRequest: nil, projects: [], roster: [newer, older]
+                lead: nil, projects: [], roster: [newer, older]
             ) == .roster(designerId: newer.designerId)
         )
     }
@@ -187,7 +226,7 @@ struct DesignerRelationshipTests {
         let second = RosterDesigner(designerId: UUID(), addedAt: day(0, hour: 17))
         #expect(
             DesignerRelationshipResolver.resolve(
-                promotedRequest: nil, projects: [], roster: [first, second]
+                lead: nil, projects: [], roster: [first, second]
             ) == .none
         )
     }
@@ -198,7 +237,7 @@ struct DesignerRelationshipTests {
         let promoted = lead(status: "accepted", designerId: designerId)
         #expect(
             DesignerRelationshipResolver.resolve(
-                promotedRequest: promoted,
+                lead: promoted,
                 projects: [],
                 roster: [
                     RosterDesigner(designerId: UUID(), addedAt: day(0, hour: 9)),
