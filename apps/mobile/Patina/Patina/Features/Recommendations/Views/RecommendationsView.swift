@@ -9,6 +9,10 @@ import SwiftUI
 import SwiftData
 
 struct RecommendationsView: View {
+    /// SP-02: one card aspect, so the image area is identical on every card
+    /// whatever the photo's own proportions.
+    private static let cardImageAspect: CGFloat = 4.0 / 3.0
+
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = RecommendationsViewModel()
@@ -31,13 +35,26 @@ struct RecommendationsView: View {
     @State private var roomName: String?
     @State private var tastePortrait: TastePortrait?
 
+    /// SP-11: the piece the reader chose "Add to room" for, and the rooms the
+    /// sheet can offer. `AddToRoomSheet` has existed and been unmounted since
+    /// it was written — this is the mount.
+    @State private var pieceAwaitingRoom: Product?
+    @State private var roomOptions: [RoomSummary] = []
+    /// SP-11: a room that has not synced has no `remoteId`, so the save cannot
+    /// be mirrored. The old silent fallback to the generic feed is what
+    /// produced the mismatch; say it instead.
+    @State private var addToRoomMessage: String?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             VStack(alignment: .leading, spacing: 4) {
                 // Glossary: "Browse pieces" replaces "Perfect for your
                 // space" as this screen's H2; the subtitle stays.
-                Text("Browse pieces")
+                // SP-11: a room-scoped browse says whose room it is. The
+                // generic title on a room's own "browse picks" is what made
+                // the scoping invisible.
+                Text(scopedTitle)
                     .font(PatinaTypography.h4)
                     .foregroundStyle(PatinaColors.Text.primary)
 
@@ -66,7 +83,26 @@ struct RecommendationsView: View {
                     .transition(.opacity)
             }
 
-            // Filter bar
+            // SP-11: the outcome of "Add to room" — including the honest
+            // failure when the room has not synced yet.
+            if let addToRoomMessage {
+                Text(addToRoomMessage)
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(PatinaColors.Background.secondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 8)
+                    .transition(.opacity)
+            }
+
+            // Filter bar. SP-02: at XXL Dynamic Type the five chips are wider
+            // than the screen, so the row scrolls and carries a trailing fade
+            // that says there is more past the edge — "Storage" clipping to
+            // "Stor" with no affordance was the reported failure.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(viewModel.filters, id: \.self) { filter in
@@ -74,11 +110,13 @@ struct RecommendationsView: View {
                             withAnimation(.spring(response: 0.3)) {
                                 viewModel.activeFilter = filter
                             }
+                            Task { await viewModel.applyActiveFilter(roomId: roomRemoteId) }
                         }
                     }
                 }
                 .padding(.horizontal, 24)
             }
+            .mask(chipRowFade)
             .padding(.bottom, 12)
 
             content
@@ -97,10 +135,84 @@ struct RecommendationsView: View {
             // U29 fix: seed already-saved state (prior visit, another
             // screen, another device) before the grid renders, so the
             // heart/menu never offer "Save" on something already saved.
+            roomOptions = RoomStore(context: modelContext).allRooms().map(RoomSummary.init(from:))
             async let seed: Void = viewModel.seedSavedState(context: modelContext)
             async let load: Void = viewModel.loadRecommendations(roomId: roomRemoteId)
             _ = await (seed, load)
         }
+        // SP-11: the loop the app invited and then closed — a piece can now be
+        // put into a room from the card menu.
+        .sheet(item: $pieceAwaitingRoom) { piece in
+            AddToRoomSheet(
+                product: piece,
+                rooms: roomOptions,
+                onSelect: { room in
+                    pieceAwaitingRoom = nil
+                    addPiece(piece, to: room)
+                },
+                onNewRoom: {
+                    pieceAwaitingRoom = nil
+                    coordinator.navigate(to: .manualRoomEntry)
+                }
+            )
+        }
+    }
+
+    /// The local room id a scoped browse saves into, so a save made here
+    /// counts on the room's own screen and on Today.
+    private var scopedRoomLocalId: UUID? {
+        guard roomRemoteId != nil, let roomId else { return nil }
+        return UUID(uuidString: roomId)
+    }
+
+    /// SP-11: names the room a scoped browse belongs to.
+    private var scopedTitle: String {
+        guard roomRemoteId != nil, let roomName else { return "Browse pieces" }
+        return roomName
+    }
+
+    /// SP-11: writes the piece into the room the reader picked — the local
+    /// `SavedItem` the room's own count reads, plus the `saved_items` mirror
+    /// carrying the room. A room that has not synced cannot be mirrored, and
+    /// the screen says so rather than silently doing something else.
+    private func addPiece(_ piece: Product, to room: RoomSummary) {
+        let store = RoomStore(context: modelContext)
+        guard let target = store.room(id: room.id) else { return }
+        _ = store.addItem(piece, matchScore: piece.matchScore, toRoomId: room.id)
+        viewModel.saveProduct(
+            piece,
+            context: modelContext,
+            roomRemoteId: target.remoteId,
+            roomLocalId: room.id
+        )
+        roomOptions = store.allRooms().map(RoomSummary.init(from:))
+        showAddToRoom(
+            target.remoteId == nil
+                ? "Added to \(room.name) on this phone. It will reach your account once the room syncs."
+                : "Added to \(room.name)."
+        )
+    }
+
+    private func showAddToRoom(_ message: String) {
+        addToRoomMessage = message
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            addToRoomMessage = nil
+        }
+    }
+
+    /// SP-02: the trailing fade that tells a reader the chip row continues
+    /// past the right edge.
+    private var chipRowFade: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: 0.92),
+                .init(color: .black.opacity(0), location: 1)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 
     /// U06/U07 fix: `roomId` is the local `RoomModel.id`; resolve it to the
@@ -170,7 +282,7 @@ struct RecommendationsView: View {
         .simultaneousGesture(productCardSwipeGesture(product))
         // PT-2-5: collapse maker/name/price into one VoiceOver stop.
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(product.name) by \(product.makerName), \(product.fullFormattedPrice), \(product.matchLabel)")
+        .accessibilityLabel(cardAccessibilityLabel(product))
         .accessibilityHint("Double-tap to view details.")
         // PT-2-4: expose the swipe-to-save / swipe-to-skip gestures as
         // VoiceOver actions, since the swipe itself is inaccessible. Toggles
@@ -183,6 +295,13 @@ struct RecommendationsView: View {
         .accessibilityAction(named: "Skip") {
             viewModel.skipProduct(product)
         }
+    }
+
+    /// SP-10: VoiceOver names the maker only when there is one to name —
+    /// "by Unknown Maker" is not a sentence anyone should hear.
+    private func cardAccessibilityLabel(_ product: Product) -> String {
+        let maker = product.resolvedMakerName.map { " by \($0)" } ?? ""
+        return "\(product.name)\(maker), \(product.fullFormattedPrice), \(product.matchLabel)"
     }
 
     private func productCardLabel(_ product: Product) -> some View {
@@ -199,15 +318,20 @@ struct RecommendationsView: View {
             // Product image via PatinaAsyncImage (R15) — branded strata
             // placeholder for loading/failure; category gradient remains
             // the deliberate no-URL fallback.
-            if let imageURL = product.imageURL, let url = URL(string: imageURL) {
-                PatinaAsyncImage(url: url)
-                    .frame(height: 160)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-            } else {
-                product.placeholderGradient
-                    .frame(height: 160)
-            }
+            //
+            // SP-02: one card aspect for every card, image or gradient, so a
+            // photo that arrives late cannot resize its neighbour and the
+            // column stays the width the grid gave it.
+            Color.clear
+                .aspectRatio(Self.cardImageAspect, contentMode: .fit)
+                .overlay {
+                    if let imageURL = product.imageURL, let url = URL(string: imageURL) {
+                        PatinaAsyncImage(url: url)
+                    } else {
+                        product.placeholderGradient
+                    }
+                }
+                .clipped()
 
             // Match badge
             Text(product.matchLabel)
@@ -234,13 +358,19 @@ struct RecommendationsView: View {
     }
 
     private func productCardInfo(_ product: Product) -> some View {
+        // SP-02: every text block reserves the same number of lines, so the
+        // four cards in view are one card size rather than four heights.
         VStack(alignment: .leading, spacing: 2) {
-            MonoLabel(text: product.makerName, size: PatinaTypography.monoSmall)
+            MonoLabel(
+                text: product.resolvedMakerName ?? "\u{00A0}",
+                size: PatinaTypography.monoSmall
+            )
+            .lineLimit(1)
 
             Text(product.name)
                 .font(PatinaTypography.uiSmall)
                 .foregroundStyle(PatinaColors.Text.primary)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
                 .padding(.top, 2)
 
             Text(product.fullFormattedPrice)
@@ -252,10 +382,12 @@ struct RecommendationsView: View {
                 Text(rationale)
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
+                    .lineLimit(2, reservesSpace: true)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 5)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
     }
@@ -294,7 +426,7 @@ struct RecommendationsView: View {
         if viewModel.isSaved(product) {
             viewModel.unsaveProduct(product, context: modelContext)
         } else {
-            viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
+            viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId, roomLocalId: scopedRoomLocalId)
         }
     }
 
@@ -310,9 +442,19 @@ struct RecommendationsView: View {
             }
         } else {
             Button {
-                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
+                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId, roomLocalId: scopedRoomLocalId)
             } label: {
                 Label("Save", systemImage: "heart")
+            }
+        }
+        // SP-11: there was no way, anywhere in the app, to put a piece into a
+        // room — the app invited the loop and then closed it. Drawn only when
+        // the reader actually has a room.
+        if !roomOptions.isEmpty {
+            Button {
+                pieceAwaitingRoom = product
+            } label: {
+                Label("Add to room", systemImage: "square.grid.2x2")
             }
         }
         ShareLink(
@@ -340,7 +482,7 @@ struct RecommendationsView: View {
             if isSaved {
                 viewModel.unsaveProduct(product, context: modelContext)
             } else {
-                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId)
+                viewModel.saveProduct(product, context: modelContext, roomRemoteId: roomRemoteId, roomLocalId: scopedRoomLocalId)
             }
         } label: {
             Circle()

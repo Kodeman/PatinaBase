@@ -193,12 +193,22 @@ final class DailyRoomViewModel {
         storyTask?.cancel()
         storyTask = Task { [weak self] in
             do {
-                let remote = try await EditorialStoriesAPIClient.shared.fetchTodaysStory()
+                // SP-18: pick the highest-`sort_order` story the reader has not
+                // opened, falling back to the newest — a `limit=1` fetch could
+                // only ever return the same row, which is why the same card
+                // appeared on every home, in dark mode, and after every
+                // relaunch. The unread dot comes off the same record.
+                let candidates = try await EditorialStoriesAPIClient.shared.fetchCandidates()
                 // `Task` inherits the enclosing `@MainActor` isolation, so the
                 // continuation already resumes on the main actor — no explicit
                 // `MainActor.run` bounce needed (PT-3-4).
                 guard let self else { return }
-                self.todayStory = remote.map { DailyStory(from: $0) }
+                let reads = StoryReadStore()
+                let pickedId = reads.nextStoryId(from: candidates.map(\.id))
+                let remote = candidates.first { $0.id == pickedId }
+                self.todayStory = remote.map {
+                    DailyStory(from: $0, isUnread: reads.isUnread(storyId: $0.id))
+                }
                 self.storyLoadFailed = false
             } catch {
                 #if DEBUG

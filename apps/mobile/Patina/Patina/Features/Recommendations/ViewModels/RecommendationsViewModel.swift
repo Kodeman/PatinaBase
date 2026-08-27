@@ -35,9 +35,15 @@ final class RecommendationsViewModel {
     /// succeeds.
     private var remoteSavedItemIds: [String: String] = [:]
 
-    /// U29: transient notice shown when the remote save mirror fails, so the
-    /// user never believes an unsaved item is saved. Cleared automatically.
+    /// U29/SP-14: transient notice shown when a signed-in reader's remote save
+    /// mirror does not land — the piece is saved on this phone either way, and
+    /// the line says so. Never set for a guest, who has no account to mirror
+    /// into. Cleared automatically.
     var saveFailureMessage: String?
+
+    /// SP-14: whether there is an account to mirror a save into. A closure so
+    /// the guest path can be exercised without an ambient session.
+    var isAccountAvailable: () -> Bool = { AuthService.shared.isAuthenticated }
 
     // MARK: - Filters
 
@@ -54,8 +60,17 @@ final class RecommendationsViewModel {
         let count = filteredProducts.count
         let piece = "piece\(count == 1 ? "" : "s")"
         // U06/U07: room-scoped browse gets its own scoping language.
-        let scope = lastRoomId != nil ? "curated for this room" : "curated for your space"
+        // SP-02: "curated" is not how anyone here talks — the word is "chosen".
+        let scope = lastRoomId != nil ? "chosen for this room" : "chosen for your space"
         return "\(count) \(piece) \(scope)"
+    }
+
+    /// SP-02: the chip's category goes to the RPC as `p_category`, so the
+    /// subtitle's number is the catalog's real count for that category rather
+    /// than however many of the ≤20 already-fetched rows happened to match.
+    /// `All` clears the filter.
+    static func category(forFilter filter: String) -> ProductCategory? {
+        ProductCategory.allCases.first { $0.displayName == filter }
     }
 
     func isSaved(_ product: Product) -> Bool {
@@ -77,14 +92,15 @@ final class RecommendationsViewModel {
         let localItems = (try? context.fetch(localDescriptor)) ?? []
         savedProductIds = Set(localItems.compactMap { $0.productId })
 
-        let remoteRoomIds = RoomStore(context: context).allRooms().compactMap { $0.remoteId }
-        for remoteRoomId in remoteRoomIds {
-            guard let rows = try? await RoomsAPIClient.shared.listItems(forRoomId: remoteRoomId) else { continue }
-            for row in rows {
-                guard let productId = row.product_id else { continue }
-                savedProductIds.insert(productId)
-                remoteSavedItemIds[productId] = row.id
-            }
+        // SP-14: one read of the account's own saves, room-scoped or not.
+        // Walking each room's rows could never see a roomless save, which is
+        // now the standard shape.
+        guard let userId = try? await RoomsAPIClient.shared.resolveUserId(),
+              let rows = try? await RoomsAPIClient.shared.listItems(forUserId: userId) else { return }
+        for row in rows {
+            guard let productId = row.product_id else { continue }
+            savedProductIds.insert(productId)
+            remoteSavedItemIds[productId] = row.id
         }
     }
 
@@ -101,8 +117,12 @@ final class RecommendationsViewModel {
         isLoading = true
         error = nil
 
+        let category = Self.category(forFilter: activeFilter)
         do {
-            let response = try await ProductAPIClient.shared.fetchRecommendations(roomId: roomId)
+            let response = try await ProductAPIClient.shared.fetchRecommendations(
+                roomId: roomId,
+                category: category
+            )
             await MainActor.run {
                 self.products = response.items
                 self.isLoading = false
@@ -117,6 +137,11 @@ final class RecommendationsViewModel {
             PatinaLog.ui.error("[Recommendations] load failed: \(error.localizedDescription)")
             #endif
         }
+    }
+
+    /// SP-02: re-fetch for the chip the reader just tapped.
+    func applyActiveFilter(roomId: String?) async {
+        await loadRecommendations(roomId: roomId)
     }
 
     /// U39: re-invokes the last load with the same room scope — the retry
@@ -135,22 +160,34 @@ final class RecommendationsViewModel {
         }
     }
 
-    func saveProduct(_ product: Product, context: ModelContext, roomRemoteId: String? = nil) {
+    func saveProduct(_ product: Product, context: ModelContext, roomRemoteId: String? = nil,
+                     roomLocalId: UUID? = nil) {
+        // SP-14: idempotent on productId — a second tap must not create a
+        // second row.
+        guard !savedProductIds.contains(product.id) else { return }
+
         // Save to SwiftData as TableItemModel
         let item = TableItemModel(
             name: product.name,
             productId: product.id,
             imageURL: product.imageURL,
-            brandName: product.makerName,
-            priceInCents: product.priceCents
+            brandName: product.resolvedMakerName ?? product.makerName,
+            priceInCents: product.priceCents,
+            roomId: roomLocalId
         )
         context.insert(item)
         savedProductIds.insert(product.id)
         saveFailureMessage = nil
 
-        // Mirror to Supabase `saved_items` so the save follows the user
-        // across devices and surfaces in the designer portal.
-        if let roomRemoteId {
+        // SP-14: mirror to Supabase `saved_items` on EVERY save, not only the
+        // room-scoped ones — `room_id` is nullable, and a save that never
+        // reaches the server does not survive a reinstall or reach a second
+        // device. `room_id` carries the room when there is one.
+        //
+        // A guest has no account to mirror into (SP-14's risk note): the local
+        // store stays authoritative and SP-06's claim step carries the work
+        // across at sign-in, so no request is made and nothing is said.
+        if SavedItemMirror.shouldAttempt(isAuthenticated: isAccountAvailable()) {
             Task {
                 do {
                     let userId = try await RoomsAPIClient.shared.resolveUserId()
@@ -172,14 +209,12 @@ final class RecommendationsViewModel {
                     #if DEBUG
                     PatinaLog.ui.error("[Recommendations] save sync failed: \(error.localizedDescription)")
                     #endif
-                    // U29: the remote mirror is what makes a save durable
-                    // across devices/the portal — on failure, revert the
-                    // visible saved state rather than let the user believe
-                    // an unsaved item is saved.
+                    // U29 wanted the visible saved state reverted when the mirror
+                    // failed. SP-14 makes the local store the thing that is saved,
+                    // so the row stays and the reader is told exactly what did and
+                    // did not happen instead.
                     await MainActor.run {
-                        self.savedProductIds.remove(product.id)
-                        context.delete(item)
-                        self.showSaveFailure()
+                        self.showSaveDeferred()
                     }
                 }
             }
@@ -225,10 +260,12 @@ final class RecommendationsViewModel {
         HapticManager.shared.notification(.success)
     }
 
-    /// U29: shows the save-failure notice for a few seconds then clears it —
-    /// deliberately lightweight, no dismiss affordance to wire up.
-    private func showSaveFailure() {
-        saveFailureMessage = "Couldn't save — check your connection and try again."
+    /// U29/SP-14: shows the mirror-deferred notice for a few seconds then
+    /// clears it — deliberately lightweight, no dismiss affordance to wire up.
+    /// The piece is saved either way; this only reports that the account copy
+    /// did not land.
+    private func showSaveDeferred() {
+        saveFailureMessage = SavedItemMirror.deferredNotice
         Task {
             try? await Task.sleep(for: .seconds(4))
             await MainActor.run {

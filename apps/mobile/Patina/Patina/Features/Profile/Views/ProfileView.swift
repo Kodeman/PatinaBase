@@ -180,6 +180,13 @@ struct ProfileView: View {
 
     // MARK: - Components
 
+    // SP-18: the "MATCH" stat is gone. It printed
+    // `styleProfile.confidence` — the quiz's confidence in its own reading —
+    // under a label claiming a match, against nothing the screen names. It
+    // read 63% signed in and 48% on the same device signed out, with nothing
+    // on screen explaining either. The app cannot compute the rationale the
+    // plank asked for, so the number comes down rather than keeps lying.
+    // Rooms and Saved stay: both are counts the screen can defend.
     @ViewBuilder
     private var stats: some View {
         if dynamicTypeSize.isAccessibilitySize {
@@ -187,16 +194,12 @@ struct ProfileView: View {
                 statItem(value: "\(viewModel.roomCount)", label: "Rooms")
                 statHorizontalDivider
                 savedStat
-                statHorizontalDivider
-                matchStat
             }
         } else {
             HStack(spacing: 0) {
                 statItem(value: "\(viewModel.roomCount)", label: "Rooms")
                 statDivider
                 savedStat
-                statDivider
-                matchStat
             }
         }
     }
@@ -208,16 +211,6 @@ struct ProfileView: View {
         ) {
             statItem(value: "\(viewModel.savedItemCount)", label: "Saved")
                 .accessibilityLabel("Saved items: \(viewModel.savedItemCount). More information available.")
-        }
-    }
-
-    private var matchStat: some View {
-        HelpTooltip(
-            surfaceKey: SurfaceKeys.IOSApp.Profile.matchPercentage,
-            fallback: "Match is the average score Patina has computed for the pieces you've seen — it goes up as the app learns your taste and the room context tightens."
-        ) {
-            statItem(value: viewModel.matchPercentage, label: "Match")
-                .accessibilityLabel("Match: \(viewModel.matchPercentage). More information available.")
         }
     }
 

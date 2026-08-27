@@ -30,9 +30,24 @@ public struct PatinaAsyncImage: View {
                     case .empty:
                         loadingPlaceholder
                     case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: contentMode)
+                        // SP-02: `.aspectRatio(.fill)` answers a proposal with
+                        // a size LARGER than the proposal on one axis, and a
+                        // call site's `.frame(maxWidth: .infinity)` does not
+                        // clamp an oversized child. Left loose, a 1200-wide
+                        // photo at `height: 340` reported 556 pt on a 402 pt
+                        // screen and dragged its whole container off-canvas —
+                        // the browse grid's runaway cards and the piece
+                        // detail's unreachable Back chevron were the same bug
+                        // seen twice. Painting the image as an overlay on a
+                        // `Color.clear` makes the component report exactly the
+                        // size it was given, whatever the image's aspect.
+                        Color.clear
+                            .overlay {
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: contentMode)
+                            }
+                            .clipped()
                     case .failure:
                         failurePlaceholder
                     @unknown default:

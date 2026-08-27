@@ -184,6 +184,12 @@ public final class AuthService {
             PatinaLog.auth.debug("[account-isolation] owner changed — wiping local store")
             LocalStoreReset.wipeUserScopedData()
         }
+        // SP-06: a nil previous owner still claims the store, but the claim is
+        // now the account's own decision rather than something that happens to
+        // it — on a shared phone the silent version handed one person's room
+        // and saves to a different person's account, and then counted them as
+        // account data everywhere.
+        LocalStoreClaim.shared.askIfNeeded(previousOwner: stored)
         if stored != userId {
             defaults.set(userId, forKey: localStoreOwnerKey)
         }
