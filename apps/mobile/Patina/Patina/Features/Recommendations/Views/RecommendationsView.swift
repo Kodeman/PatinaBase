@@ -285,6 +285,19 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
         // doesn't take exclusive precedence over the card's own Button —
         // both need to keep working now that the card is a real Button.
         .simultaneousGesture(productCardSwipeGesture(product))
+        // SP-02: `.clipped()` clips pixels, not geometry — the photo inside the
+        // card is laid out to FILL its 4:3 box, so a 16:9 or portrait original
+        // still reports its uncropped size, and `children: .combine` unions
+        // that into the card's frame. Measured on the review simulator: the
+        // same-row cards reported 228 × 262 (16:9 photo) and 171 × 326
+        // (portrait), overlapping their neighbours' rows by up to 64 pt while
+        // the rendered grid looked square. Naming the card's own rounded rect
+        // as both the interaction and the accessibility shape makes the
+        // hit-box and the VoiceOver frame the card a reader can see.
+        .contentShape(
+            [.interaction, .accessibility],
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
         // PT-2-5: collapse maker/name/price into one VoiceOver stop.
         .accessibilityElement(children: .combine)
         .accessibilityLabel(cardAccessibilityLabel(product))
@@ -314,6 +327,12 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
             productCardImage(product)
             productCardInfo(product)
         }
+        // SP-02: the rationale line is drawn only when there is one to draw, so
+        // a card without it is ~36 pt shorter — and a `LazyVGrid` centres the
+        // shorter cell in its row, which is how one card in a pair came to sit
+        // 18 pt low and end 36 pt short of its neighbour. Filling the row's
+        // height makes the pair one card size whatever either card says.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
@@ -337,6 +356,10 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
                     }
                 }
                 .clipped()
+                // The card's combined label already names the piece; the photo
+                // is decoration, and an image element here only drags its
+                // uncropped bounds into the union.
+                .accessibilityHidden(true)
 
             // Match badge
             Text(product.matchLabel)
@@ -363,38 +386,12 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
     }
 
     private func productCardInfo(_ product: Product) -> some View {
-        // SP-02: every text block reserves the same number of lines, so the
-        // four cards in view are one card size rather than four heights.
-        VStack(alignment: .leading, spacing: 2) {
-            MonoLabel(
-                text: product.resolvedMakerName ?? "\u{00A0}",
-                size: PatinaTypography.monoSmall
-            )
-            .lineLimit(1)
-
-            Text(product.name)
-                .font(PatinaTypography.uiSmall)
-                .foregroundStyle(PatinaColors.Text.primary)
-                .lineLimit(2, reservesSpace: true)
-                .padding(.top, 2)
-
-            Text(product.fullFormattedPrice)
-                .font(PatinaTypography.h5)
-                .foregroundStyle(PatinaColors.Text.primary)
-                .padding(.top, 4)
-
-            if let rationale = recommendationRationale(for: product) {
-                Text(rationale)
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.muted)
-                    .lineLimit(2, reservesSpace: true)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 5)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        BrowseCardInfo(
+            makerName: product.resolvedMakerName,
+            name: product.name,
+            price: product.fullFormattedPrice,
+            rationale: recommendationRationale(for: product)
+        )
     }
 
     private func recommendationRationale(for product: Product) -> String? {
@@ -529,4 +526,50 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
 #Preview {
     RecommendationsView()
         .environment(\.appCoordinator, AppCoordinator())
+}
+
+// MARK: - Card text block
+
+/// The browse card's text block, lifted out of the view so its geometry can be
+/// measured in a test (`BrowseGridContractTests`). SP-02: every block reserves
+/// the same number of lines — one line of maker, two of name, two of rationale
+/// — so a long name cannot make its card taller than the one beside it.
+struct BrowseCardInfo: View {
+    let makerName: String?
+    let name: String
+    let price: String
+    let rationale: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            MonoLabel(
+                text: makerName ?? "\u{00A0}",
+                size: PatinaTypography.monoSmall
+            )
+            .lineLimit(1)
+
+            Text(name)
+                .font(PatinaTypography.uiSmall)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .lineLimit(2, reservesSpace: true)
+                .padding(.top, 2)
+
+            Text(price)
+                .font(PatinaTypography.h5)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .padding(.top, 4)
+
+            if let rationale {
+                Text(rationale)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .lineLimit(2, reservesSpace: true)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 5)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
 }
