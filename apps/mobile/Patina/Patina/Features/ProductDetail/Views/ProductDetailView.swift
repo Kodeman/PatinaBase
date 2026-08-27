@@ -139,12 +139,16 @@ struct ProductDetailView: View {
 
                     // Content
                     VStack(alignment: .leading, spacing: 0) {
-                        // Maker tag
-                        MonoLabel(
-                            text: [product.makerName, product.makerLocation].compactMap { $0 }.joined(separator: " · "),
-                            color: PatinaColors.clay
-                        )
-                        .padding(.bottom, 6)
+                        // Maker tag — SP-10: `products.brand` is the actual
+                        // maker; the vendor name is only the fallback, and the
+                        // RPC's literal "Unknown Maker" is not a maker at all.
+                        if let maker = product.resolvedMakerName {
+                            MonoLabel(
+                                text: [maker, product.makerLocation].compactMap { $0 }.joined(separator: " · "),
+                                color: PatinaColors.clay
+                            )
+                            .padding(.bottom, 6)
+                        }
 
                         // Product name
                         Text(product.name)
@@ -185,6 +189,12 @@ struct ProductDetailView: View {
                             }
                         }
                         .padding(.bottom, 16)
+
+                        // SP-10: what the piece actually is — size, lead time,
+                        // maker. Each row is omitted entirely when its column
+                        // is null; the screen never prints a placeholder for a
+                        // measurement it does not have.
+                        specRows(product)
 
                         // Room-aware "Place in your room" header + spatial pills.
                         // Patina-specific concept — the pills explain why
@@ -292,6 +302,46 @@ struct ProductDetailView: View {
                     .font(.system(size: 16))
                     .foregroundStyle(PatinaColors.Text.primary)
             )
+    }
+
+    /// SP-10 — size · lead time · maker · story, drawn only for the columns
+    /// this piece actually carries. A piece with none of them draws nothing.
+    @ViewBuilder
+    private func specRows(_ product: Product) -> some View {
+        let rows: [(String, String)] = [
+            product.dimensionsLine.map { ("Size", $0) },
+            product.leadTimeLine.map { ("Lead time", $0) },
+            product.resolvedMakerName.map { ("Maker", $0) },
+            product.finish.map { ("Finish", $0) }
+        ].compactMap { $0 }
+
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(rows, id: \.0) { label, value in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        MonoLabel(text: label, size: PatinaTypography.monoSmall)
+                            .frame(width: 78, alignment: .leading)
+                        Text(value)
+                            .font(PatinaTypography.bodySmall)
+                            .foregroundStyle(PatinaColors.Text.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(label): \(value)")
+                }
+            }
+            .padding(.bottom, 16)
+        }
+
+        if let story = product.productDescription {
+            Text(story)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 16)
+        }
     }
 
     private func materialBadge(text: String) -> some View {

@@ -25,10 +25,30 @@ struct Product: Identifiable, Hashable, Codable {
     let category: ProductCategory
     let tier: ProductTier
 
+    // MARK: - Spec columns (SP-10 / 00533)
+    //
+    // Every one of these is optional and every one of them is omitted from
+    // the screen when it is nil. 00533 is not in every database this app
+    // talks to, and a piece that does not know its own size must say
+    // nothing rather than print a placeholder.
+
+    let dimensions: ProductDimensions?
+    let leadTimeWeeks: Int?
+    let brand: String?
+    /// `products.description` — `description` itself is taken by
+    /// `CustomStringConvertible` on every Swift type.
+    let productDescription: String?
+    let publishedAt: Date?
+    let finish: String?
+    let patinaManaged: Bool?
+    let photoVerifiedAt: Date?
+    let sourceURL: String?
+    let shippingFlatCents: Int?
+
     // MARK: - CodingKeys (maps snake_case DB columns to camelCase Swift)
 
     enum CodingKeys: String, CodingKey {
-        case id, name, badges, category, tier
+        case id, name, badges, category, tier, brand, finish, dimensions
         case priceCents = "price_cents"
         case matchScore = "match_score"
         case makerName = "maker_name"
@@ -38,6 +58,13 @@ struct Product: Identifiable, Hashable, Codable {
         case usdzURL = "usdz_url"
         case styleTags = "style_tags"
         case materialTags = "material_tags"
+        case leadTimeWeeks = "lead_time_weeks"
+        case productDescription = "description"
+        case publishedAt = "published_at"
+        case patinaManaged = "patina_managed"
+        case photoVerifiedAt = "photo_verified_at"
+        case sourceURL = "source_url"
+        case shippingFlatCents = "shipping_flat_cents"
     }
 
     // MARK: - Decodable (with defaults for optional fields)
@@ -63,6 +90,41 @@ struct Product: Identifiable, Hashable, Codable {
         category = ProductCategory(normalizing: try container.decodeIfPresent(String.self, forKey: .category))
         let tierRaw = try container.decodeIfPresent(String.self, forKey: .tier)
         tier = tierRaw.flatMap(ProductTier.init(rawValue:)) ?? .styleMatch
+
+        // A row whose `dimensions` jsonb is shaped differently must not take
+        // the whole product down with it — the piece simply has no size.
+        dimensions = try? container.decodeIfPresent(ProductDimensions.self, forKey: .dimensions)
+        leadTimeWeeks = try? container.decodeIfPresent(Int.self, forKey: .leadTimeWeeks)
+        brand = Product.nonEmpty(try container.decodeIfPresent(String.self, forKey: .brand))
+        productDescription = Product.nonEmpty(
+            try container.decodeIfPresent(String.self, forKey: .productDescription)
+        )
+        publishedAt = Product.timestamp(
+            try container.decodeIfPresent(String.self, forKey: .publishedAt)
+        )
+        finish = Product.nonEmpty(try container.decodeIfPresent(String.self, forKey: .finish))
+        patinaManaged = try container.decodeIfPresent(Bool.self, forKey: .patinaManaged)
+        photoVerifiedAt = Product.timestamp(
+            try container.decodeIfPresent(String.self, forKey: .photoVerifiedAt)
+        )
+        sourceURL = Product.nonEmpty(try container.decodeIfPresent(String.self, forKey: .sourceURL))
+        shippingFlatCents = try container.decodeIfPresent(Int.self, forKey: .shippingFlatCents)
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
+    /// Postgres `timestamptz` reaches the client with or without fractional
+    /// seconds depending on the column and the driver — accept both.
+    private static func timestamp(_ raw: String?) -> Date? {
+        guard let raw else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let parsed = withFraction.date(from: raw) { return parsed }
+        return ISO8601DateFormatter().date(from: raw)
     }
 
     // MARK: - Memberwise init (for mock data and internal use)
@@ -71,7 +133,22 @@ struct Product: Identifiable, Hashable, Codable {
          makerName: String, makerLocation: String?, makerStory: String?,
          imageURL: String?, usdzURL: String?,
          styleTags: [String], materialTags: [String], badges: [String],
-         category: ProductCategory, tier: ProductTier) {
+         category: ProductCategory, tier: ProductTier,
+         dimensions: ProductDimensions? = nil, leadTimeWeeks: Int? = nil,
+         brand: String? = nil, productDescription: String? = nil,
+         publishedAt: Date? = nil, finish: String? = nil,
+         patinaManaged: Bool? = nil, photoVerifiedAt: Date? = nil,
+         sourceURL: String? = nil, shippingFlatCents: Int? = nil) {
+        self.dimensions = dimensions
+        self.leadTimeWeeks = leadTimeWeeks
+        self.brand = brand
+        self.productDescription = productDescription
+        self.publishedAt = publishedAt
+        self.finish = finish
+        self.patinaManaged = patinaManaged
+        self.photoVerifiedAt = photoVerifiedAt
+        self.sourceURL = sourceURL
+        self.shippingFlatCents = shippingFlatCents
         self.id = id
         self.name = name
         self.priceCents = priceCents
@@ -111,6 +188,39 @@ struct Product: Identifiable, Hashable, Codable {
         usdzURL != nil
     }
 
+    // MARK: - SP-10 spec lines
+
+    /// `38″ W × 20″ D × 30″ H` — only the axes the row actually carries.
+    /// `nil` when the piece has no dimensions at all, so the row is omitted
+    /// rather than printed empty.
+    var dimensionsLine: String? {
+        dimensions?.displayLine
+    }
+
+    /// `Ships in 8 weeks`. `nil` when the column is null — the app never
+    /// guesses a lead time.
+    var leadTimeLine: String? {
+        guard let leadTimeWeeks, leadTimeWeeks > 0 else { return nil }
+        return "Ships in \(leadTimeWeeks) week\(leadTimeWeeks == 1 ? "" : "s")"
+    }
+
+    /// The maker, sourced from `products.brand` with the vendor name as the
+    /// fallback. `get_recommendations` prints the literal `Unknown Maker`
+    /// where no vendor resolves (00246:278) and the direct fetch prints
+    /// `Unknown` — neither is a maker, and neither is shown as one.
+    var resolvedMakerName: String? {
+        if let brand { return brand }
+        let vendor = makerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !vendor.isEmpty,
+              vendor.caseInsensitiveCompare("Unknown Maker") != .orderedSame,
+              vendor.caseInsensitiveCompare("Unknown") != .orderedSame else { return nil }
+        return vendor
+    }
+
+    var hasResolvableMaker: Bool {
+        resolvedMakerName != nil
+    }
+
     /// Gradient fill for placeholder image
     var placeholderGradient: LinearGradient {
         switch category {
@@ -121,6 +231,45 @@ struct Product: Identifiable, Hashable, Codable {
         case .decor: return PatinaGradients.linen
         case .textiles: return PatinaGradients.warm
         }
+    }
+}
+
+// MARK: - Product Dimensions (SP-10)
+
+/// `products.dimensions` jsonb — `{width, height, depth, unit}` since
+/// 00001_initial_schema.sql:35. Every axis is optional: rows in the wild
+/// carry two of the three as often as all three.
+struct ProductDimensions: Hashable, Codable {
+    let width: Double?
+    let height: Double?
+    let depth: Double?
+    let unit: String?
+
+    /// `38″ W × 20″ D × 30″ H`, in the row's stated order, omitting any axis
+    /// the row does not carry. `nil` when it carries none.
+    var displayLine: String? {
+        let parts: [String] = [
+            width.map { "\(Self.number($0))\(suffix) W" },
+            depth.map { "\(Self.number($0))\(suffix) D" },
+            height.map { "\(Self.number($0))\(suffix) H" }
+        ].compactMap { $0 }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " \u{00D7} ")
+    }
+
+    /// Inches take the double-prime mark with no space; every other unit is
+    /// printed as the row spells it.
+    private var suffix: String {
+        switch unit?.lowercased() {
+        case "in", "inch", "inches", nil: return "\u{2033}"
+        case let other?: return " \(other)"
+        }
+    }
+
+    private static func number(_ value: Double) -> String {
+        value.rounded() == value
+            ? String(Int(value))
+            : String(format: "%.1f", value)
     }
 }
 

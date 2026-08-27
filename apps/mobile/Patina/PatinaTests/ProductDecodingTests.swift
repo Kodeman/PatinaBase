@@ -92,4 +92,90 @@ struct ProductDecodingTests {
             #expect(ProductCategory(normalizing: category.rawValue) == category)
         }
     }
+
+    // MARK: - SP-10 spec columns (00533)
+
+    private static let specRowJSON = """
+    [{
+        "id": "p-spec",
+        "name": "Heirloom Oak Dining Table",
+        "maker_name": "Room & Board",
+        "brand": "Nordic Atelier",
+        "lead_time_weeks": 8,
+        "source_url": "https://example.test/oak",
+        "description": "A trestle table cut from a single log.",
+        "finish": "Oiled",
+        "patina_managed": true,
+        "shipping_flat_cents": 29900,
+        "published_at": "2026-08-20T00:00:00+00:00",
+        "photo_verified_at": "2026-08-21T00:00:00+00:00",
+        "dimensions": {"width": 38, "depth": 20, "height": 30, "unit": "in"}
+    }]
+    """
+
+    @Test
+    func specColumnsDecodeWhenPresent() throws {
+        let product = try #require(
+            try ProductAPIClient.decodeProducts(from: Data(Self.specRowJSON.utf8)).first
+        )
+        #expect(product.leadTimeWeeks == 8)
+        #expect(product.leadTimeLine == "Ships in 8 weeks")
+        #expect(product.dimensionsLine == "38\u{2033} W \u{00D7} 20\u{2033} D \u{00D7} 30\u{2033} H")
+        #expect(product.brand == "Nordic Atelier")
+        #expect(product.productDescription == "A trestle table cut from a single log.")
+        #expect(product.finish == "Oiled")
+        #expect(product.patinaManaged == true)
+        #expect(product.sourceURL == "https://example.test/oak")
+        #expect(product.shippingFlatCents == 29900)
+        #expect(product.publishedAt != nil)
+        #expect(product.photoVerifiedAt != nil)
+    }
+
+    /// SP-10: `brand` holds the actual maker; the vendor name is the fallback.
+    @Test
+    func makerPrefersBrandOverVendor() throws {
+        let product = try #require(
+            try ProductAPIClient.decodeProducts(from: Data(Self.specRowJSON.utf8)).first
+        )
+        #expect(product.makerName == "Room & Board")
+        #expect(product.resolvedMakerName == "Nordic Atelier")
+        #expect(product.hasResolvableMaker)
+    }
+
+    /// The 00533 columns are not in every database this app talks to — a null
+    /// column is absent on screen, never a placeholder.
+    @Test
+    func specColumnsAreAbsentHonestlyWhenNull() throws {
+        let json = #"[{"id":"p-bare","name":"Mystery Stool"}]"#
+        let product = try #require(
+            try ProductAPIClient.decodeProducts(from: Data(json.utf8)).first
+        )
+        #expect(product.dimensions == nil)
+        #expect(product.dimensionsLine == nil)
+        #expect(product.leadTimeLine == nil)
+        #expect(product.brand == nil)
+        #expect(product.publishedAt == nil)
+        #expect(product.shippingFlatCents == nil)
+    }
+
+    /// SP-10: the RPC prints the literal "Unknown Maker" where no vendor
+    /// resolves. That is not a maker — the app must not render it as one.
+    @Test
+    func unknownMakerIsNotAResolvableMaker() throws {
+        let json = #"[{"id":"p-nomaker","name":"Anon Chair","maker_name":"Unknown Maker"}]"#
+        let product = try #require(
+            try ProductAPIClient.decodeProducts(from: Data(json.utf8)).first
+        )
+        #expect(product.hasResolvableMaker == false)
+        #expect(product.resolvedMakerName == nil)
+    }
+
+    @Test
+    func metricDimensionsPrintTheirUnit() throws {
+        let json = #"[{"id":"p-cm","name":"Cm Table","dimensions":{"width":96,"depth":51,"unit":"cm"}}]"#
+        let product = try #require(
+            try ProductAPIClient.decodeProducts(from: Data(json.utf8)).first
+        )
+        #expect(product.dimensionsLine == "96 cm W \u{00D7} 51 cm D")
+    }
 }
