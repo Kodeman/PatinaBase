@@ -1,10 +1,12 @@
 -- Seed products for local development
 -- Matches the Patina design document product catalog examples
 
--- dimensions + lead_time_weeks (00533/SP-10): eight of the twelve rows carry
--- both so the piece detail has size and lead time to print; four are left NULL
--- on purpose, so the honest-absence branch ("omit the line entirely") has
--- something to exercise. Dimensions are inches, {width, depth, height, unit}.
+-- dimensions + lead_time_weeks (00533/SP-10). Nine of the twelve rows carry
+-- dimensions and seven carry a lead time, so the piece detail has size and
+-- lead time to print; the rest are left NULL on purpose — including two rows
+-- with a size but no lead time — so the honest-absence branch ("omit the line
+-- entirely, never a placeholder") has something to exercise on both lines
+-- independently. Dimensions are inches, {width, depth, height, unit}.
 INSERT INTO products (id, name, slug, brand, description, price_retail, price_trade, category, status, materials, colors, style_tags, tags, finish, dimensions, lead_time_weeks, images, captured_by, captured_at, created_at, updated_at)
 VALUES
 ('a0000000-0000-0000-0000-000000000001', 'Heirloom Oak Dining Table', 'heirloom-oak-dining-table', 'Nordic Atelier', 'Solid quarter-sawn white oak with hand-rubbed tung oil finish. Each table is made to order by a three-person workshop outside Aarhus.', 420000, 336000, 'table', 'published', ARRAY['Quarter-sawn white oak'], ARRAY['Natural Oak'], ARRAY['Warm Minimalist', 'Organic Modern', 'Scandinavian'], ARRAY['maker_piece', 'dining'], 'Hand-rubbed tung oil', '{"width": 96, "depth": 40, "height": 30, "unit": "in"}'::jsonb, 10, ARRAY['https://images.unsplash.com/photo-1617806118233-18e1de247200?auto=format&fit=crop&w=1200&q=80'], 'a0000000-0000-0000-0000-000000000004', NOW(), NOW() - INTERVAL '30 days', NOW() - INTERVAL '2 days'),

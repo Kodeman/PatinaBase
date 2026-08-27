@@ -20356,6 +20356,7 @@ export type Database = {
           image_url: string | null
           name: string
           notes: string | null
+          price_cents_at_save: number | null
           price_in_cents: number | null
           product_id: string | null
           room_id: string | null
@@ -20370,6 +20371,7 @@ export type Database = {
           image_url?: string | null
           name: string
           notes?: string | null
+          price_cents_at_save?: number | null
           price_in_cents?: number | null
           product_id?: string | null
           room_id?: string | null
@@ -20384,6 +20386,7 @@ export type Database = {
           image_url?: string | null
           name?: string
           notes?: string | null
+          price_cents_at_save?: number | null
           price_in_cents?: number | null
           product_id?: string | null
           room_id?: string | null
@@ -31688,6 +31691,17 @@ export type Database = {
         Returns: boolean
       }
       normalize_phone_e164: { Args: { p_phone: string }; Returns: string }
+      notify_client_attention: {
+        Args: {
+          p_body: string
+          p_entity_id: string
+          p_entity_type: string
+          p_metadata?: Json
+          p_title: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       notify_decision_overdue: {
         Args: { p_decision_id: string }
         Returns: string
@@ -31900,6 +31914,7 @@ export type Database = {
         }
       }
       publish_project_review: { Args: { p_request: Json }; Returns: Json }
+      purge_client_account: { Args: { p_user_id: string }; Returns: undefined }
       react_to_feedback: {
         Args: { p_emoji: string; p_id: string }
         Returns: {
