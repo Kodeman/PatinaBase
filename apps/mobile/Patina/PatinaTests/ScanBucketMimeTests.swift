@@ -37,7 +37,12 @@ struct ScanBucketMimeTests {
             .photoThumbnails: "application/x-ndjson",
             .annotations: "application/json",
             .bundleManifest: "application/json",
-            .photosManifest: "application/x-ndjson"
+            .photosManifest: "application/x-ndjson",
+            // Dense-frame keyframe lane — the types RoomCaptureBundleAdapter
+            // actually registers (`:276`, `:281`, `:293`).
+            .keyframesArchive: "application/x-tar",
+            .keyframeIndex: "application/x-ndjson",
+            .keyframeSummary: "application/json"
         ]
 
         // Every kind is covered — so a new case cannot slip past this test.
