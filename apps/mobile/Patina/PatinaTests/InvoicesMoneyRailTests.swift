@@ -165,7 +165,11 @@ struct InvoicesMoneyRailTests {
         let failures = [
             MoneyFailureCopy.checkout(raw),
             MoneyFailureCopy.sign(raw),
-            MoneyFailureCopy.decision(raw)
+            // m-1: the decision copy takes no error, because it never branched
+            // on one. It is listed here so the honesty assertions still cover
+            // every money surface's words.
+            MoneyFailureCopy.decision,
+            MoneyFailureCopy.deferral
         ]
         for failure in failures {
             #expect(!failure.sentence.contains("PGRST"))
@@ -182,8 +186,22 @@ struct InvoicesMoneyRailTests {
         #expect(MoneyFailureCopy.checkout(CheckoutError.notConfigured).sentence
                 == "Online payment isn't set up for this invoice yet. Your designer can sort it out.")
         #expect(MoneyFailureCopy.checkout(CheckoutError.nothingDue).offersDesignerMessage == false)
+        // B-3: `payment_processing` covers a card in the webhook gap as well as
+        // a settling ACH debit, so this branch must not name a bank transfer.
+        // Only the settle banner, which reads the payment row's own method,
+        // may print that sentence.
         #expect(MoneyFailureCopy.checkout(CheckoutError.paymentProcessing).sentence
+                == "A payment on this invoice is already going through. We'll update this as soon as it clears.")
+        #expect(!MoneyFailureCopy.checkout(CheckoutError.paymentProcessing).sentence
                 .contains("3–5 business days"))
+        // No checkout branch may guess at the method behind a payment.
+        let allCodes: [CheckoutError] = [
+            .notPayable, .paymentProcessing, .nothingDue, .notConfigured, .notFound, .unavailable
+        ]
+        for code in allCodes {
+            #expect(!MoneyFailureCopy.checkout(code).sentence.lowercased().contains("bank transfer"),
+                    "\(code) names a payment method it cannot know")
+        }
         // errorDescription is the same sentence, so a stray LocalizedError read
         // anywhere in the app still cannot print a vendor string.
         #expect(CheckoutError.unavailable.errorDescription

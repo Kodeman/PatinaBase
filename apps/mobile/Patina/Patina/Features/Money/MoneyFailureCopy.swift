@@ -54,8 +54,17 @@ enum MoneyFailureCopy {
                 "This invoice can't be paid in the app right now. Your designer can tell you why."
             )
         case .paymentProcessing:
+            // NOT "bank transfers take 3–5 business days". `payment_processing`
+            // is returned for any completed Checkout session still pointing at
+            // a pending `invoice_payments` row — "card just cleared and the
+            // webhook hasn't landed, OR an ACH debit settling"
+            // (`create-checkout-session/index.ts:433-439`, `:1114-1122`). The
+            // method is not knowable here, and `InvoiceSettleCopy` refuses the
+            // same guess four files away. The bank-transfer sentence is printed
+            // only by the settle banner on this same screen, and only when the
+            // payment row itself says `ach_manual` or `wire`.
             return MoneyFailure(
-                "A payment on this invoice is already going through. Bank transfers take 3–5 business days to clear.",
+                "A payment on this invoice is already going through. We'll update this as soon as it clears.",
                 offersDesignerMessage: true
             )
         case .nothingDue:
@@ -100,9 +109,19 @@ enum MoneyFailureCopy {
 
     // MARK: - Decisions
 
-    static func decision(_ error: Error) -> MoneyFailure {
-        MoneyFailure("We couldn't send your choice. Your designer hasn't seen it yet.")
-    }
+    /// A choice the client committed to that the app could not submit. One
+    /// sentence for every cause on purpose — a Postgrest failure and a dropped
+    /// connection are the same fact to a homeowner — and it takes no argument
+    /// so it cannot look like it branches on one. Callers log the raw error.
+    static let decision = MoneyFailure(
+        "We couldn't send your choice. Your designer hasn't seen it yet."
+    )
+
+    /// SP-17: a deferral is a message, not a choice. Reporting it as one told
+    /// a client who tapped "Not yet" that her choice had not gone through.
+    static let deferral = MoneyFailure(
+        "We couldn't send that note. Your designer hasn't seen it yet."
+    )
 
     /// The raw error, for the console only. Never reaches a screen.
     static func log(_ surface: String, _ error: Error) {

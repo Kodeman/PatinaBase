@@ -52,6 +52,10 @@ final class DecisionDetailViewModel {
     /// only draws when the decision itself failed to load — so the client tapped
     /// Approve and nothing at all happened.
     var submitFailure: MoneyFailure?
+    /// The option a failed submit was carrying, so "Let's try that again"
+    /// re-opens the consent step on the choice the client actually made
+    /// instead of dropping her back into the list of options.
+    var lastAttemptedOptionId: String?
 
     // MARK: - SP-17 · deferral
 
@@ -64,7 +68,7 @@ final class DecisionDetailViewModel {
     private(set) var sentDeferral: DecisionDeferral?
 
     func beginDeferral(_ deferral: DecisionDeferral) {
-        guard !isResolved, !isSendingDeferral else { return }
+        guard !isResolved, !isSendingDeferral, canDefer else { return }
         deferralFailure = nil
         pendingDeferral = deferral
     }
@@ -73,24 +77,76 @@ final class DecisionDetailViewModel {
         pendingDeferral = nil
     }
 
-    /// Send the note into the project thread. The decision is deliberately NOT
+    /// Where a message about this decision belongs.
+    ///
+    /// `client_decisions.project_id` is nullable — `REFERENCES projects(id) ON
+    /// DELETE SET NULL` (00062:71) — so a decision reached through a lead, or
+    /// one whose project was deleted, has no project thread. Gating the
+    /// deferral on the project alone drew both acts, opened the sheet, took the
+    /// note and then failed every time. W1a merged `createDirectThread` for
+    /// exactly this case.
+    enum MessageRoute: Equatable {
+        case project(String)
+        case direct(UUID)
+    }
+
+    var messageRoute: MessageRoute? {
+        if let projectId = decision?.project_id, !projectId.isEmpty {
+            return .project(projectId)
+        }
+        let relationship = DesignerRelationshipResolver.resolve(
+            lead: DesignRequestStatusService.shared.liveLead,
+            projects: BadgeCountService.shared.projects,
+            roster: BadgeCountService.shared.roster
+        )
+        if let designerId = relationship.designerId { return .direct(designerId) }
+        return nil
+    }
+
+    /// Whether the two deferral acts have anywhere to send a note. Where they
+    /// do not, they do not draw — an act that cannot succeed is not offered.
+    var canDefer: Bool { messageRoute != nil }
+
+    private func openThread(_ route: MessageRoute) async throws -> String {
+        switch route {
+        case .project(let projectId):
+            return try await MessagingAPIClient.shared.createThread(projectId: projectId)
+        case .direct(let designerId):
+            return try await MessagingAPIClient.shared.createDirectThread(counterpart: designerId)
+        }
+    }
+
+    /// Open (or create) the thread behind "Message your designer" on the
+    /// failure banner. Nil where there is no designer to reach.
+    func messageDesigner() async -> String? {
+        if let discussThreadId { return discussThreadId }
+        guard let route = messageRoute else { return nil }
+        do {
+            let threadId = try await openThread(route)
+            self.discussThreadId = threadId
+            return threadId
+        } catch {
+            MoneyFailureCopy.log("decision message", error)
+            return nil
+        }
+    }
+
+    /// Send the note into the thread. The decision is deliberately NOT
     /// touched — `client_decisions.status` has no "deferred" value and a
     /// deferral is a message, not a response (00062:80-81).
     /// - Returns: the thread the note landed in, for the caller to open.
     @discardableResult
     func sendDeferral(note: String) async -> String? {
         guard let deferral = pendingDeferral, !isSendingDeferral else { return nil }
-        guard let projectId = decision?.project_id, !projectId.isEmpty else {
-            deferralFailure = MoneyFailureCopy.decision(
-                NSError(domain: "Patina.Decisions", code: 0)
-            )
+        guard let route = messageRoute else {
+            deferralFailure = MoneyFailureCopy.deferral
             return nil
         }
         isSendingDeferral = true
         deferralFailure = nil
         defer { isSendingDeferral = false }
         do {
-            let threadId = try await MessagingAPIClient.shared.createThread(projectId: projectId)
+            let threadId = try await openThread(route)
             _ = try await MessagingAPIClient.shared.sendMessage(threadId: threadId, body: note)
             self.discussThreadId = threadId
             self.sentDeferral = deferral
@@ -98,7 +154,7 @@ final class DecisionDetailViewModel {
             return threadId
         } catch {
             MoneyFailureCopy.log("decision deferral", error)
-            self.deferralFailure = MoneyFailureCopy.decision(error)
+            self.deferralFailure = MoneyFailureCopy.deferral
             return nil
         }
     }
@@ -175,10 +231,19 @@ final class DecisionDetailViewModel {
             self.pendingOptionId = nil
         } catch {
             MoneyFailureCopy.log("decision", error)
-            self.submitFailure = MoneyFailureCopy.decision(error)
+            self.submitFailure = MoneyFailureCopy.decision
+            self.lastAttemptedOptionId = optionId
             self.pendingOptionId = nil
         }
         isSubmitting = false
+    }
+
+    /// SP-15's first act on the decision path: re-open the consent step on the
+    /// option the failed submit was carrying.
+    func retrySelection() {
+        guard let optionId = lastAttemptedOptionId, !isSubmitting, !isResolved else { return }
+        submitFailure = nil
+        pendingOptionId = optionId
     }
 
     /// Look up the project's comms thread for the "Discuss this" action.

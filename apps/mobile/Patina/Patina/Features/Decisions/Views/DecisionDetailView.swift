@@ -145,15 +145,27 @@ struct DecisionDetailView: View {
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.primary)
                     .fixedSize(horizontal: false, vertical: true)
-                if let threadId = viewModel.discussThreadId {
-                    Button("Message your designer") {
-                        coordinator.navigate(to: .threadDetail(threadId: threadId))
+                HStack(spacing: 18) {
+                    Button(failure.retryLabel) {
+                        viewModel.retrySelection()
                     }
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.interactive)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("decisionDetail.failure.message")
+                    .accessibilityIdentifier("decisionDetail.failure.retry")
+                    if failure.offersDesignerMessage, viewModel.messageRoute != nil {
+                        Button("Message your designer") {
+                            Task {
+                                if let threadId = await viewModel.messageDesigner() {
+                                    coordinator.navigate(to: .threadDetail(threadId: threadId))
+                                }
+                            }
+                        }
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .accessibilityIdentifier("decisionDetail.failure.message")
+                    }
                 }
+                .frame(minHeight: 44)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -277,11 +289,14 @@ struct DecisionDetailView: View {
     }
 
     /// SP-17: the two answers a real client gives, alongside the choices.
-    /// Neither resolves the decision — both open a note into the project
-    /// thread and leave it `pending`.
+    /// Neither resolves the decision — both open a note into the thread with
+    /// her designer and leave the decision `pending`. They draw only where
+    /// there is a thread to reach: a decision with no project and no designer
+    /// relationship has nowhere to send a note, and an act that cannot succeed
+    /// is not offered.
     @ViewBuilder
     private func deferralActs(_ decision: RemoteClientDecision) -> some View {
-        if !viewModel.isResolved {
+        if !viewModel.isResolved, viewModel.canDefer {
             VStack(alignment: .leading, spacing: 10) {
                 if let sent = viewModel.sentDeferral {
                     Text("You told your designer: \(sent.actLabel.lowercased()). This decision is still open.")
@@ -429,6 +444,7 @@ private struct DecisionConsentSheet: View {
             .padding(24)
         }
         .background(PatinaColors.Background.primary)
+        .moneyScreenTopBand()
     }
 }
 

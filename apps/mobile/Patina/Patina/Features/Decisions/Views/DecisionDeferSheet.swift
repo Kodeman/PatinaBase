@@ -72,6 +72,7 @@ struct DecisionDeferSheet: View {
             .padding(24)
         }
         .background(PatinaColors.Background.primary)
+        .moneyScreenTopBand()
         .onAppear {
             if note.isEmpty { note = deferral.draft(decisionTitle: decisionTitle) }
         }
