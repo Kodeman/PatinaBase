@@ -36,15 +36,21 @@ public enum CompanionHearthMetrics {
 extension View {
     /// Reserves the invisible Hearth so scrollable content cannot settle under
     /// the centered Companion circle and contextual hint.
+    ///
+    /// SP-19: the inset used to paint an opaque primary-canvas band that
+    /// extended past the bottom safe area. A safe-area inset only moves the
+    /// RESTING position of a scroll view — content still travels through that
+    /// region while scrolling — so the band drew over it, and on a pushed
+    /// screen it sat on top of "Sign proposal" and clipped the label. C8 calls
+    /// the Hearth "a reserved layout region, never a painted bar"; the band
+    /// contradicted the contract this type documents, so it is gone. The
+    /// reservation, its height and its hit/accessibility behaviour are
+    /// unchanged — nothing moves, the paint simply stops.
     func companionHearthReservation(isActive: Bool = true) -> some View {
         safeAreaInset(edge: .bottom, spacing: 0) {
             if isActive {
                 Color.clear
                     .frame(height: CompanionHearthMetrics.reservedHeight)
-                    .background {
-                        PatinaColors.Background.primary
-                            .ignoresSafeArea(edges: .bottom)
-                    }
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
