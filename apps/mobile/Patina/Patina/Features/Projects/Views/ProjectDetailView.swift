@@ -33,10 +33,10 @@ struct ProjectDetailView: View {
                     if viewModel.hasInvoices { ProjectInvoicesLink() }
                     if viewModel.hasDocuments { ProjectDocumentsLink() }
                     if !viewModel.ffe.isEmpty { ffeSection }
-                    // R23: empty sections collapse into one quiet portal hint
-                    // instead of stacked "No X yet" rows.
-                    if !missingSectionNames.isEmpty {
-                        portalHintCard
+                    // SP-05: empty sections say, in the client's words, what
+                    // her designer has not put together yet.
+                    if !missingSectionLines.isEmpty {
+                        notReadyYetCard
                     }
                 } else if let error = viewModel.error {
                     errorView(error)
@@ -111,65 +111,43 @@ struct ProjectDetailView: View {
     }
 
     private func overviewFacts(_ project: RemoteProject) -> [(String, String)] {
-        var facts: [(String, String)] = []
-        if let total = project.total_amount_cents ?? project.budget_cents {
-            facts.append(("Budget", formatPrice(total)))
-        }
-        if let status = project.status {
-            facts.append(("Status", PhaseDisplay.statusLabel(for: status)))
-        }
-        if let start = project.start_date {
-            facts.append(("Started", formatDate(start)))
-        }
-        if let target = project.target_end_date {
-            facts.append(("Target", formatDate(target)))
-        }
-        if let tier = project.client_visibility_tier, !tier.isEmpty {
-            facts.append(("Client view", tier.replacingOccurrences(of: "_", with: " ").capitalized))
-        }
-        return facts
+        ProjectDetailCopy.overviewFacts(project)
     }
 
-    // MARK: - Portal hint (R23)
+    // MARK: - Not-ready-yet sections (SP-05)
 
-    /// Display names for whichever of the three sections have no data yet.
-    private var missingSectionNames: [String] {
-        var missing: [String] = []
-        if viewModel.phases.isEmpty { missing.append("phases") }
-        if viewModel.milestones.isEmpty { missing.append("payments") }
-        if viewModel.ffe.isEmpty { missing.append("FF&E") }
-        return missing
+    /// SP-05: the client is told what is not ready yet, in her own words —
+    /// never handed the designer's portal instruction.
+    private var missingSectionLines: [String] {
+        ProjectDetailCopy.missingSectionLines(
+            phases: viewModel.phases.isEmpty,
+            payments: viewModel.milestones.isEmpty,
+            ffe: viewModel.ffe.isEmpty
+        )
     }
 
-    /// One quiet, informational card covering every not-yet-set-up section —
-    /// setup happens in the portal, so there is no tap target on iOS.
-    private var portalHintCard: some View {
-        Text("Set up \(joinedList(missingSectionNames)) in the portal →")
-            .font(PatinaTypography.caption)
-            .foregroundStyle(PatinaColors.Text.muted)
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(PatinaColors.pearl, lineWidth: 1)
-            )
-            .padding(.horizontal, 24)
-    }
-
-    /// "phases" / "phases and payments" / "phases, payments, and FF&E".
-    private func joinedList(_ items: [String]) -> String {
-        switch items.count {
-        case 0: return ""
-        case 1: return items[0]
-        case 2: return "\(items[0]) and \(items[1])"
-        default: return items.dropLast().joined(separator: ", ") + ", and \(items.last!)"
+    private var notReadyYetCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(missingSectionLines, id: \.self) { line in
+                Text(line)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.muted)
+            }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(PatinaColors.pearl, lineWidth: 1)
+        )
+        .padding(.horizontal, 24)
+        .accessibilityIdentifier("projectDetail.notReadyYet")
     }
 
     // MARK: - Phases
 
     // R23: only rendered when phases exist — the empty state collapses
-    // into `portalHintCard` instead.
+    // into `notReadyYetCard` instead.
     private var phasesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             MonoLabel(text: "Phases")
@@ -228,7 +206,7 @@ struct ProjectDetailView: View {
 
     // MARK: - Milestones
 
-    // R23: only rendered when milestones exist (see `portalHintCard`).
+    // R23: only rendered when milestones exist (see `notReadyYetCard`).
     private var milestonesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             MonoLabel(text: "Payments")
@@ -275,7 +253,7 @@ struct ProjectDetailView: View {
 
     // MARK: - FF&E summary
 
-    // R23: only rendered when FF&E items exist (see `portalHintCard`).
+    // R23: only rendered when FF&E items exist (see `notReadyYetCard`).
     private var ffeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             MonoLabel(text: "FF&E")
@@ -319,16 +297,6 @@ struct ProjectDetailView: View {
     private func formatPrice(_ cents: Int) -> String {
         let dollars = cents / 100
         return "$\(dollars.formatted())"
-    }
-
-    /// Render a Postgres `date` string ("2026-04-01") as "Apr 1, 2026";
-    /// falls back to the raw value if it doesn't parse.
-    private func formatDate(_ raw: String) -> String {
-        let parser = DateFormatter()
-        parser.dateFormat = "yyyy-MM-dd"
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        guard let date = parser.date(from: String(raw.prefix(10))) else { return raw }
-        return date.formatted(date: .abbreviated, time: .omitted)
     }
 }
 
