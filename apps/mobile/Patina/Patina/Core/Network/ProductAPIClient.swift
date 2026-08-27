@@ -87,6 +87,15 @@ actor ProductAPIClient {
 
     // MARK: - Single Product (PostgREST direct query)
 
+    /// PostgREST `select` for the single-product direct fetch.
+    ///
+    /// `products` carries two foreign keys to `vendors` — `vendor_id`
+    /// (00001_initial_schema.sql:39) and `retailer_id`
+    /// (00011_add_retailer_id.sql:6) — so a bare `vendors(...)` embed is
+    /// ambiguous and PostgREST answers PGRST201 instead of the row. The
+    /// constraint name disambiguates it.
+    static let productSelect = "*,vendors!products_vendor_id_fkey(name,made_in,brand_story)"
+
     /// Fetch a single product by ID
     func fetchProduct(id: String) async throws -> Product {
         let urlString = "\(baseURL)/rest/v1/rpc/get_recommendations?p_limit=1"
@@ -96,7 +105,7 @@ actor ProductAPIClient {
 
         // Use get_recommendations with a filter to get a single product with full data
         // Alternatively, query the products table directly
-        let directURL = "\(baseURL)/rest/v1/products?id=eq.\(id)&select=*,vendors(name,made_in,brand_story)"
+        let directURL = "\(baseURL)/rest/v1/products?id=eq.\(id)&select=\(Self.productSelect)"
         var directRequest = URLRequest(url: URL(string: directURL)!)
         directRequest.httpMethod = "GET"
         await applyHeaders(to: &directRequest)

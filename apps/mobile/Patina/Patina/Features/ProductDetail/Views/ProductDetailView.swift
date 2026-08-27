@@ -418,15 +418,32 @@ struct ProductDetailView: View {
         let retry: (() -> Void)? = productId.map { id in
             { Task { await viewModel.loadProduct(id: id) } }
         }
-        return VStack {
+        return VStack(spacing: 0) {
+            // The navigation bar is hidden for the whole screen (see `body`),
+            // and the success branch draws its own back chevron inside the
+            // hero — so without this one the failure state has no exit.
+            HStack {
+                Button { dismiss() } label: {
+                    floatingCircleButton(icon: "chevron.left")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Back")
+                .accessibilityIdentifier("ProductDetailView.ErrorBackButton")
+
+                Spacer()
+            }
+            .padding(.top, 56)
+            .padding(.horizontal, 16)
+
             Spacer()
             PatinaErrorState(
                 message: viewModel.error ?? "Couldn't load this piece",
                 action: retry
             )
+            .padding(.horizontal, 32)
             Spacer()
         }
-        .padding(.horizontal, 32)
         .frame(maxWidth: .infinity)
     }
 }
