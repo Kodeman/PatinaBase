@@ -136,11 +136,9 @@ final class ProposalDetailViewModel {
             self.didSign = true
             self.showSignSheet = false
         } catch {
-            self.signError = (error as? LocalizedError)?.errorDescription
-                ?? "Couldn't sign the proposal. Please try again."
-            #if DEBUG
-            PatinaLog.ui.error("[Proposals] sign failed: \(error.localizedDescription)")
-            #endif
+            // SP-15 / C5: Patina's words, never the server's.
+            MoneyFailureCopy.log("sign", error)
+            self.signError = MoneyFailureCopy.sign(error).sentence
         }
         isSigning = false
     }

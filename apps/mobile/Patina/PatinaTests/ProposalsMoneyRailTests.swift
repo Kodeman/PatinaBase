@@ -264,7 +264,11 @@ struct ProposalsMoneyRailTests {
         if case .notOwner = mapped("proposal x may only be signed by its client") {} else {
             Issue.record("expected .notOwner")
         }
-        if case .generic = mapped("some other database error") {} else { Issue.record("expected .generic") }
+        // SP-15 / C5: the catch-all case carries no payload, so a Postgres or
+        // vendor message cannot ride it to the screen.
+        if case .unexpected = mapped("some other database error") {} else {
+            Issue.record("expected .unexpected, carrying nothing from the server")
+        }
     }
 
     // MARK: - SP-04 · accepted is not signed

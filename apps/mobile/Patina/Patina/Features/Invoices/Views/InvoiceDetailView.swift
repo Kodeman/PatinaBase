@@ -13,6 +13,7 @@ import SwiftUI
 
 struct InvoiceDetailView: View {
     let invoiceId: String
+    @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = InvoiceDetailViewModel()
 
     var body: some View {
@@ -101,21 +102,13 @@ struct InvoiceDetailView: View {
             banner(.info, "Confirming payment… This usually takes a few seconds.")
         case .confirmed:
             banner(.success, "Payment received — thank you! A receipt is on its way to your inbox.")
-        case .achPending:
-            banner(.warning, "Your bank transfer has been started. Bank transfers take 3–5 business days to clear — we'll email your receipt as soon as it lands.")
+        case .unconfirmed:
+            banner(.warning, InvoiceSettleCopy.unconfirmed(invoice))
         case .idle:
             if invoice.hasPendingPayment {
-                banner(.info, processingCopy(invoice))
+                banner(.info, InvoiceSettleCopy.processing(invoice))
             }
         }
-    }
-
-    private func processingCopy(_ invoice: RemoteInvoice) -> String {
-        var copy = "A payment is processing. The balance above will update once it clears."
-        if invoice.hasProcessingStripePayment {
-            copy += " Bank transfers take 3–5 business days."
-        }
-        return copy
     }
 
     private func banner(_ state: PatinaStatusBadge.State, _ text: String) -> some View {
@@ -216,25 +209,76 @@ struct InvoiceDetailView: View {
                 .padding(.horizontal, 24)
         } else if invoice.isPayable && viewModel.confirmState != .confirming {
             VStack(alignment: .leading, spacing: 10) {
+                // SP-15: the failure is drawn ABOVE the button. It used to be
+                // inserted below a still-enabled "Pay $4,250.00", off the
+                // bottom of the screen and behind the Companion dock.
+                moneyFailureBanner(invoice)
                 PatinaButton(
                     "Pay \(PatinaCurrency.format(cents: invoice.balanceCents, currencyCode: invoice.currencyCode))",
                     style: .clay,
-                    isLoading: viewModel.isStartingCheckout
+                    isLoading: viewModel.isStartingCheckout,
+                    isEnabled: !viewModel.isStartingCheckout
                 ) {
                     Task { await viewModel.startCheckout(invoiceId: invoiceId) }
                 }
                 .accessibilityIdentifier("invoiceDetail.pay")
-                if let payError = viewModel.payError {
-                    Text(payError)
-                        .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.error)
-                }
+                Text("Payment opens securely in Safari.")
+                    .font(PatinaTypography.captionSmall)
+                    .foregroundStyle(PatinaColors.Text.muted)
                 Text("Pay securely by card or bank transfer.")
                     .font(PatinaTypography.captionSmall)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
             .padding(.horizontal, 24)
             .padding(.top, 4)
+        }
+    }
+
+    /// SP-15 / C5: one plain sentence in Patina's voice and the two acts that
+    /// follow it. No vendor string ever reaches this view — `MoneyFailureCopy`
+    /// is the only source of the words.
+    @ViewBuilder
+    private func moneyFailureBanner(_ invoice: RemoteInvoice) -> some View {
+        if let failure = viewModel.payFailure {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(failure.sentence)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 18) {
+                    Button(failure.retryLabel) {
+                        Task { await viewModel.startCheckout(invoiceId: invoiceId) }
+                    }
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.interactive)
+                    .accessibilityIdentifier("invoiceDetail.failure.retry")
+                    if failure.offersDesignerMessage, let projectId = invoice.project_id {
+                        Button("Message your designer") {
+                            openDesignerThread(projectId: projectId)
+                        }
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .accessibilityIdentifier("invoiceDetail.failure.message")
+                    }
+                }
+                .frame(minHeight: 44)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PatinaColors.error.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .accessibilityIdentifier("invoiceDetail.failure")
+        }
+    }
+
+    /// Opens (or creates) the project's thread — W1a's merged
+    /// `MessagingAPIClient.createThread`. A failure here stays silent; the
+    /// retry act above it is still the client's way forward.
+    private func openDesignerThread(projectId: String) {
+        Task {
+            guard let threadId = try? await MessagingAPIClient.shared
+                .createThread(projectId: projectId) else { return }
+            coordinator.navigate(to: .threadDetail(threadId: threadId))
         }
     }
 

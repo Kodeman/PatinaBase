@@ -122,4 +122,47 @@ struct MoneyAndStudioCopyTests {
         )
         #expect(decision.contains("decisionDetail.due"))
     }
+
+    // MARK: - SP-15 · the failure is where the client is looking
+
+    @Test("the pay failure is rendered above the button, not below it")
+    func payFailureIsAboveThePayButton() throws {
+        let source = try String(
+            contentsOf: Self.sourceURL("Patina/Features/Invoices/Views/InvoiceDetailView.swift"),
+            encoding: .utf8
+        )
+        let failure = try #require(source.range(of: "moneyFailureBanner(invoice)"))
+        let button = try #require(source.range(of: "invoiceDetail.pay"))
+        #expect(failure.lowerBound < button.lowerBound)
+        #expect(source.contains("invoiceDetail.failure.retry"))
+        #expect(source.contains("invoiceDetail.failure.message"))
+        #expect(source.contains("Payment opens securely in Safari."))
+    }
+
+    @Test("a failed decision submit is drawn, not swallowed")
+    func decisionSubmitFailureIsRendered() throws {
+        let source = try String(
+            contentsOf: Self.sourceURL("Patina/Features/Decisions/Views/DecisionDetailView.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("submitFailureBanner(decision)"))
+        #expect(source.contains("decisionDetail.failure"))
+    }
+
+    @Test("no money view model prints a thrown error's own description")
+    func moneyViewModelsNeverPrintErrorDescription() throws {
+        let files = [
+            "Patina/Features/Invoices/ViewModels/InvoicesViewModel.swift",
+            "Patina/Features/Proposals/ViewModels/ProposalsViewModel.swift",
+            "Patina/Features/Decisions/ViewModels/DecisionsViewModel.swift"
+        ]
+        for file in files {
+            let source = try String(contentsOf: Self.sourceURL(file), encoding: .utf8)
+            let rendered = source
+                .split(separator: "\n")
+                .filter { !$0.contains("PatinaLog") }
+                .joined(separator: "\n")
+            #expect(!rendered.contains("errorDescription"), "\(file) still renders errorDescription")
+        }
+    }
 }

@@ -241,21 +241,12 @@ public enum ProposalSignError: LocalizedError, Sendable {
     case notSignable
     case nameTooShort
     case notOwner
-    case generic(String)
+    /// Anything else. SP-15 / C5: deliberately carries no payload, so a
+    /// Postgres or vendor message cannot reach a client through it.
+    case unexpected
 
     public var errorDescription: String? {
-        switch self {
-        case .expired:
-            return "This proposal has expired. Ask your designer to renew it."
-        case .notSignable:
-            return "This proposal isn't available to sign right now."
-        case .nameTooShort:
-            return "Please enter your full name to sign."
-        case .notOwner:
-            return "You're not able to sign this proposal."
-        case .generic(let message):
-            return message
-        }
+        MoneyFailureCopy.sign(self).sentence
     }
 
     /// Map a thrown error (usually a Postgrest error carrying the RPC's
@@ -267,7 +258,7 @@ public enum ProposalSignError: LocalizedError, Sendable {
         if lower.contains("signable") { return .notSignable }
         if lower.contains("at least 2 characters") { return .nameTooShort }
         if lower.contains("only be signed by its client") { return .notOwner }
-        return .generic("Couldn't sign the proposal. Please try again.")
+        return .unexpected
     }
 }
 

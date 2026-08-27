@@ -21,6 +21,7 @@ struct DecisionDetailView: View {
             VStack(alignment: .leading, spacing: 24) {
                 if let decision = viewModel.decision {
                     header(decision)
+                    submitFailureBanner(decision)
                     ForEach(viewModel.options) { option in
                         optionCard(option)
                     }
@@ -104,6 +105,35 @@ struct DecisionDetailView: View {
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
+    }
+
+    /// SP-15 / C5: a failed submit is visible, in Patina's voice, where the
+    /// client is looking — with the two acts that follow it.
+    @ViewBuilder
+    private func submitFailureBanner(_ decision: RemoteClientDecision) -> some View {
+        if let failure = viewModel.submitFailure {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(failure.sentence)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let threadId = viewModel.discussThreadId {
+                    Button("Message your designer") {
+                        coordinator.navigate(to: .threadDetail(threadId: threadId))
+                    }
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.interactive)
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("decisionDetail.failure.message")
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PatinaColors.error.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 24)
+            .accessibilityIdentifier("decisionDetail.failure")
+        }
     }
 
     private var resolvedBanner: some View {

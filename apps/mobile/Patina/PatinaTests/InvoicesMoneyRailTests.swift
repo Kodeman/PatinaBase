@@ -136,11 +136,105 @@ struct InvoicesMoneyRailTests {
             Issue.record("expected .notConfigured")
         }
         if case .notFound = mapped("invoice_not_found") {} else { Issue.record("expected .notFound") }
-        if case let .generic(message) = mapped("something_unknown") {
-            #expect(message == "some detail")
-        } else {
-            Issue.record("expected .generic carrying the detail")
+        // SP-15 / C5: an unrecognised code used to become `.generic(detail)`,
+        // which put the vendor's words on the payment screen. It is now a
+        // payload-free case.
+        if case .unavailable = mapped("something_unknown") {} else {
+            Issue.record("expected .unavailable, carrying nothing from the server")
         }
+    }
+
+    // MARK: - SP-15 · the failure speaks Patina, never the vendor
+
+    @Test("an unknown checkout failure never carries the vendor's words")
+    func unknownCheckoutErrorDropsTheVendorDetail() {
+        let vendor = "Invalid API Key provided: sk_test_********************alls"
+        let failure = MoneyFailureCopy.checkout(CheckoutError.from(code: nil, detail: vendor))
+        #expect(!failure.sentence.contains("sk_test"))
+        #expect(!failure.sentence.contains("API Key"))
+        #expect(failure.sentence == "We couldn't start this payment. Nothing has been charged.")
+        #expect(failure.retryLabel == "Let's try that again")
+        #expect(failure.offersDesignerMessage)
+    }
+
+    @Test("every money failure is one plain sentence, whatever was thrown")
+    func everyThrownErrorMapsToPatinaVoice() {
+        let raw = NSError(domain: "PostgrestError", code: 500, userInfo: [
+            NSLocalizedDescriptionKey: "PGRST202 sk_test_51Q https://api.stripe.com/v1/customers"
+        ])
+        let failures = [
+            MoneyFailureCopy.checkout(raw),
+            MoneyFailureCopy.sign(raw),
+            MoneyFailureCopy.decision(raw)
+        ]
+        for failure in failures {
+            #expect(!failure.sentence.contains("PGRST"))
+            #expect(!failure.sentence.contains("sk_test"))
+            #expect(!failure.sentence.lowercased().contains("stripe"))
+            #expect(!failure.sentence.lowercased().contains("http"))
+            #expect(failure.sentence.hasSuffix("."))
+            #expect(failure.retryLabel == "Let's try that again")
+        }
+    }
+
+    @Test("every checkout code has its own true sentence")
+    func mappedCheckoutCodesKeepTheirOwnCopy() {
+        #expect(MoneyFailureCopy.checkout(CheckoutError.notConfigured).sentence
+                == "Online payment isn't set up for this invoice yet. Your designer can sort it out.")
+        #expect(MoneyFailureCopy.checkout(CheckoutError.nothingDue).offersDesignerMessage == false)
+        #expect(MoneyFailureCopy.checkout(CheckoutError.paymentProcessing).sentence
+                .contains("3–5 business days"))
+        // errorDescription is the same sentence, so a stray LocalizedError read
+        // anywhere in the app still cannot print a vendor string.
+        #expect(CheckoutError.unavailable.errorDescription
+                == MoneyFailureCopy.checkout(CheckoutError.unavailable).sentence)
+    }
+
+    @Test("no sign error can be constructed with a server message")
+    func signErrorsCarryNoServerPayload() {
+        let mapped = ProposalSignError.map(NSError(
+            domain: "PostgrestError", code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "duplicate key value violates unique constraint"]
+        ))
+        if case .unexpected = mapped {} else { Issue.record("expected .unexpected") }
+        #expect(MoneyFailureCopy.sign(mapped).sentence
+                == "We couldn't record your signature. Nothing has been signed.")
+    }
+
+    // MARK: - SP-15 · the settle banner tells the truth
+
+    @Test("an unconfirmed payment is not called a bank transfer unless it is one")
+    func settleBannerDefaultsToTheTruth() throws {
+        let card = try decode(RemoteInvoice.self, """
+        { "id": "i", "status": "sent", "total_cents": 425000, "amount_paid_cents": 0,
+          "payments": [{ "id": "p", "method": "stripe", "status": "pending",
+                         "stripe_payment_intent_id": "pi_1" }] }
+        """)
+        #expect(InvoiceSettleCopy.unconfirmed(card)
+                == "We haven't seen this payment yet. We'll update this as soon as it clears.")
+        #expect(!InvoiceSettleCopy.processing(card).contains("3–5 business days"))
+
+        let bank = try decode(RemoteInvoice.self, """
+        { "id": "i2", "status": "sent", "total_cents": 425000, "amount_paid_cents": 0,
+          "payments": [{ "id": "p2", "method": "ach_manual", "status": "pending" }] }
+        """)
+        #expect(InvoiceSettleCopy.unconfirmed(bank).contains("3–5 business days"))
+        #expect(InvoiceSettleCopy.processing(bank).contains("3–5 business days"))
+    }
+
+    @Test("a paid invoice with no payment rows says so honestly")
+    func paidInvoiceWithNoRowsIsNotCalledUnpaid() throws {
+        let paid = try decode(RemoteInvoice.self, """
+        { "id": "i3", "status": "paid", "total_cents": 425000,
+          "amount_paid_cents": 425000, "payments": [] }
+        """)
+        #expect(InvoiceSettleCopy.noPayments(paid)
+                == "Paid in full. Your designer recorded this payment outside Patina.")
+        let open = try decode(RemoteInvoice.self, """
+        { "id": "i4", "status": "sent", "total_cents": 425000,
+          "amount_paid_cents": 0, "payments": [] }
+        """)
+        #expect(InvoiceSettleCopy.noPayments(open) == "No payments recorded yet.")
     }
 
     // MARK: - Route names

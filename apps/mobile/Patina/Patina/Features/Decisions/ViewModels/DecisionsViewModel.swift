@@ -48,6 +48,10 @@ final class DecisionDetailViewModel {
     /// The project's comms thread, when one exists and is visible to the
     /// user — drives the "Discuss this" action. Nil hides the action.
     var discussThreadId: String?
+    /// SP-15: a failed submit used to be written into `error`, which the view
+    /// only draws when the decision itself failed to load — so the client tapped
+    /// Approve and nothing at all happened.
+    var submitFailure: MoneyFailure?
 
     func load(decisionId: String) async {
         isLoading = true
@@ -102,6 +106,7 @@ final class DecisionDetailViewModel {
         guard let optionId = pendingOptionId, !isSubmitting else { return }
         isSubmitting = true
         error = nil
+        submitFailure = nil
         do {
             try await DecisionsAPIClient.shared.selectOption(
                 decisionId: decisionId,
@@ -112,10 +117,9 @@ final class DecisionDetailViewModel {
             self.selectedOptionId = optionId
             self.pendingOptionId = nil
         } catch {
-            self.error = "Couldn't submit your choice"
-            #if DEBUG
-            PatinaLog.ui.error("[Decisions] select failed: \(error.localizedDescription)")
-            #endif
+            MoneyFailureCopy.log("decision", error)
+            self.submitFailure = MoneyFailureCopy.decision(error)
+            self.pendingOptionId = nil
         }
         isSubmitting = false
     }
