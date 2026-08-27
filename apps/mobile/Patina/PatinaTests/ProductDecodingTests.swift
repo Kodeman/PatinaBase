@@ -178,4 +178,38 @@ struct ProductDecodingTests {
         )
         #expect(product.dimensionsLine == "96 cm W \u{00D7} 51 cm D")
     }
+
+    // MARK: - SP-10: the feed withholds a piece with no resolvable maker
+
+    /// The plank: "withhold a product with no resolvable maker from the feed
+    /// instead of shipping it as `Unknown Maker`". Blanking the maker line was
+    /// not enough — the card came anyway.
+    @Test
+    func theFeedWithholdsAPieceWithNoResolvableMaker() throws {
+        let json = """
+        [{"id":"p-ok","name":"Oak Table","maker_name":"Room & Board"},
+         {"id":"p-brand","name":"Kilim Runner","maker_name":"Unknown Maker","brand":"Studio Piet"},
+         {"id":"p-anon","name":"Anon Chair","maker_name":"Unknown Maker"},
+         {"id":"p-empty","name":"Nameless Lamp","maker_name":""}]
+        """
+        let decoded = try ProductAPIClient.decodeProducts(from: Data(json.utf8))
+        #expect(decoded.count == 4, "the decode itself drops nothing")
+
+        let shown = ProductAPIClient.withholdingUnresolvedMakers(decoded)
+        let shownIds = shown.map(\.id)
+        let withheldIds = decoded.map(\.id).filter { !shownIds.contains($0) }
+        #expect(shownIds == ["p-ok", "p-brand"])
+        #expect(withheldIds == ["p-anon", "p-empty"])
+    }
+
+    /// Once 00533 returns `brand`, a piece the RPC could only call
+    /// "Unknown Maker" resolves through its brand and is shown again.
+    @Test
+    func brandRescuesAPieceTheVendorJoinCouldNotName() throws {
+        let json = #"[{"id":"p-brand","name":"Kilim Runner","maker_name":"Unknown Maker","brand":"Studio Piet"}]"#
+        let decoded = try ProductAPIClient.decodeProducts(from: Data(json.utf8))
+        let shown = ProductAPIClient.withholdingUnresolvedMakers(decoded)
+        #expect(shown.count == 1)
+        #expect(shown.first?.resolvedMakerName == "Studio Piet")
+    }
 }

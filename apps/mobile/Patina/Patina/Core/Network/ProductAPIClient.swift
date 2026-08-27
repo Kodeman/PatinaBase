@@ -64,8 +64,33 @@ actor ProductAPIClient {
             #endif
             throw ProductAPIError.http(status: http.statusCode)
         }
-        let items = try ProductAPIClient.decodeProducts(from: data)
+        let items = ProductAPIClient.withholdingUnresolvedMakers(
+            try ProductAPIClient.decodeProducts(from: data)
+        )
         return RecommendationsResponse(items: items, total: items.count, roomId: roomId, roomName: nil)
+    }
+
+    /// SP-10: a piece whose maker cannot be resolved is withheld from the feed
+    /// rather than shipped under the RPC's literal `Unknown Maker`
+    /// (00246:278) — on a marketplace whose whole argument is provenance, an
+    /// unattributed piece is not one to offer. Applies to the two feeds that
+    /// read `get_recommendations` (the browse grid and the Daily Room's picks)
+    /// and not to the direct single-piece fetch, so a piece opened by id or by
+    /// link still renders.
+    ///
+    /// The maker resolves from `products.brand` first, so once 00533 returns
+    /// that column a piece with a brand and no vendor is kept and prints its
+    /// brand; before 00533 it is withheld, which is the plank's own preference
+    /// over printing `Unknown Maker`.
+    nonisolated static func withholdingUnresolvedMakers(_ products: [Product]) -> [Product] {
+        let shown = products.filter(\.hasResolvableMaker)
+        #if DEBUG
+        let withheld = products.count - shown.count
+        if withheld > 0 {
+            PatinaLog.ui.debug("[ProductAPI] Withheld \(withheld) piece(s) with no resolvable maker")
+        }
+        #endif
+        return shown
     }
 
     // MARK: - U39: release-gating decode
