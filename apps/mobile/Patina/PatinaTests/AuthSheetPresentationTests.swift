@@ -74,4 +74,26 @@ struct AuthSheetPresentationTests {
     func authSheetBuildsWithATitle() {
         _ = AuthSheet(title: DesignRequestAuthCopy.wallTitle).body
     }
+
+    /// The soft wall's chrome belongs to the soft wall. The same view is the
+    /// app-level `.auth` sheet the Studio hub CTA, the notification feed's
+    /// guest CTA and the Companion prompt raise — a nav bar carrying a blank
+    /// title and a Cancel none of them had before would read there as an
+    /// unfinished screen, so the untitled presentation stays bare.
+    @Test("only the titled presentation carries the nav bar and Cancel")
+    func untitledPresentationStaysBare() throws {
+        let source = try SourcePin.read("Patina/Features/Authentication/Views/AuthSheet.swift")
+        let start = try #require(source.range(of: "var body: some View {"))
+        let end = try #require(source.range(of: "private var gate: some View {"))
+        let body = String(source[start.lowerBound..<end.lowerBound])
+        #expect(body.contains("if let title {"))
+        // The chrome is inside the titled branch; the else branch is `gate` alone.
+        let branch = try #require(body.range(of: "} else {"))
+        let titled = String(body[body.startIndex..<branch.lowerBound])
+        let untitled = String(body[branch.upperBound...])
+        #expect(titled.contains("NavigationStack"))
+        #expect(titled.contains("ToolbarItem(placement: .cancellationAction)"))
+        #expect(!untitled.contains("NavigationStack"))
+        #expect(!untitled.contains("Cancel"))
+    }
 }

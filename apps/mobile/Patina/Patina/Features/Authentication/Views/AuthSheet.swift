@@ -24,17 +24,26 @@ struct AuthSheet: View {
     @State private var showingPasswordSignIn = false
 
     var body: some View {
-        NavigationStack {
-            gate
-                .navigationTitle(title ?? "")
-                .toolbarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { dismiss() }
-                            .foregroundStyle(PatinaColors.Text.muted)
-                            .accessibilityIdentifier("auth.sheet.cancel")
+        if let title {
+            NavigationStack {
+                gate
+                    .navigationTitle(title)
+                    .toolbarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { dismiss() }
+                                .foregroundStyle(PatinaColors.Text.muted)
+                                .accessibilityIdentifier("auth.sheet.cancel")
+                        }
                     }
-                }
+            }
+        } else {
+            // No title means this is not a soft wall over a flow in progress:
+            // it is the app-level `.auth` sheet the Studio hub CTA, the feed's
+            // guest CTA and the Companion prompt all raise. Those keep the bare
+            // presentation they have always had — a nav bar carrying a blank
+            // title would read as an unfinished screen.
+            gate
         }
     }
 
