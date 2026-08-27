@@ -116,6 +116,22 @@ struct HouseRecordDesignerTests {
         #expect(select.hasPrefix("*,"))
     }
 
+    @Test("the select the client degrades to keeps every column but the designer")
+    func theDegradedDecisionSelectKeepsEveryColumn() {
+        let full = DecisionsAPIClient.decisionSelect
+        let degraded = DecisionsAPIClient.decisionSelectWithoutDesigner
+
+        #expect(!degraded.contains("profiles"))
+        #expect(degraded.contains("project:projects(name)"))
+        for column in ["id", "project_id", "title", "description:context", "status",
+                       "decision_type", "recommended_option_id", "viewed_at",
+                       "responded_at", "due_date", "client_consent_method",
+                       "client_consented_at", "created_at"] {
+            #expect(degraded.contains(column), "the degraded select dropped \(column)")
+            #expect(full.contains(column))
+        }
+    }
+
     @Test("the designer reference asks only for the columns profiles actually has")
     func theDesignerReferenceAsksForRealColumns() {
         // `profiles` has display_name / full_name / business_name and NO

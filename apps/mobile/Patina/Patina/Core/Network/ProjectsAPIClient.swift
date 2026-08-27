@@ -156,18 +156,30 @@ public actor ProjectsAPIClient {
         "*,designer:profiles!projects_designer_id_fkey(" + RemoteDesignerRef.selectColumns + ")"
 
     public func listProjects() async throws -> [RemoteProject] {
-        try await get(path: "projects", queryItems: [
-            URLQueryItem(name: "select", value: Self.projectSelect),
-            URLQueryItem(name: "order", value: "updated_at.desc"),
-        ])
+        try await projects(matching: [URLQueryItem(name: "order", value: "updated_at.desc")])
     }
 
     public func fetchProject(id: String) async throws -> RemoteProject? {
-        let rows: [RemoteProject] = try await get(path: "projects", queryItems: [
-            URLQueryItem(name: "select", value: Self.projectSelect),
-            URLQueryItem(name: "id", value: "eq.\(id)"),
-        ])
-        return rows.first
+        try await projects(matching: [URLQueryItem(name: "id", value: "eq.\(id)")]).first
+    }
+
+    /// One read, twice if it has to be: with the designer embed, then — only
+    /// on a 400, which is PostgREST refusing the relationship (a renamed
+    /// constraint, a lagging schema cache) — with the bare `select=*` this
+    /// query sent before. Losing the designer's name costs a caption; losing
+    /// this list costs the Studio hub, the badge counts and the engagement
+    /// tier together.
+    private func projects(matching filters: [URLQueryItem]) async throws -> [RemoteProject] {
+        do {
+            return try await get(path: "projects", queryItems:
+                [URLQueryItem(name: "select", value: Self.projectSelect)] + filters)
+        } catch RoomsAPIError.http(let status, let body) where status == 400 {
+            PatinaLog.sync.error(
+                "[Projects] designer embed refused (400): \(body). Retrying without it."
+            )
+            return try await get(path: "projects", queryItems:
+                [URLQueryItem(name: "select", value: "*")] + filters)
+        }
     }
 
     public func listPhases(projectId: String) async throws -> [RemoteProjectPhase] {
