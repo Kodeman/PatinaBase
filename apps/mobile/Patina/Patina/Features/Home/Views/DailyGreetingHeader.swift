@@ -5,9 +5,30 @@
 
 import SwiftUI
 
+/// The labelled `Studio` control that replaced the bare monogram (B §2; the
+/// graft synthesis §5 takes from Direction A). Named so its copy is a fact a
+/// test can hold rather than a string buried in a view.
+enum StudioControlLabel {
+    /// The canonical surface name in full, for VoiceOver (C4 / B-7).
+    static let voiceOverName = "Your Studio"
+    static let title = "Studio"
+
+    /// What the control says is waiting. Nil at zero — a control that prints
+    /// "0 waiting" is a chore counter, and this one counts nothing at anybody.
+    static func waitingValue(count: Int) -> String? {
+        guard count > 0 else { return nil }
+        return count == 1 ? "1 waiting" : "\(count) waiting"
+    }
+}
+
 struct DailyGreetingHeader: View {
     let dateString: String
-    let monogram: String
+    /// `TimeOfDay.current.greeting` — the complete token set the app has
+    /// carried unused. The surface is still named "Today" (C4); the greeting
+    /// is what it says, not what it is called.
+    let greeting: String
+    /// SP-16's one attention count, printed beside the Studio label.
+    var attentionCount: Int = 0
     /// Tap handler for the `?` help affordance. When non-nil, a small
     /// SF-Symbol question-mark button is rendered to the left of the
     /// monogram avatar; tapping it opens the contextual help panel for
@@ -15,11 +36,9 @@ struct DailyGreetingHeader: View {
     /// default — preserves source compatibility with existing previews
     /// and tests) the affordance is omitted entirely.
     var onHelpTap: (() -> Void)? = nil
-    /// PT-0-6: tap handler for the profile monogram avatar. When non-nil
-    /// the avatar becomes a `Button` that the parent wires to
-    /// `coordinator.navigate(to: .profile)`. Nil keeps the avatar a
-    /// static decoration (preview/source compatibility).
-    var onMonogramTap: (() -> Void)? = nil
+    /// Tap handler for the Studio control. When non-nil the control becomes a
+    /// `Button` the parent wires to `coordinator.navigate(to: .profile)`.
+    var onStudioTap: (() -> Void)? = nil
     /// PT-3-7: tap handler for the bell (notifications) glyph. When non-nil
     /// a bell button is rendered next to the help glyph with an unread-count
     /// badge; tapping routes to `coordinator.navigate(to: .notifications)`.
@@ -37,10 +56,11 @@ struct DailyGreetingHeader: View {
                     .textCase(.uppercase)
                     .foregroundStyle(PatinaColors.Text.muted)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("Today")
+                    Text(greeting)
                         .font(PatinaTypography.h4)
                         .foregroundStyle(PatinaColors.Text.primary)
                         .lineSpacing(0)
+                        .fixedSize(horizontal: false, vertical: true)
                     // Contextual help: explains what the "Daily Room" feed
                     // is — a curated mix of one editorial story and a stream
                     // of room-aware product recommendations refreshed daily.
@@ -55,6 +75,10 @@ struct DailyGreetingHeader: View {
             // row of the greeting header. Wrapping the inner VStack rather
             // than the whole HStack so the popover arrow lands on the title.
             .firstLaunchTourAnchor(.homeGreeting)
+            // The surface keeps its canonical name for VoiceOver even though
+            // the greeting is what the screen prints (C4).
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Today")
             Spacer()
             HStack(spacing: 4) {
                 // PT-3-7: bell (notifications) glyph with unread-count badge.
@@ -93,40 +117,50 @@ struct DailyGreetingHeader: View {
                     .accessibilityIdentifier("DailyRoomView.HelpButton")
                 }
             }
-            monogramAvatar
+            studioControl
                 // First-launch tour anchor — Step 3 popover attaches to the
-                // profile monogram avatar, now the live Profile entry point.
+                // same slot the monogram held; the control there is now
+                // labelled, and carries the count.
                 .firstLaunchTourAnchor(.profileMonogram)
         }
         .padding(.top, 56)
         .padding(.horizontal, PatinaSpacing.mdLarge)
     }
 
-    /// PT-0-6: the profile monogram. A `Button` when `onMonogramTap` is set,
-    /// otherwise a static circle (previews / tests).
+    /// The Studio control: the surface's name and the one attention count,
+    /// where a bare initial used to sit. A monogram said who you are; this
+    /// says what is waiting (B §2, synthesis §5).
     @ViewBuilder
-    private var monogramAvatar: some View {
-        let circle = ZStack {
-            Circle()
-                .fill(PatinaGradients.earth)
-                .frame(width: 36, height: 36)
-            Text(monogram)
-                // Deliberately fixed-size: a monogram initial inside a fixed
-                // 36pt avatar circle is a glyph decoration, not running text —
-                // scaling it with Dynamic Type would overflow the circle.
-                .font(.custom("PlayfairDisplay-Medium", size: 14))
-                .foregroundStyle(PatinaColors.offWhite)
+    private var studioControl: some View {
+        let control = HStack(spacing: 6) {
+            Text(StudioControlLabel.title)
+                .font(PatinaTypography.uiSmall)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .lineLimit(1)
+            if attentionCount > 0 {
+                Text("\(attentionCount)")
+                    .font(PatinaTypography.monoMedium)
+                    .foregroundStyle(PatinaColors.offWhite)
+                    .padding(.horizontal, PatinaSpacing.xs)
+                    .frame(minWidth: 18, minHeight: 18)
+                    .background(Capsule().fill(PatinaColors.clayDeep))
+            }
         }
-        if let onMonogramTap {
-            Button(action: onMonogramTap) {
-                circle.contentShape(Circle())
+        .padding(.horizontal, PatinaSpacing.xsm)
+        .frame(minHeight: 36)
+        .background(Capsule().fill(PatinaColors.Background.secondary))
+
+        if let onStudioTap {
+            Button(action: onStudioTap) {
+                control.contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Profile")
-            .accessibilityHint("Opens your profile and account settings.")
-            .accessibilityIdentifier("DailyRoomView.ProfileButton")
+            .accessibilityLabel(StudioControlLabel.voiceOverName)
+            .accessibilityValue(StudioControlLabel.waitingValue(count: attentionCount) ?? "")
+            .accessibilityHint("Opens your studio.")
+            .accessibilityIdentifier("DailyRoomView.StudioButton")
         } else {
-            circle
+            control
         }
     }
 }
@@ -151,12 +185,13 @@ private struct UnreadBadge: View {
 
 #Preview {
     VStack {
-        DailyGreetingHeader(dateString: "WEDNESDAY · APR 7", monogram: "A")
+        DailyGreetingHeader(dateString: "WEDNESDAY · APR 7", greeting: "Good morning.")
         DailyGreetingHeader(
             dateString: "WEDNESDAY · APR 7",
-            monogram: "A",
+            greeting: "Good evening.",
+            attentionCount: 4,
             onHelpTap: {},
-            onMonogramTap: {},
+            onStudioTap: {},
             onBellTap: {},
             unreadCount: 3
         )

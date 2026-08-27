@@ -135,9 +135,10 @@ struct DailyRoomView: View {
             VStack(spacing: 0) {
                 DailyGreetingHeader(
                     dateString: viewModel.greetingDate.uppercased(),
-                    monogram: UserIdentity.initial,
+                    greeting: TimeOfDay.current.greeting,
+                    attentionCount: BadgeCountService.shared.attentionCount,
                     onHelpTap: { isHelpPanelPresented = true },
-                    onMonogramTap: { coordinator.navigate(to: .profile) },
+                    onStudioTap: { coordinator.navigate(to: .profile) },
                     onBellTap: { coordinator.navigate(to: .notifications) },
                     unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count
                 )
