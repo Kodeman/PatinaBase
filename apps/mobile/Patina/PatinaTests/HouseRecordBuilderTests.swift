@@ -8,11 +8,14 @@
 //  empty array the builder never pads.
 //
 
+// swiftlint:disable file_length
+
 import Foundation
 import Testing
 @testable import Patina
 
 @MainActor
+// swiftlint:disable:next type_body_length
 struct HouseRecordBuilderTests {
 
     // MARK: - Fixtures
@@ -43,7 +46,7 @@ struct HouseRecordBuilderTests {
     }
 
     /// The seed's three waiting things, as the walk sees them.
-    private func waitingFixtures() throws -> (
+    private func waitingFixtures() throws -> ( // swiftlint:disable:this large_tuple
         [RemoteClientDecision], [RemoteProposal], [RemoteInvoice]
     ) {
         let decisions = try decode([RemoteClientDecision].self, """

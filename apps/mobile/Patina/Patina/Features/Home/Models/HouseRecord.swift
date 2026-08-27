@@ -11,6 +11,9 @@
 //  array — the builder never pads, never invents, never counts days at anyone.
 //  Whether an empty half is *drawn* is the caller's decision, by tier.
 //
+//  The file is long because the whole record — model, rows and builder — is one
+//  contract R2 reads; splitting it would scatter the honesty rules.
+// swiftlint:disable file_length
 
 import Foundation
 
@@ -202,7 +205,7 @@ enum HouseRecordBuilder {
     /// `previous` is the last record built this session (or loaded from the
     /// snapshot). It exists only for the six-hour suppression; omitting it
     /// simply builds a fresh anchor.
-    static func build( // swiftlint:disable:this function_parameter_count
+    static func build( // swiftlint:disable:this function_parameter_count function_body_length
         from badges: BadgeCountService,
         saved: [TableItemModel],
         products: [Product],
@@ -401,6 +404,7 @@ private extension HouseRecordBuilder {
 
 private extension HouseRecordBuilder {
 
+    // swiftlint:disable:next function_parameter_count
     static func movedRows(
         badges: BadgeCountService,
         saved: [TableItemModel],

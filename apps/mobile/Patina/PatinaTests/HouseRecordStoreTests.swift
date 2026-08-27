@@ -57,8 +57,11 @@ struct LastSeenStoreTests {
         let suite = try #require(UserDefaults(suiteName: LastSeenStore.appGroupIdentifier))
         let previous = suite.object(forKey: LastSeenStore.key)
         defer {
-            if let previous { suite.set(previous, forKey: LastSeenStore.key) }
-            else { suite.removeObject(forKey: LastSeenStore.key) }
+            if let previous {
+                suite.set(previous, forKey: LastSeenStore.key)
+            } else {
+                suite.removeObject(forKey: LastSeenStore.key)
+            }
         }
 
         let store = LastSeenStore()

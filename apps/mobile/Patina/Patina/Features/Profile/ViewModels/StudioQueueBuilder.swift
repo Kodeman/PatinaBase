@@ -5,6 +5,7 @@
 //  Converts the app's existing project-domain records into one prioritized,
 //  state-first Studio queue. It performs no network work and is testable.
 //
+// swiftlint:disable file_length
 
 import Foundation
 
@@ -63,7 +64,7 @@ enum StudioQueueBuilder {
     /// Ordered by the date each was asked, ascending — the Record's order.
     /// `designerFallback` is used only where the row's own embed brought no
     /// name; nil leaves the row unattributed rather than guessing.
-    static func itemizedAwaitingRows(
+    static func itemizedAwaitingRows( // swiftlint:disable:this function_body_length
         decisions: [RemoteClientDecision],
         proposals: [RemoteProposal],
         invoices: [RemoteInvoice],
