@@ -373,6 +373,30 @@ final class DailyRoomViewModel {
         }
     }
 
+    /// True while the Message tap is opening (or finding) the thread.
+    var isOpeningDesignerThread: Bool = false
+
+    /// SP-13's thread creation, from the seat: the project thread where a
+    /// project exists, the direct thread where it does not. Returns the thread
+    /// id, or nil when there is nothing to open — the caller navigates only on
+    /// a real id, so a failure leaves the person where they were.
+    func openDesignerThread(_ seat: DesignerSeat) async -> String? {
+        isOpeningDesignerThread = true
+        defer { isOpeningDesignerThread = false }
+        do {
+            if let projectId = seat.projectId {
+                return try await MessagingAPIClient.shared.createThread(projectId: projectId)
+            }
+            if let designerId = seat.designerId {
+                return try await MessagingAPIClient.shared.createDirectThread(counterpart: designerId)
+            }
+            return nil
+        } catch {
+            PatinaLog.ui.error("[DailyRoomVM] opening the designer thread failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     // MARK: - Intent
 
     func selectRoom(_ room: RoomSummary) {
