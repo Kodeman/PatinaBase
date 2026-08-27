@@ -42,10 +42,21 @@ private struct PatinaScreenChrome: ViewModifier {
                 HStack(spacing: 12) {
                     BackChevronButton(style: style) { coordinator.goBack() }
                     if let title {
+                        // SP-19 / b-notes §3: the chevron and title float over a
+                        // ScrollView with the system bar hidden, so on a scrolled
+                        // screen the title sat directly on live content (the
+                        // re-walk caught the slot over INV-2026-0142). The
+                        // chevron carries its own pill; the title had nothing.
                         Text(title)
                             .font(PatinaTypography.h5)
                             .foregroundStyle(titleColor)
                             .lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(.ultraThinMaterial)
+                            )
                     }
                 }
                 .padding(.top, 8)
