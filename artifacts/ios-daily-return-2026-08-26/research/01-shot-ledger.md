@@ -433,8 +433,34 @@ half (idempotent save, seeded `isSaved`, one currency formatter) is unit-pinned.
 room-scoped browse fell back to the unscoped feed as designed, because a guest's room
 has no `remoteId` (U07) — so the room-named title was not exercised either.
 
+### Fix round (`waves/w1b/a-fix-log.md`, commits `5a6cd508f`, `4b1f7ed59`)
+
+Same simulator, same signed build, **guest**, fresh install (`simctl uninstall` +
+`install` + `launch -DeploymentTarget local`), local stack now carrying lane D's
+00533–00536.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w1b-a-10-guest-saves-survive-grid.png` | Browse pieces grid, guest, after two saves | **The blocking finding, closed.** Two pieces saved from the grid (swipe-right → `toggleSaved` → `saveProduct`, the same call the heart makes) carry **filled** hearts — Heirloom Oak Dining Table and Live-Edge Coffee Table — while the two untouched cards carry outlined ones. No failure banner. On the reviewed code the same taps deleted their own local row and printed "Couldn't save — check your connection and try again." Subtitle still reads **"10 pieces chosen for your space"**: the SP-10 withhold removes nothing here, because every feed row resolves a maker once 00533 returns `brand` |
+| `w1b-a-11-guest-saved-shelf-two-pieces.png` | Saved → All items, same guest session | Both saves are on the shelf with their maker lines (HERITAGE LUMBER, NORDIC ATELIER) and `$2,100` / `$4,200` through the one formatter. The guest's save survived leaving the screen — which is the whole of SP-14's local half |
+
+**Measured, not photographed.** `scan_ui` on each piece screen after its save reports the
+primary button as `Saved ✓` and the top-bar heart as `heart.fill` / "Remove from saved",
+seeded from the local store.
+
+**Still not sim-verified, and why.** SP-10's *withhold* draws no visible change on this
+stack: `select name, maker_name, brand from get_recommendations(...)` returns ten rows and
+all ten carry a `brand`, so nothing is withheld (the four rows the RPC still calls
+"Unknown Maker" are rescued by `brand`). Showing a withheld card would need a product with
+neither `brand` nor `vendor_id`, and seeding one means writing to the local stack, which is
+lane D's alone this wave. The filter is **unit-pinned** (`ProductDecodingTests`), and
+`w1b-a-10` is the negative check: nothing with a maker is withheld.
+
 **Gate at the tip of the lane branch** (`daily-return/w1b-a`):
 `ios-gate.sh build` → `** BUILD SUCCEEDED **`; `xcodebuild test -only-testing:PatinaTests`
-on `dr-w1b-a` → **`Test run with 695 tests in 88 suites passed`** (671 on the W1a base;
+on `dr-w1b-a` → **`Test run with 700 tests in 88 suites passed`** (671 on the W1a base;
 +24 across `ProductDecodingTests`, `BrowseGridContractTests`, `SavedItemMirrorTests`,
-`CompanionActionMatrixTests`, `DailyRoomFeedMappingTests`, `AccountIsolationTests`).
+`CompanionActionMatrixTests`, `DailyRoomFeedMappingTests`, `AccountIsolationTests`, then
+**+5 in the fix round** — 3 in `SavedItemMirrorTests`, 2 in `ProductDecodingTests`).
+
+---

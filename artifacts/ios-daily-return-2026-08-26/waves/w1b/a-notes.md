@@ -134,3 +134,21 @@ Two numbers came off screens rather than being fixed, because no data can suppor
   (`SavedItemMirrorTests`), not sim-verified. The local half (idempotent save, seeded
   `isSaved`, one currency formatter) is unit-pinned.
 - **No device claims** of any kind from this lane.
+
+## 8. Fix round — SP-10's withhold depends on lane D's 00533 (seam, no file change asked)
+
+`ProductAPIClient.withholdingUnresolvedMakers` (commit `4b1f7ed59`) drops a feed row whose
+maker resolves from neither `products.brand` nor a real vendor name. **Before 00533 the RPC
+does not return `brand`**, so on a pre-00533 database the filter falls back to the vendor
+join alone and withholds every row the RPC labels `Unknown Maker` — four of the ten seeded
+rows, measured. After 00533 (already applied on the local stack) all ten resolve and nothing
+is withheld.
+
+No change is requested in any lane D file: 00533 is already minted with `brand`, which is
+exactly what this needs. Recorded so the **merge order D → A holds** — landing A ahead of D
+would visibly thin the feed on a database that has not been migrated yet.
+
+Also in the fix round: guest saves no longer attempt the `saved_items` mirror at all
+(`SavedItemMirror.shouldAttempt`), so §7's "SP-14's remote mirror … not sim-verified" now
+reads more precisely — the guest's **local** save is sim-verified end to end
+(`shots/w1b-a-10`, `w1b-a-11`); the signed-in mirror remains unit-pinned only.
