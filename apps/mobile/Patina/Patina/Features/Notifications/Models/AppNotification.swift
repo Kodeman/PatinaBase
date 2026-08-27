@@ -36,6 +36,12 @@ struct AppNotification: Identifiable {
     /// one carries the Studio row's own route, so the bell and the Studio land
     /// a tap in the same place.
     let fallbackRoute: AppRoute?
+    /// The entities a composed Studio row speaks for. The Studio's "Awaiting
+    /// you" rows are AGGREGATES — one row reading "2 Proposals" — so a
+    /// stand-in can cover several entities at once. `merge` retires it only
+    /// once every one of them has a delivered row of its own; empty for a
+    /// delivered row, which speaks for itself.
+    let coveredEntityIds: [String]
 
     /// The one route a tap follows, whichever kind of row this is.
     var route: AppRoute? {
@@ -53,7 +59,8 @@ struct AppNotification: Identifiable {
         entityType: String? = nil,
         entityId: String? = nil,
         isStudioFallback: Bool = false,
-        fallbackRoute: AppRoute? = nil
+        fallbackRoute: AppRoute? = nil,
+        coveredEntityIds: [String] = []
     ) {
         self.id = id
         self.remoteId = remoteId
@@ -66,6 +73,7 @@ struct AppNotification: Identifiable {
         self.entityId = entityId
         self.isStudioFallback = isStudioFallback
         self.fallbackRoute = fallbackRoute
+        self.coveredEntityIds = coveredEntityIds
     }
 
     var icon: String {

@@ -145,18 +145,76 @@ struct BellQueueFallbackTests {
 
     // MARK: - The merge
 
-    @Test("a real row suppresses the aggregate stand-in for its kind")
+    @Test("a real row suppresses the stand-in for the entity it covers")
     func fallbackDedupesAgainstRealRows() {
-        let real = [Self.delivered(type: .invoice, entityId: "inv-1")]
+        let real = [Self.delivered(type: .invoice, entityId: "invoice-1")]
         let merged = NotificationsViewModel.merge(
             real: real,
-            fallback: NotificationsViewModel.fallbackRows(from: Self.snapshot(), now: Self.now)
+            fallback: Self.fallback()
         )
         #expect(merged.filter { $0.entityType == "invoice" }.count == 1)
-        #expect(merged.first?.remoteId == "remote-inv-1")
+        #expect(merged.first?.remoteId == "remote-invoice-1")
         // The kinds the backend said nothing about still draw.
         #expect(merged.filter { $0.entityType == "decision" }.count == 1)
         #expect(merged.filter { $0.entityType == "proposal" }.count == 1)
+    }
+
+    /// Two proposals await signature; the backend wrote a `notification_log`
+    /// row for only one of them — the mixed-coverage case that is the whole
+    /// reason this plank exists (one proposal sent through the live path, one
+    /// seeded or predating 00534). Retiring the kind on the strength of the
+    /// one delivered row would leave the bell showing one proposal while the
+    /// Studio shows two: the contradiction, reproduced by the fix.
+    @Test("a partially covered kind keeps its Studio stand-in")
+    func partialCoverageKeepsTheStandIn() {
+        let merged = NotificationsViewModel.merge(
+            real: [Self.delivered(type: .proposal, entityId: "proposal-1")],
+            fallback: Self.fallback(proposals: [Self.proposalFixture, Self.secondProposalFixture])
+        )
+        let proposals = merged.filter { $0.entityType == "proposal" }
+        #expect(proposals.count == 2)
+        #expect(proposals.filter(\.isStudioFallback).count == 1)
+        // And the stand-in still says what the Studio says.
+        #expect(proposals.first(where: \.isStudioFallback)?.body
+            .contains("2 proposals are ready to review") == true)
+    }
+
+    /// Once every entity the stand-in speaks for has a delivered row, it has
+    /// nothing left to add and retires.
+    @Test("a stand-in retires once every entity it covers has a row")
+    func fullCoverageRetiresTheStandIn() {
+        let merged = NotificationsViewModel.merge(
+            real: [
+                Self.delivered(type: .proposal, entityId: "proposal-1"),
+                Self.delivered(type: .proposal, entityId: "proposal-2")
+            ],
+            fallback: Self.fallback(proposals: [Self.proposalFixture, Self.secondProposalFixture])
+        )
+        let proposals = merged.filter { $0.entityType == "proposal" }
+        #expect(proposals.count == 2)
+        #expect(proposals.filter(\.isStudioFallback).isEmpty)
+    }
+
+    /// Postgres hands ids back lower-case; a delivered row that carries an
+    /// upper-case copy is the same entity and must still retire its stand-in.
+    @Test("entity coverage is case-insensitive")
+    func coverageIgnoresCase() {
+        let merged = NotificationsViewModel.merge(
+            real: [Self.delivered(type: .invoice, entityId: "INVOICE-1")],
+            fallback: Self.fallback()
+        )
+        #expect(merged.filter { $0.entityType == "invoice" && $0.isStudioFallback }.isEmpty)
+    }
+
+    /// A stand-in composed without entity ids cannot be checked one by one;
+    /// the delivered row for its kind stands in its place, as it always did.
+    @Test("a stand-in that names no entity defers to its kind")
+    func unidentifiedStandInDefers() {
+        let merged = NotificationsViewModel.merge(
+            real: [Self.delivered(type: .invoice, entityId: "invoice-1")],
+            fallback: NotificationsViewModel.fallbackRows(from: Self.snapshot(), now: Self.now)
+        )
+        #expect(merged.filter { $0.entityType == "invoice" }.count == 1)
     }
 
     @Test("with nothing delivered the bell is the Studio queue")
@@ -227,6 +285,16 @@ struct BellQueueFallbackTests {
         )[0]
     }
 
+    private static var secondProposalFixture: RemoteProposal {
+        decode(
+            [RemoteProposal].self,
+            """
+            [{ "id": "proposal-2", "title": "Study proposal", "status": "sent",
+               "valid_until": "2026-09-12", "updated_at": "2026-08-21T12:00:00Z" }]
+            """
+        )[0]
+    }
+
     private static var invoiceFixture: RemoteInvoice {
         decode(
             [RemoteInvoice].self,
@@ -252,19 +320,44 @@ struct BellQueueFallbackTests {
 
     /// One awaiting row of each kind, built through the real
     /// `StudioQueueBuilder` so the fallback cannot drift from the Studio.
-    private static func snapshot() -> StudioQueueSnapshot {
+    private static func snapshot(
+        decisions: [RemoteClientDecision]? = nil,
+        proposals: [RemoteProposal]? = nil,
+        invoices: [RemoteInvoice]? = nil
+    ) -> StudioQueueSnapshot {
         StudioQueueBuilder.build(
             StudioQueueInput(
                 projects: [],
-                decisions: [decisionFixture],
-                proposals: [proposalFixture],
-                invoices: [invoiceFixture],
+                decisions: decisions ?? [decisionFixture],
+                proposals: proposals ?? [proposalFixture],
+                invoices: invoices ?? [invoiceFixture],
                 documents: [],
                 threads: [],
                 notifications: [],
                 currentUserId: nil,
                 now: now
             )
+        )
+    }
+
+    /// The stand-in rows exactly as `currentFallbackRows` composes them —
+    /// each carrying the ids of the entities it speaks for.
+    private static func fallback(
+        decisions: [RemoteClientDecision]? = nil,
+        proposals: [RemoteProposal]? = nil,
+        invoices: [RemoteInvoice]? = nil
+    ) -> [AppNotification] {
+        let decisions = decisions ?? [decisionFixture]
+        let proposals = proposals ?? [proposalFixture]
+        let invoices = invoices ?? [invoiceFixture]
+        return NotificationsViewModel.fallbackRows(
+            from: snapshot(decisions: decisions, proposals: proposals, invoices: invoices),
+            entityIds: [
+                "decision": decisions.map(\.id),
+                "proposal": proposals.map(\.id),
+                "invoice": invoices.map(\.id)
+            ],
+            now: now
         )
     }
 }

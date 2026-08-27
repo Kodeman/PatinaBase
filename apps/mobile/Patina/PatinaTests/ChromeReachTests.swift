@@ -25,11 +25,30 @@ struct ChromeReachTests {
     /// destination were always correct — `.buttonStyle(.plain)` restricts
     /// hit-testing to the label's drawn content, and the middle of
     /// `settingsRow` is a `Spacer()`.
-    @Test("every settings row declares a rectangular hit area")
+    ///
+    /// The pin is scoped to `settingsRow` itself — the label every
+    /// `NavigationLink`/`settingsButtonRow` in the screen renders, and the
+    /// only builder whose row IS the tap target. The toggle and picker rows
+    /// carry no gesture of their own (their target is the embedded control),
+    /// so a whole-file `contains` would pass on any single row and prove
+    /// nothing about this one.
+    @Test("the settings row that is itself a button declares a rectangular hit area")
     func settingsRowsAreFullyTappable() throws {
         let source = try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
-        #expect(source.contains(".contentShape(Rectangle())"))
-        #expect(source.contains("minHeight: 44"))
+        let start = try #require(source.range(of: "private func settingsRow("))
+        let end = try #require(source.range(of: "private func settingsToggleRow("))
+        let row = String(source[start.lowerBound..<end.lowerBound])
+        #expect(row.contains(".contentShape(Rectangle())"))
+        #expect(row.contains("minHeight: 44"))
+    }
+
+    /// Every row in the screen — button, toggle, picker — is at least 44pt
+    /// tall, the reach floor SP-20 asks for even where the tap target is the
+    /// embedded control rather than the row.
+    @Test("every settings row clears the 44pt reach floor")
+    func settingsRowsClearTheReachFloor() throws {
+        let source = try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
+        #expect(source.components(separatedBy: "minHeight: 44").count - 1 >= 4)
     }
 
     // MARK: - SP-19 · the Hearth

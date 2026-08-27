@@ -98,13 +98,25 @@ final class NotificationsViewModel {
                 now: now
             )
         )
-        return fallbackRows(from: snapshot, now: now)
+        // The ids behind each aggregate, from the very arrays the counts
+        // were computed from, so a stand-in and the Studio can never disagree
+        // about WHICH things are waiting.
+        let entityIds: [String: [String]] = [
+            "invoice": badges.payableInvoices.map(\.id),
+            "decision": badges.pendingDecisions.map(\.id),
+            "proposal": badges.pendingProposals.map(\.id)
+        ]
+        return fallbackRows(from: snapshot, entityIds: entityIds, now: now)
     }
 
     /// Map the Studio's "Awaiting you" section onto feed rows. Each carries
     /// the section row's own title, detail, meta and route, so tapping the
     /// bell lands exactly where tapping the Studio would.
-    static func fallbackRows(from snapshot: StudioQueueSnapshot, now: Date = Date()) -> [AppNotification] {
+    static func fallbackRows(
+        from snapshot: StudioQueueSnapshot,
+        entityIds: [String: [String]] = [:],
+        now: Date = Date()
+    ) -> [AppNotification] {
         snapshot.section(.awaitingYou).rows.compactMap { row in
             guard let type = fallbackType(for: row.route) else { return nil }
             let body = [row.detail, row.meta]
@@ -120,7 +132,8 @@ final class NotificationsViewModel {
                 entityType: type.entityType,
                 entityId: row.id,
                 isStudioFallback: true,
-                fallbackRoute: row.route
+                fallbackRoute: row.route,
+                coveredEntityIds: type.entityType.flatMap { entityIds[$0] } ?? []
             )
         }
     }
@@ -134,16 +147,36 @@ final class NotificationsViewModel {
         }
     }
 
-    /// A real row always wins: where the backend has written about a kind of
-    /// thing, the aggregate stand-in for that kind does not also draw. This is
-    /// the plank's own stated risk — "duplicate or contradictory rows if both
-    /// the fallback and the log rows render".
+    /// A delivered row wins over the stand-in that speaks for it — but only
+    /// over the entities it actually covers.
+    ///
+    /// The Studio's "Awaiting you" rows are AGGREGATES: one row reading
+    /// "2 Proposals", not a row per proposal. Retiring a whole kind the moment
+    /// ONE delivered row of that kind arrives therefore hides the second
+    /// proposal the Studio still lists — the bell-contradicts-Studio failure
+    /// this plank exists to close, reproduced by its own fix. So a stand-in
+    /// retires only once EVERY entity it speaks for has a row of its own; a
+    /// partially covered kind keeps its stand-in, which is a redundancy the
+    /// client can reconcile rather than an omission they cannot see.
     static func merge(real: [AppNotification], fallback: [AppNotification]) -> [AppNotification] {
         guard !real.isEmpty else { return fallback }
-        let covered = Set(real.compactMap(\.entityType))
+        var deliveredTypes: Set<String> = []
+        var deliveredIds: [String: Set<String>] = [:]
+        for row in real {
+            guard let entityType = row.entityType?.lowercased() else { continue }
+            deliveredTypes.insert(entityType)
+            if let entityId = row.entityId?.lowercased() {
+                deliveredIds[entityType, default: []].insert(entityId)
+            }
+        }
         let surviving = fallback.filter { row in
-            guard let entityType = row.entityType else { return false }
-            return !covered.contains(entityType)
+            guard let entityType = row.entityType?.lowercased() else { return false }
+            guard deliveredTypes.contains(entityType) else { return true }
+            let spokenFor = Set(row.coveredEntityIds.map { $0.lowercased() })
+            // A stand-in that names no entity cannot be checked one by one;
+            // the delivered row for its kind stands in its place, as before.
+            guard !spokenFor.isEmpty else { return false }
+            return !spokenFor.isSubset(of: deliveredIds[entityType] ?? [])
         }
         return real + surviving
     }
