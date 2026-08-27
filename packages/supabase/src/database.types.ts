@@ -12345,6 +12345,7 @@ export type Database = {
           payment_terms:
             | Database["public"]["Enums"]["purchase_order_payment_pattern"]
             | null
+          photo_verified_at: string | null
           price_retail: number | null
           price_trade: number | null
           pricing_tiers: Json | null
@@ -12357,6 +12358,7 @@ export type Database = {
           search_vector: unknown
           seo_description: string | null
           seo_title: string | null
+          shipping_flat_cents: number | null
           short_description: string | null
           sku: string | null
           slug: string | null
@@ -12415,6 +12417,7 @@ export type Database = {
           payment_terms?:
             | Database["public"]["Enums"]["purchase_order_payment_pattern"]
             | null
+          photo_verified_at?: string | null
           price_retail?: number | null
           price_trade?: number | null
           pricing_tiers?: Json | null
@@ -12427,6 +12430,7 @@ export type Database = {
           search_vector?: unknown
           seo_description?: string | null
           seo_title?: string | null
+          shipping_flat_cents?: number | null
           short_description?: string | null
           sku?: string | null
           slug?: string | null
@@ -12485,6 +12489,7 @@ export type Database = {
           payment_terms?:
             | Database["public"]["Enums"]["purchase_order_payment_pattern"]
             | null
+          photo_verified_at?: string | null
           price_retail?: number | null
           price_trade?: number | null
           pricing_tiers?: Json | null
@@ -12497,6 +12502,7 @@ export type Database = {
           search_vector?: unknown
           seo_description?: string | null
           seo_title?: string | null
+          shipping_flat_cents?: number | null
           short_description?: string | null
           sku?: string | null
           slug?: string | null
@@ -31141,16 +31147,26 @@ export type Database = {
         }
         Returns: {
           badges: string[]
+          brand: string
           category: string
+          description: string
+          dimensions: Json
+          finish: string
           id: string
           image_url: string
+          lead_time_weeks: number
           maker_location: string
           maker_name: string
           maker_story: string
           match_score: number
           material_tags: string[]
           name: string
+          patina_managed: boolean
+          photo_verified_at: string
           price_cents: number
+          published_at: string
+          shipping_flat_cents: number
+          source_url: string
           style_tags: string[]
           tier: string
           usdz_url: string
