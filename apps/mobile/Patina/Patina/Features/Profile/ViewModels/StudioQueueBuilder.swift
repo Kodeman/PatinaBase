@@ -350,7 +350,8 @@ private extension StudioQueueBuilder {
         return StudioQueueRow(
             id: "records.budget",
             title: "Budget",
-            detail: "Project totals and payment progress",
+            // SP-16: the row names what the screen computes.
+            detail: "What's been billed, and what's been paid",
             meta: nil,
             systemImage: "chart.pie",
             route: .budget,

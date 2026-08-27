@@ -34,7 +34,10 @@ struct BudgetView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             MonoLabel(text: "BUDGET", tracking: 2)
-            Text("Your budget")
+            // SP-16: the screen computes what has been billed and paid across
+            // the client's invoices — not her project budgets. It is named for
+            // what it computes.
+            Text("Billed to date")
                 .font(PatinaTypography.h3)
                 .foregroundStyle(PatinaColors.Text.primary)
         }
@@ -72,8 +75,8 @@ struct BudgetView: View {
     private var emptyView: some View {
         PatinaEmptyState(
             icon: "chart.pie",
-            title: "No budget yet",
-            message: "Sign a proposal or receive an invoice and your budget builds itself here.",
+            title: "Nothing billed yet",
+            message: "Sign a proposal or receive an invoice and the record builds itself here.",
             ctaTitle: studioCTATitle,
             ctaAction: presentStudioCTA
         )
@@ -147,10 +150,18 @@ struct BudgetProjectSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(section.name)
-                .font(PatinaTypography.h5)
-                .foregroundStyle(PatinaColors.Text.primary)
-                .padding(.horizontal, 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(section.name)
+                    .font(PatinaTypography.h5)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                // SP-16: the designer's figure, said to be the designer's.
+                if let budget = section.designerBudgetCents {
+                    Text("Project budget \(PatinaCurrency.formatWholeDollars(cents: budget)) · your designer's figure")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                }
+            }
+            .padding(.horizontal, 24)
 
             ForEach(section.proposals) { proposal in
                 BudgetProposalCard(proposal: proposal) {

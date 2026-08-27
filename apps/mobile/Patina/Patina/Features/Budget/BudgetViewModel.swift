@@ -72,7 +72,13 @@ enum BudgetMath {
         // Names: prefer the spine, then fall back to whatever the proposals /
         // invoices embedded, so an orphan money-bearing project still reads.
         var nameByProject: [String: String] = [:]
-        for project in projects { nameByProject[project.id] = project.name }
+        var budgetByProject: [String: Int] = [:]
+        for project in projects {
+            nameByProject[project.id] = project.name
+            if let budget = project.total_amount_cents ?? project.budget_cents {
+                budgetByProject[project.id] = budget
+            }
+        }
         for proposal in acceptedProposals {
             if let pid = proposal.project_id, nameByProject[pid] == nil {
                 nameByProject[pid] = proposal.project?.name ?? "Project"
@@ -116,7 +122,8 @@ enum BudgetMath {
                 name: nameByProject[pid] ?? "Project",
                 proposals: proposals,
                 invoices: invoices,
-                rollup: BudgetMath.rollup(invoices)
+                rollup: BudgetMath.rollup(invoices),
+                designerBudgetCents: budgetByProject[pid]
             )
         }
     }
@@ -155,6 +162,12 @@ struct BudgetProjectSection: Identifiable {
     /// Visible invoices for this project, newest first.
     let invoices: [RemoteInvoice]
     let rollup: BudgetSummary
+    /// SP-16: the designer's own figure for this project
+    /// (`projects.total_amount_cents` / `budget_cents`), carried separately so
+    /// it can never be confused with what has actually been billed. The screen
+    /// reported "$4,250 BILLED" as "Your budget" while the projects list two
+    /// taps away totalled $725,000.
+    let designerBudgetCents: Int?
 }
 
 @Observable

@@ -165,4 +165,36 @@ struct MoneyAndStudioCopyTests {
             #expect(!rendered.contains("errorDescription"), "\(file) still renders errorDescription")
         }
     }
+
+    // MARK: - SP-16 · the budget screen is named for what it computes
+
+    @Test("the screen is named for what it computes")
+    func budgetScreenIsNamedBilledToDate() throws {
+        let source = try String(
+            contentsOf: Self.sourceURL("Patina/Features/Budget/BudgetView.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("\"Billed to date\""))
+        #expect(!source.contains("\"Your budget\""))
+        #expect(source.contains("your designer's figure"))
+    }
+
+    @Test("the Studio row says what the screen holds, and keeps its id")
+    @MainActor
+    func studioBudgetRowNamesWhatItHolds() throws {
+        let projects = try decode([RemoteProject].self, """
+        [{ "id": "pr-1", "name": "Aspen Loft Refresh" }]
+        """)
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-08-27T16:00:00Z"))
+        let snapshot = StudioQueueBuilder.build(StudioQueueInput(
+            projects: projects, decisions: [], proposals: [], invoices: [],
+            documents: [], threads: [], notifications: [],
+            currentUserId: "client", now: now
+        ))
+        let row = try #require(
+            snapshot.section(.moneyAndDocuments).rows.first { $0.id == "records.budget" }
+        )
+        #expect(row.title == "Budget")
+        #expect(row.detail == "What's been billed, and what's been paid")
+    }
 }
