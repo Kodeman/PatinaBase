@@ -337,7 +337,9 @@ enum HouseRecordBuilder {
 
 // MARK: - NEEDS YOU
 
-private extension HouseRecordBuilder {
+/// Internal rather than private: the row copy is a ruling (MJ-5), and a
+/// ruling is pinned by a test that calls it directly.
+extension HouseRecordBuilder {
 
     static func needsYouRows(
         waiting: [StudioQueueItemRow],
@@ -369,9 +371,20 @@ private extension HouseRecordBuilder {
         }
     }
 
+    /// MJ-5, ruled by Fable: a decision row names the question it is asking
+    /// — "Leah asked about Rug color — Natural vs Sand." — using the
+    /// designer's first name, the way the mock's "Leah asked about the rug
+    /// colour." reads. The full-name sentence is the fallback, and it is the
+    /// only form used where the decision carries no question of its own or
+    /// where no designer is known: "Your asked about …" is the failure the
+    /// first name alone would produce.
     static func title(for item: StudioQueueItemRow) -> String {
         switch item.kind {
-        case .decision: return "\(subject(item.designerName)) asked you to choose."
+        case .decision:
+            guard let name = item.designerName, !name.isEmpty,
+                  item.title != StudioQueueBuilder.untitledDecisionTitle
+            else { return "\(subject(item.designerName)) asked you to choose." }
+            return "\(firstName(of: name)) asked about \(item.title)."
         case .proposal: return "\(subject(item.designerName)) sent a proposal to review."
         // Not attributed: an invoice is due whoever sent it, and the mock's
         // line is the plain one.
@@ -379,10 +392,25 @@ private extension HouseRecordBuilder {
         }
     }
 
+    /// The first word of a name. A studio name that fell through as the
+    /// display name ("Hartwell Studio") has no first name to take, so the
+    /// first word is all there is — which is why the titled form is used only
+    /// where a name was actually resolved.
+    static func firstName(of name: String) -> String {
+        name.split(separator: " ").first.map(String.init) ?? name
+    }
+
     static func detail(for item: StudioQueueItemRow) -> String? {
-        // The subject of the thing — the decision's own question, the
-        // proposal's own name, the invoice's own number.
-        item.title
+        switch item.kind {
+        case .decision:
+            // The question is in the headline now; the second line names the
+            // project it belongs to, and nothing when there is none.
+            return item.title == StudioQueueBuilder.untitledDecisionTitle ? item.title : item.detail
+        case .proposal, .invoice:
+            // The subject of the thing — the proposal's own name, the
+            // invoice's own number.
+            return item.title
+        }
     }
 
     static func state(for item: StudioQueueItemRow, now: Date) -> HouseRecordRow.State {

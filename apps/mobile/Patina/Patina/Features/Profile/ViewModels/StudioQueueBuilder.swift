@@ -64,6 +64,11 @@ enum StudioQueueBuilder {
     /// Ordered by the date each was asked, ascending — the Record's order.
     /// `designerFallback` is used only where the row's own embed brought no
     /// name; nil leaves the row unattributed rather than guessing.
+    /// What a decision with no question of its own is called. Named because
+    /// the Record has to tell it apart from a real question to choose its copy
+    /// (MJ-5).
+    static let untitledDecisionTitle = "A project choice is ready"
+
     static func itemizedAwaitingRows( // swiftlint:disable:this function_body_length
         decisions: [RemoteClientDecision],
         proposals: [RemoteProposal],
@@ -78,7 +83,7 @@ enum StudioQueueBuilder {
                     id: "decision:\(decision.id)",
                     kind: .decision,
                     entityId: decision.id,
-                    title: decision.title ?? "A project choice is ready",
+                    title: decision.title ?? StudioQueueBuilder.untitledDecisionTitle,
                     detail: decision.project?.name,
                     askedAt: parsedDate(decision.created_at),
                     dueAt: parsedDate(decision.due_date),
