@@ -1,0 +1,87 @@
+<section id="answers" class="dk-sec reg-paper" data-index-title="Twelve answers" data-day="later">
+  <div class="dk-wrap">
+    <p class="hour"><b>+14d</b> &middot; Two weeks later</p>
+    <h2 class="dk-h2">Twelve questions, twelve answers</h2>
+    <p class="dk-lede">Ruled by Kody, 27 August 2026, in session, on the deck&rsquo;s own twelve questions.</p>
+    <p class="dk-p">Each card carries the ruling as written, then the one sentence it turns into for the build. Where a card offered a recommendation and an alternative, the ruling below is the one he took &mdash; not always the recommended one.</p>
+
+    <div class="q-grid">
+
+      <article class="q-card">
+        <p class="q-card__n">Ruling 1 &middot; The home</p>
+        <p class="q-card__q">Yes, now &mdash; skip the interim. Today becomes Direction B&rsquo;s Record card (NEEDS YOU / MOVED, rolling 7 days, truthful empties) with the house rail under it, as the first slice itself. No interim WHAT MOVED line.</p>
+        <p class="q-card__why">C23 is amended (B&#8209;3, B&#8209;4): the Record mounts additively while the old Today root stays on the flag&rsquo;s off branch for one release.</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">Ruling 2 &middot; The tab bar</p>
+        <p class="q-card__q">Yes &mdash; ship it behind <code>house-first</code>. B&rsquo;s four&#8209;tab bar Today &middot; Spaces &middot; Pieces &middot; Studio, Companion in the trailing slot (B&#8209;1, B&#8209;2); both roots kept for one release.</p>
+        <p class="q-card__why">C1 and C8 are amended: every <code>AppRoute</code> case gets a route&rarr;tab mapping across the 105 <code>navigate(to:)</code> call sites, the flag is evaluated once at launch and held, <code>CompanionSafeArea</code>&rsquo;s 120&nbsp;pt inset retires on the flag&#8209;on branch, and the tour is rewritten (B&#8209;8).</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">Ruling 3 &middot; Buy with a designer engaged</p>
+        <p class="q-card__q">A&rsquo;s pre&#8209;emption, for now. &ldquo;Ask Leah to source this&rdquo; pre&#8209;empts Buy for any client with a live designer relationship (accepted lead or active project) until the designer&#8209;side settle notice is proven on a device. No Buy button, no disclosure line for those clients yet.</p>
+        <p class="q-card__why">Buy draws only for signed&#8209;in clients with no live designer relationship, behind flag <code>direct-orders</code> and gated on buyability, while roster&#8209;designer attribution (<code>designer_clients</code>) keeps crediting until B&rsquo;s &ldquo;Buy it myself&rdquo; flips after the settle notice is device&#8209;proven.</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">Question four &middot; C2 vs C23</p>
+        <p class="q-card__q">Retire it, name the conflict.</p>
+        <p class="q-card__why">The orphaned views (<code>HomeStudioBlock</code>, <code>StudioHubSection</code>, <code>MarketplaceLinksSection</code> and the rest) are deleted in a hygiene pass once zero call sites are confirmed, and the retirement is recorded in the canon digest.</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">Question five &middot; Money</p>
+        <p class="q-card__q">Yes, three columns. <code>designer_id</code>, <code>project_id</code>, <code>commission_rate</code> snapshotted at create, immutable after paid; settle routes onto the fulfillment rail; <code>designer_earnings</code> credit keyed on <code>order_id</code> with a partial unique index.</p>
+        <p class="q-card__why">One migration, one webhook branch and one metadata widening land before any client Buy surface ships.</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">Question six &middot; Money</p>
+        <p class="q-card__q">Route onto the fulfillment rail. A settled direct order becomes a <code>fulfillment_orders</code> row via the existing <code>fulfillment_intake</code> enqueue; one client&#8209;scoped SELECT policy over <code>fulfillment_orders</code> / <code>fulfillment_order_items</code> / <code>fulfillment_shipments</code>.</p>
+        <p class="q-card__why">No new state machine is built &mdash; Studio&rsquo;s Ordered state reads both rails.</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">Question seven &middot; Notifications</p>
+        <p class="q-card__q">SP&#8209;08&rsquo;s sentence, verbatim, before the first money event. &ldquo;We&rsquo;ll tell you when your designer sends something that needs you &mdash; a decision, a proposal, or an invoice. Nothing else.&rdquo; Asked once; Settings is the fallback.</p>
+        <p class="q-card__why">The push call sites land first &mdash; proposal&#8209;send, invoice&#8209;send/reminders, and a new AFTER INSERT trigger on <code>client_decisions</code>, each passing <code>notification_log_id</code> &mdash; and the current post&#8209;design&#8209;request ask is removed.</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">Question eight &middot; Widgets</p>
+        <p class="q-card__q">One small widget, Home + Lock Screen. Carries what moved, not what is owed; refreshed on foreground + timeline policy; may sit one open behind.</p>
+        <p class="q-card__why">A new WidgetKit target, an App Group entitlement and a shared <code>RecordSnapshotStore</code> get built; the second bundle id under ASC app <code>6762007888</code> is Kody&rsquo;s paperwork and does not block simulator verification.</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">Question nine &middot; Household</p>
+        <p class="q-card__q">Read&#8209;mostly second seat, later wave. <code>household_members</code> junction + one invite RPC; the second seat sees the record and the rooms; one designer per house; no new money surface.</p>
+        <p class="q-card__why">This lands as a backlog item after the program, not in the waves below.</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">Question ten &middot; A hotfix</p>
+        <p class="q-card__q">Yes, first. Qualify the embed (<code>vendors!products_vendor_id_fkey</code>) at <code>ProductAPIClient.swift:99</code>; give the error state a back chevron; confirm the constraint name against Strata first.</p>
+        <p class="q-card__why">It ships as its own PR, merged before wave one; TestFlight distribution stays a separate act Kody triggers.</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">Question eleven &middot; Stripe</p>
+        <p class="q-card__q">Kody checks the Stripe dashboard himself.</p>
+        <p class="q-card__why">The program treats the purchase path as test&#8209;mode, and Path A stays behind <code>direct-orders</code> until Stripe Tax/shipping and the responsibility paragraph are ruled and the keys are confirmed.</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">Question twelve &middot; The evidence itself</p>
+        <p class="q-card__q">Restart the stack from main, re&#8209;walk the Checkout hand&#8209;off and one Companion conversation, then build.</p>
+        <p class="q-card__why">This becomes a W0 steward task, and the re&#8209;walk shots go to <code>shots/r-*.png</code> and the ledger.</p>
+      </article>
+
+    </div>
+
+    <p class="dk-note">Standing from the review, unchanged by any of the above: physical goods never use IAP (C15); brand voice (C6); honesty (C5); no new NestJS service (C13); canonical names (C4) except the B&#8209;7 tab labels; the twenty planks ship with the program.</p>
+
+  </div>
+</section>

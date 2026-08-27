@@ -28,7 +28,7 @@ const URL = 'file://' + DECK;
 const SECTIONS = [
   'cover', 'ask', 'today', 'panel', 'found', 'why-return', 'why-buy', 'planks',
   'direction-a', 'direction-b', 'purchase', 'compare', 'recommendation',
-  'questions', 'colophon',
+  'questions', 'answers', 'colophon',
 ];
 
 const VIEWPORTS = [

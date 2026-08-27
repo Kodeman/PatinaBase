@@ -256,3 +256,57 @@ Not a walk lane — these seven shots proved the harness (tap method, reset reci
 | `documentList` | Documents | **Data + UI limit** — E2's failure note: no "Documents" row exists anywhere in the signed-in app; "Money & documents" holds only Proposals/Invoices/Budget, and `GET /rest/v1/project_documents?...client_visible=eq.true` returns `[]` for this account |
 
 **Summary:** 20 of 31 `AppRoute` cases have at least one confirming shot (one of those, `pieceDetail`, only as a universal failure state — never a working render); 2 are ambiguous pending code-level confirmation; 9 were not reached — 4 for a hard Simulator hardware limit (camera/LiDAR/AR: `scanFlow`, `emergence`, `roomEmergence`, `arPlacement`), 2 for a combined empty-seed-data + no-UI-affordance limit (`threadList`, `threadDetail`), 1 for empty-seed-data + no UI row (`documentList`), and 2 simply not exercised in the walk's time budget (`roomSettings`, `roomSavedItems`).
+
+---
+
+## r — re-walk after stack restart (2026-08-27)
+
+Steward S0, ruling Q12. Device `973D1724-90BF-4A0A-B02D-481D561547B3`, `-DeploymentTarget local`,
+signed in as `client@patina.dev`, **after** the stack was restarted from the main checkout
+(`research/04-stack-restart.md`) — i.e. the first shots in this program taken with the edge runtime
+actually booting. Narrative: `research/05-rewalk.md`.
+
+| shot | screen | what it shows |
+| --- | --- | --- |
+| `r-00-daily-room.png` | Daily Room | baseline after relaunch — `THURSDAY · AUG 27`, Next Move "Review a project decision / 2 decisions need your eye." |
+| `r-00b-profile-studio.png` | Profile → Studio | Studio hub "Awaiting you, 3 categories": Decisions (Overdue · Aug 22), **Invoice $4,250.00 remaining, Due Sep 1**, Proposal (Review by Sep 8) |
+| `r-01-invoice-pay-tap.png` | Invoice detail | `INV-2026-0142` fully rendered — TOTAL/PAID/BALANCE, both line items, designer memo, "No payments recorded yet.", CTA `invoiceDetail.pay` "Pay $4,250.00". Taken immediately before the tap |
+| `r-02-checkout-page.png` | Invoice detail | **not a Checkout page** — 5 s after the pay tap. `create-checkout-session` returned 502; no `SFSafariViewController` ever opened, so no Apple Pay button and no Stripe test-mode banner could be observed |
+| `r-03-pay-failure-raw-stripe-error.png` | Invoice detail | the failure **as the user sees it**: nothing visibly changed. The error is in the a11y tree at y≈763 but below the fold / behind the Companion dock |
+| `r-03b-pay-error-after-scroll.png` | Invoice detail (scrolled) | the error revealed, verbatim in red under the Pay button: **"Invalid API Key provided: sk_test_********************alls"**. Also shows the unpinned header colliding with the status bar and back chevron |
+| `r-04-return-state.png` | Invoices list | dismissed without paying — still `AWAITING PAYMENT (1)` / `INV-2026-0142` / `$4,250.00` / `Due Sep 1, 2026` |
+| `r-05-companion-panel.png` | Companion (over Invoices) | **the panel the review never saw** — headline "Settling up? / 4 things need your eye." + rows Your budget · Message your designer · Proposals · Home · Your profile |
+| `r-06-companion-row-result.png` | Budget | result of tapping the top suggested row — `$4,250 BILLED / $0 PAID / $4,250 OUTSTANDING`, Aspen Loft Refresh, invoice row. The review recorded this screen as empty |
+| `r-07-companion-rows-shift-by-screen.png` | Companion (over Budget) | same panel, **different rows** — Invoices · Proposals · Your projects · Home · Your profile. Evidence the row set is screen-derived client-side |
+| `r-08-companion-daily-room-no-composer.png` | Companion (over Daily Room) | headline "Where to begin?" + Add your first space · Retake the quiz · Your recommendations · Your studio · Your profile. **No composer, no text field** anywhere in the Companion — no message could be sent (no `r-07` conversation shot exists for that reason) |
+| `r-09-final-daily-room.png` | Daily Room | state the simulator was left in: signed in, Companion closed, Daily Room |
+
+### H0 verification — piece-detail hotfix (2026-08-27)
+
+Verifier re-walk of commit `0b7f2291d` (`daily-return/w0-hotfix-piece-detail`) against the local
+stack. **Rebuilt properly signed** — `xcodebuild build -destination 'platform=iOS
+Simulator,id=973D1724-…'` (no `CODE_SIGNING_ALLOWED=NO`), derivedDataPath
+`artifacts/ios-daily-return-2026-08-26/.build/h0-verify-dd`, `** BUILD SUCCEEDED **` — the
+implementer's own `.app` was flagged `CODE_SIGNING_ALLOWED=NO` and per
+`feedback_ios_sim_walk_harness` was not installed for this walk. Installed + launched (`-DeploymentTarget
+local`), still signed in as `client@patina.dev`.
+
+| shot | screen | what it shows |
+| --- | --- | --- |
+| `r-09b-h0-post-install.png` | Daily Room | post-install/relaunch baseline — session intact, no re-auth needed |
+| `r-10-piece-detail-loads.png` | Piece detail — "Live-Edge Coffee Table" | **F04 (PGRST201) is fixed.** Tapped from Companion → "Your recommendations" → Browse pieces grid. Full real content renders: image, "Lee Industries", title, "$2,100", "50% match". Kong confirms `GET /rest/v1/products?id=eq.a0000000-…-000000000003&select=*,vendors!products_vendor_id_fkey(name,made_in,brand_story)` → **200**, 2257 bytes (was `PGRST201`/300 pre-fix per `c-25`/`d-04`) |
+| `r-11-piece-detail-scrolled.png` | same, scrolled | full detail confirmed: "Reclaimed Hardwood · Hand-Forged Iron", Provenance tags "Maker Piece"/"Coffee-Table", `Add to Room` primary button, top bar Back/Help/Share/Save all present and on-screen |
+| `r-12-back-to-grid.png` | Browse pieces grid | **Back worked** — tapped `chevron.left`, returned cleanly to the grid (10 pieces, filter chips, both cards still present) |
+| `r-13-piece-detail-2.png` / `r-13b-detail2-topbar-check.png` | Piece detail — "Heirloom Oak Dining Table" | content again real (Kong: product id `…000000000001` → 200, 2368 bytes — the exact id/query from the implementer's own LIVE PROOF). **New finding, not this hotfix's scope**: the top bar (`chevron.left` Back, Help, Share, Save, `Add to Room`) rendered **off-screen** — `scan_ui`/`describe_screen` report `chevron.left` at `x=-85.3` (fully off the left edge); confirmed visually, no back control on screen; a horizontal swipe did not correct it (matches the pre-existing g-15c "grid doesn't scroll horizontally" finding). This card's browse-grid frame was itself off-canvas (`x=150.3, width=284.3` → right edge at 434.6 vs a 402pt screen, per `research/01-shot-ledger.md` g-15/§10-code-anatomy `RecommendationsView`), and the matched-geometry transition into `ProductDetailView` appears to inherit that offset without correcting it. Net effect: **a second, distinct hard-trap** — no PGRST201, real data loads, but Back is unreachable. Recovered via `simctl terminate`+`launch -DeploymentTarget local` (session preserved) — `r-13c-recover-relaunch.png` |
+| `r-14-piece-detail-3.png` | Piece detail — "Terracotta Planter Set" | reproduces the same off-screen-top-bar pattern (`chevron.left` at `x=-38.3`) from a *different* off-canvas grid card (`x=-10.7` in the grid). Confirms the pattern is reproducible and tied to the source card's grid position, not a one-off. Recovered via the same terminate+launch |
+| `r-15-final-state-daily-room.png` | Daily Room | state the simulator was left in: hotfix build installed, signed in as `client@patina.dev`, Companion closed, on the Daily Room |
+
+**H0 verdict:** the qualified-embed fix (F04/PGRST201) is confirmed live-fixed on the local stack —
+three different products now fetch and render real content where every prior attempt (guest, client,
+dark, XXL) hard-failed. The errorView back-chevron fix was not exercised (no error state was
+reproducible locally now that the embed is fixed — would need a forced-error condition to test that
+branch specifically). **New follow-up needed**: the off-screen top-bar/Back trap on 2 of 3 pieces
+opened (products `…001` and the Terracotta one) is a real, reproducible hard-trap distinct from F04 —
+likely inherited from the pre-existing broken browse-grid card layout (g-15) via matched-geometry
+transition — and should be triaged before this is called done for users, since most of the grid's 10
+cards are off-canvas per g-15's "wildly differing card sizes" finding.
