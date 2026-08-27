@@ -37,10 +37,46 @@
 import Foundation
 import Supabase
 
+/// The designer, as `profiles` actually stores them. `profiles` has
+/// `display_name`, `full_name` and `business_name` and NO `studio_name` — a
+/// select naming a column that does not exist 400s the whole query and takes
+/// the row list down with it, so the column list is pinned by a test.
+public struct RemoteDesignerRef: Codable, Sendable {
+    public static let selectColumns = "id,display_name,full_name,business_name"
+
+    public let id: String?
+    public let display_name: String?
+    public let full_name: String?
+    public let business_name: String?
+
+    /// The name the record prints, or nil when the embed carried none.
+    /// Deliberately optional rather than a "your designer" sentinel: a
+    /// sentinel string read as a name is how a row ends up saying
+    /// "your designer asked you to choose." with a lower-case first word.
+    /// The copy fallback lives with the copy.
+    public var displayName: String? {
+        if let display_name, !display_name.isEmpty { return display_name }
+        if let full_name, !full_name.isEmpty { return full_name }
+        if let business_name, !business_name.isEmpty { return business_name }
+        return nil
+    }
+
+    /// The studio, when there is one. Never invented from the person's name.
+    public var studioName: String? {
+        guard let business_name, !business_name.isEmpty else { return nil }
+        return business_name
+    }
+}
+
 /// Embedded `projects(name)` row on a decision — gives list rows their
 /// project context without a second round-trip.
+///
+/// The designer rides in here rather than beside it: `client_decisions.designer_id`
+/// references `auth.users`, not `public.profiles`, so PostgREST has no
+/// relationship to embed directly. The project does.
 public struct RemoteDecisionProjectRef: Codable, Sendable {
     public let name: String?
+    public let designer: RemoteDesignerRef?
 }
 
 /// Embedded `products(...)` row on an option (FK from 00172). Null when the
@@ -78,6 +114,16 @@ public struct RemoteClientDecision: Codable, Sendable, Identifiable {
     /// Convenience: the decision has already been responded to.
     public var isResolved: Bool {
         status == "responded" || responded_at != nil
+    }
+
+    /// Who asked. "your designer" when the embed brought nobody — the record
+    /// names a person or it names nobody; it never invents one.
+    public var designerDisplayName: String {
+        project?.designer?.displayName ?? "your designer"
+    }
+
+    public var designerStudioName: String? {
+        project?.designer?.studioName
     }
 }
 
@@ -149,11 +195,21 @@ public actor DecisionsAPIClient {
     /// Decision columns selected with PostgREST aliases so the wire JSON
     /// matches `RemoteClientDecision`'s field names. Kept in one place so
     /// the list + detail queries can't drift.
-    private static let decisionSelect =
+    private static let decisionColumns =
         "id,project_id,title,description:context,status,decision_type,"
         + "recommended_option_id,viewed_at,responded_at,due_date,"
         + "client_consent_method,client_consented_at,created_at,"
-        + "project:projects(name)"
+
+    static let decisionSelect = decisionColumns
+        + "project:projects(name,designer:profiles!projects_designer_id_fkey("
+        + RemoteDesignerRef.selectColumns + "))"
+
+    /// The select this client sent before the designer embed. PostgREST
+    /// answers an unresolvable relationship with a 400 that takes the whole
+    /// row list with it — a schema-cache lag or a renamed constraint would
+    /// cost the client every decision. The name is worth less than the rows,
+    /// so a 400 degrades to this and the rows still arrive.
+    static let decisionSelectWithoutDesigner = decisionColumns + "project:projects(name)"
 
     /// Option columns, likewise aliased, with the linked product embedded
     /// (00172) so catalog-first options still render name/image/price.
@@ -182,13 +238,35 @@ public actor DecisionsAPIClient {
     // MARK: - Reads
 
     public func listPending(forUser userId: String? = nil) async throws -> [RemoteClientDecision] {
-        let queryItems = [
-            URLQueryItem(name: "select", value: Self.decisionSelect),
+        try await decisions(matching: [
             URLQueryItem(name: "status", value: "eq.pending"),
             URLQueryItem(name: "order", value: "due_date.asc.nullslast,created_at.desc"),
-        ]
+        ])
+    }
+
+    public func fetchDecision(id: String) async throws -> RemoteClientDecision? {
+        try await decisions(matching: [URLQueryItem(name: "id", value: "eq.\(id)")]).first
+    }
+
+    /// One read, twice if it has to be: with the designer embed, then — only
+    /// on a 400, which is PostgREST refusing the relationship — without it.
+    /// A naming surprise costs the designer's name, never the decisions.
+    private func decisions(matching filters: [URLQueryItem]) async throws -> [RemoteClientDecision] {
+        do {
+            return try await decisions(select: Self.decisionSelect, filters: filters)
+        } catch RoomsAPIError.http(let status, let body) where status == 400 {
+            PatinaLog.sync.error(
+                "[Decisions] designer embed refused (400): \(body). Retrying without it."
+            )
+            return try await decisions(select: Self.decisionSelectWithoutDesigner, filters: filters)
+        }
+    }
+
+    private func decisions(
+        select: String, filters: [URLQueryItem]
+    ) async throws -> [RemoteClientDecision] {
         let url = baseURL.appendingPathComponent("/rest/v1/client_decisions")
-            .appending(queryItems: queryItems)
+            .appending(queryItems: [URLQueryItem(name: "select", value: select)] + filters)
         var request = URLRequest(url: url)
         await applyHeaders(to: &request)
         let (data, response) = try await session.data(for: request)
@@ -196,22 +274,6 @@ public actor DecisionsAPIClient {
             throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
         return try decoder.decode([RemoteClientDecision].self, from: data)
-    }
-
-    public func fetchDecision(id: String) async throws -> RemoteClientDecision? {
-        let url = baseURL.appendingPathComponent("/rest/v1/client_decisions")
-            .appending(queryItems: [
-                URLQueryItem(name: "select", value: Self.decisionSelect),
-                URLQueryItem(name: "id", value: "eq.\(id)"),
-            ])
-        var request = URLRequest(url: url)
-        await applyHeaders(to: &request)
-        let (data, response) = try await session.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw RoomsAPIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
-        }
-        let rows = try decoder.decode([RemoteClientDecision].self, from: data)
-        return rows.first
     }
 
     public func listOptions(forDecision decisionId: String) async throws -> [RemoteDecisionOption] {
