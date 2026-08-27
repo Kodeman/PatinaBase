@@ -31,6 +31,17 @@ final class DailyRoomViewModel {
     // MARK: - State
 
     var todayStory: DailyStory?
+    /// The row behind `todayStory`. The Record is built over the row, not the
+    /// UI model, because it needs the real `published_at`.
+    var todayStoryRow: RemoteEditorialStory?
+
+    /// The Record — what moved on the house while the person was away, and
+    /// what is waiting on them. Painted from the snapshot first, then rebuilt.
+    var record: HouseRecord = .empty
+    /// The saved pieces, retained: the record composes its withdrawn and
+    /// repriced rows over them.
+    var savedItems: [TableItemModel] = []
+
     var rooms: [RoomSummary] = []
     /// The real SwiftData rows behind `rooms`, retained so Today can show one
     /// active room with its actual image, timestamps, and saved-item history.
@@ -135,6 +146,9 @@ final class DailyRoomViewModel {
 
     func load() {
         todayStory = nil
+        // The last record, instantly, before a single fetch is in flight —
+        // a cold launch must not open on a blank card (M1's "States" row).
+        paintRecordSnapshot()
         refreshTodaysStory()
         if let ctx = modelContext {
             let preference = StylePreferenceStore(context: ctx).mostRecent()
@@ -209,6 +223,7 @@ final class DailyRoomViewModel {
                 self.todayStory = remote.map {
                     DailyStory(from: $0, isUnread: reads.isUnread(storyId: $0.id))
                 }
+                self.todayStoryRow = remote
                 self.storyLoadFailed = false
             } catch {
                 #if DEBUG
@@ -282,6 +297,80 @@ final class DailyRoomViewModel {
             insight: nil,
             pairing: nil
         )
+    }
+
+    // MARK: - The Record
+
+    /// What we already knew, painted before anything is fetched. A guest has
+    /// no house on file, so nothing of a previous session is put on screen.
+    func paintRecordSnapshot() {
+        guard AuthService.shared.isAuthenticated else {
+            record = .empty
+            return
+        }
+        if let snapshot = RecordSnapshotStore.shared.load() {
+            record = snapshot
+        }
+    }
+
+    /// Rebuild the record for this open: snapshot first, then the build, then
+    /// the save, and only then the visit stamp (`RecordRefresh` owns that
+    /// order; r1-notes §3).
+    ///
+    /// Call it AFTER `BadgeCountService.refresh()` and
+    /// `DesignRequestStatusService.refresh()` — the builder is pure and reads
+    /// whatever those two are holding.
+    func refreshRecord() async {
+        guard AuthService.shared.isAuthenticated else {
+            record = .empty
+            return
+        }
+        savedItems = fetchSavedItems()
+        let products = await fetchSavedPieceProducts(for: savedItems)
+        let saved = savedItems
+        let story = todayStoryRow
+
+        RecordRefresh.run(
+            build: { previous, lastSeenAt in
+                HouseRecordBuilder.build(
+                    from: BadgeCountService.shared,
+                    saved: saved,
+                    products: products,
+                    story: story,
+                    liveLead: DesignRequestStatusService.shared.liveLead,
+                    lastSeen: lastSeenAt,
+                    now: Date(),
+                    previous: previous
+                )
+            },
+            paint: { [weak self] painted in self?.record = painted }
+        )
+    }
+
+    private func fetchSavedItems() -> [TableItemModel] {
+        guard let ctx = modelContext else { return [] }
+        let descriptor = FetchDescriptor<TableItemModel>(
+            sortBy: [SortDescriptor(\.savedAt, order: .reverse)]
+        )
+        return (try? ctx.fetch(descriptor)) ?? []
+    }
+
+    /// The saved pieces' catalogue rows, **withdrawn ones included** — the
+    /// only read that can feed the record's "no longer available" row, because
+    /// `get_recommendations` filters a withdrawn product out by construction
+    /// (r1-notes §1). A failure here costs the two discovering rows and
+    /// nothing else: they draw nothing rather than a guess (C5).
+    private func fetchSavedPieceProducts(for saved: [TableItemModel]) async -> [Product] {
+        let ids = Array(Set(saved.compactMap(\.productId)))
+        guard !ids.isEmpty else { return [] }
+        do {
+            return try await ProductAPIClient.shared.fetchProducts(ids: ids)
+        } catch {
+            #if DEBUG
+            PatinaLog.ui.error("[DailyRoomVM] saved-piece products failed: \(error)")
+            #endif
+            return []
+        }
     }
 
     // MARK: - Intent
