@@ -36,6 +36,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
+import { notifyClientAttention } from '../_shared/client-attention.ts';
 import {
   buildInvoiceOverdueNoticeEmail,
   buildInvoiceSentEmail,
@@ -312,6 +313,33 @@ Deno.serve(async (req: Request) => {
   if (!sendResult.success && !sendResult.suppressed) {
     console.error('invoice-send: send failed', sendResult.error);
     return json({ error: 'send_failed', detail: sendResult.error }, 502);
+  }
+
+  // ── The client's bell (SP-08) ──────────────────────────────────────────
+  // sendCompliantEmail writes a channel='email' notification_log row, which the
+  // client PORTAL's inbox surfaces. The iOS bell filters channel in (in_app,
+  // push), so an invoice has never reached it. 00534 writes both, de-duplicated
+  // on the invoice id so a resend refreshes one line. Best-effort throughout:
+  // the invoice has already been sent and nothing here may change that.
+  if (sendType === 'sent' && clientUserId) {
+    const dueLine = invoice.due_date
+      ? ` It's due ${new Date(invoice.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
+      : '';
+    const attention = await notifyClientAttention(admin, {
+      userId: clientUserId,
+      entityType: 'invoice',
+      entityId: invoice.id,
+      title: 'An invoice is ready',
+      body: `${senderName} sent invoice ${invoiceNumber} for ${projectName}.${dueLine}`,
+      metadata: {
+        project_id: invoice.project_id,
+        amount_cents: invoice.total_cents,
+        due_date: invoice.due_date,
+      },
+    });
+    if (!attention.ok) {
+      console.warn('invoice-send: client attention not delivered', attention.error);
+    }
   }
 
   // ── Stamp sent_at if missing ───────────────────────────────────────────
