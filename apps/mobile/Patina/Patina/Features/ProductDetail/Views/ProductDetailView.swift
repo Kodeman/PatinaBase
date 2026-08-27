@@ -61,6 +61,9 @@ struct ProductDetailView: View {
             if product == nil, let productId {
                 await viewModel.loadProduct(id: productId)
             }
+            // SP-14: a piece saved on a previous visit must not offer to be
+            // saved again — seed from the store before the bar draws.
+            viewModel.seedSavedState(productId: displayProduct?.id, context: modelContext)
             viewModel.trackView()
         }
     }

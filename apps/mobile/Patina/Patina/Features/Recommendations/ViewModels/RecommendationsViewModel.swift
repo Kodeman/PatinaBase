@@ -86,14 +86,15 @@ final class RecommendationsViewModel {
         let localItems = (try? context.fetch(localDescriptor)) ?? []
         savedProductIds = Set(localItems.compactMap { $0.productId })
 
-        let remoteRoomIds = RoomStore(context: context).allRooms().compactMap { $0.remoteId }
-        for remoteRoomId in remoteRoomIds {
-            guard let rows = try? await RoomsAPIClient.shared.listItems(forRoomId: remoteRoomId) else { continue }
-            for row in rows {
-                guard let productId = row.product_id else { continue }
-                savedProductIds.insert(productId)
-                remoteSavedItemIds[productId] = row.id
-            }
+        // SP-14: one read of the account's own saves, room-scoped or not.
+        // Walking each room's rows could never see a roomless save, which is
+        // now the standard shape.
+        guard let userId = try? await RoomsAPIClient.shared.resolveUserId(),
+              let rows = try? await RoomsAPIClient.shared.listItems(forUserId: userId) else { return }
+        for row in rows {
+            guard let productId = row.product_id else { continue }
+            savedProductIds.insert(productId)
+            remoteSavedItemIds[productId] = row.id
         }
     }
 
@@ -153,52 +154,58 @@ final class RecommendationsViewModel {
         }
     }
 
-    func saveProduct(_ product: Product, context: ModelContext, roomRemoteId: String? = nil) {
+    func saveProduct(_ product: Product, context: ModelContext, roomRemoteId: String? = nil,
+                     roomLocalId: UUID? = nil) {
+        // SP-14: idempotent on productId — a second tap must not create a
+        // second row.
+        guard !savedProductIds.contains(product.id) else { return }
+
         // Save to SwiftData as TableItemModel
         let item = TableItemModel(
             name: product.name,
             productId: product.id,
             imageURL: product.imageURL,
-            brandName: product.makerName,
-            priceInCents: product.priceCents
+            brandName: product.resolvedMakerName ?? product.makerName,
+            priceInCents: product.priceCents,
+            roomId: roomLocalId
         )
         context.insert(item)
         savedProductIds.insert(product.id)
         saveFailureMessage = nil
 
-        // Mirror to Supabase `saved_items` so the save follows the user
-        // across devices and surfaces in the designer portal.
-        if let roomRemoteId {
-            Task {
-                do {
-                    let userId = try await RoomsAPIClient.shared.resolveUserId()
-                    let payload = CreateSavedItemPayload(
-                        room_id: roomRemoteId,
-                        user_id: userId,
-                        product_id: product.id,
-                        name: product.name,
-                        image_url: product.imageURL,
-                        price_in_cents: product.priceCents,
-                        source: "ios",
-                        notes: nil
-                    )
-                    let created = try await RoomsAPIClient.shared.createItem(payload)
-                    await MainActor.run {
-                        self.remoteSavedItemIds[product.id] = created.id
-                    }
-                } catch {
-                    #if DEBUG
-                    PatinaLog.ui.error("[Recommendations] save sync failed: \(error.localizedDescription)")
-                    #endif
-                    // U29: the remote mirror is what makes a save durable
-                    // across devices/the portal — on failure, revert the
-                    // visible saved state rather than let the user believe
-                    // an unsaved item is saved.
-                    await MainActor.run {
-                        self.savedProductIds.remove(product.id)
-                        context.delete(item)
-                        self.showSaveFailure()
-                    }
+        // SP-14: mirror to Supabase `saved_items` on EVERY save, not only the
+        // room-scoped ones — `room_id` is nullable, and a save that never
+        // reaches the server does not survive a reinstall or reach a second
+        // device. `room_id` carries the room when there is one.
+        Task {
+            do {
+                let userId = try await RoomsAPIClient.shared.resolveUserId()
+                let payload = CreateSavedItemPayload(
+                    room_id: roomRemoteId,
+                    user_id: userId,
+                    product_id: product.id,
+                    name: product.name,
+                    image_url: product.imageURL,
+                    price_in_cents: product.priceCents,
+                    source: "ios",
+                    notes: nil
+                )
+                let created = try await RoomsAPIClient.shared.createItem(payload)
+                await MainActor.run {
+                    self.remoteSavedItemIds[product.id] = created.id
+                }
+            } catch {
+                #if DEBUG
+                PatinaLog.ui.error("[Recommendations] save sync failed: \(error.localizedDescription)")
+                #endif
+                // U29: the remote mirror is what makes a save durable
+                // across devices/the portal — on failure, revert the
+                // visible saved state rather than let the user believe
+                // an unsaved item is saved.
+                await MainActor.run {
+                    self.savedProductIds.remove(product.id)
+                    context.delete(item)
+                    self.showSaveFailure()
                 }
             }
         }

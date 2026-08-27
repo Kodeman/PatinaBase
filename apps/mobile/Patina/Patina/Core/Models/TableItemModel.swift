@@ -102,11 +102,12 @@ public final class TableItemModel {
         min(Double(daysSinceSaved) / 30.0, 1.0)
     }
 
-    /// Formatted price string
+    /// Formatted price string. SP-14: through the app's one currency
+    /// formatter — this printed "$4200" on the Saved row while the grid two
+    /// screens away printed "$4,200" for the same piece.
     public var formattedPrice: String? {
         guard let cents = priceInCents else { return nil }
-        let dollars = Double(cents) / 100.0
-        return String(format: "$%.0f", dollars)
+        return PatinaCurrency.formatWholeDollars(cents: cents)
     }
 
     /// Age description for display

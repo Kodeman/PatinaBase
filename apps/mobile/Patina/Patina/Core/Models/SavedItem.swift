@@ -83,9 +83,9 @@ public final class SavedItem {
         return "$\(dollars)"
     }
 
+    /// SP-14: the app's one currency formatter.
     public var fullFormattedPrice: String {
-        let dollars = priceCents / 100
-        return "$\(NumberFormatter.localizedString(from: NSNumber(value: dollars), number: .decimal))"
+        PatinaCurrency.formatWholeDollars(cents: priceCents)
     }
 
     /// Rehydrated placeholder gradient matching the owning product's category.

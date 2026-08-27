@@ -175,9 +175,9 @@ struct Product: Identifiable, Hashable, Codable {
         return "$\(dollars)"
     }
 
+    /// SP-14: the app's one currency formatter.
     var fullFormattedPrice: String {
-        let dollars = priceCents / 100
-        return "$\(NumberFormatter.localizedString(from: NSNumber(value: dollars), number: .decimal))"
+        PatinaCurrency.formatWholeDollars(cents: priceCents)
     }
 
     var matchLabel: String {

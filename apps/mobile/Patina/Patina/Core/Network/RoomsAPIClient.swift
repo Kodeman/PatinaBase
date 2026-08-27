@@ -115,7 +115,11 @@ public struct CreateRoomScanPayload: Encodable {
 }
 
 public struct CreateSavedItemPayload: Encodable {
-    public let room_id: String
+    /// SP-14: nullable. A save made from the browse grid or the piece detail
+    /// belongs to the account, not to a room — `saved_items.room_id` has been
+    /// nullable since 00055_saved_items.sql:23, and mirroring only the
+    /// room-scoped saves is what made a save vanish on reinstall.
+    public let room_id: String?
     public let user_id: String
     public let product_id: String
     public let name: String
@@ -283,6 +287,22 @@ public actor RoomsAPIClient {
             .appending(queryItems: [
                 URLQueryItem(name: "select", value: "*"),
                 URLQueryItem(name: "room_id", value: "eq.\(roomId)"),
+                URLQueryItem(name: "order", value: "created_at.desc"),
+            ])
+        var request = URLRequest(url: url)
+        await applyHeaders(to: &request)
+        let (data, _) = try await session.data(for: request)
+        return try decoder.decode([RemoteSavedItem].self, from: data)
+    }
+
+    /// SP-14: every save the account owns, room-scoped or not. `listItems(forRoomId:)`
+    /// can only ever see saves that already belong to a room, so it cannot
+    /// reconcile the roomless ones the standard save path now writes.
+    public func listItems(forUserId userId: String) async throws -> [RemoteSavedItem] {
+        let url = baseURL.appendingPathComponent("/rest/v1/saved_items")
+            .appending(queryItems: [
+                URLQueryItem(name: "select", value: "*"),
+                URLQueryItem(name: "user_id", value: "eq.\(userId)"),
                 URLQueryItem(name: "order", value: "created_at.desc"),
             ])
         var request = URLRequest(url: url)
