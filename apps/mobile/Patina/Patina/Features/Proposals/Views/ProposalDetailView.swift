@@ -77,9 +77,13 @@ struct ProposalDetailView: View {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(PatinaColors.sage)
-                Text(signedLine(proposal))
-                    .font(PatinaTypography.bodySmallMedium)
-                    .foregroundStyle(PatinaColors.sage)
+                // SP-04: "Signed" only where a signature record exists.
+                Text(ProposalStatusDisplay.detailStatusLine(
+                    proposal,
+                    justSigned: viewModel.didSign
+                ))
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.sage)
             }
             .padding(.top, 4)
         } else if proposal.status == "expired" || (!proposal.isSignable && proposal.status != "declined") {
@@ -89,14 +93,6 @@ struct ProposalDetailView: View {
             PatinaStatusBadge(state: .error, text: "Declined")
                 .padding(.top, 4)
         }
-    }
-
-    private func signedLine(_ proposal: RemoteProposal) -> String {
-        let who = proposal.signed_by_name ?? "you"
-        if let signedAt = proposal.signed_at {
-            return "Signed by \(who) on \(DateDisplay.fromTimestamp(signedAt))"
-        }
-        return "Signed by \(who)"
     }
 
     // MARK: - Investment summary

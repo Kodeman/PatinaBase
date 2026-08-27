@@ -267,6 +267,53 @@ struct ProposalsMoneyRailTests {
         if case .generic = mapped("some other database error") {} else { Issue.record("expected .generic") }
     }
 
+    // MARK: - SP-04 · accepted is not signed
+
+    @Test("an accepted proposal with no signature record is called Accepted, never Signed")
+    func acceptedWithoutSignatureIsNotCalledSigned() throws {
+        let json = """
+        { "id": "p-1", "status": "accepted", "title": "Sample accepted proposal",
+          "total_amount": 10000000, "signed_at": null, "signed_by_name": null,
+          "accepted_at": "2026-07-04T10:00:00Z", "created_at": "2026-07-01T00:00:00Z" }
+        """
+        let proposal = try decode(RemoteProposal.self, json)
+        #expect(!proposal.hasSignatureRecord)
+        #expect(ProposalStatusDisplay.rowLabel(proposal) == "Accepted")
+        #expect(ProposalStatusDisplay.acceptedSectionTitle == "Accepted")
+        #expect(ProposalStatusDisplay.detailStatusLine(proposal, justSigned: false)
+                == "Accepted on Jul 4, 2026")
+    }
+
+    @Test("a proposal carrying a signature record is called Signed")
+    func signedProposalIsCalledSigned() throws {
+        let json = """
+        { "id": "p-2", "status": "accepted", "signed_at": "2026-07-04T10:00:00Z",
+          "signed_by_name": "Ruth Alvarez", "created_at": "2026-07-01T00:00:00Z" }
+        """
+        let proposal = try decode(RemoteProposal.self, json)
+        #expect(proposal.hasSignatureRecord)
+        #expect(ProposalStatusDisplay.rowLabel(proposal) == "Signed")
+        #expect(ProposalStatusDisplay.detailStatusLine(proposal, justSigned: false)
+                == "Signed by Ruth Alvarez on Jul 4, 2026")
+    }
+
+    @Test("the list section is titled for the status the server set")
+    func proposalListSectionTitleIsAccepted() throws {
+        let source = try String(
+            contentsOf: Self.sourceURL("Patina/Features/Proposals/Views/ProposalListView.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains("ProposalStatusDisplay.acceptedSectionTitle"))
+        #expect(!source.contains("section(\"Signed\""))
+    }
+
+    static func sourceURL(_ relativePath: String) -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // PatinaTests
+            .deletingLastPathComponent() // apps/mobile/Patina
+            .appendingPathComponent(relativePath)
+    }
+
     // MARK: - Route names
 
     @Test

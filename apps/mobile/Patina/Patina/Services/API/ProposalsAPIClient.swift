@@ -80,6 +80,15 @@ public struct RemoteProposal: Codable, Sendable, Identifiable {
 
     public var isSigned: Bool { status == "accepted" }
 
+    /// SP-04: whether `sign_proposal` actually returned for this proposal.
+    /// `status == "accepted"` alone does not say so — a designer-side accept
+    /// sets it too — so the word "Signed" is gated on the signature record.
+    public var hasSignatureRecord: Bool {
+        if let signed_at, !signed_at.isEmpty { return true }
+        if let signed_by_name, !signed_by_name.isEmpty { return true }
+        return false
+    }
+
     /// SP-16: whether this proposal is one of the things awaiting the client.
     /// THE counting predicate — `BadgeCountService.attentionCount` and the
     /// Studio's "Awaiting you" block both read it, so the header sentence and

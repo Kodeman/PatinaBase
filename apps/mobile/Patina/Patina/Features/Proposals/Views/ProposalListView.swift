@@ -56,7 +56,11 @@ struct ProposalListView: View {
         } else {
             VStack(alignment: .leading, spacing: 24) {
                 section("Awaiting your review", viewModel.pending, accent: PatinaColors.Text.interactive)
-                section("Signed", viewModel.accepted, accent: PatinaColors.sage)
+                section(
+                    ProposalStatusDisplay.acceptedSectionTitle,
+                    viewModel.accepted,
+                    accent: PatinaColors.sage
+                )
                 section("Archive", viewModel.archived, accent: PatinaColors.Text.muted)
             }
             .padding(.top, 12)
@@ -162,14 +166,7 @@ private struct ProposalRowCard: View {
     }
 
     private var statusLabel: String {
-        switch proposal.status {
-        case "sent": return "Awaiting your review"
-        case "viewed": return "In review"
-        case "accepted": return "Signed"
-        case "declined": return "Declined"
-        case "expired": return "Expired"
-        default: return proposal.status?.capitalized ?? "Proposal"
-        }
+        ProposalStatusDisplay.rowLabel(proposal)
     }
 
     private var expiryLine: String? {
