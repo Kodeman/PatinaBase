@@ -17,6 +17,14 @@ struct TodayPriorityInput: Equatable {
     var unreadMessageCount: Int = 0
     var hasStyleProfile: Bool = false
     var activeRoom: ContextRoomCandidate?
+    /// The client's live project, where there is one. With nothing waiting,
+    /// the Next Move names the phase the project is actually in rather than
+    /// inventing a chore (synthesis §5's graft from Direction A).
+    var activeProjectID: String?
+    var activeProjectName: String?
+    /// `projects.current_phase`, raw. Empty or nil means the app does not know
+    /// the phase and says nothing about it.
+    var activeProjectPhase: String?
 }
 
 struct TodayNextMove: Equatable {
@@ -26,6 +34,7 @@ struct TodayNextMove: Equatable {
         case trackDesignRequest
         case reviewDecisions
         case readMessages
+        case openProject
         case scanFirstRoom
         case discoverStyle
         case exploreActiveRoom
@@ -116,6 +125,22 @@ enum TodayExperience {
                 detail: "\(input.unreadMessageCount) unread \(noun) waiting.",
                 symbol: "bubble.left.and.bubble.right",
                 targetID: nil
+            )
+        }
+
+        // Nothing is waiting. The queue is empty and the project is still
+        // moving, so the move names where it has got to — the phase is already
+        // on the wire (`projects.current_phase`) and was being discarded.
+        if let projectId = input.activeProjectID,
+           let phase = input.activeProjectPhase,
+           !phase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return TodayNextMove(
+                kind: .openProject,
+                title: input.activeProjectName.map { "See where \($0) stands" }
+                    ?? "See where your project stands",
+                detail: "Now in \(PhaseDisplay.clientLabel(for: phase)).",
+                symbol: "list.bullet.rectangle",
+                targetID: projectId
             )
         }
         return nil

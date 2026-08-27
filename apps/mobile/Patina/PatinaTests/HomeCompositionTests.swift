@@ -143,3 +143,50 @@ struct HomeCompositionTests {
         #expect(HomeComposition.storyWeight(for: quiet) == .hero)
     }
 }
+
+// MARK: - The empty-queue Next Move (synthesis §5)
+
+@MainActor
+struct EmptyQueueNextMoveTests {
+
+    @Test("with nothing waiting the move names the phase the project is in")
+    func theEmptyQueueMoveNamesThePhase() {
+        let move = TodayExperience.nextMove(for: TodayPriorityInput(
+            activeProjectID: "b1",
+            activeProjectName: "Aspen Loft Refresh",
+            activeProjectPhase: "installation"
+        ))
+        #expect(move.kind == .openProject)
+        #expect(move.title == "See where Aspen Loft Refresh stands")
+        #expect(move.detail == "Now in Installation.")
+        #expect(move.targetID == "b1")
+    }
+
+    @Test("an unknown phase is not named — the move falls through instead")
+    func anUnknownPhaseIsNeverInvented() {
+        // `PhaseDisplay.clientLabel(for: nil)` answers "Discovery" for any
+        // unknown value, so a project whose phase the app does not know must
+        // never reach it.
+        let blank = TodayExperience.nextMove(for: TodayPriorityInput(
+            activeProjectID: "b1", activeProjectName: "Aspen Loft Refresh",
+            activeProjectPhase: "  "
+        ))
+        #expect(blank.kind != .openProject)
+
+        let missing = TodayExperience.nextMove(for: TodayPriorityInput(
+            activeProjectID: "b1", activeProjectName: "Aspen Loft Refresh"
+        ))
+        #expect(missing.kind != .openProject)
+    }
+
+    @Test("something waiting still wins the slot")
+    func waitingWorkOutranksThePhaseLine() {
+        let move = TodayExperience.nextMove(for: TodayPriorityInput(
+            pendingDecisionCount: 1,
+            activeProjectID: "b1",
+            activeProjectName: "Aspen Loft Refresh",
+            activeProjectPhase: "installation"
+        ))
+        #expect(move.kind == .reviewDecisions)
+    }
+}

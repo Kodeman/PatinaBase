@@ -250,6 +250,9 @@ struct DailyRoomView: View {
             coordinator.navigate(to: .decisionList)
         case .readMessages:
             coordinator.navigate(to: .threadList)
+        case .openProject:
+            guard let projectId = move.targetID else { break }
+            coordinator.navigate(to: .projectDetail(projectId: projectId))
         case .scanFirstRoom:
             OnboardingFunnel.shared.markFirstSessionScanStarted()
             coordinator.navigate(to: .scanFlow(reason: .fresh))
