@@ -29,24 +29,39 @@ describe("Apple App Site Association", () => {
   });
 
   it("associates only namespaced Site Request links with the Field app", () => {
-    expect(appleAppSiteAssociation()).toEqual({
-      applinks: {
-        apps: [],
-        details: [
-          {
-            appID: "VP22LXHT7L.cloud.patina.field",
-            paths: ["/field/sr_*"],
-            components: [
-              {
-                "/": "/field/sr_*",
-                comment:
-                  "Patina Field Site Request links only; legacy 64-hex Field links stay on web",
-              },
-            ],
-          },
-        ],
-      },
+    const field = appleAppSiteAssociation().applinks.details.find(
+      (entry) => entry.appID === "VP22LXHT7L.cloud.patina.field",
+    );
+    expect(field).toEqual({
+      appID: "VP22LXHT7L.cloud.patina.field",
+      paths: ["/field/sr_*"],
+      components: [
+        {
+          "/": "/field/sr_*",
+          comment:
+            "Patina Field Site Request links only; legacy 64-hex Field links stay on web",
+        },
+      ],
     });
+  });
+
+  it("associates the piece and money paths with the client app", () => {
+    const client = appleAppSiteAssociation().applinks.details.find(
+      (entry) => entry.appID === "VP22LXHT7L.cloud.patina.app",
+    );
+    expect(client).toEqual({
+      appID: "VP22LXHT7L.cloud.patina.app",
+      paths: ["/piece/*", "/invoice/*", "/proposal/*", "/decision/*"],
+    });
+  });
+
+  it("serves exactly the two apps, and no wildcard app entry", () => {
+    const { applinks } = appleAppSiteAssociation();
+    expect(applinks.apps).toEqual([]);
+    expect(applinks.details.map((entry) => entry.appID)).toEqual([
+      "VP22LXHT7L.cloud.patina.field",
+      "VP22LXHT7L.cloud.patina.app",
+    ]);
   });
 
   it("serves JSON directly without a redirect", () => {
