@@ -193,6 +193,7 @@ struct SettingsView: View {
         }
         .padding(.horizontal, PatinaSpacing.md)
         .padding(.vertical, PatinaSpacing.sm)
+        .frame(minHeight: 44)
         .overlay(alignment: .bottom) {
             Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 .padding(.leading, 60)
@@ -229,6 +230,7 @@ struct SettingsView: View {
         }
         .padding(.horizontal, PatinaSpacing.md)
         .padding(.vertical, PatinaSpacing.sm)
+        .frame(minHeight: 44)
         .overlay(alignment: .bottom) {
             Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 .padding(.leading, 60)
@@ -291,6 +293,13 @@ struct SettingsView: View {
         }
         .padding(.horizontal, PatinaSpacing.md)
         .padding(.vertical, PatinaSpacing.xsm)
+        // SP-20: this is the label of a NavigationLink/Button carrying
+        // `.buttonStyle(.plain)`, which hit-tests only the drawn content —
+        // so the Spacer in the middle of the row swallowed every centred tap
+        // and "Account" never pushed. Bisected on the simulator: a tap on the
+        // word worked, a tap dead-centre did not.
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
             Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 .padding(.leading, 60)
@@ -323,6 +332,7 @@ struct SettingsView: View {
         }
         .padding(.horizontal, PatinaSpacing.md)
         .padding(.vertical, PatinaSpacing.xsm)
+        .frame(minHeight: 44)
         .overlay(alignment: .bottom) {
             Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
                 .padding(.leading, 60)
