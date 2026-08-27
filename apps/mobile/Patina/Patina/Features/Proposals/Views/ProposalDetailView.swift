@@ -112,6 +112,13 @@ struct ProposalDetailView: View {
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
+            // SP-15: "Expires Sep 8" printed on the list and vanished here.
+            if !viewModel.isSigned, let expiry = DateDisplay.expiry(proposal.valid_until) {
+                Text(expiry.text)
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(expiry.isPastDue ? PatinaColors.error : PatinaColors.Text.secondary)
+                    .accessibilityIdentifier("proposalDetail.expiry")
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -38,4 +38,52 @@ enum DateDisplay {
         }
         return fromDateString(raw)
     }
+
+    // MARK: - SP-15 · the date you need is on the screen you leave
+
+    /// One due/expiry line for every money surface. The Studio hub printed
+    /// "Overdue · Aug 22" while the decision list and detail printed nothing;
+    /// the list carried "Due Sep 1, 2026" and the invoice detail dropped it.
+    /// Both now read this.
+    struct DueLine: Equatable {
+        let text: String
+        let isPastDue: Bool
+    }
+
+    /// "Overdue · Aug 22" / "Due today" / "Due Sep 1". Day precision — a
+    /// Postgres `date` carries no time, and the ISO8601 formatters reject it
+    /// outright (the trap `isAwaitingSignature` documents).
+    static func due(_ raw: String?, now: Date = Date()) -> DueLine? {
+        guard let date = parsed(raw) else { return nil }
+        return due(date, now: now)
+    }
+
+    static func due(_ date: Date, now: Date = Date()) -> DueLine {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: date)
+        let today = calendar.startOfDay(for: now)
+        if day < today { return DueLine(text: "Overdue · \(short(date))", isPastDue: true) }
+        if day == today { return DueLine(text: "Due today", isPastDue: false) }
+        return DueLine(text: "Due \(short(date))", isPastDue: false)
+    }
+
+    /// "Expired Sep 8" / "Expires today" / "Expires Sep 8".
+    static func expiry(_ raw: String?, now: Date = Date()) -> DueLine? {
+        guard let date = parsed(raw) else { return nil }
+        return expiry(date, now: now)
+    }
+
+    static func expiry(_ date: Date, now: Date = Date()) -> DueLine {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: date)
+        let today = calendar.startOfDay(for: now)
+        if day < today { return DueLine(text: "Expired \(short(date))", isPastDue: true) }
+        if day == today { return DueLine(text: "Expires today", isPastDue: false) }
+        return DueLine(text: "Expires \(short(date))", isPastDue: false)
+    }
+
+    private static func parsed(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        return ISO8601DateParsing.dateOrDay(from: raw)
+    }
 }

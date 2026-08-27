@@ -22,6 +22,7 @@ struct InvoiceDetailView: View {
                     header(invoice)
                     confirmBanner(invoice)
                     amountSummary(invoice)
+                    dueLine(invoice)
                     InvoiceLineItemsBlock(invoice: invoice)
                     memoSection(invoice)
                     InvoicePaymentsBlock(invoice: invoice)
@@ -165,6 +166,19 @@ struct InvoiceDetailView: View {
         .padding(.horizontal, 24)
     }
 
+    /// SP-15: "Due Sep 1, 2026" printed on the list and vanished here. It now
+    /// sits under the balance, above the pay button, and turns red once past.
+    @ViewBuilder
+    private func dueLine(_ invoice: RemoteInvoice) -> some View {
+        if let due = DateDisplay.due(invoice.due_date), !invoice.isPaid, !invoice.isVoid {
+            Text(due.text)
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(due.isPastDue ? PatinaColors.error : PatinaColors.Text.secondary)
+                .padding(.horizontal, 24)
+                .accessibilityIdentifier("invoiceDetail.due")
+        }
+    }
+
     private func summaryTile(_ label: String, _ cents: Int, _ currency: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             MonoLabel(text: label)
@@ -227,13 +241,8 @@ struct InvoiceDetailView: View {
     // MARK: - Helpers
 
     private func isOverdue(_ invoice: RemoteInvoice) -> Bool {
-        guard invoice.status == "sent" || invoice.status == "partially_paid",
-              let due = invoice.due_date else { return false }
-        let parser = DateFormatter()
-        parser.dateFormat = "yyyy-MM-dd"
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        guard let date = parser.date(from: String(due.prefix(10))) else { return false }
-        return date < Calendar.current.startOfDay(for: Date())
+        guard invoice.status == "sent" || invoice.status == "partially_paid" else { return false }
+        return DateDisplay.due(invoice.due_date)?.isPastDue == true
     }
 
     private func errorView(_ msg: String) -> some View {

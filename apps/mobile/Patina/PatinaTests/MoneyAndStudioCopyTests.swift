@@ -61,4 +61,65 @@ struct MoneyAndStudioCopyTests {
         #expect(!source.contains("in the portal"))
         #expect(!source.contains("Client view"))
     }
+
+    // MARK: - SP-15 · the date you need is on the screen you leave
+
+    @Test("the due line reads the same on every money surface")
+    func dueLineIsOneStringForEverySurface() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-08-27T16:00:00Z"))
+        #expect(DateDisplay.due("2026-08-22", now: now)
+                == DateDisplay.DueLine(text: "Overdue \u{00B7} Aug 22", isPastDue: true))
+        #expect(DateDisplay.due("2026-08-27", now: now)
+                == DateDisplay.DueLine(text: "Due today", isPastDue: false))
+        #expect(DateDisplay.due("2026-09-01", now: now)
+                == DateDisplay.DueLine(text: "Due Sep 1", isPastDue: false))
+        #expect(DateDisplay.due(nil, now: now) == nil)
+        #expect(DateDisplay.due("", now: now) == nil)
+        #expect(DateDisplay.expiry("2026-09-08", now: now)?.text == "Expires Sep 8")
+        #expect(DateDisplay.expiry("2026-08-22", now: now)?.isPastDue == true)
+    }
+
+    /// `invoices.due_date` is a Postgres `date` (00178:38) and
+    /// `client_decisions.due_date` is `timestamptz` (00062:76) — both shapes
+    /// reach this helper, and both have to produce a line. They are read in
+    /// the device calendar, which is also how the Studio hub already reads
+    /// them, so the hub and the detail cannot disagree.
+    @Test("both Postgres date shapes produce a line, and the Studio hub agrees")
+    @MainActor
+    func dueLineParsesBothPostgresShapesAndMatchesTheStudioHub() throws {
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-08-27T16:00:00Z"))
+        #expect(DateDisplay.due("2026-09-01", now: now) != nil)
+        let stamped = try #require(DateDisplay.due("2026-08-22T00:00:00Z", now: now))
+        #expect(stamped.isPastDue)
+
+        let decisions = try decode([RemoteClientDecision].self, """
+        [{ "id": "d-1", "title": "Rug color", "status": "pending",
+           "due_date": "2026-08-22T00:00:00Z", "created_at": "2026-08-01T00:00:00Z" }]
+        """)
+        let snapshot = StudioQueueBuilder.build(StudioQueueInput(
+            projects: [], decisions: decisions, proposals: [], invoices: [],
+            documents: [], threads: [], notifications: [],
+            currentUserId: "client", now: now
+        ))
+        #expect(snapshot.section(.awaitingYou).rows.first?.meta == stamped.text)
+    }
+
+    @Test("every money detail carries the date its list already printed")
+    func moneyDetailsCarryTheirDates() throws {
+        let invoice = try String(
+            contentsOf: Self.sourceURL("Patina/Features/Invoices/Views/InvoiceDetailView.swift"),
+            encoding: .utf8
+        )
+        #expect(invoice.contains("invoiceDetail.due"))
+        let proposal = try String(
+            contentsOf: Self.sourceURL("Patina/Features/Proposals/Views/ProposalDetailView.swift"),
+            encoding: .utf8
+        )
+        #expect(proposal.contains("proposalDetail.expiry"))
+        let decision = try String(
+            contentsOf: Self.sourceURL("Patina/Features/Decisions/Views/DecisionDetailView.swift"),
+            encoding: .utf8
+        )
+        #expect(decision.contains("decisionDetail.due"))
+    }
 }

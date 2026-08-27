@@ -463,13 +463,10 @@ private extension StudioQueueBuilder {
         return 20 + tieBreaker
     }
 
+    /// SP-15: the Studio row and the money detail print the same line, from
+    /// the same place, so they cannot drift.
     static func dueLabel(_ date: Date, now: Date) -> String {
-        let calendar = Calendar.current
-        let due = calendar.startOfDay(for: date)
-        let today = calendar.startOfDay(for: now)
-        if due < today { return "Overdue · \(DateDisplay.short(date))" }
-        if due == today { return "Due today" }
-        return "Due \(DateDisplay.short(date))"
+        DateDisplay.due(date, now: now).text
     }
 
     static func parsedDate(_ raw: String?) -> Date? {
