@@ -29,6 +29,9 @@ struct DailyStoryDetailView: View {
                     .offset(y: chromeVisible ? 0 : 16)
             }
         }
+        // SP-18: opening the story is what takes its dot off, and what moves
+        // the home on to a story the reader has not read.
+        .task { StoryReadStore().markRead(storyId: story.id) }
         .scrollDisabled(dragOffset > 0)
         .background(
             // Deliberately dark immersive reader — stays charcoal in both modes.

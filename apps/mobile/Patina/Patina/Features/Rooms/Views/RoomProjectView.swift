@@ -229,10 +229,13 @@ struct RoomProjectView: View {
     }()
 
     private func statRow(for room: RoomModel) -> some View {
+        // SP-18: "IN AR" is gone. `get_recommendations` hard-codes `usdz_url`
+        // to NULL and the direct fetch hard-codes it nil, so `hasARModel` is
+        // false on every path — the number could never be anything but zero.
+        // "MATCH" now names what it matches against.
         HStack(spacing: 8) {
             statCell(value: "\(room.items.count)", label: "Items")
-            statCell(value: room.averageMatchScore.map { "\($0)%" } ?? "—", label: "Match")
-            statCell(value: "\(room.arReadyCount)", label: "In AR")
+            statCell(value: room.averageMatchScore.map { "\($0)%" } ?? "—", label: "Room match")
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 16)

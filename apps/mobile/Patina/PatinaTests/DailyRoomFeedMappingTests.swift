@@ -115,4 +115,48 @@ struct DailyRoomFeedMappingTests {
         #expect(model.activeFilterID == "all")
         #expect(model.recommendations.count == 1)
     }
+
+    // MARK: - SP-18: the story's unread dot is real
+
+    private func readStore(_ name: String) -> (StoryReadStore, UserDefaults) {
+        let suite = "PatinaTests.\(name).\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        return (StoryReadStore(defaults: defaults), defaults)
+    }
+
+    /// The dot was hard-coded `true`, so the same card was permanently marked
+    /// new — on every home, in dark mode, after every relaunch.
+    @Test
+    func aStoryIsUnreadUntilItIsOpened() {
+        let (store, defaults) = readStore("unread")
+        defer { defaults.removePersistentDomain(forName: defaults.description) }
+
+        #expect(store.isUnread(storyId: "story-1"))
+        store.markRead(storyId: "story-1")
+        #expect(!store.isUnread(storyId: "story-1"))
+        #expect(store.readAt(storyId: "story-1") != nil)
+        #expect(store.isUnread(storyId: "story-2"))
+    }
+
+    /// The pick serves the highest-`sort_order` story the reader has not
+    /// opened; the ordered list's own head is the fallback once every story
+    /// has been read.
+    @Test
+    func theHomeServesAStoryTheReaderHasNotOpened() {
+        let (store, _) = readStore("pick")
+        let candidates = ["story-1", "story-2", "story-3"]
+
+        #expect(store.nextStoryId(from: candidates) == "story-1")
+        store.markRead(storyId: "story-1")
+        #expect(store.nextStoryId(from: candidates) == "story-2")
+        store.markRead(storyId: "story-2")
+        store.markRead(storyId: "story-3")
+        #expect(store.nextStoryId(from: candidates) == "story-1")
+    }
+
+    @Test
+    func anEmptyShortlistServesNothing() {
+        let (store, _) = readStore("empty")
+        #expect(store.nextStoryId(from: []) == nil)
+    }
 }
