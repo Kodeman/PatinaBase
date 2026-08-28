@@ -279,7 +279,8 @@ struct InvoicesMoneyRailTests {
     /// `reservedHeight` — which is 20 points shorter than the dock draws.
     @Test("a money screen's bottom inset clears the dock, not just the Hearth")
     func moneyClearanceClearsTheDock() {
-        #expect(MoneyScreenMetrics.bottomClearance >= CompanionHearthMetrics.dockHeight)
+        #expect(MoneyScreenMetrics.bottomClearance(houseFirst: false)
+                >= CompanionHearthMetrics.dockHeight)
         #expect(CompanionHearthMetrics.dockHeight > CompanionHearthMetrics.reservedHeight)
     }
 

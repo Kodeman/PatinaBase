@@ -106,9 +106,17 @@ struct HouseFirstRootTests {
             for: .invoiceDetail(invoiceId: "i"), houseFirst: false))
         #expect(CompanionHearthMetrics.yieldsToPinnedFooter(for: .invoiceDetail(invoiceId: "i")))
 
-        #expect(CompanionHearthMetrics.pinnedFooterClearance(houseFirst: true) == 8)
+        // R3, corrected against the running app: the bar is DRAWN over the
+        // stacks, not reserved out of them — a `safeAreaInset` on the root does
+        // not reach a `NavigationStack`'s pushed destinations, on either root.
+        // So a pushed screen still clears the bar's own row itself; 8 pt would
+        // have put a money footer 41 pt under the bar.
+        #expect(CompanionHearthMetrics.pinnedFooterClearance(houseFirst: true)
+                == CompanionHearthMetrics.barRowHeight + 8)
         #expect(CompanionHearthMetrics.pinnedFooterClearance(houseFirst: false)
                 == CompanionHearthMetrics.dockHeight + 8)
+        // The Design layer's copy of the bar's row height is the bar's own.
+        #expect(CompanionHearthMetrics.barRowHeight == PatinaTabBar<EmptyView>.itemHeight)
     }
 
     @Test

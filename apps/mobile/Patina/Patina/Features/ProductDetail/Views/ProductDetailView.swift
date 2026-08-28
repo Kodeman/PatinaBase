@@ -397,6 +397,10 @@ struct ProductDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
+    /// W2's clearance under the pinned act on a root with nothing else at that
+    /// edge: the home indicator's own room, and no more.
+    private static let pinnedActBottomInset: CGFloat = 36
+
     private func bottomBar(product: Product) -> some View {
         HStack(spacing: 12) {
             // AR placement button — icon-only action. Real navigation
@@ -447,7 +451,20 @@ struct ProductDetailView: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
-        .padding(.bottom, 36)
+        // The act is pinned above the bottom safe area, and the root's
+        // `safeAreaInset` does not reach a pushed destination — measured on
+        // `dr-w3-int`, this capsule sat at the identical y on both roots, which
+        // put its lower edge 13 pt under the house-first bar
+        // (`shots/w3-n1-13-piece-footer-under-bar-dark-xxl.png`). Where the bar
+        // draws, the capsule takes the same clearance the money screens take.
+        // On the flag-off root nothing is over this edge — `pieceDetail` is one
+        // of the routes where the Companion is already `.minimal`, a 44 pt mark
+        // in the corner, not a 140 pt dock — so W2's home-indicator breathing
+        // room is what this edge needs and the dock-sized figure would lift the
+        // act 112 pt off the bottom for nothing.
+        .padding(.bottom, coordinator.isHouseFirstRoot
+                 ? MoneyScreenMetrics.bottomClearance(houseFirst: true)
+                 : Self.pinnedActBottomInset)
         // PT-5-7: Liquid Glass action bar. `.glassEffect(.regular)` renders
         // the translucent, light-reactive material behind the bar (iOS 26+),
         // replacing the flat off-white + shadow. A hairline top divider keeps

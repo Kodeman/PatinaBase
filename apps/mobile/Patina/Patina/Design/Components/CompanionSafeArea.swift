@@ -39,16 +39,31 @@ public enum CompanionHearthMetrics {
     public static let dockHeight: CGFloat =
         collapsedDiameter + captionSpacing + captionRowHeight + overlayBottomInset
 
+    /// The house-first bar's tappable row, above the bottom safe area.
+    ///
+    /// The figure belongs to `PatinaTabBar.itemHeight`; it is restated here so
+    /// the Design layer does not reach into `Features/Navigation` for it, and
+    /// `HouseFirstRootTests` pins the two equal.
+    public static let barRowHeight: CGFloat = 49
+
     /// The bottom clearance a screen with a pinned money act must reserve.
     ///
-    /// On the house-first root the 83 pt bar owns the bottom and reserves its
-    /// own space, so the dock's 140 pt is dead space rather than clearance.
-    /// `MoneyScreenChrome.swift:33` still computes `dockHeight + 8` directly —
-    /// it belongs to no W3 lane and was deliberately not edited by N1 (see
-    /// `waves/w3/n1-notes.md` §3); this is the one-line replacement for
-    /// whoever takes it.
+    /// Both answers are measured from the **bottom safe area**, because a
+    /// `safeAreaInset` on the root — the flag-off root's 120 pt Hearth
+    /// reservation, the house-first root's bar — does not reach a
+    /// `NavigationStack`'s pushed destinations. Measured on `dr-w3-int`: the
+    /// piece screen's pinned capsule sits at the identical y on both roots, and
+    /// a money screen's content ends `bottomClearance` above the home indicator
+    /// rather than above the reservation. So a pushed screen clears whatever
+    /// draws over that edge by itself:
+    ///
+    ///  • flag-off — the Companion dock, 140 pt of mark, caption and lift (W1b).
+    ///  • house-first — the bar's 49 pt row (B-2: the bar replaces the dock).
+    ///    Not zero: the bar is drawn over the screen, not reserved out of it.
+    ///
+    /// Plus the same 8 pt of air in both cases.
     public static func pinnedFooterClearance(houseFirst: Bool) -> CGFloat {
-        houseFirst ? 8 : dockHeight + 8
+        houseFirst ? barRowHeight + 8 : dockHeight + 8
     }
 
     /// Root overlay ownership policy. Scan and quiz render their own in-flow

@@ -45,7 +45,7 @@ struct DecisionDetailView: View {
                         .padding(.top, 80)
                 }
             }
-            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance(houseFirst: coordinator.isHouseFirstRoot))
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries
