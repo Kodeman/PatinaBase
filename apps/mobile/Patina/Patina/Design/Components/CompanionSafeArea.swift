@@ -39,9 +39,26 @@ public enum CompanionHearthMetrics {
     public static let dockHeight: CGFloat =
         collapsedDiameter + captionSpacing + captionRowHeight + overlayBottomInset
 
+    /// The bottom clearance a screen with a pinned money act must reserve.
+    ///
+    /// On the house-first root the 83 pt bar owns the bottom and reserves its
+    /// own space, so the dock's 140 pt is dead space rather than clearance.
+    /// `MoneyScreenChrome.swift:33` still computes `dockHeight + 8` directly —
+    /// it belongs to no W3 lane and was deliberately not edited by N1 (see
+    /// `waves/w3/n1-notes.md` §3); this is the one-line replacement for
+    /// whoever takes it.
+    public static func pinnedFooterClearance(houseFirst: Bool) -> CGFloat {
+        houseFirst ? 8 : dockHeight + 8
+    }
+
     /// Root overlay ownership policy. Scan and quiz render their own in-flow
     /// Companion, so reserving the root Hearth there would create dead space.
-    static func reservesRootHearth(for route: AppRoute) -> Bool {
+    ///
+    /// B-2: on the house-first root the bar replaces the dock, so nothing is
+    /// reserved at all. (`HouseFirstRoot` never applies the reservation, so
+    /// this answer is belt-and-braces for any other caller.)
+    static func reservesRootHearth(for route: AppRoute, houseFirst: Bool = false) -> Bool {
+        guard !houseFirst else { return false }
         switch route {
         case .scanFlow, .styleQuiz:
             return false
@@ -63,7 +80,12 @@ public enum CompanionHearthMetrics {
     /// drops to its minimal resting state — the 44-point mark in the trailing
     /// corner, caption retired — out of the act's column at every scroll
     /// offset. The same yield `pieceDetail` and `arPlacement` already take.
-    static func yieldsToPinnedFooter(for route: AppRoute) -> Bool {
+    ///
+    /// B-2 retires the policy on the house-first root: there is no dock to
+    /// yield, only a fixed bar slot, and a slot cannot step aside. The W1b
+    /// policy stands, unchanged, on the flag-off root.
+    static func yieldsToPinnedFooter(for route: AppRoute, houseFirst: Bool = false) -> Bool {
+        guard !houseFirst else { return false }
         switch route {
         case .invoiceDetail, .proposalDetail, .decisionDetail:
             return true

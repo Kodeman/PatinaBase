@@ -134,7 +134,26 @@ struct ContentView: View {
 
     // MARK: - Main Content
 
+    /// The root, chosen ONCE (B-1, R2). `AppCoordinator` read
+    /// `FeatureFlags.shared.isOn(.houseFirst)` in its own `init` — after
+    /// `PatinaApp` resolved the flags and before this view existed — and holds
+    /// the answer in a `let`. So this is not a flag lookup per body
+    /// evaluation, and a payload landing late cannot swap the root under a
+    /// session already in someone's hands.
+    ///
+    /// The flag-off branch below is the W2 root, untouched: one
+    /// `NavigationStack`, the 120 pt Hearth reservation, the floating
+    /// `CompanionOverlay`, and `DailyRoomView` with the Record on it.
+    @ViewBuilder
     private var mainContent: some View {
+        if coordinator.isHouseFirstRoot {
+            HouseFirstRoot()
+        } else {
+            legacyMainContent
+        }
+    }
+
+    private var legacyMainContent: some View {
         ZStack {
             PatinaColors.Background.primary
                 .ignoresSafeArea()
