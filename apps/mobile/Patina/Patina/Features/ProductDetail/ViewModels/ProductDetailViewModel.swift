@@ -179,7 +179,7 @@ final class ProductDetailViewModel {
             image_url: product.imageURL,
             price_in_cents: product.priceCents,
             price_cents_at_save: product.priceCents,
-            source: "ios",
+            source: SavedItemMirror.discoverySource,
             notes: nil
         )
     }

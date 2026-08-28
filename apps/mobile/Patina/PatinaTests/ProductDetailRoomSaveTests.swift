@@ -60,6 +60,30 @@ struct ProductDetailRoomSaveTests {
         #expect(json?["room_id"] as? String == "c0000000-0000-4000-8000-000000000001")
     }
 
+    /// `saved_items.source` has carried a CHECK since 00055:32 — `emergence`,
+    /// `search`, `companion`, `extension`. Both iOS save paths sent `"ios"`,
+    /// which PostgREST refused with a 400 (23514) on every save this app has
+    /// ever made; the local row is the saved thing, so the failure only ever
+    /// logged. Caught on the fix walk.
+    @Test("the payload's source is one the column accepts")
+    func thePayloadSourceIsLegal() {
+        let allowed = ["emergence", "search", "companion", "extension"]
+        let payload = ProductDetailViewModel.savePayload(
+            product: piece(), userId: "u", roomRemoteId: nil
+        )
+        #expect(allowed.contains(payload.source))
+        #expect(allowed.contains(SavedItemMirror.discoverySource))
+    }
+
+    @Test("the browse grid sends the same legal source")
+    func theBrowseGridSendsTheSameSource() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Recommendations/ViewModels/RecommendationsViewModel.swift"
+        )
+        #expect(!source.contains("source: \"ios\""))
+        #expect(source.contains("source: SavedItemMirror.discoverySource"))
+    }
+
     @Test("a save with no room names none")
     func aSaveWithNoRoomStaysRoomless() throws {
         let payload = ProductDetailViewModel.savePayload(
