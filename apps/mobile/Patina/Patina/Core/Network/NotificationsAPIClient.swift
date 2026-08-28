@@ -172,6 +172,11 @@ extension AppNotificationType {
         case "proposal": self = .proposal
         case "invoice": self = .invoice
         case "decision": self = .decision
+        // W5: what `fulfillment-notify` actually writes
+        // (`fulfillment-notify/core.ts:265`), plus the direct rail's own
+        // spelling, so an order never arrives in the "New pieces for you"
+        // bucket with a sparkles icon.
+        case "fulfillment_order", "order", "direct_order": self = .order
         default: return nil
         }
     }
@@ -201,6 +206,12 @@ extension AppNotificationType {
             self = .invoice
         case "decision_raised", "decision_reminder", "decision_attention":
             self = .decision
+        // The six transitions `_shared/fulfillment-templates.ts:38-49` names,
+        // plus the intake the settle writes.
+        case "order_confirmed", "order_in_production", "order_shipped",
+             "order_delivered", "order_eta_change", "order_substitution",
+             "fulfillment_order", "direct_order_paid":
+            self = .order
         default:
             self = .newRecommendations
         }
@@ -216,6 +227,7 @@ extension AppNotificationType {
         case .proposal: return "A proposal needs your signature"
         case .invoice: return "An invoice is waiting"
         case .decision: return "A decision needs you"
+        case .order: return "An update on your order"
         }
     }
 }

@@ -105,6 +105,12 @@ enum AppNotificationType: Equatable {
     case proposal
     case invoice
     case decision
+    /// W5: the six fulfillment transitions
+    /// (`_shared/fulfillment-templates.ts:38-49`). Without its own bucket an
+    /// order arriving in the bell fell to `.newRecommendations` and a shipped
+    /// sofa was titled "New pieces for you" — the same SP-08 failure, one rail
+    /// over.
+    case order
 
     var icon: String {
         switch self {
@@ -116,6 +122,7 @@ enum AppNotificationType: Equatable {
         case .proposal: return "doc.text"
         case .invoice: return "creditcard"
         case .decision: return "hand.raised"
+        case .order: return "shippingbox"
         }
     }
 
@@ -129,6 +136,7 @@ enum AppNotificationType: Equatable {
         case .proposal: return PatinaColors.mocha
         case .invoice: return PatinaColors.terracotta
         case .decision: return PatinaColors.clayDeep
+        case .order: return PatinaColors.dustyBlue
         }
     }
 
@@ -139,6 +147,9 @@ enum AppNotificationType: Equatable {
         case .proposal: return "proposal"
         case .invoice: return "invoice"
         case .decision: return "decision"
+        // `fulfillment-notify` writes `fulfillment_order`; that spelling is the
+        // contract, and `NotificationRouter` routes on it.
+        case .order: return "fulfillment_order"
         default: return nil
         }
     }

@@ -82,6 +82,18 @@ enum NotificationRouter {
             return UUID(uuidString: entityId).map { .roomProject(roomId: $0) }
         case "product", "piece":
             return .pieceDetail(pieceId: entityId)
+        case "fulfillment_order", "order":
+            // What `fulfillment-notify` actually writes is `fulfillment_order`
+            // (`fulfillment-notify/core.ts:265`), carrying the
+            // `fulfillment_orders.id`; `order` is accepted because the envelope
+            // is hand-assembled per call site and the shorter spelling is one
+            // typo away. `AppRoute.orderDetail` takes a PREFIXED token
+            // (`ClientOrder.id`), so the rail is named here.
+            return .orderDetail(orderId: "\(ClientOrder.Rail.fulfillment.rawValue):\(entityId)")
+        case "direct_order":
+            // A direct order that has not yet reached the fulfillment rail —
+            // the paid-but-not-shipped window.
+            return .orderDetail(orderId: "\(ClientOrder.Rail.direct.rawValue):\(entityId)")
         default:
             return nil
         }
