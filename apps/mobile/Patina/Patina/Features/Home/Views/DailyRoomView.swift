@@ -43,7 +43,15 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
     }
 
     var body: some View {
-        FirstLaunchTour(canAutoStart: coordinator.navigationPath.isEmpty) {
+        // B-8's Rollback clause: "the tour is gated by the same `house-first`
+        // flag as the root it describes." `isHouseFirstRoot` is the flag read
+        // once at launch and held (AppCoordinator), not a live re-read.
+        FirstLaunchTour(
+            steps: coordinator.isHouseFirstRoot
+                ? FirstLaunchTourModel.defaultSteps
+                : FirstLaunchTourModel.preHouseFirstSteps,
+            canAutoStart: coordinator.navigationPath.isEmpty
+        ) {
             screenBody
         }
     }
@@ -212,7 +220,9 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     // First-launch tour step 2 (B-8). The record is the block
                     // step 1 has just named; when it does not draw — a guest
                     // with nothing true to say — the tour drops the step and
-                    // renumbers rather than pointing at nothing.
+                    // renumbers rather than pointing at nothing. Unconditional
+                    // because the record is unflagged (R1); inert on the
+                    // flag-off root, whose step list does not name this anchor.
                     .firstLaunchTourAnchor(.todayRecord)
                 }
 
