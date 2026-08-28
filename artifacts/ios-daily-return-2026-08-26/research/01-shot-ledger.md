@@ -964,3 +964,34 @@ guest with an empty Record, which would explain 2-of-3 without needing the flag-
 independently verified against the runtime filtering code — flagged for whoever roots out the B-8
 copy fix, since it changes the fix from "update three Sanity documents" to "also decide what a
 guest's tour looks like when step 2 has nothing to point at."
+
+## w3 re-walk
+
+Walker, re-walk pass on the review device **`973D1724-90BF-4A0A-B02D-481D561547B3`** (iPhone 17
+Pro / iOS 26.5, 402×874 pt), 2026-08-28. Build installed from the same DerivedData path, integration
+tip `28597eaa7` (`fix2-log.md`'s commits — `c25c758bf` fixing V-1, `28597eaa7` fixing V-2). Local
+Supabase (`docker compose` + `supabase:start`) was down at the start and had to be brought up before
+sign-in worked; not otherwise notable. Numbering continues from `w3-24`.
+
+| Shot | Launch / account | What it shows |
+|---|---|---|
+| `w3-25-flagon-onboarding-lands-pieces-no-tour.png` | flag on, fresh client sign-in, post-quiz | Onboarding lands on `Browse pieces` (`Pieces` tab selected); no tour element in the AX tree |
+| `w3-26-flagon-today-client-no-studio-pill.png` | flag on, client | Today header: `Today` group + bell (`3 unread`) + `Help` only — no Studio pill |
+| `w3-27-flagon-studio-tab-your-studio-title-client.png` | flag on, client | Studio tab root, heading reads `Your Studio` |
+| `w3-28-flagon-studio-settings-signout-delete-client.png` | flag on, client | Settings sheet: `Sign Out` and `Delete account` both present, three taps from the bar (neither tapped) |
+| `w3-29-flagon-companion-studio-signedin-5rows-no-profile.png` | flag on, client, on Studio tab | Companion panel: 5 rows (Decisions waiting · Messages · Proposals · Billed to date · Home), **no "Your profile" row** — V-2 fix confirmed live for a signed-in reader |
+| `w3-30-flagon-invoice-pay-footer-clears-bar-default.png` | flag on, client, default text | Invoice detail `Pay $4,250.00` footer sits well above the bar |
+| `w3-31-flagon-invoice-pay-footer-clears-bar-xxl.png` | flag on, client, XXL | Same screen at accessibility-XXL: `invoiceDetail.pay` frame ends y=722, bar starts y=791 |
+| `w3-32-flagon-proposal-sign-footer-clears-bar-default.png` | flag on, client, default text | Proposal detail `Sign proposal` footer clear of the bar |
+| `w3-33-flagon-proposal-sign-footer-clears-bar-xxl.png` | flag on, client, XXL | Same screen at XXL: `proposalDetail.sign` frame ends y=783, bar starts y=791 (8pt clear) |
+| `w3-34-flagon-piece-add-to-room-clears-bar-default.png` | flag on, client, default text | Piece detail `Add to Room` capsule clear of the bar. The ledger's earlier PGRST201 "every piece detail is hard-broken" trap did not reproduce |
+| `w3-35-flagon-piece-add-to-room-clears-bar-xxl.png` | flag on, client, XXL | Same piece at XXL, capsule still clear (ends y=783, bar at y=791) |
+| `w3-36-flagon-today-dark-client-genuine.png` | flag on, client, genuinely dark (`simctl io screenshot`) | Today at night: bar reads `Today Spaces Pieces Studio` legibly, no Studio pill, dark background confirmed on the non-MCP capture path too |
+| `w3-37-flagon-guest-freshtour-step1of2-empty-record.png` | flag on, fresh guest, first launch | Tour step 1 of 2 on Today: `Step 1 of 2, Welcome to Patina, This is your Daily Room…` (Sanity's retired copy — OWED-Kody, see `walk.md`); guest's Record is empty (`Start with a room` renders, no `NEEDS YOU` block), consistent with the "2 of 2" denominator |
+| `w3-38-flagon-guest-tour-step2of2-studio-popover-above-bar.png` | flag on, fresh guest | Tour step 2 of 2: the popover card (y 642–773) sits fully **above** the bar row (y 791+); `Today Spaces Pieces Studio` all read clearly beneath it — V-1 fix confirmed live (compare `w3-fix-03`'s pre-fix occlusion) |
+| `w3-39-flagoff-today-client-structure.png` | flag off, client | Today: NEEDS YOU/MOVED/See all card, Leah Hartwell designer seat, YOUR HOUSE rail, floating Companion orb, no tab bar — structurally matches `w3-13-flagoff-today-client-final.png` |
+| `w3-40-flagoff-header-pill-opens-profile.png` | flag off, client | Tapping the header's `Your Studio` pill (the former "monogram") pushes `ProfileView` (`Client User`, `STUDIO`/`YOUR PROFILE` sections, `Settings` row) — unchanged by the W3 tab-bar refactor |
+| `w3-41-flagoff-today-client-leave-state.png` | flag off, client (final/leave state) | Same frame as `w3-39`; this is the exact leave-state screenshot |
+
+Verdict: every merge-rule item (`rulings-fable.md`, end) passes. The Sanity-copy gap (`w3-37`) is
+carried as OWED (Kody) per ruling 5, not a FAIL — see `waves/w3/walk.md` for the full disposition.
