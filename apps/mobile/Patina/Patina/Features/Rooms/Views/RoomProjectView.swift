@@ -54,8 +54,22 @@ struct RoomProjectView: View {
     private let budgetMinCents: Int = 200_000   // $2K
     private let budgetMaxCents: Int = 500_000   // $5K
 
-    @State private var actionItem: SavedItem?
-    @State private var isSettingBudget = false
+    /// One presentation, not two. A second `.sheet` attached further down the
+    /// hierarchy never presented on the sim walk (`waves/w4/h1-notes.md`), so
+    /// both sheets go through one `item:` binding on the root.
+    enum Presented: Identifiable {
+        case itemActions(SavedItem)
+        case budget
+
+        var id: String {
+            switch self {
+            case .itemActions(let item): return "item:\(item.id.uuidString)"
+            case .budget: return "budget"
+            }
+        }
+    }
+
+    @State private var presented: Presented?
 
     init(roomId: UUID) {
         self.roomId = roomId
@@ -110,11 +124,19 @@ struct RoomProjectView: View {
                 notFoundState
             }
         }
-        .sheet(item: $actionItem) { item in
-            ItemActionMenu(item: item) { action in
-                handle(action, item: item)
+        .sheet(item: $presented) { which in
+            switch which {
+            case .itemActions(let item):
+                ItemActionMenu(item: item) { action in
+                    handle(action, item: item)
+                }
+                .presentationDetents([.medium])
+            case .budget:
+                if let room {
+                    RoomBudgetSheet(room: room)
+                        .presentationDetents([.medium])
+                }
             }
-            .presentationDetents([.medium])
         }
         // U18: standard pushed-screen chrome — covers both the populated
         // room (its own header carries the title) and `notFoundState`
@@ -318,7 +340,7 @@ struct RoomProjectView: View {
                         coordinator.navigate(to: .pieceDetail(pieceId: pair.element.productId))
                     },
                     onActions: {
-                        actionItem = pair.element
+                        presented = .itemActions(pair.element)
                     }
                 )
                 if pair.offset < room.items.count - 1 {
@@ -374,15 +396,11 @@ struct RoomProjectView: View {
                 title: room.budgetCents == nil ? "Set a budget" : "Edit budget",
                 identifier: "RoomProjectView.SetABudget"
             ) {
-                isSettingBudget = true
+                presented = .budget
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
-        .sheet(isPresented: $isSettingBudget) {
-            RoomBudgetSheet(room: room)
-                .presentationDetents([.medium])
-        }
     }
 
     private func ghostAct(
@@ -436,6 +454,6 @@ struct RoomProjectView: View {
         case .remove:
             store.removeItem(item)
         }
-        actionItem = nil
+        presented = nil
     }
 }

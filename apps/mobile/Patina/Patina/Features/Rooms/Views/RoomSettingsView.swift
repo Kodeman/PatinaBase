@@ -215,8 +215,11 @@ struct RoomSettingsView: View {
         return Self.entry(fromMetres: metres, unit: new)
     }
 
+    /// Round to a tenth before asking whether the number is whole: 18 ft
+    /// stored as metres comes back 17.999999999999996, and the field must
+    /// offer the person the number they typed, not the float.
     static func entry(fromMetres metres: Double, unit: RoomUnit) -> String {
-        let value = unit.value(fromMetres: metres)
+        let value = (unit.value(fromMetres: metres) * 10).rounded() / 10
         return value.rounded() == value
             ? String(Int(value))
             : String(format: "%.1f", value)

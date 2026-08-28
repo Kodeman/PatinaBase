@@ -61,7 +61,9 @@ struct RoomGalleryCard: View {
                     .padding(.top, 10)
                     .padding(.trailing, 10)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            } else if room.items.isEmpty {
+            } else if room.items.isEmpty && room.hasBeenScanned {
+                // A room the person typed was never scanned; the badge said it
+                // was, on the same card whose meta line said "Manual entry".
                 badge(label: "Just scanned", color: PatinaColors.dustyBlue)
                     .padding(.top, 10)
                     .padding(.trailing, 10)
@@ -117,9 +119,15 @@ struct RoomGalleryCard: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var budgetString: String {
-        let dollars = room.totalInvestmentCents / 100
-        if dollars == 0 { return "—" }
+    /// The budget the person set, under the word `Budget`. It used to be the
+    /// sum of the room's saved pieces — a different number entirely, printed
+    /// under a label that did not describe it (C5). W4 gives the room a real
+    /// `budgetCents`, so the cell reads that or nothing.
+    private var budgetString: String { Self.budgetString(for: room) }
+
+    static func budgetString(for room: RoomModel) -> String {
+        guard let cents = room.budgetCents else { return "—" }
+        let dollars = cents / 100
         if dollars >= 1000 {
             return "$\(String(format: "%.1f", Double(dollars) / 1000))K"
         }

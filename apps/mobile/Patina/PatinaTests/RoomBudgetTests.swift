@@ -240,6 +240,11 @@ struct RoomBudgetTests {
         #expect(RoomUnit.metres.metres(from: 5) == 5)
         #expect(RoomSettingsView.restate("18", from: .feet, to: .metres) == "5.5")
         #expect(RoomSettingsView.restate("18", from: .feet, to: .feet) == "18")
+        // The field offers back the number the person typed, not the float a
+        // feet → metres → feet round trip leaves behind (17.999999999999996).
+        #expect(RoomSettingsView.entry(
+            fromMetres: RoomUnit.feet.metres(from: 18), unit: .feet
+        ) == "18")
     }
 
     @Test("a typed correction stays a typed room, and marks itself measured")
@@ -263,6 +268,18 @@ struct RoomBudgetTests {
         #expect(space.hasBeenScanned == false)
         #expect(RoomScreenLines.make(room: space).meta.contains("TYPED, NOT SCANNED"))
         #expect(RoomScreenLines.make(room: space).meta.hasPrefix("20 × 15 ft"))
+    }
+
+    @Test("the Spaces gallery card's Budget cell is the budget, not the pieces total")
+    func theGalleryCardPrintsTheBudget() {
+        let space = room()
+        saved("Brass Arc Floor Lamp", cents: 89_000, at: Self.day(8, 25), in: space)
+        // Before W4 this cell printed `totalInvestmentCents` under the word
+        // Budget — a different number entirely, labelled as something it was not.
+        #expect(RoomGalleryCard.budgetString(for: space) == "—")
+
+        space.budgetCents = 900_000
+        #expect(RoomGalleryCard.budgetString(for: space) == "$9.0K")
     }
 
     // MARK: - T8 · steward §4a — the saved row's note and its price at save
