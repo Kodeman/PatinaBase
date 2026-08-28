@@ -101,7 +101,13 @@ struct AuthScreenView: View {
 
                 // Soft wall — prominent "look around" that fully works without
                 // an account (browse + save via the marketplace home).
-                Button(action: onBrowseAsGuest) {
+                Button {
+                    // W3 ruling 9: the choice is recorded where the reader
+                    // makes it, so the next launch honours it instead of
+                    // putting the same wall back.
+                    GuestSessionStore.shared.optIn()
+                    onBrowseAsGuest()
+                } label: {
                     HStack(spacing: 8) {
                         Text("Look around first")
                         Image(systemName: "arrow.right")

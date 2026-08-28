@@ -84,7 +84,12 @@ public final class AppCoordinator: Coordinator {
     /// Replaces today's implicit "skip auth, still let them onboard"
     /// behavior. Cleared automatically when `AuthService` reports a
     /// signed-in user, so guest+signed-in doesn't get stuck.
-    public var guestModeOptIn: Bool = false
+    ///
+    /// W3 ruling 9: its initial value is the persisted choice
+    /// (`GuestSessionStore`), so a guest who declined the wall does not meet
+    /// it again on the next launch. It stays a stored property — the phase
+    /// observation loop in `observePhaseInputs()` reads it.
+    public var guestModeOptIn: Bool = GuestSessionStore.shared.isOptedIn
 
     /// URL queued during `.launching` (e.g., a magic-link cold launch
     /// arriving before the auth state stream settles). Drained on entry
