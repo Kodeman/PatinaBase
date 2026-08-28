@@ -57,6 +57,12 @@ private struct PatinaScreenChrome: ViewModifier {
     let style: BackChevronButton.Style
 
     @Environment(\.appCoordinator) private var coordinator
+    /// W3 · N2: `YourSpacesView` and `RecommendationsView` are pushed screens
+    /// that the house-first bar also mounts as tab roots, where there is
+    /// nothing behind them to go back to. The wrapper in `TabRoot.swift` sets
+    /// this; it defaults to false, so every pushed screen and the whole
+    /// flag-off root keep the chevron they have today.
+    @Environment(\.isTabRoot) private var isTabRoot
 
     func body(content: Content) -> some View {
         content
@@ -64,7 +70,9 @@ private struct PatinaScreenChrome: ViewModifier {
             .toolbar(.hidden, for: .navigationBar)
             .overlay(alignment: .topLeading) {
                 HStack(spacing: 12) {
-                    BackChevronButton(style: style) { coordinator.goBack() }
+                    if !isTabRoot {
+                        BackChevronButton(style: style) { coordinator.goBack() }
+                    }
                     if let title {
                         // SP-19 / b-notes §3: the chevron and title float over a
                         // ScrollView with the system bar hidden, so on a scrolled
