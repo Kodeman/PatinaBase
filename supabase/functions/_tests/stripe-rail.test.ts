@@ -280,6 +280,15 @@ async function cleanup() {
   }
   if (payIds.length) await admin.from('po_payments').delete().in('id', payIds);
   if (poIds.length) await admin.from('purchase_orders').delete().in('id', poIds);
+  // 00540: a settled direct order now enqueues a fulfillment_intake task and
+  // (when attributed) credits designer_earnings. These fixtures carry no
+  // designer so no credit is written, but the enqueue fires on every paid
+  // settle — clear both before the orders they point at.
+  if (doIds.length) {
+    await admin.from('agent_tasks').delete()
+      .eq('entity_type', 'direct_order').in('entity_id', doIds);
+    await admin.from('designer_earnings').delete().in('order_id', doIds);
+  }
   // direct_orders.client_id FK is ON DELETE RESTRICT — delete orders before the
   // buyer profile/user; product_id references products, so orders before product.
   if (doIds.length) await admin.from('direct_orders').delete().in('id', doIds);

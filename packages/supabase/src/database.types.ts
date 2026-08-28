@@ -4322,6 +4322,7 @@ export type Database = {
           proposal_id: string | null
           proposal_item_id: string | null
           reverses_invoice_payment_id: string | null
+          reverses_order_id: string | null
           source_type: string
           status: string
         }
@@ -4344,6 +4345,7 @@ export type Database = {
           proposal_id?: string | null
           proposal_item_id?: string | null
           reverses_invoice_payment_id?: string | null
+          reverses_order_id?: string | null
           source_type: string
           status?: string
         }
@@ -4366,6 +4368,7 @@ export type Database = {
           proposal_id?: string | null
           proposal_item_id?: string | null
           reverses_invoice_payment_id?: string | null
+          reverses_order_id?: string | null
           source_type?: string
           status?: string
         }
@@ -4986,12 +4989,15 @@ export type Database = {
         Row: {
           amount_cents: number
           client_id: string
+          commission_rate: number | null
           created_at: string
           currency: string
+          designer_id: string | null
           id: string
           paid_at: string | null
           product_id: string
           product_name: string
+          project_id: string | null
           quantity: number
           shipping: Json | null
           status: string
@@ -5002,12 +5008,15 @@ export type Database = {
         Insert: {
           amount_cents: number
           client_id: string
+          commission_rate?: number | null
           created_at?: string
           currency?: string
+          designer_id?: string | null
           id?: string
           paid_at?: string | null
           product_id: string
           product_name: string
+          project_id?: string | null
           quantity: number
           shipping?: Json | null
           status?: string
@@ -5018,12 +5027,15 @@ export type Database = {
         Update: {
           amount_cents?: number
           client_id?: string
+          commission_rate?: number | null
           created_at?: string
           currency?: string
+          designer_id?: string | null
           id?: string
           paid_at?: string | null
           product_id?: string
           product_name?: string
+          project_id?: string | null
           quantity?: number
           shipping?: Json | null
           status?: string
@@ -5042,6 +5054,20 @@ export type Database = {
           {
             foreignKeyName: "direct_orders_client_id_fkey"
             columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_orders_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_orders_designer_id_fkey"
+            columns: ["designer_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
@@ -5087,6 +5113,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "direct_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "direct_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -29873,12 +29913,15 @@ export type Database = {
         Returns: {
           amount_cents: number
           client_id: string
+          commission_rate: number | null
           created_at: string
           currency: string
+          designer_id: string | null
           id: string
           paid_at: string | null
           product_id: string
           product_name: string
+          project_id: string | null
           quantity: number
           shipping: Json | null
           status: string
@@ -30879,6 +30922,10 @@ export type Database = {
         Args: { p_actor: string; p_refs: Json; p_type: string }
         Returns: string
       }
+      fulfillment_po_belongs_to_caller: {
+        Args: { p_po_id: string }
+        Returns: boolean
+      }
       fulfillment_record_ack: {
         Args: {
           p_ack_method: string
@@ -31098,6 +31145,14 @@ export type Database = {
       get_designer_reliability_inputs: {
         Args: { p_designer_id: string }
         Returns: Json
+      }
+      get_direct_order_terms: {
+        Args: never
+        Returns: {
+          contact: string
+          responsibility_paragraph: string
+          tax_shipping_enabled: boolean
+        }[]
       }
       get_embedding_stats: {
         Args: never
@@ -32635,6 +32690,10 @@ export type Database = {
         Args: { p_designer_id: string }
         Returns: undefined
       }
+      reverse_direct_order_earnings: {
+        Args: { p_order_id: string }
+        Returns: Json
+      }
       review_agent_task: {
         Args: {
           p_decision: string
@@ -33168,6 +33227,10 @@ export type Database = {
       }
       set_trade_scope_party: {
         Args: { p_party_id: string; p_proposal_id: string }
+        Returns: Json
+      }
+      settle_direct_order_attribution: {
+        Args: { p_order_id: string }
         Returns: Json
       }
       settle_invoice_checkout_payment: {

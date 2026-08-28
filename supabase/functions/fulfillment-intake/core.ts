@@ -30,8 +30,51 @@ export interface IntakeDeps {
   worker?: string;
 }
 
+/**
+ * What the task that queued this intake knows and the PaymentIntent does not.
+ *
+ * Only `totals` today, and only the direct-order producer sets it (00540).
+ * A Checkout session's metadata is written before Checkout runs, so with
+ * Stripe Tax or a shipping rate on the session the metadata's
+ * subtotal/freight/tax cannot sum to what was captured — and
+ * fulfillment_orders carries chk_fulfillment_captured_identity (00360:428), so
+ * a split that does not sum is refused at the INSERT and aborts the whole
+ * intake. stripe-webhook computes the real split off the settled
+ * session and passes it here. Absent (BOH, seeds, any pre-00540 task) → the
+ * metadata is used exactly as before.
+ */
+export interface IntakeOverrides {
+  totals?: {
+    captured_total_cents?: number;
+    product_subtotal_cents?: number;
+    freight_charged_cents?: number;
+    tax_cents?: number;
+  };
+}
+
+/** Read `totals` off an agent_tasks payload without trusting its shape. */
+export function intakeOverridesFromTaskPayload(
+  payload: Record<string, unknown> | null | undefined,
+): IntakeOverrides | undefined {
+  const totals = (payload ?? {}).totals;
+  if (!totals || typeof totals !== 'object' || Array.isArray(totals)) return undefined;
+  const row = totals as Record<string, unknown>;
+  const num = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+  const picked = {
+    captured_total_cents: num(row.captured_total_cents),
+    product_subtotal_cents: num(row.product_subtotal_cents),
+    freight_charged_cents: num(row.freight_charged_cents),
+    tax_cents: num(row.tax_cents),
+  };
+  return Object.values(picked).every((v) => v === undefined) ? undefined : { totals: picked };
+}
+
 /** Map a Stripe PI (+ its metadata cart) to the fulfillment_intake_order payload. */
-export function normalizeIntakePayload(pi: Record<string, unknown>): Record<string, unknown> {
+export function normalizeIntakePayload(
+  pi: Record<string, unknown>,
+  overrides?: IntakeOverrides,
+): Record<string, unknown> {
   const md = (pi.metadata ?? {}) as Record<string, string>;
   // metadata carries JSON-encoded cart + attribution (BOH intake contract §3).
   const lines = md.lines ? JSON.parse(md.lines) : [];
@@ -47,12 +90,21 @@ export function normalizeIntakePayload(pi: Record<string, unknown>): Record<stri
       designer_client_id: md.designer_client_id ?? null,
       attribution: md.designer_attribution ? JSON.parse(md.designer_attribution) : null,
     },
-    ship_to: md.ship_to ? JSON.parse(md.ship_to) : null,
+    // A direct-order PI cannot carry ship_to in its metadata: that metadata is
+    // written when the Checkout session opens and the address is collected
+    // inside the session, after. Stripe copies the collected address onto the
+    // PaymentIntent itself, so fall back to it rather than filing the order
+    // with nowhere to ship. BOH orders that DO set md.ship_to are unchanged.
+    ship_to: md.ship_to ? JSON.parse(md.ship_to) : (pi.shipping ?? null),
     totals: {
-      captured_total_cents: Number(md.captured_total_cents ?? pi.amount ?? 0),
-      product_subtotal_cents: Number(md.product_subtotal_cents ?? 0),
-      freight_charged_cents: Number(md.freight_charged_cents ?? 0),
-      tax_cents: Number(md.tax_cents ?? 0),
+      captured_total_cents:
+        overrides?.totals?.captured_total_cents ??
+        Number(md.captured_total_cents ?? pi.amount ?? 0),
+      product_subtotal_cents:
+        overrides?.totals?.product_subtotal_cents ?? Number(md.product_subtotal_cents ?? 0),
+      freight_charged_cents:
+        overrides?.totals?.freight_charged_cents ?? Number(md.freight_charged_cents ?? 0),
+      tax_cents: overrides?.totals?.tax_cents ?? Number(md.tax_cents ?? 0),
     },
     lines,
   };
@@ -63,8 +115,9 @@ export async function intakeInlinePI(
   deps: IntakeDeps,
   pi: Record<string, unknown>,
   actor = 'seed',
+  overrides?: IntakeOverrides,
 ): Promise<string> {
-  const payload = normalizeIntakePayload(pi);
+  const payload = normalizeIntakePayload(pi, overrides);
   const res = await deps.supabase.rpc('fulfillment_intake_order', { p_payload: payload, p_actor: actor });
   if (res.error) throw new Error(res.error.message);
   return res.data as string;
@@ -83,13 +136,19 @@ export async function runIntakeWorker(deps: IntakeDeps): Promise<{ processed: nu
     failed = 0;
   for (const t of tasks) {
     try {
-      const piId = (t.payload as Record<string, unknown>).payment_intent_id as string;
+      const taskPayload = t.payload as Record<string, unknown>;
+      const piId = taskPayload.payment_intent_id as string;
       if (!deps.fetchPaymentIntent) throw new Error('worker path requires fetchPaymentIntent');
       const pi = await deps.fetchPaymentIntent(piId);
       // Idempotent: if this PI already produced an order (redelivery, or a
       // retried task after a partial prior failure), the RPC returns the
       // SAME order_id and writes nothing further — this branch is a no-op.
-      const orderId = await intakeInlinePI(deps, pi, worker);
+      const orderId = await intakeInlinePI(
+        deps,
+        pi,
+        worker,
+        intakeOverridesFromTaskPayload(taskPayload),
+      );
       const completed = await completeAgentTaskIfOwned(deps.supabase, {
         id: t.id,
         outcome: 'done',
