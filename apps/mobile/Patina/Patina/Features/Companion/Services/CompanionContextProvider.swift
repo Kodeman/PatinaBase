@@ -39,6 +39,10 @@ struct CompanionActionItem: Identifiable {
         /// Present the "Request design help" sheet (PT-3-8: design services
         /// is a `PresentedSheet`, not a navigation route).
         case openDesignServices(roomId: UUID?)
+        /// Perform the piece screen's own act (W5, B §5). The panel draws over
+        /// the piece rather than inside it, so the row asks the screen to open
+        /// the sheet it would have opened itself.
+        case performPieceAct
     }
 
     init(

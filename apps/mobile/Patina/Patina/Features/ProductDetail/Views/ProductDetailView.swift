@@ -23,6 +23,10 @@ struct ProductDetailView: View {
     /// Held, not computed in `body`: it reads every room out of SwiftData.
     @State private var fitLine: RoomFitLine?
 
+    /// The terms the sold-by block prints. Read once; `.unknown` promises
+    /// nothing, which is the safe answer when the call fails.
+    @State private var terms: DirectOrderTerms = .unknown
+
     /// Product ID to load (from navigation)
     var productId: String?
 
@@ -36,6 +40,72 @@ struct ProductDetailView: View {
 
     private var displayProduct: Product? {
         product ?? viewModel.product
+    }
+
+    /// W5 · B §5. The designer relationship, read from the same two services
+    /// the Companion, the Studio and the home's designer seat read.
+    ///
+    /// Computed in `body`, never cached in `@State`: reading the services here
+    /// is what registers the observation dependency, so the act re-resolves
+    /// when their refresh lands. A first cut resolved it once in `.task` and
+    /// `client@patina.dev` — three active projects — was offered
+    /// `Buy — $4,200.00`, because the projects had not arrived yet and an
+    /// unresolved relationship reads `.none`.
+    private var relationship: DesignerRelationship {
+        DesignerThreadOpener.currentRelationship
+    }
+
+    private var designerName: String? {
+        DesignerSeat.make(
+            liveLead: DesignRequestStatusService.shared.liveLead,
+            projects: BadgeCountService.shared.projects
+        )?.name
+    }
+
+    /// Whether the relationship above is an answer rather than a default.
+    ///
+    /// `BadgeCountService.hasLoaded` is deliberately NOT the projects half:
+    /// it goes true when any one of five fetches answers, and on a session
+    /// where `listProjects()` alone fails a client with an active project
+    /// still resolves `.none` — the one relationship that draws Buy.
+    /// `projectsLoaded` says only that the projects answer arrived.
+    private var relationshipIsResolved: Bool {
+        PieceActResolver.relationshipIsResolved(
+            isAuthenticated: AuthService.shared.isAuthenticated,
+            projectsAnswered: BadgeCountService.shared.projectsLoaded,
+            leadAnswered: DesignRequestStatusService.shared.hasLoaded
+        )
+    }
+
+    /// The one act this piece offers, resolved from the relationship, the
+    /// flag and the gate. R3 lives inside `PieceActResolver`: a client with a
+    /// live designer gets Path B here whatever the flag and the gate say.
+    private func act(for product: Product) -> PieceAct {
+        PieceActResolver.act(
+            product: product,
+            relationship: relationship,
+            designerName: designerName,
+            directOrdersEnabled: FeatureFlags.shared.isOn(.directOrders),
+            relationshipIsResolved: relationshipIsResolved
+        )
+    }
+
+    /// The act as it stands right now, or nothing when no piece is loaded.
+    private var currentAct: PieceAct? {
+        displayProduct.map { act(for: $0) }
+    }
+
+    /// Ask the two designer services for an answer when this screen has none.
+    ///
+    /// They refresh on the home's own polling floor, so a reader who walked
+    /// here through the app arrives with the answer already in hand. A reader
+    /// who arrives from a `patina://piece/<id>` link does not — and without
+    /// this the act would sit on Path C for the whole session, which the walk
+    /// reproduced on a fresh sign-in that landed straight on this screen.
+    private func resolveRelationshipIfNeeded() async {
+        guard !relationshipIsResolved else { return }
+        await BadgeCountService.shared.refresh()
+        await DesignRequestStatusService.shared.refresh()
     }
 
     var body: some View {
@@ -65,6 +135,27 @@ struct ProductDetailView: View {
             roomOptions = RoomStore(context: modelContext).allRooms().map(RoomSummary.init(from:))
             refreshFitLine()
             viewModel.trackView()
+            PieceActChannel.shared.publish(currentAct)
+            await resolveRelationshipIfNeeded()
+            terms = (try? await DirectOrdersAPIClient.shared.fetchTerms()) ?? .unknown
+        }
+        // A session can land while this screen is still up: the wall is a sheet
+        // over it, so `.task` has already run — as a guest, where the
+        // relationship is knowable without any fetch and nothing was asked.
+        // Without this the reader signs in, comes back, and the bar still reads
+        // "Ask about this piece" for the rest of the session.
+        .onChange(of: AuthService.shared.isAuthenticated) { _, _ in
+            Task { await resolveRelationshipIfNeeded() }
+        }
+        // The act can change under the screen — the piece finishes loading, or
+        // the two designer services answer. Both surfaces follow it.
+        .onChange(of: currentAct) { _, act in PieceActChannel.shared.publish(act) }
+        .onDisappear { PieceActChannel.shared.publish(nil) }
+        // The Companion's piece-context row performs the screen's own act, so
+        // the two surfaces cannot offer the same words and do different things.
+        .onChange(of: PieceActChannel.shared.requestToken) { _, _ in
+            guard let product = displayProduct else { return }
+            performPrimaryAct(product)
         }
         .sheet(item: $presented) { which in
             switch which {
@@ -73,7 +164,7 @@ struct ProductDetailView: View {
                 HelpPanelSheet(
                     surfaceKey: SurfaceKeys.IOSApp.ProductDetail.root,
                     isPresented: Binding(
-                        get: { presented == .help },
+                        get: { presented?.id == "help" },
                         set: { if !$0 { presented = nil } }
                     )
                 )
@@ -100,9 +191,89 @@ struct ProductDetailView: View {
                         }
                     )
                 }
+
+            case .askDesigner:
+                if let product = displayProduct {
+                    AskDesignerSheet(
+                        product: product,
+                        designerFirstName: PieceActResolver.firstName(of: designerName),
+                        roomName: contextRoom()?.name
+                    )
+                }
+
+            case .askAboutPiece(let reason):
+                if let product = displayProduct {
+                    AskAboutPieceSheet(
+                        product: product,
+                        roomName: contextRoom()?.name,
+                        reason: reason
+                    )
+                }
+
+            case .order:
+                if let product = displayProduct {
+                    OrderSheet(
+                        product: product,
+                        fitLine: fitLine?.text,
+                        onPlaced: { order in presented = .orderPlaced(order) }
+                    )
+                }
+
+            case .orderPlaced(let order):
+                OrderPlacedView(
+                    order: order,
+                    responsibilityParagraph: terms.responsibilityParagraph,
+                    contactLine: terms.contact.map { "Questions or damage: \($0)" },
+                    soldBy: displayProduct.map(OrderSheetContent.soldBy) ?? "",
+                    taxShippingEnabled: terms.taxShippingEnabled,
+                    // The order route and the id it takes belong to the order
+                    // lane (steward map §6: "if an order route is needed, C2
+                    // asks"), and its token is not a bare `direct_orders` uuid
+                    // — a settled order re-keys onto the fulfillment row. This
+                    // lane hands over the direct-order id and draws no control
+                    // until a destination exists, because a control that goes
+                    // nowhere is worse than no control.
+                    onSeeOrder: nil,
+                    onBackToToday: {
+                        presented = nil
+                        coordinator.navigate(to: .heroFrame)
+                    }
+                )
+                .interactiveDismissDisabled(false)
+
+            case .authWall(let title):
+                // SP-09 / C9: a soft wall over the flow the person is in,
+                // with a Cancel. Nothing has been written and nothing will be
+                // until a session lands. The title names the act that raised
+                // it — a reader who tapped "Ask about this piece" is not told
+                // to sign in to order something.
+                AuthSheet(title: title)
             }
         }
     }
+
+    // MARK: - The act
+
+    /// One entry point for the primary act, so the bar and the Companion row
+    /// cannot diverge.
+    private func performPrimaryAct(_ product: Product) {
+        let act = act(for: product)
+        PostHogService.shared.capture(act.analyticsEvent, properties: ["product_id": product.id])
+        switch PieceActResolver.entry(
+            for: act,
+            isAuthenticated: AuthService.shared.isAuthenticated
+        ) {
+        case .authWall(let title):
+            presented = .authWall(title: title)
+        case .askDesigner:
+            presented = .askDesigner
+        case .order:
+            presented = .order
+        case .askAboutPiece(let reason):
+            presented = .askAboutPiece(reason: reason)
+        }
+    }
+
 
     /// Recomputed when the screen appears and when the piece is put in a room
     /// — the two moments the answer can change.
@@ -340,11 +511,17 @@ struct ProductDetailView: View {
                                 location: product.makerLocation,
                                 story: story
                             )
-                            .padding(.bottom, 120)
-                        } else {
-                            Spacer()
-                                .frame(height: 120)
+                            .padding(.bottom, 18)
                         }
+
+                        // M3 block 10 — who is responsible. Drawn only for a
+                        // piece the app would actually sell, and only from the
+                        // server's own config: an unset paragraph prints
+                        // nothing rather than a reassurance nobody wrote.
+                        soldByBlock(product)
+
+                        Spacer()
+                            .frame(height: 120)
                     }
                     .padding(24)
                 }
@@ -361,42 +538,60 @@ struct ProductDetailView: View {
     /// edge: the home indicator's own room, and no more.
     private static let pinnedActBottomInset: CGFloat = 36
 
-    private func bottomBar(product: Product) -> some View {
-        HStack(spacing: 12) {
-            // AR placement button — icon-only action. Real navigation
-            // action lives in `simultaneousGesture`-friendly Button, and
-            // an explicit `accessibilityLabel` keeps VoiceOver clear.
-            // Contextual copy ships through the help panel (`?` button
-            // in the top bar) rather than tooltip-wrapping the Button
-            // (which would conflict with the Button's tap gesture).
-            if product.hasARModel {
-                Button {
-                    coordinator.navigate(
-                        to: .arPlacement(
-                            productId: product.id,
-                            roomRemoteId: viewModel.roomContextRemoteId
-                        )
-                    )
-                } label: {
-                    Circle()
-                        .fill(PatinaColors.Background.secondary)
-                        .frame(width: 50, height: 50)
-                        .overlay(
-                            Image(systemName: "arkit")
-                                .font(.system(size: 18))
-                                .foregroundStyle(PatinaColors.Text.primary)
-                        )
-                }
-                .accessibilityLabel("Place in AR")
-                .accessibilityHint("Preview this piece in your room with augmented reality.")
-                .accessibilityIdentifier("ProductDetailView.ARButton")
-            }
+    /// The width the Companion's minimal corner mark takes out of the bar's
+    /// trailing edge: the 44 pt mark plus a hair of air. Its own trailing
+    /// inset (20) already sits inside the screen's 24 pt gutter.
+    private static let companionMarkClearance: CGFloat = 48
 
-            // Add to room. The act names a room, so it puts the piece in one:
-            // the room this screen was opened from where there is one, the
-            // room the reader picks where there is not, and the plain
-            // account-wide save only where the reader has no room at all.
-            Button {
+    /// M3 block 10 — the sold-by line and the config-driven responsibility
+    /// paragraph. B §5 makes the paragraph a condition of Path A shipping, so
+    /// it is printed where the reader decides, not only where they pay.
+    @ViewBuilder
+    private func soldByBlock(_ product: Product) -> some View {
+        if BuyabilityGate.isBuyable(product) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(OrderSheetContent.soldBy(product))
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .accessibilityIdentifier("ProductDetailView.SoldBy")
+                if let paragraph = terms.responsibilityParagraph {
+                    Text(paragraph)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let contact = terms.contact {
+                    Text("Questions or damage: \(contact)")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 18)
+        }
+    }
+
+    /// W5 · M3 block 11. The bar is the piece's one act plus the ghost that
+    /// was the whole bar before it. `Add to room` keeps every behaviour it
+    /// had: the room this screen was opened from where there is one, the
+    /// picker where there is not, and the plain account-wide save where the
+    /// reader has no room at all.
+    private func bottomBar(product: Product) -> some View {
+        PurchaseActionBar(
+            act: act(for: product),
+            isSaved: viewModel.isSaved,
+            showsARButton: product.hasARModel,
+            onAR: {
+                coordinator.navigate(
+                    to: .arPlacement(
+                        productId: product.id,
+                        roomRemoteId: viewModel.roomContextRemoteId
+                    )
+                )
+            },
+            onPrimary: { performPrimaryAct(product) },
+            onAddToRoom: {
                 if viewModel.isSaved {
                     viewModel.toggleSave(context: modelContext)
                 } else if let room = contextRoom() {
@@ -406,17 +601,15 @@ struct ProductDetailView: View {
                 } else {
                     viewModel.toggleSave(context: modelContext)
                 }
-            } label: {
-                Text(viewModel.isSaved ? "Saved ✓" : "Add to Room")
-                    .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.Text.inverse)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(viewModel.isSaved ? PatinaColors.clay : PatinaColors.Interactive.active)
-                    .clipShape(Capsule())
             }
-        }
-        .padding(.horizontal, 24)
+        )
+        .padding(.leading, 24)
+        // The Companion draws `.minimal` over this route — a 44 pt mark at
+        // `.trailing, 20` — and it lands on the bar's right end. One capsule
+        // could live with that because its label was centred; two cannot, and
+        // the walk caught the ghost reading `Add to ro…` under the mark.
+        // The mark keeps its corner; the bar stops short of it.
+        .padding(.trailing, 24 + Self.companionMarkClearance)
         .padding(.top, 16)
         // The act is pinned above the bottom safe area, and the root's
         // `safeAreaInset` does not reach a pushed destination — measured on
