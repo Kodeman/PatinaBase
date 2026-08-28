@@ -60,6 +60,21 @@ BEGIN
     (v_room_living, v_project_id, 'Living Room', 'living_room', 1)
   ON CONFLICT (id) DO NOTHING;
 
+  -- Both rooms carried budget_cents = 0 and committed_cents = 0, so the two
+  -- cards on "Your house" could only ever draw the truthful empty and B M4's
+  -- labelled-`committed_cents` path drew on no room at all (waves/w4/
+  -- d-notes.md §4, integration.md §6.2). Two shapes, so a walk sees both: a
+  -- room part-way committed, and one with a budget and nothing committed yet.
+  -- The UPDATE is outside the ON CONFLICT so a stack seeded before this line
+  -- picks the figures up on the next reset.
+  UPDATE public.project_rooms
+     SET budget_cents = 900000, committed_cents = 240000   -- $9,000 · $2,400
+   WHERE id = v_room_living;
+
+  UPDATE public.project_rooms
+     SET budget_cents = 450000, committed_cents = 0        -- $4,500 · nothing yet
+   WHERE id = v_room_dining;
+
   DELETE FROM public.client_decisions
    WHERE id IN (v_dec_draft, v_dec_pending, v_dec_overdue, v_dec_responded, v_dec_expired);
 
