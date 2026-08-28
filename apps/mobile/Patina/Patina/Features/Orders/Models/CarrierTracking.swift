@@ -33,7 +33,7 @@ enum CarrierTracking {
         "olddominion": "https://www.odfl.com/us/en/tracking.html?pro=%@",
         "odfl": "https://www.odfl.com/us/en/tracking.html?pro=%@",
         "saia": "https://www.saia.com/track/details?pro=%@",
-        "rlcarriers": "https://www.rlcarriers.com/shipping/tracking?pro=%@",
+        "rlcarriers": "https://www.rlcarriers.com/shipping/tracking?pro=%@"
     ]
 
     static func normalise(_ carrier: String) -> String {

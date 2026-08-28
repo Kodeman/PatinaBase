@@ -74,7 +74,7 @@ struct OrderStateDerivationTests {
         let derived = ClientOrderBuilder.derive(lines: [
             line("delivered", index: 0),
             line("in_production", index: 1),
-            line("shipped", index: 2),
+            line("shipped", index: 2)
         ])
         #expect(derived.state == .inProduction)
     }
@@ -88,7 +88,7 @@ struct OrderStateDerivationTests {
     func cancelledLinesAreExcludedFromTheMinimum() {
         let derived = ClientOrderBuilder.derive(lines: [
             line("cancelled", index: 0),
-            line("shipped", index: 1),
+            line("shipped", index: 1)
         ])
         #expect(derived.state == .shipped)
     }
@@ -97,7 +97,7 @@ struct OrderStateDerivationTests {
     func allCancelledIsCancelled() {
         let derived = ClientOrderBuilder.derive(lines: [
             line("cancelled", index: 0),
-            line("cancelled", index: 1),
+            line("cancelled", index: 1)
         ])
         #expect(derived.state == .cancelled)
     }
@@ -121,7 +121,7 @@ struct OrderStateDerivationTests {
         let derived = ClientOrderBuilder.derive(lines: [
             line("in_production", entered: early, index: 0),
             line("in_production", entered: late, index: 1),
-            line("shipped", entered: base.addingTimeInterval(7200), index: 2),
+            line("shipped", entered: base.addingTimeInterval(7200), index: 2)
         ])
         #expect(derived.state == .inProduction)
         #expect(derived.enteredAt == late)
@@ -133,7 +133,7 @@ struct OrderStateDerivationTests {
         let shipped = base.addingTimeInterval(86_400)
         let derived = ClientOrderBuilder.derive(lines: [
             line("in_production", entered: production, index: 0),
-            line("shipped", entered: shipped, index: 1),
+            line("shipped", entered: shipped, index: 1)
         ])
         #expect(derived.enteredAt == production)
     }

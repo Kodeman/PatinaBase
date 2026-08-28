@@ -115,6 +115,13 @@ enum OrderFailureCopy {
                 offersDesignerMessage: false
             )
         }
+        return checkout(typed)
+    }
+
+    /// The refusals `create-checkout-session` names, each answered with the one
+    /// fact it is about. Split off `checkout(_:)` so the table can grow with the
+    /// server's vocabulary without the function outgrowing the length gate.
+    static func checkout(_ typed: OrderCheckoutError) -> MoneyFailure {
         switch typed {
         case .orderNotFound:
             return MoneyFailure(

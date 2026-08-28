@@ -71,7 +71,7 @@ struct OrderRecordRowTests {
         // the fulfillment intake it settles into.
         let rows = HouseRecordBuilder.orderRows([
             order(id: "dir-1", rail: .direct, state: .paidNotOnRail),
-            order(id: "ful-1", state: .confirmed),
+            order(id: "ful-1", state: .confirmed)
         ])
         #expect(rows.isEmpty)
     }
@@ -79,7 +79,7 @@ struct OrderRecordRowTests {
     @Test("a designer-placed order is still not a row at Confirmed — the intake is not a movement")
     func evenTheDesignersIntakeIsNotAMovement() {
         let rows = HouseRecordBuilder.orderRows([
-            order(state: .confirmed, placedBy: .designer(firstName: "Leah")),
+            order(state: .confirmed, placedBy: .designer(firstName: "Leah"))
         ])
         #expect(rows.isEmpty)
     }
@@ -88,7 +88,7 @@ struct OrderRecordRowTests {
     func moneyGoingBackIsNotAMovement() {
         let rows = HouseRecordBuilder.orderRows([
             order(id: "a", state: .cancelled),
-            order(id: "b", state: .refunded),
+            order(id: "b", state: .refunded)
         ])
         #expect(rows.isEmpty)
     }
@@ -112,7 +112,7 @@ struct OrderRecordRowTests {
     func theShipmentDates() {
         let shippedAt = base.addingTimeInterval(86_400)
         let rows = HouseRecordBuilder.orderRows([
-            order(state: .shipped, entered: base, shipped: shippedAt),
+            order(state: .shipped, entered: base, shipped: shippedAt)
         ])
         #expect(rows[0].date == shippedAt)
     }
@@ -132,7 +132,7 @@ struct OrderRecordRowTests {
         #expect(mine[0].detail == nil)
 
         let hers = HouseRecordBuilder.orderRows([
-            order(state: .shipped, placedBy: .designer(firstName: "Leah")),
+            order(state: .shipped, placedBy: .designer(firstName: "Leah"))
         ])
         #expect(hers[0].detail == "Ordered by Leah")
     }

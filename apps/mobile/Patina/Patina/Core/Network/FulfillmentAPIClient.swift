@@ -249,7 +249,7 @@ public actor FulfillmentAPIClient {
     private func orders(select: String) async throws -> [RemoteFulfillmentOrder] {
         try await get("/rest/v1/fulfillment_orders", [
             URLQueryItem(name: "select", value: select),
-            URLQueryItem(name: "order", value: "intake_at.desc"),
+            URLQueryItem(name: "order", value: "intake_at.desc")
         ])
     }
 
@@ -261,7 +261,7 @@ public actor FulfillmentAPIClient {
         return try await get("/rest/v1/fulfillment_order_items", [
             URLQueryItem(name: "select", value: RemoteFulfillmentOrderItem.selectColumns),
             URLQueryItem(name: "order_id", value: "in.(\(orderIds.joined(separator: ",")))"),
-            URLQueryItem(name: "order", value: "line_index.asc"),
+            URLQueryItem(name: "order", value: "line_index.asc")
         ])
     }
 
@@ -285,7 +285,7 @@ public actor FulfillmentAPIClient {
     public func shipments() async throws -> [RemoteFulfillmentShipment] {
         try await get("/rest/v1/fulfillment_shipments", [
             URLQueryItem(name: "select", value: RemoteFulfillmentShipment.selectColumns),
-            URLQueryItem(name: "order", value: "created_at.desc"),
+            URLQueryItem(name: "order", value: "created_at.desc")
         ])
     }
 
@@ -295,7 +295,7 @@ public actor FulfillmentAPIClient {
     public func directOrders(clientId: String?) async throws -> [ClientDirectOrder] {
         var query = [
             URLQueryItem(name: "select", value: ClientDirectOrder.selectColumns),
-            URLQueryItem(name: "order", value: "created_at.desc"),
+            URLQueryItem(name: "order", value: "created_at.desc")
         ]
         if let clientId, !clientId.isEmpty {
             query.append(URLQueryItem(name: "client_id", value: "eq.\(clientId)"))

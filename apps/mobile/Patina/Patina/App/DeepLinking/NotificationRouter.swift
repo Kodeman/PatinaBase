@@ -82,6 +82,15 @@ enum NotificationRouter {
             return UUID(uuidString: entityId).map { .roomProject(roomId: $0) }
         case "product", "piece":
             return .pieceDetail(pieceId: entityId)
+        default:
+            return orderRoute(forEntityType: entityType, entityId: entityId)
+        }
+    }
+
+    /// The two order spellings, split off the main table so the mapping stays
+    /// under the complexity gate as the vocabulary grows.
+    static func orderRoute(forEntityType entityType: String, entityId: String) -> AppRoute? {
+        switch entityType {
         case "fulfillment_order", "order":
             // What `fulfillment-notify` actually writes is `fulfillment_order`
             // (`fulfillment-notify/core.ts:265`), carrying the

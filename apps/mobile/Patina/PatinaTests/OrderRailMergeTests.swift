@@ -117,7 +117,7 @@ struct OrderRailMergeTests {
         let rows = ClientOrderBuilder.build(
             fulfillmentOrders: [fulfillment(pi: "pi_other", attribution: [
                 "source": AnyCodable("direct_order"),
-                "direct_order_id": AnyCodable("dir-1"),
+                "direct_order_id": AnyCodable("dir-1")
             ])],
             items: [line("in_production")],
             shipments: [],
@@ -200,7 +200,7 @@ struct OrderRailMergeTests {
             fulfillmentOrders: [], items: [], shipments: [],
             directOrders: [
                 direct(id: "dir-pending", status: "pending_payment", pi: nil),
-                direct(id: "dir-canceled", status: "canceled", pi: nil),
+                direct(id: "dir-canceled", status: "canceled", pi: nil)
             ]
         )
         #expect(rows.isEmpty)
@@ -237,7 +237,7 @@ struct OrderRailMergeTests {
             fulfillmentOrders: [
                 fulfillment(id: "ful-old", pi: "pi_old", intake: base),
                 fulfillment(id: "ful-new", pi: "pi_new",
-                            intake: base.addingTimeInterval(86_400)),
+                            intake: base.addingTimeInterval(86_400))
             ],
             items: [line("shipped", order: "ful-old"), line("intake", order: "ful-new")],
             shipments: [],
@@ -285,7 +285,7 @@ struct OrderRailMergeTests {
         let rows = ClientOrderBuilder.build(
             fulfillmentOrders: [
                 fulfillment(id: "ful-1", pi: "pi_1"),
-                fulfillment(id: "ful-2", pi: "pi_2"),
+                fulfillment(id: "ful-2", pi: "pi_2")
             ],
             items: [line("shipped", order: "ful-1"), line("shipped", order: "ful-2")],
             shipments: [shipment()],

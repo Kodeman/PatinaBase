@@ -46,7 +46,7 @@ struct OrderRoutingTests {
         let resolved = NotificationRouter.resolve(apnsUserInfo: [
             "entity_type": "fulfillment_order",
             "entity_id": "order-1",
-            "notification_log_id": "log-1",
+            "notification_log_id": "log-1"
         ])
         #expect(resolved.route == .orderDetail(orderId: "fulfillment:order-1"))
         #expect(resolved.notificationLogId == "log-1")
@@ -123,7 +123,7 @@ struct OrderRoutingTests {
         }
 
         let row = StudioQueueBuilder.orderRecordRow([
-            order("a", .confirmed), order("b", .shipped),
+            order("a", .confirmed), order("b", .shipped)
         ])
         #expect(row?.title == "Ordered")
         #expect(row?.detail == "2 pieces on their way")
@@ -133,13 +133,13 @@ struct OrderRoutingTests {
         // "On its way" counts only what is live and has not arrived. A
         // delivered order is not on its way, and neither is a refunded one.
         let withDelivered = StudioQueueBuilder.orderRecordRow([
-            order("a", .confirmed), order("b", .delivered), order("c", .refunded),
+            order("a", .confirmed), order("b", .delivered), order("c", .refunded)
         ])
         #expect(withDelivered?.detail == "1 piece on its way")
         #expect(withDelivered?.meta == "Confirmed")
 
         let allArrived = StudioQueueBuilder.orderRecordRow([
-            order("a", .delivered), order("b", .delivered),
+            order("a", .delivered), order("b", .delivered)
         ])
         #expect(allArrived?.detail == "2 pieces delivered")
         #expect(allArrived?.meta == "Delivered")
