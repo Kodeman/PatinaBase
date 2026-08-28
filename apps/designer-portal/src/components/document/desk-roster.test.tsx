@@ -213,6 +213,21 @@ describe('DeskRoster — the stage tabs (R126)', () => {
     expect(proposal.className).toContain('inline-flex');
     expect(proposal.className).toContain('text-white');
     expect(proposal.textContent).toBe('Proposal · 1');
+    // The mockup's .stage-head letter-spacing.
+    expect(proposal.className).toContain('tracking-[0.1em]');
+  });
+
+  it('ends each roster row on the solid hairline, never a dashed one', () => {
+    // Dashed goes back to meaning “not filled in” and appears nowhere
+    // (globals.css, R126). .doc-rule-hair spends --rule-hair; last:border-b-0
+    // still wins on specificity, so the last line in a stage carries none.
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    for (const row of container.querySelectorAll<HTMLElement>('[data-roster-line]')) {
+      expect(row.className).toContain('doc-rule-hair');
+      expect(row.className).toContain('last:border-b-0');
+      expect(row.className).not.toContain('border-dashed');
+    }
   });
 
   it('gives every stage a tab, and lends Care the Install pigment', () => {
@@ -261,12 +276,14 @@ describe('DeskRoster — the hover wash (R126)', () => {
     expect(tones).toEqual(['var(--wash-proposal)', 'var(--wash-project)']);
   });
 
-  it('scores the job name with the wash, keeping today’s clay underline', () => {
+  it('draws exactly one clay line under the job name — the wash’s own score', () => {
     render(<DeskRoster roster={roster()} />);
 
     const name = screen.getByRole('link', { name: 'Vandersteen residence' });
     expect(name.className).toContain('row-wash-score');
-    expect(name.className).toContain('hover:decoration-[var(--color-clay)]');
+    // The .row-wash-score ::after in globals.css is the only clay line. A
+    // text-decoration hover path would draw a second one under the same word.
+    expect(name.className).not.toMatch(/decoration-\[var\(--color-clay\)\]/);
   });
 
   it('leaves the act as the row’s own focusable control', () => {

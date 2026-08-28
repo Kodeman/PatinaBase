@@ -1,7 +1,8 @@
 /**
  * R126 — the filled stamp. One recipe per state: the state's own --fill-*-tint,
- * a 1.5px border in that state's own -ink, and a charcoal word. The outline
- * stamp is untouched, and stays the default.
+ * a 1.5px border in that state's own -ink, a charcoal word, and the same −1.5°
+ * tilt the outline wears. The outline stamp is untouched, and stays the
+ * default.
  */
 
 import { readFileSync } from 'node:fs';
@@ -58,12 +59,13 @@ describe('Stamp', () => {
     });
   });
 
-  it('sits level and prints mono 12px semibold uppercase when filled', () => {
+  it('keeps the tilt and prints mono 12px semibold uppercase when filled', () => {
     const { container } = render(
       <Stamp label="Ordered" color="var(--color-clay)" variant="filled" tone="ordered" />,
     );
     const stamp = container.firstElementChild as HTMLElement;
-    expect(stamp.className).not.toMatch(/rotate/);
+    // The mockup rotates every stamp alike; the tilt is not the outline's alone.
+    expect(stamp).toHaveClass('-rotate-[1.5deg]');
     expect(stamp).toHaveClass(
       'font-mono',
       'text-[12px]',

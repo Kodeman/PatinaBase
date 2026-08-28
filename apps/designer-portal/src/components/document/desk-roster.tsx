@@ -87,7 +87,7 @@ function JobLine({
       {...wash}
       data-tour-anchor={tourAnchor}
       data-roster-line={line.engagementId}
-      className={`has-wash flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-dashed border-[var(--border-subtle)] py-2.5 last:border-b-0${
+      className={`has-wash doc-rule-hair flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2.5 last:border-b-0${
         settle ? ' desk-settle' : ''
       }`}
       style={settle ? ({ '--i': index } as CSSProperties) : undefined}
@@ -107,7 +107,7 @@ function JobLine({
       />
       <Link
         href={line.jobHref}
-        className="row-wash-score font-heading text-[16px] font-medium text-[var(--text-primary)] underline decoration-transparent decoration-1 underline-offset-4 transition-colors hover:decoration-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+        className="row-wash-score font-heading text-[16px] font-medium text-[var(--text-primary)] underline decoration-transparent decoration-1 underline-offset-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
       >
         {line.name}
       </Link>
@@ -190,7 +190,7 @@ export function DeskRoster({ roster }: { roster: DeskRosterModel }) {
               <h3
                 id={`roster-stage-${group.key}`}
                 data-stage-tab={group.key}
-                className={`mb-1.5 inline-flex items-center rounded-[3px] px-2.5 py-[3px] font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-white ${
+                className={`mb-1.5 inline-flex items-center rounded-[3px] px-2.5 py-[3px] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-white ${
                   STAGE_TAB[group.key]
                 }`}
               >

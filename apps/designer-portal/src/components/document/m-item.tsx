@@ -61,7 +61,7 @@ export function MItemContent({
 }
 
 const CONTAINER: Record<MItemTone, string> = {
-  paper: 'doc-elevated border-[var(--doc-ink-border)] bg-[var(--doc-paper)]',
+  paper: 'border-[var(--doc-ink-border)] bg-[var(--doc-paper)]',
   dark: 'border-[rgba(250,247,242,0.15)] bg-[rgba(250,247,242,0.04)]',
 };
 

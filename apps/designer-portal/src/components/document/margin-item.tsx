@@ -43,7 +43,7 @@ export function MarginItem({
 
   return (
     <div
-      className={`mb-2 rounded-[5px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] transition-colors duration-150 hover:border-[#CFC8BB] ${
+      className={`doc-elevated mb-2 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] transition-colors duration-150 hover:border-[#CFC8BB] ${
         resolved ? 'opacity-65' : ''
       }`}
       style={{ borderLeft: `2.5px solid ${accent.border}` }}

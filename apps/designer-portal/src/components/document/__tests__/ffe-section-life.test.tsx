@@ -213,6 +213,16 @@ describe('FF&E line fill classes', () => {
   });
 });
 
+describe('FF&E region rule', () => {
+  it('opens Pieces on the double rule, the one strong rule the mockup draws', () => {
+    mockItems = [{ ...baseFurnishing }];
+    renderSection();
+    const rule = document.querySelector('[data-rule-weight]');
+    expect(rule).toHaveAttribute('data-rule-weight', 'strong');
+    expect(rule).toHaveClass('doc-rule-strong');
+  });
+});
+
 describe('FF&E stamp — filled variant + tone', () => {
   it('maps ordered/in-production/received/delivered lines to tone="ordered"', () => {
     mockItems = [{ ...baseFurnishing, status: 'ordered' }];

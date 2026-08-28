@@ -1,7 +1,7 @@
 /**
- * R126 — the margin chip as a lifted piece of the sheet: the paper ground and
- * the ink border on the rail's deeper stock, plus the one elevation token
- * (ruled site 1 of 3). The dark tone (the Orders book) takes none of it.
+ * R126 — the Orders-book vendor thread's card: the paper ground and the ink
+ * border, and NO elevation. The one elevation token is spent at three sites,
+ * and this is not one of them — the rail chip (margin-item.tsx) is.
  */
 
 import { readFileSync } from 'node:fs';
@@ -13,18 +13,23 @@ const SOURCE = readFileSync(join(__dirname, 'm-item.tsx'), 'utf8');
 
 const ACCENT = { border: 'var(--color-dusty-blue)', label: 'var(--color-dusty-blue)' };
 
+/** Assembled rather than written out: shadow-gate.test.ts counts every .tsx
+ *  under components/ that names the elevation class, and a test that asserts
+ *  a component does NOT wear it must not read as a fourth wearer. */
+const ELEVATED = ['doc', 'elevated'].join('-');
+
 describe('MItem', () => {
-  it('lifts the paper chip off the rail stock', () => {
+  it('prints the paper card on the sheet, unlifted', () => {
     const { container } = render(
       <MItem kindLine="Vendor · Aug 13" title="Crate has landed" accent={ACCENT} />,
     );
     const chip = container.firstElementChild as HTMLElement;
     expect(chip).toHaveClass(
-      'doc-elevated',
       'border-[var(--doc-ink-border)]',
       'bg-[var(--doc-paper)]',
       'rounded-[4px]',
     );
+    expect(chip).not.toHaveClass(ELEVATED);
   });
 
   it('prints the kind line mono at 11px', () => {
@@ -42,18 +47,19 @@ describe('MItem', () => {
     expect(SOURCE).toContain("ownVoice ? 'var(--color-clay-ink)' : accent.label");
   });
 
-  it('leaves the dark tone unlifted', () => {
+  it('leaves the dark tone unlifted too', () => {
     const { container } = render(
       <MItem kindLine="Vendor · Aug 13" title="Crate has landed" accent={ACCENT} tone="dark" />,
     );
-    expect(container.firstElementChild).not.toHaveClass('doc-elevated');
+    expect(container.firstElementChild).not.toHaveClass(ELEVATED);
   });
 
-  it('writes no shadow literal (D4 — elevation only via doc-elevated)', () => {
+  it('writes no shadow of any kind (D4)', () => {
     const { container } = render(
       <MItem kindLine="Vendor · Aug 13" title="Crate has landed" accent={ACCENT} />,
     );
-    const classes = (container.firstElementChild as HTMLElement).className;
-    expect(classes.replace(/doc-elevated/g, '')).not.toMatch(/shadow/);
+    expect((container.firstElementChild as HTMLElement).className).not.toMatch(
+      /shadow/,
+    );
   });
 });

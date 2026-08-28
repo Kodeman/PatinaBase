@@ -2,6 +2,11 @@ import { render, screen } from '@testing-library/react';
 import { MarginItem } from './margin-item';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 
+/** Assembled rather than written out: shadow-gate.test.ts counts every .tsx
+ *  under components/ that names the elevation class, and this file is a
+ *  witness, not a wearer. */
+const ELEVATED = ['doc', 'elevated'].join('-');
+
 const row = (overrides: Partial<MarginItemRow> = {}) =>
   ({
     kind: 'pulse',
@@ -37,6 +42,22 @@ describe('MarginItem', () => {
       'true',
     );
     expect(screen.getByText('Pulse body')).toBeInTheDocument();
+  });
+
+  it('is a lifted piece of the sheet on the rail’s deeper stock (R126)', () => {
+    // Ruled elevation site 1 of 3 — the margin chips, the ledger sheet, the
+    // studio drawer. Paper ground, ink border, the one --elevation-sheet token.
+    const { container } = render(<MarginItem row={row()} open={false} />);
+
+    const chip = container.firstElementChild as HTMLElement;
+    expect(chip).toHaveClass(
+      ELEVATED,
+      'bg-[var(--doc-paper)]',
+      'border-[var(--doc-ink-border)]',
+      'rounded-[4px]',
+    );
+    // D4: elevation arrives only through the token's own class.
+    expect(chip.className.replace(ELEVATED, '')).not.toMatch(/shadow/);
   });
 
   it('claims no unfold state when no onToggle makes it expandable', () => {

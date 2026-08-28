@@ -48,7 +48,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ComponentType,
 } from 'react';
 import {
   deriveLineStamp,
@@ -210,21 +209,6 @@ function ffeWashTone(kind: LineStamp['kind']): RowWashTone {
   if (kind === 'damaged') return 'terracotta';
   return 'clay';
 }
-
-/** `Stamp` (./stamp.tsx) does not yet accept `variant`/`tone` — Lane 1 is
- *  adding them on the sibling branch `document-life/stamp`. Until that
- *  lands here, pass the props through this typed cast: today `Stamp`
- *  destructures only `label`/`color`/`ink`/`size` and silently ignores the
- *  rest, so this renders the existing outline stamp (the documented
- *  fallback) until Lane 1's `variant="filled"` merges. */
-type FilledStampProps = {
-  label: string;
-  color: string;
-  ink?: string;
-  variant?: 'filled';
-  tone?: 'ordered' | 'decision' | 'damaged';
-};
-const FilledStamp = Stamp as unknown as ComponentType<FilledStampProps>;
 
 /** A non-empty product image URL off the already-joined `product.images`
  *  (`useProjectFFEItems`'s `.select()` joins `product:products!product_id(id,
@@ -442,7 +426,7 @@ function FFELine({
           {eligible.reason}
         </span>
       ) : stamp.kind === 'trade_pending' ? null : (
-        <FilledStamp
+        <Stamp
           label={sp.label}
           color={sp.color}
           ink={sp.ink}
@@ -1285,7 +1269,7 @@ function FFESectionBody({
         </div>
       ) : (
         <>
-          <RegionRule className="mt-5" />
+          <RegionRule className="mt-5" weight="strong" />
           {ffeFold.folded ? (
             <FoldSeam
               headingId={ffeHeadingId}

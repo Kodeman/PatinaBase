@@ -43,7 +43,7 @@ export function HouseholdChip({
         aria-label="View or change the client this document is for"
       >
         {hasHousehold ? (
-          <span className="font-heading text-[1.15rem] italic leading-tight text-[var(--color-aged-oak)] transition-colors group-hover:text-[var(--color-clay-ink)]">
+          <span className="font-heading text-[1.15rem] italic leading-tight text-[var(--color-clay-ink)] transition-colors group-hover:text-[var(--color-clay-ink)]">
             for {familyLabel(clientName)}
             <span
               aria-hidden

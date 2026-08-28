@@ -8,7 +8,7 @@
  * One recipe: the state's own canon pigment composited over --doc-paper to a
  * common ~1.18:1 (the --fill-*-tint tokens), a 1.5px border in that state's own
  * -ink, and a CHARCOAL word at 11.7:1. State is hue; legibility is charcoal.
- * The filled stamp sits level — the rotation is the outline stamp's alone.
+ * The filled stamp keeps the −1.5° tilt the mockup draws on every stamp.
  */
 
 /** The four states that carry a fill (FINAL §2). One pigment per state, spent
@@ -61,7 +61,7 @@ export function Stamp({
       <span
         data-stamp-variant="filled"
         data-stamp-tone={tone}
-        className="inline-block whitespace-nowrap rounded-[3px] border-[1.5px] px-[9px] py-[3px] font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-primary)] motion-safe:transition-[background-color,border-color] motion-safe:duration-[260ms] motion-safe:ease-[var(--ease-editorial)]"
+        className="inline-block -rotate-[1.5deg] whitespace-nowrap rounded-[3px] border-[1.5px] px-[9px] py-[3px] font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-primary)] motion-safe:transition-[background-color,border-color] motion-safe:duration-[260ms] motion-safe:ease-[var(--ease-editorial)]"
         style={{
           backgroundColor: TONE_FILL[tone],
           borderColor: TONE_BORDER[tone],
