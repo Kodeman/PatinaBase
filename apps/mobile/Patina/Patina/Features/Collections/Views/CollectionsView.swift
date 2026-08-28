@@ -38,6 +38,18 @@ struct CollectionsView: View {
         return RoomStore(context: modelContext).room(id: roomId)?.name
     }
 
+    /// B §3: the row names the room it was saved into. One fetch for the
+    /// whole list — a `room(id:)` per row would be a query per row.
+    private var roomNamesById: [UUID: String] {
+        Dictionary(
+            RoomStore(context: modelContext).allRooms().map { ($0.id, $0.name) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    /// The saved piece whose note sheet is open, by local id.
+    @State private var notePieceId: UUID?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
@@ -292,29 +304,90 @@ struct CollectionsView: View {
                 // can't apply — the card's context menu carries the
                 // remove/share/details actions instead.
                 ForEach(scopedSavedItems) { item in
-                    ProductCard(
-                        data: ProductCardData(tableItem: item),
-                        style: .list,
-                        shareURL: item.productId.map { PatinaDeepLinks.productURL(forProductId: $0) },
-                        onRemove: {
-                            viewModel.removeSavedItem(item, context: modelContext)
-                        },
-                        // SP-12: the only path that puts a piece on a board.
-                        // Without it `addToBoard` had no caller and a board
-                        // could never hold anything.
-                        boardTargets: boardTargets,
-                        onAddToBoard: { target in
-                            addSavedItem(item, toBoardId: target.id)
-                        }
-                    ) {
-                        let pieceId = item.productId ?? item.id.uuidString
-                        coordinator.navigate(to: .pieceDetail(pieceId: pieceId))
-                    }
+                    savedRow(item)
                 }
             }
         }
         .padding(24)
         .padding(.bottom, 100)
+        .sheet(isPresented: Binding(
+            get: { notePieceId != nil },
+            set: { if !$0 { notePieceId = nil } }
+        )) {
+            if let item = scopedSavedItems.first(where: { $0.id == notePieceId }) {
+                SavedNoteSheet(pieceName: item.name, note: item.notes) { note in
+                    viewModel.setNote(note, on: item, context: modelContext)
+                }
+            }
+        }
+    }
+
+    /// B §3: the piece, then what the reader knows about their own save —
+    /// the day, the room, and their note. Nothing else: B §10 refuses a
+    /// compare surface by name.
+    private func savedRow(_ item: TableItemModel) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ProductCard(
+                data: ProductCardData(tableItem: item),
+                style: .list,
+                shareURL: item.productId.map { PatinaDeepLinks.productURL(forProductId: $0) },
+                onRemove: {
+                    viewModel.removeSavedItem(item, context: modelContext)
+                },
+                // SP-12: the only path that puts a piece on a board.
+                // Without it `addToBoard` had no caller and a board
+                // could never hold anything.
+                boardTargets: boardTargets,
+                onAddToBoard: { target in
+                    addSavedItem(item, toBoardId: target.id)
+                }
+            ) {
+                let pieceId = item.productId ?? item.id.uuidString
+                coordinator.navigate(to: .pieceDetail(pieceId: pieceId))
+            }
+
+            savedRowFooter(item)
+        }
+        .padding(.bottom, 6)
+    }
+
+    @ViewBuilder
+    private func savedRowFooter(_ item: TableItemModel) -> some View {
+        let note = SavedRowMeta.note(item.notes)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(SavedRowMeta.line(
+                    savedAt: item.savedAt,
+                    roomName: item.roomId.flatMap { roomNamesById[$0] }
+                ))
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.muted)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    notePieceId = item.id
+                } label: {
+                    Text(note == nil ? "Add a note" : "Edit note")
+                        .font(PatinaTypography.captionMedium)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    note == nil ? "Add a note about \(item.name)" : "Edit your note about \(item.name)"
+                )
+            }
+
+            if let note {
+                Text(note)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 4)
     }
 }
 

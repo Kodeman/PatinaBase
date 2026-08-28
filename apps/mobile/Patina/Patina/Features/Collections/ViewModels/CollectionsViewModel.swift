@@ -128,6 +128,19 @@ final class CollectionsViewModel {
         HapticManager.shared.impact(.light)
     }
 
+    /// W4 (B §3): the reader's own sentence about a piece. Written locally
+    /// first — that is where they typed it and where it must survive a failed
+    /// network — then mirrored onto `saved_items.notes`.
+    func setNote(_ note: String?, on item: TableItemModel, context: ModelContext) {
+        item.notes = note
+        try? context.save()
+        if let index = savedItems.firstIndex(where: { $0.id == item.id }) {
+            savedItems[index] = item
+        }
+        guard let productId = item.productId else { return }
+        Task { await SavedItemNoteMirror.mirror(note: note, productId: productId) }
+    }
+
     /// R26: pull-to-refresh — re-fetch the local store and await the remote
     /// `saved_items` reconciliation instead of firing it in the background.
     @MainActor
