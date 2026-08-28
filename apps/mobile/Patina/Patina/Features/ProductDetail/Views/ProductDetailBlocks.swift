@@ -25,11 +25,27 @@ extension ProductDetailView {
     enum Presented: Identifiable {
         case help
         case roomPicker
+        /// Path B — the message into the conversation she already watches.
+        case askDesigner
+        /// Path C — the question that becomes a lead.
+        case askAboutPiece(reason: String?)
+        /// Path A — M5a.
+        case order
+        /// M5c, over the flow once the row settles.
+        case orderPlaced(DirectOrder)
+        /// C9's soft wall. A guest tapping Buy meets this and **nothing is
+        /// written** — `create_direct_order` is never called.
+        case authWall
 
         var id: String {
             switch self {
             case .help: return "help"
             case .roomPicker: return "roomPicker"
+            case .askDesigner: return "askDesigner"
+            case .askAboutPiece: return "askAboutPiece"
+            case .order: return "order"
+            case .orderPlaced(let order): return "orderPlaced-\(order.id)"
+            case .authWall: return "authWall"
             }
         }
     }
