@@ -205,6 +205,35 @@ struct HouseFirstRootTests {
         #expect(PatinaTab.studio.canonicalName == "Your Studio")
     }
 
+    /// §6a's exit: one Studio door on this root, and B-8's step 3 points at it.
+    ///
+    /// The tour is hoisted into `HouseFirstRoot` so its model covers the bar as
+    /// well as the four stacks, the bar's `.studio` arm carries the anchor, and
+    /// the header's pill — B-1's fallback door for the root without a bar — is
+    /// gated off. The two mounts are mutually exclusive, which
+    /// `FirstLaunchTourTests.everyDefaultStepAnchorHasExactlyOneProductionMountPerRoot`
+    /// pins from the other side.
+    @Test
+    func stepThreeAnchorsOnTheBarAndTheHeaderPillIsGoneOnThisRoot() throws {
+        let bar = try SourcePin.read("Patina/Features/Navigation/PatinaTabBar.swift")
+        let root = try SourcePin.read("Patina/Features/Navigation/HouseFirstRoot.swift")
+        let daily = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
+        let header = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
+
+        // The anchor is on the bar, on the `.studio` arm, with its raw value
+        // untouched (it keys the Sanity document behind step 3).
+        #expect(SourceScan.code(in: bar).contains("if tab == .studio {"))
+        #expect(SourceScan.code(in: bar).contains("control.firstLaunchTourAnchor(.profileMonogram)"))
+        #expect(FirstLaunchTourAnchor.profileMonogram.rawValue == "profile-monogram")
+
+        // The tour is hosted above the stacks, so the popover can reach it.
+        #expect(SourceScan.code(in: root).contains("FirstLaunchTour(canAutoStart:"))
+
+        // And the header's duplicate door is gated off wherever the bar draws.
+        #expect(SourceScan.code(in: header).contains("if showsStudioControl {"))
+        #expect(SourceScan.code(in: daily).contains("showsStudioControl: !coordinator.isHouseFirstRoot"))
+    }
+
     /// The bar's fifth slot may be a control only once something acts on
     /// `isCompanionExpanded`. `CompanionOverlay` writes that flag when it
     /// expands itself and never reads it, so a slot button would present

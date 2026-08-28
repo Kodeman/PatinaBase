@@ -687,30 +687,40 @@ struct FirstLaunchTourTests {
     }
 
     @Test
-    func everyDefaultStepAnchorHasExactlyOneProductionMount() throws {
+    func everyDefaultStepAnchorHasExactlyOneProductionMountPerRoot() throws {
         // The defect this whole rewrite starts from: an anchor in the step list
         // that no view carries. The tour drops it silently and runs short —
         // "Step 1 of 2" against a three-step list, seen in four research walks.
-        // A second mount would be just as wrong: two popovers, one step.
+        // A second mount on the SAME root would be just as wrong: two popovers,
+        // one step.
         //
-        // Scoped to `defaultSteps` — the house-first list — on purpose.
-        // `preHouseFirstSteps` still carries the dead `.addToRoom` anchor, and
-        // `theFlagOffTourKeepsTheStepThatNeverMounts` below names that rather
-        // than letting this pin quietly cover it.
-        let views = SourcePin.swiftFiles(under: "Patina/Features")
-            .filter { !$0.hasSuffix("FirstLaunchTour.swift") }
-            .compactMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+        // So the pin is a map, not a count: every anchor names the file that is
+        // allowed to mount it, and nothing else in the app may. Step 3 has two
+        // entries because the app's Studio door is in two places — the bar on
+        // the house-first root, the header pill on the flag-off one — and the
+        // header gates its pill off wherever the bar draws
+        // (`DailyGreetingHeader.showsStudioControl`), so exactly one of the two
+        // is ever in the tree.
+        let expected: [FirstLaunchTourAnchor: Set<String>] = [
+            .homeGreeting: ["DailyGreetingHeader.swift"],
+            .todayRecord: ["DailyRoomView.swift"],
+            .profileMonogram: ["PatinaTabBar.swift", "DailyGreetingHeader.swift"]
+        ]
 
         for step in FirstLaunchTourModel.defaultSteps {
-            let mounts = views.reduce(0) { total, source in
-                total + SourceScan.code(in: source)
+            let allowed = try #require(expected[step.anchor], "no mount site named for .\(step.anchor)")
+            for path in SourcePin.swiftFiles(under: "Patina/Features")
+                where !path.hasSuffix("FirstLaunchTour.swift") {
+                let name = (path as NSString).lastPathComponent
+                let source = try String(contentsOfFile: path, encoding: .utf8)
+                let mounts = SourceScan.code(in: source)
                     .components(separatedBy: ".firstLaunchTourAnchor(.\(step.anchor))")
                     .count - 1
+                #expect(
+                    mounts == (allowed.contains(name) ? 1 : 0),
+                    "anchor .\(step.anchor) is mounted \(mounts) times in \(name)"
+                )
             }
-            #expect(
-                mounts == 1,
-                "anchor .\(step.anchor) is mounted \(mounts) times in production views, not once"
-            )
         }
     }
 
@@ -901,18 +911,36 @@ struct FirstLaunchTourTests {
     }
 
     @Test
-    func theTourIsGatedByTheSameFlagAsTheRootItDescribes() throws {
-        // The gate itself, pinned at its one production call site. The flag is
-        // read through `AppCoordinator.isHouseFirstRoot` — resolved once at
-        // launch from `FeatureFlags` and held — never re-read mid-session.
-        let source = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
-        let code = SourceScan.code(in: source)
+    func eachRootHostsExactlyOneTourModel() throws {
+        // `FirstLaunchTour` publishes its model down its own subtree, so the
+        // host has to sit above every anchor the step list names. On the
+        // house-first root that means above the four stacks AND the bar
+        // (`HouseFirstRoot`); on the flag-off root Today's stack is the whole
+        // app, so `DailyRoomView` still hosts it there. Two hosts in one tree
+        // would split the tour: Today's anchors would answer the inner model
+        // and the bar's step 3 the outer one.
+        let daily = SourceScan.code(in: try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift"))
+        let houseFirst = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Navigation/HouseFirstRoot.swift")
+        )
 
-        #expect(code.contains("steps: coordinator.isHouseFirstRoot"))
-        #expect(code.contains("? FirstLaunchTourModel.defaultSteps"))
-        #expect(code.contains(": FirstLaunchTourModel.preHouseFirstSteps"))
-        // The flag must not be read live in the view layer.
-        #expect(!code.contains("FeatureFlags.shared.isOn(.houseFirst)"))
+        #expect(daily.contains("if coordinator.isHouseFirstRoot {"))
+        #expect(houseFirst.contains("FirstLaunchTour(canAutoStart:"))
+        // The flag must not be read live in the view layer — `isHouseFirstRoot`
+        // is resolved once at launch by `AppCoordinator` and held.
+        #expect(!daily.contains("FeatureFlags.shared.isOn(.houseFirst)"))
+        #expect(!houseFirst.contains("FeatureFlags.shared.isOn(.houseFirst)"))
+
+        // Exactly two hosts in the whole app, one per root.
+        var hosts: [String] = []
+        for path in SourcePin.swiftFiles(under: "Patina")
+            where !path.hasSuffix("FirstLaunchTour.swift") {
+            let source = SourceScan.code(in: (try? String(contentsOfFile: path, encoding: .utf8)) ?? "")
+            if source.contains("FirstLaunchTour(") {
+                hosts.append((path as NSString).lastPathComponent)
+            }
+        }
+        #expect(Set(hosts) == ["DailyRoomView.swift", "HouseFirstRoot.swift"], "found \(hosts)")
     }
 
     @Test

@@ -32,7 +32,22 @@ public struct HouseFirstRoot: View {
 
     public init() {}
 
+    /// The first-launch tour is hosted HERE, above the four stacks, and not
+    /// inside `DailyRoomView` as it is on the flag-off root.
+    ///
+    /// `FirstLaunchTour` builds its model in `@State` and publishes it down its
+    /// own subtree. B-8 points step 3 at the **Studio tab**, and the bar is a
+    /// sibling of Today's stack — from inside `DailyRoomView` the popover could
+    /// never reach it, which is the deviation `integration.md` §6a names. One
+    /// model per root: this one covers all four stacks *and* the bar;
+    /// `DailyRoomView` still owns the flag-off root's.
     public var body: some View {
+        FirstLaunchTour(canAutoStart: coordinator.tabs.stack(for: .today).isEmpty) {
+            rootContent
+        }
+    }
+
+    private var rootContent: some View {
         ZStack {
             PatinaColors.Background.primary
                 .ignoresSafeArea()

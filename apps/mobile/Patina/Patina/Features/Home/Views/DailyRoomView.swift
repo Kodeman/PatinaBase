@@ -42,25 +42,27 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
         BadgeCountService.shared
     }
 
+    /// One tour model per root, and this view hosts only the flag-off root's.
+    ///
+    /// `FirstLaunchTour` publishes its model down its own subtree. On the
+    /// house-first root Today is one of four sibling stacks and B-8's step 3
+    /// points at the bar, so the host has to sit above all four —
+    /// `HouseFirstRoot` owns it there. Hosting it here as well would put a
+    /// second model over Today's anchors and split the tour in half.
+    /// `isHouseFirstRoot` is the flag read once at launch and held
+    /// (`AppCoordinator`), not a live re-read.
+    @ViewBuilder
     var body: some View {
-        // B-8's Rollback clause: "the tour is gated by the same `house-first`
-        // flag as the root it describes." `isHouseFirstRoot` is the flag read
-        // once at launch and held (AppCoordinator), not a live re-read.
-        FirstLaunchTour(
-            steps: coordinator.isHouseFirstRoot
-                ? FirstLaunchTourModel.defaultSteps
-                : FirstLaunchTourModel.preHouseFirstSteps,
-            // `navigationPath` is the flag-off root's single stack; on the
-            // house-first root it is inert and permanently empty, so the gate
-            // read `true` at any Today depth and the tour could auto-start
-            // against a screen the reader was not looking at (n1-notes §3c,
-            // n3-notes §3b — observed live). The tab-aware twin asks the
-            // Today stack instead.
-            canAutoStart: coordinator.isHouseFirstRoot
-                ? coordinator.tabs.stack(for: .today).isEmpty
-                : coordinator.navigationPath.isEmpty
-        ) {
+        if coordinator.isHouseFirstRoot {
             screenBody
+        } else {
+            FirstLaunchTour(
+                steps: FirstLaunchTourModel.preHouseFirstSteps,
+                // `navigationPath` is the flag-off root's single stack.
+                canAutoStart: coordinator.navigationPath.isEmpty
+            ) {
+                screenBody
+            }
         }
     }
 
@@ -208,7 +210,11 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     onHelpTap: { isHelpPanelPresented = true },
                     onStudioTap: { coordinator.navigate(to: .profile) },
                     onBellTap: { coordinator.navigate(to: .notifications) },
-                    unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count
+                    unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count,
+                    // M1's header is date, greeting and a bell. The pill is
+                    // B-1's fallback door for the root without a bar; where
+                    // the bar draws, the Studio tab IS the door.
+                    showsStudioControl: !coordinator.isHouseFirstRoot
                 )
 
                 if blocks.contains(.record) {

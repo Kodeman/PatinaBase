@@ -73,8 +73,14 @@ public struct PatinaTabBar<Trailing: View>: View {
         .accessibilityAddTraits(.isTabBar)
     }
 
+    /// B-8's step 3 points at the Studio tab, so the `.studio` arm carries the
+    /// tour's anchor. The raw value stays `profile-monogram` — it keys the
+    /// Sanity document behind that step (steward §7·F) — and the modifier is a
+    /// structural no-op outside a `FirstLaunchTour` host, which is what keeps
+    /// the previews below working.
+    @ViewBuilder
     private func item(_ tab: PatinaTab) -> some View {
-        Button {
+        let control = Button {
             onSelect(tab)
         } label: {
             Text(tab.title)
@@ -102,6 +108,12 @@ public struct PatinaTabBar<Trailing: View>: View {
         // the canonical one, in full.
         .accessibilityLabel(tab.canonicalName)
         .accessibilityAddTraits(tab == selected ? [.isSelected] : [])
+
+        if tab == .studio {
+            control.firstLaunchTourAnchor(.profileMonogram)
+        } else {
+            control
+        }
     }
 }
 
