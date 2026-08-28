@@ -231,6 +231,7 @@ public struct CompanionOverlay: View {
             roster: BadgeCountService.shared.roster
         )
         context.hasStyleProfile = StyleProfileStore.shared.hasCompletedProfile
+        context.pieceAct = PieceActChannel.shared.currentAct
 
         let store = PersistenceController.shared.container.mainContext
         if let rooms = try? store.fetchCount(FetchDescriptor<RoomModel>()) {
@@ -668,6 +669,8 @@ public struct CompanionOverlay: View {
                                 coordinator.presentedSheet = .auth
                             case let .openDesignServices(roomId):
                                 coordinator.presentDesignServices(roomId: roomId)
+                            case .performPieceAct:
+                                PieceActChannel.shared.requestAct()
                             }
                             if navOutcome == .showFirstNavAck {
                                 presentFirstNavAck()

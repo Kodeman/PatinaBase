@@ -78,8 +78,11 @@ extension CompanionActionProvider {
 
     // MARK: - Discovery
 
-    static func saveRow(label: String) -> CompanionActionItem {
-        item("heart", label, "Add to a collection", route: .table, id: "save_collection", suggested: true)
+    /// `suggested` is a parameter because the piece screen has a better answer
+    /// than "save it" once W5 resolves an act: on `.pieceDetail` the act row is
+    /// the suggestion and this one steps back. The panel allows exactly one.
+    static func saveRow(label: String, suggested: Bool = true) -> CompanionActionItem {
+        item("heart", label, "Add to a collection", route: .table, id: "save_collection", suggested: suggested)
     }
 
     static func tryInRoomRow(productId: String) -> CompanionActionItem {
@@ -186,6 +189,38 @@ extension CompanionActionProvider {
             icon: "bubble.left", label: label, hint: "Get expert advice",
             isSuggested: suggested, analyticsId: "ask_designer",
             specialAction: .openDesignServices(roomId: roomId)
+        )
+    }
+
+    /// W5 · B §5 — the piece's own act, mirrored into the panel. The label is
+    /// the bar's label, so the two surfaces cannot say different things about
+    /// the same piece, and the row performs the bar's act rather than a
+    /// lookalike of it.
+    static func pieceActRow(_ act: PieceAct) -> CompanionActionItem {
+        let icon: String
+        let hint: String
+        let analyticsId: String
+        switch act {
+        case .askDesigner:
+            icon = "bubble.left.and.bubble.right"
+            hint = "She'll see the piece, the price and the room"
+            analyticsId = "piece_ask_designer"
+        case .buy:
+            icon = "creditcard"
+            hint = "Payment opens securely in Safari"
+            analyticsId = "piece_buy"
+        case .askAboutPiece:
+            icon = "bubble.left"
+            hint = "A designer will come back to you"
+            analyticsId = "piece_ask"
+        }
+        return CompanionActionItem(
+            icon: icon,
+            label: act.primaryLabel,
+            hint: hint,
+            isSuggested: true,
+            analyticsId: analyticsId,
+            specialAction: .performPieceAct
         )
     }
 

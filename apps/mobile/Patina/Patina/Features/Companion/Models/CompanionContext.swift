@@ -100,6 +100,18 @@ public struct CompanionContext: Equatable {
     /// `engagementTier`: `DesignerRelationship` is internal.
     var designerRelationship: DesignerRelationship?
 
+    // MARK: - The piece's act
+
+    /// The act the piece screen currently offers (W5, B §5). Resolved by that
+    /// screen — which is the only place that holds the whole `Product` and can
+    /// run the buyability gate — and read here so the Companion's row and the
+    /// screen's bar can never offer the same words and do different things.
+    /// `nil` means no piece is on screen, or its act has not resolved yet.
+    ///
+    /// Internal + assigned after construction for the same reason as
+    /// `engagementTier` and `designerRelationship`: `PieceAct` is internal.
+    var pieceAct: PieceAct?
+
     // MARK: - Initialization
 
     public init(
@@ -222,6 +234,8 @@ public struct CompanionContext: Equatable {
             return "Billed to date"
         case .documentList:
             return "Your documents"
+        case .orderDetail:
+            return "Your order"
         }
     }
 
@@ -273,6 +287,8 @@ public struct CompanionContext: Equatable {
             return "chart.pie"
         case .documentList:
             return "folder"
+        case .orderDetail:
+            return "shippingbox"
         }
     }
 }

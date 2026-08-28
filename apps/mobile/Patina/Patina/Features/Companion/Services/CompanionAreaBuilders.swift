@@ -82,10 +82,17 @@ extension CompanionActionProvider {
             // W2 R3 (W1b SP-18 residual): `tryInRoomRow` dead-ended on every
             // product while `usdz_url` is NULL — removed here, not deleted;
             // it returns the day an AR asset pipeline exists.
-            return [
-                saveRow(label: "Save"),
-                designerRow(roomId: nil, context: context)
-            ]
+            //
+            // W5: the second row is the piece's own act — Ask her, Buy, or ask
+            // about it — so the panel and the bar agree. Until the screen has
+            // resolved one (the piece is still loading) the row stays what it
+            // was, which is the designer door.
+            guard let act = context.pieceAct else {
+                return [saveRow(label: "Save"), designerRow(roomId: nil, context: context)]
+            }
+            // Exactly one suggested row per panel: once the piece has an act,
+            // the act is it and "Save" steps back.
+            return [saveRow(label: "Save", suggested: false), pieceActRow(act)]
         default: // .arPlacement
             return [
                 item("camera", "Save photo", "Capture this view",
