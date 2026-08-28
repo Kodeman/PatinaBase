@@ -49,14 +49,14 @@ export function DocLetterhead({
   onReleaseRoom?: (() => void) | null;
 }) {
   return (
-    <header id="document-project-status" tabIndex={-1} className="mb-4 border-b border-[var(--color-pearl)] pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
+    <header id="document-project-status" tabIndex={-1} className="doc-rule-mid mb-4 pb-5 pt-3.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
       <div className="mb-2.5">
         <StrataMark state="active" size="lg" fill={fill} label={fill ? 'Document progress' : undefined} />
       </div>
       {projectId ? (
         <LetterheadTitle projectId={projectId} serverTitle={title} />
       ) : (
-        <h1 className="font-heading text-[1.55rem] font-medium leading-tight tracking-[-0.01em] text-[var(--color-charcoal)]">
+        <h1 className="font-heading text-[40px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)]">
           {title}
         </h1>
       )}

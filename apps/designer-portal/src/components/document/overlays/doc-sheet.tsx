@@ -7,7 +7,8 @@
  * converged onto the paper-folio treatment: a warm veil over the desk and a
  * laid-paper panel that centers when it fits and begins at the safe viewport
  * edge when it does not (D8), without ever unmounting the work beneath (D1).
- * Depth is value contrast + a single 1px rule edge — zero shadow (D4). The
+ * Depth is value contrast, a single 1px rule edge, and — under D4 as amended
+ * (R126) — the one `--elevation-sheet` token, worn as `doc-elevated`. The
  * panel is `--doc-paper`, so every sheet reads as ink on paper, not chrome.
  *
  * The `variant` prop is retained for backward compatibility (callers still pass
@@ -122,8 +123,8 @@ export function HelpGlyph({
  * icon, its DM-mono uppercase name (and optional page), and a "put back · esc"
  * hint. Exported so ledgers wrapped by the Studio Drawer (which owns their
  * DocSheet frame and can't reach these props) can render the same head inline,
- * where their live page label lives. Zero shadow (D4); the pearl rule is the
- * only edge. An optional `helpKey` renders the {@link HelpGlyph} doorway
+ * where their live page label lives. The head takes no depth of its own (D4);
+ * the pearl rule is its only edge. An optional `helpKey` renders the {@link HelpGlyph} doorway
  * beside the put-back hint (help-desk Wave 1).
  */
 export function DocSheetHead({
@@ -362,9 +363,14 @@ export function DocSheet({
         tabIndex={-1}
         data-doc-sheet-panel
         data-doc-sheet-scroll-region
-        className={`doc-sheet-panel relative my-auto max-h-[calc(100dvh_-_var(--doc-sheet-inset-top)_-_var(--doc-sheet-inset-bottom))] min-w-0 w-full ${
+        // R126: the sheet settles UP as it opens. The `!` is load-bearing —
+        // `.doc-sheet-panel` in globals.css declares `animation: doc-fade` and
+        // is unlayered CSS declared after `@tailwind utilities` expands, so at
+        // equal specificity it would win on source order. Reduced motion still
+        // lands on that rule's own `animation: none`.
+        className={`doc-sheet-panel doc-elevated relative my-auto max-h-[calc(100dvh_-_var(--doc-sheet-inset-top)_-_var(--doc-sheet-inset-bottom))] min-w-0 w-full ${
           wide ? 'max-w-[760px]' : 'max-w-[640px]'
-        } overflow-y-auto overscroll-contain rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none sm:px-9`}
+        } overflow-y-auto overscroll-contain rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none motion-safe:!animate-[doc-sheet-up_240ms_var(--ease-editorial)] sm:px-9`}
       >
         {icon ? (
           <DocSheetHead

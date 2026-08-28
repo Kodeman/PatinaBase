@@ -3,7 +3,35 @@
  * border, 3px radius, −1.5° rotation, transparent fill. The rotation is
  * the entire skeuomorphism budget for state. `ink` optionally darkens the
  * text against paper while the border keeps the brand color.
+ *
+ * R126 — the filled variant, the first of the three places B's colour survives.
+ * One recipe: the state's own canon pigment composited over --doc-paper to a
+ * common ~1.18:1 (the --fill-*-tint tokens), a 1.5px border in that state's own
+ * -ink, and a CHARCOAL word at 11.7:1. State is hue; legibility is charcoal.
+ * The filled stamp sits level — the rotation is the outline stamp's alone.
  */
+
+/** The four states that carry a fill (FINAL §2). One pigment per state, spent
+ *  on BOTH the tint and the border, so no two filled stamps share an edge. */
+export type StampTone = 'ordered' | 'decision' | 'damaged' | 'anchor';
+
+const TONE_FILL: Record<StampTone, string> = {
+  ordered: 'var(--fill-ordered-tint)',
+  decision: 'var(--fill-decision-tint)',
+  damaged: 'var(--fill-damaged-tint)',
+  anchor: 'var(--fill-anchor-tint)',
+};
+
+/** The 1.5px border: each state's own -ink, the values FINAL §2 measured off
+ *  the page (rgb(124,94,48) / rgb(121,101,30) / rgb(156,83,64)). The anchor is
+ *  a wash rather than an object and has no -ink token, so it draws its base
+ *  pigment. */
+const TONE_BORDER: Record<StampTone, string> = {
+  ordered: 'var(--color-clay-ink)',
+  decision: 'var(--color-golden-hour-ink)',
+  damaged: 'var(--color-terracotta-ink)',
+  anchor: 'var(--color-dusty-blue)',
+};
 
 /**
  * `size` — 'xs' is the historical 10px mark, kept as the default so no existing
@@ -15,12 +43,35 @@ export function Stamp({
   color,
   ink,
   size = 'xs',
+  variant = 'outline',
+  tone,
 }: {
   label: string;
   color: string;
   ink?: string;
   size?: 'xs' | 'sm';
+  /** 'outline' is today's look, unchanged, and stays the default. */
+  variant?: 'outline' | 'filled';
+  /** Required for `filled`; without one the stamp keeps its outline, because a
+   *  fill has no meaning to invent from a caller-supplied border colour. */
+  tone?: StampTone;
 }) {
+  if (variant === 'filled' && tone) {
+    return (
+      <span
+        data-stamp-variant="filled"
+        data-stamp-tone={tone}
+        className="inline-block whitespace-nowrap rounded-[3px] border-[1.5px] px-[9px] py-[3px] font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-primary)] motion-safe:transition-[background-color,border-color] motion-safe:duration-[260ms] motion-safe:ease-[var(--ease-editorial)]"
+        style={{
+          backgroundColor: TONE_FILL[tone],
+          borderColor: TONE_BORDER[tone],
+        }}
+      >
+        {label}
+      </span>
+    );
+  }
+
   return (
     <span
       className={`inline-block -rotate-[1.5deg] whitespace-nowrap rounded-[3px] border-[1.5px] bg-transparent px-[9px] py-[3px] font-mono font-semibold uppercase ${
