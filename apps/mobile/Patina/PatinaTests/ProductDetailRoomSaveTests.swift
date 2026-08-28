@@ -125,6 +125,53 @@ struct ProductDetailRoomSaveTests {
         #expect(rows.first?.roomId == room.id)
     }
 
+    // MARK: - Taking it back out
+
+    @Test("un-saving a piece takes it out of the room it was put in")
+    func unsavingClearsTheRoomsCopy() throws {
+        let context = try makeContext()
+        let store = RoomStore(context: context)
+        let room = store.createRoom(name: "Guest Bedroom", roomType: "bedroom", manualEntry: true)
+        let product = piece()
+
+        let model = viewModel(for: product)
+        model.addToRoom(localId: room.id, remoteId: nil, context: context)
+        #expect(store.room(id: room.id)?.items.count == 1)
+
+        // The second tap on `Saved ✓`.
+        model.toggleSave(context: context)
+
+        #expect(model.isSaved == false)
+        #expect(try context.fetch(FetchDescriptor<TableItemModel>()).isEmpty)
+        // Every count in the app reads one of these three.
+        #expect(store.room(id: room.id)?.items.isEmpty == true)
+        #expect(store.room(id: room.id)?.savedItemCount == 0)
+        #expect(store.room(id: room.id)?.totalInvestmentCents == 0)
+    }
+
+    @Test("un-saving one piece leaves the room's other pieces alone")
+    func unsavingLeavesTheOtherPieces() throws {
+        let context = try makeContext()
+        let store = RoomStore(context: context)
+        let room = store.createRoom(name: "Guest Bedroom", roomType: "bedroom", manualEntry: true)
+        let other = Product(
+            id: "p-linen-chair", name: "Linen Slipper Chair",
+            priceCents: 180_000, matchScore: 80,
+            makerName: "Nordic Atelier", makerLocation: "Aarhus", makerStory: nil,
+            imageURL: nil, usdzURL: nil, styleTags: [], materialTags: [], badges: [],
+            category: .seating, tier: .designerSelection, dimensions: nil
+        )
+        viewModel(for: other).addToRoom(localId: room.id, remoteId: nil, context: context)
+
+        let model = viewModel(for: piece())
+        model.addToRoom(localId: room.id, remoteId: nil, context: context)
+        model.toggleSave(context: context)
+
+        #expect(store.room(id: room.id)?.items.count == 1)
+        #expect(store.room(id: room.id)?.items.first?.productId == "p-linen-chair")
+        #expect(store.room(id: room.id)?.totalInvestmentCents == 180_000)
+    }
+
     // MARK: - What the reader then sees
 
     @Test("the saved row's meta line names the room")

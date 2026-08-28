@@ -145,6 +145,7 @@ final class ProductDetailViewModel {
         } else {
             isSaved = false
             for item in existing { context.delete(item) }
+            removeFromRooms(productId: product.id, context: context)
             Task { await mirrorUnsave(productId: product.id) }
         }
 
@@ -153,6 +154,23 @@ final class ProductDetailViewModel {
             await ProductAPIClient.shared.trackInteraction(
                 InteractionEvent(productId: product.id, eventType: saved ? .save : .skip, metadata: nil)
             )
+        }
+    }
+
+    /// The inverse of what `addToRoom` wrote to the room.
+    ///
+    /// `addToRoom` puts the piece in two places — the Saved table and the
+    /// room's own list — and the un-save used to take back only the first. The
+    /// room then kept saying "1 saved piece", kept it in its gallery, and kept
+    /// counting its price against the room's budget, for a piece the person had
+    /// just removed (C5).
+    @MainActor
+    private func removeFromRooms(productId: String, context: ModelContext) {
+        let store = RoomStore(context: context)
+        for room in store.allRooms() {
+            for item in room.items where item.productId == productId {
+                store.removeItem(item)
+            }
         }
     }
 
