@@ -303,8 +303,12 @@ struct CollectionsView: View {
                 // R26: rows live in a VStack (not a List), so swipe actions
                 // can't apply — the card's context menu carries the
                 // remove/share/details actions instead.
+                // Read once for the list, not once per row: `roomNamesById` is
+                // a computed property that runs a fetch, and reading it inside
+                // the row was the per-row query its own comment warns against.
+                let roomNames = roomNamesById
                 ForEach(scopedSavedItems) { item in
-                    savedRow(item)
+                    savedRow(item, roomNames: roomNames)
                 }
             }
         }
@@ -325,7 +329,7 @@ struct CollectionsView: View {
     /// B §3: the piece, then what the reader knows about their own save —
     /// the day, the room, and their note. Nothing else: B §10 refuses a
     /// compare surface by name.
-    private func savedRow(_ item: TableItemModel) -> some View {
+    private func savedRow(_ item: TableItemModel, roomNames: [UUID: String]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             ProductCard(
                 data: ProductCardData(tableItem: item),
@@ -346,19 +350,19 @@ struct CollectionsView: View {
                 coordinator.navigate(to: .pieceDetail(pieceId: pieceId))
             }
 
-            savedRowFooter(item)
+            savedRowFooter(item, roomNames: roomNames)
         }
         .padding(.bottom, 6)
     }
 
     @ViewBuilder
-    private func savedRowFooter(_ item: TableItemModel) -> some View {
+    private func savedRowFooter(_ item: TableItemModel, roomNames: [UUID: String]) -> some View {
         let note = SavedRowMeta.note(item.notes)
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(SavedRowMeta.line(
                     savedAt: item.savedAt,
-                    roomName: item.roomId.flatMap { roomNamesById[$0] }
+                    roomName: item.roomId.flatMap { roomNames[$0] }
                 ))
                 .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.muted)
