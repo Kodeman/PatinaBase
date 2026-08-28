@@ -11845,3 +11845,69 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.purge_client_account(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.direct_orders_freeze_attribution() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_direct_order_terms() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_direct_order_terms() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_direct_order(UUID, INTEGER) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_direct_order(UUID, INTEGER) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.settle_direct_order_attribution(UUID) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.settle_direct_order_attribution(UUID) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_po_belongs_to_caller(UUID) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_po_belongs_to_caller(UUID) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  REVOKE SELECT ON public.fulfillment_order_items FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  GRANT SELECT ( id, order_id, product_id, item_name, qty, unit_price_cents, line_state, line_state_entered_at, line_index, created_at, updated_at ) ON public.fulfillment_order_items TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
