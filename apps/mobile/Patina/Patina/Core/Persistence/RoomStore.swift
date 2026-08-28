@@ -193,6 +193,34 @@ public final class RoomStore {
         save()
     }
 
+    /// The local half of the room budget. Always succeeds — the mirror to
+    /// `rooms.budget_cents` is `RoomBudgetCoordinator`'s, and a room that has
+    /// never synced still keeps the figure its owner typed.
+    public func setBudget(_ room: RoomModel, cents: Int?) {
+        room.budgetCents = cents
+        room.updatedAt = Date()
+        save()
+    }
+
+    /// Dimensions the person typed against the segmented unit control.
+    ///
+    /// Deliberately NOT `RoomModel.updateDimensions`, which sets
+    /// `hasBeenScanned = true`: a typed correction is still a typed room, and
+    /// flipping the flag would relabel it `SCANNED` on every surface (F51).
+    public func updateTypedDimensions(
+        _ room: RoomModel,
+        widthMeters: Double?,
+        lengthMeters: Double?,
+        heightMeters: Double?
+    ) {
+        room.width = widthMeters
+        room.length = lengthMeters
+        if let heightMeters { room.height = heightMeters }
+        room.measuredWithUnitControl = true
+        room.updatedAt = Date()
+        save()
+    }
+
     public func delete(_ room: RoomModel) {
         context.delete(room)
         save()

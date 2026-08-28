@@ -60,6 +60,10 @@ struct HouseRoomCard: Identifiable, Equatable {
         )
     }
 
+    /// `252 sq ft · 3 saved pieces · budget $9,000`. W4's addition is the last
+    /// clause: the room the person made now carries a budget of its own
+    /// (`RoomModel.budgetCents` → `rooms.budget_cents`), so the rail prints a
+    /// stored figure or none — never a derived one (C5).
     static func card(for room: RoomModel) -> HouseRoomCard {
         var parts: [String] = []
         if let area = room.formattedArea { parts.append(area) }
@@ -67,6 +71,7 @@ struct HouseRoomCard: Identifiable, Equatable {
         if count > 0 {
             parts.append("\(count) saved \(count == 1 ? "piece" : "pieces")")
         }
+        if let budgetLine = room.budgetLine { parts.append(budgetLine) }
         return HouseRoomCard(
             id: "room:\(room.id.uuidString)",
             name: room.name,
