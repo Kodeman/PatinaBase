@@ -179,6 +179,76 @@ struct DesignerSeatTests {
         #expect(orphaned.projectId == "b-newer")
     }
 
+    /// The urgent project carries no `designer` embed — no designer assigned
+    /// yet, a decode predating the embed, or a `profiles` row this client
+    /// cannot SELECT. The seat used to filter those out *before* resolving the
+    /// urgent row, so it named the other project while the Next Move named
+    /// this one and `Message` opened the wrong thread (the W2 walk defect).
+    private func twoProjectsOneUnattributed() throws -> [RemoteProject] {
+        try projects("""
+        [{ "id": "b-newer", "name": "Birch Hollow", "status": "active",
+           "designer_id": "22222222-2222-2222-2222-222222222222",
+           "designer": { "id": "22222222-2222-2222-2222-222222222222",
+                         "display_name": "Leah Hartwell" } },
+         { "id": "b-aspen", "name": "Aspen Loft Refresh", "status": "active",
+           "designer_id": null, "designer": null }]
+        """)
+    }
+
+    @Test("the seat and the Next Move cannot name different projects")
+    func onePickForBoth() throws {
+        let rows = try twoProjectsOneUnattributed()
+        let record = record(firstNeedsYou: .decisionDetail(decisionId: "d-1"))
+        let decisions = [try decision(id: "d-1", projectId: "b-aspen")]
+
+        // The pick both surfaces make is one function, and it is the urgent
+        // project — designer embed or no designer embed.
+        let picked = DesignerSeat.activeProject(
+            projects: rows, record: record, decisions: decisions
+        )
+        #expect(picked?.id == "b-aspen")
+
+        // And the seat does not answer with the other project's designer.
+        let seat = DesignerSeat.make(
+            liveLead: nil, projects: rows, record: record, decisions: decisions
+        )
+        #expect(seat == nil)
+    }
+
+    @Test("with no designer on the picked project the seat speaks for the lead instead")
+    func theLeadCarriesTheSeatInstead() throws {
+        let seat = try #require(DesignerSeat.make(
+            liveLead: lead(),
+            projects: try twoProjectsOneUnattributed(),
+            record: record(firstNeedsYou: .decisionDetail(decisionId: "d-1")),
+            decisions: [try decision(id: "d-1", projectId: "b-aspen")]
+        ))
+        #expect(seat.name == "Leah Hartwell")
+        // No project thread: the app will not point Message at a project it
+        // did not seat.
+        #expect(seat.projectId == nil)
+    }
+
+    @Test("an archived urgent project is not the pick — it is not active")
+    func anArchivedUrgentProjectIsSkipped() throws {
+        let rows = try projects("""
+        [{ "id": "b-newer", "name": "Birch Hollow", "status": "active",
+           "designer_id": "22222222-2222-2222-2222-222222222222",
+           "designer": { "id": "22222222-2222-2222-2222-222222222222",
+                         "display_name": "Leah Hartwell" } },
+         { "id": "b-old", "name": "Old Job", "status": "archived",
+           "designer_id": "22222222-2222-2222-2222-222222222222",
+           "designer": { "id": "22222222-2222-2222-2222-222222222222",
+                         "display_name": "Leah Hartwell" } }]
+        """)
+        let picked = DesignerSeat.activeProject(
+            projects: rows,
+            record: record(firstNeedsYou: .decisionDetail(decisionId: "d-1")),
+            decisions: [try decision(id: "d-1", projectId: "b-old")]
+        )
+        #expect(picked?.id == "b-newer")
+    }
+
     @Test("an empty record changes nothing")
     func anEmptyRecordChangesNothing() throws {
         let seat = try #require(DesignerSeat.make(

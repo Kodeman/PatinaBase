@@ -58,16 +58,10 @@ struct DesignerSeat: Equatable {
         invoices: [RemoteInvoice] = [],
         nextMoveDetail: String? = nil
     ) -> DesignerSeat? {
-        let candidates = projects.filter {
-            !StudioQueueBuilder.projectIsArchived($0) && $0.designer != nil
-        }
-        // The project the house is waiting on, else the most recently updated
-        // one (`ProjectsAPIClient.listProjects` orders `updated_at.desc`).
-        let urgentId = urgentProjectId(
-            record: record, decisions: decisions, proposals: proposals, invoices: invoices
+        let project = activeProject(
+            projects: projects, record: record,
+            decisions: decisions, proposals: proposals, invoices: invoices
         )
-        let project = urgentId.flatMap { id in candidates.first { $0.id == id } }
-            ?? candidates.first
 
         if let project, let name = project.designer?.displayName, !name.isEmpty {
             let meta = [project.designerStudioName, project.name]
@@ -115,6 +109,32 @@ struct DesignerSeat: Equatable {
             .compactMap { $0 }
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
+    }
+
+    /// **The one pick.** The project the house is waiting on, else the most
+    /// recently updated active one (`ProjectsAPIClient.listProjects` orders
+    /// `updated_at.desc`).
+    ///
+    /// The seat and the Next Move both call this, and neither narrows the set
+    /// first. The seat used to filter to `designer != nil` *before* resolving
+    /// the urgent row, so an urgent project whose `designer` embed was nil —
+    /// no designer yet, a decode predating the embed, or a `profiles` row the
+    /// client cannot SELECT — left the Next Move naming that project while the
+    /// seat named a different one and `Message` opened the wrong thread. Where
+    /// the picked project carries no designer the seat draws from the lead
+    /// instead, or not at all; it never names a second project.
+    static func activeProject(
+        projects: [RemoteProject],
+        record: HouseRecord?,
+        decisions: [RemoteClientDecision] = [],
+        proposals: [RemoteProposal] = [],
+        invoices: [RemoteInvoice] = []
+    ) -> RemoteProject? {
+        let active = projects.filter { !StudioQueueBuilder.projectIsArchived($0) }
+        let urgentId = urgentProjectId(
+            record: record, decisions: decisions, proposals: proposals, invoices: invoices
+        )
+        return urgentId.flatMap { id in active.first { $0.id == id } } ?? active.first
     }
 
     /// The project behind the record's most urgent NEEDS YOU row. The row

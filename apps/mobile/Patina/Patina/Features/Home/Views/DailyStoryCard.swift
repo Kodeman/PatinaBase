@@ -13,17 +13,14 @@ struct DailyStoryCard: View {
     /// footprint on a quiet day and drops to a row when the Record carried the
     /// screen. `HomeComposition.storyWeight` decides which.
     var height: CGFloat = 180
-    /// When it was published. M1 block 5 draws the date beside the read time
-    /// ("AUG 25 · 4 MIN"): a story is a dated thing, and on a screen built
-    /// around what is new the reader is owed which day this one is.
-    /// Defaults to the story's own `publishedAt`; a caller holding the raw
-    /// row may pass it explicitly.
-    var publishedAt: Date?
 
     /// "AUG 25 · 4 MIN", or the read time alone where no publish date came
-    /// back — never an invented one.
+    /// back — never an invented one. M1 block 5: a story is a dated thing, and
+    /// on a screen built around what is new the reader is owed which day this
+    /// one is. The date comes off the story itself — there is no override, so
+    /// no caller can hand the card a date the story does not carry.
     private var datedReadTimeLabel: String {
-        guard let date = publishedAt ?? story.publishedAt else { return story.readTimeLabel }
+        guard let date = story.publishedAt else { return story.readTimeLabel }
         return "\(HouseRecordDates.short(date)) · \(story.readTimeLabel)"
     }
 

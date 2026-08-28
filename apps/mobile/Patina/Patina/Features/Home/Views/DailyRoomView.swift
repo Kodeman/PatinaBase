@@ -405,8 +405,7 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     story: story,
                     namespace: cardNamespace,
                     isExpanded: expandedStory?.id == story.id,
-                    height: storyHeight,
-                    publishedAt: viewModel.todayStoryPublishedAt
+                    height: storyHeight
                 )
             }
             .buttonStyle(.plain)
@@ -456,18 +455,18 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
         ))
     }
 
-    /// W4: the same pick the seat makes. "See where <project> stands" naming
-    /// one project while every NEEDS YOU row above it belongs to another is
-    /// the seat's W2 defect wearing the Next Move's clothes.
+    /// W4: literally the same pick the seat makes — one function, called
+    /// twice. "See where <project> stands" naming one project while the seat
+    /// under it names another is the seat's W2 defect wearing the Next Move's
+    /// clothes.
     private var liveProject: RemoteProject? {
-        let candidates = badges.projects.filter { !StudioQueueBuilder.projectIsArchived($0) }
-        let urgentId = DesignerSeat.urgentProjectId(
+        DesignerSeat.activeProject(
+            projects: badges.projects,
             record: viewModel.record,
             decisions: badges.pendingDecisions,
             proposals: badges.pendingProposals,
             invoices: badges.payableInvoices
         )
-        return urgentId.flatMap { id in candidates.first { $0.id == id } } ?? candidates.first
     }
 
     private func performNextMove() { // swiftlint:disable:this cyclomatic_complexity
