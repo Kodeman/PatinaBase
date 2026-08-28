@@ -173,7 +173,9 @@ struct DailyRoomView: View {
             roomCount: viewModel.houseRoomCards.count,
             newThisWeekCount: viewModel.newThisWeek.count,
             hasStory: viewModel.todayStory != nil || viewModel.storyLoadFailed,
-            hasDesigner: designerSeat != nil
+            hasDesigner: designerSeat != nil,
+            localRoomCount: viewModel.roomModels.count,
+            savedPieceCount: viewModel.savedItems.count
         )
     }
 
@@ -224,11 +226,26 @@ struct DailyRoomView: View {
                     .padding(.top, PatinaSpacing.xsm)
                 }
 
+                if blocks.contains(.roomHero), let room = viewModel.roomModels.first {
+                    RoomHeroCard(
+                        hero: RoomHero.make(room: room),
+                        onOpen: {
+                            PostHogService.shared.capture("house_room_opened", properties: [
+                                "read_only": false
+                            ])
+                            ContextMemoryStore.shared.rememberRoom(id: room.id)
+                            coordinator.navigate(to: .roomProject(roomId: room.id))
+                        },
+                        onAddRoom: addRoom
+                    )
+                    .padding(.top, PatinaSpacing.md)
+                }
+
                 if blocks.contains(.houseRail) {
                     YourHouseRail(
                         cards: viewModel.houseRoomCards,
                         onCard: openHouseRoom,
-                        onAddRoom: { addRoom(.typeTheDimensions) }
+                        onAddRoom: addRoom
                     )
                     .padding(.top, PatinaSpacing.xsm)
                 }
@@ -248,6 +265,17 @@ struct DailyRoomView: View {
                             coordinator.navigate(to: .pieceDetail(pieceId: product.id))
                         }
                     )
+                    .padding(.top, PatinaSpacing.md)
+                }
+
+                if blocks.contains(.savedSummary),
+                   let summary = SavedSummary.make(items: viewModel.savedItems) {
+                    SavedSummaryRow(summary: summary, onOpen: {
+                        PostHogService.shared.capture("today_saved_summary_tapped", properties: [
+                            "saved_count": summary.count
+                        ])
+                        coordinator.navigate(to: .table)
+                    })
                     .padding(.top, PatinaSpacing.md)
                 }
 
@@ -329,7 +357,8 @@ struct DailyRoomView: View {
                     story: story,
                     namespace: cardNamespace,
                     isExpanded: expandedStory?.id == story.id,
-                    height: storyHeight
+                    height: storyHeight,
+                    publishedAt: viewModel.todayStoryPublishedAt
                 )
             }
             .buttonStyle(.plain)

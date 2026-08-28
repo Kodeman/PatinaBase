@@ -199,8 +199,13 @@ enum HomeBlock: String, Equatable, CaseIterable {
     case nextMove
     case designerSeat
     case houseRail
+    /// M2 block 3: at discovering the house is ONE room, so it is drawn whole
+    /// rather than as a rail of one card.
+    case roomHero
     case startWithARoom
     case newThisWeek
+    /// M2 block 5: the door to the pieces the person has gathered.
+    case savedSummary
     case story
     case signInLine
 }
@@ -224,6 +229,11 @@ struct HomeCompositionInput: Equatable {
     var newThisWeekCount: Int = 0
     var hasStory: Bool = false
     var hasDesigner: Bool = false
+    /// Rooms the PERSON made, as opposed to the designer's project rooms. The
+    /// discovering house draws the one they made; a project room is not theirs
+    /// to be shown as theirs.
+    var localRoomCount: Int = 0
+    var savedPieceCount: Int = 0
 }
 
 enum HomeComposition {
@@ -269,8 +279,18 @@ enum HomeComposition {
         if input.isSignedIn, input.tier >= .engaged, input.hasDesigner {
             blocks.append(.designerSeat)
         }
-        blocks.append(input.roomCount > 0 ? .houseRail : .startWithARoom)
+        // Below engaged the house is the person's own rooms, and one room is
+        // a card, not a rail (M2 block 3). From engaged upward the rail holds
+        // the designer's project rooms beside them.
+        if input.tier < .engaged, input.localRoomCount == 1, input.roomCount == 1 {
+            blocks.append(.roomHero)
+        } else {
+            blocks.append(input.roomCount > 0 ? .houseRail : .startWithARoom)
+        }
         if input.newThisWeekCount >= newThisWeekFloor { blocks.append(.newThisWeek) }
+        // The Saved door, where the person has saved anything. Signed in only:
+        // a guest's saves are not on file anywhere yet (M2's tier note).
+        if input.isSignedIn, input.savedPieceCount > 0 { blocks.append(.savedSummary) }
         if input.hasStory { blocks.append(.story) }
         if !input.isSignedIn { blocks.append(.signInLine) }
         return blocks

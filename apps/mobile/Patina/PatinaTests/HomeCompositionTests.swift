@@ -215,8 +215,13 @@ struct HomeMountTests {
     @Test("the record is unflagged — rolling it back is deleting one mount")
     func theRecordIsUnflagged() throws {
         let source = try home()
-        #expect(source.contains("HouseRecordCard("))
-        #expect(!source.contains("FeatureFlags"))
+        let mount = try #require(source.range(of: "HouseRecordCard("))
+        // What matters is that the MOUNT is not inside a flag branch — not
+        // that the string is absent from the whole file, which W3 will
+        // legitimately break when it mounts the tab bar off `houseFirst`.
+        let preceding = String(source[..<mount.lowerBound].suffix(400))
+        #expect(preceding.contains("blocks.contains(.record)"))
+        #expect(!preceding.contains("FeatureFlags"))
     }
 
     @Test("markSeen is stamped by the rebuild on this screen, not in ContentView")

@@ -134,7 +134,11 @@ enum StartWithARoomAct: String, CaseIterable, Identifiable {
 struct YourHouseRail: View {
     let cards: [HouseRoomCard]
     var onCard: (HouseRoomCard) -> Void = { _ in }
-    var onAddRoom: () -> Void = {}
+    /// Both acts, here too. With one room made, `Scan it` was unreachable from
+    /// Today — and every rail tap reported itself as the typed one.
+    var onAddRoom: (StartWithARoomAct) -> Void = { _ in }
+
+    @State private var isChoosingAct = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -196,7 +200,7 @@ struct YourHouseRail: View {
     }
 
     private var addRoomCard: some View {
-        Button(action: onAddRoom) {
+        Button { isChoosingAct = true } label: {
             Text("Add a room")
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.interactive)
@@ -210,6 +214,13 @@ struct YourHouseRail: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Add a room")
         .accessibilityIdentifier("DailyRoomView.AddRoom")
+        .confirmationDialog("Add a room", isPresented: $isChoosingAct) {
+            // The light act first (F120), the same order the empty block draws.
+            ForEach(StartWithARoomAct.ordered) { act in
+                Button(act.title) { onAddRoom(act) }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 }
 
