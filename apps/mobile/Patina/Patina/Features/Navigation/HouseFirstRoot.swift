@@ -42,7 +42,7 @@ public struct HouseFirstRoot: View {
     /// model per root: this one covers all four stacks *and* the bar;
     /// `DailyRoomView` still owns the flag-off root's.
     public var body: some View {
-        FirstLaunchTour(canAutoStart: coordinator.tabs.stack(for: .today).isEmpty) {
+        FirstLaunchTour(canAutoStart: coordinator.tabs.isShowingTodayRoot) {
             rootContent
         }
     }

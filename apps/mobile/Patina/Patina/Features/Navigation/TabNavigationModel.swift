@@ -99,6 +99,18 @@ public final class TabNavigationModel {
         stacks[tab] ?? []
     }
 
+    /// Today is the tab on screen and nothing is pushed on it.
+    ///
+    /// The gate the first-launch tour auto-starts behind on this root (R6). The
+    /// flag-off root asks `navigationPath.isEmpty`, which is the same question
+    /// where there is one stack; here that path is inert and permanently empty,
+    /// so reading it let the tour open over whichever tab was selected — the
+    /// walk caught it running over Pieces (`shots/w3-n3-13`). Both halves are
+    /// load-bearing: the depth, and the tab.
+    public var isShowingTodayRoot: Bool {
+        selected == .today && stack(for: .today).isEmpty
+    }
+
     // MARK: - Internals
 
     private func select(_ tab: PatinaTab, poppingToRoot: Bool) {
