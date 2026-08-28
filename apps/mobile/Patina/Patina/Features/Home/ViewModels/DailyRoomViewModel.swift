@@ -369,6 +369,11 @@ final class DailyRoomViewModel { // swiftlint:disable:this type_body_length
         // that is already in flight rather than building without it and
         // showing the row one open late.
         await storyTask?.value
+        // The record's `orderMoved` rows read what the orders service holds,
+        // the same way the rest of the builder reads what `BadgeCountService`
+        // already fetched — one holder, so the card and Studio → Ordered can
+        // never disagree about what moved.
+        await OrdersService.shared.refresh()
         savedItems = fetchSavedItems()
         let products = await fetchSavedPieceProducts(for: savedItems)
         let saved = savedItems
@@ -384,6 +389,7 @@ final class DailyRoomViewModel { // swiftlint:disable:this type_body_length
                     story: story,
                     liveLead: DesignRequestStatusService.shared.liveLead,
                     lastSeen: lastSeenAt,
+                    orders: OrdersService.shared.movedOrders,
                     now: Date(),
                     previous: previous
                 )

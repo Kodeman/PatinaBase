@@ -72,14 +72,23 @@ extension CompanionActionProvider {
              route: .proposalList, id: "proposals", suggested: suggested)
     }
 
+    /// W5 — "where is it". Canonical name (C4): the word on the Studio row.
+    static func ordersRow(suggested: Bool = false) -> CompanionActionItem {
+        item("shippingbox", "Ordered", "Where your pieces are",
+             route: .orderList, id: "orders", suggested: suggested)
+    }
+
     static func invoicesRow(label: String, suggested: Bool = false) -> CompanionActionItem {
         item("creditcard", label, "What's due", route: .invoiceList, id: "invoices", suggested: suggested)
     }
 
     // MARK: - Discovery
 
-    static func saveRow(label: String) -> CompanionActionItem {
-        item("heart", label, "Add to a collection", route: .table, id: "save_collection", suggested: true)
+    /// `suggested` is a parameter because the piece screen has a better answer
+    /// than "save it" once W5 resolves an act: on `.pieceDetail` the act row is
+    /// the suggestion and this one steps back. The panel allows exactly one.
+    static func saveRow(label: String, suggested: Bool = true) -> CompanionActionItem {
+        item("heart", label, "Add to a collection", route: .table, id: "save_collection", suggested: suggested)
     }
 
     static func tryInRoomRow(productId: String) -> CompanionActionItem {
@@ -186,6 +195,40 @@ extension CompanionActionProvider {
             icon: "bubble.left", label: label, hint: "Get expert advice",
             isSuggested: suggested, analyticsId: "ask_designer",
             specialAction: .openDesignServices(roomId: roomId)
+        )
+    }
+
+    /// W5 · B §5 — the piece's own act, mirrored into the panel. The label is
+    /// the bar's label, so the two surfaces cannot say different things about
+    /// the same piece, and the row performs the bar's act rather than a
+    /// lookalike of it.
+    static func pieceActRow(_ act: PieceAct) -> CompanionActionItem {
+        let icon: String
+        let hint: String
+        let analyticsId: String
+        switch act {
+        case .askDesigner(let firstName):
+            icon = "bubble.left.and.bubble.right"
+            // The name the app has, never a pronoun it is guessing.
+            hint = "\((firstName?.isEmpty == false) ? firstName! : "Your designer")"
+                + " will see the piece and the price"
+            analyticsId = "piece_ask_designer"
+        case .buy:
+            icon = "creditcard"
+            hint = "Payment opens securely in Safari"
+            analyticsId = "piece_buy"
+        case .askAboutPiece:
+            icon = "bubble.left"
+            hint = "A designer will come back to you"
+            analyticsId = "piece_ask"
+        }
+        return CompanionActionItem(
+            icon: icon,
+            label: act.primaryLabel,
+            hint: hint,
+            isSuggested: true,
+            analyticsId: analyticsId,
+            specialAction: .performPieceAct
         )
     }
 

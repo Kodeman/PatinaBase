@@ -28,7 +28,7 @@ struct RouteTabTableTests {
         confidence: 0.9
     )
 
-    /// Every `AppRoute` case with the tab it belongs to. All 32, by hand.
+    /// Every `AppRoute` case with the tab it belongs to. All 34, by hand.
     /// `tab(for:)` is exhaustive with no `default:`, so a route added later
     /// fails compilation there first — this list then fails to be exhaustive
     /// in review, which is why `everyRouteCaseIsCovered` counts it.
@@ -70,7 +70,9 @@ struct RouteTabTableTests {
         (.invoiceList, .studio),
         (.invoiceDetail(invoiceId: "invoice-1"), .studio),
         (.budget, .studio),
-        (.documentList, .studio)
+        (.documentList, .studio),
+        (.orderList, .studio),
+        (.orderDetail(orderId: "fulfillment:order-1"), .studio)
     ]
 
     // MARK: - The table
@@ -87,14 +89,15 @@ struct RouteTabTableTests {
 
     @Test
     func everyRouteCaseIsCovered() {
-        // 32 `AppRoute` cases — 31, plus `.studio`, minted in W3-fix so the
-        // Studio tab stops reporting Profile's screen name. `.emergence`
-        // appears twice (both payload shapes) and `.scanFlow` three times
-        // (every reason), so 35 rows in all. The steward's inventory tallies
-        // Today 1 · Spaces 8 · Pieces 6 · Studio 16 over distinct cases at the
-        // base sha; Studio is 17 now, and the Spaces count here is 11 because
-        // scanFlow's three reasons and arPlacement are each pinned.
-        #expect(Self.expected.count == 35)
+        // 34 `AppRoute` cases — 31, plus `.studio` (minted in W3-fix so the
+        // Studio tab stops reporting Profile's screen name), plus W5's
+        // `.orderList` and `.orderDetail`. `.emergence` appears twice (both
+        // payload shapes) and `.scanFlow` three times (every reason), so 37
+        // rows in all. The steward's inventory tallies Today 1 · Spaces 8 ·
+        // Pieces 6 · Studio 16 over distinct cases at the base sha; Studio is
+        // 19 now, and the Spaces count here is 11 because scanFlow's three
+        // reasons and arPlacement are each pinned.
+        #expect(Self.expected.count == 37)
         let today = Self.expected.filter { $0.1 == .today }.count
         let spaces = Self.expected.filter { $0.1 == .spaces }.count
         let pieces = Self.expected.filter { $0.1 == .pieces }.count
@@ -102,7 +105,7 @@ struct RouteTabTableTests {
         #expect(today == 1)
         #expect(spaces == 11)
         #expect(pieces == 6)
-        #expect(studio == 17)
+        #expect(studio == 19)
     }
 
     /// A new `AppRoute` case must fail to compile in `tab(for:)`, not fall

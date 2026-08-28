@@ -68,7 +68,12 @@ public struct RouteTabTable {
              .invoiceList,
              .invoiceDetail,
              .budget,
-             .documentList:
+             .documentList,
+             // W5: "where is it" is the work, not the catalogue — an order
+             // push and the record's MOVED row both land on the Studio tab,
+             // beside the money the order came out of.
+             .orderList,
+             .orderDetail:
             return .studio
         }
     }

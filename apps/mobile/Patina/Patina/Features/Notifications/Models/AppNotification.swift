@@ -105,6 +105,21 @@ enum AppNotificationType: Equatable {
     case proposal
     case invoice
     case decision
+    /// W5: the six fulfillment transitions
+    /// (`_shared/fulfillment-templates.ts:38-49`).
+    ///
+    /// ⚠ What this bucket serves TODAY is the **push** path only:
+    /// `fulfillment-notify` sends `entity_type: 'fulfillment_order'`
+    /// (`fulfillment-notify/core.ts:265`) and `NotificationRouter` routes it.
+    /// **Nothing writes an order row to `notification_log`** — verified:
+    /// `fulfillment-notify` calls `sendPush` with no `notification_log_id`,
+    /// `apns-send` only ever updates a log row (`apns-send/index.ts:217-238`)
+    /// and never inserts one, and `_shared/client-attention.ts` (00534) knows
+    /// only `proposal | invoice | decision`. So the bucket cannot yet fire in
+    /// the bell; it exists so that when the server side lands, an order does
+    /// not arrive as "New pieces for you" with a sparkles icon (the SP-08
+    /// failure, one rail over). The server gap is W6's, not this screen's.
+    case order
 
     var icon: String {
         switch self {
@@ -116,6 +131,7 @@ enum AppNotificationType: Equatable {
         case .proposal: return "doc.text"
         case .invoice: return "creditcard"
         case .decision: return "hand.raised"
+        case .order: return "shippingbox"
         }
     }
 
@@ -129,6 +145,7 @@ enum AppNotificationType: Equatable {
         case .proposal: return PatinaColors.mocha
         case .invoice: return PatinaColors.terracotta
         case .decision: return PatinaColors.clayDeep
+        case .order: return PatinaColors.dustyBlue
         }
     }
 
@@ -139,6 +156,9 @@ enum AppNotificationType: Equatable {
         case .proposal: return "proposal"
         case .invoice: return "invoice"
         case .decision: return "decision"
+        // `fulfillment-notify` writes `fulfillment_order`; that spelling is the
+        // contract, and `NotificationRouter` routes on it.
+        case .order: return "fulfillment_order"
         default: return nil
         }
     }

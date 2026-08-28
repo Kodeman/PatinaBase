@@ -411,9 +411,73 @@ private extension StudioQueueBuilder {
     }
 }
 
+/// Internal, not file-private: the Ordered row is a ruling about where the
+/// door lives, and a ruling is pinned by a test that calls it directly.
+extension StudioQueueBuilder {
+
+    /// W5 / direction B §11 M8 — the "where is it" door, in Money & documents
+    /// per Option B's Studio contract: an order is the last thing money turns
+    /// into, and it belongs beside the invoice that paid for it.
+    ///
+    /// Priority -1 so it sits above Proposals: of the five rows in this group
+    /// it is the only one that is still moving. It draws only where an order
+    /// exists (M8: "no orders → the section does not render").
+    static func orderRecordRow(_ orders: [ClientOrder]) -> StudioQueueRow? {
+        guard !orders.isEmpty else { return nil }
+        // "On its way" is a claim about a specific set of orders: the ones that
+        // are live and have not arrived. A delivered order is not on its way,
+        // and a refunded one never will be — counting all of them was a false
+        // sentence in the one place a reader glances rather than reads.
+        let live = orders.filter { $0.state != .refunded && $0.state != .cancelled }
+        let moving = live.filter { $0.state != .delivered }
+        let delivered = live.count - moving.count
+
+        let detail: String
+        if !moving.isEmpty {
+            detail = countLabel(
+                moving.count,
+                singular: "1 piece on its way",
+                plural: "\(moving.count) pieces on their way"
+            )
+        } else if delivered > 0 {
+            detail = countLabel(
+                delivered,
+                singular: "1 piece delivered",
+                plural: "\(delivered) pieces delivered"
+            )
+        } else {
+            // Everything she has is refunded or cancelled. The door still
+            // draws — the orders are in the list — and says nothing more.
+            detail = countLabel(
+                orders.count,
+                singular: "1 past order",
+                plural: "\(orders.count) past orders"
+            )
+        }
+
+        // The meta names the furthest-along order in whatever set the detail
+        // just counted, so the two halves of the row cannot describe different
+        // orders.
+        let furthest = (moving.isEmpty ? live : moving)
+            .max { $0.state.progressRank < $1.state.progressRank }
+
+        return StudioQueueRow(
+            id: "records.orders",
+            title: "Ordered",
+            detail: detail,
+            meta: furthest?.state.railLabel,
+            systemImage: "shippingbox",
+            route: .orderList,
+            priority: -1,
+            sortDate: orders.compactMap(\.placedAt).max()
+        )
+    }
+}
+
 private extension StudioQueueBuilder {
     static func moneyAndDocumentRows(_ context: StudioQueueContext) -> [StudioQueueRow] {
         [
+            orderRecordRow(context.input.orders),
             proposalRecordRow(context.input.proposals),
             invoiceRecordRow(context.input.invoices),
             documentRecordRow(context.input.documents),

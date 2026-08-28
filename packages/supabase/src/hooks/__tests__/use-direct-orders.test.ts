@@ -59,7 +59,13 @@ describe('useDirectOrders', () => {
     const rows = await config.queryFn();
 
     expect(supabaseClient.from).toHaveBeenCalledWith('direct_orders');
-    expect(selectMock).toHaveBeenCalledWith('*');
+    // Named columns, never '*': 00540 narrowed `authenticated`'s grant off
+    // commission_rate, so a star select would 42501 for the buyer.
+    const selectArg = String((selectMock.mock.calls as unknown as unknown[][])[0]?.[0]);
+    expect(selectArg).not.toContain('*');
+    expect(selectArg).not.toContain('commission_rate');
+    expect(selectArg).toContain('amount_cents');
+    expect(selectArg).toContain('designer_id');
     expect(orderMock).toHaveBeenCalledWith('created_at', { ascending: false });
     expect(rows).toEqual([{ id: 'order-1' }, { id: 'order-2' }]);
   });
