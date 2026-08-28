@@ -45,4 +45,13 @@ struct HomeHeaderTests {
         // SP-16 / AttentionCountTests: this screen still reads the one hint.
         #expect(source.contains("badges.studioHint"))
     }
+
+    /// SP-19: 44 pt. The Studio control replaced the bare monogram on the
+    /// screen every session opens on, so it is held to the ruled target.
+    @Test("the Studio control is a 44 pt target")
+    func theStudioControlMeetsTheTarget() throws {
+        let source = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
+        #expect(source.contains("minHeight: 44"))
+        #expect(!source.contains("minHeight: 36"))
+    }
 }

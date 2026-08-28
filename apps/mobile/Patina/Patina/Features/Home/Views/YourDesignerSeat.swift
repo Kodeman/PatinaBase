@@ -153,7 +153,7 @@ struct YourDesignerSeat: View {
                 }
             }
             .padding(.horizontal, PatinaSpacing.xsm)
-            .frame(minHeight: 36)
+            .frame(minHeight: 44)
             .background(Capsule().fill(PatinaColors.clay.opacity(0.14)))
             .contentShape(Capsule())
         }

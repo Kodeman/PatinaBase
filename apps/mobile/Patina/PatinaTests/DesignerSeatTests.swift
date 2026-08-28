@@ -89,4 +89,12 @@ struct DesignerSeatTests {
         """)
         #expect(DesignerSeat.make(liveLead: nil, projects: rows) == nil)
     }
+
+    /// SP-19: 44 pt. `Message` is the seat's whole reason to exist.
+    @Test("the Message button is a 44 pt target")
+    func theMessageButtonMeetsTheTarget() throws {
+        let source = try SourcePin.read("Patina/Features/Home/Views/YourDesignerSeat.swift")
+        #expect(source.contains("minHeight: 44"))
+        #expect(!source.contains("minHeight: 36"))
+    }
 }

@@ -147,7 +147,7 @@ struct DailyGreetingHeader: View {
             }
         }
         .padding(.horizontal, PatinaSpacing.xsm)
-        .frame(minHeight: 36)
+        .frame(minHeight: 44)
         .background(Capsule().fill(PatinaColors.Background.secondary))
 
         if let onStudioTap {
