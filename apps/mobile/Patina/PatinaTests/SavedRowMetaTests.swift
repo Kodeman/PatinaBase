@@ -75,14 +75,16 @@ struct SavedItemReconcileTests {
     private func remote(
         createdAt: String,
         roomId: String? = "srv-room-1",
-        productId: String? = "p-1"
+        productId: String? = "p-1",
+        notes: String? = nil
     ) throws -> RemoteSavedItem {
         let room = roomId.map { "\"\($0)\"" } ?? "null"
         let product = productId.map { "\"\($0)\"" } ?? "null"
+        let note = notes.map { "\"\($0)\"" } ?? "null"
         let json = """
         { "id": "si-1", "room_id": \(room), "user_id": "u-1", "product_id": \(product),
           "name": "Velvet Club Chair", "image_url": null, "price_in_cents": 420000,
-          "source": "browse", "created_at": "\(createdAt)" }
+          "source": "browse", "created_at": "\(createdAt)", "notes": \(note) }
         """
         return try JSONDecoder().decode(RemoteSavedItem.self, from: Data(json.utf8))
     }
@@ -150,6 +152,30 @@ struct SavedItemReconcileTests {
             from: try remote(createdAt: "2026-06-14T18:22:07Z", productId: nil),
             roomIdByRemoteId: [:]
         ) == nil)
+    }
+
+    /// The integration join: H1 put `notes` on the DTO, H2 draws it on the row,
+    /// and nothing carried it across the two until now (`waves/w4/h2-notes.md`
+    /// §3). Without this a note written on one device is silent on the next.
+    @Test("the note the person wrote crosses onto the local row")
+    func theNoteCrosses() throws {
+        let carried = try #require(CollectionsViewModel.localRow(
+            from: try remote(
+                createdAt: "2026-06-14T18:22:07Z",
+                notes: "For the reading corner"
+            ),
+            roomIdByRemoteId: [:]
+        ))
+        #expect(carried.notes == "For the reading corner")
+        #expect(SavedRowMeta.note(carried.notes) == "For the reading corner")
+
+        // A row carrying no note prints none — never a placeholder (C5).
+        let bare = try #require(CollectionsViewModel.localRow(
+            from: try remote(createdAt: "2026-06-14T18:22:07Z"),
+            roomIdByRemoteId: [:]
+        ))
+        #expect(bare.notes == nil)
+        #expect(SavedRowMeta.note(bare.notes) == nil)
     }
 
     @Test("an unparseable date falls back rather than dropping the piece")

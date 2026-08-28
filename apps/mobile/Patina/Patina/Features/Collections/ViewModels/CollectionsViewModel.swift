@@ -109,6 +109,9 @@ final class CollectionsViewModel {
     ///   `Saved Aug 28` for a piece saved in June (C5).
     /// - **the room.** `room_id` is the server's id; the row draws the local
     ///   `RoomModel.name`, which is keyed by the local `UUID`.
+    /// - **the note.** `saved_items.notes` reaches the DTO as of W4 lane H1
+    ///   (`RemoteSavedItem.notes`); carrying it here is what lets a note
+    ///   written on one device draw on another (`waves/w4/h2-notes.md` §3).
     static func localRow(
         from row: RemoteSavedItem,
         roomIdByRemoteId: [String: UUID]
@@ -119,6 +122,7 @@ final class CollectionsViewModel {
             productId: productId,
             imageURL: row.image_url,
             savedAt: ISO8601DateParsing.dateOrDay(from: row.created_at) ?? Date(),
+            notes: row.notes,
             brandName: nil,
             priceInCents: row.price_in_cents,
             roomId: row.room_id.flatMap { roomIdByRemoteId[$0] }
