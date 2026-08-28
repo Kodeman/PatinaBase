@@ -35,6 +35,26 @@ enum ProjectDetailCopy {
         return facts
     }
 
+    /// W4 (F76/F125): which phase the project is actually on, so the timeline
+    /// can mark it. `projects.current_phase` is the designer's own answer and
+    /// wins. Failing that, a single `in_progress` row is unambiguous enough to
+    /// stand in for it.
+    ///
+    /// Two rows claiming `in_progress` is not an answer, and nothing is marked
+    /// — the timeline still draws every phase in order, it just does not
+    /// invent a position the server never took.
+    static func currentPhaseId(
+        phases: [RemoteProjectPhase],
+        currentPhaseKey: String?
+    ) -> String? {
+        if let currentPhaseKey,
+           let named = phases.first(where: { $0.phase_key == currentPhaseKey }) {
+            return named.id
+        }
+        let running = phases.filter { $0.status?.lowercased() == "in_progress" }
+        return running.count == 1 ? running.first?.id : nil
+    }
+
     /// One client-voiced line per section that has no data yet. Never sends a
     /// homeowner to the designer's portal.
     static func missingSectionLines(phases: Bool, payments: Bool, ffe: Bool) -> [String] {

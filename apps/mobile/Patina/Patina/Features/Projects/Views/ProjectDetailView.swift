@@ -147,18 +147,32 @@ struct ProjectDetailView: View {
         .accessibilityIdentifier("projectDetail.notReadyYet")
     }
 
-    // MARK: - Phases
+    // MARK: - Phases (W4 — F76/F125)
 
     // R23: only rendered when phases exist — the empty state collapses
     // into `notReadyYetCard` instead.
+    //
+    // W4: the rows the detail has always fetched, drawn as the timeline they
+    // are — a connecting rail down the dots and the current phase marked. The
+    // data was on the wire the whole time; this draws it. Nothing is composed:
+    // every line is a column of `project_phases`.
     private var phasesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let currentId = ProjectDetailCopy.currentPhaseId(
+            phases: viewModel.phases,
+            currentPhaseKey: viewModel.project?.current_phase
+        )
+        return VStack(alignment: .leading, spacing: 8) {
             MonoLabel(text: "Phases")
                 .padding(.horizontal, 24)
 
             VStack(spacing: 0) {
-                ForEach(viewModel.phases) { phase in
-                    phaseRow(phase)
+                ForEach(Array(viewModel.phases.enumerated()), id: \.element.id) { index, phase in
+                    phaseRow(
+                        phase,
+                        isCurrent: phase.id == currentId,
+                        isFirst: index == 0,
+                        isLast: index == viewModel.phases.count - 1
+                    )
                 }
             }
             .background(PatinaColors.Background.secondary)
@@ -167,18 +181,24 @@ struct ProjectDetailView: View {
         }
     }
 
-    private func phaseRow(_ phase: RemoteProjectPhase) -> some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(phaseColor(for: phase.status))
-                .frame(width: 10, height: 10)
+    private func phaseRow(
+        _ phase: RemoteProjectPhase,
+        isCurrent: Bool,
+        isFirst: Bool,
+        isLast: Bool
+    ) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            phaseMarker(phase, isCurrent: isCurrent, isFirst: isFirst, isLast: isLast)
             VStack(alignment: .leading, spacing: 2) {
+                if isCurrent {
+                    MonoLabel(text: "Current")
+                }
                 // R16: designer-defined name wins; otherwise the formatted
                 // designer label for the slug — never `phase_key.capitalized`.
                 Text(phase.name ?? PhaseDisplay.label(for: phase.phase_key))
-                    .font(PatinaTypography.bodySmallMedium)
+                    .font(isCurrent ? PatinaTypography.bodyMedium : PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.primary)
-                Text(PhaseDisplay.statusLabel(for: phase.status ?? "pending"))
+                Text(phaseStatusLine(phase))
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
@@ -191,12 +211,60 @@ struct ProjectDetailView: View {
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 16)
-        .overlay(alignment: .bottom) {
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(phaseAccessibilityLabel(phase, isCurrent: isCurrent))
+    }
+
+    /// The rail: a dot per phase, joined above and below except at the ends,
+    /// so the column reads as one run of time rather than a stack of chips.
+    private func phaseMarker(
+        _ phase: RemoteProjectPhase,
+        isCurrent: Bool,
+        isFirst: Bool,
+        isLast: Bool
+    ) -> some View {
+        let color = phaseColor(for: phase.status)
+        return VStack(spacing: 0) {
             Rectangle()
-                .fill(PatinaColors.pearl)
-                .frame(height: 1)
-                .padding(.leading, 38)
+                .fill(isFirst ? Color.clear : PatinaColors.pearl)
+                .frame(width: 1, height: 8)
+            ZStack {
+                if isCurrent {
+                    Circle()
+                        .stroke(color, lineWidth: 1.5)
+                        .frame(width: 16, height: 16)
+                }
+                Circle()
+                    .fill(color)
+                    .frame(width: 10, height: 10)
+            }
+            .frame(width: 16, height: 16)
+            Rectangle()
+                .fill(isLast ? Color.clear : PatinaColors.pearl)
+                .frame(width: 1)
+                .frame(maxHeight: .infinity)
         }
+        .frame(width: 16)
+        .accessibilityHidden(true)
+    }
+
+    /// The status the server gave, plus the dates it gave — never a date the
+    /// app worked out for itself.
+    private func phaseStatusLine(_ phase: RemoteProjectPhase) -> String {
+        var parts = [PhaseDisplay.statusLabel(for: phase.status ?? "pending")]
+        if let start = phase.start_date {
+            parts.append(DateDisplay.fromDateString(start))
+        }
+        if let end = phase.end_date {
+            parts.append(DateDisplay.fromDateString(end))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func phaseAccessibilityLabel(_ phase: RemoteProjectPhase, isCurrent: Bool) -> String {
+        let name = phase.name ?? PhaseDisplay.label(for: phase.phase_key)
+        let prefix = isCurrent ? "Current phase. " : ""
+        return "\(prefix)\(name). \(phaseStatusLine(phase))"
     }
 
     private func phaseColor(for status: String?) -> Color {
