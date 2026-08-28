@@ -775,6 +775,8 @@ interface FFESectionProps {
   mode: 'project' | 'install';
   /** Line hovered in the margin (§13 Slice 3 anchored highlight). */
   highlightId?: string | null;
+  /** A document deep link may ask for one Piece to arrive unfolded. */
+  requestedLineId?: string | null;
   /** Slice 4 (R14): open the margin note composer pre-anchored to a line. */
   onAddNote?: (lineId: string) => void;
   /** R23/R24: which document section this table embodies — mounts The Work
@@ -822,6 +824,7 @@ function FFESectionBody({
   projectName = '',
   mode,
   highlightId = null,
+  requestedLineId = null,
   onAddNote = () => {},
   sectionKey = null,
   clientUserId = null,
@@ -1109,6 +1112,15 @@ function FFESectionBody({
     positionDensity: ffePositionDensity,
   });
   const ffeSetFolded = ffeFold.setFolded;
+  useEffect(() => {
+    if (mode !== 'project' || !requestedLineId) return;
+    const requestedLineExists = (items ?? []).some(
+      (item) => String(item.id) === requestedLineId,
+    );
+    if (!requestedLineExists) return;
+    setOpenLineId(requestedLineId);
+    ffeSetFolded(false);
+  }, [ffeSetFolded, items, mode, requestedLineId]);
   const openFfeRegion = useCallback(() => {
     if (mode !== 'project') return;
     ffeSetFolded(false);
