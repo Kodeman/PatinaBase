@@ -245,10 +245,22 @@ project decision** — 2 decisions need your eye." (`s-05-signed-in-client.png`)
 
 ### (b) engaged tier — **`james.okafor@example.com`**
 
-`28fd9d2c-4961-446b-afec-b2084ba0a647` · "James Okafor" · role `homeowner` · email confirmed.
-Lead `c0c863fd-673d-407f-91a9-80e3d1c35b93`, status **`accepted`**, **claimed** (designer_id set),
-1 `lead_room_scans` row, created 2026-08-18. **No project, no proposal, no invoice.** This is the
+"James Okafor" · role `homeowner` · email confirmed. Status **`accepted`**, **claimed**
+(designer_id set), 1 `lead_room_scans` row. **No project, no proposal, no invoice.** This is the
 best "matched but not yet a project" account.
+
+⚠ **Do not quote this account's UUID.** `seed/leads_room_scans.sql:15-26` mints every homeowner and
+scan id with `gen_random_uuid()`, so the id and its lead id change on **every** `supabase db reset`.
+The first version of this section named `28fd9d2c-…`; the W4 walk found that id owned no lead, read
+`b2490455-…` off the stack it walked, and the next reset made that one stale too. Read it when you
+need it:
+
+```sql
+select u.id, l.id AS lead, l.status
+  from auth.users u
+  join public.leads l on l.homeowner_id = u.id
+ where u.email = 'james.okafor@example.com';
+```
 
 Other engaged homeowners if you need variety (all claimed, 1 scan each, `password123`):
 `marcus.wright@example.com` (`viewed`), `elena.ruiz@example.com` (`contacted`),

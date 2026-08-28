@@ -995,3 +995,267 @@ sign-in worked; not otherwise notable. Numbering continues from `w3-24`.
 
 Verdict: every merge-rule item (`rulings-fable.md`, end) passes. The Sanity-copy gap (`w3-37`) is
 carried as OWED (Kody) per ruling 5, not a FAIL — see `waves/w3/walk.md` for the full disposition.
+
+## w4-h1
+
+Lane H1 · rooms & budget. Simulator clone `dr-w4-h1`
+`BA5B70BC-07A5-4F40-94A3-B6A7A307205B`, ad-hoc-signed `.app` from
+`.codex/worktrees/agent-dr-w4-h1/.build/dd/…/Patina.app` (never
+`CODE_SIGNING_ALLOWED=NO`), `-DeploymentTarget local` on every launch, account
+`client@patina.dev` (activeProject). Shots 01–09 are the **flag-off** W2 root;
+10–13 are **flag-on** (`-PatinaFlags house-first`). Shots 06 and 11–13 were
+re-taken after the fix round below.
+
+| Shot | State | What it shows |
+|---|---|---|
+| `w4-h1-01-flagoff-today.png` | flag off, client | Today with the Record, the Leah Hartwell seat and the `YOUR HOUSE` rail; Companion intro popover over the rail (pre-existing) |
+| `w4-h1-02-flagoff-house-rail.png` | flag off, client | The rail: `Dining Room` / `Living Room` from `project_rooms`, **no meta** — both rows carry `budget_cents = 0`/`committed_cents = 0`, which W2's rule reads as "not set" and draws nothing rather than `$0` |
+| `w4-h1-03-flagoff-light-act-first.png` | flag off, client, `Add a room` | The two-act dialog, ruled order live: `Type the dimensions` (y=481) above `Scan it` (y=537) |
+| `w4-h1-04-flagoff-rail-local-room.png` | flag off, client | Today after typing a room; Companion popover re-fired over `YOUR HOUSE` (pre-existing) |
+| `w4-h1-05-room-screen-no-budget.png` | flag off, client, room screen | `14 × 18 FT · 252 SQ FT · TYPED, NOT SCANNED`; `0 SAVED PIECES` / `— ROOM MATCH`; **no figure line at all** with no pieces and no budget (never a dash); M4's two ghost acts `Edit dimensions` · `Set a budget` |
+| `w4-h1-06-set-a-budget-sheet.png` | flag off, client | The `Set a budget` sheet: `LIVING ROOM`, "What you mean to spend on this room. Only you see it.", `$` field, `Save` correctly **disabled** on an empty field |
+| `w4-h1-07-edit-dimensions-segmented.png` | flag off, client, Room Settings | The new Dimensions section: SP-19's segmented `ft | m` control, `18 LENGTH (ft)` / `14 WIDTH (ft)`, `Save dimensions` |
+| `w4-h1-08-room-screen-with-budget.png` | flag off, client | After saving $9,000: figure line reads `budget $9,000` (no pieces yet, so no pieces clause); the act relabels itself `Edit budget` |
+| `w4-h1-09-flagoff-rail-with-budget.png` | flag off, client | The rail card now reads `Living Room. 252 sq ft · budget $9,000` (AX label) |
+| `w4-h1-10-flagon-today.png` | flag on, client | Same Today under the four-tab bar: `Today Spaces Pieces Studio` + Companion slot; `YOUR HOUSE` rail present |
+| `w4-h1-11-flagon-spaces-gallery-budget.png` | flag on, client, Spaces | The gallery card's stat row: `0 ITEMS` · **`$9.0K BUDGET`** · `— MATCH`. Before this wave the Budget cell printed the *saved-pieces total* under the word Budget; the false `JUST SCANNED` badge on a typed room is also gone. `MANUAL ENTRY` in the meta line is F51 wording, untouched (see `h1-notes.md`) |
+| `w4-h1-12-flagon-room-screen.png` | flag on, client | The same room screen on the tab-bar root: both ghost acts fully clear of the bar, nothing under the Companion (it is in the bar's trailing slot on this root) |
+| `w4-h1-13-flagon-rail-with-budget.png` | flag on, client | `Living Room` / `252 sq ft · budget $9,000` on the rail, `Add a room` last — the same strings on both roots |
+
+Server-side proof of the mirror (read-only, local stack, not a reset):
+
+```
+$ psql -p 54322 -c "select id,name,budget_cents,created_at,updated_at from public.rooms …"
+19703872-…|Living Room|900000|2026-08-28 11:02:18+00|2026-08-28 11:08:15+00
+c0000000-…|Guest Bedroom|900000|2026-08-28 10:50:43+00|2026-08-28 10:50:43+00
+```
+
+The `Living Room` row was created at 11:02 by the typed-room path and updated at
+11:08 by the budget sheet — `rooms.budget_cents = 900000` is the mirror landing.
+(`Guest Bedroom` is lane D's seed row, created already carrying a budget.)
+
+**Review fix round** (`waves/w4/h1-fix-log.md`) — shots 14–18, same clone, fresh install of the
+post-fix build, signed in again as `client@patina.dev`. The Spaces gallery card's `Budget` cell was
+still printing `—` for a room with no budget; it now does not draw at all. The budget was removed
+and re-set through the sheet on each root, which also exercised the mirror live in both directions
+(`public.rooms.budget_cents` for `19703872-…` → null → `900000`, `updated_at` 12:01:20Z). The room's
+stored state is back exactly as the rows above record it.
+
+| Shot | State | What it shows |
+|---|---|---|
+| `w4-h1-14-flagon-spaces-no-budget-cell.png` | flag on, client, Spaces | The same card after `Remove this budget`: the stat row is `0 ITEMS │ — MATCH` — **two cells, one divider, no `—` under `Budget` and no `Budget` label at all**. The pieces total does not move into the empty slot |
+| `w4-h1-15-flagon-spaces-budget-cell-back.png` | flag on, client, Spaces | The budget re-set to $9,000: `0 ITEMS │ $9.0K BUDGET │ — MATCH` — the three-cell row is unchanged when there is a number to print |
+| `w4-h1-16-flagoff-rail-unchanged.png` | flag off, client | The W2 root after the fix: `YOUR HOUSE` → `Living Room` / `252 sq ft · budget $9,000`, `Add a room`. Nothing on the rail moved |
+| `w4-h1-17-flagoff-spaces-budget-cell.png` | flag off, client, Spaces | `Your Spaces` reached on the **flag-off** root via the Companion orb → `Your spaces` (`ContentView`'s `.yourSpaces` route): the same three-cell row, same strings — the card is a shared component with no flag branching |
+| `w4-h1-18-flagoff-spaces-no-budget-cell.png` | flag off, client, Spaces | The two-cell row on the flag-off root — `0 ITEMS │ — MATCH`. Both roots, both states, one component |
+
+The `— MATCH` cell one place to its right is deliberately untouched: that dash is the match score
+Patina has not computed, not a figure its owner withheld (`h1-notes.md` §6.2, open for Fable).
+
+**Two defects found on the first walk and fixed in that round** (`h1-notes.md` §3):
+`Set a budget` did not present at all (a second `.sheet` deeper in the hierarchy
+was dropped — both sheets now go through one `item:` binding on the root), and the
+Room Settings field offered `18.0` for a room typed as 18 ft (a metres round-trip
+float). Both re-verified in `w4-h1-06` and `w4-h1-07`.
+
+## w4-h2
+
+Lane H2 · saved rows, decays, timeline, seat, story date. Sim check on the lane clone `dr-w4-h2`
+(`D6DACCE3-E865-4AB5-80FF-F7C49F16736F`, iPhone 17 Pro, iOS 26.5), signed build from
+`ios-gate.sh build`, every launch `-DeploymentTarget local`, both roots walked. Branch
+`daily-return/w4-h2` @ `293a1f5ec`.
+
+⚠ **Shots 01–09 were taken on an app with no live session** (`/rest/v1/projects` → `[]` while the
+DB holds three for `client@patina.dev`), which is why the signed-in ones show no projects, no
+NEEDS YOU rows and no designer seat.
+
+✅ **RESOLVED in the fix round (shots 10–13).** The cause was not a keychain trap: `ios-gate.sh
+build` passes `CODE_SIGNING_ALLOWED=NO` (`scripts/ios-gate.sh:54`), so the installed `.app`
+carried **no entitlements at all** (`codesign -d --entitlements -` → empty dict) and the Supabase
+SDK could not persist its session — the recorded `feedback_ios_sim_walk_harness` rule, hit in
+full. **Walk shots must come from a build made without that flag** (a plain `xcodebuild build …
+-derivedDataPath <tree>/.build/dd`); the gate's own artifact is for compiling, not for walking.
+With a signed build the session survives sign-in, relaunch and reinstall, and everything called
+unverifiable above is shot below.
+
+| Shot | Root / tier | What it shows |
+|---|---|---|
+| `w4-h2-01-flagoff-today.png` | flag off, first launch | The auth gate as it stands on a fresh install — the wall a guest is about to decline |
+| `w4-h2-02-guest-optin.png` | flag off, guest | Immediately after `Look around first`: the guest Today. Story chip reads `AUG 27 · 4 MIN READ` (the publish date, drawn). Also visible: the first-launch tour still reads `Step 1 of 2` and still says "Daily Room" — W3 rulings 4 and 5, both OWED elsewhere, not H2's |
+| `w4-h2-03-guest-survives-relaunch.png` | flag off, guest, **after terminate + relaunch** | **W3 ruling 9 proven.** The relaunch lands on the guest Today, not the gate. Before this lane the same sequence put the wall back |
+| `w4-h2-04-flagon-guest-today.png` | **flag on** (`-PatinaFlags house-first`), guest | The same guest Today under the four-tab bar — the persisted opt-in and the story chip both render on the flag-on root |
+| `w4-h2-05-flagoff-today-client.png` | flag off, signed in (`client@patina.dev`) | Today with the Record card (`YOU WERE LAST HERE ON THE 13TH` / `MOVED` / `A new story from the workshop. AUG 27 · NEW`) and the `Saved` summary row. The empty NEEDS YOU and absent seat are the anon-session condition above, not the record's doing |
+| `w4-h2-06-saved-row-date-room.png` | flag off, signed in | The Saved surface: `Heirloom Oak Dining Table · $4,200`, and under it **`Saved Aug 28`** with **`Add a note`**. No room on the line because the save was made from Browse, which writes no `room_id` (nullable, 00055:23) — and `saved_items` is empty in this database, so no seeded save carries one |
+| `w4-h2-07-saved-note-sheet.png` | flag off, signed in | The note sheet: the piece's name, one text field, `Cancel` / `Save`. Nothing else — B §10 refuses a compare surface by name |
+| `w4-h2-08-saved-row-with-note.png` | flag off, signed in | The same row after saving: `Saved Aug 28` · **`Edit note`** · `Check the leaf width before the dining room measure.` |
+| `w4-h2-09-flagon-saved-row.png` | **flag on**, guest | The Saved surface on the flag-on root — row, `Saved Aug 28`, `Add a note`, all clear of the 83 pt bar |
+| `w4-h2-10-fix-seat-follows-record.png` | flag off, signed in, **signed build** | **The W2 walk defect closed, on screen.** The seat reads `Leah Hartwell · Aspen Loft Refresh` — the project the first NEEDS YOU row (the $4,250 invoice) belongs to — while `listProjects`' own `updated_at.desc` order puts `Birch Hollow` first. Three NEEDS YOU rows, a MOVED row, and the story chip `AUG 27 · 4 MIN READ` |
+| `w4-h2-11-fix-phase-timeline.png` | flag off, signed in | **The project timeline, first shot of it.** Aspen Loft Refresh, five phases, **one continuous rail** down the dots (the pre-fix rail broke into 8 pt ticks with 28 pt gaps), each row status + start + `target_end_date` + fee. Nothing marked CURRENT: `projects.current_phase` is null and two rows claim `in_progress`, so the app refuses to guess |
+| `w4-h2-12-fix-flagon-seat.png` | **flag on** (`-PatinaFlags house-first`), signed in | The same seat under the four-tab bar |
+| `w4-h2-13-fix-flagon-timeline.png` | **flag on**, signed in | The same timeline on the house-first root |
+
+Server-side, on the local stack. First pass (service-role reads; the one write reset to NULL
+afterwards): `profiles.last_seen_at` accepts the mirror's exact PATCH with a client JWT (204, value
+lands); `saved_items` holds 0 rows in this database.
+
+Fix round, with a live session: **the app itself wrote the mirror** —
+`profiles.last_seen_at = 2026-08-28 12:06:05+00` for `a0000000-…-005`, one minute after that
+launch, reset to NULL afterwards. One `saved_items` row was inserted with a June `created_at` and
+a `room_id` to try the reconcile live; it could not be reached (the reconcile also needs *local*
+rooms carrying a `remoteId`, and this account's rooms exist only server-side) and was deleted —
+`select count(*) from saved_items` → 0, as before.
+
+## w4 walk
+
+Acceptance walker · review device `973D1724-90BF-4A0A-B02D-481D561547B3` (iPhone 17 Pro / iOS
+26.5). Installed `.codex/worktrees/agent-dr-w4-integration/apps/mobile/Patina/.build/dd/…/Patina.app`
+(`xcrun simctl install`, unsandboxed) — `codesign -dv` confirms `Identifier=cloud.patina.app`,
+`Signature=adhoc`, not `CODE_SIGNING_ALLOWED=NO`. `-DeploymentTarget local` on every launch; flag-on
+shots add `-PatinaFlags house-first`.
+
+| Shot | State | What it shows |
+|---|---|---|
+| `w4-01-flagoff-today-top.png` | flag off, `client@patina.dev` | Post-sign-in Today: NEEDS YOU (invoice/proposal/decision, all Aspen Loft Refresh) |
+| `w4-02-flagoff-today-house-rail.png` | flag off, client | MOVED, designer seat `Leah Hartwell · Aspen Loft Refresh` + Message, `YOUR HOUSE` rail — only `Dining Room` / `Living Room` (the two `project_rooms`); no third card for D's seeded `Guest Bedroom` typed room |
+| `w4-03-flagoff-phase-timeline.png` | flag off, client, tapped `Dining Room` | Tapping a `project_rooms`-origin card opens **project detail**, not a room screen (`YourHouseRail.swift:372-373` routes `.project` origin cards to `.projectDetail`) — Aspen Loft Refresh, budget $120,000, 5-phase timeline, one continuous rail, each phase's own status + two dates + `$0` fee; two rows both read `In Progress`, nothing marked CURRENT (`projects.current_phase` is null) |
+| `w4-04-flagoff-designer-seat-message-thread.png` | flag off, client | `Message Leah Hartwell` opens a fresh thread; `comms_threads` confirms server-side it is scoped to `project_id` = Aspen Loft Refresh, matching the seat |
+| `w4-05-flagoff-house-rail-with-new-room.png` | flag off, client, after `Type the dimensions` | A local room (`Walk Test Room`, 18×14, Bedroom) created via the app now shows on the rail beside the two project rooms — confirms `HouseRoomCard.card(for: RoomModel)` works; only the *pre-seeded* room is invisible |
+| `w4-06-flagoff-room-screen.png` | flag off, client, `RoomProjectView` | `Walk Test Room` · `14 × 18 FT · 252 SQ FT · TYPED, NOT SCANNED` (F51 label correct) · `0 SAVED PIECES` / `— ROOM MATCH` (em dash, unscored) · `Edit dimensions` / `Set a budget` |
+| n/a (verified via `scan_ui`, no separate shot) | flag off, client | `Set a budget` → `$7,500` → Save: rail card updates to `216 sq ft · budget $7,500` (after a corrected `Edit dimensions` pass to 12×18); **relaunch (same session) → still `216 sq ft · budget $7,500`** — both acts persist across relaunch. Server: `rooms.budget_cents = 750000`, `length_meters/width_meters` match |
+| `w4-07-flagon-today-tabbar.png` | **flag on**, client | Today under the four-tab bar (`Today · Spaces · Pieces · Studio` + Companion slot) — same record content as flag-off |
+| n/a | flag on, client, Spaces tab | `Walk Test Room` visible here (`216 sq ft · South-facing · Manual entry · 0 Items · $7.5K Budget · — Match`) — confirms Spaces reads local `RoomModel`s correctly; also reconfirms the `MANUAL ENTRY`/`TYPED, NOT SCANNED` copy mismatch between the gallery card and the room header (`h1-notes.md` §6.3, carried, not new) |
+| `w4-08-note-sheet.png` | flag on, client, Pieces → a product → `Add to Room` → Saved list → `Add a note` | The note sheet: piece name, one text field, `Cancel / Note / Save` |
+| `w4-09-flagon-saved-row-date-note.png` | flag on, client, Saved list | `Heirloom Oak Dining Table · $4,200` under it **`Saved Aug 28`** and, after the note sheet, `Check the leaf width before the walk test measure.` — date + note both draw correctly |
+| n/a | flag on, client | A second piece (`Meadow Linen Sectional`) saved via `Browse pieces for the Walk Test Room` (a room-scoped browse) → `Add to Room` still only toggles the generic save (`ProductDetailView.swift:443`, `viewModel.isSaved`), never sets `room_id`; the room's own `SAVED PIECES` stat stayed `0` and the Saved row for this piece also carries no room, confirming **no code path in this build ever attaches a room to a save** — `SavedRowMeta.line` supports `Saved Aug 24 · Living Room` (`SavedRowMeta.swift:28-41`) but nothing ever calls it with a non-nil `roomName` |
+| `w4-10-james-matched-no-decay-20days.png` | flag on, `james.okafor@example.com` | `leads.id = 7bdd7af4-…` (the account's actual UUID is `b2490455-9737-4328-b943-507e727edc08` — `research/02-steward-boot.md` §6(b)'s `28fd9d2c-…` is stale, superseded by a later seed) manually set to `created_at`/`updated_at` = 20 days ago in local Postgres, unsandboxed; after `terminate` + relaunch the record's `Leah Hartwell picked up your request.` row and the `Your designer` seat are both **still visible** — `DesignRequestStatusService.isVisibleForPromotion` (`:357-366`) returns `true` unconditionally for `stage.isMatched`, so the 14-day window never applies to a match. `created_at` restored to `2026-08-21` afterward |
+| n/a | flag on, client, `Heirloom Oak Dining Table` product detail | No fit line drawn despite a qualifying room (`Walk Test Room`, `measuredWithUnitControl = true` after `Edit dimensions`) and a qualifying product (has `dimensions.width`/`depth`) — `grep -rn "RoomFitLine" .` outside `RoomFitLine.swift` itself returns **zero matches**: the type is not instantiated anywhere. Confirms `integration.md` §4/§6.2's disposition (`h1-notes.md` §1, NOT APPLIED) |
+| `w4-11/12/13-flagon-today-dark-xxl-*.png` | flag on, client, dark + XXL | Today scrolls cleanly top→bottom: record rows, seat, `YOUR HOUSE` rail, story card (frame ends y≈749, tab bar starts y=791 — 42pt clear). No Companion-orb overlap anywhere (W2/W3's carried defect; the orb now lives in the bar's trailing slot on this root, confirmed absent as a floating element) |
+| `w4-14-flagon-room-dark-xxl-top.png` | flag on, client, dark + XXL, `RoomProjectView` (a fresh `XXL Test Room`, since sign-out had cleared local rooms — see below) | `Edit dimensions` / `Set a budget` both end y≈740, tab bar starts y=791 — 51pt clear, no overlap |
+| `w4-15-leave-state-flagoff-client-daily-room.png` | flag off, client, light, default text | Leave state |
+
+**Unscripted finding, material to the wave's own open item #1:** after a Sign Out / Sign In cycle
+(Studio → Settings → Sign Out, back in as `client@patina.dev`), the **just-created, already-synced**
+`Walk Test Room` vanished from both Today's house rail and the Spaces tab (`No rooms yet`), even
+though `rooms.budget_cents = 750000` for it was still present server-side, untouched. This is the
+same root cause `integration.md` §6 item 1 names for D's pre-seeded room (`RoomsAPIClient.listRooms()`
+has zero call sites, so nothing re-hydrates local `RoomModel`s on sign-in) — this walk shows it also
+destroys a room the *client typed in the same session*, not only a seeded one. Rooms created after
+this (`XXL Test Room`, for the dark+XXL room-screen shot) were cleaned up server-side afterward
+(`delete from rooms where id in (…)`), leaving only D's `Guest Bedroom` for the next steward.
+
+Leave state: signed in as `client@patina.dev`, flag off, on the Daily Room, light appearance,
+default text size, scrolled to top (`w4-15`).
+
+## w4 re-walk
+
+Second-pass walker, 2026-08-28 · review device `973D1724-90BF-4A0A-B02D-481D561547B3` · tip
+`ba209c2a5` on `daily-return/integration` (the tip `fix2-review.md` reviewed). Rebuilt fresh for this
+device — the build already on it (from `b1ff6e458`, the first-pass tip) was stale, from before both
+fix rounds. `xcodebuild build -project Patina.xcodeproj -scheme Patina -configuration Debug
+-destination "platform=iOS Simulator,id=973D1724-…" -derivedDataPath .build/dd` (signed `adhoc`, not
+`CODE_SIGNING_ALLOWED=NO`); `codesign -dv` confirms `Identifier=cloud.patina.app`. Clean sign-in via
+`xcrun simctl keychain … reset` + uninstall/install. Dark shots taken with `xcrun simctl io … screenshot`
+(not the `get_screenshot` MCP path — already flagged above as light-rendering-buggy for dark mode);
+`content_size accessibility-extra-extra-large` for "XXL". Full verdict and results table:
+`waves/w4/walk.md` (this pass's rewrite is now the file's primary content; the original pass is
+preserved there as an appendix).
+
+| Shot | State | What it shows |
+|---|---|---|
+| `w4-16-flagoff-today-rail-2rooms-only-postsignin.png` | flag off, client, fresh clean sign-in | Today's rail shows only `Dining Room`/`Living Room`, moments after sign-in (through the app's forced onboarding/style-quiz detour) |
+| `w4-17-yourspaces-guestbedroom-present.png` | flag off, client | `Your Spaces` correctly lists `Guest Bedroom` (180 sq ft, Typed, $9.0K budget) in the same session |
+| `w4-18-flagoff-today-rail-still-2rooms-after-yourspaces.png` | flag off, client | Back on Today: still only 2 cards, **after** `Your Spaces`' own reconcile is proven to have populated the local store. Device log at the point of the first attempt: `[com.patina.app:sync] [RoomSync] listRooms failed: cancelled` — the `.task`-scoped reconcile at `DailyRoomView.swift:131` was cancelled by view churn through the onboarding/quiz flow |
+| `w4-19-flagoff-today-rail-2rooms-after-signout-signin.png` | flag off, client | Typed `W4 Rewalk Room` (12×18 ft, synced server-side, `rooms.id=2b82d097-…`), then Settings → Sign Out → sign back in: Today's rail **still only 2 cards** |
+| `w4-20-yourspaces-both-rooms-after-signout-signin.png` | flag off, client | `Your Spaces` correctly lists both `W4 Rewalk Room` and `Guest Bedroom` post sign-in; `psql` confirms both rows under the client's `user_id` server-side |
+| `w4-21-flagoff-today-rail-2rooms-after-cold-relaunch.png` | flag off, client | A **full cold terminate+relaunch** (fresh process, fresh `DailyRoomViewModel`, a synchronous no-network `store.allRooms()` read on the first `.task`) still shows only the 2 project-room cards — rules out task-cancellation as the sole cause; the gap is in `DailyRoomViewModel`/`houseRoomCards`, not the network layer |
+| `w4-22-houserfirst-today-rail-2rooms-only.png` | **flag on** (`house-first`), client | The 4-tab root's Today shows the identical 2-card rail |
+| `w4-23-houserfirst-yourspaces-both-rooms.png` | flag on, client, Spaces tab | The same root's `Your Spaces` tab correctly lists both rooms — confirms the bug is root-independent |
+| `w4-24-piecescreen-helppanel-opens.png` | flag on, client, `Oak Reading Chair` | `ProductDetailView.HelpButton` presents "Help / No help articles yet" — M-2's single-`sheet(item:)` collapse holds |
+| `w4-25-piecescreen-fitline-present.png` | flag on, client, `Heirloom Oak Dining Table` | `RoomFitLine` draws: **"Your W4 Rewalk Room's longest wall is 18 ft. This table is 8 ft."** — correctly falls back past the mirrored, unmeasured `Guest Bedroom` to the most-recently-measured local room |
+| `w4-26-savedrow-note-entry.png` | flag on, client | Tapped `Add to Room` → picked `Guest Bedroom` (server: `saved_items.room_id` set, `source='emergence'`) → note sheet with "W4 re-walk note" typed |
+| `w4-27-savedrow-date-room-note-complete.png` | flag on, client | Saved row reads **"Saved Aug 28 · Guest Bedroom"** with the note beneath — date, room, and note all present |
+| `w4-28-guestbedroom-room-saved-list.png` | flag on, client, Guest Bedroom room screen | "You added the Heirloom Oak Dining Table on Friday" under YOUR ITEMS, $4,200 |
+| `w4-29-piecescreen-unsaved.png` | flag on, client | Tapped `Saved ✓` on the piece screen to un-save; button reverts to `Add to Room` |
+| `w4-30-guestbedroom-count-dropped-to-zero.png` | flag on, client, Guest Bedroom room screen | "0 SAVED PIECES · A blank canvas" — the room's own count dropped to zero, confirming M-1's un-save-clears-the-room fix on this exact surface |
+| `w4-31-james-matched-survives-20day.png` | flag on, `james.okafor@example.com` | `leads.id=38672cae-…` (fresh UUID this reset — `homeowner_id=603aa555-…`) set 20 days old; Today still shows "See your design request. You're matched with Leah Hartwell" and the `Leah Hartwell · Designer matched` seat. `created_at` restored afterward |
+| `w4-32-flagoff-today-dark-xxl-top.png` | flag off→on for content, dark + XXL (genuine, `simctl io`) | Top of Today renders cleanly at XXL |
+| `w4-33-flagoff-today-dark-xxl-rail-story-OVERLAP.png` | dark + XXL | The editorial story card (AX frame `y=595.17`, height `153.83`) **overlaps** the house rail cards (`y=458`, height `150`, bottom `608`) by ~13pt — measured from AX frames |
+| `w4-34-flagoff-today-dark-xxl-bottom-overlap-confirmed.png` | dark + XXL | Same overlap at the true scroll-bottom; three separate taps aimed at the visible `Dining Room` card's lower two-thirds (`y≈615–650`) all activated the **story card** underneath instead of the room card — the story card sits above the rail in hit-test order across the overlap, not just visually. A tap near the card's top (`y≈580`) does reach it |
+| `w4-35-leave-state-flagoff-client-daily-room.png` | flag off, client, light, default text size | Leave-state frame |
+| `w4-36-project-room-dark-xxl.png` | dark + XXL, client | Aspen Loft Refresh (Dining Room) project detail renders cleanly at dark+XXL — budget/status row and "Message your designer" row both intact |
+| `w4-37-room-dark-xxl-top.png` / `w4-38-room-dark-xxl-bottom.png` | dark + XXL, client, Guest Bedroom room screen | Title, dimensions, budget, saved-pieces stat, "A blank canvas", and `Edit dim…`/`Edit bud…` (ellipsis-truncated, not clipped) all render cleanly with adequate clearance above the Companion orb |
+
+Not shot separately: the Companion action sheet's list does not scroll at XXL text size, leaving
+`Your spaces` and `Your profile` (the last two of six rows) permanently off-screen and unreachable by
+touch from Today at this text size — worked around for this walk by temporarily lowering
+`content_size` to navigate, then restoring XXL on the target screen.
+
+Cleanup: `leads.created_at`/`updated_at` for `38672cae-…` restored to `2026-08-21 15:26:53.64368+00`;
+`W4 Rewalk Room` (`rooms.id=2b82d097-1eaf-4473-8142-23c3b1d1e794`) deleted server-side, leaving only
+D's `Guest Bedroom` under the client's `user_id`; `saved_items` for the client confirmed empty
+server-side (the save→unsave round-trip during this walk left no residue).
+
+Leave state: signed in as `client@patina.dev`, flag off, on the Daily Room, light appearance,
+default text size, scrolled to top (`w4-35`).
+
+## w4 walk 4
+
+Fourth-pass walker, 2026-08-28 · review device `973D1724-90BF-4A0A-B02D-481D561547B3` · commit
+`2ba1864de` (F4's reviewed fix — "her rooms come first on YOUR HOUSE, and the next card peeks") on
+`daily-return/integration`. **First install attempt used the wrong build path**
+(`apps/mobile/Patina/.build/dd`, stale, built 10:53 — before the 12:26 fix4 commit) and reproduced
+the pre-fix bug (project rooms first, her room off-screen at x=524); caught by cross-checking the
+task's own specified path (`.build/dd` at the worktree root, built 12:27, matching the commit) and
+redone correctly for every result below. Gestures delivered throughout — no harness failure.
+
+| Shot | State | What it shows |
+|---|---|---|
+| `w4-39-freshsignin-today-house-rail.png` | flag off, client, fresh clean sign-in, correct build | **Ruling 1 confirmed**: Guest Bedroom (her room) first at x=20 filling from the left edge, Dining Room peeking at x=316 (280pt-wide cards, 86pt/280pt visible — a real scroll affordance), Living Room further off-screen, Add a room last |
+| `w4-40-typed-room-appears-first.png` | flag off, client | Typed a new room ("W4 Walk4 Room", saved server-side as `W4 Wa` — see note below); it appears first on the rail, ahead of Guest Bedroom (newest-first among her own rooms) |
+| `w4-41-signout-signin-both-rooms-survive.png` | flag off, client | Sign Out → sign in: both her rooms (`W4 Wa`, `Guest Bedroom`) still on the rail, in the ruling-1 order, ahead of the two project rooms; `psql` confirms both rows under the client's `user_id` |
+| `w4-42-houseFirst-flag-rail-same-order.png` | **flag on** (`house-first`) | The 4-tab root's Today shows the identical rail order and peek — confirms ruling 1 is root-independent |
+| `w4-43-xxLarge-light-rail-no-overlap.png` | `.xxLarge` (`content_size extra-extra-large`, light) | At this size the rail **stays a horizontal strip** (not wrapped — `layout(for:)` only wraps at true accessibility sizes, confirmed against `YourHouseRail.swift` and matching F4's own note on this exact terminology gap); no overlap with the story card (16pt clear gap, AX frames); tapped the first card and it opened the correct room |
+| `w4-44-dark-xxLarge-today.png` | dark + `.xxLarge` | Genuinely dark (`simctl io` screenshot); rail cards visible, tab bar/labels correct |
+| `w4-45-dark-xxLarge-rail-story.png` | dark + `.xxLarge` | Rail bottom `y=569`, story top `y=585` — 16pt clear gap, no overlap, dark too (round 3's `a849b39fd` fix holds at this size in both appearances) |
+| `w4-46-dark-accessibilityXXL-rail-wrapped-vertical.png` | dark + a true accessibility size (`accessibility-extra-extra-large`) | The rail **does** wrap to a vertical list here (matching ruling 1's actual "accessibility sizes" language and F4's shot-02): her rooms first, then project rooms, then Add a room, each non-overlapping (AX frames sequential, no y-range collision) |
+| `w4-47-companion-bubble-overlaps-story-flagoff-accessibilityXXL.png` | flag off, accessibility-XXL | **New finding.** At this scroll position the floating Companion bubble (`y=748–812, x=169–233`) sits entirely inside the `EditorialStory` card's bounds (`y=711–961`). A tap at the bubble's location (201,780) opened the Companion sheet, not the story — confirmed by AX frames and by the actual tap outcome, not appearance alone. Distinct from F4's flagged room-card overlap; this is the flag-off root's only nav surface stealing a tap from editorial content |
+| — | flag on, client | Un-save round-trip: saved `Oak Reading Chair` into Guest Bedroom via the room picker (server: `saved_items.room_id` set) → un-saved via a Browse card's long-press → "Unsave" (server row gone, confirmed `psql`) → re-saved into `W4 Wa` → un-saved via the Saved screen's own long-press → "Remove" (server row gone again) → on-glass, `W4 Wa`'s rail card dropped the "1 saved piece" clause both times. Both paths work |
+| — | flag on, client | The `?` help panel and the room-picker sheet both present correctly on the `Oak Reading Chair` piece screen |
+| `w4-48-james-matched-survives-20day-walk4.png` | flag on, `james.okafor@example.com` | `leads.id=a8fc690e-…` (fresh UUID this reset, queried not quoted) set 20 days old; Today still shows "See your design request. You're matched with Leah Hartwell" and the `Leah Hartwell picked up your request` seat. `created_at` restored to `2026-08-21 17:08:24.922373+00` afterward |
+| `w4-49-leave-state-flagoff-client-daily-room-walk4.png` | flag off, client, light, medium text size | Leave-state frame |
+
+**The claim sheet** (guest types a room, then signs in → "Keep them?" → the room is the account's,
+hydrate lands): not observed on the first attempt — `local_store_owner_user_id` (UserDefaults, only
+cleared by uninstall) was already set to the client's id from earlier in this same walk, so
+`LocalStoreClaim.shouldAsk` correctly declined to ask (`previousOwner != nil`) per the documented
+"first sign-in only" rule (`LocalStoreClaim.swift`). Re-tested with a genuine fresh pairing (full
+`keychain reset` + uninstall + reinstall): guest typed "Guest Claim Room" → `Sign in` via the
+Companion's own row (Settings/Account for a guest offers only "Sign in on the web" — no in-app
+password path once past the welcome gate; the Companion row is the actual route back to it) →
+signed in as `client@patina.dev` → the push primer, then the claim sheet ("Keep the room and the
+pieces you saved on this phone?") presented correctly → "Keep them" → the rail then showed the
+account's own rooms (`Guest Bedroom`, `W4 Wa`, mirrored from the server) beside the newly-claimed
+`Guest Cla` room, confirming the hydrate landed. The claimed room itself never syncs to the server
+(`RoomSyncCoordinator` is documented as read-only — "the read half of the room mirror"; nothing in
+the claim path pushes) — `psql` confirms no `Guest Claim Room` row server-side — but this is
+honestly disclosed: `Your Spaces` shows a "Saved on this phone" pill under it (`YourSpacesView.swift`
+`isLocalOnly`). Not a defect; worth flagging only because the Companion's "Sign in" CTA copy reads
+"Save rooms · Sync across devices" and this room does the first but not, yet, the second.
+
+**Room names get silently truncated on save** — "W4 Walk4 Room" saved as `W4 Wa` (`psql`-confirmed,
+not a display ellipsis), two separate attempts at "Guest Claim Test"/"Guest Claim Room" both saved
+as `Guest Cla`. The truncation points aren't a consistent character count, which points at an
+automation input-timing artifact (the harness's `input-text` outrunning the field, or the tap-to-Save
+landing before the last characters committed) rather than a deterministic field limit — flagged as an
+observation, not a confirmed app defect, since it wasn't independently reproduced with a slower typing
+cadence.
+
+Cleanup: `leads.created_at`/`updated_at` for `a8fc690e-c31a-4928-b54b-1765d3b53697` restored;
+`W4 Wa` (the only test room that reached the server) deleted server-side, leaving only D's
+`Guest Bedroom` under the client's `user_id`; `saved_items` for the client confirmed empty
+server-side; the local-only `Guest Claim Room`/`Guest Cla` was never server-side and needed no
+server cleanup (its on-device SwiftData copy remains, harmless, consistent with the app's
+local-first design).
+
+Leave state: signed in as `client@patina.dev`, flag off, on the Daily Room, light appearance,
+medium (default) text size, scrolled to top (`w4-49`).

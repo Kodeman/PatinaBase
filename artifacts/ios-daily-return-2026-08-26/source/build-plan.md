@@ -75,6 +75,11 @@ Evidence: `research/01-shot-ledger.md`, `research/05-rewalk.md`. Mocks: `mock/fr
 - Reviews are separate contexts; reviewer briefs say "report every finding with confidence +
   severity" — never a severity filter. Each lane owns the existing test suites in its file set and
   leaves them green.
+- **Screen capture rule:** simulator evidence comes ONLY from `xcrun simctl io <udid> screenshot`
+  (or blitz's screenshot tool). Never `screencapture` / desktop-region capture — the desktop belongs
+  to Kody and a W4 agent's `screencapture -R` caught an unrelated personal window. Drive taps with
+  blitz (explicit udid) or the calibrated AppleScript helper; if gestures stop delivering, stop and
+  report — do not improvise with desktop tooling.
 
 ## Team model (per wave)
 
@@ -231,6 +236,17 @@ Rooms with real numbers (`rooms.budget_cents` local-first + mirror; `committed_c
 project owns the room), saved-row date/room/note, the two 14-day decays removed, project timeline
 from the phases the detail already fetches, `profiles.last_seen_at` mirror. No new migration (00537
 carried the columns).
+
+### W4 — DONE 2026-08-28 (merged `2fffd48b3`; `waves/w4/`; 1253 tests; 00539 on main)
+Four fix rounds — see `waves/w4/rulings-fable.md` (her rooms first on the rail, a peeking card,
+vertical at accessibility sizes) and `fix3-log.md` (the root cause was composition, not data). Also
+found and fixed: every `saved_items` POST had been failing the `source` CHECK. **Carried to W5 (a
+small accessibility lane):** the Companion action sheet does not scroll at accessibility text sizes
+(round 3's fix did not hold); on the flag-off root the floating orb steals taps from the story card
+at accessibility sizes (the orb must yield there as it does on pay/sign screens). **Backlog:** a
+claimed guest room never syncs up (the coordinator is pull-only; the "Saved on this phone" pill is
+honest); typed room names occasionally truncated under automation typing (not reproduced by hand);
+`panelShielded`'s retiring task has no fuse (`fix3-log.md`).
 
 ### W5 — Purchase (B §5 + R3/Q5/Q6/Q11; `direct-orders`; base = main after W4)
 - Backend (Opus): **00539** (00538 was taken by W2's anonymize purge) — `direct_orders.designer_id/project_id/commission_rate` (snapshot in
