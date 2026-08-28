@@ -89,6 +89,12 @@ import {
 } from './invoice-checkout-integrity.ts';
 // BOH fulfillment intake emission (S0) — additive, one new call site below.
 import { enqueueAgentTask, type RpcClient } from '../_shared/agent-queue.ts';
+// Direct-order settle side effects (00540 / W5): the earnings credit + project
+// notice, and the intake enqueue that gives the client a "where is it".
+import {
+  runDirectOrderSettleEffects,
+  type SettleRpcClient,
+} from './direct-order-settle.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -1064,6 +1070,12 @@ async function handlePoPaymentIntentSettled(
 // gets a receipt and ops gets a heads-up, both via sendCompliantEmail; email
 // failures never fail the settle. All writes are service-role; the guard-then-
 // flip contract keeps Stripe retries safe.
+//
+// 00540 (W5) hangs two more effects off that same guarded flip — the earnings
+// credit + project-thread notice, and the fulfillment_intake enqueue. See
+// runDirectOrderSettleEffects. Like the emails, they can fail without failing
+// the settle: the money is already taken, and a retry would re-run an event
+// whose payable state has already moved.
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface DirectOrderRow {
@@ -1187,6 +1199,36 @@ async function markDirectOrderPaid(
     throw new Error(`failed to mark direct_order ${row.id} paid: ${error.message}`);
   }
   return (data ?? []).length > 0;
+}
+
+/**
+ * The settle's non-email side effects (00540): the earnings credit + project
+ * notice, and the fulfillment_intake enqueue. Logic and failure discipline live
+ * in direct-order-settle.ts; this is the logging wrapper. It never throws, so a
+ * missed effect can never make Stripe redeliver an event whose money is already
+ * settled — see that module's banner.
+ */
+async function logDirectOrderSettleEffects(
+  admin: SupabaseClient,
+  orderId: string,
+  paymentIntentId: string | null
+): Promise<void> {
+  const outcome = await runDirectOrderSettleEffects(
+    admin as unknown as SettleRpcClient,
+    orderId,
+    paymentIntentId
+  );
+  for (const problem of outcome.problems) {
+    console.error('stripe-webhook: direct_order settle effect —', orderId, problem);
+  }
+  if (outcome.problems.length === 0) {
+    console.log(
+      'stripe-webhook: direct_order settle effects done',
+      orderId,
+      outcome.attribution,
+      `intake_enqueued=${outcome.intakeEnqueued}`
+    );
+  }
 }
 
 /** One-line shipping summary (name + address) for the receipt/ops emails. */
@@ -1410,7 +1452,14 @@ async function handleDirectOrderSessionCompleted(
   if (session.payment_status === 'paid') {
     const shipping = extractDirectOrderShipping(session);
     const flipped = await markDirectOrderPaid(admin, row, paymentIntentId, shipping);
-    if (flipped) await sendDirectOrderPaidEmails(admin, row.id);
+    if (flipped) {
+      await sendDirectOrderPaidEmails(admin, row.id);
+      await logDirectOrderSettleEffects(
+        admin,
+        row.id,
+        paymentIntentId ?? row.stripe_payment_intent_id
+      );
+    }
   } else if (paymentIntentId && !row.stripe_payment_intent_id) {
     // ACH initiated ('unpaid'): stamp the PI id, leave status pending. The
     // async_payment_succeeded/failed event settles it in 3–5 business days.
@@ -1438,7 +1487,14 @@ async function handleDirectOrderAsyncPaymentSucceeded(
   }
   const shipping = extractDirectOrderShipping(session);
   const flipped = await markDirectOrderPaid(admin, row, paymentIntentId, shipping);
-  if (flipped) await sendDirectOrderPaidEmails(admin, row.id);
+  if (flipped) {
+    await sendDirectOrderPaidEmails(admin, row.id);
+    await logDirectOrderSettleEffects(
+      admin,
+      row.id,
+      paymentIntentId ?? row.stripe_payment_intent_id
+    );
+  }
 }
 
 async function handleDirectOrderAsyncPaymentFailed(
@@ -1501,7 +1557,10 @@ async function handleDirectOrderPaymentIntentSettled(
     // No session on a PI event → no shipping to persist here (pass undefined so
     // a prior session-backed shipping write is never clobbered with null).
     const flipped = await markDirectOrderPaid(admin, row, pi.id, undefined);
-    if (flipped) await sendDirectOrderPaidEmails(admin, row.id);
+    if (flipped) {
+      await sendDirectOrderPaidEmails(admin, row.id);
+      await logDirectOrderSettleEffects(admin, row.id, pi.id);
+    }
   }
   // outcome 'failed': a card decline leaves the Checkout session open for retry;
   // a failed ACH is handled authoritatively by async_payment_failed (clears the

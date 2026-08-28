@@ -47,7 +47,12 @@ export function normalizeIntakePayload(pi: Record<string, unknown>): Record<stri
       designer_client_id: md.designer_client_id ?? null,
       attribution: md.designer_attribution ? JSON.parse(md.designer_attribution) : null,
     },
-    ship_to: md.ship_to ? JSON.parse(md.ship_to) : null,
+    // A direct-order PI cannot carry ship_to in its metadata: that metadata is
+    // written when the Checkout session opens and the address is collected
+    // inside the session, after. Stripe copies the collected address onto the
+    // PaymentIntent itself, so fall back to it rather than filing the order
+    // with nowhere to ship. BOH orders that DO set md.ship_to are unchanged.
+    ship_to: md.ship_to ? JSON.parse(md.ship_to) : (pi.shipping ?? null),
     totals: {
       captured_total_cents: Number(md.captured_total_cents ?? pi.amount ?? 0),
       product_subtotal_cents: Number(md.product_subtotal_cents ?? 0),

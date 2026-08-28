@@ -41,8 +41,12 @@
 //      payment before Stripe, then reuse one stable Stripe idempotency key.
 //      PO/direct-order keep their existing pointer flow.
 //   5. Create the session: mode 'payment', card + us_bank_account, one line
-//      item at the payable amount, metadata { payable_type, … } on BOTH the
-//      session and the payment intent (webhook resolution).
+//      item at the payable amount, metadata { payable_type, … } on the session
+//      (webhook resolution) and on the payment intent. DIRECT ORDER (00540):
+//      the PaymentIntent's metadata is widened to the fulfillment-intake
+//      contract, a second "Delivery" line carries the freight already folded
+//      into amount_cents, and automatic_tax / shipping_options are added ONLY
+//      when fulfillment_config direct_orders.tax_shipping_enabled says so.
 //   6. Persist the session pointer (+ a pending invoice_payments row for
 //      invoices). The stripe-webhook function settles state from the metadata.
 //
@@ -70,6 +74,13 @@ import {
   reconcileInvoiceCheckoutSession,
   runInvoiceCheckout,
 } from './invoice-checkout-core.ts';
+import {
+  TAX_SHIPPING_CONFIG_KEY,
+  buildDirectOrderIntakeMetadata,
+  directOrderSessionExtras,
+  parseTaxShippingConfig,
+  type TaxShippingConfig,
+} from './direct-order.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -137,9 +148,34 @@ interface Payable {
    * shipping collection, exactly as before for invoice / po_payment.
    */
   shippingAddressCollection?: Stripe.Checkout.SessionCreateParams.ShippingAddressCollection;
+  /**
+   * Extra Checkout lines beyond the one built from lineItem* above — the
+   * direct-order rail's flat freight, so a buyer sees what she is paying for
+   * instead of one silently inflated piece price. Their amounts are already
+   * inside `amountCents`.
+   */
+  additionalLineItems?: Stripe.Checkout.SessionCreateParams.LineItem[];
+  /**
+   * Stripe Tax / shipping rates, added only when the server says so
+   * (fulfillment_config direct_orders.tax_shipping_enabled). When either is
+   * present the session's amount_total exceeds `amountCents`, so reuse
+   * compares against amount_subtotal instead — see startCheckout.
+   */
+  automaticTax?: Stripe.Checkout.SessionCreateParams.AutomaticTax;
+  shippingOptions?: Stripe.Checkout.SessionCreateParams.ShippingOption[];
   existingSessionId: string | null;
-  /** Copied onto the session AND payment_intent_data for webhook resolution. */
+  /**
+   * Copied onto the session for webhook resolution. Keep it to the two keys
+   * the dispatch actually reads — Stripe caps metadata at 50 keys / 500 chars
+   * per value, and the wide payload belongs on the PaymentIntent.
+   */
   metadata: Record<string, string>;
+  /**
+   * The PaymentIntent's metadata. Defaults to `metadata`. The direct-order rail
+   * widens this to the fulfillment-intake contract (fulfillment-intake/core.ts
+   * normalizeIntakePayload reads pi.metadata and nothing else).
+   */
+  paymentIntentMetadata?: Record<string, string>;
   successUrl: string;
   cancelUrl: string;
   /** 409 detail when a completed session still has an in-flight (ACH) payment. */
@@ -460,6 +496,7 @@ async function loadPoPaymentPayable(
 interface DirectOrderRow {
   id: string;
   client_id: string;
+  product_id: string | null;
   product_name: string;
   quantity: number;
   unit_price_cents: number;
@@ -468,6 +505,26 @@ interface DirectOrderRow {
   status: string;
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
+  designer_id: string | null;
+  project_id: string | null;
+  commission_rate: number | string | null;
+}
+
+/**
+ * Read fulfillment_config direct_orders.tax_shipping_enabled (00540). The I/O
+ * half; parseTaxShippingConfig owns the shape and the fail-closed rule.
+ */
+async function loadTaxShippingConfig(admin: SupabaseClient): Promise<TaxShippingConfig> {
+  const { data, error } = await admin
+    .from('fulfillment_config')
+    .select('value')
+    .eq('key', TAX_SHIPPING_CONFIG_KEY)
+    .maybeSingle();
+  if (error) {
+    console.error('create-checkout-session: tax_shipping_enabled lookup failed', error);
+    return { enabled: false, shippingRateIds: [] };
+  }
+  return parseTaxShippingConfig((data as { value?: unknown } | null)?.value);
 }
 
 /** direct_order payable — a client buying a Patina-managed product ("buy now"). */
@@ -480,8 +537,9 @@ async function loadDirectOrderPayable(
     .from('direct_orders')
     .select(
       `
-      id, client_id, product_name, quantity, unit_price_cents, amount_cents,
-      currency, status, stripe_checkout_session_id, stripe_payment_intent_id
+      id, client_id, product_id, product_name, quantity, unit_price_cents, amount_cents,
+      currency, status, stripe_checkout_session_id, stripe_payment_intent_id,
+      designer_id, project_id, commission_rate
     `
     )
     .eq('id', directOrderId)
@@ -540,17 +598,63 @@ async function loadDirectOrderPayable(
     );
   }
 
+  const currency = (order.currency || 'usd').toLowerCase();
+  const taxShipping = await loadTaxShippingConfig(admin);
+  const extras = directOrderSessionExtras({ order, currency, taxShipping });
+
+  // Buyer identity for the intake contract. A missing profile is not fatal —
+  // normalizeIntakePayload defaults the name — so this never blocks a payment.
+  const { data: buyer } = await admin
+    .from('profiles')
+    .select('full_name, email')
+    .eq('id', order.client_id)
+    .maybeSingle();
+
+  // The roster row linking this designer to this buyer, when there is one.
+  // fulfillment_orders.designer_client_id FKs to it; absent is fine.
+  let designerClientId: string | null = null;
+  if (order.designer_id) {
+    const { data: roster } = await admin
+      .from('designer_clients')
+      .select('id')
+      .eq('designer_id', order.designer_id)
+      .eq('client_id', order.client_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    designerClientId = (roster as { id?: string } | null)?.id ?? null;
+  }
+
   return {
     payableType: 'direct_order',
     amountCents: order.amount_cents,
-    currency: (order.currency || 'usd').toLowerCase(),
+    currency,
     lineItemName: order.product_name,
     // Bill quantity × unit price (a real quantity on the receipt), not one lump.
     lineItemQuantity: order.quantity,
     lineItemUnitAmountCents: order.unit_price_cents,
+    ...(extras.additionalLineItems
+      ? {
+          additionalLineItems:
+            extras.additionalLineItems as unknown as Stripe.Checkout.SessionCreateParams.LineItem[],
+        }
+      : {}),
+    ...(extras.automaticTax ? { automaticTax: extras.automaticTax } : {}),
+    ...(extras.shippingOptions
+      ? {
+          shippingOptions:
+            extras.shippingOptions as unknown as Stripe.Checkout.SessionCreateParams.ShippingOption[],
+        }
+      : {}),
     shippingAddressCollection: { allowed_countries: ['US'] },
     existingSessionId: order.stripe_checkout_session_id,
     metadata: { payable_type: 'direct_order', direct_order_id: order.id },
+    paymentIntentMetadata: buildDirectOrderIntakeMetadata({
+      order,
+      clientName: (buyer as { full_name?: string | null } | null)?.full_name ?? null,
+      clientEmail: (buyer as { email?: string | null } | null)?.email ?? null,
+      designerClientId,
+    }),
     successUrl: `${CLIENT_PORTAL_URL}/orders?order=${order.id}&checkout=success`,
     cancelUrl: `${CLIENT_PORTAL_URL}/orders?order=${order.id}&checkout=cancelled`,
     processingDetail:
@@ -1105,7 +1209,15 @@ async function startCheckout(
       }
 
       if (existing?.status === 'open') {
-        if (existing.amount_total === payable.amountCents && existing.url) {
+        // With automatic_tax or a shipping rate on the session, amount_total is
+        // our amount plus whatever Stripe added — comparing against it would
+        // expire and re-mint a perfectly good session on every tap. amount_
+        // subtotal is the line-item sum, which IS payable.amountCents.
+        const reusableAmount =
+          payable.automaticTax?.enabled || payable.shippingOptions?.length
+            ? (existing.amount_subtotal ?? existing.amount_total)
+            : existing.amount_total;
+        if (reusableAmount === payable.amountCents && existing.url) {
           return json({ url: existing.url });
         }
         try {
@@ -1149,12 +1261,22 @@ async function startCheckout(
             product_data: { name: payable.lineItemName },
           },
         },
+        ...(payable.additionalLineItems ?? []),
       ],
       ...(payable.shippingAddressCollection
         ? { shipping_address_collection: payable.shippingAddressCollection }
         : {}),
+      ...(payable.automaticTax
+        ? {
+            automatic_tax: payable.automaticTax,
+            // Stripe Tax needs an address on the Customer to compute against;
+            // 'auto' copies the one collected at Checkout onto it.
+            customer_update: { address: 'auto' as const, shipping: 'auto' as const },
+          }
+        : {}),
+      ...(payable.shippingOptions?.length ? { shipping_options: payable.shippingOptions } : {}),
       metadata: payable.metadata,
-      payment_intent_data: { metadata: payable.metadata },
+      payment_intent_data: { metadata: payable.paymentIntentMetadata ?? payable.metadata },
       success_url: payable.successUrl,
       cancel_url: payable.cancelUrl,
     });
