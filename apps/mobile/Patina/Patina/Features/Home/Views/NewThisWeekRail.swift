@@ -88,7 +88,9 @@ struct NewThisWeekRail: View {
                     if let raw = product.imageURL, let url = URL(string: raw), url.scheme != nil {
                         PatinaAsyncImage(url: url, contentMode: .fill)
                     } else {
-                        PatinaGradients.linen
+                        // Adaptive, so an unloaded image is not a light band
+                        // on a dark card.
+                        PatinaColors.Background.primary
                     }
                 }
                 .frame(width: 160, height: 112)

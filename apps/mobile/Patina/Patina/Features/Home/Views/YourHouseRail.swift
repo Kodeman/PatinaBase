@@ -160,8 +160,10 @@ struct YourHouseRail: View {
             onCard(card)
         } label: {
             VStack(alignment: .leading, spacing: 0) {
+                // An adaptive ground, not the `linen` gradient: a fixed light
+                // gradient reads as a white band on the dark card (M1d).
                 Rectangle()
-                    .fill(PatinaGradients.linen)
+                    .fill(PatinaColors.Background.primary)
                     .frame(height: 48)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
