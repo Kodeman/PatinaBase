@@ -51,10 +51,20 @@ final class RecommendationsViewModel {
 
     // MARK: - Computed
 
-    var filteredProducts: [Product] {
-        if activeFilter == "All" { return products }
-        return products.filter { $0.category.displayName == activeFilter }
-    }
+    /// Everything the RPC returned for the active chip.
+    ///
+    /// SP-02 sent the chip to `get_recommendations` as `p_category`, but the
+    /// grid went on filtering the result a second time on
+    /// `category.displayName`. That second pass can only ever subtract rows
+    /// the server deliberately sent: the RPC's filter is an exact
+    /// `p.category = p_category` against the DB vocabulary (00244:1016), while
+    /// the client re-derives its enum through `ProductCategory(normalizing:)`,
+    /// which folds unknown vocabulary onto `.decor`. Any row whose stored
+    /// category is a synonym the enum does not name would be fetched under its
+    /// own chip and then dropped before it reached the screen — and the
+    /// subtitle would print a count of what survived the client rather than
+    /// the catalogue's own. One filter, on the server.
+    var filteredProducts: [Product] { products }
 
     var headerSubtitle: String {
         let count = filteredProducts.count

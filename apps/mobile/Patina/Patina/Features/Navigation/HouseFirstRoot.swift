@@ -85,33 +85,22 @@ public struct HouseFirstRoot: View {
         )
     }
 
+    /// Each tab's root is a wrapper from `TabRoot.swift` (W3 · N2), which
+    /// carries the destination's canonical name (C4) and tells the screen it
+    /// is a root rather than a pushed copy of itself — a tab root draws no
+    /// back chevron, and the Pieces root draws M9's `Saved` door.
     @ViewBuilder
     private func root(for tab: PatinaTab) -> some View {
         switch tab {
         case .today:
             DailyRoomView()
         case .spaces:
-            YourSpacesView()
+            SpacesTabRoot()
         case .pieces:
-            RecommendationsView()
+            PiecesTabRoot()
         case .studio:
-            studioRoot
+            StudioTabRoot()
         }
-    }
-
-    /// The Studio tab's root. `StudioHubView` is a section, not a screen — it
-    /// carries no scroll view and no title of its own — so this supplies both
-    /// until N2's tab-root wrapper lands in the hub's own file.
-    private var studioRoot: some View {
-        ScrollView {
-            StudioHubView()
-                .padding(.horizontal, 24)
-                .padding(.top, 12)
-                .padding(.bottom, 24)
-        }
-        .background(PatinaColors.Background.primary)
-        .navigationTitle(PatinaTab.studio.canonicalName)
-        .navigationBarTitleDisplayMode(.large)
     }
 
     // MARK: - The bar
