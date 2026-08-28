@@ -184,6 +184,7 @@ describe('LineUnfold · the authorization gate', () => {
 describe('LineUnfold · piece artifact plate', () => {
   it('uses the joined product image, maker, and configuration language', () => {
     renderUnfold({
+      showArtifactPlate: true,
       item: {
         ...item,
         name: 'Halden Sofa',
@@ -219,7 +220,7 @@ describe('LineUnfold · piece artifact plate', () => {
   });
 
   it('states missing image, maker, and configuration data without inventing it', () => {
-    renderUnfold();
+    renderUnfold({ showArtifactPlate: true });
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(screen.getByText('Image not on file')).toBeInTheDocument();
@@ -229,6 +230,13 @@ describe('LineUnfold · piece artifact plate', () => {
     expect(
       screen.getByText('Configuration not recorded on this line.'),
     ).toBeInTheDocument();
+  });
+
+  it('stays out of non-project unfolds', () => {
+    renderUnfold({ showArtifactPlate: false });
+
+    expect(screen.queryByText('Piece in hand')).not.toBeInTheDocument();
+    expect(screen.queryByText('Image not on file')).not.toBeInTheDocument();
   });
 });
 

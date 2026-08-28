@@ -62,7 +62,7 @@ export function PieceArtifactPlate({ item }: { item: PieceArtifactItem }) {
             />
           ) : (
             <div className="px-5 py-8 text-center">
-              <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+              <p className="font-mono text-[12px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
                 Image not on file
               </p>
               <p className="mt-2 font-heading text-[18px] italic leading-snug text-[var(--color-charcoal)]">
@@ -73,22 +73,22 @@ export function PieceArtifactPlate({ item }: { item: PieceArtifactItem }) {
         </div>
 
         <figcaption className="flex min-w-0 flex-col border-t border-[var(--color-aged-oak)] pt-3 sm:border-t-0 sm:pt-0">
-          <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+          <p className="font-mono text-[12px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
             Piece in hand
           </p>
           <h3 className="mt-1 font-heading text-[23px] font-medium leading-[1.08] text-[var(--color-charcoal)]">
             {item.name}
             {(item.quantity ?? 0) > 1 ? ` · ×${item.quantity}` : ""}
           </h3>
-          <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">
-            <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <p className="mt-1.5 text-[14px] text-[var(--text-muted)]">
+            <span className="font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
               Maker
             </span>{" "}
             · {brand ?? "Not recorded"}
           </p>
 
           <div className="mt-4 border-t border-dashed border-[var(--color-pearl)] pt-3">
-            <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+            <p className="font-mono text-[12px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
               Specification
             </p>
             {visibleSelections.length > 0 ? (
@@ -98,22 +98,22 @@ export function PieceArtifactPlate({ item }: { item: PieceArtifactItem }) {
                     key={`${selection.groupName}:${selection.valueLabel}`}
                     className="border-b border-[var(--color-pearl)] pb-1"
                   >
-                    <dt className="font-mono text-[7.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                    <dt className="font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                       {selection.groupName}
                     </dt>
-                    <dd className="text-[11px] leading-snug text-[var(--color-charcoal)]">
+                    <dd className="text-[14px] leading-snug text-[var(--color-charcoal)]">
                       {selection.valueLabel}
                     </dd>
                   </div>
                 ))}
               </dl>
             ) : (
-              <p className="mt-1.5 text-[11px] italic text-[var(--text-muted)]">
+              <p className="mt-1.5 text-[14px] italic text-[var(--text-muted)]">
                 Configuration not recorded on this line.
               </p>
             )}
             {remainingSelections > 0 && (
-              <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              <p className="mt-2 font-mono text-[12px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                 + {remainingSelections} more in spec details
               </p>
             )}
