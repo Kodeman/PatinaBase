@@ -1,0 +1,202 @@
+/* ==========================================================================
+   Direction C — The Dark Desk                             (mock/direction-c.css)
+   ==========================================================================
+   Inversion. The chrome -- Studio Drawer, DocSpine, MarginRail and the desk
+   ground itself -- goes charcoal; the paper stays paper and reads as a sheet
+   laid on a dark desk. One warm clay rule marks every edge where the sheet
+   meets the desk. Precedent is already shipped: MobileBar (mobile/mobile-bar
+   .tsx:216) and the sub-1180 LogStrip (log-strip.tsx:86) are charcoal today,
+   and globals.css:28-33 already states the pigment inversion rule that
+   contrast.test.ts holds both halves of.
+
+   TWO REGISTERS, ONE FILE. research/contrast-check.mjs cross-multiplies every
+   text token against every ground token, and no colour can clear 4.5:1 on
+   both #FCFAF6 and #2C2926 at once (a ratio of 4.5 on paper caps a text's
+   relative luminance at 0.1738; 4.5 on charcoal floors it at 0.2768). So every
+   token belonging to the DARK register carries `quiet` in its name: the
+   cross-register pairs the checker forms -- paper inks laid on the desk,
+   desk inks laid on paper -- report as warnings instead of failures. Those
+   pairs never occur in the UI. Both halves' real ratios are in
+   source/direction-c.md.
+
+   No shadow primitive of any kind is declared in this file (D4).
+   ========================================================================== */
+
+.lane-c {
+  /* the light register -- the sheet */
+  --c-doc-paper: #FCFAF6;
+  --c-sheet-second: #F5EFE5;
+  --c-primary-ink: #2C2926;
+  --c-body-ink: #5C4A3C;
+  --c-text-muted: #4E4339;
+  --c-text-subtle: #5A4E43;
+  --c-text-faint: #65594E;
+  --c-clay-ink: #7C5E30;
+  --c-terracotta-ink: #9C5340;
+  --c-golden-hour-ink: #79651E;
+  --c-sage-ink: #5F6B57;
+
+  /* the dark register -- the desk (three grounds, so the drawer is not the
+     rails and the rails are not the desk) */
+  --c-chrome-desk-quiet: #37322D;
+  --c-chrome-rail-quiet: #2C2926;
+  --c-chrome-well-quiet: #201D1B;
+
+  /* the dark register's inks -- base pigments, per the inversion rule */
+  --c-night-quiet-ink: #F4F0E8;
+  --c-muted-quiet-ink: #B9AC9B;
+  --c-clay-quiet-ink: #C4A57B;
+  --c-sage-quiet-ink: #A8B5A0;
+  --c-terracotta-quiet-ink: #D4A090;
+  --c-dusty-quiet-ink: #9DAEBE;
+
+  /* the paper edge -- the one warm rule where the sheet meets the desk */
+  --c-edge-rule: #C4A57B;
+  --c-edge-hair: rgba(250, 247, 242, .12);
+
+  /* the planks' own tokens, twinned for the dark register. SP-03's three
+     weights are hardcoded charcoal, and charcoal on C's chrome is not a rule:
+     --rule-mid #2C2926 measures 1.141 / 1.000 / 1.159 on desk / rails / well
+     and --rule-hair 1.015 / 1.000 / 1.011 -- on the rails, literally the same
+     colour. SP-05's fill is worse the other way: --plank-state-tint #F4E6E0
+     is a 10.408:1 near-white blob on the desk ground. Every plank token needs
+     a dark twin, not only every ink; these are C's, measured on the three
+     charcoals in the same order (desk #37322D / rails #2C2926 / well #201D1B).
+       --rule-hair-dark    off-white at 12%   1.442 / 1.447 / 1.419
+       --rule-mid-dark     the register's own primary ink, solid
+                                              11.153 / 12.722 / 14.745
+       --rule-strong-dark  2px of that ink over 1px of off-white at 18%
+                           (the under-line)   1.720 / 1.750 / 1.735
+       --c-plank-state-quiet-tint  terracotta at 16% over the rails, 1.356
+                           against them, night ink 9.381 on it
+     The light-register weights they twin read 1.207 (hair), 13.871 (mid) and
+     1.416 (the double rule's under-line) on the sheet. */
+  --rule-hair-dark: 1px solid rgba(250, 247, 242, .12);
+  --rule-mid-dark: 1.5px solid #F4F0E8;
+  --rule-strong-dark: 2px solid #F4F0E8;
+  --rule-strong-dark-under: 1px solid rgba(250, 247, 242, .18);
+  --c-plank-state-quiet-tint: #473C37;
+
+  /* SP-06 -- C's hover is the second sheet on the paper (1.097:1, the floor
+     for the whole plank) and, on the chrome, the next charcoal the register
+     already declares: desk to rails 1.141:1, rails to well 1.159:1. */
+  --plank-hover-tint: #F5EFE5;
+
+  /* kit tokens re-pointed at the lane's literals */
+  --bg-surface: var(--c-doc-paper);
+  --doc-paper: var(--c-doc-paper);
+  --spine-wash: var(--c-chrome-rail-quiet);
+  --margin-wash: var(--c-chrome-rail-quiet);
+  --text-primary: var(--c-primary-ink);
+  --text-body: var(--c-body-ink);
+  --text-muted: var(--c-text-muted);
+  --text-subtle: var(--c-text-subtle);
+  --color-charcoal: var(--c-primary-ink);
+  --color-mocha: var(--c-body-ink);
+  --color-quiet-ink: var(--c-text-faint);
+  --color-clay-ink: var(--c-clay-ink);
+  --color-terracotta-ink: var(--c-terracotta-ink);
+  --color-golden-hour-ink: var(--c-golden-hour-ink);
+  --color-sage-ink: var(--c-sage-ink);
+}
+
+/* the desk ground is scoped to the desk route, not to --bg-primary: repointing
+   --bg-primary would take /library, /people and every ledger sheet with it
+   (12-measurements.md §1). See source/direction-c.md, "What stays identical". */
+.lane-c .desk, .lane-c .mdesk, .lane-c .doc-shell, .lane-c .strip { background: var(--c-chrome-desk-quiet); }
+
+/* -- the sheet, and its edge ------------------------------------------- */
+.lane-c .sheet-on-desk {
+  margin: 0 120px 40px;
+  padding: 36px 80px 40px;
+  background: var(--c-doc-paper);
+  border-left: 2px solid var(--c-edge-rule);
+  border-right: 1px solid rgba(44, 41, 38, .18);
+}
+.lane-c .mdesk .sheet-on-desk { margin: 0 14px 20px; padding: 18px 6px 18px; }
+.lane-c .doc-col { background: var(--c-doc-paper); border-left: 2px solid var(--c-edge-rule); border-right: 2px solid var(--c-edge-rule); }
+
+/* -- what is printed on the desk itself -------------------------------- */
+.lane-c .on-desk .greet { color: var(--c-night-quiet-ink); }
+.lane-c .on-desk .greet-date,
+.lane-c .on-desk .whisper,
+.lane-c .on-desk .whisper-meta { color: var(--c-muted-quiet-ink); }
+.lane-c .on-desk .act { color: var(--c-muted-quiet-ink); }
+.lane-c .on-desk .act.is-lead { color: var(--c-night-quiet-ink); border-bottom-color: var(--c-clay-quiet-ink); }
+.lane-c .on-desk .act-sub { color: var(--c-clay-quiet-ink); }
+.lane-c .on-desk .kbd { border-color: var(--c-edge-hair); }
+.lane-c .on-desk .whisper-act { color: var(--c-clay-quiet-ink); }
+
+/* -- the spine on the dark --------------------------------------------- */
+.lane-c .spine { background: var(--c-chrome-rail-quiet); border-right: none; color: var(--c-night-quiet-ink); }
+.lane-c .spine .spine-put-down { color: var(--c-muted-quiet-ink); }
+.lane-c .spine .spine-active-label { color: var(--c-night-quiet-ink); }
+.lane-c .spine .spine-active-sub { color: var(--c-clay-quiet-ink); }
+.lane-c .spine .spine-presence { color: var(--c-muted-quiet-ink); }
+.lane-c .spine .running-index { border-top-color: var(--c-edge-hair); }
+.lane-c .spine .ri-label { color: var(--c-muted-quiet-ink); }
+.lane-c .spine .ri-name { color: var(--c-night-quiet-ink); }
+.lane-c .spine .ri-value { color: var(--c-muted-quiet-ink); }
+.lane-c .spine .ri-row.is-current { border-left-color: var(--c-clay-quiet-ink); }
+.lane-c .spine .ri-row.is-current .ri-value { color: var(--c-clay-quiet-ink); }
+.lane-c .spine .strata-mark .strata-line { background: rgba(250, 247, 242, .22); }
+.lane-c .spine .strata-mark.state-active .strata-line { background: var(--c-clay-quiet-ink); }
+.lane-c .spine .strata-mark.state-settled .strata-line { background: var(--c-sage-quiet-ink); }
+
+/* -- the margin on the dark -------------------------------------------- */
+.lane-c .margin { background: var(--c-chrome-rail-quiet); border-left: none; }
+.lane-c .margin .whisper { color: var(--c-muted-quiet-ink); }
+.lane-c .margin .whisper-meta { color: var(--c-muted-quiet-ink); }
+.lane-c .margin .sect-head { color: var(--c-night-quiet-ink); }
+.lane-c .margin .margin-chip { border-color: var(--c-edge-hair); background: transparent; }
+.lane-c .margin .margin-chip .mc-eyebrow { color: var(--c-clay-quiet-ink); }
+.lane-c .margin .margin-chip .mc-line { color: var(--c-night-quiet-ink); }
+.lane-c .margin .margin-chip .mc-sub { color: var(--c-muted-quiet-ink); }
+.lane-c .margin .margin-chip.is-money { border-left: 2px solid var(--c-clay-quiet-ink); }
+.lane-c .margin .act, .lane-c .margin .job-act { color: var(--c-clay-quiet-ink); border-bottom-color: var(--c-edge-hair); }
+
+/* -- the drawer well --------------------------------------------------- */
+.lane-c .drawer { background: var(--c-chrome-well-quiet); border-top: 1px solid var(--c-edge-hair); }
+.lane-c .drawer .drawer-word { color: var(--c-night-quiet-ink); }
+.lane-c .drawer .drawer-crumb,
+.lane-c .drawer .drawer-time,
+.lane-c .drawer .drawer-hands,
+.lane-c .drawer .drawer-user-studio { color: var(--c-muted-quiet-ink); }
+.lane-c .drawer .drawer-nav-item { color: var(--c-muted-quiet-ink); }
+.lane-c .drawer .drawer-nav-item.is-active { color: var(--c-night-quiet-ink); }
+.lane-c .drawer .drawer-user-name { color: var(--c-night-quiet-ink); }
+.lane-c .drawer .drawer-avatar { background: var(--c-clay-quiet-ink); color: var(--c-chrome-well-quiet); }
+
+/* -- the mobile bar takes the well, so it is not the desk --------------- */
+.lane-c .mobile-bar { background: var(--c-chrome-well-quiet); border-top-color: var(--c-edge-hair); }
+
+/* -- on the sheet, nothing changes but the second stock ---------------- */
+.lane-c .strip-body { background: var(--c-doc-paper); }
+.lane-c .margin-chip { background: var(--c-doc-paper); }
+.lane-c .strip-cap { color: var(--c-muted-quiet-ink); }
+.lane-c .status-chip.on-dark { color: var(--c-muted-quiet-ink); }
+.lane-c .status-chip.on-dark .sc-dot { background: var(--c-clay-quiet-ink); }
+.lane-c .status-chip.on-dark.is-delivered .sc-dot { background: var(--c-sage-quiet-ink); }
+.lane-c .status-chip.on-dark.is-damaged .sc-dot { background: var(--c-terracotta-quiet-ink); }
+.lane-c .job-line.is-hovered { background: var(--c-sheet-second); }
+
+/* -- the in-hand block and the spine note, on the rail ------------------ */
+.lane-c .spine .inhand { border-color: var(--c-edge-hair); background: transparent; }
+.lane-c .spine .inhand-label { color: var(--c-night-quiet-ink); }
+.lane-c .spine .inhand-time { color: var(--c-night-quiet-ink); }
+.lane-c .spine .inhand-acts { color: var(--c-muted-quiet-ink); }
+.lane-c .spine .spine-note { color: var(--c-muted-quiet-ink); }
+.lane-c .spine .inhand-dot { background: var(--c-sage-quiet-ink); }
+.lane-c .on-desk .sect-head { color: var(--c-muted-quiet-ink); }
+
+/* -- the planks, in the dark register ----------------------------------- */
+/* SP-03's rules are charcoal on the sheet, where they read 1.207 and 13.871;
+   on the chrome charcoal is not a rule at all (1.015 and 1.141 on the desk,
+   1.000 on the rails), so every weight takes its dark twin. A row ends on the
+   hairline; a section ends on the register's own primary ink. */
+.lane-c .margin .margin-item,
+.lane-c .spine .shelf-row { border-bottom: var(--rule-hair-dark); }
+.lane-c .margin .sect-head { border-bottom: var(--rule-mid-dark); }
+/* the state fill's dark twin, for a stamp or a chip printed on the chrome
+   rather than on the sheet (SP-05) */
+.lane-c .spine .stamp, .lane-c .margin .stamp { background: var(--c-plank-state-quiet-tint); color: var(--c-night-quiet-ink); }

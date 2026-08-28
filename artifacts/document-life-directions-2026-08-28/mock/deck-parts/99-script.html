@@ -1,0 +1,199 @@
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var root = document.documentElement;
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ── 1. The index is built from the deck's own order. Nothing is
+        hand-listed, so a part added or moved cannot drift. */
+  var sections = Array.prototype.slice.call(
+    document.querySelectorAll("#dk-main > section[data-index-title]")
+  );
+  var list = document.getElementById("dk-index-list");
+  var links = [];
+
+  sections.forEach(function (section) {
+    if (!list) { return; }
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.className = "dk-index-link";
+    a.href = "#" + section.id;
+    a.textContent = section.getAttribute("data-index-title") || section.id;
+    li.appendChild(a);
+    list.appendChild(li);
+    links.push({ el: a, id: section.id });
+  });
+
+  /* ── 2. Anchor scroll. Smooth by default; instant when the viewer has asked
+        for less motion. Focus follows the jump so a keyboard reader lands
+        inside the section, not back at the top of the page. */
+  function focusSection(section) {
+    if (!section) { return; }
+    var target = section.querySelector("h1, h2, .dk-h1, .dk-h2") || section;
+    if (!target.hasAttribute("tabindex")) { target.setAttribute("tabindex", "-1"); }
+    try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); }
+  }
+
+  document.addEventListener("click", function (ev) {
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href^="#"]') : null;
+    if (!a) { return; }
+    var id = a.getAttribute("href").slice(1);
+    if (!id) { return; }
+    var section = document.getElementById(id);
+    if (!section) { return; }
+    ev.preventDefault();
+    var top = section.getBoundingClientRect().top + window.pageYOffset - 54;
+    if (reduce) {
+      window.scrollTo(0, top);
+    } else {
+      try { window.scrollTo({ top: top, behavior: "smooth" }); }
+      catch (e) { window.scrollTo(0, top); }
+    }
+    if (history.replaceState) { history.replaceState(null, "", "#" + id); }
+    focusSection(section);
+  });
+
+  /* ── 3. Scroll spy: exactly one current row, and the index scrolls it into
+        view so the reader can always see where they are. */
+  var currentId = null;
+  function setCurrent(id) {
+    if (id === currentId) { return; }
+    currentId = id;
+    links.forEach(function (link) {
+      if (link.id === id) {
+        link.el.setAttribute("aria-current", "true");
+        if (link.el.scrollIntoView) {
+          try { link.el.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (e) {}
+        }
+      } else {
+        link.el.removeAttribute("aria-current");
+      }
+    });
+  }
+
+  if ("IntersectionObserver" in window && sections.length) {
+    var visible = Object.create(null);
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) { visible[entry.target.id] = entry.isIntersecting; });
+      for (var i = 0; i < sections.length; i += 1) {
+        if (visible[sections[i].id]) { setCurrent(sections[i].id); return; }
+      }
+    }, { rootMargin: "-14% 0px -68% 0px", threshold: 0 });
+    sections.forEach(function (s) { spy.observe(s); });
+    setCurrent(sections[0].id);
+  }
+
+  /* ── 4. Read progress on the index hairline. */
+  var progress = document.getElementById("dk-progress");
+  function drawProgress() {
+    if (!progress) { return; }
+    var doc = document.documentElement;
+    var span = (doc.scrollHeight - doc.clientHeight) || 1;
+    var pct = Math.min(1, Math.max(0, (window.pageYOffset || doc.scrollTop) / span));
+    progress.style.width = (pct * 100).toFixed(2) + "%";
+  }
+
+  /* ── 5. Fit every CSS-built mock to the column it sits in (no phone chrome
+        in this kit — desk/document screens, drawn at native width by
+        build.mjs's FRAGMENT scaler and only ever scaled here, never
+        redrawn). Grafted from artifacts/document-wayfinding-directions-
+        2026-08-25/mock/deck-parts/99-script.html:79-102. */
+  function fitMocks() {
+    var mocks = document.querySelectorAll(".dk-mock");
+    Array.prototype.forEach.call(mocks, function (mock) {
+      var nw = parseFloat(mock.getAttribute("data-w"));
+      var nh = parseFloat(mock.getAttribute("data-h"));
+      var viewport = mock.querySelector(".dk-mock-viewport");
+      var scale = mock.querySelector(".dk-mock-scale");
+      if (!nw || !nh || !viewport || !scale) { return; }
+      /* Measure the figure, never the viewport: the viewport is what we
+         resize, so measuring it would feed its own output back in. */
+      var avail = mock.clientWidth;
+      if (!avail) { return; }
+      var s = Math.min(1, avail / nw);
+      scale.style.transform = "scale(" + s + ")";
+      viewport.style.width = Math.round(nw * s) + "px";
+      viewport.style.height = Math.round(nh * s) + "px";
+    });
+    drawProgress();
+  }
+
+  fitMocks();
+  window.addEventListener("load", fitMocks);
+
+  /* ── 5b. Every body cell carries its column head, so a table can restack as
+        definition rows on a phone instead of scrolling sideways off canvas.
+        Nothing is hand-listed: the labels are the table's own thead, so a
+        column added or renamed cannot drift. Saves 3 columns at 390px on
+        the compare table (dk-table--compare3). */
+  Array.prototype.forEach.call(document.querySelectorAll(".dk-table"), function (table) {
+    var headRow = table.querySelector("thead tr");
+    if (!headRow) { return; }
+    var heads = Array.prototype.map.call(headRow.children, function (th) {
+      return (th.textContent || "").replace(/\s+/g, " ").trim();
+    });
+    Array.prototype.forEach.call(table.querySelectorAll("tbody tr"), function (row) {
+      var col = 0;
+      Array.prototype.forEach.call(row.children, function (cell) {
+        var span = parseInt(cell.getAttribute("colspan") || "1", 10) || 1;
+        var label = heads[col];
+        var isRowHead = cell.tagName === "TH";
+        if (label && span === 1 && !isRowHead) { cell.setAttribute("data-l", label); }
+        col += span;
+      });
+    });
+  });
+
+  var raf = null;
+  window.addEventListener("scroll", function () {
+    if (raf) { return; }
+    raf = window.requestAnimationFrame(function () { raf = null; drawProgress(); });
+  }, { passive: true });
+
+  var resizeTimer = null;
+  window.addEventListener("resize", function () {
+    if (resizeTimer) { window.clearTimeout(resizeTimer); }
+    resizeTimer = window.setTimeout(fitMocks, 120);
+  });
+
+  /* ── 6. Theme: system -> light -> dark -> system. Remembered per viewer,
+        best effort; a blocked store just means the default stands. */
+  var toggle = document.getElementById("dk-theme-toggle");
+  var order = ["system", "light", "dark"];
+  var labels = { system: "Match system", light: "Light", dark: "Dark" };
+  var mode = "system";
+  try {
+    var saved = window.localStorage.getItem("dk-document-life-theme");
+    if (saved && order.indexOf(saved) !== -1) { mode = saved; }
+  } catch (e) { /* private window or blocked storage */ }
+
+  function apply() {
+    if (mode === "system") { root.removeAttribute("data-theme"); }
+    else { root.setAttribute("data-theme", mode); }
+    if (toggle) {
+      toggle.textContent = labels[mode];
+      toggle.setAttribute("aria-label", "Colour scheme: " + labels[mode] + ". Click to change.");
+    }
+  }
+  apply();
+
+  if (toggle) {
+    toggle.addEventListener("click", function () {
+      mode = order[(order.indexOf(mode) + 1) % order.length];
+      apply();
+      try { window.localStorage.setItem("dk-document-life-theme", mode); }
+      catch (e) { /* nothing to remember; the page still works */ }
+    });
+  }
+
+  /* ── 7. Deep link on load: honour a #hash the reader arrived with. */
+  if (window.location.hash) {
+    var landed = document.getElementById(window.location.hash.slice(1));
+    if (landed) { window.setTimeout(function () { focusSection(landed); }, 60); }
+  }
+})();
+</script>

@@ -1,0 +1,199 @@
+/* ==========================================================================
+   Direction B — Honest Materials                          (mock/direction-b.css)
+   ==========================================================================
+   Colour, tint, imagery, texture -- inside D4. Paper is tinted by the movement
+   the document is in: six stocks, one per stage group the desk actually
+   prints, each drawn from one of the six shipped --phase-* hues and composited
+   to the literal hex it resolves to, so research/contrast-check.mjs can read
+   them.
+
+   v2 retune: the stocks are now tuned against THE GROUND THEY ARE PAINTED ON
+   (the desk ground #FAF7F2), not against the sheet. Each sits at 1.081-1.088:1
+   over it, from 1.001-1.020:1 in v1 -- which was flatter than the 1.025:1 the
+   audit calls the defect. Alphas run 9-22% rather than 4-6%. Each declared hex
+   is its --phase-* hue COMPOSITED OVER THE SHEET #FCFAF6 and MEASURED against
+   the ground #FAF7F2 it is painted on; composite the same alpha over the
+   ground instead and you get six different colours (Proposal would be
+   #F2EBE0, which is already B's ordered fill).
+
+   v3 retune: the RAIL moved. At v2's #ECE7DF the rails measured 1.058-1.066:1
+   against the six sheets they actually flank -- below today's 1.081:1, so B
+   was the one lane whose SP-08 went backwards. The rail is one step deeper at
+   #E8E3DB and now reads 1.098-1.106:1 against all six, 1.225:1 under the
+   untinted sheet and 1.195:1 under the desk ground. The price is exact and it
+   is why the token carries `quiet`: on #E8E3DB the three warm pigment inks
+   fall under the 4.5:1 floor -- golden-hour 4.452, terracotta 4.414, sage
+   4.411 -- so B's rail carries only charcoal, the muted ramp and clay-ink
+   (4.697:1), and research/contrast-check.mjs reports the pairs that never
+   occur as warnings rather than failures. The arithmetic leaves no third
+   option: 1.08:1 under the darkest sheet caps the rail at a relative
+   luminance of 0.7858, and sage-ink needs 0.7886.
+
+   The five tab pigments (--b-tab-*) are deliberately NOT named as ground
+   tokens: the checker cross-multiplies every text against every ground, and
+   the tab's only text is white at 12px. Those ratios are in
+   source/direction-b.md instead.
+
+   Depends on mock/direction-a.css for the shared mock shapes and the PLANKS
+   block; the deck injects all three lane stylesheets.
+
+   No shadow primitive of any kind is declared in this file (D4).
+   ========================================================================== */
+
+.lane-b {
+  /* the sheet and the desk */
+  --b-doc-paper: #FCFAF6;
+  --b-desk-ground: #FAF7F2;   /* unchanged -- B spends its colour on movements */
+
+  /* the six movement stocks, one per stage group on w1440-desk.png.
+     ratios: vs the desk ground / vs the untinted sheet */
+  --b-stock-brief: #EDEEED;      /* consultation #8B9CAD @13% -- 1.088 / 1.116 */
+  --b-stock-discovery: #EFEFE8;  /* walkthrough  #A8B5A0 @16% -- 1.081 / 1.108 */
+  --b-stock-direction: #F2EEE8;  /* refinement   #8B7355 @9%  -- 1.081 / 1.109 */
+  --b-stock-proposal: #F4EDE4;   /* concept      #C4A57B @15% -- 1.087 / 1.114 */
+  --b-stock-project: #F8EED0;    /* procurement  #E8C547 @22% -- 1.084 / 1.111 */
+  --b-stock-install: #F6EDE7;    /* installation #D4A090 @15% -- 1.081 / 1.108 */
+
+  /* the rails: as deep as the six sheets allow, which is deeper than the four
+     paper inks allow. 1.098-1.106:1 under the six movement stocks, 1.225:1
+     under the untinted sheet, 1.195:1 under the desk ground. Only charcoal,
+     the muted ramp and clay-ink print on it -- see the header. */
+  --b-rail-quiet-stock: #E8E3DB;
+
+  /* SP-06 -- B's hover is the untinted sheet showing through the tinted
+     stock: 1.108-1.116:1 on the six, 1.225:1 on the rail. A fill DARKER than
+     a movement stock cannot be used -- at 1.10:1 below the Project stock the
+     four -ink tokens read 4.36:1 on the hovered row. */
+  --plank-hover-tint: #FCFAF6;
+
+  /* state fills -- pigment over the untinted sheet. The stamp's 1.5px pigment
+     border does the separating; the fill carries the hue. Damaged is 16%,
+     not 18%, so its ink clears 4.5:1 by 0.13 rather than 0.01. */
+  --b-chip-ordered-tint: #F2EBE0;
+  --b-chip-production-tint: #F8F0D7;
+  --b-chip-delivered-tint: #EDEEE7;
+  --b-chip-damaged-tint: #F4E6E0;
+  --b-chip-approval-tint: #E8E9E9;
+
+  /* the charcoal band under the letterhead and the red letter */
+  --b-band-quiet-chrome: #2C2926;
+  --b-band-quiet-ink: #FAF7F2;
+  --b-band-clay-quiet-ink: #C4A57B;
+  --b-band-terracotta-quiet-ink: #D4A090;
+
+  /* paper inks -- I151 values, unchanged */
+  --b-primary-ink: #2C2926;
+  --b-body-ink: #5C4A3C;
+  --b-clay-ink: #7C5E30;
+  --b-terracotta-ink: #9C5340;
+  --b-golden-hour-ink: #79651E;
+  --b-sage-ink: #5F6B57;
+
+  /* saturated folder tabs -- the phase hues deepened until white ink holds */
+  --b-tab-brief: #5C7186;
+  --b-tab-discovery: #4F6248;
+  --b-tab-direction: #6B5637;
+  --b-tab-proposal: #8B6A3A;
+  --b-tab-project: #7A6410;
+  --b-tab-install: #9A4E39;
+
+  /* kit tokens re-pointed at the lane's literals */
+  --bg-primary: var(--b-desk-ground);
+  --bg-surface: var(--b-doc-paper);
+  --doc-paper: var(--b-doc-paper);
+  --spine-wash: var(--b-rail-quiet-stock);
+  --margin-wash: var(--b-rail-quiet-stock);
+  --text-primary: var(--b-primary-ink);
+  --text-body: var(--b-body-ink);
+  --color-charcoal: var(--b-primary-ink);
+  --color-mocha: var(--b-body-ink);
+  --color-clay-ink: var(--b-clay-ink);
+  --color-terracotta-ink: var(--b-terracotta-ink);
+  --color-golden-hour-ink: var(--b-golden-hour-ink);
+  --color-sage-ink: var(--b-sage-ink);
+}
+
+/* -- the grain: 2-3% tooth, two crossed repeating gradients ------------- */
+.lane-b .grain {
+  background-image:
+    repeating-linear-gradient(45deg, rgba(92, 74, 60, .030) 0 1px, rgba(92, 74, 60, 0) 1px 3px),
+    repeating-linear-gradient(-45deg, rgba(92, 74, 60, .022) 0 1px, rgba(92, 74, 60, 0) 1px 4px);
+}
+
+/* -- the movement stocks, applied -------------------------------------- */
+.lane-b .doc-col { background-color: var(--b-stock-project); }
+.lane-b .spine, .lane-b .margin { background: var(--b-rail-quiet-stock); }
+.lane-b .stage-group.mv-brief { background-color: var(--b-stock-brief); }
+.lane-b .stage-group.mv-discovery { background-color: var(--b-stock-discovery); }
+.lane-b .stage-group.mv-direction { background-color: var(--b-stock-direction); }
+.lane-b .stage-group.mv-proposal { background-color: var(--b-stock-proposal); }
+.lane-b .stage-group.mv-project { background-color: var(--b-stock-project); }
+.lane-b .stage-group.mv-install { background-color: var(--b-stock-install); }
+/* the band is a stock, not a panel: it bleeds to the page's own edges so it
+   has no left or right edge of its own and cannot read as a card */
+.lane-b .sheet-on-desk .stage-group { margin: 10px -200px 0; padding: 8px 200px 2px; border-radius: 0; }
+.lane-b .mdesk .sheet-on-desk .stage-group { margin: 10px -20px 0; padding: 8px 20px 2px; }
+.lane-b .strip-body .stage-group { margin: 0 -10px; padding: 6px 10px 2px; }
+
+/* -- the folder tab: the movement's own word, saturated ---------------- */
+.lane-b .stage-head { display: inline-flex; align-items: center; height: 22px; padding: 0 12px; border-radius: 3px 3px 0 0; color: #FFFFFF; letter-spacing: .1em; }
+.lane-b .stage-group.mv-brief .stage-head { background: var(--b-tab-brief); }
+.lane-b .stage-group.mv-discovery .stage-head { background: var(--b-tab-discovery); }
+.lane-b .stage-group.mv-direction .stage-head { background: var(--b-tab-direction); }
+.lane-b .stage-group.mv-proposal .stage-head { background: var(--b-tab-proposal); }
+.lane-b .stage-group.mv-project .stage-head { background: var(--b-tab-project); }
+.lane-b .stage-group.mv-install .stage-head { background: var(--b-tab-install); }
+.lane-b .movement-tab { display: inline-flex; align-items: center; height: 26px; padding: 0 14px; border-radius: 3px 3px 0 0; background: var(--b-tab-project); color: #FFFFFF; font-family: var(--font-meta); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+
+/* -- the charcoal band: letterhead + red letter ------------------------ */
+.lane-b .band { margin: 0 -48px 20px; padding: 24px 48px 20px; background: var(--b-band-quiet-chrome); }
+.lane-b .band .letterhead { border-bottom: 1px solid rgba(250, 247, 242, .18); }
+.lane-b .band .lh-title { color: var(--b-band-quiet-ink); }
+.lane-b .band .lh-client { color: var(--b-band-clay-quiet-ink); }
+.lane-b .band .vitals .vital { color: var(--b-band-clay-quiet-ink); }
+.lane-b .band .vitals .vital-value { color: var(--b-band-quiet-ink); }
+.lane-b .band .red-letter { border-left-color: var(--b-band-terracotta-quiet-ink); background: rgba(212, 160, 144, .12); }
+.lane-b .band .red-letter .rl-label { color: var(--b-band-terracotta-quiet-ink); }
+.lane-b .band .red-letter .rl-text { color: var(--b-band-quiet-ink); }
+.lane-b .band .red-letter .rl-action { color: var(--b-band-clay-quiet-ink); }
+.lane-b .band .red-letter .rl-row { border-bottom-color: rgba(250, 247, 242, .14); }
+.lane-b .band .strata-mark .strata-line { background: rgba(250, 247, 242, .32); }
+.lane-b .band .strata-mark.state-active .strata-line { background: var(--b-band-clay-quiet-ink); }
+
+/* -- filled states: the Stamp is what the surface renders -------------- */
+.lane-b .stamp { background: var(--b-chip-ordered-tint); border-width: 1.5px; }
+.lane-b .stamp.stamp-ordered { background: var(--b-chip-ordered-tint); color: var(--b-clay-ink); }
+.lane-b .stamp.stamp-decision { background: var(--b-chip-damaged-tint); color: var(--b-terracotta-ink); }
+.lane-b .stamp.stamp-in-production, .lane-b .stamp.stamp-shipped { background: var(--b-chip-production-tint); color: var(--b-golden-hour-ink); }
+.lane-b .stamp.stamp-delivered, .lane-b .stamp.stamp-received { background: var(--b-chip-delivered-tint); color: var(--b-sage-ink); }
+.lane-b .stamp.stamp-damaged, .lane-b .stamp.stamp-cancelled { background: var(--b-chip-damaged-tint); color: var(--b-terracotta-ink); }
+.lane-b .stamp.stamp-draft { background: var(--b-chip-ordered-tint); color: var(--b-clay-ink); }
+.lane-b .stamp.stamp-confirmed { background: var(--b-chip-approval-tint); color: var(--b-body-ink); }
+/* the same variant on the chip, where the chip is reachable */
+.lane-b .status-chip { border-radius: 2px; padding: 3px 8px; background: var(--b-chip-ordered-tint); color: var(--b-clay-ink); }
+.lane-b .status-chip .sc-dot { display: none; }
+.lane-b .status-chip.is-damaged { background: var(--b-chip-damaged-tint); color: var(--b-terracotta-ink); }
+.lane-b .status-chip.is-delivered { background: var(--b-chip-delivered-tint); color: var(--b-sage-ink); }
+
+/* -- product thumbs: only where an FF&E line links a catalog product ---- */
+.lane-b .thumb { display: block; width: 48px; height: 48px; flex: 0 0 auto; border: 1px solid rgba(44, 41, 38, .14); border-radius: 2px; background-color: var(--b-rail-quiet-stock); background-size: cover; background-position: center; }
+.lane-b .thumb[data-crop="heirloom-oak-dining-table"] { background-image: var(--crop-heirloom-oak-dining-table); }
+.lane-b .thumb[data-crop="live-edge-coffee-table"] { background-image: var(--crop-live-edge-coffee-table); }
+.lane-b .thumb[data-crop="pendant-lamp"] { background-image: var(--crop-pendant-lamp); }
+.lane-b .thumb[data-crop="planter-set"] { background-image: var(--crop-planter-set); }
+.lane-b .thumb[data-crop="heirloom-thumb"] { background-image: var(--crop-heirloom-thumb); }
+/* no catalog link -- the line keeps the slot and shows a material at the rail
+   stock's value (1.103:1 under the Project stock the M2 sheet takes, from
+   1.063:1 at v2's lighter rail), never a stand-in photograph and never a
+   blank that reads as a failed image */
+.lane-b .thumb.is-unlinked { background-image: none; background-color: var(--b-rail-quiet-stock); border-color: rgba(44, 41, 38, .22); }
+.lane-b .ffe-row { grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 10px 0; }
+
+/* -- the rules take the movement's pigment ----------------------------- */
+.lane-b .region-rule { border-top-color: var(--b-tab-project); }
+.lane-b .sect-mark i:nth-child(1) { background: var(--b-tab-project); }
+
+/* -- the rails and the drawer ------------------------------------------ */
+.lane-b .drawer { background: var(--b-doc-paper); border-top: 1px solid rgba(44, 41, 38, .16); }
+.lane-b .margin-chip { border-color: rgba(44, 41, 38, .14); background: var(--b-doc-paper); }
+.lane-b .movement-tab { display: inline-flex; }

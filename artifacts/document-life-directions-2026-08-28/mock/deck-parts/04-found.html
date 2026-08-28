@@ -1,0 +1,124 @@
+<section id="found" class="dk-sec reg-dark" data-index-title="What we found">
+  <div class="dk-wrap">
+    <p class="hour"><b>FINDINGS</b></p>
+    <h2 class="dk-h2">Twenty-five findings, four of them blockers</h2>
+    <p class="dk-lede">Twenty-five findings came out of the walk: four blocker, eleven high, nine medium, one low. By theme, type carries seven, tone five, state four, chrome four, color two, material two, rule one. Every fix is a token, a type step, a rule weight, a fill, a ground or a crop &mdash; nothing that moves a route, a label or an act.</p>
+
+    <p class="dk-note">No dedicated finding-card class exists in <code>00-head.html</code>; the cards below reuse <code>.q-card</code> (the question-card kit), which already carries an id line, a title and a meta row.</p>
+
+    <div class="q-grid">
+      <article class="q-card">
+        <p class="q-card__n">F01 <span class="f-chip f-chip--s0">blocker</span></p>
+        <h3 class="q-card__q">Hover and decision-due paint one FF&amp;E row identically</h3>
+        <p class="q-card__why">Hover and a row stamped DECISION DUE composite to about 1.0005:1 against the paper &mdash; a row that needs a decision and a row under the cursor land on the same ground.</p>
+        <p class="q-card__meta"><code>w1440-ffe-lines.png</code> &middot; <code>ffe-section.tsx:396-399</code></p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">F05 <span class="f-chip f-chip--s1">high</span></p>
+        <h3 class="q-card__q">Room, paper and card sit inside 1.07 to 1</h3>
+        <p class="q-card__why">Desk ground, document paper and card register within 1.069:1 of each other, so arriving at &ldquo;Chen Residence&rdquo; does not change the paper under the eye.</p>
+        <p class="q-card__meta"><code>w1440-doc-project-rich.png</code> &middot; <code>globals.css:63-64</code></p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">F07 <span class="f-chip f-chip--s1">high</span></p>
+        <h3 class="q-card__q">The margin rail has no ground of its own</h3>
+        <p class="q-card__why">The fill behind &ldquo;IN THE MARGIN&rdquo; composites to exactly the ground it sits on, 1.000:1, so its chips float rather than rest on a place.</p>
+        <p class="q-card__meta"><code>w1440-margin-rail.png</code> &middot; <code>margin-rail.tsx:258</code></p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">F12 <span class="f-chip f-chip--s1">high</span></p>
+        <h3 class="q-card__q">Three in four mono labels are ten pixels or under</h3>
+        <p class="q-card__why">75.2% of the document's mono labels &mdash; eyebrows like &ldquo;NEEDS ATTENTION&rdquo; among them &mdash; sit at 10px or under, past the declared 12px floor.</p>
+        <p class="q-card__meta"><code>w1440-doc-project-rich.png</code> &middot; <code>globals.css:73-75</code></p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">F03 <span class="f-chip f-chip--s0">blocker</span></p>
+        <h3 class="q-card__q">One stamp shape carries every kind of state</h3>
+        <p class="q-card__why">One geometry serves 14 call sites, so &ldquo;IN PRODUCTION&rdquo;, &ldquo;SENT&rdquo; and &ldquo;OUTLINE&rdquo; are told apart only by a hairline of border hue.</p>
+        <p class="q-card__meta"><code>w1440-ffe-lines.png</code> &middot; <code>stamp.tsx:26-31</code></p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">F09 <span class="f-chip f-chip--s1">high</span></p>
+        <h3 class="q-card__q">The most urgent band is the palest band</h3>
+        <p class="q-card__why">The band reading &ldquo;NEEDS ATTENTION &middot; IN ONE PLACE&rdquo; composites to 1.056:1 against paper &mdash; the document's palest fill is also its most urgent.</p>
+        <p class="q-card__meta"><code>w1440-doc-install.png</code> &middot; <code>red-letter-zone.tsx:87</code></p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">F02 <span class="f-chip f-chip--s0">blocker</span></p>
+        <h3 class="q-card__q">Six-pixel dots carry five states one hue apart</h3>
+        <p class="q-card__why">The status dot beside &ldquo;Full Room&rdquo; and its neighbors renders at 6px, with the five state pigments as close as 1.024:1 apart.</p>
+        <p class="q-card__meta"><code>w1440-desk-roster-rows.png</code> &middot; <code>globals.css:44-47</code></p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">F04 <span class="f-chip f-chip--s0">blocker</span></p>
+        <h3 class="q-card__q">An empty document and a working one print alike</h3>
+        <p class="q-card__why">An empty-state heading near &ldquo;No authorizations recorded yet&rdquo; renders at about 17px, larger than the 12.5px FF&amp;E product name beside real inventory.</p>
+        <p class="q-card__meta"><code>w1440-doc-project-rich.png</code> &middot; <code>job-ticket.tsx:407-418</code></p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">F06 <span class="f-chip f-chip--s1">high</span></p>
+        <h3 class="q-card__q">The Studio Drawer is the same white as a card</h3>
+        <p class="q-card__why">The drawer behind &ldquo;Library &middot; People &middot; The Scans &middot; Ledgers&rdquo; reads 1.069:1 against the page &mdash; the same gap as a plain white card.</p>
+        <p class="q-card__meta"><code>w1440-drawer-strip.png</code> &middot; <code>studio-drawer.tsx:289</code></p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">F08 <span class="f-chip f-chip--s1">high</span></p>
+        <h3 class="q-card__q">The spine wash is invisible against its own paper</h3>
+        <p class="q-card__why">The wash behind &ldquo;Client approvals&rdquo; and its three neighbors composites to 1.080:1 against the paper it rides on &mdash; a column with almost no column.</p>
+        <p class="q-card__meta"><code>w1440-spine-detail.png</code> &middot; <code>doc-spine.tsx:44</code></p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">F10 <span class="f-chip f-chip--s1">high</span></p>
+        <h3 class="q-card__q">A section head and a state chip are one style</h3>
+        <p class="q-card__why">The section head and the state chip both declare 10px mono uppercase, so &ldquo;BRIEF &middot; DECIDE THE FIT &middot; NEEDS ATTENTION&rdquo; reads as one more caption among captions.</p>
+        <p class="q-card__meta"><code>w1440-doc-brief.png</code> &middot; <code>section-eyebrow.tsx:17</code></p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">F24 <span class="f-chip f-chip--s2">defect &middot; not a design question</span></p>
+        <h3 class="q-card__q">The desk at 390 overflows onto a fourth, unpainted ground</h3>
+        <p class="q-card__why">A stitching pass measured 437 CSS px of content in a 390px viewport &mdash; 47px of overflow onto a ground that appears nowhere else in the product.</p>
+        <p class="q-card__meta"><code>m390-desk.png</code> &middot; <code>globals.css:860</code></p>
+      </article>
+    </div>
+
+    <h3 class="dk-h3">In the designer's words</h3>
+
+    <blockquote class="voice">
+      <p class="voice__q">On &ldquo;Good morning, Leah.&rdquo; It is the largest thing on the page by a wide margin and it is the one thing on the page that is not work.</p>
+      <p class="voice__who"><span class="voice__seat">Audit seat</span><span class="voice__role">senior interior designer, daily portal user &middot; simulated seat, 2026-08-28</span></p>
+    </blockquote>
+
+    <blockquote class="voice">
+      <p class="voice__q">The sixteen job lines blend into each other. Five of them in a row end in &lsquo;OPEN THE JOB&rsquo;, set identically, and I have to read left to know which job I am opening.</p>
+      <p class="voice__who"><span class="voice__seat">Audit seat</span><span class="voice__role">senior interior designer, daily portal user &middot; simulated seat, 2026-08-28</span></p>
+    </blockquote>
+
+    <blockquote class="voice">
+      <p class="voice__q">At six pixels across, on this paper, I cannot tell you which is which without leaning in, and I would not bet money on it after leaning in.</p>
+      <p class="voice__who"><span class="voice__seat">Audit seat</span><span class="voice__role">senior interior designer, daily portal user &middot; simulated seat, 2026-08-28</span></p>
+    </blockquote>
+
+    <blockquote class="voice">
+      <p class="voice__q">It is the most urgent thing on this document and it is the palest thing on this document. I found it because it has a thin terracotta line down its left edge, not because the field itself registered.</p>
+      <p class="voice__who"><span class="voice__seat">Audit seat</span><span class="voice__role">senior interior designer, daily portal user &middot; simulated seat, 2026-08-28</span></p>
+    </blockquote>
+
+    <blockquote class="voice">
+      <p class="voice__q">Nineteen pieces of furniture and not one of them is visible as a piece of furniture. This is the room where I choose things by eye, and there is nothing here for the eye.</p>
+      <p class="voice__who"><span class="voice__seat">Audit seat</span><span class="voice__role">senior interior designer, daily portal user &middot; simulated seat, 2026-08-28</span></p>
+    </blockquote>
+
+    <p class="dk-p">The planks that follow turn these findings into shared token moves; Directions A, B and C each build on them without touching a route, an act or a label.</p>
+  </div>
+</section>

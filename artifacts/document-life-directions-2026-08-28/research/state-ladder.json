@@ -1,0 +1,42 @@
+{
+  "designer": {
+    "email": "designer@patina.dev",
+    "id": "a0000000-0000-0000-0000-000000000004"
+  },
+  "rungs": {
+    "project_rich": {
+      "id": "5536f8d2-8950-4c64-8999-87a63befbe63",
+      "label": "Chen Residence",
+      "route": "/doc/5536f8d2-8950-4c64-8999-87a63befbe63",
+      "query_used": "select p.id, p.name, count(f.id) ffe_count from projects p join document_state ds on ds.project_id=p.id left join project_ffe_items f on f.project_id=p.id where ds.designer_id='a0000000-0000-0000-0000-000000000004' and ds.engagement_kind='project' group by p.id, p.name order by ffe_count desc; -- tied with Olsen Lake House (3 ffe_items, 4 purchase_orders each) — Chen chosen to match prior-program precedent (document-wayfinding-directions-2026-08-25) and the plan's own expectation"
+    },
+    "project_plain": {
+      "id": "b0000000-0000-0000-0000-0000000000d4",
+      "label": "Marrow & Vale Residence",
+      "route": "/doc/b0000000-0000-0000-0000-0000000000d4",
+      "query_used": "select project_id, title, active_section, item_count from document_state where designer_id='a0000000-0000-0000-0000-000000000004' and engagement_kind='project'; -- only project-stage doc with item_count=0 (0 project_ffe_items)"
+    },
+    "proposal_sent": {
+      "id": "b0000000-0000-0000-0000-000000000002",
+      "label": "Aspen Loft — Living Room Refresh",
+      "route": "/doc/b0000000-0000-0000-0000-000000000002",
+      "query_used": "select proposal_id, title, proposal_status, proposal_sent_at from document_state where designer_id='a0000000-0000-0000-0000-000000000004' and engagement_kind='proposal' and proposal_status='sent'; -- only sent proposal on this DB"
+    },
+    "install": {
+      "id": "b0000000-0000-0000-0000-0000000000d1",
+      "label": "Aspen Loft Refresh",
+      "route": "/doc/b0000000-0000-0000-0000-0000000000d1",
+      "query_used": "select project_id, title, active_section, current_phase from document_state where project_id='b0000000-0000-0000-0000-0000000000d1'; -- was active_section='project' after a DB reseed (no project currently at 'install'); lifted via the exact idempotent RPC chain from the wayfinding program (research/lift-install.sql, ported verbatim from artifacts/document-wayfinding-directions-2026-08-25/research/lift-states.sql): expire_client_decision(c301 signoff blocker) -> advance_project_phase(c102) -> advance_project_phase(c103). No raw table writes; designer-authorized RPCs only. Post-lift verified active_section='install', current_phase='installation'."
+    },
+    "brief": {
+      "id": "ffae1daa-4357-4539-a09b-ec55b9e37ac4",
+      "label": "Full Room",
+      "route": "/doc/ffae1daa-4357-4539-a09b-ec55b9e37ac4",
+      "query_used": "select lead_id, title, lead_status, active_section, lead_response_deadline from document_state where designer_id='a0000000-0000-0000-0000-000000000004' and engagement_kind='lead' order by lead_response_deadline nulls last; -- earliest-deadline lead (status='viewed', deadline 2026-08-31); pre-existing, no write needed"
+    }
+  },
+  "notes": [
+    "IDs on this local stack do NOT match the wayfinding program's state-ladder.json ids for project_rich/project_plain/proposal_sent/brief (a DB reset/reseed happened between 2026-08-25 and this 2026-08-28 run, per this program's own re-check) — every id here was independently re-resolved via psql on 2026-08-28, not copied forward.",
+    "care and discovery/direction rungs are not part of this program's required ladder and were not resolved."
+  ]
+}

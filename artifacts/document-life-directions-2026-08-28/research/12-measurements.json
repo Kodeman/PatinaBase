@@ -1,0 +1,969 @@
+{
+  "desk": {
+    "route": "/desk",
+    "elementCount": 488,
+    "textBearingCount": 128,
+    "topBackgrounds": [
+      [
+        "rgb(238, 230, 219)",
+        17
+      ],
+      [
+        "rgb(139, 156, 173)",
+        6
+      ],
+      [
+        "rgb(196, 165, 123)",
+        5
+      ],
+      [
+        "rgb(92, 74, 60)",
+        2
+      ],
+      [
+        "rgb(212, 160, 144)",
+        2
+      ],
+      [
+        "oklch(0.9582 0.0152 90.2357)",
+        1
+      ],
+      [
+        "rgb(250, 247, 242)",
+        1
+      ],
+      [
+        "rgb(44, 41, 38)",
+        1
+      ],
+      [
+        "rgb(255, 255, 255)",
+        1
+      ],
+      [
+        "rgba(196, 165, 123, 0.16)",
+        1
+      ],
+      [
+        "rgb(168, 181, 160)",
+        1
+      ]
+    ],
+    "topBorders": [
+      [
+        "rgb(229, 226, 221)",
+        16
+      ],
+      [
+        "rgba(229, 226, 221, 0.6)",
+        11
+      ],
+      [
+        "rgb(255, 255, 255)",
+        4
+      ]
+    ],
+    "fontSizeBuckets": {
+      "8-10": 12,
+      "11-12": 49,
+      "13-14": 8,
+      "15-16": 44,
+      "17-24": 13,
+      "25+": 2
+    },
+    "fontFamilyWeight": [
+      [
+        "DM Mono / 400",
+        48
+      ],
+      [
+        "Inter / 400",
+        24
+      ],
+      [
+        "Playfair Display / 400",
+        23
+      ],
+      [
+        "Playfair Display / 500",
+        18
+      ],
+      [
+        "DM Mono / 600",
+        11
+      ],
+      [
+        "DM Mono / 500",
+        2
+      ],
+      [
+        "DM Mono / 300",
+        2
+      ]
+    ],
+    "largestPlayfair": {
+      "size": 30.6,
+      "text": "Good morning, Leah"
+    },
+    "uppercaseMonoCount": 46,
+    "shadowEls": [
+      {
+        "tag": "div",
+        "id": null,
+        "classes": "go3489369143.go1754112896.tsqd-open-btn-container",
+        "boxShadow": "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.1) 0px 2px 4px -2px",
+        "filter": null
+      }
+    ],
+    "namedSurfaces": {
+      "body": "oklch(0.9582 0.0152 90.2357)",
+      "main": "rgba(0, 0, 0, 0)",
+      "spineRail": null,
+      "drawer": "rgb(255, 255, 255)",
+      "marginRail": null
+    },
+    "tokens": {
+      "--text-muted": "#65594E",
+      "--text-subtle": "#65594E",
+      "--text-faint": "#65594E",
+      "--color-quiet-ink": "#65594E",
+      "--bg-hover": "rgba(196, 165, 123, 0.06)",
+      "--doc-paper": "#FCFAF6",
+      "--color-off-white": "#FAF7F2",
+      "--color-pearl": "#E5E2DD",
+      "--color-clay": "#C4A57B"
+    },
+    "pairwiseContrast": [
+      {
+        "a": "rgb(238, 230, 219)",
+        "b": "rgb(139, 156, 173)",
+        "ratio": 2.2767795738843772
+      },
+      {
+        "a": "rgb(238, 230, 219)",
+        "b": "rgb(196, 165, 123)",
+        "ratio": 1.883154568716773
+      },
+      {
+        "a": "rgb(238, 230, 219)",
+        "b": "rgb(92, 74, 60)",
+        "ratio": 6.791300793253809
+      },
+      {
+        "a": "rgb(238, 230, 219)",
+        "b": "rgb(212, 160, 144)",
+        "ratio": 1.8392428438205075
+      },
+      {
+        "a": "rgb(139, 156, 173)",
+        "b": "rgb(196, 165, 123)",
+        "ratio": 1.2090242679525929
+      },
+      {
+        "a": "rgb(139, 156, 173)",
+        "b": "rgb(92, 74, 60)",
+        "ratio": 2.982853883244955
+      },
+      {
+        "a": "rgb(139, 156, 173)",
+        "b": "rgb(212, 160, 144)",
+        "ratio": 1.2378895921949116
+      },
+      {
+        "a": "rgb(196, 165, 123)",
+        "b": "rgb(92, 74, 60)",
+        "ratio": 3.606342732599781
+      },
+      {
+        "a": "rgb(196, 165, 123)",
+        "b": "rgb(212, 160, 144)",
+        "ratio": 1.023874892347033
+      },
+      {
+        "a": "rgb(92, 74, 60)",
+        "b": "rgb(212, 160, 144)",
+        "ratio": 3.6924437771071057
+      }
+    ],
+    "surfaceContrast": [
+      {
+        "a": "body",
+        "aColor": "oklch(0.9582 0.0152 90.2357)",
+        "b": "main",
+        "bColor": "rgba(0, 0, 0, 0)",
+        "ratio": null
+      },
+      {
+        "a": "body",
+        "aColor": "oklch(0.9582 0.0152 90.2357)",
+        "b": "drawer",
+        "bColor": "rgb(255, 255, 255)",
+        "ratio": null
+      },
+      {
+        "a": "main",
+        "aColor": "rgba(0, 0, 0, 0)",
+        "b": "drawer",
+        "bColor": "rgb(255, 255, 255)",
+        "ratio": 21
+      }
+    ]
+  },
+  "doc-project-rich": {
+    "route": "/doc/5536f8d2-8950-4c64-8999-87a63befbe63",
+    "elementCount": 662,
+    "textBearingCount": 199,
+    "topBackgrounds": [
+      [
+        "rgba(44, 41, 38, 0.12)",
+        24
+      ],
+      [
+        "rgb(238, 230, 219)",
+        14
+      ],
+      [
+        "rgb(196, 165, 123)",
+        11
+      ],
+      [
+        "rgb(92, 74, 60)",
+        7
+      ],
+      [
+        "rgb(44, 41, 38)",
+        7
+      ],
+      [
+        "rgb(252, 250, 246)",
+        5
+      ],
+      [
+        "rgb(139, 156, 173)",
+        5
+      ],
+      [
+        "rgb(250, 247, 242)",
+        2
+      ],
+      [
+        "rgb(168, 181, 160)",
+        2
+      ],
+      [
+        "oklch(0.9582 0.0152 90.2357)",
+        1
+      ],
+      [
+        "rgba(229, 226, 221, 0.28)",
+        1
+      ],
+      [
+        "rgba(252, 250, 246, 0.85)",
+        1
+      ]
+    ],
+    "topBorders": [
+      [
+        "rgb(229, 226, 221)",
+        38
+      ],
+      [
+        "rgba(44, 41, 38, 0.18)",
+        17
+      ],
+      [
+        "rgb(196, 165, 123)",
+        8
+      ],
+      [
+        "rgb(232, 197, 71)",
+        8
+      ],
+      [
+        "rgba(44, 41, 38, 0.1)",
+        7
+      ],
+      [
+        "rgb(44, 41, 38)",
+        6
+      ],
+      [
+        "rgb(139, 115, 85)",
+        4
+      ],
+      [
+        "rgb(168, 181, 160)",
+        4
+      ],
+      [
+        "rgb(255, 255, 255)",
+        4
+      ],
+      [
+        "rgb(212, 160, 144)",
+        1
+      ],
+      [
+        "rgb(92, 74, 60)",
+        1
+      ]
+    ],
+    "fontSizeBuckets": {
+      "8-10": 70,
+      "11-12": 82,
+      "13-14": 24,
+      "15-16": 8,
+      "17-24": 11,
+      "25+": 4
+    },
+    "fontFamilyWeight": [
+      [
+        "DM Mono / 400",
+        89
+      ],
+      [
+        "Inter / 400",
+        45
+      ],
+      [
+        "Playfair Display / 500",
+        16
+      ],
+      [
+        "DM Mono / 600",
+        12
+      ],
+      [
+        "Playfair Display / 400",
+        9
+      ],
+      [
+        "DM Mono / 300",
+        9
+      ],
+      [
+        "DM Mono / 500",
+        8
+      ],
+      [
+        "Inter / 500",
+        6
+      ],
+      [
+        "Playfair Display / 300",
+        3
+      ],
+      [
+        "Inter / 600",
+        2
+      ]
+    ],
+    "largestPlayfair": {
+      "size": 27.9,
+      "text": "Chen Residence"
+    },
+    "uppercaseMonoCount": 104,
+    "shadowEls": [
+      {
+        "tag": "div",
+        "id": null,
+        "classes": "go3489369143.go1754112896.tsqd-open-btn-container",
+        "boxShadow": "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.1) 0px 2px 4px -2px",
+        "filter": null
+      }
+    ],
+    "namedSurfaces": {
+      "body": "oklch(0.9582 0.0152 90.2357)",
+      "main": "rgba(0, 0, 0, 0)",
+      "spineRail": "rgba(229, 226, 221, 0.28)",
+      "drawer": "rgb(255, 255, 255)",
+      "marginRail": "rgba(250, 247, 242, 0.55)"
+    },
+    "tokens": {
+      "--text-muted": "#65594E",
+      "--text-subtle": "#65594E",
+      "--text-faint": "#65594E",
+      "--color-quiet-ink": "#65594E",
+      "--bg-hover": "rgba(196, 165, 123, 0.06)",
+      "--doc-paper": "#FCFAF6",
+      "--color-off-white": "#FAF7F2",
+      "--color-pearl": "#E5E2DD",
+      "--color-clay": "#C4A57B"
+    },
+    "pairwiseContrast": [
+      {
+        "a": "rgba(44, 41, 38, 0.12)",
+        "b": "rgb(238, 230, 219)",
+        "ratio": 11.690106063460686
+      },
+      {
+        "a": "rgba(44, 41, 38, 0.12)",
+        "b": "rgb(196, 165, 123)",
+        "ratio": 6.20772519561504
+      },
+      {
+        "a": "rgba(44, 41, 38, 0.12)",
+        "b": "rgb(92, 74, 60)",
+        "ratio": 1.721335340509898
+      },
+      {
+        "a": "rgba(44, 41, 38, 0.12)",
+        "b": "rgb(44, 41, 38)",
+        "ratio": 1
+      },
+      {
+        "a": "rgb(238, 230, 219)",
+        "b": "rgb(196, 165, 123)",
+        "ratio": 1.883154568716773
+      },
+      {
+        "a": "rgb(238, 230, 219)",
+        "b": "rgb(92, 74, 60)",
+        "ratio": 6.791300793253809
+      },
+      {
+        "a": "rgb(238, 230, 219)",
+        "b": "rgb(44, 41, 38)",
+        "ratio": 11.690106063460686
+      },
+      {
+        "a": "rgb(196, 165, 123)",
+        "b": "rgb(92, 74, 60)",
+        "ratio": 3.606342732599781
+      },
+      {
+        "a": "rgb(196, 165, 123)",
+        "b": "rgb(44, 41, 38)",
+        "ratio": 6.20772519561504
+      },
+      {
+        "a": "rgb(92, 74, 60)",
+        "b": "rgb(44, 41, 38)",
+        "ratio": 1.721335340509898
+      }
+    ],
+    "surfaceContrast": [
+      {
+        "a": "body",
+        "aColor": "oklch(0.9582 0.0152 90.2357)",
+        "b": "main",
+        "bColor": "rgba(0, 0, 0, 0)",
+        "ratio": null
+      },
+      {
+        "a": "body",
+        "aColor": "oklch(0.9582 0.0152 90.2357)",
+        "b": "spineRail",
+        "bColor": "rgba(229, 226, 221, 0.28)",
+        "ratio": null
+      },
+      {
+        "a": "body",
+        "aColor": "oklch(0.9582 0.0152 90.2357)",
+        "b": "drawer",
+        "bColor": "rgb(255, 255, 255)",
+        "ratio": null
+      },
+      {
+        "a": "body",
+        "aColor": "oklch(0.9582 0.0152 90.2357)",
+        "b": "marginRail",
+        "bColor": "rgba(250, 247, 242, 0.55)",
+        "ratio": null
+      },
+      {
+        "a": "main",
+        "aColor": "rgba(0, 0, 0, 0)",
+        "b": "spineRail",
+        "bColor": "rgba(229, 226, 221, 0.28)",
+        "ratio": 16.25423681060808
+      },
+      {
+        "a": "main",
+        "aColor": "rgba(0, 0, 0, 0)",
+        "b": "drawer",
+        "bColor": "rgb(255, 255, 255)",
+        "ratio": 21
+      },
+      {
+        "a": "main",
+        "aColor": "rgba(0, 0, 0, 0)",
+        "b": "marginRail",
+        "bColor": "rgba(250, 247, 242, 0.55)",
+        "ratio": 19.651265398439584
+      },
+      {
+        "a": "spineRail",
+        "aColor": "rgba(229, 226, 221, 0.28)",
+        "b": "drawer",
+        "bColor": "rgb(255, 255, 255)",
+        "ratio": 1.2919708408760642
+      },
+      {
+        "a": "spineRail",
+        "aColor": "rgba(229, 226, 221, 0.28)",
+        "b": "marginRail",
+        "bColor": "rgba(250, 247, 242, 0.55)",
+        "ratio": 1.208993422909557
+      },
+      {
+        "a": "drawer",
+        "aColor": "rgb(255, 255, 255)",
+        "b": "marginRail",
+        "bColor": "rgba(250, 247, 242, 0.55)",
+        "ratio": 1.0686334734285108
+      }
+    ]
+  },
+  "library": {
+    "route": "/library",
+    "elementCount": 249,
+    "textBearingCount": 54,
+    "topBackgrounds": [
+      [
+        "rgb(196, 165, 123)",
+        8
+      ],
+      [
+        "rgb(124, 94, 48)",
+        3
+      ],
+      [
+        "rgb(252, 250, 246)",
+        2
+      ],
+      [
+        "rgb(238, 230, 219)",
+        2
+      ],
+      [
+        "oklch(0.9582 0.0152 90.2357)",
+        1
+      ],
+      [
+        "rgb(250, 247, 242)",
+        1
+      ],
+      [
+        "rgba(252, 250, 246, 0.85)",
+        1
+      ],
+      [
+        "rgb(44, 41, 38)",
+        1
+      ],
+      [
+        "rgba(196, 165, 123, 0.06)",
+        1
+      ],
+      [
+        "rgb(255, 255, 255)",
+        1
+      ],
+      [
+        "rgba(196, 165, 123, 0.16)",
+        1
+      ],
+      [
+        "rgb(168, 181, 160)",
+        1
+      ]
+    ],
+    "topBorders": [
+      [
+        "rgb(229, 226, 221)",
+        25
+      ],
+      [
+        "rgba(44, 41, 38, 0.18)",
+        9
+      ],
+      [
+        "rgb(196, 165, 123)",
+        4
+      ],
+      [
+        "rgb(255, 255, 255)",
+        4
+      ]
+    ],
+    "fontSizeBuckets": {
+      "8-10": 6,
+      "11-12": 31,
+      "13-14": 8,
+      "15-16": 1,
+      "17-24": 5,
+      "25+": 3
+    },
+    "fontFamilyWeight": [
+      [
+        "DM Mono / 400",
+        22
+      ],
+      [
+        "Inter / 400",
+        15
+      ],
+      [
+        "Playfair Display / 400",
+        6
+      ],
+      [
+        "DM Mono / 300",
+        4
+      ],
+      [
+        "DM Mono / 500",
+        3
+      ],
+      [
+        "Playfair Display / 500",
+        3
+      ],
+      [
+        "DM Mono / 600",
+        1
+      ]
+    ],
+    "largestPlayfair": {
+      "size": 45,
+      "text": "Find a piece—or ask about one."
+    },
+    "uppercaseMonoCount": 25,
+    "shadowEls": [
+      {
+        "tag": "div",
+        "id": null,
+        "classes": "go3489369143.go1754112896.tsqd-open-btn-container",
+        "boxShadow": "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.1) 0px 2px 4px -2px",
+        "filter": null
+      }
+    ],
+    "namedSurfaces": {
+      "body": "oklch(0.9582 0.0152 90.2357)",
+      "main": null,
+      "spineRail": null,
+      "drawer": "rgb(255, 255, 255)",
+      "marginRail": null
+    },
+    "tokens": {
+      "--text-muted": "#65594E",
+      "--text-subtle": "#65594E",
+      "--text-faint": "#65594E",
+      "--color-quiet-ink": "#65594E",
+      "--bg-hover": "rgba(196, 165, 123, 0.06)",
+      "--doc-paper": "#FCFAF6",
+      "--color-off-white": "#FAF7F2",
+      "--color-pearl": "#E5E2DD",
+      "--color-clay": "#C4A57B"
+    },
+    "pairwiseContrast": [
+      {
+        "a": "rgb(196, 165, 123)",
+        "b": "rgb(124, 94, 48)",
+        "ratio": 2.575203615053749
+      },
+      {
+        "a": "rgb(196, 165, 123)",
+        "b": "rgb(252, 250, 246)",
+        "ratio": 2.2344547248898046
+      },
+      {
+        "a": "rgb(196, 165, 123)",
+        "b": "rgb(238, 230, 219)",
+        "ratio": 1.883154568716773
+      },
+      {
+        "a": "rgb(196, 165, 123)",
+        "b": "oklch(0.9582 0.0152 90.2357)",
+        "ratio": null
+      },
+      {
+        "a": "rgb(124, 94, 48)",
+        "b": "rgb(252, 250, 246)",
+        "ratio": 5.754175885210155
+      },
+      {
+        "a": "rgb(124, 94, 48)",
+        "b": "rgb(238, 230, 219)",
+        "ratio": 4.849506453064417
+      },
+      {
+        "a": "rgb(124, 94, 48)",
+        "b": "oklch(0.9582 0.0152 90.2357)",
+        "ratio": null
+      },
+      {
+        "a": "rgb(252, 250, 246)",
+        "b": "rgb(238, 230, 219)",
+        "ratio": 1.1865487634466543
+      },
+      {
+        "a": "rgb(252, 250, 246)",
+        "b": "oklch(0.9582 0.0152 90.2357)",
+        "ratio": null
+      },
+      {
+        "a": "rgb(238, 230, 219)",
+        "b": "oklch(0.9582 0.0152 90.2357)",
+        "ratio": null
+      }
+    ],
+    "surfaceContrast": [
+      {
+        "a": "body",
+        "aColor": "oklch(0.9582 0.0152 90.2357)",
+        "b": "drawer",
+        "bColor": "rgb(255, 255, 255)",
+        "ratio": null
+      }
+    ]
+  },
+  "people": {
+    "route": "/people",
+    "elementCount": 358,
+    "textBearingCount": 103,
+    "topBackgrounds": [
+      [
+        "rgb(255, 255, 255)",
+        20
+      ],
+      [
+        "rgb(196, 165, 123)",
+        14
+      ],
+      [
+        "rgb(212, 160, 144)",
+        10
+      ],
+      [
+        "rgb(168, 181, 160)",
+        6
+      ],
+      [
+        "rgb(44, 41, 38)",
+        2
+      ],
+      [
+        "rgb(232, 197, 71)",
+        2
+      ],
+      [
+        "oklch(0.9582 0.0152 90.2357)",
+        1
+      ],
+      [
+        "rgb(250, 247, 242)",
+        1
+      ],
+      [
+        "rgb(252, 250, 246)",
+        1
+      ],
+      [
+        "rgba(252, 250, 246, 0.85)",
+        1
+      ],
+      [
+        "rgb(229, 226, 221)",
+        1
+      ],
+      [
+        "rgba(196, 165, 123, 0.16)",
+        1
+      ]
+    ],
+    "topBorders": [
+      [
+        "rgb(229, 226, 221)",
+        78
+      ],
+      [
+        "rgb(212, 160, 144)",
+        20
+      ],
+      [
+        "rgb(168, 181, 160)",
+        16
+      ],
+      [
+        "rgb(196, 165, 123)",
+        5
+      ],
+      [
+        "rgb(44, 41, 38)",
+        4
+      ],
+      [
+        "rgb(255, 255, 255)",
+        4
+      ],
+      [
+        "oklch(0.8606 0.0321 84.5881)",
+        2
+      ],
+      [
+        "rgba(44, 41, 38, 0.18)",
+        1
+      ],
+      [
+        "rgba(229, 226, 221, 0.6)",
+        1
+      ]
+    ],
+    "fontSizeBuckets": {
+      "8-10": 26,
+      "11-12": 28,
+      "13-14": 23,
+      "15-16": 23,
+      "17-24": 2,
+      "25+": 1
+    },
+    "fontFamilyWeight": [
+      [
+        "DM Mono / 600",
+        36
+      ],
+      [
+        "Inter / 400",
+        29
+      ],
+      [
+        "DM Mono / 400",
+        13
+      ],
+      [
+        "Inter / 600",
+        10
+      ],
+      [
+        "Inter / 500",
+        5
+      ],
+      [
+        "Playfair Display / 400",
+        3
+      ],
+      [
+        "Playfair Display / 500",
+        3
+      ],
+      [
+        "DM Mono / 300",
+        2
+      ],
+      [
+        "DM Mono / 500",
+        2
+      ]
+    ],
+    "largestPlayfair": {
+      "size": 28.8,
+      "text": "Directory"
+    },
+    "uppercaseMonoCount": 40,
+    "shadowEls": [
+      {
+        "tag": "div",
+        "id": null,
+        "classes": "go3489369143.go1754112896.tsqd-open-btn-container",
+        "boxShadow": "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.1) 0px 2px 4px -2px",
+        "filter": null
+      }
+    ],
+    "namedSurfaces": {
+      "body": "oklch(0.9582 0.0152 90.2357)",
+      "main": "rgba(0, 0, 0, 0)",
+      "spineRail": null,
+      "drawer": "rgb(255, 255, 255)",
+      "marginRail": null
+    },
+    "tokens": {
+      "--text-muted": "#65594E",
+      "--text-subtle": "#65594E",
+      "--text-faint": "#65594E",
+      "--color-quiet-ink": "#65594E",
+      "--bg-hover": "rgba(196, 165, 123, 0.06)",
+      "--doc-paper": "#FCFAF6",
+      "--color-off-white": "#FAF7F2",
+      "--color-pearl": "#E5E2DD",
+      "--color-clay": "#C4A57B"
+    },
+    "pairwiseContrast": [
+      {
+        "a": "rgb(255, 255, 255)",
+        "b": "rgb(196, 165, 123)",
+        "ratio": 2.329394590060997
+      },
+      {
+        "a": "rgb(255, 255, 255)",
+        "b": "rgb(212, 160, 144)",
+        "ratio": 2.2750773629396415
+      },
+      {
+        "a": "rgb(255, 255, 255)",
+        "b": "rgb(168, 181, 160)",
+        "ratio": 2.1467720111648307
+      },
+      {
+        "a": "rgb(255, 255, 255)",
+        "b": "rgb(44, 41, 38)",
+        "ratio": 14.460241487251018
+      },
+      {
+        "a": "rgb(196, 165, 123)",
+        "b": "rgb(212, 160, 144)",
+        "ratio": 1.023874892347033
+      },
+      {
+        "a": "rgb(196, 165, 123)",
+        "b": "rgb(168, 181, 160)",
+        "ratio": 1.0850684553116918
+      },
+      {
+        "a": "rgb(196, 165, 123)",
+        "b": "rgb(44, 41, 38)",
+        "ratio": 6.20772519561504
+      },
+      {
+        "a": "rgb(212, 160, 144)",
+        "b": "rgb(168, 181, 160)",
+        "ratio": 1.059766640848458
+      },
+      {
+        "a": "rgb(212, 160, 144)",
+        "b": "rgb(44, 41, 38)",
+        "ratio": 6.355933966380313
+      },
+      {
+        "a": "rgb(168, 181, 160)",
+        "b": "rgb(44, 41, 38)",
+        "ratio": 6.735806789005482
+      }
+    ],
+    "surfaceContrast": [
+      {
+        "a": "body",
+        "aColor": "oklch(0.9582 0.0152 90.2357)",
+        "b": "main",
+        "bColor": "rgba(0, 0, 0, 0)",
+        "ratio": null
+      },
+      {
+        "a": "body",
+        "aColor": "oklch(0.9582 0.0152 90.2357)",
+        "b": "drawer",
+        "bColor": "rgb(255, 255, 255)",
+        "ratio": null
+      },
+      {
+        "a": "main",
+        "aColor": "rgba(0, 0, 0, 0)",
+        "b": "drawer",
+        "bColor": "rgb(255, 255, 255)",
+        "ratio": 21
+      }
+    ]
+  }
+}

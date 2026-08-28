@@ -1,0 +1,88 @@
+<section id="questions" class="dk-sec reg-paper" data-index-title="Questions for the team">
+  <div class="dk-wrap">
+    <p class="hour"><b>QUESTIONS</b></p>
+    <h2 class="dk-h2">Eleven things we need answered before anyone builds</h2>
+    <p class="dk-lede">Every card below carries the numbers that bear on it and closes with the question itself. Nothing here is a recommendation restated &mdash; section 12 already made those; this section is what the team has to rule on to make them real.</p>
+
+    <div class="q-grid">
+
+      <article class="q-card">
+        <p class="q-card__n">01 &middot; Direction &middot; needs a ruling</p>
+        <h4 class="q-card__q">Does Direction A ship as the floor under whichever visible move the team picks?</h4>
+        <p class="q-card__why">A is the only lane whose stock separations reproduce exactly across two critiques &mdash; paper&rarr;rail <code>1.177</code>, rail&rarr;desk <code>1.173</code>, paper&rarr;desk <code>1.381</code> &mdash; and the only lane that adds rank above the shared planks: a five-step Playfair scale, three rule weights spent on rank, an 18px job name against a 14px need line. Its own work is 2&ndash;3 days, on top of the planks. The one item that was open &mdash; <code>--bg-surface</code> resolving 83 times across 51 files outside the Document tree, priced nowhere in A's Cost &mdash; is closed in v3: it is now scoped as a <code>--doc-surface</code> on the Document tree, the same way the desk ground is scoped, and the 83/51 count is named as the priced alternative (<code>D44</code>).</p>
+        <p class="q-card__why"><strong>We ask:</strong> does A ship as the floor now that both of its app-wide tokens are scoped and priced?</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">02 &middot; Direction &middot; needs a ruling</p>
+        <h4 class="q-card__q">After A, does the team take C's chrome, B's material, or neither?</h4>
+        <p class="q-card__why">The v2 scorecard has C ahead of B on four of six axes (contrast, still-Patina, canon fit each by one to two points) and behind on cost &amp; reversibility by a point; B is the safer, cheaper move and C is the larger, riskier one. Section 12's recommendation is C's chrome, now that <code>D42</code> (a dark twin for every plank token, not only every ink) is priced &mdash; the twins are declared in SP-03 and spent by C inside the same 4&ndash;5 days &mdash; and <code>D19</code> (the <code>contrast.test.ts</code> parser split) is priced at 1 day and called non-optional.</p>
+        <p class="q-card__why"><strong>We ask:</strong> which visible move, if any, follows A &mdash; and does the team want it priced before or after the planks land?</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">03 &middot; Scope &middot; needs a ruling</p>
+        <h4 class="q-card__q">Accept A's desk ground <code>#E0D6C4</code> scoped to <code>/desk</code>, or keep the desk white and take only the paper and rail stocks?</h4>
+        <p class="q-card__why">The tan is the single move A names as its own risk &mdash; a team can reject it on sight after three years of one cream. It is already scoped to the desk route, not to <code>--bg-primary</code>: repointing the app-wide token instead would carry <code>/library</code>, <code>/people</code> and every ledger sheet tan with it, priced at <strong>+2&ndash;3 days and three rooms to draw</strong> before ruling. If the ground is refused outright, A's two rail stocks (paper&rarr;rail at <code>1.177:1</code>) still open the document's three columns on their own.</p>
+        <p class="q-card__why"><strong>We ask:</strong> accept the tan on <code>/desk</code>, keep the desk white and take only the rail stocks, or price the app-wide repoint first?</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">04 &middot; Amendment &middot; needs a ruling</p>
+        <h4 class="q-card__q">Close R72's dead exception and build the CSS gate D4's own text asks for, before deciding whether to admit one tokenized elevation?</h4>
+        <p class="q-card__why">ESLint's D4 block covers only <code>files: '**/*.{ts,tsx}'</code> and never reads <code>globals.css</code>; no stylelint exists anywhere in this app, this workspace or the repo root. R72's <code>filter: drop-shadow&#40;&hellip;&#41;</code> at <code>globals.css:217/223/227</code> ships today and trips no rule, on a <code>.folio-face</code> class that zero <code>.tsx</code> files reference &mdash; dead CSS carrying a live exception. <code>apps/designer-portal/CLAUDE.md:19-26</code> asked for a stylelint rule &ldquo;in your first PR&rdquo; and never got one. Per <code>D38</code>, the amendment's own &ldquo;We ask&rdquo; now puts closing the dead exception and building the gate first, and admitting one token, <code>--elevation-sheet</code>, second. No figure to quote here &mdash; the amendment's corrected cost is zero lint change if the token is ever spent from CSS, not from a <code>.tsx</code> literal.</p>
+        <p class="q-card__why"><strong>We ask:</strong> close the exception and build the gate first, then take up the token &mdash; or leave both questions open together?</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">05 &middot; Direction &middot; needs a ruling</p>
+        <h4 class="q-card__q">Accept B's movement told by hue alone, or drop the tints and keep the band and the stamps?</h4>
+        <p class="q-card__why">B's six stocks now measure real value against the ground &mdash; <code>1.081</code>&ndash;<code>1.088:1</code>, from v1's <code>1.001</code>&ndash;<code>1.020:1</code> &mdash; but pairwise, stock to stock, they still sit at only <code>1.000</code>&ndash;<code>1.007:1</code>: a movement is told from the ground by value and from another movement only by hue. Reaching that value did cost the rail its own headroom, and the v2 rail went backwards &mdash; a defect the v3 pass fixed: the rail moved to <code>#E8E3DB</code> and now reads <code>1.098</code>&ndash;<code>1.106:1</code> against the six sheets it flanks and <code>1.225:1</code> against the untinted sheet, above today's own <code>1.081:1</code> (<code>D41</code>, resolved in v3), at the price of three of the four paper inks &mdash; only charcoal, the muted ramp and clay-ink at <code>4.697</code> can still print there.</p>
+        <p class="q-card__why"><strong>We ask:</strong> accept a movement told by hue alone, or drop the tints and keep only the charcoal band and the filled stamps?</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">06 &middot; Data &middot; needs a ruling</p>
+        <h4 class="q-card__q">What is the production <code>product_id</code> count, and does it change the ruling on F15?</h4>
+        <p class="q-card__why">Locally, <code>project_ffe_items</code> has <strong>6 rows, 0 with a <code>product_id</code></strong>; <code>products</code> has 21 rows, 17 with images. On that shape, B's headline material move &mdash; a 48px thumbnail on a catalog-linked FF&amp;E line &mdash; renders zero thumbnails, and the two crops in its mock are stood in to show the treatment, not the data. Nobody in this program has the Strata figure.</p>
+        <p class="q-card__why"><strong>We ask:</strong> run the count before ruling on F15 &mdash; and if it is near zero, is B's answer to F15 still worth taking as written?</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">07 &middot; Scope &middot; needs a ruling</p>
+        <h4 class="q-card__q">Does C's inversion stay at four surfaces, or extend to <code>/library</code>, <code>/people</code> and the ledgers too?</h4>
+        <p class="q-card__why">As scoped, C inverts the Studio Drawer, the DocSpine, the MarginRail and the <code>/desk</code> route's own ground; the three rooms keep paper and receive only the dark drawer along the bottom edge. Extending them dark is a second piece of work, not a token flip: <code>/people</code> alone renders 78 pearl border-sides and 20 white card backgrounds tuned for a cream ground, priced as <strong>+3&ndash;4 days and three rooms to draw</strong>, none of them mocked in this deck.</p>
+        <p class="q-card__why"><strong>We ask:</strong> rooms stay paper under a dark drawer as drawn, or invert all three at +3&ndash;4 days?</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">08 &middot; Direction &middot; needs a ruling</p>
+        <h4 class="q-card__q">Do the planks ship as one lane before any direction, at SP-01's 4&ndash;6 days?</h4>
+        <p class="q-card__why">SP-01 alone is <strong>1,749 <code>text-[&lt;n&gt;px]</code> literals across 252 files</strong>, sized L &mdash; the largest single piece of work in the package &mdash; and every lane's own figures (A's stocks, B's stocks, C's separations) already assume it has landed. <code>shared-planks.md</code> calls it &ldquo;the one plank that should be sequenced before any direction ships.&rdquo;</p>
+        <p class="q-card__why"><strong>We ask:</strong> sequence the planks as their own lane first, at 4&ndash;6 days for SP-01 alone?</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">09 &middot; Scope &middot; needs a ruling</p>
+        <h4 class="q-card__q">Does <code>contrast.test.ts</code>'s <code>parseTokens</code> get a light/dark split before C ships?</h4>
+        <p class="q-card__why"><code>parseTokens</code> is last-wins over the whole file and asserts every <code>-ink</code>-suffixed token against the light grounds only; a dark-register token carrying that suffix would fail hard, and the scoped-override alternative C's v1 draft proposed is worse &mdash; it overwrites the real token's parsed value. C's committed fix is no <code>-ink</code> suffix in the dark register plus a light/dark split in the parser, priced at <strong>1 day</strong> and called non-optional (<code>D19</code>). Separately, the base-pigment guard's exemption list widens from five files to eleven (<code>D20</code>).</p>
+        <p class="q-card__why"><strong>We ask:</strong> is the parser split required before C ships regardless of the visible-move ruling, and does the widened exemption list get a ruling of its own?</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">10 &middot; Defect &middot; no owner</p>
+        <h4 class="q-card__q">Who fixes the desk's 390 overflow, and when?</h4>
+        <p class="q-card__why">A stitching pass measured 437 CSS px of content inside a 390px viewport &mdash; <strong>47 CSS px of overflow</strong> onto a fourth, unpainted ground (<code>F24</code>, severity medium). It is a layout defect, not a design question: all twelve 390 mockups in this deck are drawn with it assumed repaired, and the one plank that touches it (SP-09) only repaints the ground underneath the overflow, not the overflow itself. No direction in this deck fixes it.</p>
+        <p class="q-card__why"><strong>We ask:</strong> who takes F24, and does it ship ahead of, or alongside, whichever direction is ruled for?</p>
+      </article>
+
+      <article class="q-card">
+        <p class="q-card__n">11 &middot; Direction &middot; needs a ruling</p>
+        <h4 class="q-card__q">Accept SP-06's floor at what it actually measures, <code>1.097:1</code>, against its own <code>&ge;1.09:1</code> promise?</h4>
+        <p class="q-card__why">SP-06 no longer names one hex: it is a rule &mdash; a hovered row takes the next stock the lane already declares &mdash; because no single value cleared <code>1.10:1</code> across every stock every direction proposes. The token this plank tried, <code>--plank-hover-tint: #F3ECE2</code>, measured <strong>1.008</strong>&ndash;<strong>1.125:1</strong> across the declared stocks and inverted direction on two of them &mdash; <strong>1.228:1</strong> on A's desk and <strong>1.089:1</strong> on B's rail, both lighter than the ground rather than darker &mdash; and a fill deep enough to clear <code>1.10:1</code> everywhere else broke the 4.5:1 ink floor: charcoal at 6% over A's desk stock reads 1.106:1 and drops A's tightest <code>-ink</code> to <strong>4.137:1</strong> on the hovered row; over B's Project stock, 1.115:1 and <strong>4.363:1</strong> (<code>D43</code>, resolved in v3). The plank now promises a floor of at least <strong>1.09:1</strong>, not 1.10:1, and delivers exactly <strong>1.097:1</strong> at its tightest point &mdash; C's second sheet. Every lane clears it with a stock it already owns: A at <code>1.177 / 1.177 / 1.173</code>, B at <code>1.108</code>&ndash;<code>1.116:1</code> with <code>1.225:1</code> on its rail, C at <code>1.097 / 1.141 / 1.159</code>.</p>
+        <p class="q-card__why"><strong>We ask:</strong> accept the plank's <code>1.097:1</code> floor against its own <code>&ge;1.09:1</code> promise, or ask for a higher floor than any single value could deliver across three lanes' stocks?</p>
+      </article>
+
+    </div>
+  </div>
+</section>

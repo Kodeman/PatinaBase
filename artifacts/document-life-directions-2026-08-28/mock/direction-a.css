@@ -1,0 +1,419 @@
+/* ==========================================================================
+   Direction A — Ink on Paper                              (mock/direction-a.css)
+   ==========================================================================
+   THREE blocks live in this file, and B and C depend on the first two --
+   `direction-b.css` and `direction-c.css` are NOT self-contained. The deck's
+   build injects all three lane stylesheets at @@DIR_A@@ / @@DIR_B@@ /
+   @@DIR_C@@ in that order, and `mock/build-preview.sh` inlines them in the
+   same order, so source order alone decides the cascade: shapes, then planks,
+   then lane.
+
+   BLOCK 1 — SHARED MOCK SHAPES. kit.css carries every primitive the product
+   ships as a component (.paper .spine .region-head .ffe-row .stamp .margin
+   .drawer .mobile-bar .letterhead .red-letter .seam). It carries no class for
+   five desk shapes the product draws with Tailwind utilities rather than a
+   kit primitive: the greeting block, the act ledger, the whisper note, the
+   roster line, the studio contents columns, the StatusChip and the strip
+   caption. Those are drawn here ONCE, at TODAY's measured values, scoped to
+   all four lane classes -- so `today-M4-strip-360` (which must be today's
+   treatment, drawn from the kit as-is) and the three direction lanes start
+   from the same shape and differ only by the token deltas each lane declares.
+   kit.css is read-only for this program and the deck injects all three
+   direction stylesheets, so this file is where a shared shape can live.
+   Nothing in BLOCK 1 sets a colour or a size that is not the value measured
+   on the live app (research/12-measurements.md, shots/w1440-*.png).
+
+   BLOCK 2 — PLANKS. source/shared-planks.md, scoped `.lane-a, .lane-b,
+   .lane-c` so the three lanes are compared on equal terms and `today` stays
+   unplanked.
+
+   BLOCK 3 — .lane-a. Direction A's own token deltas and recipes, over and
+   above the planks.
+
+   No shadow primitive of any kind is declared in this file (D4).
+   ========================================================================== */
+
+
+/* ==========================================================================
+   BLOCK 1 -- shared mock shapes, at today's values
+   ========================================================================== */
+
+/* The browser's own <p>/<h*> margins are not part of the product's rendering
+   (the portal ships Tailwind's preflight, which zeroes them). kit.css resets
+   only box-sizing, so zero them here or every mock gains a stray 1em between
+   two lines that sit tight together in the real component. */
+.patina-mock h1, .patina-mock h2, .patina-mock h3, .patina-mock h4,
+.patina-mock p, .patina-mock ul, .patina-mock ol, .patina-mock figure { margin: 0; padding: 0; }
+.patina-mock ul { list-style: none; }
+
+/* -- the desk ---------------------------------------------------------- */
+.patina-mock .desk { position: relative; height: 100%; overflow: hidden; background: var(--bg-primary); }
+.patina-mock .desk-inner { padding: 56px 200px 0; }
+.patina-mock .desk-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 48px; }
+.patina-mock .greet { font-family: var(--font-display); font-size: 30.6px; font-weight: 400; line-height: 1.15; color: var(--text-primary); }
+.patina-mock .greet i { font-style: italic; }
+.patina-mock .greet-date { margin-top: 9px; font-family: var(--font-meta); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .desk-acts { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: flex-end; gap: 14px 22px; max-width: 440px; }
+.patina-mock .act { font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-body); }
+.patina-mock .act.is-lead { color: var(--text-primary); border-bottom: 1px solid var(--text-primary); padding-bottom: 3px; }
+.patina-mock .act-sub { display: block; margin-top: 6px; font-family: var(--font-meta); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .kbd { display: inline-block; margin-left: 7px; border: 1px solid var(--border-default); border-radius: 3px; padding: 1px 4px; font-size: 9px; letter-spacing: 0; }
+.patina-mock .whisper { max-width: 350px; font-family: var(--font-display); font-style: italic; font-size: 15px; line-height: 1.6; color: var(--text-muted); }
+.patina-mock .whisper-meta { margin-top: 7px; font-family: var(--font-meta); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .whisper-act { font-family: var(--font-meta); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-body); }
+
+/* -- the section eyebrow (section-eyebrow.tsx: 34/24/14px lines, mono 10) -- */
+.patina-mock .sect-head { display: flex; align-items: center; gap: 10px; font-family: var(--font-meta); font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .sect-mark { display: inline-flex; flex-direction: column; gap: 2px; }
+.patina-mock .sect-mark i { display: block; height: 1.5px; border-radius: 1px; background: var(--color-mocha); }
+.patina-mock .sect-mark i:nth-child(1) { width: 34px; }
+.patina-mock .sect-mark i:nth-child(2) { width: 24px; background: var(--color-clay); opacity: .7; }
+.patina-mock .sect-mark i:nth-child(3) { width: 14px; background: var(--color-clay); opacity: .35; }
+
+/* -- the roster (desk-roster.tsx) --------------------------------------- */
+.patina-mock .roster-lede { margin-top: 16px; font-size: 14px; color: var(--text-body); }
+.patina-mock .stage-group { margin-top: 20px; }
+.patina-mock .stage-head { margin-bottom: 4px; font-family: var(--font-meta); font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .job-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding: 9px 0; border-bottom: 1px dashed var(--border-subtle); }
+.patina-mock .job-line:last-child { border-bottom: none; }
+.patina-mock .job-mark { width: 7px; height: 7px; border-radius: 999px; flex: 0 0 auto; background: var(--color-dusty-blue); }
+.patina-mock .job-mark.is-urgent { background: var(--color-terracotta); }
+.patina-mock .job-mark.is-none { background: transparent; }
+.patina-mock .job-name { font-family: var(--font-display); font-size: 16px; font-weight: 500; color: var(--text-primary); }
+.patina-mock .job-need { flex: 1 1 240px; min-width: 0; font-size: 14px; color: var(--text-muted); }
+.patina-mock .job-overdue { display: block; color: var(--color-terracotta-ink); }
+.patina-mock .job-act { font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-body); border-bottom: 1px solid var(--border-default); padding-bottom: 3px; }
+
+/* -- the studio contents (desk-contents.tsx: labels + doorways, no counts) -- */
+.patina-mock .contents { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 56px; margin-top: 18px; }
+.patina-mock .contents-head { margin-bottom: 14px; font-family: var(--font-meta); font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .contents-item { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; }
+.patina-mock .contents-name { font-family: var(--font-display); font-size: 16px; color: var(--text-primary); }
+.patina-mock .contents-sub { display: block; margin-top: 1px; font-family: var(--font-meta); font-size: 9px; letter-spacing: .06em; color: var(--text-muted); }
+.patina-mock .contents-tag { margin-left: auto; font-family: var(--font-meta); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .contents-glyph { width: 13px; flex: 0 0 auto; font-size: 11px; color: var(--text-muted); }
+
+/* -- StatusChip (status-chip.tsx: 6px dot + mono 10, no fill) ----------- */
+.patina-mock .status-chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-family: var(--font-meta); font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .status-chip .sc-dot { width: 6px; height: 6px; border-radius: 999px; flex: 0 0 auto; background: var(--color-clay); }
+.patina-mock .status-chip.is-delivered .sc-dot { background: var(--color-sage); }
+.patina-mock .status-chip.is-damaged .sc-dot { background: var(--color-error); }
+
+/* -- the document shell ------------------------------------------------- */
+.patina-mock .doc-shell { position: relative; display: grid; grid-template-columns: var(--doc-spine-w) 1fr var(--doc-margin-w); height: 100%; overflow: hidden; background: var(--bg-primary); }
+.patina-mock .doc-col { position: relative; padding: 28px 48px 0; background: var(--doc-paper); }
+.patina-mock .lh-client { margin-top: 5px; font-family: var(--font-display); font-style: italic; font-size: 15px; color: var(--color-clay-ink); }
+.patina-mock .movement-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.patina-mock .movement-eyebrow { font-family: var(--font-meta); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .phase-row { display: grid; grid-template-columns: 26px 1fr auto; align-items: baseline; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border-subtle); }
+.patina-mock .phase-row:last-child { border-bottom: none; }
+.patina-mock .phase-num { font-family: var(--font-display); font-size: 13px; color: var(--color-clay); }
+.patina-mock .phase-name { font-family: var(--font-display); font-size: 14px; color: var(--text-primary); }
+.patina-mock .phase-when { font-family: var(--font-meta); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .phase-state { font-family: var(--font-meta); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .phase-row.is-active .phase-name { font-weight: 600; }
+.patina-mock .phase-row.is-active .phase-state { color: var(--color-clay-ink); }
+
+/* -- the margin chip (margin-rail.tsx:563) ------------------------------ */
+.patina-mock .margin-chip { margin-bottom: 8px; border: 1px solid var(--color-pearl); border-radius: 5px; background: var(--doc-paper); padding: 10px 12px; }
+.patina-mock .margin-chip .mc-eyebrow { font-family: var(--font-meta); font-size: 9px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--color-aged-oak); }
+.patina-mock .margin-chip .mc-line { margin-top: 3px; font-size: 13px; color: var(--text-primary); }
+.patina-mock .margin-chip .mc-sub { margin-top: 1px; font-size: 12px; color: var(--text-muted); }
+
+/* -- the drawer, filled out (studio-drawer.tsx) ------------------------- */
+.patina-mock .drawer-left { display: flex; align-items: center; gap: 10px; }
+.patina-mock .drawer-avatar { width: 34px; height: 34px; border-radius: 999px; background: var(--color-charcoal); color: var(--doc-paper); font-family: var(--font-display); font-size: 15px; display: flex; align-items: center; justify-content: center; }
+.patina-mock .drawer-user { display: flex; align-items: center; gap: 8px; }
+.patina-mock .drawer-user-name { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+.patina-mock .drawer-user-studio { display: block; font-family: var(--font-meta); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .drawer-hands { font-family: var(--font-meta); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+
+/* -- the mobile desk ---------------------------------------------------- */
+.patina-mock .mdesk { position: relative; height: 100%; overflow: hidden; background: var(--bg-primary); }
+.patina-mock .mdesk-inner { padding: 28px 20px 0; }
+.patina-mock .mdesk .greet { font-size: 26px; }
+.patina-mock .mdesk .desk-top { flex-direction: column; gap: 20px; }
+.patina-mock .mdesk .desk-acts { justify-content: flex-start; max-width: none; }
+.patina-mock .mdesk .job-line { gap: 1px 8px; padding: 8px 0; }
+.patina-mock .mdesk .stage-group { margin-top: 14px; }
+.patina-mock .mdesk .desk-acts { gap: 10px 18px; }
+
+/* -- the product thumb: off in every lane but B ------------------------- */
+.patina-mock .thumb { display: none; }
+
+
+/* -- layout blocks the desk and the document use (spacing only) --------- */
+.patina-mock .on-desk { padding: 44px 200px 0; }
+.patina-mock .sheet-on-desk { padding: 0 200px 36px; }
+.patina-mock .desk-whispers { margin-top: 34px; }
+.patina-mock .whisper-note { margin-top: 22px; }
+.patina-mock .roster { padding-top: 38px; }
+.patina-mock .studio { padding-top: 38px; }
+.patina-mock .doc-block { margin-top: 26px; }
+.patina-mock .doc-acts { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border-subtle); }
+.patina-mock .band { display: block; }
+.patina-mock .movement-tab { display: none; }
+.patina-mock .room-head { display: flex; align-items: baseline; gap: 10px; margin: 18px 0 2px; }
+.patina-mock .room-name { font-family: var(--font-display); font-size: 13.5px; font-weight: 500; font-style: italic; color: var(--text-primary); }
+.patina-mock .room-alloc { margin-left: auto; font-family: var(--font-meta); font-size: 8.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .inhand { margin-top: 18px; border: 1px solid var(--border-default); border-radius: 4px; background: var(--doc-paper); padding: 12px; }
+.patina-mock .inhand-label { display: flex; align-items: center; gap: 6px; font-family: var(--font-meta); font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
+.patina-mock .inhand-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--color-sage); }
+.patina-mock .inhand-time { margin-top: 6px; font-family: var(--font-meta); font-size: 17px; color: var(--text-primary); }
+.patina-mock .inhand-acts { display: flex; gap: 14px; margin-top: 10px; font-family: var(--font-meta); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .spine-note { margin-top: 14px; font-family: var(--font-meta); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); line-height: 1.5; }
+.patina-mock .spine-marks { display: flex; align-items: center; gap: 2px; margin-bottom: 12px; }
+.patina-mock .sect-head.is-spread { justify-content: space-between; width: 100%; }
+.patina-mock .drawer-avatar.is-user { width: 26px; height: 26px; font-size: 11px; background: var(--bg-warm); color: var(--text-body); }
+.patina-mock .drawer-fixed { position: absolute; left: 0; right: 0; bottom: 0; }
+.patina-mock .mdesk .on-desk { padding: 26px 20px 0; }
+.patina-mock .mdesk .sheet-on-desk { padding: 0 20px 14px; }
+.patina-mock .mdesk .roster { padding-top: 24px; }
+.patina-mock .mdesk .desk-whispers { margin-top: 20px; }
+/* two stamp words the canon vocabulary carries and kit.css has no class for
+   (DECISIONS.md stamp list: ... ORDERED ... DECISION DUE) */
+.patina-mock .stamp.stamp-ordered { color: var(--color-clay-ink); }
+.patina-mock .stamp.stamp-decision { color: var(--color-terracotta-ink); }
+
+/* -- the strip (M4) ----------------------------------------------------- */
+.patina-mock .strip { height: 100%; overflow: hidden; background: var(--bg-primary); padding: 10px 14px; }
+.patina-mock .strip-cell { margin-bottom: 6px; }
+.patina-mock .strip-body .stage-group { margin-top: 0; }
+.patina-mock .strip-body .job-line { border-bottom: none; }
+.patina-mock .strip-cap { margin-bottom: 4px; font-family: var(--font-meta); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.patina-mock .strip-body { background: var(--doc-paper); border: 1px solid var(--border-subtle); padding: 9px 10px; }
+.patina-mock .strip-body .region-rule { margin: 8px 0 0; }
+.patina-mock .strip-body .margin-chip { margin-bottom: 0; }
+.patina-mock .strip-body .job-line { padding: 0; }
+.patina-mock .strip-row { display: flex; align-items: center; gap: 14px; }
+
+/* ==========================================================================
+   BLOCK 2 -- PLANKS, shared by all lanes
+   ==========================================================================
+   source/shared-planks.md, adopted identically by A, B and C -- and by none of
+   them alone. Everything here is scoped `.lane-a, .lane-b, .lane-c` so the
+   three lanes are compared on equal terms and `today` stays unplanked. A lane
+   may restate a plank at its own value (Direction A's stocks are deeper, so A
+   darkens the four paper inks); those restatements live in each lane's own
+   block below and override by source order.
+
+   SP-01 type floors . SP-02 three muted inks . SP-03 the rule-weight set .
+   SP-05 the state fill . SP-06 the hover step.
+   ========================================================================== */
+
+.lane-a, .lane-b, .lane-c {
+  /* SP-02 -- three muted inks that are three colours (today all three are
+     #65594E). Ratios on --doc-paper #FCFAF6: 9.216 / 7.731 / 6.514. */
+  --text-muted: #4E4339;
+  --text-subtle: #5A4E43;
+  --text-faint: #65594E;
+  --color-quiet-ink: #65594E;
+
+  /* SP-03 -- one weight per rank */
+  --rule-ink: #2C2926;
+  --rule-hair: 1px solid rgba(44, 41, 38, .10);
+  --rule-mid: 1.5px solid #2C2926;
+
+  /* SP-05 -- the state fill: the pigment at 16-18% over the sheet, worn by
+     the one state that is the reason the row is on the page */
+  --plank-state-tint: #F4E6E0;      /* --color-error @16% over #FCFAF6 */
+
+  /* SP-06 -- hover is declared PER LANE, not once. v2 carried one hex here
+     (#F3ECE2, clay at 16% over the sheet) and promised 1.10:1 on every stock
+     a direction declares; measured, it delivers 1.125 on the sheet, 1.097 on
+     today's ground, 1.046 on A's rail, 1.008-1.016 on B's six stocks, 1.025
+     on C's second sheet -- and on A's desk stock it is LIGHTER than the
+     ground it tints. One hex cannot clear 1.10 across stocks that span
+     1.381:1, and a fill deep enough to try puts the four -ink tokens under
+     4.5:1 on the hovered row (charcoal at 6% over A's desk reads 1.106 and
+     drops A's tightest ink to 4.137). So SP-06 is a rule, not a value: a
+     hovered row takes THE NEXT STOCK THE LANE ALREADY DECLARES. Each lane's
+     value is in its own block below; the floor across all three is 1.097.
+     A static mock cannot draw hover; the tokens are here so the numbers are
+     in the deck. */
+}
+
+/* SP-01 -- the 11px mono floor (today: 8, 8.5, 9, 9.5 and 10px) */
+.lane-a .stage-head, .lane-b .stage-head, .lane-c .stage-head,
+.lane-a .sect-head, .lane-b .sect-head, .lane-c .sect-head,
+.lane-a .rh-eyebrow, .lane-b .rh-eyebrow, .lane-c .rh-eyebrow,
+.lane-a .movement-eyebrow, .lane-b .movement-eyebrow, .lane-c .movement-eyebrow,
+.lane-a .rl-label, .lane-b .rl-label, .lane-c .rl-label,
+.lane-a .strip-cap, .lane-b .strip-cap, .lane-c .strip-cap,
+.lane-a .mc-eyebrow, .lane-b .mc-eyebrow, .lane-c .mc-eyebrow,
+.lane-a .contents-head, .lane-b .contents-head, .lane-c .contents-head,
+.lane-a .contents-tag, .lane-b .contents-tag, .lane-c .contents-tag,
+.lane-a .contents-sub, .lane-b .contents-sub, .lane-c .contents-sub,
+.lane-a .vitals .vital, .lane-b .vitals .vital, .lane-c .vitals .vital,
+.lane-a .vitals .vital-value, .lane-b .vitals .vital-value, .lane-c .vitals .vital-value,
+.lane-a .ffe-vendor, .lane-b .ffe-vendor, .lane-c .ffe-vendor,
+.lane-a .phase-when, .lane-b .phase-when, .lane-c .phase-when,
+.lane-a .phase-state, .lane-b .phase-state, .lane-c .phase-state,
+.lane-a .status-chip, .lane-b .status-chip, .lane-c .status-chip,
+.lane-a .act-sub, .lane-b .act-sub, .lane-c .act-sub,
+.lane-a .whisper-meta, .lane-b .whisper-meta, .lane-c .whisper-meta,
+.lane-a .spine-note, .lane-b .spine-note, .lane-c .spine-note,
+.lane-a .drawer-user-studio, .lane-b .drawer-user-studio, .lane-c .drawer-user-studio,
+.lane-a .seam-summary, .lane-b .seam-summary, .lane-c .seam-summary,
+.lane-a .seam-unfold, .lane-b .seam-unfold, .lane-c .seam-unfold,
+.lane-a .ri-label, .lane-b .ri-label, .lane-c .ri-label,
+.lane-a .ri-value, .lane-b .ri-value, .lane-c .ri-value,
+.lane-a .room-alloc, .lane-b .room-alloc, .lane-c .room-alloc,
+.lane-a .mb-eyebrow, .lane-b .mb-eyebrow, .lane-c .mb-eyebrow { font-size: 11px; }
+
+/* SP-01 -- the 14px body floor (today: 12.5, 13, 13.5 and 13.5px) */
+.lane-a .job-need, .lane-b .job-need, .lane-c .job-need,
+.lane-a .roster-lede, .lane-b .roster-lede, .lane-c .roster-lede,
+.lane-a .rh-status, .lane-b .rh-status, .lane-c .rh-status,
+.lane-a .mc-line, .lane-b .mc-line, .lane-c .mc-line,
+.lane-a .mi-line, .lane-b .mi-line, .lane-c .mi-line,
+.lane-a .rl-text, .lane-b .rl-text, .lane-c .rl-text,
+.lane-a .ri-name, .lane-b .ri-name, .lane-c .ri-name,
+.lane-a .seam-name, .lane-b .seam-name, .lane-c .seam-name,
+.lane-a .phase-name, .lane-b .phase-name, .lane-c .phase-name,
+.lane-a .room-name, .lane-b .room-name, .lane-c .room-name,
+.lane-a .ffe-name, .lane-b .ffe-name, .lane-c .ffe-name,
+.lane-a .ffe-price, .lane-b .ffe-price, .lane-c .ffe-price { font-size: 14px; }
+
+/* SP-03 -- a hairline ends a row, a 1.5px charcoal rule ends a section, the
+   double rule ends a movement. Dashed goes back to meaning "not filled in". */
+.lane-a .job-line, .lane-b .job-line, .lane-c .job-line,
+.lane-a .phase-row, .lane-b .phase-row, .lane-c .phase-row,
+.lane-a .ffe-row, .lane-b .ffe-row, .lane-c .ffe-row,
+.lane-a .margin-item, .lane-b .margin-item, .lane-c .margin-item { border-bottom: var(--rule-hair); }
+.lane-a .region-rule, .lane-b .region-rule, .lane-c .region-rule {
+  height: 0;
+  border-top: 1.5px solid var(--rule-ink);
+  border-bottom: none;
+  margin: 12px 0 18px;
+}
+.lane-a .region-rule.is-movement, .lane-b .region-rule.is-movement, .lane-c .region-rule.is-movement {
+  height: 6px;
+  border-top: 2px solid var(--rule-ink);
+  border-bottom: 1px solid rgba(44, 41, 38, .18);
+}
+.lane-a .sect-head, .lane-b .sect-head, .lane-c .sect-head {
+  padding-bottom: 10px;
+  border-bottom: 1.5px solid var(--rule-ink);
+}
+.lane-a .letterhead, .lane-b .letterhead, .lane-c .letterhead {
+  border-bottom: 1.5px solid var(--rule-ink);
+  padding-bottom: 20px;
+}
+.lane-a .contents-head, .lane-b .contents-head, .lane-c .contents-head {
+  padding-bottom: 8px;
+  border-bottom: var(--rule-hair);
+}
+
+/* SP-05 -- the state fill. It lands on Stamp, which is what the surface
+   actually renders (status-chip.tsx has no reachable render on this data);
+   the chip carries the same variant where it is reachable. Filling a stamp
+   departs from KIT.md:266 -- named in the plank, not only in Direction B. */
+.lane-a .stamp.stamp-decision, .lane-b .stamp.stamp-decision, .lane-c .stamp.stamp-decision {
+  background: var(--plank-state-tint);
+  border-width: 1.5px;
+}
+.lane-a .status-chip.is-filled, .lane-b .status-chip.is-filled, .lane-c .status-chip.is-filled {
+  background: var(--plank-state-tint);
+  border-radius: 2px;
+  padding: 3px 8px;
+}
+.lane-a .status-chip.is-filled .sc-dot, .lane-b .status-chip.is-filled .sc-dot,
+.lane-c .status-chip.is-filled .sc-dot { display: none; }
+
+
+/* ==========================================================================
+   BLOCK 3 -- Direction A: Ink on Paper
+   ==========================================================================
+   What is A's, over and above the planks: three paper stocks 1.18:1 apart,
+   a five-step Playfair scale, four one-step-darker paper inks, a red-letter
+   stock, two hairline values, and the section head as the one section device.
+   ========================================================================== */
+
+.lane-a {
+  /* the three stocks */
+  --a-doc-paper: #FCFAF6;      /* the sheet -- unchanged */
+  --a-spine-stock: #EFE7DA;    /* spine + margin rails: 1.177:1 under the sheet */
+  --a-desk-ground: #E0D6C4;    /* the desk route: 1.173:1 under the rails */
+
+  /* the red-letter zone's own stock -- terracotta at 28% over the sheet, so
+     the most urgent band stops being the palest one (F09) */
+  --a-red-letter-tint: #F1E1D9;
+
+  /* the paper inks, one step darker than I151 so the deepest stock holds */
+  --a-primary-ink: #2C2926;
+  --a-body-ink: #5C4A3C;
+  --a-clay-ink: #6F5429;
+  --a-terracotta-ink: #8E4A38;
+  --a-golden-hour-ink: #6C5A1B;
+  --a-sage-ink: #55604E;
+
+  /* two hairline values: one for the two light stocks, one for the desk --
+     #D8CDBA reads at 1.508:1 on paper and 1.281:1 on the rail but only
+     1.092:1 on the desk stock, under today's pearl-on-off-white 1.209:1 */
+  --a-hairline: #D8CDBA;
+  --a-hairline-deep: #C9BCA4;   /* 1.301:1 on the desk stock; a border colour, never a ground */
+
+  /* SP-06 -- A's hover is the next stock down the lane's own ladder: the rail
+     stock under a row on paper (1.177:1) and over a row on the desk stock
+     (1.173:1); a hovered row on the rail itself takes the paper (1.177:1).
+     No new value, and every one of them already clears 4.5:1 on A's inks. */
+  --plank-hover-tint: #EFE7DA;
+
+  /* kit tokens re-pointed at the lane's literals.
+     --bg-surface is SCOPED, exactly as the desk ground is: in the product it
+     is a --doc-surface declared on the Document tree, not --bg-surface at
+     :root. var(--bg-surface) resolves 83 times across 51 files and most of
+     them are not Document surfaces (scope-builder, procurement, proposals,
+     ffe, ui/controls, toast-provider, mood-board). Repointing it globally is
+     priced in source/direction-a.md, Cost; here the lane class IS the scope. */
+  --bg-surface: var(--a-doc-paper);
+  --doc-paper: var(--a-doc-paper);
+  --spine-wash: var(--a-spine-stock);
+  --margin-wash: var(--a-spine-stock);
+  --text-primary: var(--a-primary-ink);
+  --text-body: var(--a-body-ink);
+  --color-charcoal: var(--a-primary-ink);
+  --color-mocha: var(--a-body-ink);
+  --color-clay-ink: var(--a-clay-ink);
+  --color-terracotta-ink: var(--a-terracotta-ink);
+  --color-golden-hour-ink: var(--a-golden-hour-ink);
+  --color-sage-ink: var(--a-sage-ink);
+  --border-default: var(--a-hairline);
+  --border-subtle: rgba(44, 41, 38, .10);
+  --doc-ink-border: rgba(44, 41, 38, .18);
+}
+
+/* the desk ground is scoped to the desk route, not to --bg-primary: repointing
+   --bg-primary would take /library, /people and every ledger sheet with it
+   (12-measurements.md §1). See source/direction-a.md, Cost. */
+.lane-a .desk, .lane-a .mdesk { background: var(--a-desk-ground); }
+.lane-a .desk .job-line, .lane-a .mdesk .job-line,
+.lane-a .desk .contents-head, .lane-a .mdesk .contents-head { border-bottom-color: rgba(44, 41, 38, .14); }
+.lane-a .desk .kbd, .lane-a .mdesk .kbd { border-color: var(--a-hairline-deep); }
+
+/* A's type scale, above the planks' floors */
+.lane-a .lh-title { font-size: 40px; line-height: 1.08; letter-spacing: -.015em; }
+.lane-a .region-head .rh-name { font-size: 24px; }
+.lane-a .job-name { font-size: 18px; }
+.lane-a .ffe-row .ffe-name, .lane-a .ffe-row .ffe-price { font-size: 15px; }
+.lane-a .phase-name { font-size: 15px; }
+/* mono spent only on state, time and provenance: the contents sub-lines are
+   prose, so they leave the mono register (no copy changes) */
+.lane-a .contents-sub { font-family: var(--font-body); font-size: 12px; letter-spacing: 0; }
+
+/* the section head is the signature: mark, mono label, name, rule */
+.lane-a .sect-mark i:nth-child(1) { width: 40px; height: 2px; background: var(--a-primary-ink); }
+.lane-a .sect-mark i:nth-child(2) { width: 28px; height: 2px; opacity: .85; }
+.lane-a .sect-mark i:nth-child(3) { width: 16px; height: 2px; opacity: .45; }
+
+/* the stocks, applied */
+.lane-a .spine, .lane-a .margin { background: var(--a-spine-stock); border-color: var(--a-hairline); }
+.lane-a .doc-col { background: var(--a-doc-paper); }
+.lane-a .drawer { background: var(--a-doc-paper); border-top: 1.5px solid var(--rule-ink); }
+.lane-a .margin-chip { border-color: var(--a-hairline); }
+.lane-a .strip-body { background: var(--a-doc-paper); border-color: var(--a-hairline); }
+
+/* the red-letter zone: a stock, not an 8% wash */
+.lane-a .red-letter { background: var(--a-red-letter-tint); border-left-width: 2px; }
+.lane-a .red-letter .rl-row { border-bottom-color: rgba(44, 41, 38, .12); }

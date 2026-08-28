@@ -1,0 +1,140 @@
+<section id="planks" class="dk-sec reg-paper" data-index-title="Shared planks">
+  <div class="dk-wrap">
+    <p class="hour"><b>PLANKS</b></p>
+    <h2 class="dk-h2">Nine planks, and no direction skips one</h2>
+    <p class="dk-lede">A plank is a repair the surface needs whichever direction the team rules for &mdash; a token, a floor, a fill or a ground. &ldquo;No plank adds a surface, moves a region, changes a label, or changes what any act does&rdquo; (<code>shared-planks.md</code>). Where a direction restates a plank at its own value &mdash; Direction A's stocks are deeper, so A's inks are one step darker &mdash; the plank is still adopted, never replaced.</p>
+
+    <ul class="plank-list">
+      <li class="plank">
+        <span class="plank__id">SP-01</span>
+        <div>
+          <p class="plank__title">A 14px body floor and an 11px mono floor</p>
+          <p class="f-chips plank__meta">
+            <span class="f-chip f-chip--s1">F11</span>
+            <span class="f-chip f-chip--s1">F12</span>
+            <span class="f-chip f-chip--s1">F13</span>
+            <span class="f-chip f-chip--s1">F14</span>
+            <span class="f-chip f-chip--s2">F21</span>
+            <span class="f-chip f-chip--s2">F22</span>
+          </p>
+          <p class="plank__why">Every text-bearing element on a Document surface lands on one of five steps &mdash; mono label 11px, mono state 12px, body 14px, name 16px, head 18px+ &mdash; so <code>--type-body-min: 14px</code> and <code>--type-metadata-min: 12px</code> become the floor in fact instead of a suggestion beside it, and the mono floor moves to 11px because 649 of 1,029 mono usages (63%) already sit at or below 10px, 296 of them at exactly 9px. The tokens are the easy part: <code>text-[&lt;n&gt;px]</code> literals run 1,749 deep across 252 files in 25 distinct sizes, and the seven named components are where the decisions are, not where the work is.</p>
+          <p class="dk-note">Size L &middot; its own lane, 4&ndash;6 days, sequenced before any direction ships &middot; <code>globals.css</code> &middot; 1,749 <code>text-[&lt;n&gt;px]</code> literals across 252 files in <code>components/document/**</code></p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-02</span>
+        <div>
+          <p class="plank__title">Three muted inks that are three colours</p>
+          <p class="f-chips plank__meta">
+            <span class="f-chip f-chip--s2">F16</span>
+          </p>
+          <p class="plank__why"><code>--text-muted</code>, <code>--text-subtle</code> and <code>--text-faint</code> all resolve to <code>#65594E</code> today; they become three steps &mdash; <code>--text-muted: #4E4339</code>, <code>--text-subtle: #5A4E43</code>, <code>--text-faint: #65594E</code> kept at today's value as the quietest step &mdash; and all three clear 4.5:1 on every ground any direction declares.</p>
+          <p class="dk-note">Size S &middot; <code>globals.css</code> only</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-03</span>
+        <div>
+          <p class="plank__title">A rule-weight token set, and one job per weight</p>
+          <p class="f-chips plank__meta">
+            <span class="f-chip f-chip--s2">F18</span>
+          </p>
+          <p class="plank__why">Three tokens replace the single pearl hairline used 502 times: <code>--rule-hair</code> for a row ended, <code>--rule-mid</code> for a section ended, <code>--rule-double</code> (the existing <code>.doc-region-rule</code>) for a movement ended &mdash; one weight per rank instead of one weight carrying all three.</p>
+          <p class="plank__why">All three are hardcoded charcoal, so any inverted chrome erases them: on Direction C's three charcoals &mdash; desk <code>#37322D</code>, rails <code>#2C2926</code>, well <code>#201D1B</code> &mdash; <code>--rule-mid</code> reads 1.141 / 1.000 / 1.159 and <code>--rule-hair</code> reads 1.015 / 1.000 / 1.011, on the rails literally the ground's own colour. The plank owns a dark twin for each weight, spent only by a lane that inverts a ground &mdash; today that is C alone, and C prices them.</p>
+          <div class="dk-tablewrap">
+            <table class="dk-table">
+              <caption>The dark twin set &mdash; measured on C's three charcoals</caption>
+              <thead><tr><th>Twin</th><th>Value</th><th>Desk &middot; rails &middot; well</th><th>The light weight it twins, on the sheet</th></tr></thead>
+              <tbody>
+                <tr><th class="dk-row-h" data-l="Twin"><code>--rule-hair-dark</code></th><td data-l="Value">off-white at 12%</td><td class="dk-num" data-l="Ratio">1.442 &middot; 1.447 &middot; 1.419</td><td data-l="Twins">1.207</td></tr>
+                <tr><th class="dk-row-h" data-l="Twin"><code>--rule-mid-dark</code></th><td data-l="Value">the dark register's primary ink, solid</td><td class="dk-num" data-l="Ratio">11.153 &middot; 12.722 &middot; 14.745</td><td data-l="Twins">13.871</td></tr>
+                <tr><th class="dk-row-h" data-l="Twin"><code>--rule-strong-dark</code></th><td data-l="Value">2px of that ink over 1px off-white at 18%</td><td class="dk-num" data-l="Ratio">1.720 &middot; 1.750 &middot; 1.735 <span class="dk-note">the under-line</span></td><td data-l="Twins">1.416 <span class="dk-note">the under-line</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="dk-note">Size M &middot; <code>globals.css</code> &middot; the <code>border-[var(--color-pearl)]</code> sweep in <code>components/document/**</code></p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-04</span>
+        <div>
+          <p class="plank__title">No pigment is spent as text</p>
+          <p class="f-chips plank__meta">
+            <span class="f-chip f-chip--s0">F02</span>
+            <span class="f-chip f-chip--s0">F03</span>
+          </p>
+          <p class="plank__why">Every base pigment already has a text-grade companion ink and <code>contrast.test.ts</code> holds the rule; the stamp is the hole &mdash; <code>stamp.tsx:31</code> lets an undeclared stamp print its own base pigment as text, as low as 2.01:1. Every stamp descriptor now carries an explicit <code>-ink</code>, and the base pigment stays on the border, where it is material, not type.</p>
+          <p class="dk-note">Size S &middot; <code>components/document/stamp.tsx</code> &middot; <code>orders-ledger.tsx</code> &middot; the stamp descriptor maps &middot; <code>lib/document/__tests__/contrast.test.ts</code></p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-05</span>
+        <div>
+          <p class="plank__title">State gets a ground, not only a hue</p>
+          <p class="f-chips plank__meta">
+            <span class="f-chip f-chip--s0">F01</span>
+            <span class="f-chip f-chip--s0">F02</span>
+            <span class="f-chip f-chip--s0">F03</span>
+          </p>
+          <p class="plank__why"><code>Stamp</code> and <code>StatusChip</code> gain one fill variant &mdash; the state's pigment at 16-18% over the sheet, with the matching <code>-ink</code> for the word &mdash; worn when the state is the reason the row is on the page; every figure in this deck shows the fill on <code>Stamp</code>, since <code>StatusChip</code> has no reachable render on the local DB. The fill departs from <code>KIT.md:266</code> (&ldquo;stamps are always outlined, never filled&rdquo;), and giving <code>StatusChip</code> the same variant is a new prop and a call-site decision, not only a token.</p>
+          <p class="dk-note">Size M &middot; <code>components/document/{status-chip,stamp}.tsx</code> &middot; <code>ffe-section.tsx</code> &middot; <code>orders-ledger.tsx</code> &middot; every call site that decides a variant</p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-06</span>
+        <div>
+          <p class="plank__title">Hover is the next stock the lane already declares</p>
+          <p class="f-chips plank__meta">
+            <span class="f-chip f-chip--s2">F17</span>
+            <span class="f-chip f-chip--s0">F01</span>
+          </p>
+          <p class="plank__why"><code>--bg-hover</code> moves off <code>rgba(196,165,123,.06)</code> &mdash; 1.042:1 over the ground &mdash; but it is a rule now, not a hex: a hovered row takes the next stock the direction already declared for that lane, because one value could not clear 1.10:1 across every stock every direction proposes. The one hex this plank tried, <code>--plank-hover-tint: #F3ECE2</code>, measured 1.008&ndash;1.125:1 across the declared stocks and inverted direction on two of them &mdash; 1.228:1 on A's desk (lighter than the ground) and 1.089:1 on B's rail (also lighter) &mdash; and a fill deep enough to clear 1.10:1 everywhere else broke SP-04's floor: charcoal at 6% over A's desk stock reads 1.106:1 and drops A's tightest <code>-ink</code> to 4.137:1 on the hovered row; over B's Project stock, 1.115:1 and 4.363:1. So the plank promises a floor of at least <strong>1.09:1</strong>, not 1.10:1, and the floor is <strong>1.097</strong> &mdash; C's second sheet, the tightest value any lane's rule produces. Every lane clears it with a stock it already owns: A takes the rail stock (paper &middot; rail &middot; desk &mdash; 1.177 &middot; 1.177 &middot; 1.173), B takes the untinted sheet showing through the tint (1.108&ndash;1.116 on the six stocks, 1.225 on the rail), C takes the second sheet on paper and the next charcoal on the chrome (1.097 &middot; 1.141 &middot; 1.159). The FF&amp;E row's own local 4% hover is deleted in favour of the rule.</p>
+          <p class="dk-note">Size S &middot; <code>globals.css</code> &middot; <code>components/document/ffe-section.tsx</code></p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-07</span>
+        <div>
+          <p class="plank__title">The drawer gets a ground of its own</p>
+          <p class="f-chips plank__meta">
+            <span class="f-chip f-chip--s1">F06</span>
+            <span class="f-chip f-chip--s2">F23</span>
+          </p>
+          <p class="plank__why">The Studio Drawer is <code>bg-[var(--bg-surface)]</code> today &mdash; pure white, 1.069:1 against the page &mdash; and takes a declared chrome stock instead, with the mid rule from SP-03 along its top edge in place of a pearl hairline. Contents, order and behaviour are unchanged.</p>
+          <p class="dk-note">Size M, not S: <code>studio-drawer.tsx:289</code> is a Tailwind arbitrary value, not a token &middot; <code>components/document/studio-drawer.tsx</code> &middot; <code>globals.css</code></p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-08</span>
+        <div>
+          <p class="plank__title">The two rails are painted on a stock</p>
+          <p class="f-chips plank__meta">
+            <span class="f-chip f-chip--s1">F07</span>
+            <span class="f-chip f-chip--s1">F08</span>
+          </p>
+          <p class="plank__why">The margin rail carries two values &mdash; <code>rgba(250,247,242,0.98)</code> from 1180 to 1439px, and <code>rgba(250,247,242,0.55)</code> at 1440 and above, where it composites to the ground exactly, 1.000:1 &mdash; and the spine (pearl at 28%) reads 1.053:1 against the ground and 1.081:1 against the document paper beside it. Both rails take one declared stock so the paper is visibly flanked, and the paper's own edge takes the mid rule.</p>
+          <p class="dk-note">Size M, not S: <code>doc-spine.tsx:44</code> and <code>margin-rail.tsx:258</code> are Tailwind arbitrary values, and the rail has a second value at the 1180-1439 tier &middot; <code>components/document/{doc-spine,margin-rail}.tsx</code> &middot; <code>globals.css</code></p>
+        </div>
+      </li>
+
+      <li class="plank">
+        <span class="plank__id">SP-09</span>
+        <div>
+          <p class="plank__title">The desk at 390 stops showing a fourth ground</p>
+          <p class="f-chips plank__meta">
+            <span class="f-chip f-chip--s2">F24</span>
+          </p>
+          <p class="plank__why">The shadcn base layer <code>--background</code> (<code>globals.css:860</code>, about <code>#F5F1E6</code>), exposed where the desk overflows its viewport at 390, is repointed to <code>--bg-primary</code> so the page has one ground under it at every width. The overflow itself is a layout defect and stays out of this program's scope; painting the ground is not.</p>
+          <p class="dk-note">Size S &middot; <code>globals.css</code> &middot; <code>app/(document)/layout.tsx</code></p>
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
