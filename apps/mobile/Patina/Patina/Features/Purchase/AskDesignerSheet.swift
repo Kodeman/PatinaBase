@@ -149,7 +149,7 @@ struct AskDesignerSheet: View {
             }
             .accessibilityIdentifier("AskDesignerSheet.Send")
 
-            Text(Self.caption(hasRoom: roomName != nil, sent: didSend))
+            Text(Self.caption(firstName: designerFirstName, hasRoom: roomName != nil, sent: didSend))
                 .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)
@@ -165,13 +165,15 @@ struct AskDesignerSheet: View {
     /// name the room when there IS one: the walk caught it promising
     /// "the piece, the price and the room" to a client with no rooms at all,
     /// over a message that carried two of the three (C5).
-    static func caption(hasRoom: Bool, sent: Bool) -> String {
-        switch (hasRoom, sent) {
-        case (true, false): return "She'll see the piece, the price and the room."
-        case (true, true): return "She has the piece, the price and the room."
-        case (false, false): return "She'll see the piece and the price."
-        case (false, true): return "She has the piece and the price."
-        }
+    ///
+    /// The app knows the designer's name and does not know their gender, so
+    /// the caption uses the name it has (the mock's "She'll" was written for
+    /// one designer, not for every one of them).
+    static func caption(firstName: String?, hasRoom: Bool, sent: Bool) -> String {
+        let who = (firstName?.isEmpty == false) ? firstName! : "Your designer"
+        let verb = sent ? "has" : "will see"
+        let what = hasRoom ? "the piece, the price and the room" : "the piece and the price"
+        return "\(who) \(verb) \(what)."
     }
 
     private func send() async {

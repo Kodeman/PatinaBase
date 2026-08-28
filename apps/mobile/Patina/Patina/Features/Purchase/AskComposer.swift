@@ -20,6 +20,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 enum AskComposer {
 
@@ -57,7 +58,19 @@ enum AskComposer {
     /// the unique index scopes to this homeowner — two clients asking about
     /// the same piece do not collide.
     static func clientRequestId(for product: Product) -> UUID {
-        UUID(uuidString: product.id) ?? UUID()
+        if let direct = UUID(uuidString: product.id) { return direct }
+        // A catalogue id that is not a uuid (preview and synthetic rows) must
+        // still key the SAME lead on a second tap. `UUID()` would mint a fresh
+        // key each time and quietly write a second lead, which is the one
+        // failure `(homeowner_id, client_request_id)` exists to prevent — so
+        // the key is derived from the id rather than invented.
+        var bytes = Array(SHA256.hash(data: Data(product.id.utf8)).prefix(16))
+        bytes[6] = (bytes[6] & 0x0F) | 0x50
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
     }
 
     static func defaultQuestion(product: Product) -> String {

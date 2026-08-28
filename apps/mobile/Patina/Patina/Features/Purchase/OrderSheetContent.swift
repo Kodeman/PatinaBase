@@ -87,6 +87,19 @@ struct OrderSheetContent: Equatable {
         // add up to the total the session takes.
         if let freight = product.shippingFlatCents, freight > 0 {
             money.append(MoneyRow(label: "Delivery", value: PatinaCurrency.format(cents: freight)))
+            // With two components the reader must not be left to add them:
+            // the figure the session bills is `direct_orders.amount_cents`,
+            // which the RPC folded freight into. Before the row exists the
+            // same sum is printed from the catalogue's own two numbers. With
+            // one component the Piece row already IS the total, and a second
+            // row repeating it would be decoration.
+            money.append(
+                MoneyRow(
+                    label: "Total",
+                    value: order.map(\.formattedTotal)
+                        ?? PatinaCurrency.format(cents: piecePrice + freight)
+                )
+            )
         }
 
         let enabled = terms.taxShippingEnabled

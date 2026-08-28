@@ -48,9 +48,13 @@ struct OrderSheetCopyTests {
             product: PurchaseFixture.piece(shippingFlatCents: 18_000),
             terms: enabled, fitLine: nil
         )
-        #expect(content.moneyRows.map(\.label) == ["Piece", "Delivery"])
+        // With two components the sheet prints the sum as well — the reader
+        // must never be the one adding them up.
+        #expect(content.moneyRows.map(\.label) == ["Piece", "Delivery", "Total"])
         #expect(content.moneyRows[1].value == "$180.00")
+        #expect(content.moneyRows[2].value == "$4,380.00")
 
+        // One component: the Piece row already IS the total.
         let zero = OrderSheetContent.make(
             product: PurchaseFixture.piece(shippingFlatCents: 0), terms: enabled, fitLine: nil
         )
@@ -69,6 +73,10 @@ struct OrderSheetCopyTests {
             terms: enabled, fitLine: nil, order: order
         )
         #expect(content.moneyRows[0].value == "$8,400.00")
+        // The Total row is the row's own `amount_cents`, not a figure the app
+        // re-multiplied — this is the number the Checkout session will bill.
+        #expect(content.moneyRows.last?.label == "Total")
+        #expect(content.moneyRows.last?.value == order.formattedTotal)
         #expect(order.formattedTotal == "$8,580.00")
     }
 
@@ -209,7 +217,7 @@ struct OrderSheetCopyTests {
     @Test("Order placed names the piece and the total, and paints no tracker")
     func orderPlacedCopy() {
         let order = PurchaseFixture.order(status: "paid")
-        let line = OrderPlacedView.summaryLine(order)
+        let line = OrderPlacedView.summaryLine(order, taxShippingEnabled: false)
         #expect(line == "Heirloom Oak Dining Table · $4,200.00")
         #expect(!line.contains("delivery and tax"))
         #expect(OrderPlacedView.shipLine == "We'll email you when it ships.")
@@ -221,5 +229,19 @@ struct OrderSheetCopyTests {
         let order = PurchaseFixture.order(status: "paid")
         #expect(OrderPlacedView.summaryLine(order, taxShippingEnabled: true)
                 == "Heirloom Oak Dining Table · $4,200.00 · total with delivery and tax")
+        // The branch is reachable from the app: the view takes the setting as
+        // a stored property and the piece screen passes the terms it read.
+        // A default of `false` on the parameter was what made it dead.
+        let placed = OrderPlacedView(
+            order: order,
+            responsibilityParagraph: nil,
+            contactLine: nil,
+            soldBy: "Sold and shipped by Patina.",
+            taxShippingEnabled: true,
+            onSeeOrder: nil,
+            onBackToToday: {}
+        )
+        #expect(placed.taxShippingEnabled)
+        #expect(placed.onSeeOrder == nil)
     }
 }

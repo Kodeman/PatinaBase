@@ -201,9 +201,11 @@ extension CompanionActionProvider {
         let hint: String
         let analyticsId: String
         switch act {
-        case .askDesigner:
+        case .askDesigner(let firstName):
             icon = "bubble.left.and.bubble.right"
-            hint = "She'll see the piece, the price and the room"
+            // The name the app has, never a pronoun it is guessing.
+            hint = "\((firstName?.isEmpty == false) ? firstName! : "Your designer")"
+                + " will see the piece and the price"
             analyticsId = "piece_ask_designer"
         case .buy:
             icon = "creditcard"

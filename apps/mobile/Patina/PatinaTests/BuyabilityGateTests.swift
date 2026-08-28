@@ -112,9 +112,18 @@ struct BuyabilityGateTests {
         }
     }
 
-    @Test("the gate-failed piece screen states the reason B §5 names")
-    func dimensionsSentenceIsTheOneTheSpecNames() {
+    @Test("the gate-failed piece screen names the fact that is actually missing")
+    func refusalSentencesNameTheirOwnFact() {
         #expect(BuyabilityGate.sentence(for: .dimensions)
-                == "We don't have this piece's size and lead time yet.")
+                == "We don't have this piece's size yet.")
+        #expect(BuyabilityGate.sentence(for: .leadTimeWeeks)
+                == "We don't have this piece's lead time yet.")
+        // The client gate refuses any piece it cannot prove `patina_managed`,
+        // but the server also sells a vendor's catalogue row — so the sentence
+        // may not claim the piece is not sold through Patina.
+        #expect(BuyabilityGate.sentence(for: .noSellerOfRecord)
+                == "We can't sell this piece through the app yet.")
+        #expect(!BuyabilityGate.sentence(for: .noSellerOfRecord)
+                .contains("isn't sold through Patina"))
     }
 }

@@ -92,11 +92,20 @@ enum BuyabilityGate {
         case .withdrawn:
             return "This piece is no longer in the catalogue."
         case .noSellerOfRecord:
-            return "This piece isn't sold through Patina."
+            // NOT "isn't sold through Patina": the server also sells any piece
+            // whose vendor carries `is_patina_catalog`, which this client-side
+            // gate cannot see. The honest sentence is about the app, not the
+            // piece.
+            return "We can't sell this piece through the app yet."
         case .noPrice:
             return "This piece doesn't have a price yet."
-        case .dimensions, .leadTimeWeeks:
-            return "We don't have this piece's size and lead time yet."
+        case .dimensions:
+            return "We don't have this piece's size yet."
+        case .leadTimeWeeks:
+            // Its own sentence: the client refuses `lead_time_weeks = 0` where
+            // the server tests NULL only, so this is sometimes the stricter
+            // answer and must at least name the right fact.
+            return "We don't have this piece's lead time yet."
         case .brand:
             return "We don't know who makes this piece yet."
         case .photoVerifiedAt:

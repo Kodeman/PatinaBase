@@ -84,16 +84,23 @@ struct AskSheetsTests {
         // The walk caught this: `client@patina.dev` has no rooms, so the body
         // carried the piece and the price — and the caption said "and the
         // room" anyway.
-        #expect(AskDesignerSheet.caption(hasRoom: true, sent: false)
-                == "She'll see the piece, the price and the room.")
-        #expect(AskDesignerSheet.caption(hasRoom: true, sent: true)
-                == "She has the piece, the price and the room.")
-        #expect(AskDesignerSheet.caption(hasRoom: false, sent: false)
-                == "She'll see the piece and the price.")
-        #expect(AskDesignerSheet.caption(hasRoom: false, sent: true)
-                == "She has the piece and the price.")
+        #expect(AskDesignerSheet.caption(firstName: "Leah", hasRoom: true, sent: false)
+                == "Leah will see the piece, the price and the room.")
+        #expect(AskDesignerSheet.caption(firstName: "Leah", hasRoom: true, sent: true)
+                == "Leah has the piece, the price and the room.")
+        #expect(AskDesignerSheet.caption(firstName: "Leah", hasRoom: false, sent: false)
+                == "Leah will see the piece and the price.")
+        #expect(AskDesignerSheet.caption(firstName: "Leah", hasRoom: false, sent: true)
+                == "Leah has the piece and the price.")
+        // No name resolved: the designer, not a guessed pronoun.
+        #expect(AskDesignerSheet.caption(firstName: nil, hasRoom: false, sent: false)
+                == "Your designer will see the piece and the price.")
         for sent in [true, false] {
-            #expect(!AskDesignerSheet.caption(hasRoom: false, sent: sent).contains("room"))
+            for name in ["Leah", nil] {
+                let line = AskDesignerSheet.caption(firstName: name, hasRoom: false, sent: sent)
+                #expect(!line.contains("room"))
+                #expect(!line.contains("She"))
+            }
         }
     }
 
@@ -123,8 +130,13 @@ struct AskSheetsTests {
 
     @Test("a piece whose id is not a uuid still gets a key rather than crashing")
     func nonUUIDProductStillKeys() {
-        let key = AskComposer.clientRequestId(for: PurchaseFixture.piece(id: "preview-1"))
-        #expect(key.uuidString.isEmpty == false)
+        // Stability is the whole point: a fresh key per call would file a
+        // second lead on a second tap.
+        let first = AskComposer.clientRequestId(for: PurchaseFixture.piece(id: "preview-1"))
+        let again = AskComposer.clientRequestId(for: PurchaseFixture.piece(id: "preview-1"))
+        #expect(first == again)
+        let other = AskComposer.clientRequestId(for: PurchaseFixture.piece(id: "preview-2"))
+        #expect(first != other)
     }
 
     @Test("the lead is roomless, single-piece, and names the piece in its description")
