@@ -61,6 +61,16 @@ public struct RemoteDesignerRef: Codable, Sendable {
         return nil
     }
 
+    /// The name of a PERSON, when one resolved. `business_name` is a studio
+    /// and is deliberately not here: a studio has no first name to take, and
+    /// halving one ("Hartwell Studio" → "Hartwell") is how a row ends up
+    /// addressing a business as a colleague.
+    public var personName: String? {
+        if let display_name, !display_name.isEmpty { return display_name }
+        if let full_name, !full_name.isEmpty { return full_name }
+        return nil
+    }
+
     /// The studio, when there is one. Never invented from the person's name.
     public var studioName: String? {
         guard let business_name, !business_name.isEmpty else { return nil }

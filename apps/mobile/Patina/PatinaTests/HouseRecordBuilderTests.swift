@@ -821,12 +821,14 @@ struct HouseRecordDecisionCopyTests {
     private func row(
         title: String,
         designerName: String?,
+        isPerson: Bool = true,
         project: String? = "Aspen Loft Refresh"
     ) -> StudioQueueItemRow {
         StudioQueueItemRow(
             id: "decision:d1", kind: .decision, entityId: "d1", title: title,
             detail: project, askedAt: Date(timeIntervalSince1970: 1_755_000_000),
             dueAt: nil, amountCents: nil, designerName: designerName,
+            designerIsPerson: isPerson,
             route: .decisionDetail(decisionId: "d1")
         )
     }
@@ -856,5 +858,65 @@ struct HouseRecordDecisionCopyTests {
     func aStudioNameIsItsOwnFirstName() {
         #expect(HouseRecordBuilder.firstName(of: "Hartwell") == "Hartwell")
         #expect(HouseRecordBuilder.firstName(of: "Leah Hartwell") == "Leah")
+    }
+
+    // MARK: - MJ-A: a studio is not a colleague
+
+    @Test("a studio keeps its whole name, and still names the question")
+    func aStudioIsNeverHalved() {
+        let item = row(
+            title: "Rug color — Natural vs Sand",
+            designerName: "Hartwell Studio",
+            isPerson: false
+        )
+        #expect(HouseRecordBuilder.title(for: item)
+                == "Hartwell Studio asked about Rug color — Natural vs Sand.")
+    }
+
+    @Test("a business_name-only profile resolves as a studio, not a person")
+    func businessNameAloneIsAStudio() throws {
+        let ref = try decode(RemoteDesignerRef.self, """
+        { "id": "d1", "business_name": "Hartwell Studio" }
+        """)
+        #expect(ref.displayName == "Hartwell Studio")
+        #expect(ref.personName == nil)
+        #expect(ref.studioName == "Hartwell Studio")
+
+        let named = StudioQueueBuilder.naming(ref, fallback: nil, fallbackIsPerson: false)
+        #expect(named.name == "Hartwell Studio")
+        #expect(!named.isPerson)
+    }
+
+    @Test("a display_name or full_name profile resolves as a person")
+    func aNamedProfileIsAPerson() throws {
+        let display = try decode(RemoteDesignerRef.self, """
+        { "id": "d1", "display_name": "Leah Hartwell", "business_name": "Hartwell Studio" }
+        """)
+        #expect(StudioQueueBuilder.naming(display, fallback: nil, fallbackIsPerson: false).isPerson)
+
+        let full = try decode(RemoteDesignerRef.self, """
+        { "id": "d1", "full_name": "Leah Hartwell" }
+        """)
+        #expect(StudioQueueBuilder.naming(full, fallback: nil, fallbackIsPerson: false).isPerson)
+    }
+
+    @Test("the studio's own decision row reads with the whole studio name")
+    func theRowBuiltFromAStudioEmbedIsWhole() throws {
+        let decision = try decode(RemoteClientDecision.self, """
+        {
+          "id": "d1", "title": "Rug color — Natural vs Sand",
+          "created_at": "2026-08-22T10:00:00Z",
+          "project": { "name": "Aspen Loft Refresh",
+                       "designer": { "id": "d", "business_name": "Hartwell Studio" } }
+        }
+        """)
+        let rows = StudioQueueBuilder.itemizedAwaitingRows(
+            decisions: [decision], proposals: [], invoices: [],
+            designerFallback: nil, now: Date(timeIntervalSince1970: 1_756_000_000)
+        )
+        let item = try #require(rows.first)
+        #expect(!item.designerIsPerson)
+        #expect(HouseRecordBuilder.title(for: item)
+                == "Hartwell Studio asked about Rug color — Natural vs Sand.")
     }
 }
