@@ -215,17 +215,26 @@ describe('LineUnfold · piece artifact plate', () => {
     expect(screen.getByText('Maker').parentElement).toHaveTextContent(
       'Maker · Hollowell Woodshop',
     );
+    expect(screen.getByText('Source').parentElement).toHaveTextContent(
+      'Source · Winfield Workroom',
+    );
     expect(screen.getByText('Walnut')).toBeInTheDocument();
     expect(screen.getByText('Antique Brass')).toBeInTheDocument();
   });
 
   it('states missing image, maker, and configuration data without inventing it', () => {
-    renderUnfold({ showArtifactPlate: true });
+    renderUnfold({
+      showArtifactPlate: true,
+      item: { ...item, vendor_name: null },
+    });
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(screen.getByText('Image not on file')).toBeInTheDocument();
     expect(screen.getByText(/Maker/).parentElement).toHaveTextContent(
       'Maker · Not recorded',
+    );
+    expect(screen.getByText('Source').parentElement).toHaveTextContent(
+      'Source · Not recorded',
     );
     expect(
       screen.getByText('Configuration not recorded on this line.'),
@@ -237,6 +246,37 @@ describe('LineUnfold · piece artifact plate', () => {
 
     expect(screen.queryByText('Piece in hand')).not.toBeInTheDocument();
     expect(screen.queryByText('Image not on file')).not.toBeInTheDocument();
+  });
+
+  it('stays out of trade-line unfolds even in project mode', () => {
+    renderUnfold({
+      showArtifactPlate: true,
+      item: { ...item, trade_scope_document_id: 'trade-scope-1' },
+    });
+
+    expect(screen.queryByText('Piece in hand')).not.toBeInTheDocument();
+  });
+
+  it('falls back honestly when the joined image cannot load', () => {
+    renderUnfold({
+      showArtifactPlate: true,
+      item: {
+        ...item,
+        product: {
+          brand: 'Hollowell Woodshop',
+          images: ['https://images.example.com/missing.jpg'],
+        },
+      },
+    });
+
+    fireEvent.error(
+      screen.getByRole('img', {
+        name: 'Roman shades, six windows by Hollowell Woodshop',
+      }),
+    );
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('Image not on file')).toBeInTheDocument();
   });
 });
 
