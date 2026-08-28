@@ -70,6 +70,55 @@ struct YourHouseRailTests {
         #expect(StartWithARoomAct.ordered == [.typeTheDimensions, .scanIt])
         #expect(StartWithARoomAct.ordered[0].title == "Type the dimensions")
         #expect(StartWithARoomAct.ordered[1].title == "Scan it")
+        // W4 pin: `ordered` is the whole set, so no act can be reached only
+        // through `allCases` and quietly land in the wrong order (F120).
+        #expect(Set(StartWithARoomAct.ordered) == Set(StartWithARoomAct.allCases))
+    }
+
+    // MARK: - The rooms the person made carry real numbers too (W4)
+
+    @Test("a local room prints its area, its pieces and its own budget")
+    func aLocalRoomPrintsItsFigures() {
+        let local = RoomModel(
+            name: "Living Room", roomType: "living", hasBeenScanned: false,
+            width: 18 / 3.28084, length: 14 / 3.28084
+        )
+        local.items.append(SavedItem(
+            productId: "p1", productName: "Brass Arc Floor Lamp", makerName: "Schoolhouse",
+            priceCents: 89_000, matchScore: 90, hasAR: false,
+            thumbGradientKey: "brass", room: local
+        ))
+        local.budgetCents = 900_000
+
+        let card = HouseRoomCard.card(for: local)
+        #expect(card.meta == "252 sq ft · 1 saved piece · budget $9,000")
+        #expect(card.isReadOnly == false)
+    }
+
+    @Test("a local room with no budget invents none")
+    func aLocalRoomWithNoBudget() {
+        let local = RoomModel(
+            name: "Garage", roomType: "other", hasBeenScanned: false,
+            width: 18 / 3.28084, length: 14 / 3.28084
+        )
+        #expect(HouseRoomCard.card(for: local).meta == "252 sq ft")
+    }
+
+    @Test("a room the project owns stays read-only, with the designer's figures")
+    func aProjectRoomStaysReadOnly() throws {
+        let rooms = try projectRooms("""
+        [{ "id": "r1", "project_id": "b1", "name": "Dining Room",
+           "budget_cents": 3200000, "committed_cents": 1840000 }]
+        """)
+        let card = HouseRoomCard.card(for: rooms[0])
+        #expect(card.isReadOnly)
+        #expect(card.meta == "$18,400 of $32,000 committed")
+        // The edit acts live on `RoomProjectView`, which only ever opens a
+        // local `RoomModel`; a project room routes to the project instead, so
+        // there is no edit act on it to withhold.
+        if case .project = card.origin {} else {
+            Issue.record("a project room must carry a project origin")
+        }
     }
 
     @Test("an activeProject client whose rooms are all the designer's still has a house")

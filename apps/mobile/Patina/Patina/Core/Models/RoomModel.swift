@@ -81,6 +81,21 @@ public final class RoomModel {
     /// Scan confidence raw: "low" | "medium" | "high" | ""
     public var lastScanConfidenceRaw: String = ""
 
+    // MARK: - Budget (W4 · B §3)
+
+    /// What the homeowner means to spend on this room, in integer cents.
+    /// Written locally first and mirrored to `rooms.budget_cents` (00537 §1)
+    /// on sync. NULL means she has not said, and then nothing is drawn —
+    /// never a `—` and never a figure the app derived (C5).
+    public var budgetCents: Int?
+
+    /// True only where the dimensions were typed against a control that shows
+    /// its unit — SP-19's segmented ft/m control. Every room that existed
+    /// before it did carries `false`, because the old 12 × 13 pt toggle
+    /// persisted its unit silently and left rooms measured in the wrong one
+    /// (F40). The fit line draws for `true` and for nothing else.
+    public var measuredWithUnitControl: Bool = false
+
     /// Saved items placed in this room
     @Relationship(deleteRule: .cascade, inverse: \SavedItem.room)
     public var items: [SavedItem] = []
@@ -244,6 +259,28 @@ public final class RoomModel {
     /// Total investment (sum of saved items) in cents.
     public var totalInvestmentCents: Int {
         items.reduce(0) { $0 + $1.priceCents }
+    }
+
+    /// `budget $9,000`, or nil where no budget has been set. A budget of zero
+    /// is a budget the person typed, so it prints; only absence is silent.
+    public var budgetLine: String? {
+        guard let budgetCents else { return nil }
+        return "budget \(PatinaCurrency.formatWholeDollars(cents: budgetCents))"
+    }
+
+    /// `$2,400 in saved pieces · budget $9,000` — the room's figures, each one
+    /// labelled for what it is. The first figure is the sum of what the pieces
+    /// in this room cost, never a spend figure the app cannot support (C5);
+    /// the second is the stored budget or nothing.
+    public var savedPiecesFigureLine: String? {
+        var parts: [String] = []
+        if !items.isEmpty {
+            parts.append(
+                "\(PatinaCurrency.formatWholeDollars(cents: totalInvestmentCents)) in saved pieces"
+            )
+        }
+        if let budgetLine { parts.append(budgetLine) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// Average match score across saved items, or nil if empty.

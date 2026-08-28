@@ -18,6 +18,11 @@ struct RoomSettingsView: View {
 
     @State private var name: String = ""
     @State private var roomType: String = "other"
+    /// SP-19: the unit is state, never a stored preference — every visit opens
+    /// in feet, visibly (see `RoomUnitToggle`).
+    @State private var unit: RoomUnit = .feet
+    @State private var lengthText: String = ""
+    @State private var widthText: String = ""
     @State private var showDeleteConfirm = false
     /// U27: debounces the autosave triggered by `.onChange(of: name)` so a
     /// rename isn't written on every keystroke; cancelled + re-armed on each
@@ -37,6 +42,7 @@ struct RoomSettingsView: View {
                 header
                 nameField
                 typeField
+                if let room { dimensionsField(room) }
                 if let room { scanCard(room) }
                 shareButton
                 deleteButton
@@ -53,6 +59,12 @@ struct RoomSettingsView: View {
             if let room {
                 name = room.name
                 roomType = room.roomType
+                if let length = room.length {
+                    lengthText = Self.entry(fromMetres: length, unit: unit)
+                }
+                if let width = room.width {
+                    widthText = Self.entry(fromMetres: width, unit: unit)
+                }
             }
         }
         // U27: a rename must never silently drop. onSubmit covers the
@@ -121,6 +133,114 @@ struct RoomSettingsView: View {
                     }
                 }
         }
+    }
+
+    // MARK: - Edit dimensions (M4 block 6)
+
+    /// The numbers the person typed, correctable — the one piece of project
+    /// data a client may edit, because they typed it themselves (B §10).
+    /// The unit is on a segmented control that shows its own state, and the
+    /// write goes through `updateTypedDimensions`, which does NOT flip
+    /// `hasBeenScanned`: a corrected room is still a typed room (F51).
+    private func dimensionsField(_ room: RoomModel) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Dimensions")
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                Spacer()
+                RoomUnitToggle(unit: $unit)
+            }
+            HStack(spacing: 10) {
+                dimensionEntry(title: "Length", text: $lengthText)
+                dimensionEntry(title: "Width", text: $widthText)
+            }
+            Button {
+                saveDimensions(room)
+            } label: {
+                Text("Save dimensions")
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(Capsule().fill(PatinaColors.Background.primary))
+                    .overlay(Capsule().stroke(PatinaColors.pearl, lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+            .disabled(!hasUsableDimensions)
+            .accessibilityIdentifier("RoomSettingsView.SaveDimensions")
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(PatinaColors.Background.secondary)
+        )
+        .onChange(of: unit) { old, new in
+            // Re-express what is on screen rather than reinterpreting it: the
+            // number the person is looking at keeps meaning the same length.
+            lengthText = Self.restate(lengthText, from: old, to: new)
+            widthText = Self.restate(widthText, from: old, to: new)
+        }
+    }
+
+    private func dimensionEntry(title: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            TextField("", text: text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.center)
+                .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                .foregroundStyle(PatinaColors.Text.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(PatinaColors.Background.primary)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                )
+                .accessibilityLabel("\(title) in \(unit.label.lowercased())")
+            Text("\(title.uppercased()) (\(unit.rawValue))")
+                .font(PatinaTypography.monoLabel)
+                .tracking(0.4)
+                .foregroundStyle(PatinaColors.Text.interactive)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    static func restate(_ text: String, from old: RoomUnit, to new: RoomUnit) -> String {
+        guard old != new, let value = Double(text) else { return text }
+        let metres = old.metres(from: value)
+        return Self.entry(fromMetres: metres, unit: new)
+    }
+
+    /// Round to a tenth before asking whether the number is whole: 18 ft
+    /// stored as metres comes back 17.999999999999996, and the field must
+    /// offer the person the number they typed, not the float.
+    static func entry(fromMetres metres: Double, unit: RoomUnit) -> String {
+        let value = (unit.value(fromMetres: metres) * 10).rounded() / 10
+        return value.rounded() == value
+            ? String(Int(value))
+            : String(format: "%.1f", value)
+    }
+
+    private var hasUsableDimensions: Bool {
+        guard let l = Double(lengthText), let w = Double(widthText) else { return false }
+        return l > 0 && w > 0
+    }
+
+    private func saveDimensions(_ room: RoomModel) {
+        guard let l = Double(lengthText), let w = Double(widthText), l > 0, w > 0 else { return }
+        RoomStore(context: modelContext).updateTypedDimensions(
+            room,
+            widthMeters: unit.metres(from: w),
+            lengthMeters: unit.metres(from: l),
+            heightMeters: nil
+        )
+        PostHogService.shared.capture("room_dimensions_edited", properties: [
+            "unit": unit.rawValue
+        ])
     }
 
     private func scanCard(_ room: RoomModel) -> some View {

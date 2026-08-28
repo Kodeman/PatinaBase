@@ -96,6 +96,30 @@ struct RoomHeroCardTests {
                               calendar: Self.calendar).pieces == "2 saved pieces")
     }
 
+    // MARK: - The budget (W4)
+
+    @Test("the hero prints the room's budget beside its pieces, as M2 draws it")
+    func theHeroPrintsTheBudget() {
+        let space = room()
+        _ = saved("Brass Arc Floor Lamp", at: Self.day(8, 25), in: space)
+        _ = saved("Velvet Club Chair", at: Self.day(8, 24), in: space)
+        _ = saved("Woven Jute Area Rug 8x10", at: Self.day(8, 23), in: space)
+        space.budgetCents = 900_000
+
+        let hero = RoomHero.make(room: space, now: Self.day(8, 26), calendar: Self.calendar)
+        #expect(hero.pieces == "3 saved pieces · budget $9,000")
+    }
+
+    @Test("a budget with nothing saved yet still prints, and nothing prints a dash")
+    func theBudgetStandsAlone() {
+        let space = room()
+        space.budgetCents = 900_000
+        #expect(RoomHero.make(room: space).pieces == "budget $9,000")
+
+        let bare = room()
+        #expect(RoomHero.make(room: bare).pieces == nil)
+    }
+
     // MARK: - The dated state line
 
     @Test("the state line names the last real save, by its own date")

@@ -56,6 +56,14 @@ public struct RemoteSavedItem: Codable, Sendable {
     public let price_in_cents: Int?
     public let source: String?
     public let created_at: String
+    /// The note the person left on the save (`saved_items.notes`, 00055:29) and
+    /// what the piece cost the day they saved it (`price_cents_at_save`,
+    /// 00535:21). Both columns have existed longer than this decode; the saved
+    /// row cannot print "date · room · note" from the server leg without them
+    /// (`waves/w4/steward.md` §4a). Optional, so a row carrying neither still
+    /// decodes.
+    public let notes: String?
+    public let price_cents_at_save: Int? // swiftlint:disable:this identifier_name
 }
 
 public struct CreateRoomPayload: Encodable {
@@ -245,6 +253,16 @@ public actor RoomsAPIClient {
         let rows = try decoder.decode([RemoteRoom].self, from: data)
         guard let first = rows.first else { throw RoomsAPIError.emptyResponse }
         return first
+    }
+
+    /// Mirror a room's budget onto `rooms.budget_cents` (00537 §1). `nil`
+    /// clears it — an explicit null, not an omitted key, so removing a budget
+    /// on one device removes it everywhere rather than leaving the old figure
+    /// standing.
+    @discardableResult
+    public func updateRoomBudget(id: String, cents: Int?) async throws -> RemoteRoom {
+        let value: Any = cents.map { $0 as Any } ?? NSNull()
+        return try await updateRoom(id: id, patch: ["budget_cents": AnyCodable(value)])
     }
 
     public func deleteRoom(id: String) async throws {
