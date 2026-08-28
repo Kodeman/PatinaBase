@@ -12738,6 +12738,36 @@ export type Database = {
           },
         ]
       }
+      profile_presence: {
+        Row: {
+          last_seen_at: string
+          user_id: string
+        }
+        Insert: {
+          last_seen_at?: string
+          user_id: string
+        }
+        Update: {
+          last_seen_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_presence_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_presence_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           availability_changed_at: string | null
@@ -12763,7 +12793,6 @@ export type Database = {
           is_designer: boolean | null
           is_verified: boolean | null
           last_active_at: string | null
-          last_seen_at: string | null
           mfa_enforced: boolean
           original_source: string | null
           original_utm: Json | null
@@ -12803,7 +12832,6 @@ export type Database = {
           is_designer?: boolean | null
           is_verified?: boolean | null
           last_active_at?: string | null
-          last_seen_at?: string | null
           mfa_enforced?: boolean
           original_source?: string | null
           original_utm?: Json | null
@@ -12843,7 +12871,6 @@ export type Database = {
           is_designer?: boolean | null
           is_verified?: boolean | null
           last_active_at?: string | null
-          last_seen_at?: string | null
           mfa_enforced?: boolean
           original_source?: string | null
           original_utm?: Json | null

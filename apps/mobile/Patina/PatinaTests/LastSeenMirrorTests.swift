@@ -3,8 +3,9 @@
 //  PatinaTests
 //
 //  B §3's last row: the visit stamp is local first and mirrored to
-//  `profiles.last_seen_at` (00537 §2 added the column; nothing wrote it).
-//  The watermark is what keeps a re-render from being a write.
+//  `profile_presence.last_seen_at` (00539 §2 — 00537 put the column on
+//  `profiles`, where any authenticated reader could see it). The watermark is
+//  what keeps a re-render from being a write.
 //
 
 import Testing
@@ -63,5 +64,12 @@ struct LastSeenMirrorTests {
         let suite = UserDefaults(suiteName: "last-seen-mirror-guest-\(UUID())")!
         await ProfileService.shared.mirrorLastSeenIfNeeded(stamp: visit, defaults: suite)
         #expect(suite.object(forKey: ProfileService.lastSeenMirrorKey) == nil)
+    }
+
+    @Test("the mirror writes the table whose RLS names its readers, not profiles")
+    func theMirrorWritesProfilePresence() throws {
+        let source = try SourcePin.read("Patina/Services/Auth/ProfileService.swift")
+        #expect(source.contains("from(\"profile_presence\")"))
+        #expect(!source.contains("update([\"last_seen_at\""))
     }
 }

@@ -125,11 +125,17 @@ public final class ProfileService {
         return stamp > mirrored
     }
 
-    /// Mirror the local visit stamp onto the caller's own `profiles` row —
-    /// the second device's half of "when were you last here" (B §3). Owner
-    /// UPDATE under RLS (`00013_profiles_table.sql:62`); best effort, never
-    /// awaited by anything the reader is looking at, and a failure leaves the
-    /// local stamp — the authority — untouched.
+    /// Mirror the local visit stamp onto the caller's own `profile_presence`
+    /// row — the second device's half of "when were you last here" (B §3).
+    ///
+    /// It used to write `profiles.last_seen_at`, and `profiles` is
+    /// `FOR SELECT USING (true)`, so every authenticated reader could see when
+    /// a homeowner last opened the app. 00539 §2 moved the fact onto a table
+    /// whose RLS names two readers — the person, and her designer of record.
+    ///
+    /// Owner UPSERT under that RLS; best effort, never awaited by anything the
+    /// reader is looking at, and a failure leaves the local stamp — the
+    /// authority — untouched.
     @MainActor
     func mirrorLastSeenIfNeeded(
         stamp: Date? = LastSeenStore.shared.lastSeenAt,
@@ -143,9 +149,14 @@ public final class ProfileService {
 
         do {
             try await supabase.database
-                .from("profiles")
-                .update(["last_seen_at": ISO8601DateFormatter().string(from: stamp)])
-                .eq("id", value: userId)
+                .from("profile_presence")
+                .upsert(
+                    [
+                        "user_id": userId,
+                        "last_seen_at": ISO8601DateFormatter().string(from: stamp)
+                    ],
+                    onConflict: "user_id"
+                )
                 .execute()
             defaults.set(stamp.timeIntervalSince1970, forKey: Self.lastSeenMirrorKey)
         } catch {

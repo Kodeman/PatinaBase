@@ -3,7 +3,8 @@
 --
 -- Covers every item in the migration:
 --   1. rooms.budget_cents        — exists, integer, nullable, documented;
---   2. profiles.last_seen_at     — exists, timestamptz, nullable, documented;
+--   2. the return clock is NOT on profiles — 00539 §2 moved last_seen_at onto
+--      public.profile_presence and dropped the world-readable column;
 --   3. the two partial unique indexes on saved_items:
 --        a. a second unroomed save of the same piece is REFUSED;
 --        b. a second save of the same piece in the same room is REFUSED;
@@ -78,21 +79,32 @@ BEGIN
   SELECT budget_cents INTO v_count FROM public.rooms WHERE id = r_living;
   ASSERT v_count = 1250000, 'and hold integer cents, got ' || COALESCE(v_count::text, '<null>');
 
-  -- ── 2. profiles.last_seen_at ──
-  SELECT data_type, is_nullable INTO v_type, v_null
+  -- ── 2. the return clock is NOT on profiles ──
+  -- 00537 put `last_seen_at` on public.profiles, which is FOR SELECT
+  -- USING (true) (00013:57-58) — so every authenticated reader could see when
+  -- a homeowner last opened the app. 00539 §2 moved it onto
+  -- public.profile_presence, whose RLS names exactly two readers, and dropped
+  -- the column. Its own policies are tested in profile_presence_test.sql.
+  SELECT data_type INTO v_type
     FROM information_schema.columns
    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'last_seen_at';
+  ASSERT v_type IS NULL,
+    'profiles.last_seen_at must NOT exist — it is world-readable there (00539 §2)';
+
+  SELECT data_type, is_nullable INTO v_type, v_null
+    FROM information_schema.columns
+   WHERE table_schema = 'public' AND table_name = 'profile_presence'
+     AND column_name = 'last_seen_at';
   ASSERT v_type = 'timestamp with time zone',
-    'profiles.last_seen_at must exist as timestamptz, got ' || COALESCE(v_type, '<missing>');
-  ASSERT v_null = 'YES', 'profiles.last_seen_at must be nullable';
-  SELECT col_description('public.profiles'::regclass,
+    'profile_presence.last_seen_at must exist as timestamptz, got ' || COALESCE(v_type, '<missing>');
+  SELECT col_description('public.profile_presence'::regclass,
            (SELECT attnum FROM pg_attribute
-             WHERE attrelid = 'public.profiles'::regclass AND attname = 'last_seen_at'))
+             WHERE attrelid = 'public.profile_presence'::regclass AND attname = 'last_seen_at'))
     INTO v_comment;
-  ASSERT v_comment IS NOT NULL, 'profiles.last_seen_at must carry a comment';
-  SELECT last_seen_at::text INTO v_comment FROM public.profiles WHERE id = u_client;
-  ASSERT v_comment IS NULL,
-    'and start NULL — nothing in W2 counts days away at the person (C5)';
+  ASSERT v_comment IS NOT NULL, 'profile_presence.last_seen_at must carry a comment';
+  SELECT count(*)::int INTO v_count FROM public.profile_presence WHERE user_id = u_client;
+  ASSERT v_count = 0,
+    'and start absent — nothing in W2 counts days away at the person (C5)';
 
   -- ── 3a. a second unroomed save of the same piece is refused ──
   INSERT INTO public.saved_items (user_id, product_id, name, source)
