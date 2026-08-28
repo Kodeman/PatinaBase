@@ -4,13 +4,14 @@
 //
 //  ViewModel powering The Daily Room — editorial story + room-contextual feed.
 //
+// swiftlint:disable file_length
 
 import SwiftUI
 import SwiftData
 
 @MainActor
 @Observable
-final class DailyRoomViewModel {
+final class DailyRoomViewModel { // swiftlint:disable:this type_body_length
 
     /// Provided by the view so the VM can read/write real rooms.
     var modelContext: ModelContext?

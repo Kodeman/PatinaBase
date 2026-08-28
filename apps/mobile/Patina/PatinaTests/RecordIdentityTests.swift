@@ -15,7 +15,7 @@ import Foundation
 @MainActor
 struct RecordIdentityTests {
 
-    private func stores() -> (RecordSnapshotStore, LastSeenStore, RecordOwnerStamp) {
+    private func stores() -> (RecordSnapshotStore, LastSeenStore, RecordOwnerStamp) { // swiftlint:disable:this large_tuple
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("record-identity-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

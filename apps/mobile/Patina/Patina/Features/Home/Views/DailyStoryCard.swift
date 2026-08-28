@@ -7,7 +7,7 @@ import SwiftUI
 
 struct DailyStoryCard: View {
     let story: DailyStory
-    var namespace: Namespace.ID? = nil
+    var namespace: Namespace.ID?
     var isExpanded: Bool = false
     /// Card weight follows content (B, synthesis §5): the story keeps the hero
     /// footprint on a quiet day and drops to a row when the Record carried the
@@ -16,7 +16,7 @@ struct DailyStoryCard: View {
     /// When it was published. M1 block 5 draws the date beside the read time
     /// ("AUG 25 · 4 MIN"): a story is a dated thing, and on a screen built
     /// around what is new the reader is owed which day this one is.
-    var publishedAt: Date? = nil
+    var publishedAt: Date?
 
     /// "AUG 25 · 4 MIN", or the read time alone where no publish date came
     /// back — never an invented one.

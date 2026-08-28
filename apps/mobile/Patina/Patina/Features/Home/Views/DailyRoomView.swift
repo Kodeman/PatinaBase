@@ -12,11 +12,12 @@
 //
 //  The record is UNFLAGGED (R1): rolling it back is deleting one mount.
 //
+// swiftlint:disable file_length
 
 import SwiftUI
 import SwiftData
 
-struct DailyRoomView: View {
+struct DailyRoomView: View { // swiftlint:disable:this type_body_length
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -412,7 +413,7 @@ struct DailyRoomView: View {
         badges.projects.first { !StudioQueueBuilder.projectIsArchived($0) }
     }
 
-    private func performNextMove() {
+    private func performNextMove() { // swiftlint:disable:this cyclomatic_complexity
         let move = nextMove
         PostHogService.shared.capture("today_next_move_tapped", properties: [
             "action_id": move.analyticsID

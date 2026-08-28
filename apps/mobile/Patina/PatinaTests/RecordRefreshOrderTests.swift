@@ -21,7 +21,7 @@ struct RecordRefreshOrderTests {
         return url
     }
 
-    private func stores() -> (RecordSnapshotStore, LastSeenStore, RecordOwnerStamp) {
+    private func stores() -> (RecordSnapshotStore, LastSeenStore, RecordOwnerStamp) { // swiftlint:disable:this large_tuple
         let suiteName = "record-refresh-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         return (

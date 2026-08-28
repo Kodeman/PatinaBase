@@ -42,9 +42,9 @@ struct DesignerSeat: Equatable {
         liveLead: DesignRequestStatus?,
         projects: [RemoteProject]
     ) -> DesignerSeat? {
-        let project = projects
-            .filter { !StudioQueueBuilder.projectIsArchived($0) }
-            .first { $0.designer != nil }
+        let project = projects.first {
+            !StudioQueueBuilder.projectIsArchived($0) && $0.designer != nil
+        }
 
         if let project, let name = project.designer?.displayName, !name.isEmpty {
             let meta = [project.designerStudioName, project.name]
