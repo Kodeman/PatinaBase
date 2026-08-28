@@ -110,6 +110,18 @@ final class BadgeCountService {
     /// Guests never load — the rail renders invitations, not counts.
     private(set) var hasLoaded: Bool = false
 
+    /// True once the **projects** fetch itself has answered for this session.
+    ///
+    /// `hasLoaded` above means "at least one of five queries answered", which
+    /// is the right predicate for the rail (a stale floor beats a flickering
+    /// zero) and the wrong one for anything that must know whether a client
+    /// HAS a designer. W5's R3 turns on exactly that: with `listProjects()`
+    /// alone failing, `projects` keeps its previous value — `[]` on a cold
+    /// launch — and a client with an active project resolves to `.none`, which
+    /// is the one relationship that draws Buy. This flag says only what it
+    /// knows: the projects answer arrived.
+    private(set) var projectsLoaded: Bool = false
+
     /// True when the last authenticated refresh came back with nothing at
     /// all — every one of the five fetches failed. Distinguishes "still
     /// waiting" from "we couldn't reach your studio", which the home needs
@@ -146,6 +158,7 @@ final class BadgeCountService {
             projects = []
             roster = []
             hasLoaded = false
+            projectsLoaded = false
             lastRefreshFailed = false
             return
         }
@@ -220,6 +233,7 @@ final class BadgeCountService {
         if let fetchedProjects {
             projects = fetchedProjects
             projectCount = fetchedProjects.count
+            projectsLoaded = true
         }
         if let fetchedRoster {
             roster = fetchedRoster

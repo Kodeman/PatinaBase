@@ -245,7 +245,8 @@ struct ContentView: View {
             workCoreDestination(for: route)
 
         case .threadList, .threadDetail, .proposalList, .proposalDetail,
-             .invoiceList, .invoiceDetail, .budget, .documentList:
+             .invoiceList, .invoiceDetail, .budget, .documentList,
+             .orderList, .orderDetail:
             workDocumentsDestination(for: route)
         }
     }
@@ -401,6 +402,22 @@ struct ContentView: View {
 
         case .documentList:
             DocumentListView()
+
+        default:
+            orderDestination(for: route)
+        }
+    }
+
+    /// The two order routes, split off `workDocumentsDestination` so that table
+    /// stays under the complexity gate as the Studio's rails grow.
+    @ViewBuilder
+    private func orderDestination(for route: AppRoute) -> some View {
+        switch route {
+        case .orderList:
+            OrderedListView()
+
+        case .orderDetail(let orderId):
+            OrderDetailView(orderId: orderId)
 
         default:
             EmptyView() // unreachable — dispatched only for the cases above

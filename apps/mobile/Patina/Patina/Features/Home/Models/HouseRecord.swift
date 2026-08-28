@@ -27,8 +27,9 @@ struct HouseRecordRow: Identifiable, Codable, Equatable, Sendable {
         case invoiceDue
         /// MOVED
         case messageReceived
-        /// Fed by the fulfillment rail from W4 on; no source before then, so
-        /// the record simply never emits one.
+        /// Fed by the fulfillment rail. W5 wrote the producer
+        /// (`HouseRecordBuilder.orderRows`); before it, there was no source and
+        /// the record simply never emitted one.
         case orderMoved
         case savedPieceRepriced
         case savedPieceWithdrawn
@@ -134,6 +135,9 @@ private struct RouteToken: Codable {
         case .projectDetail(let value): self = RouteToken(kind: "project", id: value)
         case .pieceDetail(let value): self = RouteToken(kind: "piece", id: value)
         case .designRequests(let value): self = RouteToken(kind: "designRequests", id: value)
+        // The order id is already a prefixed token (`ClientOrder.id`); it
+        // round-trips as one string, exactly like the others.
+        case .orderDetail(let value): self = RouteToken(kind: "order", id: value)
         default: return nil
         }
     }
@@ -156,6 +160,7 @@ private struct RouteToken: Codable {
         case "thread": return .threadDetail(threadId: id)
         case "project": return .projectDetail(projectId: id)
         case "piece": return .pieceDetail(pieceId: id)
+        case "order": return .orderDetail(orderId: id)
         default: return nil
         }
     }
@@ -212,6 +217,7 @@ enum HouseRecordBuilder {
         story: RemoteEditorialStory?,
         liveLead: DesignRequestStatus?,
         lastSeen: Date?,
+        orders: [ClientOrder] = [],
         now: Date = Date(),
         previous: HouseRecord? = nil
     ) -> HouseRecord {
@@ -264,7 +270,7 @@ enum HouseRecordBuilder {
         // Everything else carries a real event date and is filtered by it.
         let moved = movedRows(
             badges: badges, saved: saved, products: products, story: story,
-            liveLead: liveLead, designerName: designerName
+            liveLead: liveLead, designerName: designerName, orders: orders
         )
         .compactMap { row -> HouseRecordRow? in
             switch row.kind {
@@ -457,13 +463,15 @@ private extension HouseRecordBuilder {
         products: [Product],
         story: RemoteEditorialStory?,
         liveLead: DesignRequestStatus?,
-        designerName: String?
+        designerName: String?,
+        orders: [ClientOrder]
     ) -> [HouseRecordRow] {
         var rows: [HouseRecordRow] = []
         if let matched = matchedDesignerRow(liveLead: liveLead, designerName: designerName) {
             rows.append(matched)
         }
         rows.append(contentsOf: messageRows(badges: badges, designerName: designerName))
+        rows.append(contentsOf: HouseRecordBuilder.orderRows(orders))
         rows.append(contentsOf: savedPieceRows(saved: saved, products: products))
         if let story = storyRow(story) {
             rows.append(story)
@@ -608,6 +616,78 @@ private extension HouseRecordBuilder {
                 isNew: false,
                 route: .pieceDetail(pieceId: productId)
             )
+        }
+    }
+}
+
+// MARK: - MOVED · orders
+
+/// Internal, not private: the row copy is a ruling and the "not a row" rule is
+/// the whole point of the producer, so both are pinned by tests that call this
+/// directly.
+extension HouseRecordBuilder {
+
+    /// "Your dining table shipped." — the record's `orderMoved` rows.
+    ///
+    /// Three rules, all of them C5:
+    ///
+    ///  1. **Only a line-state change draws.** `inProduction`, `shipped` and
+    ///     `delivered` are things that happened to the piece. `confirmed` is
+    ///     the intake — the settle of a purchase — and `paidNotOnRail` is the
+    ///     moment the reader's own card was charged. **Placing an order is the
+    ///     reader's own act, and the Record does not report the reader to
+    ///     himself** (B §2 — the same rule that keeps a saved piece's own save
+    ///     off the card). So neither draws, whoever bought it.
+    ///  2. **The date is the wire's.** `stateEnteredAt` is the real
+    ///     `line_state_entered_at` of the lines at that stage (or the
+    ///     shipment's own `shipped_at` / `delivered_at` where one is attached).
+    ///     A row whose date the wire will not give does not draw at all, rather
+    ///     than being dated "now" and then filtered by a window it never
+    ///     honestly entered.
+    ///  3. **Cancelled and refunded are not movements.** A refund is money
+    ///     going back, and it belongs on the order, not in a list of what moved
+    ///     in the house this week.
+    static func orderRows(_ orders: [ClientOrder]) -> [HouseRecordRow] {
+        orders.compactMap { order in
+            guard let title = orderTitle(order), let moved = orderDate(order) else { return nil }
+            return HouseRecordRow(
+                id: "order:\(order.id)",
+                kind: .orderMoved,
+                title: title,
+                detail: orderDetail(order),
+                date: moved,
+                state: .none,
+                isNew: false,
+                route: .orderDetail(orderId: order.id)
+            )
+        }
+    }
+
+    /// The sentence. Named with the piece, because "Your order shipped" is a
+    /// row about a database and "Your dining table shipped." is a row about a
+    /// house.
+    static func orderTitle(_ order: ClientOrder) -> String? {
+        switch order.state {
+        case .inProduction: return "\(order.title) is being made."
+        case .shipped: return "\(order.title) shipped."
+        case .delivered: return "\(order.title) arrived."
+        case .paidNotOnRail, .confirmed, .cancelled, .refunded: return nil
+        }
+    }
+
+    /// Who is watching it, when it is not the reader. Nil for an order the
+    /// reader placed himself — the list says "You ordered this." and the record
+    /// does not need to repeat it.
+    static func orderDetail(_ order: ClientOrder) -> String? {
+        guard case .designer(let name) = order.placedBy else { return nil }
+        return "Ordered by \(name ?? "your designer")"
+    }
+
+    static func orderDate(_ order: ClientOrder) -> Date? {
+        switch order.state {
+        case .shipped: return order.shippedAt ?? order.stateEnteredAt
+        case .delivered: return order.deliveredAt ?? order.stateEnteredAt
+        default: return order.stateEnteredAt
         }
     }
 }

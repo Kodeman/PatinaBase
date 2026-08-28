@@ -7,10 +7,11 @@
 
 import SwiftUI
 
-/// Enough of a tall phone for the panel's rows and its own chrome, and short
-/// enough that it still clears the bar it sits above. File scope: a generic
-/// type may not hold a static stored property.
-private let companionAccessibilityPanelMaxHeight: CGFloat = 460
+/// The panel's own inset. Applied to the column rather than around it, so
+/// that when the column scrolls the inset scrolls with it — see
+/// `expandedColumn`. File scope: a generic type may not hold a static stored
+/// property.
+private let companionPanelPadding: CGFloat = 20
 
 public struct CompanionHearthView<ExpandedContent: View>: View {
     public let presentation: CompanionPresentationState
@@ -316,7 +317,6 @@ private extension CompanionHearthView {
         VStack(spacing: 0) {
             shell(cornerRadius: presentation.usesFullSheet ? 30 : 26) {
                 expandedColumn(content)
-                    .padding(20)
                     .frame(
                         maxWidth: .infinity,
                         minHeight: presentation.usesFullSheet ? 360 : 0,
@@ -340,9 +340,28 @@ private extension CompanionHearthView {
     /// last of them — `Your spaces` and `Your profile` — fell off the bottom
     /// with no way to reach them: on the flag-off root the Companion is the
     /// app's only nav surface, so those destinations became unreachable by
-    /// touch (w4 re-walk, item 8's second note). The column scrolls at those
-    /// sizes and is unchanged at every other one, so the normal panel keeps
-    /// sizing itself to its content.
+    /// touch (w4 re-walk, item 8's second note).
+    ///
+    /// Two things had to be true for a scroll to reach them, and round 3's fix
+    /// had only the first. Measured on `dr-w5-a11y` (402×874 pt,
+    /// `accessibility-extra-extra-large`, `client@patina.dev`):
+    ///
+    ///  1. **The panel takes the height it is given.** The ScrollView was
+    ///     capped at a hardcoded 460 pt: a viewport of 336…796 on an 874 pt
+    ///     screen, for a column measuring 1,522 pt — three and a third
+    ///     viewports of travel, with ~250 pt of screen sitting unused above the
+    ///     panel. 460 was a guess, and it is the right number on no device.
+    ///     `ViewThatFits` replaces it with the actual answer: the plain column
+    ///     while the column fits (which is every non-accessibility size, and
+    ///     the short accessibility panels too), the scrolling one otherwise,
+    ///     taking the room the overlay's frame chain already offers.
+    ///  2. **The inset scrolls with the rows.** `.padding(20)` used to sit
+    ///     around this view, i.e. outside the ScrollView, so the 20 pt strip at
+    ///     796…816 was visible panel that did not scroll — the panel's bottom
+    ///     edge, where a thumb lands. A drag from y=790 moved the column; the
+    ///     same drag from y=800 did nothing, which is why walk 4's four
+    ///     attempts (all from y=800 or y=850) reported a list that would not
+    ///     move. The inset now belongs to the column and travels with it.
     @ViewBuilder
     private func expandedColumn(_ content: CompanionExpandedPresentation) -> some View {
         let column = VStack(alignment: .leading, spacing: 16) {
@@ -354,17 +373,15 @@ private extension CompanionHearthView {
 
             expandedContent
         }
+        .padding(companionPanelPadding)
 
-        if dynamicTypeSize.isAccessibilitySize {
+        ViewThatFits(in: .vertical) {
+            column
+
             ScrollView(.vertical, showsIndicators: true) {
                 column
             }
-            // Bounded so the panel cannot grow past the screen; the rows inside
-            // it scroll instead of being cut off.
-            .frame(maxHeight: companionAccessibilityPanelMaxHeight)
             .scrollBounceBehavior(.basedOnSize)
-        } else {
-            column
         }
     }
 
@@ -459,28 +476,6 @@ private extension CompanionHearthView {
         .accessibilityLabel(label)
         .accessibilityHint(hint)
         .accessibilityIdentifier(identifier)
-    }
-}
-
-public extension CompanionHearthView where ExpandedContent == EmptyView {
-    init(
-        presentation: CompanionPresentationState,
-        attention: MarkAttention = .calm,
-        wakePhase: WakePhase = .awake,
-        onPrimaryAction: (() -> Void)? = nil,
-        onHintAction: (() -> Void)? = nil,
-        onDismiss: (() -> Void)? = nil
-    ) {
-        self.init(
-            presentation: presentation,
-            attention: attention,
-            wakePhase: wakePhase,
-            onPrimaryAction: onPrimaryAction,
-            onHintAction: onHintAction,
-            onDismiss: onDismiss
-        ) {
-            EmptyView()
-        }
     }
 }
 

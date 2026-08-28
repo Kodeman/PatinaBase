@@ -82,10 +82,17 @@ extension CompanionActionProvider {
             // W2 R3 (W1b SP-18 residual): `tryInRoomRow` dead-ended on every
             // product while `usdz_url` is NULL — removed here, not deleted;
             // it returns the day an AR asset pipeline exists.
-            return [
-                saveRow(label: "Save"),
-                designerRow(roomId: nil, context: context)
-            ]
+            //
+            // W5: the second row is the piece's own act — Ask her, Buy, or ask
+            // about it — so the panel and the bar agree. Until the screen has
+            // resolved one (the piece is still loading) the row stays what it
+            // was, which is the designer door.
+            guard let act = context.pieceAct else {
+                return [saveRow(label: "Save"), designerRow(roomId: nil, context: context)]
+            }
+            // Exactly one suggested row per panel: once the piece has an act,
+            // the act is it and "Save" steps back.
+            return [saveRow(label: "Save", suggested: false), pieceActRow(act)]
         default: // .arPlacement
             return [
                 item("camera", "Save photo", "Capture this view",
@@ -235,6 +242,8 @@ extension CompanionActionProvider {
             return messageItems(screen, context: context)
         case .documentList:
             return documentItems()
+        case .orderList, .orderDetail:
+            return orderItems(screen, context: context)
         case .notifications:
             return notificationItems(context: context)
         default: // .designerConsultation, .designRequests
@@ -301,6 +310,31 @@ extension CompanionActionProvider {
             projectsRow(suggested: true),
             messageDesignerRow(label: "Messages", hint: "Your conversations"),
             proposalsRow()
+        ]
+    }
+
+    /// W5 — the two order screens. Without an arm of their own they fell to
+    /// `default:` and were handed the *designer-request* rows, which is the
+    /// wrong conversation entirely for someone looking at a sofa in transit.
+    ///
+    /// No "Ordered" row is added to `.studio`'s own list: C8's cap is six rows
+    /// INCLUDING the provider's tail, and `.studio` already sits at six for a
+    /// guest (see `studioItems`). The Ordered door is the Studio hub's own row.
+    static func orderItems(
+        _ screen: AppRoute,
+        context: CompanionContext
+    ) -> [CompanionActionItem] {
+        if case .orderDetail = screen {
+            return [
+                messageDesignerRow(label: "Message your designer", suggested: true),
+                ordersRow(),
+                projectsRow()
+            ]
+        }
+        return [
+            messageDesignerRow(label: "Message your designer", suggested: true),
+            projectsRow(),
+            invoicesRow(label: "Invoices")
         ]
     }
 

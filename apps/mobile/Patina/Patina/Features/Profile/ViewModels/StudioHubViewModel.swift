@@ -53,6 +53,10 @@ final class StudioHubViewModel {
         async let documents = Self.fetchDocuments()
         async let threads = Self.fetchThreads()
         async let notifications = Self.fetchNotifications()
+        // Not a `StudioLoadResult` source: its failure is its own (an order
+        // read that fails costs the Ordered row and nothing else), and the
+        // service is the one holder every order surface reads.
+        await OrdersService.shared.refresh()
 
         let loaded = await (
             projects,
@@ -87,7 +91,11 @@ final class StudioHubViewModel {
                 threads: result.threads ?? [],
                 notifications: result.notifications ?? [],
                 currentUserId: nil,
-                now: Date()
+                now: Date(),
+                // Single-sourced: `OrdersService` holds what the Ordered
+                // screen and the record's MOVED rows read, so the Studio row
+                // cannot report a different number from the screen it opens.
+                orders: OrdersService.shared.orders
             )
         )
         hasLoaded = true

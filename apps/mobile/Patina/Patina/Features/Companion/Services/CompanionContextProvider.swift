@@ -39,6 +39,10 @@ struct CompanionActionItem: Identifiable {
         /// Present the "Request design help" sheet (PT-3-8: design services
         /// is a `PresentedSheet`, not a navigation route).
         case openDesignServices(roomId: UUID?)
+        /// Perform the piece screen's own act (W5, B §5). The panel draws over
+        /// the piece rather than inside it, so the row asks the screen to open
+        /// the sheet it would have opened itself.
+        case performPieceAct
     }
 
     init(
@@ -136,7 +140,10 @@ enum CompanionActionProvider {
             return styleItems(screen, context: context)
         case .studio, .projectList, .projectDetail, .decisionList, .decisionDetail,
              .threadList, .threadDetail, .documentList, .notifications,
-             .designerConsultation, .designRequests:
+             .designerConsultation, .designRequests,
+             // W5: the two order screens get their own arm inside
+             // `studioItems` — an order is Studio work, not money-rail work.
+             .orderList, .orderDetail:
             return studioItems(screen, context: context)
         case .proposalList, .proposalDetail, .invoiceList, .invoiceDetail, .budget:
             return moneyRailItems(screen, context: context)
