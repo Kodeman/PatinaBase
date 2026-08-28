@@ -17,6 +17,50 @@ import SwiftUI
 
 extension ProductDetailView {
 
+    /// One presentation, not two. This screen carried `.helpPanel` — itself a
+    /// `sheet(isPresented:)` — and then a second sheet for the room picker; a
+    /// second sheet on one chain is the defect `RoomProjectView` already hit in
+    /// this wave (`waves/w4/h1-notes.md`), and the one that loses is the older
+    /// `?`. Both go through one `item:` binding, as they do there.
+    enum Presented: Identifiable {
+        case help
+        case roomPicker
+
+        var id: String {
+            switch self {
+            case .help: return "help"
+            case .roomPicker: return "roomPicker"
+            }
+        }
+    }
+
+    /// The room's longest wall beside the piece's own width, or nothing.
+    /// Static because the screen holds the answer in `@State` rather than
+    /// rebuilding it on every scroll frame.
+    static func fitLine(
+        for product: Product?,
+        rooms: [RoomModel],
+        preferredLocalId: UUID?,
+        preferredRemoteId: String?
+    ) -> RoomFitLine? {
+        guard let product,
+              let room = RoomFitLine.room(
+                  preferredLocalId: preferredLocalId,
+                  preferredRemoteId: preferredRemoteId,
+                  in: rooms
+              ) else { return nil }
+        return RoomFitLine.make(room: room, product: product)
+    }
+
+    /// The room the screen already belongs to — a room-scoped browse, a Daily
+    /// Room chip. Resolved through the local store so a screen that only
+    /// carries the server's id still writes the local row's room.
+    static func contextRoom(in store: RoomStore, localId: UUID?, remoteId: String?) -> RoomModel? {
+        if let localId, let room = store.room(id: localId) { return room }
+        if let remoteId { return store.room(remoteId: remoteId) }
+        return nil
+    }
+
     /// Web deep link for a piece — matches the Library piece route at
     /// `app/(document)/library/[id]` on app.patina.cloud.
     static func shareURL(for product: Product) -> URL {

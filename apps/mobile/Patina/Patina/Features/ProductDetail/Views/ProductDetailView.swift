@@ -14,30 +14,13 @@ struct ProductDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ProductDetailViewModel()
 
-    /// One presentation, not two. This screen carried `.helpPanel` — itself a
-    /// `sheet(isPresented:)` — and then a second `.sheet` for the room picker;
-    /// a second sheet on one chain is the defect `RoomProjectView` already hit
-    /// in this wave (`waves/w4/h1-notes.md`), and the one that loses is the
-    /// older `?`. Both go through one `item:` binding, as they do there.
-    enum Presented: Identifiable {
-        case help
-        case roomPicker
-
-        var id: String {
-            switch self {
-            case .help: return "help"
-            case .roomPicker: return "roomPicker"
-            }
-        }
-    }
-
+    /// One presentation for both sheets (`Presented` is in the blocks file).
     @State private var presented: Presented?
 
     /// SP-11: the rooms `Add to Room` can offer.
     @State private var roomOptions: [RoomSummary] = []
 
-    /// Held rather than computed in `body`: building it reads every room out
-    /// of SwiftData, and `body` runs on every scroll frame of this screen.
+    /// Held, not computed in `body`: it reads every room out of SwiftData.
     @State private var fitLine: RoomFitLine?
 
     /// Product ID to load (from navigation)
@@ -86,8 +69,7 @@ struct ProductDetailView: View {
         .sheet(item: $presented) { which in
             switch which {
             case .help:
-                // Empty state ships until Sanity authoring catches up
-                // (Sprint 2 expectation).
+                // Empty state ships until Sanity authoring catches up.
                 HelpPanelSheet(
                     surfaceKey: SurfaceKeys.IOSApp.ProductDetail.root,
                     isPresented: Binding(
@@ -122,38 +104,24 @@ struct ProductDetailView: View {
         }
     }
 
-    /// The fit line for this piece, or nothing. Recomputed when the screen
-    /// appears and when the piece is put in a room — the two moments the
-    /// answer can change.
+    /// Recomputed when the screen appears and when the piece is put in a room
+    /// — the two moments the answer can change.
     private func refreshFitLine() {
-        guard let product = displayProduct else {
-            fitLine = nil
-            return
-        }
-        let rooms = RoomStore(context: modelContext).allRooms()
-        guard let room = RoomFitLine.room(
+        fitLine = Self.fitLine(
+            for: displayProduct,
+            rooms: RoomStore(context: modelContext).allRooms(),
             preferredLocalId: viewModel.roomContextLocalId,
-            preferredRemoteId: viewModel.roomContextRemoteId,
-            in: rooms
-        ) else {
-            fitLine = nil
-            return
-        }
-        fitLine = RoomFitLine.make(room: room, product: product)
+            preferredRemoteId: viewModel.roomContextRemoteId
+        )
     }
 
-    /// The room this screen already belongs to — a room-scoped browse, a
-    /// Daily Room chip. Resolved through the local store so a screen that
-    /// only carries the server's id still writes the local row's room.
+    /// The room this screen was opened from, if any (in the blocks file).
     private func contextRoom() -> RoomModel? {
-        let store = RoomStore(context: modelContext)
-        if let localId = viewModel.roomContextLocalId, let room = store.room(id: localId) {
-            return room
-        }
-        if let remoteId = viewModel.roomContextRemoteId {
-            return store.room(remoteId: remoteId)
-        }
-        return nil
+        Self.contextRoom(
+            in: RoomStore(context: modelContext),
+            localId: viewModel.roomContextLocalId,
+            remoteId: viewModel.roomContextRemoteId
+        )
     }
 
     // MARK: - Product Content

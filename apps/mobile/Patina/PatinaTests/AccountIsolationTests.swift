@@ -108,7 +108,8 @@ struct AccountIsolationTests {
     @Test
     func theAuthListenerWaitsOnAPendingClaim() throws {
         let source = try SourcePin.read("Patina/Services/Auth/AuthService.swift")
-        #expect(source.contains("if !claimPending {"))
+        #expect(source.contains("guard !claimPending else { return }"))
+        #expect(source.contains("await RoomSyncCoordinator.shared.reconcileSharedStore()"))
     }
 
     /// "Start fresh" clears the guest's work. A room carrying a `remoteId` is

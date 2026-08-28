@@ -81,34 +81,8 @@ public final class AuthService {
             for await (event, session) in supabase.auth.authStateChanges {
                 self.session = session
 
-                // Account isolation: the local SwiftData store is device-global
-                // and unscoped, so wipe the previous owner's rooms/scans/etc.
-                // whenever a DIFFERENT real account signs in. A guest→account
-                // transition keeps the guest's local scans (see the helper).
                 if let user = session?.user {
-                    let claimPending = Self.reconcileLocalStoreOwner(userId: user.id.uuidString)
-                    // W3 ruling 9: a real session ends the guest session. An
-                    // `.initialSession` carrying no user clears nothing —
-                    // that is the cold launch the persisted opt-in exists for.
-                    GuestSessionStore.shared.clear()
-
-                    // The account's rooms live on the server too, and until
-                    // W4's fix round nothing ever read them back — so a room
-                    // typed on this phone and synced was gone after a
-                    // sign-out and a sign-in, and a room made anywhere else
-                    // never arrived. Debounced and owner-keyed inside the
-                    // coordinator; it does nothing for a guest (SP-06).
-                    //
-                    // While the claim sheet is up it waits: the person is
-                    // being asked what to do with the guest's work, and
-                    // hydrating underneath that question puts the account's
-                    // own rooms inside the answer. `LocalStoreClaim` runs it
-                    // when the sheet is answered, either way.
-                    if !claimPending {
-                        Task { @MainActor in
-                            await RoomSyncCoordinator.shared.reconcileSharedStore()
-                        }
-                    }
+                    Self.settleLocalStore(for: user.id.uuidString)
                 }
 
                 // Mark auth state as ready after first event and fan out
@@ -201,6 +175,36 @@ public final class AuthService {
     /// (relaunch, token refresh) are a no-op. Never wiped on sign-out — the same
     /// user re-signing-in keeps their rooms (the app doesn't sync rooms back
     /// down, so a sign-out wipe would lose them).
+    /// What a real session does to the device-local store, in order.
+    ///
+    /// Account isolation first: the store is device-global and unscoped, so a
+    /// DIFFERENT real account signing in wipes the previous owner's
+    /// rooms/scans/etc. A guest→account transition keeps the guest's work and
+    /// asks whose it is (SP-06).
+    ///
+    /// Then the account's own rooms, which live on the server and which
+    /// nothing read back until W4's fix round — a room typed on this phone and
+    /// synced was gone after a sign-out and a sign-in, and a room made anywhere
+    /// else never arrived. Debounced and owner-keyed inside the coordinator; it
+    /// does nothing for a guest.
+    ///
+    /// While the claim sheet is up the hydrate waits: the person is being asked
+    /// what to do with the guest's work, and hydrating underneath that question
+    /// puts the account's own rooms inside the answer. `LocalStoreClaim` runs
+    /// it when the sheet is answered, either way.
+    @MainActor
+    private static func settleLocalStore(for userId: String) {
+        let claimPending = reconcileLocalStoreOwner(userId: userId)
+        // W3 ruling 9: a real session ends the guest session. An
+        // `.initialSession` carrying no user clears nothing — that is the cold
+        // launch the persisted opt-in exists for.
+        GuestSessionStore.shared.clear()
+        guard !claimPending else { return }
+        Task { @MainActor in
+            await RoomSyncCoordinator.shared.reconcileSharedStore()
+        }
+    }
+
     /// Returns whether the claim sheet is now up, and therefore whether the
     /// store is still waiting on a decision.
     @MainActor
