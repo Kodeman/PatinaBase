@@ -13,14 +13,19 @@
 --
 -- ─── What lands ────────────────────────────────────────────────────────────
 --  1. direct_orders.designer_id / project_id / commission_rate — snapshotted
---     INSIDE create_direct_order, immutable once the order is paid (trigger).
+--     INSIDE create_direct_order, immutable from paid onward (trigger), and
+--     the rate withheld from the buyer (§1b).
 --  2. create_direct_order enforces the buyability gate and folds flat freight.
 --  3. designer_earnings partial unique index on order_id — the earnings credit
---     fires exactly once however many times Stripe redelivers.
+--     fires exactly once however many times Stripe redelivers — plus
+--     reverses_order_id, its contra key (§3b).
 --  4. Client-scoped SELECT on fulfillment_orders / _order_items / _shipments.
 --  5. Three fulfillment_config keys + get_direct_order_terms() to read them.
 --  6. settle_direct_order_attribution() — the settle-side effects the webhook
---     cannot do itself (see §6's banner).
+--     cannot do itself (see §7's banner): the credit, and the notice into the
+--     project thread or the direct thread.
+--  7. reverse_direct_order_earnings() — the same credit, taken back when the
+--     order is refunded (§7b).
 --
 -- ─── Two hazards this file is deliberate about ─────────────────────────────
 --
@@ -39,9 +44,22 @@
 --     8%"; fulfillment_config.commission_rate_default is {"rate":0.16}
 --     (00351:104). Both live references are FRACTIONS, so this file reads
 --     products.commission_rate as a fraction too and constrains the snapshot
---     to [0,1]. If a later writer ever puts 16.00 in products.commission_rate
---     meaning "16%", create_direct_order raises a check_violation at create —
---     loudly, before any money moves — instead of crediting 16× the order.
+--     to [0,1]. A later writer that puts a percent there is refused at create,
+--     loudly, before any money moves — but by two different errors, which is
+--     worth stating exactly: 16.00 overflows v_rate's own NUMERIC(5,4) and
+--     raises 22003 numeric_value_out_of_range on assignment; 5.00 fits the
+--     variable and is caught one step later by
+--     direct_orders_commission_rate_is_a_fraction (23514 check_violation).
+--     Either way the order is not minted and nobody is credited 16×.
+--
+-- (c) THE RATE IS NOT THE BUYER'S TO READ. §8(b) narrows `authenticated` off
+--     fulfillment_order_items.unit_cost_cents on the reasoning that a policy is
+--     row-level and the row is too wide. commission_rate is the same class of
+--     fact one table over — direction B §5's disclosure says a commission
+--     exists and does not change her price, and deliberately never prints a
+--     number — so §1(b) gives direct_orders the same treatment, and
+--     create_direct_order's returned copy is masked (the stored snapshot is
+--     untouched). See §1(b) for the full argument and its one consumer edit.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ─── 1. The three attribution columns ───────────────────────────────────────
@@ -80,7 +98,43 @@ COMMENT ON COLUMN public.direct_orders.commission_rate IS
   'A FRACTION in [0,1] (0.1600 = 16%), snapshotted at create from '
   'products.commission_rate, else fulfillment_config commission_rate_default. '
   'Snapshotted so a later catalog edit never moves an existing order''s '
-  'credit, and frozen once paid.';
+  'credit, and frozen once paid. NOT readable by `authenticated` (00540 §1b '
+  'narrowed that role to a column list) — the buyer is told a commission '
+  'exists, never its size.';
+
+-- ─── 1b. …and the buyer does not read the rate ──────────────────────────────
+--
+-- direct_orders_select_own (00276) is `client_id = auth.uid()`, and an RLS
+-- policy is ROW-level: it hands the buyer every column of her own order. That
+-- was harmless until this migration put a commercial term on the row.
+--
+-- Direction B §5's disclosure is precise about the shape of what she is owed:
+-- "Leah sees it on your project and is credited at the piece's trade rate.
+-- This doesn't change your price." — THAT a commission exists, and that it is
+-- not added to her bill. Never the number. §8(b) withholds
+-- fulfillment_order_items.unit_cost_cents on the same reasoning ("the policy is
+-- right and the row is too wide"), and the rate is the stronger case of the
+-- two: it multiplies straight into a price she can see.
+--
+-- Postgres keeps table-level and column-level privileges separately, so a
+-- column REVOKE against a table GRANT is a no-op — the table grant is withdrawn
+-- and re-issued as a list of the sixteen columns that are hers.
+--
+-- TWO consumers had to move with it, both in this branch:
+--   • packages/supabase/src/hooks/use-direct-orders.ts — `select('*')` expands
+--     to every column and would now 42501. It names its columns.
+--   • create_direct_order RETURNS public.direct_orders — a composite returned
+--     by a function is NOT filtered by the table's column ACL, so the rate
+--     would come straight back on the create call. §6 masks it on the returned
+--     copy; the stored row keeps the snapshot the settle reads as service_role.
+
+REVOKE SELECT ON public.direct_orders FROM authenticated;
+GRANT SELECT (
+  id, client_id, product_id, product_name, quantity,
+  unit_price_cents, amount_cents, currency, status,
+  stripe_checkout_session_id, stripe_payment_intent_id, shipping,
+  created_at, paid_at, designer_id, project_id
+) ON public.direct_orders TO authenticated;
 
 -- ─── 2. Immutable-after-paid ────────────────────────────────────────────────
 --
@@ -88,6 +142,14 @@ COMMENT ON COLUMN public.direct_orders.commission_rate IS
 -- RLS entirely. The guard is a trigger. It fires on OLD.status, so the settle
 -- UPDATE itself (pending_payment → paid) passes, and every UPDATE after it is
 -- refused if it moves one of the three.
+--
+-- 'refunded' is in the guard for a reason Q5's wording does not say out loud:
+-- "immutable after paid" has to mean "immutable from paid ONWARD". 00277's
+-- refund flip (paid → refunded) moves none of the three and so still passes —
+-- but without 'refunded' in this list every UPDATE after a refund would find
+-- OLD.status = 'refunded' and re-open the attribution on a row that has now
+-- moved money in both directions, and whose earnings credit and contra
+-- (§3b, §7b) are both keyed to the designer it names.
 
 CREATE OR REPLACE FUNCTION public.direct_orders_freeze_attribution()
 RETURNS trigger
@@ -95,7 +157,7 @@ LANGUAGE plpgsql
 SET search_path TO 'public'
 AS $$
 BEGIN
-  IF OLD.status = 'paid' AND (
+  IF OLD.status IN ('paid', 'refunded') AND (
        NEW.designer_id     IS DISTINCT FROM OLD.designer_id
     OR NEW.project_id      IS DISTINCT FROM OLD.project_id
     OR NEW.commission_rate IS DISTINCT FROM OLD.commission_rate
@@ -110,9 +172,10 @@ $$;
 REVOKE ALL ON FUNCTION public.direct_orders_freeze_attribution() FROM PUBLIC, anon;
 
 COMMENT ON FUNCTION public.direct_orders_freeze_attribution() IS
-  'Q5: designer_id / project_id / commission_rate are snapshots. Once status = '
-  '''paid'' they cannot move — not by the webhook, not by an operator, not by '
-  'service_role. Fires on OLD.status so the settle flip itself is allowed.';
+  'Q5: designer_id / project_id / commission_rate are snapshots. From status = '
+  '''paid'' ONWARD (''paid'' or ''refunded'') they cannot move — not by the '
+  'webhook, not by an operator, not by service_role. Fires on OLD.status so the '
+  'settle flip and the refund flip themselves are both allowed.';
 
 DROP TRIGGER IF EXISTS trg_direct_orders_freeze_attribution ON public.direct_orders;
 CREATE TRIGGER trg_direct_orders_freeze_attribution
@@ -133,6 +196,34 @@ COMMENT ON COLUMN public.designer_earnings.order_id IS
   '(00540) so a Stripe redelivery credits once. NOTE: the column is not '
   'namespaced by rail — a future non-direct-order writer must not reuse it '
   'without scoping the index first.';
+
+-- ─── 3b. …and it can be taken back when the money goes back ─────────────────
+--
+-- A refunded order that keeps its commission is the one money defect this
+-- branch could introduce on its own: handleDirectOrderRefund flips
+-- direct_orders.status to 'refunded' and the credit sits there, 'confirmed',
+-- un-re-creditable (the index above) and un-reversed.
+--
+-- The invoice rail already ruled the shape of the answer (00277:205-243): never
+-- DELETE the credit — designer_earnings carries settlement and payout state, so
+-- the credit must stay auditable — post a NEGATIVE mirror that nets it out, in
+-- the same status bucket, keyed on its own column so at most one reversal can
+-- ever exist per order. `reverses_order_id` is that column, and the contra row
+-- leaves `order_id` NULL because the credit holds that unique slot.
+
+ALTER TABLE public.designer_earnings
+  ADD COLUMN IF NOT EXISTS reverses_order_id UUID;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_designer_earnings_order_reversal
+  ON public.designer_earnings(reverses_order_id)
+  WHERE reverses_order_id IS NOT NULL;
+
+COMMENT ON COLUMN public.designer_earnings.reverses_order_id IS
+  'Set on a CONTRA row that negates the product_commission credit for a '
+  'refunded direct order (00540 §7b, mirroring 00277''s '
+  'reverses_invoice_payment_id). Partial-unique, so an order is reversed at '
+  'most once however many refund events Stripe redelivers. The contra row''s '
+  'own order_id stays NULL — the credit holds uniq_designer_earnings_order.';
 
 -- ─── 4. fulfillment_config: the three direct-order keys ─────────────────────
 --
@@ -156,6 +247,21 @@ COMMENT ON COLUMN public.designer_earnings.order_id IS
 -- Path A's "Delivery and tax are added at payment" copy from outrunning the
 -- rail (critique M14). Its optional shipping_rate_ids are Stripe dashboard
 -- rate ids — the session never invents a freight price of its own.
+--
+-- ⚠ This one row arms Stripe Tax on a live money path, so what it does NOT
+--   break is worth stating. fulfillment_orders carries
+--   chk_fulfillment_captured_identity (00360:428) — captured = subtotal +
+--   freight + tax — and posts a T1 ledger entry of the same shape
+--   (00352:178-186) behind it. A split that does not sum is refused at the
+--   INSERT and takes the WHOLE intake transaction with it: no order row, no
+--   lines, and a fulfillment_intake task that fails identically on every retry
+--   until it parks. The session's metadata is stamped BEFORE Checkout runs and
+--   cannot know what tax was added, so the settle stamps the real split from
+--   checkout.session.completed instead
+--   (directOrderTotalsFromSession → the fulfillment_intake task payload →
+--   normalizeIntakePayload's overrides). What flipping this flag still requires
+--   is a Stripe Tax REGISTRATION on the account; without one Stripe refuses the
+--   session and Path A's create call 502s.
 
 -- The GUC is transaction-local, so it and the INSERT must be one statement:
 -- a bare `SELECT set_config(...)` followed by a bare INSERT works under the
@@ -174,7 +280,7 @@ BEGIN
      'The one reachable human on a direct order — printed under the responsibility paragraph. PLACEHOLDER: a real Patina address, but Kody names the intended support route (an address or a number) before Path A ships.'),
     ('direct_orders.tax_shipping_enabled',
      '{"enabled":false}'::jsonb,
-     'When true, create-checkout-session adds automatic_tax to the direct-order session, plus shipping_options for any shipping_rate_ids listed here ({"enabled":true,"shipping_rate_ids":["shr_..."]}). Default false: Stripe Tax registration is a Kody ruling, and while it is false the order sheet must read "Delivery and tax are not included yet".')
+     'When true, create-checkout-session adds automatic_tax to the direct-order session (both line items carry tax_behavior exclusive), plus shipping_options for any shipping_rate_ids listed here ({"enabled":true,"shipping_rate_ids":["shr_..."]}). Default false: Stripe Tax registration is a Kody ruling, and while it is false the order sheet must read "Delivery and tax are not included yet". Flipping it is safe for the fulfillment rail — stripe-webhook takes the captured split from the settled session (directOrderTotalsFromSession) rather than from the pre-Checkout metadata, so the T1 ledger entry stays balanced — but Stripe Tax must be REGISTERED first, or Stripe refuses the session.')
   ON CONFLICT (key) DO NOTHING;
 END $$;
 
@@ -334,7 +440,15 @@ BEGIN
   END IF;
 
   -- ── (i) the rest of the buyability gate ────────────────────────────────
-  IF v_product.dimensions IS NULL THEN
+  -- dimensions is JSONB (00001:35) with no shape constraint, so IS NOT NULL is
+  -- not the same question as "has a size": '{}', 'null'::jsonb (which is not
+  -- SQL NULL), '[]' and '{"unit":"in"}' are all non-NULL and all mean nothing.
+  -- The order sheet leads with the size, so the gate tests the shape — the same
+  -- standard the blank-brand branch below already holds a TEXT column to. Every
+  -- seeded catalog row carries {"width":…,"depth":…,"height":…,"unit":…}.
+  IF v_product.dimensions IS NULL
+     OR jsonb_typeof(v_product.dimensions) <> 'object'
+     OR NULLIF(btrim(COALESCE(v_product.dimensions->>'width', '')), '') IS NULL THEN
     RAISE EXCEPTION 'create_direct_order: not_buyable:dimensions';
   END IF;
   IF v_product.lead_time_weeks IS NULL THEN
@@ -426,6 +540,13 @@ BEGIN
   )
   RETURNING * INTO v_order;
 
+  -- §1(b): the column ACL narrows what the buyer can SELECT, but a composite
+  -- returned by a function is not filtered by it — so the rate would come back
+  -- on the create call and nowhere else, which is worse than either answer.
+  -- The STORED snapshot is untouched; only this copy is masked. The one caller
+  -- is the buyer, and settle_direct_order_attribution reads the row itself.
+  v_order.commission_rate := NULL;
+
   RETURN v_order;
 END;
 $$;
@@ -439,8 +560,9 @@ COMMENT ON FUNCTION public.create_direct_order(UUID, INTEGER) IS
   'products.shipping_flat_cents into amount_cents (freight is always '
   'amount_cents - quantity * unit_price_cents). Snapshots the designer '
   '(active project → live lead → roster, ambiguity uncredited), the project, '
-  'and the commission rate. SECURITY DEFINER because clients have no INSERT '
-  'policy on direct_orders.';
+  'and the commission rate — the rate is STORED and returned NULL, because the '
+  'buyer is told a commission exists and never its size (00540 §1b). SECURITY '
+  'DEFINER because clients have no INSERT policy on direct_orders.';
 
 -- CREATE OR REPLACE preserves the ACL, but the generated legacy-grants seed
 -- reads these lines, so they stay stated (00276:200-201, verbatim).
@@ -464,14 +586,33 @@ GRANT EXECUTE ON FUNCTION public.create_direct_order(UUID, INTEGER) TO authentic
 -- 00540's partial unique index with ON CONFLICT DO NOTHING, and the message is
 -- posted only when THIS call was the one that inserted it. So a redelivery
 -- credits nothing and says nothing, and no marker has to be smuggled into a
--- sentence Leah reads. It also means the message and the credit are the same
--- fact: the notice says "credited at the piece's trade rate", so it must not
--- draw where there is no credit.
+-- sentence Leah reads.
 --
--- Consequence, stated: an order attributed through a LEAD or a ROSTER row
--- carries no project_id and therefore gets the credit but no thread message.
--- Direction B §5 wants that notice to land in rpc_start_direct_thread's direct
--- thread instead; that is not in W5's brief and is not built here.
+-- WHICH MEANS THE ROW IS WRITTEN FOR EVERY ATTRIBUTED ORDER, INCLUDING A
+-- ZERO-RATE ONE. products.commission_rate is a nullable NUMERIC(4,2) that
+-- nothing has ever written, and 0.0000 is a legal catalogue value — a piece
+-- Patina pays no commission on. Gating the INSERT on rate > 0 would have made
+-- the one case where the designer most needs to hear that her client bought
+-- something the case where she hears nothing, because the notice hangs off the
+-- same latch. So: attributed → a row, gross possibly 0; and the SENTENCE, not
+-- the effect, is what varies (see v_body below). A 0-gross row is also the
+-- honest record — the order was attributed and earned nothing.
+--
+-- WHERE THE NOTICE LANDS (direction B §5, verbatim: "At engaged tier with no
+-- project yet, project_id is null and designer_id is not; the settle notice
+-- still fires, into rpc_start_direct_thread's thread"):
+--
+--   project_id IS NOT NULL  →  the project thread   (rpc_start_project_thread's)
+--   project_id IS NULL      →  the direct thread    (rpc_start_direct_thread's)
+--
+-- Both branches are resolve-or-create because the service-role webhook cannot
+-- call either RPC — both open with `IF auth.uid() IS NULL THEN RAISE`. Under
+-- R3 the direct branch is the ONLY one an iOS buyer can reach: Buy draws only
+-- for a client with no live designer relationship, and this function only sets
+-- project_id from an active project — a client R3 pre-empts. Building just the
+-- project branch would have shipped the notice dead on the surface it exists
+-- for, and R3 makes B's "Buy it myself" flip conditional on this very notice
+-- being proven.
 --
 -- Returns a jsonb receipt so the webhook can log what actually happened
 -- without re-querying.
@@ -485,13 +626,14 @@ AS $$
 DECLARE
   v_order      public.direct_orders;
   v_subtotal   INTEGER;
-  v_gross      INTEGER;
+  v_gross      INTEGER := 0;
   v_credited   BOOLEAN := FALSE;
   v_posted     BOOLEAN := FALSE;
   v_thread     UUID;
   v_designer   UUID;
   v_client     UUID;
   v_buyer_name TEXT;
+  v_piece      TEXT;
   v_body       TEXT;
 BEGIN
   SELECT * INTO v_order FROM public.direct_orders WHERE id = p_order_id;
@@ -511,8 +653,8 @@ BEGIN
   v_subtotal := v_order.quantity * v_order.unit_price_cents;
 
   -- ── the earnings credit ─────────────────────────────────────────────────
-  IF v_order.designer_id IS NOT NULL AND COALESCE(v_order.commission_rate, 0) > 0 THEN
-    v_gross := round(v_subtotal * v_order.commission_rate)::INTEGER;
+  IF v_order.designer_id IS NOT NULL THEN
+    v_gross := round(v_subtotal * COALESCE(v_order.commission_rate, 0))::INTEGER;
 
     INSERT INTO public.designer_earnings (
       designer_id, source_type, order_id, project_id,
@@ -520,7 +662,7 @@ BEGIN
       description, status, earned_at
     ) VALUES (
       v_order.designer_id, 'product_commission', v_order.id, v_order.project_id,
-      v_gross, 0, v_gross, v_order.commission_rate,
+      v_gross, 0, v_gross, COALESCE(v_order.commission_rate, 0),
       'Direct order — ' || v_order.product_name,
       -- Stripe money is 'confirmed' until the platform payout lands, exactly
       -- as the invoice credit rules it (00178:657).
@@ -532,40 +674,90 @@ BEGIN
     v_credited := FOUND;
   END IF;
 
-  -- ── the system message in the project thread ────────────────────────────
-  -- Only on the call that actually credited (see the banner): the notice and
-  -- the credit are one fact, and that is also what makes it fire once.
-  IF v_credited AND v_order.project_id IS NOT NULL THEN
-    SELECT pr.designer_id, pr.client_id INTO v_designer, v_client
-      FROM public.projects pr WHERE pr.id = v_order.project_id;
+  -- ── the system message, into whichever thread she watches ───────────────
+  -- Only on the call that actually filed the attribution (see the banner):
+  -- one latch, both effects, so a redelivery says nothing.
+  IF v_credited THEN
+    IF v_order.project_id IS NOT NULL THEN
+      -- (a) the project thread — resolve-or-create, mirroring
+      --     rpc_start_project_thread (00103:113).
+      SELECT pr.designer_id, pr.client_id INTO v_designer, v_client
+        FROM public.projects pr WHERE pr.id = v_order.project_id;
 
-    IF v_designer IS NOT NULL AND v_client IS NOT NULL THEN
-      -- resolve-or-create, mirroring rpc_start_project_thread (00103:113)
+      IF v_designer IS NOT NULL AND v_client IS NOT NULL THEN
+        SELECT t.id INTO v_thread
+          FROM public.comms_threads t
+         WHERE t.kind = 'project' AND t.project_id = v_order.project_id
+         ORDER BY t.created_at ASC
+         LIMIT 1;
+
+        IF v_thread IS NULL THEN
+          INSERT INTO public.comms_threads (kind, project_id, created_by)
+            VALUES ('project', v_order.project_id, v_designer)
+            RETURNING id INTO v_thread;
+          INSERT INTO public.comms_thread_participants (thread_id, profile_id, role) VALUES
+            (v_thread, v_designer, 'designer'),
+            (v_thread, v_client,   'client');
+          INSERT INTO public.comms_messages (thread_id, sender_id, body, system)
+            VALUES (v_thread, NULL, 'Project conversation opened.', TRUE);
+        END IF;
+      END IF;
+    ELSE
+      -- (b) the direct thread — the lead and roster cases, and under R3 the
+      --     ONLY branch an iOS buyer reaches. Resolve-or-create, mirroring
+      --     rpc_start_direct_thread (00536:196-224). No relationship predicate
+      --     is re-checked here: the attribution resolver in create_direct_order
+      --     already established one, and it is a strictly narrower test than
+      --     that RPC's. The participants trigger is a DEFERRABLE constraint
+      --     trigger (00101:250-259), so thread-then-participants inside one
+      --     transaction is legal — the half-built state is checked at COMMIT.
+      v_designer := v_order.designer_id;
+      v_client   := v_order.client_id;
+
       SELECT t.id INTO v_thread
         FROM public.comms_threads t
-       WHERE t.kind = 'project' AND t.project_id = v_order.project_id
+       WHERE t.kind = 'direct'
+         AND EXISTS (SELECT 1 FROM public.comms_thread_participants p
+                      WHERE p.thread_id = t.id AND p.profile_id = v_designer AND p.left_at IS NULL)
+         AND EXISTS (SELECT 1 FROM public.comms_thread_participants p
+                      WHERE p.thread_id = t.id AND p.profile_id = v_client AND p.left_at IS NULL)
        ORDER BY t.created_at ASC
        LIMIT 1;
 
       IF v_thread IS NULL THEN
-        INSERT INTO public.comms_threads (kind, project_id, created_by)
-          VALUES ('project', v_order.project_id, v_designer)
+        INSERT INTO public.comms_threads (kind, created_by)
+          VALUES ('direct', v_designer)
           RETURNING id INTO v_thread;
         INSERT INTO public.comms_thread_participants (thread_id, profile_id, role) VALUES
-          (v_thread, v_designer, 'designer'),
-          (v_thread, v_client,   'client');
-        INSERT INTO public.comms_messages (thread_id, sender_id, body, system)
-          VALUES (v_thread, NULL, 'Project conversation opened.', TRUE);
+          (v_thread, v_designer, public.comms_resolve_role(v_designer)),
+          (v_thread, v_client,   public.comms_resolve_role(v_client));
       END IF;
+    END IF;
 
+    IF v_thread IS NOT NULL THEN
       SELECT COALESCE(NULLIF(btrim(pf.full_name), ''), 'Your client')
         INTO v_buyer_name
         FROM public.profiles pf WHERE pf.id = v_order.client_id;
 
+      -- The money in this sentence is the PIECE — direction B §5's exemplar is
+      -- "Ruth bought the Heirloom Oak Dining Table — $4,200.00, credited at the
+      -- piece's trade rate", and $4,200 is one table, not a total with freight
+      -- folded into it. The commission is on the same number, so the sentence
+      -- and the credit agree. Quantity is named when there is more than one,
+      -- because two tables at $4,200 must not read as one at $8,400.
+      v_piece := CASE WHEN v_order.quantity > 1
+                      THEN v_order.quantity::text || ' × ' || v_order.product_name
+                      ELSE 'the ' || v_order.product_name END;
+
       v_body := COALESCE(v_buyer_name, 'Your client')
-             || ' bought the ' || v_order.product_name
-             || ' — ' || to_char(v_order.amount_cents / 100.0, 'FM$999,999,990.00')
-             || ', credited at the piece''s trade rate.';
+             || ' bought ' || v_piece
+             || ' — ' || to_char(v_subtotal / 100.0, 'FM$999,999,990.00')
+             -- A zero-rate piece IS attributed and earns nothing. Saying
+             -- "credited" there would be false (C5), so the clause goes and
+             -- the notice stays: she still needs to know her client bought it.
+             || CASE WHEN v_gross > 0
+                     THEN ', credited at the piece''s trade rate.'
+                     ELSE '.' END;
 
       INSERT INTO public.comms_messages (thread_id, sender_id, body, system)
         VALUES (v_thread, NULL, v_body, TRUE);
@@ -575,6 +767,7 @@ BEGIN
 
   RETURN jsonb_build_object(
     'credited', v_credited,
+    'gross_amount', v_gross,
     'thread_message', v_posted,
     'designer_id', v_order.designer_id,
     'project_id', v_order.project_id,
@@ -585,14 +778,90 @@ $$;
 
 COMMENT ON FUNCTION public.settle_direct_order_attribution(UUID) IS
   'The DB half of a direct order''s settle (W5 / Q5): credit designer_earnings '
-  'once (partial unique index on order_id) and post one system message into '
-  'the project thread naming the piece and the total. Service-role only — it '
-  'exists because rpc_start_project_thread requires an auth.uid() the '
-  'stripe-webhook does not have. Refuses to do anything for an order that is '
-  'not already paid; idempotent on both effects.';
+  'once (partial unique index on order_id) and post one system message naming '
+  'the piece and what the piece cost — into the project thread when the order '
+  'carries a project, else into the designer/client direct thread (direction B '
+  '§5). Service-role only: it exists because rpc_start_project_thread and '
+  'rpc_start_direct_thread both require an auth.uid() the stripe-webhook does '
+  'not have. Refuses to do anything for an order that is not already paid; '
+  'both effects ride one latch, so a Stripe redelivery repeats neither. The '
+  'message is `system = TRUE`, so comms_messages_notification_dispatch '
+  '(00105:43) deliberately does NOT email or push it — it bumps '
+  'comms_threads.last_message_at and counts toward rpc_unread_summary, which '
+  'is the channel the designer already watches. A designer-side email on a '
+  'client purchase is a copy and a consent question nobody has ruled.';
 
 REVOKE ALL ON FUNCTION public.settle_direct_order_attribution(UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.settle_direct_order_attribution(UUID) TO service_role;
+
+-- ─── 7b. …and the settle undone, when the money goes back ───────────────────
+--
+-- The other half of §3b. "Internal payable state is the source of truth" cuts
+-- both ways: once direct_orders.status is 'refunded', a live 'confirmed'
+-- commission on that order is the ledger disagreeing with the payable.
+--
+-- Shape lifted from 00277:211-243, and every choice in it is that file's:
+--   • a CONTRA row, never a DELETE — designer_earnings carries settlement and
+--     payout state, so both rows stay auditable and net to zero in aggregate;
+--   • the SAME status bucket as the original, so it nets where the credit sat;
+--   • paid_at NULL (a clawback recognised now, not payout-settled);
+--   • order_id NULL on the contra (the credit holds uniq_designer_earnings_order),
+--     reverses_order_id carrying the key instead.
+--
+-- PARTIAL refunds are deliberately not handled: 00277 does not pro-rate either,
+-- handleDirectOrderRefund leaves a partially-refunded order 'paid', and a
+-- fractional clawback is an ops decision, not a webhook's. The ops email that
+-- fires on every refund is the existing route for it.
+
+CREATE OR REPLACE FUNCTION public.reverse_direct_order_earnings(p_order_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_status   TEXT;
+  v_reversed BOOLEAN := FALSE;
+BEGIN
+  SELECT status INTO v_status FROM public.direct_orders WHERE id = p_order_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'reverse_direct_order_earnings: order % not found', p_order_id;
+  END IF;
+
+  IF v_status <> 'refunded' THEN
+    RETURN jsonb_build_object('reversed', false, 'reason', 'order is not refunded');
+  END IF;
+
+  INSERT INTO public.designer_earnings (
+    designer_id, source_type, order_id, project_id,
+    gross_amount, platform_fee, net_amount, commission_rate,
+    description, status, paid_at, earned_at, reverses_order_id
+  )
+  SELECT
+    orig.designer_id, orig.source_type, NULL, orig.project_id,
+    -orig.gross_amount, -orig.platform_fee, -orig.net_amount, orig.commission_rate,
+    'Refund reversal — ' || COALESCE(orig.description, 'direct order'),
+    orig.status, NULL, now(), p_order_id
+  FROM public.designer_earnings orig
+  WHERE orig.order_id = p_order_id
+  ON CONFLICT (reverses_order_id) WHERE reverses_order_id IS NOT NULL DO NOTHING;
+
+  v_reversed := FOUND;
+  RETURN jsonb_build_object('reversed', v_reversed);
+END;
+$$;
+
+COMMENT ON FUNCTION public.reverse_direct_order_earnings(UUID) IS
+  'Post the contra row that nets out a refunded direct order''s '
+  'product_commission credit (00540 §7b, the 00277:211 shape). Refuses unless '
+  'direct_orders.status = ''refunded''; a no-op when the order was never '
+  'credited; idempotent on reverses_order_id, so however many refund events '
+  'Stripe redelivers the commission is taken back exactly once. Never deletes '
+  'the credit — designer_earnings carries payout state and both rows stay '
+  'auditable. Service-role only.';
+
+REVOKE ALL ON FUNCTION public.reverse_direct_order_earnings(UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.reverse_direct_order_earnings(UUID) TO service_role;
 
 -- ─── 8. The client can see her own order on the fulfillment rail ────────────
 --

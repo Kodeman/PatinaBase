@@ -20,17 +20,25 @@
 --
 -- Data-driven rather than a hardcoded id list, so it stays true if products.sql
 -- moves: verify the photography on exactly the rows that already have a size, a
--- lead time and a maker, and are a seller of record. That is 7 of the 21
--- catalog rows today (the Heirloom Oak Dining Table, Walnut Credenza,
--- Live-Edge Coffee Table, Hand-Forged Iron Shelf, Meadow Linen Sectional,
--- Velvet Club Chair and Marble Side Table). The other 14 keep the honest
--- refusal, so the gate-failed variant has something to draw too.
+-- lead time and a maker, and are a seller of record. Counted on a clean
+-- `supabase db reset` on 2026-08-28: **7 of the 19** catalog rows (the Heirloom
+-- Oak Dining Table, Walnut Credenza, Live-Edge Coffee Table, Hand-Forged Iron
+-- Shelf, Meadow Linen Sectional, Velvet Club Chair and Marble Side Table). The
+-- other **12** keep the honest refusal, so the gate-failed variant has
+-- something to draw too. (An earlier draft of this comment said 7 of 21 / 14;
+-- the query says 19 / 12. C5.)
 --
--- What this asserts is what the column means (00533): "a human last confirmed
--- the photography on this row is the piece it claims to be". On a dev stack
--- that human is the seed, and the pictures are stock — which is exactly why
--- this file is not in the staging sql_paths derivation by accident but by
--- being a local/staging dev seed like every other row here.
+-- ⚠ WHAT THIS ASSERTS, AND WHERE IT IS TRUE. photo_verified_at means (00533)
+--   "a human last confirmed the photography on this row is the piece it claims
+--   to be". On a SEEDED stack that human is this file and the pictures are
+--   stock Unsplash — F06 documents the dining table shown with green velvet
+--   chairs. That is fine on local and on staging, which are demo stacks whose
+--   whole catalogue is fictional and which cannot exercise Path A at all
+--   without it; it is NOT a claim that survives anywhere real. Strata is never
+--   seeded: photo_verified_at is NULL on every prod row, so create_direct_order
+--   refuses every prod product until the catalogue data pass named in direction
+--   B §10 sets the column against actual photography. That pass precedes the
+--   migration reaching prod, not follows it.
 --
 -- shipping_flat_cents is deliberately NOT seeded. W1b left it NULL because
 -- nothing has ever written it and the honest render of an unknown freight is

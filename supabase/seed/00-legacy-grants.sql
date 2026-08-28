@@ -11848,6 +11848,18 @@ END $g$;
 
 -- 00540_direct_orders_attribution.sql
 DO $g$ BEGIN
+  REVOKE SELECT ON public.direct_orders FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  GRANT SELECT ( id, client_id, product_id, product_name, quantity, unit_price_cents, amount_cents, currency, status, stripe_checkout_session_id, stripe_payment_intent_id, shipping, created_at, paid_at, designer_id, project_id ) ON public.direct_orders TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.direct_orders_freeze_attribution() FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -11885,6 +11897,18 @@ END $g$;
 -- 00540_direct_orders_attribution.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.settle_direct_order_attribution(UUID) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reverse_direct_order_earnings(UUID) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00540_direct_orders_attribution.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reverse_direct_order_earnings(UUID) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

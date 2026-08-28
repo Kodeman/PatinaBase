@@ -55,6 +55,34 @@ export interface DirectOrder {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
+ * Every column of direct_orders that `authenticated` may read.
+ *
+ * NOT `*`, and it cannot go back to `*`. Migration 00540 added
+ * `commission_rate` — what the designer of record earns on the order — and
+ * narrowed this role's grant to a column list without it, so `select('*')`
+ * expands to a column the buyer has no privilege on and fails with 42501. She
+ * is told a commission exists and never its size (direction B §5).
+ */
+const DIRECT_ORDER_COLUMNS = [
+  'id',
+  'client_id',
+  'product_id',
+  'product_name',
+  'quantity',
+  'unit_price_cents',
+  'amount_cents',
+  'currency',
+  'status',
+  'stripe_checkout_session_id',
+  'stripe_payment_intent_id',
+  'shipping',
+  'created_at',
+  'paid_at',
+  'designer_id',
+  'project_id',
+].join(', ');
+
+/**
  * Fetches the signed-in client's own "buy now" orders. RLS does the scoping
  * (direct_orders_select_own: client_id = auth.uid(), migration 00267) — no
  * explicit filter needed here. Newest first for the orders list.
@@ -66,10 +94,10 @@ export function useDirectOrders() {
       const supabase = getSupabase();
       const { data, error } = await supabase
         .from('direct_orders')
-        .select('*')
+        .select(DIRECT_ORDER_COLUMNS)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data ?? []) as DirectOrder[];
+      return (data ?? []) as unknown as DirectOrder[];
     },
   });
 }

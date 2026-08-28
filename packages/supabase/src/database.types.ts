@@ -4322,6 +4322,7 @@ export type Database = {
           proposal_id: string | null
           proposal_item_id: string | null
           reverses_invoice_payment_id: string | null
+          reverses_order_id: string | null
           source_type: string
           status: string
         }
@@ -4344,6 +4345,7 @@ export type Database = {
           proposal_id?: string | null
           proposal_item_id?: string | null
           reverses_invoice_payment_id?: string | null
+          reverses_order_id?: string | null
           source_type: string
           status?: string
         }
@@ -4366,6 +4368,7 @@ export type Database = {
           proposal_id?: string | null
           proposal_item_id?: string | null
           reverses_invoice_payment_id?: string | null
+          reverses_order_id?: string | null
           source_type?: string
           status?: string
         }
@@ -32686,6 +32689,10 @@ export type Database = {
       retire_designer_taste: {
         Args: { p_designer_id: string }
         Returns: undefined
+      }
+      reverse_direct_order_earnings: {
+        Args: { p_order_id: string }
+        Returns: Json
       }
       review_agent_task: {
         Args: {
