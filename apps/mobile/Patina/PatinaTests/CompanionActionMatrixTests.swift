@@ -555,6 +555,38 @@ struct CompanionTierAndFreshnessTests {
         }
     }
 
+    /// The second surface onto the same dead end: the nudge pill above the
+    /// resting Companion mark (r3-notes.md §2). The menu row went in W2 R3;
+    /// this one offered `.arPlacement` for any piece in view, and `usdz_url`
+    /// is NULL on every product.
+    @Test
+    func theARNudgeIsSilentForAPieceWithNoModel() {
+        let screens: [AppRoute] = [.emergence(pieceId: nil), .roomEmergence(roomId: UUID())]
+        for screen in screens {
+            var ctx = Fixture.context(for: screen, roomCount: 1, active: false, tier: .discovering)
+            ctx.viewingPiece = ViewingPieceContext(
+                id: "piece-1", name: "Chair", maker: "Maker", hasARModel: false
+            )
+            #expect(
+                CompanionActionProvider.nudge(for: screen, context: ctx) == nil,
+                "\(screen) still nudges toward AR for a piece with no usdz_url"
+            )
+        }
+    }
+
+    /// …and it is a gate, not a removal: a piece that carries a model still
+    /// gets the offer, the day an AR asset pipeline puts one there.
+    @Test
+    func theARNudgeReturnsForAPieceThatCarriesAModel() {
+        let screen: AppRoute = .emergence(pieceId: nil)
+        var ctx = Fixture.context(for: screen, roomCount: 1, active: false, tier: .discovering)
+        ctx.viewingPiece = ViewingPieceContext(
+            id: "piece-1", name: "Chair", maker: "Maker", hasARModel: true
+        )
+        let nudge = CompanionActionProvider.nudge(for: screen, context: ctx)
+        #expect(nudge?.route == .arPlacement(productId: "piece-1"))
+    }
+
     // MARK: - SP-12: the Saved door opens at zero
 
     /// The Companion's `Saved` row is the only route to the Saved screen

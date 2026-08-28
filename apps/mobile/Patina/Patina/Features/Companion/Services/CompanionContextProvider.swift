@@ -272,9 +272,13 @@ enum CompanionActionProvider {
             // "Start a scan" CTA — suppress the redundant persistent pill (C.2).
             return nil
         case .emergence, .roomEmergence:
-            // AR try-in-room needs a concrete product, so only nudge when the
-            // browsing surface has reported one (R01).
-            guard let piece = context.viewingPiece else { return nil }
+            // AR try-in-room needs a concrete product AND an AR asset for it.
+            // The menu row with the same destination was retired in W2 R3
+            // because `usdz_url` is NULL on every product; this pill is the
+            // second surface onto the same dead end (r3-notes.md §2). It now
+            // draws only for a piece that carries a model, which is the same
+            // gate ProductDetailView's own AR button uses (SP-18).
+            guard let piece = context.viewingPiece, piece.hasARModel else { return nil }
             return CompanionNudge(label: "Try in your room →", route: .arPlacement(productId: piece.id))
         case .table:
             return CompanionNudge(label: "Find more pieces →", route: .emergence(pieceId: nil))

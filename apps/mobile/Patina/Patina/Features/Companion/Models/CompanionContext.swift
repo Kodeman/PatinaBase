@@ -340,12 +340,16 @@ public struct ViewingPieceContext: Equatable {
     public let name: String
     public let maker: String
     public let imageURL: URL?
+    /// Mirrors `Product.hasARModel` (`usdz_url != nil`). Defaults to false so a
+    /// caller that has not established an AR asset cannot produce an AR offer.
+    public let hasARModel: Bool
 
-    public init(id: String, name: String, maker: String, imageURL: URL? = nil) {
+    public init(id: String, name: String, maker: String, imageURL: URL? = nil, hasARModel: Bool = false) {
         self.id = id
         self.name = name
         self.maker = maker
         self.imageURL = imageURL
+        self.hasARModel = hasARModel
     }
 }
 
