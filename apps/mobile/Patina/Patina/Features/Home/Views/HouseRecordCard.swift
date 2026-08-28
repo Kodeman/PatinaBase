@@ -51,14 +51,14 @@ struct HouseRecordRowPresentation: Equatable {
         let tick = row.isNew
         switch row.state {
         case .overdue:
-            let asked = "asked \(HouseRecordDates.short(row.date))"
+            let asked = "asked \(HouseRecordDates.short(row.date, calendar: calendar))"
             return HouseRecordRowPresentation(
                 leadText: asked, lateText: "overdue", showsNewTick: tick,
                 accessibilityLabel: spoken(row: row, state: "\(asked), overdue", isNew: tick)
             )
 
         case .due(let due):
-            let by = "by \(HouseRecordDates.short(due))"
+            let by = "by \(HouseRecordDates.short(due, calendar: calendar))"
             return HouseRecordRowPresentation(
                 leadText: by, lateText: nil, showsNewTick: tick,
                 accessibilityLabel: spoken(row: row, state: "Due \(by)", isNew: tick)
@@ -66,7 +66,9 @@ struct HouseRecordRowPresentation: Equatable {
 
         case .amount(let cents, let due):
             let money = PatinaCurrency.format(cents: cents)
-            let text = due.map { "\(money) · due \(HouseRecordDates.short($0))" } ?? money
+            let text = due.map {
+                "\(money) · due \(HouseRecordDates.short($0, calendar: calendar))"
+            } ?? money
             let late = due.map {
                 calendar.startOfDay(for: $0) < calendar.startOfDay(for: now)
             } ?? false
@@ -82,7 +84,7 @@ struct HouseRecordRowPresentation: Equatable {
         case .none, .new:
             // `.new` is never emitted; drawing it as a state would put a
             // second, unearned newness signal beside the tick.
-            let date = HouseRecordDates.short(row.date)
+            let date = HouseRecordDates.short(row.date, calendar: calendar)
             return HouseRecordRowPresentation(
                 leadText: date, lateText: nil, showsNewTick: tick,
                 accessibilityLabel: spoken(row: row, state: date, isNew: tick)
@@ -107,25 +109,31 @@ struct HouseRecordRowPresentation: Equatable {
 
 enum HouseRecordDates {
 
-    /// "Aug 22". The one date format the card prints.
-    static func short(_ date: Date) -> String {
+    /// Fixed-format dates need a fixed locale, or "Aug 22" becomes "22 août"
+    /// on a French device while the copy around it stays English — and the
+    /// tests that assert the ruled strings pass or fail by device setting.
+    /// The calendar's own time zone decides which day a timestamp falls on.
+    private static func formatter(_ format: String, _ calendar: Calendar) -> DateFormatter {
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return formatter.string(from: date)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = format
+        return formatter
+    }
+
+    /// "Aug 22". The one date format the card prints.
+    static func short(_ date: Date, calendar: Calendar = .current) -> String {
+        formatter("MMM d", calendar).string(from: date)
     }
 
     /// "Thu, Aug 20".
-    static func weekdayAndDay(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE, MMM d"
-        return formatter.string(from: date)
+    static func weekdayAndDay(_ date: Date, calendar: Calendar = .current) -> String {
+        formatter("EEE, MMM d", calendar).string(from: date)
     }
 
     /// "Thursday" — the weekday the MOVED empty names.
-    static func weekday(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE"
-        return formatter.string(from: date)
+    static func weekday(_ date: Date, calendar: Calendar = .current) -> String {
+        formatter("EEEE", calendar).string(from: date)
     }
 
     /// "12th".
@@ -140,8 +148,9 @@ enum HouseRecordDates {
     ///
     /// Nil on a first run or a reinstall: there is no gap to name, so the
     /// header is the greeting alone (B §1). Beyond a week the line names the
-    /// day of the month instead of the weekday — the record runs longer, and
-    /// still counts no days at the person.
+    /// day of the month instead of the weekday, and beyond a month it names
+    /// the month too — "on the 13th" three months later implies this one. No
+    /// branch counts days at the person.
     static func headerLine(lastSeenAt: Date?, now: Date, calendar: Calendar = .current) -> String? {
         guard let lastSeenAt else { return nil }
         let days = calendar.dateComponents(
@@ -149,17 +158,23 @@ enum HouseRecordDates {
             from: calendar.startOfDay(for: lastSeenAt),
             to: calendar.startOfDay(for: now)
         ).day ?? 0
+        if days > longGapDays {
+            return "You were last here on \(short(lastSeenAt, calendar: calendar))"
+        }
         if days > 7 {
             return "You were last here on the \(ordinalDay(lastSeenAt, calendar: calendar))"
         }
-        return "Since you were last here · \(weekdayAndDay(lastSeenAt))"
+        return "Since you were last here · \(weekdayAndDay(lastSeenAt, calendar: calendar))"
     }
+
+    /// Past this the ordinal alone is ambiguous — it reads as this month.
+    static let longGapDays = 30
 
     /// "Nothing moved since Thursday." — and, with no visit on file, the line
     /// that names no day it cannot vouch for.
-    static func movedEmpty(lastSeenAt: Date?) -> String {
+    static func movedEmpty(lastSeenAt: Date?, calendar: Calendar = .current) -> String {
         guard let lastSeenAt else { return "Nothing moved yet." }
-        return "Nothing moved since \(weekday(lastSeenAt))."
+        return "Nothing moved since \(weekday(lastSeenAt, calendar: calendar))."
     }
 
     static let needsYouEmpty = "Nothing needs you right now."
@@ -198,7 +213,6 @@ struct HouseRecordCard: View {
                 .needsYou,
                 eyebrow: "NEEDS YOU",
                 rows: record.needsYou,
-                hasMore: record.hasMoreNeedsYou,
                 empty: HouseRecordDates.needsYouEmpty,
                 isFirst: true
             )
@@ -207,10 +221,11 @@ struct HouseRecordCard: View {
                 .moved,
                 eyebrow: "MOVED",
                 rows: record.moved,
-                hasMore: record.hasMoreMoved,
                 empty: HouseRecordDates.movedEmpty(lastSeenAt: record.lastSeenAt),
                 isFirst: record.needsYou.isEmpty && !drawsEmpties
             )
+
+            seeAllFooter
         }
         .padding(.horizontal, PatinaSpacing.md)
         .padding(.top, 10)
@@ -220,10 +235,55 @@ struct HouseRecordCard: View {
         .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
         .accessibilityIdentifier("DailyRoomView.HouseRecord")
         .onAppear {
-            PostHogService.shared.capture("today_record_shown", properties: [
+            var properties: [String: Any] = [
                 "needs_count": record.needsYou.count,
                 "moved_count": record.moved.count
-            ])
+            ]
+            // The one property that answers whether the return surface is
+            // working. Absent rather than zero where there is no visit on
+            // file: a first run has no gap to measure.
+            if let days = daysSinceLastSeen {
+                properties["days_since_last_seen"] = days
+            }
+            PostHogService.shared.capture("today_record_shown", properties: properties)
+        }
+    }
+
+    private var daysSinceLastSeen: Int? {
+        guard let lastSeenAt = record.lastSeenAt else { return nil }
+        let calendar = Calendar.current
+        return calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: lastSeenAt),
+            to: calendar.startOfDay(for: now)
+        ).day
+    }
+
+    /// M1 draws ONE `See all →`, under both eyebrow groups, with a rule above
+    /// it. Per half it reads as a divider between NEEDS YOU and MOVED rather
+    /// than as the card's footer. It leads with whichever half has more.
+    @ViewBuilder
+    private var seeAllFooter: some View {
+        if record.hasMoreNeedsYou || record.hasMoreMoved {
+            let half: Half = record.hasMoreNeedsYou ? .needsYou : .moved
+            VStack(alignment: .leading, spacing: 0) {
+                Rectangle()
+                    .fill(PatinaColors.pearl)
+                    .frame(height: 1)
+                    .padding(.top, PatinaSpacing.sm)
+                    .accessibilityHidden(true)
+                Button {
+                    onSeeAll(half)
+                } label: {
+                    Text("See all →")
+                        .font(PatinaTypography.uiAction)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("See all")
+            }
         }
     }
 
@@ -232,7 +292,6 @@ struct HouseRecordCard: View {
         _ half: Half,
         eyebrow: String,
         rows: [HouseRecordRow],
-        hasMore: Bool,
         empty: String,
         isFirst: Bool
     ) -> some View {
@@ -272,20 +331,6 @@ struct HouseRecordCard: View {
                                 .accessibilityHidden(true)
                         }
                         HouseRecordRowView(row: row, now: now) { onRow(row) }
-                    }
-                    if hasMore {
-                        Button {
-                            onSeeAll(half)
-                        } label: {
-                            Text("See all →")
-                                .font(PatinaTypography.uiAction)
-                                .foregroundStyle(PatinaColors.Text.interactive)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.top, PatinaSpacing.sm)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("See all")
                     }
                 }
             }

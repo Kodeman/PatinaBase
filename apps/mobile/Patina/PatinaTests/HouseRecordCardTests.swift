@@ -170,4 +170,47 @@ struct HouseRecordCardTests {
         // No visit on file means no weekday to name.
         #expect(HouseRecordDates.movedEmpty(lastSeenAt: nil) == "Nothing moved yet.")
     }
+
+    @Test("past a month the header names the month too, so the day is not this one")
+    func aLongGapNamesTheMonth() {
+        // "You were last here on the 13th" three months later reads as THIS
+        // month's 13th.
+        #expect(HouseRecordDates.headerLine(
+            lastSeenAt: Self.day(5, 13), now: Self.day(8, 26), calendar: Self.calendar
+        ) == "You were last here on May 13")
+        // The ordinal form still holds inside the month.
+        #expect(HouseRecordDates.headerLine(
+            lastSeenAt: Self.day(7, 30), now: Self.day(8, 26), calendar: Self.calendar
+        ) == "You were last here on the 30th")
+    }
+
+    @Test("the ruled date strings do not depend on the device locale")
+    func datesAreFixedFormat() {
+        // A fixed `dateFormat` with the device locale gives "26 août" on a
+        // French phone, mid-English sentence. The formatter is pinned.
+        #expect(HouseRecordDates.short(Self.day(8, 22), calendar: Self.calendar) == "Aug 22")
+        #expect(HouseRecordDates.weekday(Self.day(8, 20), calendar: Self.calendar) == "Thursday")
+        #expect(HouseRecordDates.weekdayAndDay(Self.day(8, 20), calendar: Self.calendar)
+                == "Thu, Aug 20")
+    }
+
+    @Test("See all is one footer under both halves, not one per half")
+    func theFooterIsSingle() throws {
+        let source = try SourcePin.read("Patina/Features/Home/Views/HouseRecordCard.swift")
+        // Exactly one place draws it, and it is not inside `half(...)`.
+        #expect(source.components(separatedBy: "Text(\"See all →\")").count - 1 == 1)
+        #expect(source.contains("private var seeAllFooter"))
+        let half = try #require(source.range(of: "private func half("))
+        let body = String(source[half.lowerBound...])
+        let end = try #require(body.range(of: "// MARK: - One row"))
+        #expect(!String(body[..<end.lowerBound]).contains("See all"))
+    }
+
+    @Test("the record's own event carries the gap it is reporting on")
+    func theShownEventCarriesTheGap() throws {
+        let source = try SourcePin.read("Patina/Features/Home/Views/HouseRecordCard.swift")
+        #expect(source.contains("\"days_since_last_seen\""))
+        #expect(source.contains("\"needs_count\""))
+        #expect(source.contains("\"moved_count\""))
+    }
 }

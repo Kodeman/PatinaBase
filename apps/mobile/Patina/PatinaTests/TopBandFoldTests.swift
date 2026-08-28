@@ -15,29 +15,16 @@ import Foundation
 @MainActor
 struct TopBandFoldTests {
 
-    /// Every file that carried the old modifier, plus the two that own the
-    /// pattern now.
-    private static let files = [
-        "Patina/Design/Components/PatinaScreenChrome.swift",
-        "Patina/Features/Money/MoneyScreenChrome.swift",
-        "Patina/Features/Invoices/Views/InvoiceDetailView.swift",
-        "Patina/Features/Invoices/Views/InvoiceListView.swift",
-        "Patina/Features/Projects/Views/ProjectDetailView.swift",
-        "Patina/Features/Decisions/Views/DecisionDetailView.swift",
-        "Patina/Features/Decisions/Views/DecisionListView.swift",
-        "Patina/Features/Decisions/Views/DecisionDeferSheet.swift",
-        "Patina/Features/Proposals/Views/ProposalDetailView.swift",
-        "Patina/Features/Proposals/Views/ProposalListView.swift",
-        "Patina/Features/Proposals/Views/ProposalSignSheet.swift",
-        "Patina/Features/Budget/BudgetView.swift"
-    ]
-
-    @Test("no call site uses the money screens' own top band any more")
+    @Test("no file in the app uses the money screens' own top band any more")
     func theDuplicateIsGone() throws {
-        for file in Self.files {
-            let source = try SourcePin.read(file)
+        // Every Swift file under the app target, not a list — a thirteenth
+        // file could reintroduce the modifier under a hard-coded twelve.
+        let all = SourcePin.swiftFiles(under: "Patina")
+        #expect(all.count > 100, "the source walk found nothing to check")
+        for path in all {
+            let source = try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8)
             #expect(!source.contains("moneyScreenTopBand"),
-                    "\((file as NSString).lastPathComponent) still uses the folded modifier")
+                    "\((path as NSString).lastPathComponent) still uses the folded modifier")
         }
     }
 
