@@ -42,7 +42,14 @@ import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { MobileMarginChips } from './mobile/mobile-margin-chips';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+} from 'react';
 import {
   deriveLineStamp,
   lineStampLabel,
@@ -67,6 +74,7 @@ import {
 } from '@/lib/document/authorization-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { Stamp } from './stamp';
+import { RowWash, useRowWash, type RowWashTone } from './row-wash';
 import { LineUnfold } from './line-unfold';
 import { StrataMark } from './strata-mark';
 import { StrataMiniRule } from './strata-mini-rule';
@@ -181,6 +189,49 @@ function stampProps(stamp: LineStamp): {
       return { label, color: cfg.color, ink: STAGE_INK[stamp.kind] };
     }
   }
+}
+
+/** The Life Review's stamp contract (Lane 1, `stamp.tsx` on
+ *  `document-life/stamp`): every filled stamp collapses onto one of three
+ *  tones. decision_due and damaged/claim are each their own tone; every
+ *  other kind an FF&E line can wear — ordered, in production, shipped,
+ *  received, delivered, installed, any trade-* progress — reads "ordered". */
+function ffeStampTone(kind: LineStamp['kind']): 'ordered' | 'decision' | 'damaged' {
+  if (kind === 'decision_due') return 'decision';
+  if (kind === 'damaged') return 'damaged';
+  return 'ordered';
+}
+
+/** The hover wash takes the same three-way split, in the wash's own
+ *  vocabulary (FINAL.md §1/§2: golden for decision due, terracotta for
+ *  damaged/claim, clay everywhere else — including no state at all). */
+function ffeWashTone(kind: LineStamp['kind']): RowWashTone {
+  if (kind === 'decision_due') return 'golden';
+  if (kind === 'damaged') return 'terracotta';
+  return 'clay';
+}
+
+/** `Stamp` (./stamp.tsx) does not yet accept `variant`/`tone` — Lane 1 is
+ *  adding them on the sibling branch `document-life/stamp`. Until that
+ *  lands here, pass the props through this typed cast: today `Stamp`
+ *  destructures only `label`/`color`/`ink`/`size` and silently ignores the
+ *  rest, so this renders the existing outline stamp (the documented
+ *  fallback) until Lane 1's `variant="filled"` merges. */
+type FilledStampProps = {
+  label: string;
+  color: string;
+  ink?: string;
+  variant?: 'filled';
+  tone?: 'ordered' | 'decision' | 'damaged';
+};
+const FilledStamp = Stamp as unknown as ComponentType<FilledStampProps>;
+
+/** A non-empty product image URL off the already-joined `product.images`
+ *  (`useProjectFFEItems`'s `.select()` joins `product:products!product_id(id,
+ *  name, images, brand)` — no hook change needed, see build/00-seams-b). */
+function ffeThumbSrc(item: FFERow): string | null {
+  const src = item.product?.images?.[0];
+  return typeof src === 'string' && src.length > 0 ? src : null;
 }
 
 const UNDERWAY = new Set([
@@ -335,32 +386,54 @@ function FFELine({
   const billing = coverageNote(item, coverage);
   const price =
     item.line_total_cents != null ? fmtUsd(item.line_total_cents) : '—';
+  const thumbSrc = ffeThumbSrc(item);
+  const washTone = ffeWashTone(stamp.kind);
+  const rowWash = useRowWash();
 
   const body = (
     <>
-      <div>
-        <p className="text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
-          {item.name}
-          {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
-        </p>
-        {line && (
-          <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>
+      <div className="flex items-center gap-3.5">
+        {thumbSrc ? (
+          <img
+            src={thumbSrc}
+            alt=""
+            loading="lazy"
+            className="h-12 w-12 shrink-0 rounded-[3px] border border-[var(--doc-ink-border)] object-cover"
+          />
+        ) : (
+          <span
+            aria-hidden
+            className="h-12 w-12 shrink-0 rounded-[3px] border border-[var(--doc-ink-border)] bg-[var(--doc-rail-stock)]"
+            style={{
+              backgroundImage:
+                'linear-gradient(to top right, transparent calc(50% - 0.5px), var(--doc-ink-border) calc(50% - 0.5px), var(--doc-ink-border) calc(50% + 0.5px), transparent calc(50% + 0.5px))',
+            }}
+          />
         )}
-        {/* R76: the coverage stamp — the 00187 bridge's per-line truth. */}
-        {billing && (
-          <p
-            className="mt-px font-mono text-[8px] uppercase tracking-[0.08em]"
-            style={{ color: billing.color }}
-          >
-            {billing.text}
+        <div>
+          <p className="row-wash-score text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
+            {item.name}
+            {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
           </p>
-        )}
-        {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
-        {item.added_via === 'engine' && (
-          <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] opacity-70">
-            via the Engine
-          </p>
-        )}
+          {line && (
+            <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>
+          )}
+          {/* R76: the coverage stamp — the 00187 bridge's per-line truth. */}
+          {billing && (
+            <p
+              className="mt-px font-mono text-[8px] uppercase tracking-[0.08em]"
+              style={{ color: billing.color }}
+            >
+              {billing.text}
+            </p>
+          )}
+          {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
+          {item.added_via === 'engine' && (
+            <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] opacity-70">
+              via the Engine
+            </p>
+          )}
+        </div>
       </div>
       {/* Ineligibility is a reason, not a refusal — lowercase mono, exactly
           where the logistics stamp sits. */}
@@ -369,7 +442,13 @@ function FFELine({
           {eligible.reason}
         </span>
       ) : stamp.kind === 'trade_pending' ? null : (
-        <Stamp label={sp.label} color={sp.color} ink={sp.ink} />
+        <FilledStamp
+          label={sp.label}
+          color={sp.color}
+          ink={sp.ink}
+          variant="filled"
+          tone={ffeStampTone(stamp.kind)}
+        />
       )}
       {showAuthorization &&
         (tradeHold.onTradeScope ? (
@@ -391,16 +470,16 @@ function FFELine({
       : showAuthorization
         ? 'grid-cols-[1fr_auto_auto_auto]'
         : 'grid-cols-[1fr_auto_auto]'
-  } ${
-    item.id === highlightId
-      ? 'bg-[rgba(196,165,123,0.08)]'
-      : stamp.kind === 'decision_due'
-        ? 'bg-[rgba(232,197,71,0.05)]'
-        : 'hover:bg-[rgba(196,165,123,0.04)]'
-  }`;
+  } ${item.id === highlightId ? 'bg-[rgba(196,165,123,0.08)]' : ''}`;
 
   return (
-    <li id={`ffe-selection-${item.id}`} className="scroll-mt-24 border-b border-[var(--color-pearl)]">
+    <li
+      id={`ffe-selection-${item.id}`}
+      className="has-wash scroll-mt-24 border-b border-[var(--color-pearl)]"
+      onPointerMove={rowWash.onPointerMove}
+      onPointerEnter={rowWash.onPointerEnter}
+    >
+      <RowWash tone={washTone} />
       {selecting ? (
         // The whole row is the tick while the schedule is a selection surface.
         <label
