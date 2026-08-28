@@ -276,10 +276,25 @@ struct RoomBudgetTests {
         saved("Brass Arc Floor Lamp", cents: 89_000, at: Self.day(8, 25), in: space)
         // Before W4 this cell printed `totalInvestmentCents` under the word
         // Budget — a different number entirely, labelled as something it was not.
-        #expect(RoomGalleryCard.budgetString(for: space) == "—")
+        #expect(RoomGalleryCard.budgetString(for: space) == nil)
 
         space.budgetCents = 900_000
         #expect(RoomGalleryCard.budgetString(for: space) == "$9.0K")
+    }
+
+    @Test("no budget on the Spaces card draws no Budget cell at all — never a dash")
+    func theGalleryCardDropsTheBudgetCellWhenThereIsNone() {
+        let space = room()
+        saved("Brass Arc Floor Lamp", cents: 89_000, at: Self.day(8, 25), in: space)
+
+        let unset = RoomGalleryCard.statCells(for: space)
+        #expect(unset.map(\.label) == ["Items", "Match"])
+        #expect(unset.contains { $0.value == "$890" } == false)
+
+        space.budgetCents = 900_000
+        let set = RoomGalleryCard.statCells(for: space)
+        #expect(set.map(\.label) == ["Items", "Budget", "Match"])
+        #expect(set.first { $0.label == "Budget" }?.value == "$9.0K")
     }
 
     // MARK: - T8 · steward §4a — the saved row's note and its price at save
