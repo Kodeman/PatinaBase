@@ -96,6 +96,17 @@ struct ProductDetailView: View {
         }
     }
 
+    /// The fit line for this piece, or nothing.
+    private func fitLine(for product: Product) -> RoomFitLine? {
+        let rooms = RoomStore(context: modelContext).allRooms()
+        guard let room = RoomFitLine.room(
+            preferredLocalId: viewModel.roomContextLocalId,
+            preferredRemoteId: viewModel.roomContextRemoteId,
+            in: rooms
+        ) else { return nil }
+        return RoomFitLine.make(room: room, product: product)
+    }
+
     /// The room this screen already belongs to — a room-scoped browse, a
     /// Daily Room chip. Resolved through the local store so a screen that
     /// only carries the server's id still writes the local row's room.
@@ -240,6 +251,17 @@ struct ProductDetailView: View {
                         // is null; the screen never prints a placeholder for a
                         // measurement it does not have.
                         specRows(product)
+
+                        // B §5 item 4 / M3 block 8: the room's longest wall
+                        // beside the piece's own width. Two numbers and a full
+                        // stop — no verdict, because the app does not know
+                        // what else is in the room (C5). Drawn only for a room
+                        // measured on the segmented unit control, and only for
+                        // a piece that carries dimensions.
+                        if let fit = fitLine(for: product) {
+                            RoomFitLineView(line: fit)
+                                .padding(.bottom, 16)
+                        }
 
                         // Room-aware "Place in your room" header + spatial pills.
                         // Patina-specific concept — the pills explain why

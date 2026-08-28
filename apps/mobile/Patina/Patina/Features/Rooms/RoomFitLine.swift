@@ -35,6 +35,32 @@ struct RoomFitLine: Equatable {
         )
     }
 
+    /// Which room the piece screen measures against. The room the screen was
+    /// opened from wins; where that room was never measured on the segmented
+    /// control, no other room is substituted for it — quoting the Guest
+    /// Bedroom's wall to somebody looking at the Living Room's picks is worse
+    /// than saying nothing. With no room in context, the most recently updated
+    /// measured room is the one the reader was last working in.
+    static func room(
+        preferredLocalId: UUID?,
+        preferredRemoteId: String?,
+        in rooms: [RoomModel]
+    ) -> RoomModel? {
+        let preferred = rooms.first { room in
+            if let preferredLocalId, room.id == preferredLocalId { return true }
+            if let preferredRemoteId, let remoteId = room.remoteId {
+                return remoteId.caseInsensitiveCompare(preferredRemoteId) == .orderedSame
+            }
+            return false
+        }
+        if let preferred {
+            return preferred.measuredWithUnitControl ? preferred : nil
+        }
+        return rooms
+            .filter(\.measuredWithUnitControl)
+            .max { $0.updatedAt < $1.updatedAt }
+    }
+
     /// The longer of the two floor axes, in feet. The model stores metres.
     static func longestWallFeet(of room: RoomModel) -> Double? {
         let axes = [room.width, room.length].compactMap { $0 }.filter { $0 > 0 }

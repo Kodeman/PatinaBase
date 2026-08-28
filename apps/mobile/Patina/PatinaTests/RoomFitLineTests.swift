@@ -128,4 +128,60 @@ struct RoomFitLineTests {
         let line = RoomFitLine.make(room: room(), product: piece(category: .seating))
         #expect(line?.text == "Your Living Room's longest wall is 18 ft. This piece is 7 ft.")
     }
+
+    // MARK: - Which room (W4 fix round — the mount)
+
+    @Test("the piece screen is where the line draws")
+    func theLineIsMountedOnThePieceScreen() throws {
+        let source = try SourcePin.read("Patina/Features/ProductDetail/Views/ProductDetailView.swift")
+        #expect(source.contains("RoomFitLineView(line: fit)"))
+    }
+
+    @Test("the room the screen was opened from is the one measured against")
+    func theRoomInContextIsPreferred() {
+        let living = room(name: "Living Room")
+        let guestRoom = room(name: "Guest Bedroom")
+        let picked = RoomFitLine.room(
+            preferredLocalId: guestRoom.id, preferredRemoteId: nil, in: [living, guestRoom]
+        )
+        #expect(picked?.name == "Guest Bedroom")
+    }
+
+    @Test("a room in context that was never measured substitutes no other room")
+    func anUnmeasuredRoomInContextSubstitutesNoOtherRoom() {
+        let living = room(name: "Living Room", measured: true)
+        let guestRoom = room(name: "Guest Bedroom", measured: false)
+        let picked = RoomFitLine.room(
+            preferredLocalId: guestRoom.id, preferredRemoteId: nil, in: [living, guestRoom]
+        )
+        #expect(picked == nil)
+    }
+
+    @Test("with no room in context the most recently measured room is used")
+    func theMostRecentlyMeasuredRoomIsUsedWithNoContext() {
+        let older = room(name: "Office")
+        older.updatedAt = Date(timeIntervalSince1970: 1_000)
+        let newer = room(name: "Living Room")
+        newer.updatedAt = Date(timeIntervalSince1970: 2_000)
+        let picked = RoomFitLine.room(preferredLocalId: nil, preferredRemoteId: nil, in: [older, newer])
+        #expect(picked?.name == "Living Room")
+    }
+
+    @Test("no measured room draws nothing")
+    func noMeasuredRoomDrawsNothing() {
+        let unmeasured = room(name: "Office", measured: false)
+        #expect(RoomFitLine.room(preferredLocalId: nil, preferredRemoteId: nil, in: [unmeasured]) == nil)
+    }
+
+    @Test("the room in context can be named by its server id")
+    func theRoomInContextResolvesByRemoteId() {
+        let living = room(name: "Living Room")
+        living.remoteId = "C0000000-0000-4000-8000-000000000001"
+        let picked = RoomFitLine.room(
+            preferredLocalId: nil,
+            preferredRemoteId: "c0000000-0000-4000-8000-000000000001",
+            in: [living]
+        )
+        #expect(picked?.name == "Living Room")
+    }
 }
