@@ -21,11 +21,15 @@
 --      and the decision with its two options, which 00536 destroyed;
 --   4. the client's PII is gone from profiles, replaced by a tombstone;
 --   5. what the client owned is gone — rooms, room scans, saved items,
---      notifications, push tokens, and the threads the client started
---      (including a thread shared with the designer: ruling 2 puts those on
---      the client-owned side — see waves/w2/d-notes.md §3);
---   6. a thread the DESIGNER started survives, with the client's participant
---      row intact and naming the tombstone;
+--      notifications, push tokens, and the threads the client started in which
+--      no designer ever spoke (a shared one included: the designer sitting in
+--      a thread is not the same as her having written in it);
+--   6. the narrowing Fable ruled (integration.md §7 item 3, from
+--      waves/w2/d-notes.md §3): a thread the client started that carries a
+--      DESIGNER-AUTHORED message is KEPT whole, messages and all, and the
+--      client's own messages in it name the tombstone rather than being
+--      scrubbed; and a thread the DESIGNER started survives, with the client's
+--      participant row intact and naming the tombstone;
 --   7. NO trigger was disabled — the assertion 00536 needed because it broke
 --      them and put them back; 00538 must pass it trivially. An ENABLE ALWAYS
 --      trigger is still ALWAYS;
@@ -105,24 +109,43 @@ INSERT INTO public.client_decision_options (id, decision_id, name, sort_order)
 VALUES ('d8070000-0000-4000-8000-000000000001', 'd8060000-0000-4000-8000-000000000001', 'Option A', 0),
        ('d8070000-0000-4000-8000-000000000002', 'd8060000-0000-4000-8000-000000000001', 'Option B', 1);
 
--- Three threads. Two the CLIENT started (one shared with the designer, one
--- where she is the only participant); one the DESIGNER started with the client
--- in it, which must survive. All `project` kind — comms_check_thread_
--- cardinality requires exactly two active participants on `direct` and
--- `vendor_brief` only, so a one-sided direct thread cannot be fixtured.
+-- Four threads, chosen so the narrowed clause is exercised on both sides.
+--   …0001  the CLIENT started, the DESIGNER wrote in it   → KEPT
+--   …0002  the CLIENT started, nobody else in it          → deleted
+--   …0004  the CLIENT started, the designer sits in it but never wrote → deleted
+--   …0003  the DESIGNER started, the client in it         → survives
+-- All `project` kind — comms_check_thread_cardinality requires exactly two
+-- active participants on `direct` and `vendor_brief` only, so a one-sided
+-- direct thread cannot be fixtured.
 INSERT INTO public.comms_threads (id, kind, created_by, project_id)
 VALUES ('d8080000-0000-4000-8000-000000000001', 'project', 'd8000000-0000-4000-8000-000000000001',
         'd8040000-0000-4000-8000-000000000001'),
        ('d8080000-0000-4000-8000-000000000002', 'project', 'd8000000-0000-4000-8000-000000000001',
         'd8040000-0000-4000-8000-000000000001'),
        ('d8080000-0000-4000-8000-000000000003', 'project', 'd8000000-0000-4000-8000-00000000000d',
+        'd8040000-0000-4000-8000-000000000001'),
+       ('d8080000-0000-4000-8000-000000000004', 'project', 'd8000000-0000-4000-8000-000000000001',
         'd8040000-0000-4000-8000-000000000001');
 INSERT INTO public.comms_thread_participants (thread_id, profile_id, role)
 VALUES ('d8080000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-000000000001', 'client'),
        ('d8080000-0000-4000-8000-000000000001', 'd8000000-0000-4000-8000-00000000000d', 'designer'),
        ('d8080000-0000-4000-8000-000000000002', 'd8000000-0000-4000-8000-000000000001', 'client'),
        ('d8080000-0000-4000-8000-000000000003', 'd8000000-0000-4000-8000-000000000001', 'client'),
-       ('d8080000-0000-4000-8000-000000000003', 'd8000000-0000-4000-8000-00000000000d', 'designer');
+       ('d8080000-0000-4000-8000-000000000003', 'd8000000-0000-4000-8000-00000000000d', 'designer'),
+       ('d8080000-0000-4000-8000-000000000004', 'd8000000-0000-4000-8000-000000000001', 'client'),
+       ('d8080000-0000-4000-8000-000000000004', 'd8000000-0000-4000-8000-00000000000d', 'designer');
+
+-- Who actually spoke. This is the whole difference between …0001 and …0004:
+-- the designer sits in both, and wrote in only one.
+INSERT INTO public.comms_messages (id, thread_id, sender_id, body)
+VALUES ('d80f0000-0000-4000-8000-000000000001', 'd8080000-0000-4000-8000-000000000001',
+        'd8000000-0000-4000-8000-000000000001', 'AP client message in the shared thread'),
+       ('d80f0000-0000-4000-8000-000000000002', 'd8080000-0000-4000-8000-000000000001',
+        'd8000000-0000-4000-8000-00000000000d', 'AP designer reply — her record'),
+       ('d80f0000-0000-4000-8000-000000000003', 'd8080000-0000-4000-8000-000000000002',
+        'd8000000-0000-4000-8000-000000000001', 'AP client message, nobody listening'),
+       ('d80f0000-0000-4000-8000-000000000004', 'd8080000-0000-4000-8000-000000000004',
+        'd8000000-0000-4000-8000-000000000001', 'AP client message the designer never answered');
 
 -- An ISSUED invoice: set_invoice_studio_id is one of the guards 00536 had to
 -- disable. 00538 never writes here either.
@@ -277,10 +300,36 @@ BEGIN
                       WHERE id = 'd8080000-0000-4000-8000-000000000002'),
     'a thread with nobody else in it must be deleted';
   ASSERT NOT EXISTS (SELECT 1 FROM public.comms_threads
-                      WHERE id = 'd8080000-0000-4000-8000-000000000001'),
-    'a thread the client started must be deleted even when shared (ruling 2; d-notes §3)';
+                      WHERE id = 'd8080000-0000-4000-8000-000000000004'),
+    'and a thread the client started in which the designer never wrote, even '
+    || 'though she sits in it — presence is not authorship';
+  SELECT count(*) INTO v_count FROM public.comms_messages
+   WHERE thread_id = 'd8080000-0000-4000-8000-000000000002';
+  ASSERT v_count = 0, 'their messages cascade with them, got ' || v_count;
 
-  -- ── 6. a thread the DESIGNER started survives ──
+  -- ── 6. the narrowing: a thread the designer wrote in is KEPT ──
+  -- integration.md §7 item 3. Deleting this one would cascade the designer's
+  -- own words away, which is what ruling 2 exists to prevent.
+  ASSERT EXISTS (SELECT 1 FROM public.comms_threads
+                  WHERE id = 'd8080000-0000-4000-8000-000000000001'),
+    'a thread the client started that carries a designer-authored message must be KEPT';
+  SELECT count(*) INTO v_count FROM public.comms_messages
+   WHERE thread_id = 'd8080000-0000-4000-8000-000000000001';
+  ASSERT v_count = 2,
+    'whole — both messages, hers and the client''s, got ' || v_count;
+  SELECT m.sender_id INTO v_owner FROM public.comms_messages m
+   WHERE m.id = 'd80f0000-0000-4000-8000-000000000001';
+  ASSERT v_owner = u_client,
+    'the client''s message keeps its author, because that author is now a tombstone';
+  SELECT p.display_name INTO v_text FROM public.profiles p WHERE p.id = v_owner;
+  ASSERT v_text = 'Former client',
+    'and reading that author gives the tombstone, not a person, got ' || COALESCE(v_text, '<null>');
+  SELECT count(*) INTO v_count FROM public.comms_thread_participants
+   WHERE thread_id = 'd8080000-0000-4000-8000-000000000001';
+  ASSERT v_count = 2,
+    'with both participants still on it, got ' || v_count;
+
+  -- and a thread the DESIGNER started survives, as it always did
   ASSERT EXISTS (SELECT 1 FROM public.comms_threads
                   WHERE id = 'd8080000-0000-4000-8000-000000000003'),
     'a thread the designer started must survive';
@@ -314,7 +363,7 @@ BEGIN
   ASSERT v_detached->'deleted'->>'public.rooms' = '1',
     'and the room';
   ASSERT v_detached->'deleted'->>'public.comms_threads' = '2',
-    'and both threads the client started';
+    'and both threads it was allowed to delete — not the one the designer wrote in';
   ASSERT v_detached->'tombstoned_profile' = to_jsonb(u_client),
     'and name the profile it tombstoned';
   SELECT p.email INTO v_text FROM public.client_account_purges p WHERE p.id = v_purge;

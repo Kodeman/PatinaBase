@@ -53,7 +53,9 @@
 --      erase her book of business rather than detach a person from it;
 --   2. replaces the PII on the client's profiles row with a tombstone;
 --   3. deletes the client-owned artefacts. Ruling 2 names four — rooms, room
---      scans, saved items, and the threads the client started. The rest of the
+--      scans, saved items, and the threads the client started, that last one
+--      NARROWED by Fable (integration.md §7 item 3) to the threads no designer
+--      has spoken in; see step 2 below. The rest of the
 --      list below is what USED to vanish through the auth.users → profiles
 --      cascade when the delete was hard: with the profile now surviving,
 --      nothing cascades, so not deleting them would leave the person's data
@@ -62,6 +64,9 @@
 --        · public.profiles                — it is the tombstone;
 --        · public.designer_clients        — the roster row is what keeps the
 --          decision record alive; that is the whole point of ruling 2;
+--        · a thread the client started that carries a designer-authored
+--          message — it is her record too, and cascading it would take her
+--          words with it (see step 2);
 --        · public.comms_thread_participants — removing the leaver from a
 --          thread the DESIGNER started would break comms_participants_
 --          cardinality (a deferred constraint trigger) and rewrite her
@@ -198,12 +203,33 @@ BEGIN
          email_suppressed_at       = COALESCE(email_suppressed_at, now())
    WHERE id = p_user_id;
 
-  -- ── 2. the threads the client started ──
-  -- Ruling 2 puts these on the client-owned side. Participants and messages
-  -- cascade from comms_threads. Threads the DESIGNER started are untouched;
-  -- the client's participant row on those now names the tombstone.
+  -- ── 2. the threads the client started, minus the ones she does not own alone ──
+  -- Ruling 2 puts these on the client-owned side; Fable narrowed the clause
+  -- (integration.md §7 item 3, from d-notes §3): a thread is the client's alone
+  -- only while no designer has spoken in it. One that carries a designer-
+  -- authored message is HER record too, and cascading it would take her words
+  -- with it — the one thing ruling 2's own headline forbids. That thread is
+  -- kept whole.
+  --
+  -- Nothing inside a kept thread is scrubbed, because nothing in it names the
+  -- person any more: comms_messages.sender_id references profiles(id), and that
+  -- row survived step 1 as the tombstone, so the client's messages already read
+  -- as 'Former client'. Their bodies are the designer's conversation.
+  --
+  -- Participants and messages cascade from the threads that ARE deleted.
+  -- Threads the DESIGNER started are untouched, as before; the client's
+  -- participant row on those now names the tombstone.
   WITH gone AS (
-    DELETE FROM public.comms_threads WHERE created_by = p_user_id RETURNING id)
+    DELETE FROM public.comms_threads t
+     WHERE t.created_by = p_user_id
+       AND NOT EXISTS (
+             SELECT 1
+               FROM public.comms_messages m
+               JOIN public.profiles pr ON pr.id = m.sender_id
+              WHERE m.thread_id = t.id
+                AND m.sender_id <> p_user_id
+                AND pr.is_designer)
+    RETURNING t.id)
   SELECT COALESCE(array_agg(id), '{}'::uuid[]) INTO v_threads FROM gone;
   IF array_length(v_threads, 1) IS NOT NULL THEN
     v_deleted := v_deleted || jsonb_build_object(
@@ -291,4 +317,4 @@ REVOKE ALL ON FUNCTION public.purge_client_account(uuid)
 GRANT EXECUTE ON FUNCTION public.purge_client_account(uuid) TO service_role;
 
 COMMENT ON FUNCTION public.purge_client_account(uuid) IS
-  'SP-20 / App Store 5.1.1(v) / W1b ruling 2: closes a CLIENT account by anonymizing rather than cascading. Replaces the PII on the client''s profiles row with a tombstone, deletes what the person owned (rooms, scans, saved items, the threads they started, and the rest of the former profiles-cascade set), and journals it into client_account_purges — reusing an open row (and merging into it, never overwriting) so a retry does not read as a second interrupted closure nor erase the first pass''s tally. Writes NOTHING to proposals, projects, invoices, client_decisions or designer_clients: with the profile surviving, every designer-owned leg still names the tombstone, so the designer''s record — the decision included — stays whole. No trigger is disabled and no ACCESS EXCLUSIVE is taken (00536 needed both; see the 00538 banner). Refuses a designer id outright. The auth user is detached by the delete-account edge function through GoTrue''s SOFT admin delete, which obfuscates the login and leaves profiles standing. service_role only.';
+  'SP-20 / App Store 5.1.1(v) / W1b ruling 2: closes a CLIENT account by anonymizing rather than cascading. Replaces the PII on the client''s profiles row with a tombstone, deletes what the person owned (rooms, scans, saved items, the threads they started in which no designer ever spoke, and the rest of the former profiles-cascade set), and journals it into client_account_purges — reusing an open row (and merging into it, never overwriting) so a retry does not read as a second interrupted closure nor erase the first pass''s tally. Writes NOTHING to proposals, projects, invoices, client_decisions or designer_clients: with the profile surviving, every designer-owned leg still names the tombstone, so the designer''s record — the decision included — stays whole. No trigger is disabled and no ACCESS EXCLUSIVE is taken (00536 needed both; see the 00538 banner). Refuses a designer id outright. The auth user is detached by the delete-account edge function through GoTrue''s SOFT admin delete, which obfuscates the login and leaves profiles standing. service_role only.';
