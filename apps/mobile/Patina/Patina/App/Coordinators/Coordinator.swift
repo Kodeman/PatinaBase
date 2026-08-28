@@ -111,6 +111,15 @@ public enum AppRoute: Hashable {
     case budget                                       // client: budget overview
     case documentList                                 // client: shared documents
 
+    // W5 — "where is it" (Q6, direction B §5 / M8). One list over BOTH rails:
+    // the piece the client bought (`direct_orders`) and the piece her designer
+    // bought for her (`fulfillment_orders`).
+    case orderList                                    // client: Studio → Ordered
+    /// `orderId` is a PREFIXED token — `"fulfillment:<uuid>"` / `"direct:<uuid>"`
+    /// (`ClientOrder.id`). Two rails are two tables, and a bare uuid cannot say
+    /// which one a row came from.
+    case orderDetail(orderId: String)
+
     /// Display name for the route. Used for debugging / companion context.
     ///
     /// NOTE (PT-3-5): the PostHog *screen name* for the scan flow is the
@@ -153,6 +162,9 @@ public enum AppRoute: Hashable {
         case .invoiceDetail: return "Invoice"
         case .budget: return "Budget"
         case .documentList: return "Documents"
+        // C4: the canonical name of the door is the word on the Studio row.
+        case .orderList: return "Ordered"
+        case .orderDetail: return "Order"
         }
     }
 }

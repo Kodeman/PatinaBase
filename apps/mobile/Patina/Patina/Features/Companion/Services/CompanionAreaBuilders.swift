@@ -235,6 +235,8 @@ extension CompanionActionProvider {
             return messageItems(screen, context: context)
         case .documentList:
             return documentItems()
+        case .orderList, .orderDetail:
+            return orderItems(screen, context: context)
         case .notifications:
             return notificationItems(context: context)
         default: // .designerConsultation, .designRequests
@@ -301,6 +303,31 @@ extension CompanionActionProvider {
             projectsRow(suggested: true),
             messageDesignerRow(label: "Messages", hint: "Your conversations"),
             proposalsRow()
+        ]
+    }
+
+    /// W5 — the two order screens. Without an arm of their own they fell to
+    /// `default:` and were handed the *designer-request* rows, which is the
+    /// wrong conversation entirely for someone looking at a sofa in transit.
+    ///
+    /// No "Ordered" row is added to `.studio`'s own list: C8's cap is six rows
+    /// INCLUDING the provider's tail, and `.studio` already sits at six for a
+    /// guest (see `studioItems`). The Ordered door is the Studio hub's own row.
+    static func orderItems(
+        _ screen: AppRoute,
+        context: CompanionContext
+    ) -> [CompanionActionItem] {
+        if case .orderDetail = screen {
+            return [
+                messageDesignerRow(label: "Message your designer", suggested: true),
+                ordersRow(),
+                projectsRow()
+            ]
+        }
+        return [
+            messageDesignerRow(label: "Message your designer", suggested: true),
+            projectsRow(),
+            invoicesRow(label: "Invoices")
         ]
     }
 

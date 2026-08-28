@@ -72,6 +72,12 @@ extension CompanionActionProvider {
              route: .proposalList, id: "proposals", suggested: suggested)
     }
 
+    /// W5 — "where is it". Canonical name (C4): the word on the Studio row.
+    static func ordersRow(suggested: Bool = false) -> CompanionActionItem {
+        item("shippingbox", "Ordered", "Where your pieces are",
+             route: .orderList, id: "orders", suggested: suggested)
+    }
+
     static func invoicesRow(label: String, suggested: Bool = false) -> CompanionActionItem {
         item("creditcard", label, "What's due", route: .invoiceList, id: "invoices", suggested: suggested)
     }

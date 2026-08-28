@@ -136,7 +136,10 @@ enum CompanionActionProvider {
             return styleItems(screen, context: context)
         case .studio, .projectList, .projectDetail, .decisionList, .decisionDetail,
              .threadList, .threadDetail, .documentList, .notifications,
-             .designerConsultation, .designRequests:
+             .designerConsultation, .designRequests,
+             // W5: the two order screens get their own arm inside
+             // `studioItems` — an order is Studio work, not money-rail work.
+             .orderList, .orderDetail:
             return studioItems(screen, context: context)
         case .proposalList, .proposalDetail, .invoiceList, .invoiceDetail, .budget:
             return moneyRailItems(screen, context: context)
