@@ -37,8 +37,16 @@ function stylesheets(dir: string, out: string[] = []): string[] {
 function tsxFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) tsxFiles(full, out);
-    else if (entry.name.endsWith('.tsx')) out.push(full);
+    if (entry.isDirectory()) {
+      if (entry.name === '__tests__') continue;
+      tsxFiles(full, out);
+    } else if (
+      entry.name.endsWith('.tsx') &&
+      !entry.name.endsWith('.test.tsx') &&
+      !entry.name.endsWith('.spec.tsx')
+    ) {
+      out.push(full);
+    }
   }
   return out;
 }

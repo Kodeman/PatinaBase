@@ -220,9 +220,7 @@ describe('StudioDrawer — the elevation gate (R126)', () => {
     render(<StudioDrawer />);
 
     const bar = screen.getByRole('navigation', { name: 'Studio drawer' });
-    // Assembled, not written out: shadow-gate.test.ts counts every .tsx that
-    // names the class, and this file is a witness, not a wearer.
-    expect(bar.className).toContain(['doc', 'elevated'].join('-'));
+    expect(bar.className).toContain('doc-elevated');
     expect(bar.className).not.toMatch(/(^|[\s:])(drop-)?shadow-/);
   });
 });

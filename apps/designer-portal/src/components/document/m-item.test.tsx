@@ -13,11 +13,6 @@ const SOURCE = readFileSync(join(__dirname, 'm-item.tsx'), 'utf8');
 
 const ACCENT = { border: 'var(--color-dusty-blue)', label: 'var(--color-dusty-blue)' };
 
-/** Assembled rather than written out: shadow-gate.test.ts counts every .tsx
- *  under components/ that names the elevation class, and a test that asserts
- *  a component does NOT wear it must not read as a fourth wearer. */
-const ELEVATED = ['doc', 'elevated'].join('-');
-
 describe('MItem', () => {
   it('prints the paper card on the sheet, unlifted', () => {
     const { container } = render(
@@ -29,7 +24,7 @@ describe('MItem', () => {
       'bg-[var(--doc-paper)]',
       'rounded-[4px]',
     );
-    expect(chip).not.toHaveClass(ELEVATED);
+    expect(chip).not.toHaveClass('doc-elevated');
   });
 
   it('prints the kind line mono at 11px', () => {
@@ -51,7 +46,7 @@ describe('MItem', () => {
     const { container } = render(
       <MItem kindLine="Vendor · Aug 13" title="Crate has landed" accent={ACCENT} tone="dark" />,
     );
-    expect(container.firstElementChild).not.toHaveClass(ELEVATED);
+    expect(container.firstElementChild).not.toHaveClass('doc-elevated');
   });
 
   it('writes no shadow of any kind (D4)', () => {

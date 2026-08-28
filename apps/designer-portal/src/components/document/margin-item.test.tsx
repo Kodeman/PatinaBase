@@ -2,11 +2,6 @@ import { render, screen } from '@testing-library/react';
 import { MarginItem } from './margin-item';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 
-/** Assembled rather than written out: shadow-gate.test.ts counts every .tsx
- *  under components/ that names the elevation class, and this file is a
- *  witness, not a wearer. */
-const ELEVATED = ['doc', 'elevated'].join('-');
-
 const row = (overrides: Partial<MarginItemRow> = {}) =>
   ({
     kind: 'pulse',
@@ -51,13 +46,13 @@ describe('MarginItem', () => {
 
     const chip = container.firstElementChild as HTMLElement;
     expect(chip).toHaveClass(
-      ELEVATED,
+      'doc-elevated',
       'bg-[var(--doc-paper)]',
       'border-[var(--doc-ink-border)]',
       'rounded-[4px]',
     );
     // D4: elevation arrives only through the token's own class.
-    expect(chip.className.replace(ELEVATED, '')).not.toMatch(/shadow/);
+    expect(chip.className.replace('doc-elevated', '')).not.toMatch(/shadow/);
   });
 
   it('claims no unfold state when no onToggle makes it expandable', () => {
