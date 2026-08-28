@@ -241,7 +241,6 @@ public final class CompanionViewModel { // swiftlint:disable:this type_body_leng
         case .invoiceDetail: return "invoice_detail"
         case .budget: return "budget"
         case .documentList: return "document_list"
-        case .orderDetail: return "order_detail"
         }
     }
 

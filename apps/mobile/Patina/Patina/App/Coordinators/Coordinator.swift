@@ -111,12 +111,6 @@ public enum AppRoute: Hashable {
     case budget                                       // client: budget overview
     case documentList                                 // client: shared documents
 
-    // W5 — the order, after (Q6). One order over both rails: the client's own
-    // `direct_orders` row and the `fulfillment_orders` row it becomes at
-    // settle. The case is minted here because two lanes reach it — the
-    // purchase flow's "See your order" and the Studio's Ordered row.
-    case orderDetail(orderId: String)
-
     /// Display name for the route. Used for debugging / companion context.
     ///
     /// NOTE (PT-3-5): the PostHog *screen name* for the scan flow is the
@@ -159,7 +153,6 @@ public enum AppRoute: Hashable {
         case .invoiceDetail: return "Invoice"
         case .budget: return "Budget"
         case .documentList: return "Documents"
-        case .orderDetail: return "Order"
         }
     }
 }

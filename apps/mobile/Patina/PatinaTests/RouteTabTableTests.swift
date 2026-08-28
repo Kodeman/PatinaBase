@@ -70,8 +70,7 @@ struct RouteTabTableTests {
         (.invoiceList, .studio),
         (.invoiceDetail(invoiceId: "invoice-1"), .studio),
         (.budget, .studio),
-        (.documentList, .studio),
-        (.orderDetail(orderId: "order-1"), .studio)
+        (.documentList, .studio)
     ]
 
     // MARK: - The table
@@ -88,15 +87,14 @@ struct RouteTabTableTests {
 
     @Test
     func everyRouteCaseIsCovered() {
-        // 33 `AppRoute` cases — 31, plus `.studio` (W3-fix, so the Studio tab
-        // stops reporting Profile's screen name) and `.orderDetail` (W5, the
-        // order over both rails). `.emergence` appears twice (both payload
-        // shapes) and `.scanFlow` three times (every reason), so 36 rows in
-        // all. The steward's inventory tallies Today 1 · Spaces 8 · Pieces 6 ·
-        // Studio 16 over distinct cases at the base sha; Studio is 18 now, and
-        // the Spaces count here is 11 because scanFlow's three reasons and
-        // arPlacement are each pinned.
-        #expect(Self.expected.count == 36)
+        // 32 `AppRoute` cases — 31, plus `.studio`, minted in W3-fix so the
+        // Studio tab stops reporting Profile's screen name. `.emergence`
+        // appears twice (both payload shapes) and `.scanFlow` three times
+        // (every reason), so 35 rows in all. The steward's inventory tallies
+        // Today 1 · Spaces 8 · Pieces 6 · Studio 16 over distinct cases at the
+        // base sha; Studio is 17 now, and the Spaces count here is 11 because
+        // scanFlow's three reasons and arPlacement are each pinned.
+        #expect(Self.expected.count == 35)
         let today = Self.expected.filter { $0.1 == .today }.count
         let spaces = Self.expected.filter { $0.1 == .spaces }.count
         let pieces = Self.expected.filter { $0.1 == .pieces }.count
@@ -104,7 +102,7 @@ struct RouteTabTableTests {
         #expect(today == 1)
         #expect(spaces == 11)
         #expect(pieces == 6)
-        #expect(studio == 18)
+        #expect(studio == 17)
     }
 
     /// A new `AppRoute` case must fail to compile in `tab(for:)`, not fall

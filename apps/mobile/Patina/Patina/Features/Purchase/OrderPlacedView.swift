@@ -28,7 +28,15 @@ struct OrderPlacedView: View {
     let responsibilityParagraph: String?
     let contactLine: String?
     let soldBy: String
-    let onSeeOrder: (String) -> Void
+    /// Whether the session actually collected delivery and tax. Passed from
+    /// the terms the screen already read — the mock's "· total with delivery
+    /// and tax" is printed only where that is true.
+    let taxShippingEnabled: Bool
+    /// Given the direct-order id. `nil` where no order destination exists yet
+    /// — the control is then not drawn at all rather than pushed at a screen
+    /// that would tell a person who paid ninety seconds ago that we cannot
+    /// find their order.
+    let onSeeOrder: ((String) -> Void)?
     let onBackToToday: () -> Void
 
     @State private var pushAuthorized = false
@@ -46,7 +54,7 @@ struct OrderPlacedView: View {
                 .padding(.bottom, 12)
                 .accessibilityIdentifier("OrderPlaced.Title")
 
-            Text(Self.summaryLine(order))
+            Text(Self.summaryLine(order, taxShippingEnabled: taxShippingEnabled))
                 .font(PatinaTypography.body)
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -77,12 +85,17 @@ struct OrderPlacedView: View {
             Spacer(minLength: 0)
 
             VStack(spacing: 6) {
-                PatinaButton("See your order", style: .primary) { onSeeOrder(order.id) }
-                    .accessibilityIdentifier("OrderPlaced.SeeOrder")
-                Button("Back to Today") { onBackToToday() }
-                    .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.Text.interactive)
-                    .accessibilityIdentifier("OrderPlaced.BackToToday")
+                if let onSeeOrder {
+                    PatinaButton("See your order", style: .primary) { onSeeOrder(order.id) }
+                        .accessibilityIdentifier("OrderPlaced.SeeOrder")
+                    Button("Back to Today") { onBackToToday() }
+                        .font(PatinaTypography.uiSmall)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .accessibilityIdentifier("OrderPlaced.BackToToday")
+                } else {
+                    PatinaButton("Back to Today", style: .primary) { onBackToToday() }
+                        .accessibilityIdentifier("OrderPlaced.BackToToday")
+                }
             }
             .frame(maxWidth: .infinity)
         }
@@ -126,7 +139,9 @@ struct OrderPlacedView: View {
     /// session actually took. The mock's trailing "total with delivery and tax"
     /// is printed only where the server says those were collected; where it
     /// does not, naming them would be the same untruth the order sheet refuses.
-    static func summaryLine(_ order: DirectOrder, taxShippingEnabled: Bool = false) -> String {
+    /// No default: the caller holds the terms, and a defaulted `false` is how
+    /// the enabled branch became unreachable from the app in the first place.
+    static func summaryLine(_ order: DirectOrder, taxShippingEnabled: Bool) -> String {
         let base = "\(order.productName) · \(order.formattedTotal)"
         return taxShippingEnabled ? "\(base) · total with delivery and tax" : base
     }

@@ -140,7 +140,7 @@ enum CompanionActionProvider {
             return styleItems(screen, context: context)
         case .studio, .projectList, .projectDetail, .decisionList, .decisionDetail,
              .threadList, .threadDetail, .documentList, .notifications,
-             .designerConsultation, .designRequests, .orderDetail:
+             .designerConsultation, .designRequests:
             return studioItems(screen, context: context)
         case .proposalList, .proposalDetail, .invoiceList, .invoiceDetail, .budget:
             return moneyRailItems(screen, context: context)

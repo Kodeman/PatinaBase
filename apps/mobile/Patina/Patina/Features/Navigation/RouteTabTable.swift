@@ -68,10 +68,7 @@ public struct RouteTabTable {
              .invoiceList,
              .invoiceDetail,
              .budget,
-             .documentList,
-             // An order is work on the job, whoever bought the piece — it
-             // belongs beside the invoices, not in the catalogue.
-             .orderDetail:
+             .documentList:
             return .studio
         }
     }
