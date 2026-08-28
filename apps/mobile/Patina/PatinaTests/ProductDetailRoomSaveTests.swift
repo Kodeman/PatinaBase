@@ -212,4 +212,20 @@ struct ProductDetailRoomSaveTests {
         #expect(source.contains("AddToRoomSheet("))
         #expect(source.contains("viewModel.addToRoom("))
     }
+
+    /// A second `sheet(isPresented:)` on one chain is the defect this wave
+    /// already hit on `RoomProjectView`, and the one that loses is the older
+    /// presentation — here, the `?` help panel that has been on this screen
+    /// since long before the room picker arrived. One driver, both sheets.
+    @Test("the piece screen presents one sheet at a time")
+    func thePieceScreenHasOneSheetDriver() throws {
+        let source = try SourcePin.read("Patina/Features/ProductDetail/Views/ProductDetailView.swift")
+        #expect(source.contains("sheet(item: $presented)"))
+        #expect(source.contains(".sheet(isPresented:") == false)
+        #expect(source.contains(".helpPanel(") == false)
+        // Both routes still exist, and both still reach a sheet.
+        #expect(source.contains("presented = .help"))
+        #expect(source.contains("presented = .roomPicker"))
+        #expect(source.contains("HelpPanelSheet("))
+    }
 }

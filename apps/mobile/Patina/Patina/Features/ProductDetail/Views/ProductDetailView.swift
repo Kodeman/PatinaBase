@@ -14,13 +14,27 @@ struct ProductDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ProductDetailViewModel()
 
-    /// Drives the contextual help-panel sheet for the Product Detail surface.
-    /// Triggered by the `?` floating button in the top bar.
-    @State private var isHelpPanelPresented: Bool = false
+    /// One presentation, not two. This screen carried `.helpPanel` — itself a
+    /// `sheet(isPresented:)` — and then a second `.sheet` for the room picker;
+    /// a second sheet on one chain is the defect `RoomProjectView` already hit
+    /// in this wave (`waves/w4/h1-notes.md`), and the one that loses is the
+    /// older `?`. Both go through one `item:` binding, as they do there.
+    enum Presented: Identifiable {
+        case help
+        case roomPicker
 
-    /// SP-11: the rooms `Add to Room` can offer, and whether it is asking.
+        var id: String {
+            switch self {
+            case .help: return "help"
+            case .roomPicker: return "roomPicker"
+            }
+        }
+    }
+
+    @State private var presented: Presented?
+
+    /// SP-11: the rooms `Add to Room` can offer.
     @State private var roomOptions: [RoomSummary] = []
-    @State private var isChoosingRoom = false
 
     /// Product ID to load (from navigation)
     var productId: String?
@@ -49,13 +63,6 @@ struct ProductDetailView: View {
         }
         .background(PatinaColors.Background.primary)
         .toolbar(.hidden, for: .navigationBar)
-        // Contextual help panel — `?` floating button in the top bar
-        // toggles `isHelpPanelPresented`. Empty state ships until Sanity
-        // authoring catches up (Sprint 2 expectation).
-        .helpPanel(
-            isPresented: $isHelpPanelPresented,
-            surfaceKey: SurfaceKeys.IOSApp.ProductDetail.root
-        )
         .task {
             viewModel.attachRoomContext(
                 localId: roomLocalId,
@@ -71,27 +78,40 @@ struct ProductDetailView: View {
             roomOptions = RoomStore(context: modelContext).allRooms().map(RoomSummary.init(from:))
             viewModel.trackView()
         }
-        .sheet(isPresented: $isChoosingRoom) {
-            if let product = displayProduct {
-                AddToRoomSheet(
-                    product: product,
-                    rooms: roomOptions,
-                    onSelect: { summary in
-                        isChoosingRoom = false
-                        let store = RoomStore(context: modelContext)
-                        guard let room = store.room(id: summary.id) else { return }
-                        viewModel.addToRoom(
-                            localId: room.id,
-                            remoteId: room.remoteId,
-                            context: modelContext
-                        )
-                        roomOptions = store.allRooms().map(RoomSummary.init(from:))
-                    },
-                    onNewRoom: {
-                        isChoosingRoom = false
-                        coordinator.navigate(to: .manualRoomEntry)
-                    }
+        .sheet(item: $presented) { which in
+            switch which {
+            case .help:
+                // Empty state ships until Sanity authoring catches up
+                // (Sprint 2 expectation).
+                HelpPanelSheet(
+                    surfaceKey: SurfaceKeys.IOSApp.ProductDetail.root,
+                    isPresented: Binding(
+                        get: { presented == .help },
+                        set: { if !$0 { presented = nil } }
+                    )
                 )
+            case .roomPicker:
+                if let product = displayProduct {
+                    AddToRoomSheet(
+                        product: product,
+                        rooms: roomOptions,
+                        onSelect: { summary in
+                            presented = nil
+                            let store = RoomStore(context: modelContext)
+                            guard let room = store.room(id: summary.id) else { return }
+                            viewModel.addToRoom(
+                                localId: room.id,
+                                remoteId: room.remoteId,
+                                context: modelContext
+                            )
+                            roomOptions = store.allRooms().map(RoomSummary.init(from:))
+                        },
+                        onNewRoom: {
+                            presented = nil
+                            coordinator.navigate(to: .manualRoomEntry)
+                        }
+                    )
+                }
             }
         }
     }
@@ -155,7 +175,7 @@ struct ProductDetailView: View {
                             // a sheet listing every help article for this
                             // surface (`ios-app/product-detail`).
                             Button {
-                                isHelpPanelPresented = true
+                                presented = .help
                             } label: {
                                 floatingCircleButton(icon: "questionmark")
                             }
@@ -399,7 +419,7 @@ struct ProductDetailView: View {
                 } else if let room = contextRoom() {
                     viewModel.addToRoom(localId: room.id, remoteId: room.remoteId, context: modelContext)
                 } else if !roomOptions.isEmpty {
-                    isChoosingRoom = true
+                    presented = .roomPicker
                 } else {
                     viewModel.toggleSave(context: modelContext)
                 }
