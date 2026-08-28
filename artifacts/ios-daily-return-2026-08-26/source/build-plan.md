@@ -188,6 +188,17 @@ Sep 1) and MOVED with dates; Leah's seat with Message; her project rooms; the st
 two-weeks header after a last-seen manipulation; James sees "Leah Hartwell picked up your request";
 Walt/Maya see true rows or nothing; Studio control shows the count; dark + XXL.
 
+### W2 — DONE 2026-08-27 (merged; `waves/w2/`; 980 tests; 00537 + 00538 on main)
+The Record is live on Today at every tier (sim-verified on live local data); the App Group is
+compile-green only on the ad-hoc build. Carry-overs: **W3** — the XXL Companion-orb overlap on Today
+and Budget (ruled to the bar); the seat's line duplicating the Next Move at engaged (N3 or W4).
+**W4** — the designer seat picks `projects.first` by `updated_at`; it must pick the project carrying
+the most urgent NEEDS YOU item, else the most recently updated active project (walk finding);
+`Leah added two pieces to the proposal.` has no producer (a proposal-revision event, W4 or later);
+the story card's publish date chip (needs `DailyStory.publishedAt` in Core/Models). **Kody** —
+`designer_clients.client_name/email` are not scrubbed on closure (retention policy);
+the "· due Sep 1" vs "· Sep 1" state wording (one word).
+
 ### W3 — Navigation (R2; B-1/B-2/B-7/B-8; behind `house-first`; base = main after W2)
 - N1 root + routing (Opus xhigh): `PatinaTabBar` (Today · Spaces · Pieces · Studio + Companion
   trailing slot; VoiceOver labels = canonical names; 83 pt), four `NavigationStack`s under one root,

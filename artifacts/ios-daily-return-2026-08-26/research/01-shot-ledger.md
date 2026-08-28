@@ -701,3 +701,113 @@ ruling 1's "the orb yields."
 
 Simulator restored to Dynamic Type medium and left signed in as `client@patina.dev` on the Daily
 Room after the re-check.
+
+## w2-r2
+
+Lane R2 (the Record UI), sim pass on its own clone `dr-w2-r2`
+`0B472471-1E2E-4C04-825A-8668695264C1` (iPhone 17 Pro, 402×874 pt), local stack (migrations through
+00538), app launched with `-DeploymentTarget local`. Build: `xcodebuild` Debug, **no**
+`CODE_SIGNING_ALLOWED=NO` — entitlements intact; the in-app version stamp read `3b252ab1` for shots
+01–05 and the branch head `6b96a87a9` thereafter. Three accounts walked: guest ("Look around
+first"), `client@patina.dev` (activeProject), `james.okafor@example.com` (engaged). OTP codes read
+out of the local mail server (`:54324/api/v1/messages`), as `research/04-stack-restart.md` §3(c)
+describes.
+
+**Verdict: PASS on every item the lane brief names.** The record draws nothing at guest, draws its
+truthful empties at engaged, and draws dated NEEDS YOU / MOVED rows at activeProject; the Studio
+control carries the one attention count; dark and Dynamic Type XXL are clean.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w2-r2-01-guest-light.png` | Today, guest, light | `THURSDAY · AUG 27` over `Good evening.` (TimeOfDay), bell, `?`, the labelled `Studio` control with **no** count. **The record is not drawn at all** — an empty record at guest draws nothing (synthesis §5). Next Move takes the second slot, then `YOUR HOUSE / Start with a room` with **Type the dimensions first, Scan it second**, the story at hero weight, and the one quiet line `Sign in to keep this on every device.` `NEW THIS WEEK` absent (below the three-row floor) |
+| `w2-r2-02-guest-dark.png` | same, dark | Identical composition on `#211E1B`; no light band anywhere |
+| `w2-r2-03-activeproject-light.png` | Today, `client@patina.dev`, light | The record: `NEEDS YOU` — `Your invoice is due.` / `$4,250.00 · DUE SEP 1`; `Leah Hartwell sent a proposal to review.` / `BY SEP 10`; **`Leah asked about Dining chairs - Shaker Oak vs Windsor Elm.`** / `BY SEP 1` (MJ-5's ruled copy, live); `See all →`; `MOVED` — `A new story from the workshop.` / `AUG 26`. Then the seat (`Leah Hartwell · Birch Hollow` + `Message`), `YOUR HOUSE` with the **project's** rooms `Dining Room` / `Living Room` read from `project_rooms`, and the story demoted below. `Studio 5` |
+| `w2-r2-04-activeproject-dark.png` | same, dark | Same, dark ground, `pearl` hairlines, no white band on the room cards |
+| `w2-r2-05-activeproject-xxl.png` | same, Dynamic Type XXL | Every row wraps, no clipping: the invoice row's state wraps to two lines, the decision title to three, `See all →` and both eyebrows intact |
+| `w2-r2-06-engaged-light.png` | Today, `james.okafor@example.com`, light | `NEEDS YOU` → **`Nothing needs you right now.`** (the truthful empty, drawn because the tier is engaged); `MOVED` → `Leah Hartwell picked up your request.` / `AUG 27` — the fact the app hid before — and `A new story from the workshop.` / `AUG 25`. Next Move keeps the second slot (nothing needs him). Seat + `Message`. `Studio` with no count |
+| `w2-r2-07-engaged-dark.png` | same, dark | Same |
+| `w2-r2-08-engaged-xxl.png` | same, XXL | Same, wrapped, nothing clipped |
+| `w2-r2-09-two-weeks-header-new-ticks.png` | Today, engaged, last visit forced to Aug 13 | The long-gap header **`YOU WERE LAST HERE ON THE 13TH`** — no count of days — and both MOVED rows now carrying the clay `· NEW` tick, because both postdate that visit |
+
+Method note for shot 09: the last-visit stamp lives in the **App Group** suite, and on this
+simulator the App Group container *is* honoured (`.../Containers/Shared/AppGroup/6E95EB57-…/`
+holds both `house-record.json` and `group.cloud.patina.app.plist`), so it was forced by editing that
+plist with the app terminated and `cfprefsd` killed — a plain `defaults write` is cached and lost.
+The snapshot file was deleted in the same step, because the six-hour suppression otherwise holds the
+previous anchor and the header would not move.
+
+Simulator left booted, Dynamic Type medium, light appearance, signed in as
+`james.okafor@example.com`.
+
+## w2-r2 · fix round
+
+Same clone `dr-w2-r2` `0B472471-1E2E-4C04-825A-8668695264C1` (iPhone 17 Pro, 402×874 pt), local stack
+(migrations through 00538), `-DeploymentTarget local`, build from the lane's own `.build/dd` — **no**
+`CODE_SIGNING_ALLOWED=NO`. Branch `daily-return/w2-r2` at `f815e4a60`. Shots re-taken only where the
+fix round changed what is drawn.
+
+**Verdict: PASS.** The account switch leaks nothing; `See all →` is one footer; the Studio control
+and Message are 44 pt; the discovering house draws its room whole, with only the lines it can prove.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w2-r2-10-engaged-story-date-chip-light.png` | Today, `james.okafor@example.com`, light | The story card's chip now reads **`AUG 25 · 3 MIN READ`** (minor 13) — the publish date beside the read time, from the raw row the view model already held. Studio control and `Message` at their new 44 pt height |
+| `w2-r2-11-account-switch-cold-launch-no-leak.png` | Today, first paint after an account switch, light | **B-1's proof.** James signed out → `client@patina.dev` signed in → app terminated → cold launch, screenshot at the first Today paint. The record holds only client's own rows (`Your invoice is due. / $4,250.00 · DUE SEP 1`, the proposal, `Leah asked about Dining chairs …`); **no** `Leah Hartwell picked up your request.` from the previous account, and no `YOU WERE LAST HERE` header — the visit went with the account. Also shows the single `See all →` footer under both eyebrow groups, with its rule above |
+| `w2-r2-13-activeproject-one-see-all-footer-dark.png` | same, dark | Same composition on the dark ground; the footer rule and the amber `See all →` both read |
+| `w2-r2-14-activeproject-footer-xxl.png` | same, Dynamic Type XXL | Every row wraps, the footer wraps with them, nothing clipped |
+| `w2-r2-15-discovering-room-hero-light.png` | Today, guest with one room the person typed, light | **MJ-B.** `YOUR HOUSE` / `TYPED, NOT SCANNED` / the full-width `RoomHeroCard` — `Living Room`, `14 × 18 ft · 252 sq ft` — and `+ Add a room` below it. No budget line and no state line, because this room has neither a budget field on the model nor a saved piece: the card draws only what it can prove (C5) |
+| `w2-r2-16-add-a-room-both-acts.png` | same, `+ Add a room` tapped | Both acts, the light one first: `Type the dimensions`, then `Scan it` (minor 9 — `Scan it` was unreachable from Today once a room existed, and every rail tap reported itself as the typed act) |
+| `w2-r2-17-discovering-room-hero-dark.png` | same, dark | The hero card's ground adapts; no white band where the rail cards' fixed gradient used to sit |
+| `w2-r2-18-final-state-client-signed-in.png` | Today, `client@patina.dev`, light | The state the simulator was left in |
+
+Method note for shot 11: the app's own Appearance preference (`patina.appearance`, Settings →
+Preferences) overrides `simctl ui … appearance`, so the dark shots were taken by editing
+`Library/Preferences/cloud.patina.app.plist` with the app terminated and `cfprefsd` killed — a plain
+`defaults write` is cached and lost.
+
+Simulator left booted, light appearance, Dynamic Type medium, signed in as `client@patina.dev`.
+
+## w2 walk
+
+Walker's acceptance pass on the **review device** `973D1724-90BF-4A0A-B02D-481D561547B3` (not a lane
+clone), 2026-08-27. App from the **integration** branch build (`f2a51a1e3`, signed, 980
+tests/117 suites green — `integration.md` §9e), local stack through migration `00538`,
+`-DeploymentTarget local`. Full detail, per-item PASS/FAIL and verbatim FAIL copy: `waves/w2/walk.md`.
+
+**Verdict: ok = false — one FAIL, already known and already ruled to W3.** Every content, honesty,
+navigation and tier-composition item in the acceptance script PASSED against live local-DB data
+(not the mock's illustrative dates). The FAIL is the Companion bubble overlapping Record/Budget text
+at Dynamic Type XXL — named already in `r2-notes.md` §4.5 and ruled to W3 in
+`waves/w1b/rulings-fable.md` #1; not a new regression, not owned by any W2 lane.
+
+| Shot | Surface | What it shows |
+|---|---|---|
+| `w2-00-push-primer.png` | Push permission primer, fires at very first sign-in | Verbatim SP-08 copy: "We'll tell you when your designer sends something that needs you — a decision, a proposal, or an invoice. Nothing else." |
+| `w2-01-today-activeproject-light.png` | Today, `client@patina.dev`, light | NEEDS YOU (invoice `$4,250.00 · DUE SEP 2`, proposal `BY SEP 10`, decision `BY SEP 1`) / MOVED (message `AUG 27`, story `AUG 25`) / `See all →`; ordering verified against `askedAt` in the live DB, not assumed |
+| `w2-02-today-activeproject-dark.png` | same, dark | Clean, no light leakage |
+| `w2-03/04/05` | same, dark + Dynamic Type XXL | `w2-03` header/record clean; `w2-04`/`w2-05` show the Companion bubble covering part of "asked" and "BY SEP 1" — the FAIL |
+| `w2-06-proposal-sign-xxl-dark.png` | Proposal detail, `Sign proposal`, XXL/dark | Clean, 76 pt clear of the Companion (carry-over 8c) |
+| `w2-07-decision-detail-xxl-dark.png` | Decision detail, XXL/dark | Clean, both `Choose this` buttons legible (carry-over 8c) |
+| `w2-08/09` | Invoice detail, XXL/dark | `w2-08`'s TOTAL/PAID/BALANCE grid wraps digits across 2-3 lines (ugly, not hidden — observation, not FAIL); `w2-09`'s `Pay $4,250.00` button clean (carry-over 8c) |
+| `w2-10-message-thread-opened.png` | Designer seat → Message | Opens a real `rpc_start_project_thread` conversation — but on **Birch Hollow**, not Aspen Loft Refresh, the project actually carrying every NEEDS YOU row (seat picks `projects.first` by `updated_at desc`, unrelated to which project has open items — flagged for a ruling, not a script FAIL) |
+| `w2-11/12` | Budget, XXL/dark | Same BILLED/PAID/OUTSTANDING wrap as the invoice (observation); `w2-12` also shows the Companion bubble covering part of "your" in "your designer's figure" — the FAIL, second instance, same root cause |
+| `w2-13/14/15` | Today, two-weeks-away last-seen | `w2-15` (the correctly-forced one, after fixing the App-Group/cfprefsd/six-hour-suppression procedure): header reads `YOU WERE LAST HERE ON THE 13TH`, every row postdating it carries `· NEW` |
+| `w2-16-new-tick-yesterday.png` | Today, last-seen = exactly 24h ago | Precision-checked: a proposal sent ~38 min *before* the cutoff correctly shows no `· NEW` tick — timestamp-exact, not calendar-day |
+| `w2-17/18/19/20` | Today, `james.okafor@example.com`, engaged | `w2-20` (clean): NEEDS YOU → `Nothing needs you right now.` (truthful empty); MOVED → `Leah Hartwell picked up your request.` `AUG 27` — **verbatim** acceptance-script match |
+| `w2-21/22` | Today, guest | `DailyRoomView.HouseRecord` accessibility element **absent entirely** (confirmed via the AX tree, not a blank-area guess) — "or nothing," satisfied |
+| `w2-23-final-state-client-daily-room.png` | End state | Signed in as `client@patina.dev`, light, Dynamic Type medium, Daily Room, scrolled to top |
+
+Method notes (both non-obvious, both real, neither an app defect):
+1. **Dark mode via `xcrun simctl ui <udid> appearance dark` does not work on this build** — even
+   `Settings.app` itself stays visibly light after the command. The app's own in-app Appearance
+   setting (`@AppStorage("patina.appearance")`) reads through `cfprefsd`, whose cache must be killed
+   (`xcrun simctl spawn <udid> /usr/bin/killall cfprefsd`) before a direct plist edit takes effect.
+2. **Two-weeks-header manipulation needs three steps, not one.** Writing `patina.house.lastSeenAt`
+   via a plain `defaults write` targets the wrong domain; writing the real App-Group plist directly
+   is cached by `cfprefsd` (same kill needed); and even with both fixed, `HouseRecordBuilder`'s
+   six-hour suppression (real, working, by design) will keep the *previous* build's anchor unless the
+   cached `house-record.json` snapshot in the same App Group container is also deleted before
+   relaunch. Sequence: terminate → kill `cfprefsd` → edit the plist → delete the snapshot → launch.
+
+Simulator left booted, light appearance, Dynamic Type medium, signed in as `client@patina.dev`, on
+the Daily Room.
