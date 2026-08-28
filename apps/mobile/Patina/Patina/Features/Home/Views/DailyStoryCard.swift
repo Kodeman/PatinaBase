@@ -100,7 +100,16 @@ struct DailyStoryCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
         }
-        .frame(height: height)
+        // A MINIMUM, not a fixed height. `height` is the card's weight on a
+        // normal day (180 hero / a shorter row when the Record carried the
+        // screen); at an accessibility text size the tag, title and subtitle
+        // are taller than any of those figures, and a hard `.frame(height:)`
+        // reported the small number to the enclosing VStack while the text
+        // drew past it — so the story overlapped the house rail above it by
+        // ~13pt at XXL and, being the later sibling, hit-tested on top of it:
+        // the covered portion of the room cards was untappable (w4 re-walk,
+        // item 8). Growing with the content is what keeps the column honest.
+        .frame(minHeight: height)
         .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
         .padding(.top, PatinaSpacing.md)
         .padding(.horizontal, PatinaSpacing.mdLarge)

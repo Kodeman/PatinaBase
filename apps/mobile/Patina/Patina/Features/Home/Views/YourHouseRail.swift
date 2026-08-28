@@ -191,7 +191,12 @@ struct YourHouseRail: View {
                 .padding(.vertical, PatinaSpacing.sm)
                 Spacer(minLength: 0)
             }
-            .frame(width: 240, height: 150, alignment: .topLeading)
+            // A minimum height, for the same reason the story card carries one:
+            // at an accessibility text size the room's name and its figures are
+            // taller than 150pt, and a hard height reported 150 to the column
+            // while the card drew past it into the block below.
+            .frame(width: 240, alignment: .topLeading)
+            .frame(minHeight: 150, alignment: .topLeading)
             .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
             .contentShape(Rectangle())
