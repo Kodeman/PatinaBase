@@ -323,4 +323,37 @@ struct RoomBudgetTests {
         #expect(row.notes == nil)
         #expect(row.price_cents_at_save == nil)
     }
+
+    // MARK: - The bar measures the budget its owner set (integration.md §6.3)
+
+    @Test("the bar measures against the room's own budget")
+    func theBarMeasuresAgainstTheStoredBudget() {
+        #expect(BudgetAssessment.level(totalCents: 100_000, budgetCents: 900_000) == .below50)
+        #expect(BudgetAssessment.level(totalCents: 600_000, budgetCents: 900_000) == .approaching)
+        #expect(BudgetAssessment.level(totalCents: 1_000_000, budgetCents: 900_000) == .atRange)
+        #expect(BudgetAssessment.level(totalCents: 1_500_000, budgetCents: 900_000) == .overRange)
+    }
+
+    @Test("a room with no budget measures nothing and draws no bar")
+    func noBudgetDrawsNoBar() {
+        #expect(BudgetAssessment.level(totalCents: 240_000, budgetCents: nil) == nil)
+        #expect(BudgetAssessment.level(totalCents: 240_000, budgetCents: 0) == nil)
+    }
+
+    @Test("the bar prints both figures and no third")
+    func theBarPrintsBothFigures() {
+        #expect(RoomBudgetBar.figure(totalCents: 240_000, budgetCents: 900_000) == "$2.4K of $9.0K")
+        #expect(RoomBudgetBar.figure(totalCents: 0, budgetCents: 45_000) == "$0 of $450")
+    }
+
+    @Test("the invented $2K–$5K range is gone from the room screen and the bar")
+    func theInventedRangeIsGone() throws {
+        let screen = try SourcePin.read("Patina/Features/Rooms/Views/RoomProjectView.swift")
+        #expect(!screen.contains("200_000"))
+        #expect(!screen.contains("500_000"))
+        // The phrase survives in the file's own account of what it replaced;
+        // what must be gone is the drawn line.
+        let bar = try SourcePin.read("Patina/Features/Rooms/Components/RoomBudgetBar.swift")
+        #expect(!bar.contains("Text(\"Your range"))
+    }
 }

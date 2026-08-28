@@ -3,32 +3,40 @@
 //  Patina
 //
 //  Pure-function helper that maps a room's total investment against the
-//  user's stated budget range into the thresholds described in the Room
-//  System spec (50% / 100% / 150%).
+//  budget its owner set, at the thresholds the Room System spec describes
+//  (50% / 100% / 150%).
+//
+//  It used to measure against a hard-coded $2,000–$5,000 "range" declared in
+//  RoomProjectView as "from user preferences / quiz; defaults for now" — a
+//  figure nobody had ever given, printed under the words "Your range" (C5,
+//  h1-notes.md §6.1, integration.md §6.3). W4 gives a room a real
+//  `budgetCents`, so the stored number is what the bar measures; where there
+//  is none, there is no bar.
 //
 
 import Foundation
 
 public enum BudgetLevel: Hashable {
-    /// Under 50% of the user's minimum — keep the bar hidden.
+    /// Under 50% of the budget — keep the bar hidden.
     case below50
-    /// 50–100% of the range — show the bar quietly.
+    /// 50–100% of the budget — show the bar quietly.
     case approaching
-    /// 100–150% of the max — "you're at your budget" note.
+    /// 100–150% of the budget — "you're at your budget" note.
     case atRange
-    /// >150% of the max — Companion nudges the designer CTA.
+    /// >150% of the budget — Companion nudges the designer CTA.
     case overRange
 }
 
 public enum BudgetAssessment {
 
-    /// Compute the level for a given room total relative to a stated range.
-    public static func level(totalCents: Int, minCents: Int, maxCents: Int) -> BudgetLevel {
-        guard maxCents > 0, minCents >= 0 else { return .below50 }
-        let halfOfMin = minCents / 2
-        if totalCents < halfOfMin { return .below50 }
-        if totalCents <= maxCents { return .approaching }
-        if totalCents <= (maxCents * 3 / 2) { return .atRange }
+    /// The level for a room total against the budget its owner set. `nil`
+    /// where she has not set one: then nothing is measured, nothing is drawn,
+    /// and no range is invented for her.
+    public static func level(totalCents: Int, budgetCents: Int?) -> BudgetLevel? {
+        guard let budgetCents, budgetCents > 0 else { return nil }
+        if totalCents < budgetCents / 2 { return .below50 }
+        if totalCents <= budgetCents { return .approaching }
+        if totalCents <= (budgetCents * 3 / 2) { return .atRange }
         return .overRange
     }
 

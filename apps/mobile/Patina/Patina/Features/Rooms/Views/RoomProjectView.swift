@@ -50,10 +50,6 @@ struct RoomProjectView: View {
     @Environment(\.appCoordinator) private var coordinator
     @Query private var rooms: [RoomModel]
 
-    // MARK: - Budget context (from user preferences / quiz; defaults for now)
-    private let budgetMinCents: Int = 200_000   // $2K
-    private let budgetMaxCents: Int = 500_000   // $5K
-
     /// One presentation, not two. A second `.sheet` attached further down the
     /// hierarchy never presented on the sim walk (`waves/w4/h1-notes.md`), so
     /// both sheets go through one `item:` binding on the root.
@@ -95,22 +91,24 @@ struct RoomProjectView: View {
                                 .padding(.bottom, 16)
                             emptyBlock(for: room)
                         } else {
+                            // No budget, no bar and no nudge: there is
+                            // nothing to measure against, and inventing a
+                            // range to measure against is what this replaced.
                             let level = BudgetAssessment.level(
                                 totalCents: room.totalInvestmentCents,
-                                minCents: budgetMinCents,
-                                maxCents: budgetMaxCents
+                                budgetCents: room.budgetCents
                             )
-                            if BudgetAssessment.shouldShowBar(level) {
+                            if let level, let budget = room.budgetCents,
+                               BudgetAssessment.shouldShowBar(level) {
                                 RoomBudgetBar(
                                     totalCents: room.totalInvestmentCents,
-                                    minCents: budgetMinCents,
-                                    maxCents: budgetMaxCents
+                                    budgetCents: budget
                                 )
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 16)
                             }
                             itemsSection(for: room)
-                            budgetNudge(for: level, room: room)
+                            if let level { budgetNudge(for: level, room: room) }
                             cta(primary: "Get design help with this room") {
                                 coordinator.presentDesignServices(roomId: room.id)
                             }
