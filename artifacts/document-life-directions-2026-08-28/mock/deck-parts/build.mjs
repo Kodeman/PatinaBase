@@ -62,6 +62,7 @@ const PARTS = [
   "11-compare.html",
   "12-recommendation.html",
   "13-questions.html",
+  "15-ruled.html",
   "14-colophon.html",
   "99-script.html",
 ];
@@ -376,8 +377,12 @@ const styleBlock = (html.match(/<style[\s\S]*?<\/style>/) || [""])[0];
 const braceOpen = (styleBlock.match(/\{/g) || []).length;
 const braceClose = (styleBlock.match(/\}/g) || []).length;
 
+// The RULED section (15-ruled.html) cites the assembled direction's own clickable mockup, an
+// Artifact published at claude.ai — the one allowed non-font https host, scoped to that one part
+// by convention (nothing else in the deck should ever need it). Every other host stays rejected.
 const badUrls = (html.match(/https:\/\/[^"'\s)]+/g) || [])
-  .filter((u) => !/^https:\/\/fonts\.(googleapis|gstatic)\.com/.test(u));
+  .filter((u) => !/^https:\/\/fonts\.(googleapis|gstatic)\.com/.test(u))
+  .filter((u) => !/^https:\/\/claude\.ai\/code\/artifact\//.test(u));
 
 const nonAscii = (html.match(/[^\x00-\x7F]/g) || []).length;
 

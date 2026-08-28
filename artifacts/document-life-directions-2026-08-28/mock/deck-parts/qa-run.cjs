@@ -30,7 +30,7 @@ const URL = 'file://' + DECK;
 const SECTIONS = [
   'cover', 'ask', 'today', 'found', 'planks',
   'direction-a', 'direction-b', 'direction-c', 'strip', 'mobile', 'compare',
-  'recommendation', 'questions', 'colophon',
+  'recommendation', 'questions', 'ruled', 'colophon',
 ];
 
 const VIEWPORTS = [

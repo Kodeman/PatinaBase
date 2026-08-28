@@ -1,0 +1,252 @@
+
+=== (1) DESK — roster lines and stage groups ===
+roster head : Every job · 16 live · 1 overdue
+job lines   : 16
+groups      : 6
+  Brief · 5        lines=5  h=289px  stock=rgba(0, 0, 0, 0)  tab=rgb(73, 112, 147)
+  Discovery · 1    lines=1  h=79px  stock=rgba(0, 0, 0, 0)  tab=rgb(48, 112, 99)
+  Direction · 3    lines=3  h=184px  stock=rgba(0, 0, 0, 0)  tab=rgb(54, 106, 58)
+  Proposal · 2     lines=2  h=131px  stock=rgba(0, 0, 0, 0)  tab=rgb(87, 93, 29)
+  Project · 4      lines=4  h=270px  stock=rgba(0, 0, 0, 0)  tab=rgb(109, 78, 36)
+  Install · 1      lines=1  h=79px  stock=rgba(0, 0, 0, 0)  tab=rgb(130, 56, 50)
+
+=== (2) DESK -> DOCUMENT (Vandersteen) ===
+doc-shell running animations: [{"name":"doc-raise","dur":270,"state":"running"}]
+mid-transition opacity/transform: 0 / matrix(0.986, 0, 0, 0.986, 0, 0)
+computed animation: doc-raise 0.27s
+document on          : true
+sheet background     : rgb(252, 250, 246) (expect rgb(252,250,246) = #FCFAF6 -- ONE untinted sheet)
+letterhead block bg  : 1 rgba(0, 0, 0, 0) (expect rgba(0, 0, 0, 0) -- no charcoal band) rect {"x":309,"w":910,"h":609} col {"x":261,"w":1006}
+spine / margin rail  : rgb(232, 227, 219) / rgb(232, 227, 219)
+thumbs               : 6 total — 1 linked, 5 slots
+  thumb 0: 48x48 linked=true url("data:image/jpeg;bas
+  thumb 1: 48x48 linked=false linear-gradient(to right
+  thumb 2: 48x48 linked=false linear-gradient(to right
+  thumb 3: 48x48 linked=false linear-gradient(to right
+  thumb 4: 48x48 linked=false linear-gradient(to right
+  thumb 5: 48x48 linked=false linear-gradient(to right
+stamps:
+  "Decision due" inked=false ink=rgb(121, 101, 30) fill=rgb(245, 231, 185) fillTransform=matrix(0, 0, 0, 1, 0, 0)
+  "Decision due" inked=false ink=rgb(121, 101, 30) fill=rgb(245, 231, 185) fillTransform=matrix(0, 0, 0, 1, 0, 0)
+  "Ordered" inked=true ink=rgb(124, 94, 48) fill=rgb(239, 230, 218) fillTransform=matrix(1, 0, 0, 1, 0, 0)
+  "Damaged" inked=true ink=rgb(156, 83, 64) fill=rgb(243, 229, 223) fillTransform=matrix(1, 0, 0, 1, 0, 0)
+  "Decision due" inked=true ink=rgb(121, 101, 30) fill=rgb(245, 231, 185) fillTransform=matrix(1, 0, 0, 1, 0, 0)
+  "Decision due" inked=true ink=rgb(121, 101, 30) fill=rgb(245, 231, 185) fillTransform=matrix(1, 0, 0, 1, 0, 0)
+
+=== (3) UNFOLD Client approvals / FOLD Schedule ===
+approvals before: {"h":0,"rows":"0px","op":"0"} word= Unfold ↓ type= "DM Mono" / uppercase / 11px
+approvals after : {"h":119,"rows":"119px","op":"1"} word= Fold ↑ aria= true
+schedule before : {"h":236,"rows":"236px","op":"1"} word= Fold ↑ type= "DM Mono" / uppercase / 11px
+schedule after  : {"h":0,"rows":"0px","op":"0"} word= Unfold ↓ aria= false
+
+=== (4) margin chip -> anchored line ===
+chip "money" -> {"chipBg":"rgb(231, 232, 232)","chipActive":true,"target":"ffe-po","targetBg":"rgb(231, 232, 232)","anchored":true,"trans":"background-color","inView":true}
+chip "time" -> {"chipBg":"rgb(231, 232, 232)","chipActive":true,"target":"phase-active","targetBg":"rgb(231, 232, 232)","anchored":true,"trans":"background-color","inView":true}
+
+=== (5) PUT DOWN -> desk ===
+roster animations running right after PUT DOWN: 0 []
+desk on: true
+stamp-fill animations running on RE-ENTRY to the document: 0 []
+
+=== (6) Ledgers ^ -> Orders sheet -> Esc ===
+sheet: {"open":true,"aria":"false","transform":"none","opacity":"1","focusMovedIntoDialog":true,"activeElement":"Put back · Esc"}
+  row: {"key":"PO-2026-0418","thumb":"photo 48px","stamp":"Ordered","lines":119}
+  row: {"key":"Brass-and-oak console","thumb":"SLOT 48px","stamp":"Damaged","lines":135}
+after Esc — open: false
+
+=== (7) Tab through the first 15 focusables -- DESK state ===
+   1. ring=YES inFrame=false vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Desk"
+   2. ring=YES inFrame=false vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Document"
+   3. ring=YES inFrame=false vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Orders sheet"
+   4. ring=YES inFrame=false vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "390"
+   5. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "+ Capture a lead"
+   6. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "+ Open a project"
+   7. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Find anything⌘K"
+   8. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "×"
+   9. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Finish setting up"
+  10. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Full Room"
+  11. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Open the job"
+  12. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Full Room"
+  13. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Open the job"
+  14. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Full Room"
+  15. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Open the job"
+  visible ring on 15 of 15 (DESK state)
+  buttons inside #frame (markup): 158 | reachable in this state: 54
+
+=== (7) Tab through the first 15 focusables -- DOCUMENT state ===
+   1. ring=YES inFrame=false vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Desk"
+   2. ring=YES inFrame=false vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Document"
+   3. ring=YES inFrame=false vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Orders sheet"
+   4. ring=YES inFrame=false vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "390"
+   5. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "← Put down"
+   6. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Pause"
+   7. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "+ Log"
+   8. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Rooms4 rooms→"
+   9. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Pieces36 lines · 2 unspecified→"
+  10. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "DrawingsNothing filed→"
+  11. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Spec34 of 36 specified · by room→"
+  12. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "BoardsNo boards yet · start one→"
+  13. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "Money$17,500 outstanding→"
+  14. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "DatesInstall Tue Sep 15→"
+  15. ring=YES inFrame=true vis=true outline="2px solid rgb(124, 94, 48)" off=2px  "PeopleMarit & Dale Vandersteen · M"
+  visible ring on 15 of 15 (DOCUMENT state)
+  buttons inside #frame (markup): 158 | reachable in this state: 38
+
+=== (10) computed boxShadow sweep (visible elements only) ===
+  desk: 1 element(s) with a shadow [{"sel":"nav.drawer","bs":"rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"}]
+  orders sheet (opened from the DESK): 2 element(s) with a shadow [{"sel":"nav.drawer","bs":"rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"},{"sel":"div.ledger-sheet","bs":"rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"}]
+  document: 3 element(s) with a shadow [{"sel":"button.margin-chip","bs":"rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"},{"sel":"button.margin-chip","bs":"rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"},{"sel":"nav.drawer","bs":"rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"}]
+  orders sheet (opened from the DOCUMENT): 4 element(s) with a shadow [{"sel":"button.margin-chip","bs":"rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"},{"sel":"button.margin-chip","bs":"rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"},{"sel":"nav.drawer","bs":"rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"},{"sel":"div.ledger-sheet","bs":"rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"}]
+  expected desk 1 / sheet-from-desk 2 / document 3 / sheet-from-document 4  ->  got 1 / 2 / 3 / 4
+
+=== (13) sampled text/ground contrast from computed styles ===
+  PASS   5.22  tab label — BRIEF white on tab  fg=rgb(255, 255, 255) bg=rgb(73,112,147) 11px/600
+  PASS   5.80  tab label — DISCOVERY white on tab  fg=rgb(255, 255, 255) bg=rgb(48,112,99) 11px/600
+  PASS   6.40  tab label — DIRECTION white on tab  fg=rgb(255, 255, 255) bg=rgb(54,106,58) 11px/600
+  PASS   7.03  tab label — PROPOSAL white on tab  fg=rgb(255, 255, 255) bg=rgb(87,93,29) 11px/600
+  PASS   7.59  tab label — PROJECT white on tab  fg=rgb(255, 255, 255) bg=rgb(109,78,36) 11px/600
+  PASS   8.20  tab label — INSTALL white on tab  fg=rgb(255, 255, 255) bg=rgb(130,56,50) 11px/600
+  PASS  13.53  roster — job name on the cream ground  fg=rgb(44, 41, 38) bg=rgb(250,247,242) 18px/500
+  PASS   8.99  roster — job need on the cream ground  fg=rgb(78, 67, 57) bg=rgb(250,247,242) 14px/400
+  PASS   8.99  roster — job need, Project group  fg=rgb(78, 67, 57) bg=rgb(250,247,242) 14px/400
+  PASS   5.28  roster — OVERDUE line, Project group  fg=rgb(156, 83, 64) bg=rgb(250,247,242) 14px/400
+  PASS   6.35  roster — OPEN THE JOB act, Install group  fg=rgb(101, 89, 78) bg=rgb(250,247,242) 11px/500
+  PASS   7.86  desk ground — roster lede  fg=rgb(92, 74, 60) bg=rgb(250,247,242) 14px/400
+  PASS   7.54  desk ground — whisper (italic)  fg=rgb(90, 78, 67) bg=rgb(250,247,242) 15px/400
+  PASS  13.87  letterhead — instrument value on paper  fg=rgb(44, 41, 38) bg=rgb(252,250,246) 14px/400
+  PASS   9.22  letterhead — instrument label (muted)  fg=rgb(78, 67, 57) bg=rgb(252,250,246) 11px/400
+  PASS   9.22  the sheet — seam summary  fg=rgb(78, 67, 57) bg=rgb(252,250,246) 11px/400
+  PASS  13.87  letterhead — title on paper  fg=rgb(44, 41, 38) bg=rgb(252,250,246) 40px/500
+  PASS   9.22  letterhead — vital label (muted)  fg=rgb(78, 67, 57) bg=rgb(252,250,246) 11px/400
+  PASS   5.12  red letter on paper — label (terracotta-ink)  fg=rgb(156, 83, 64) bg=rgb(249,243,238) 11px/600
+  PASS  13.14  red letter on paper — the sentence  fg=rgb(44, 41, 38) bg=rgb(249,243,238) 15px/500
+  PASS   7.63  red letter on paper — REVIEW DECISIONS act  fg=rgb(92, 74, 60) bg=rgb(249,243,238) 11px/500
+  PASS   4.70  rail — spine ACTIVE (clay-ink)  fg=rgb(124, 94, 48) bg=rgb(232,227,219) 11px/400
+  PASS  11.32  rail — spine ACTIVE label (primary)  fg=rgb(44, 41, 38) bg=rgb(232,227,219) 14px/600
+  PASS  11.32  rail — running index name  fg=rgb(44, 41, 38) bg=rgb(232,227,219) 14px/400
+  PASS   7.52  rail — running index value  fg=rgb(78, 67, 57) bg=rgb(232,227,219) 11px/400
+  PASS   7.52  rail — ON THIS PAPER label  fg=rgb(78, 67, 57) bg=rgb(232,227,219) 11px/400
+  PASS   5.32  rail — PUT DOWN act  fg=rgb(101, 89, 78) bg=rgb(232,227,219) 11px/500
+  PASS   5.32  rail — spine note (JUST YOU)  fg=rgb(101, 89, 78) bg=rgb(232,227,219) 11px/400
+  PASS   6.31  rail — margin whisper (italic)  fg=rgb(90, 78, 67) bg=rgb(232,227,219) 14px/400
+  PASS  11.32  rail — IN THE MARGIN head  fg=rgb(44, 41, 38) bg=rgb(232,227,219) 11px/600
+  PASS   5.32  rail — + NOTE act  fg=rgb(101, 89, 78) bg=rgb(232,227,219) 11px/500
+  PASS   9.22  chip — eyebrow  fg=rgb(78, 67, 57) bg=rgb(252,250,246) 11px/600
+  PASS  13.87  chip — line  fg=rgb(44, 41, 38) bg=rgb(252,250,246) 14px/400
+  PASS   6.51  chip — sub (faint)  fg=rgb(101, 89, 78) bg=rgb(252,250,246) 11px/400
+  PASS   7.83  chip active — eyebrow on anchor fill  fg=rgb(78, 67, 57) bg=rgb(231,232,232) 11px/600
+  PASS  11.78  chip active — line on anchor fill  fg=rgb(44, 41, 38) bg=rgb(231,232,232) 14px/400
+  PASS   5.53  chip active — sub on anchor fill  fg=rgb(101, 89, 78) bg=rgb(231,232,232) 11px/400
+  PASS   7.83  anchored row — ffe vendor on anchor fill  fg=rgb(78, 67, 57) bg=rgb(231,232,232) 11px/400
+  PASS  11.71  stamp ORDERED word on its fill  fg=rgb(44, 41, 38) bg=rgb(239,230,218) 12px/600
+  PASS  11.72  stamp DECISION DUE word on its fill  fg=rgb(44, 41, 38) bg=rgb(245,231,185) 12px/600
+  PASS  11.76  stamp DAMAGED word on its fill  fg=rgb(44, 41, 38) bg=rgb(243,229,223) 12px/600
+  PASS   7.73  sheet (untinted) — ledger state  fg=rgb(90, 78, 67) bg=rgb(252,250,246) 14px/400
+  PASS   6.51  sheet (untinted) — ledger when (faint)  fg=rgb(101, 89, 78) bg=rgb(252,250,246) 11px/400
+  — 43 of 43 sampled pairs pass — 0 short of 4.5:1
+  --- stamp fill separation ---
+  ordered   fill rgb(239, 230, 218) vs Project sheet rgb(252, 250, 246) = 1.185:1  |  vs untinted paper rgb(252, 250, 246) = 1.185:1
+  decision  fill rgb(245, 231, 185) vs Project sheet rgb(252, 250, 246) = 1.184:1  |  vs untinted paper rgb(252, 250, 246) = 1.184:1
+  damaged   fill rgb(243, 229, 223) vs Project sheet rgb(252, 250, 246) = 1.179:1  |  vs untinted paper rgb(252, 250, 246) = 1.179:1
+  anchor    fill rgb(231, 232, 232) vs Project sheet rgb(252, 250, 246) = 1.178:1
+  --- fill vs fill (do two stamp kinds separate by VALUE?) ---
+  ordered vs decision = 1.001:1
+  ordered vs damaged = 1.005:1
+  ordered vs anchor = 1.006:1
+  decision vs damaged = 1.004:1
+  decision vs anchor = 1.005:1
+  damaged vs anchor = 1.001:1
+  --- stamp border / word colour ---
+  ordered   border rgb(124, 94, 48) / word rgb(44, 41, 38)
+  decision  border rgb(121, 101, 30) / word rgb(44, 41, 38)
+  damaged   border rgb(156, 83, 64) / word rgb(44, 41, 38)
+  rail rgb(232, 227, 219) vs sheet rgb(252, 250, 246) = 1.225:1
+  --- the six stage pigments: the tab plate, and the wash they open on hover ---
+  brief      tab rgb(73, 112, 147)  group background rgba(0, 0, 0, 0)  wash rgba(73, 112, 147, 0.08) -> rgb(236,236,234)  vs ground 1.106:1
+  discovery  tab rgb(48, 112, 99)  group background rgba(0, 0, 0, 0)  wash rgba(48, 112, 99, 0.08) -> rgb(234,236,231)  vs ground 1.113:1
+  direction  tab rgb(54, 106, 58)  group background rgba(0, 0, 0, 0)  wash rgba(54, 106, 58, 0.08) -> rgb(234,236,227)  vs ground 1.117:1
+  proposal   tab rgb(87, 93, 29)  group background rgba(0, 0, 0, 0)  wash rgba(87, 93, 29, 0.08) -> rgb(237,235,225)  vs ground 1.121:1
+  project    tab rgb(109, 78, 36)  group background rgba(0, 0, 0, 0)  wash rgba(109, 78, 36, 0.08) -> rgb(239,233,226)  vs ground 1.125:1
+  install    tab rgb(130, 56, 50)  group background rgba(0, 0, 0, 0)  wash rgba(130, 56, 50, 0.08) -> rgb(240,232,227)  vs ground 1.134:1
+
+=== (14) the hover wash -- composited ground, and the sweep ===
+  -- ROSTER, the Vandersteen line (Project pigment) --
+  wash rgba(109, 78, 36, 0.08) over ground rgb(250, 247, 242)  ->  rgb(239, 233, 226)   (row 1038x86, unchanged by the wash)
+  clip-path at t0 circle(20.3846% at 155.429px 26.1495px)  ->  after 340ms circle(150% at 313.4px 44px)   SWEPT   transition 0.26s
+  the name's score: rgb(196, 165, 123) matrix(1, 0, 0, 1, 0, 0)
+  PASS  12.00  .job-name      rgb(44, 41, 38) 18px  "The Vandersteen Residence"
+  PASS   7.97  .job-need      rgb(78, 67, 57) 14px  "Shorewood Hills, Madison WI · "
+  PASS   4.68  .job-overdue   rgb(156, 83, 64) 14px  "Overdue 6 days — sent Aug 13, "
+  PASS   5.63  .act           rgb(101, 89, 78) 11px  "Review decisions"
+  -> 0 text(s) short of 4.5:1 on the washed row
+  -- FF&E, the ordered dining set (clay, the line has a state) --
+  wash rgba(196, 165, 123, 0.16) over ground rgb(252, 250, 246)  ->  rgb(243, 236, 226)   (row 910x69, unchanged by the wash)
+  clip-path at t0 circle(20.066% at calc(43.3113% + 36.5202px) calc(43.3113% + 4.61519px))  ->  after 340ms circle(150% at 275px 35.5px)   SWEPT   transition 0.26s
+  PASS  12.33  .ffe-name      rgb(44, 41, 38) 15px  "Dining table + 6 side chairs"
+  PASS   8.19  .ffe-vendor    rgb(78, 67, 57) 11px  "Sturdy Oak Woodworks · Dodgevi"
+  PASS  12.33  .ffe-price     rgb(44, 41, 38) 15px  "$14,880"
+  PASS  11.71  stamp word    "Ordered" rgb(44, 41, 38) on its own opaque fill rgb(239, 230, 218)
+  -> 0 text(s) short of 4.5:1 on the washed row
+  -- FF&E, the damaged console (terracotta) --
+  wash rgba(212, 160, 144, 0.16) over ground rgb(252, 250, 246)  ->  rgb(246, 236, 230)   (row 910x69, unchanged by the wash)
+  clip-path at t0 circle(24.4413% at calc(41.8529% + 44.4832px) calc(41.8529% + 5.6215px))  ->  after 340ms circle(150% at 275px 35.5px)   SWEPT   transition 0.26s
+  PASS  12.44  .ffe-name      rgb(44, 41, 38) 15px  "Brass-and-oak console"
+  PASS   8.26  .ffe-vendor    rgb(78, 67, 57) 11px  "Fond du Lac Ironworks"
+  PASS  12.44  .ffe-price     rgb(44, 41, 38) 15px  "$3,600"
+  PASS  11.76  stamp word    "Damaged" rgb(44, 41, 38) on its own opaque fill rgb(243, 229, 223)
+  -> 0 text(s) short of 4.5:1 on the washed row
+  -- FF&E, the Hartland wool rug (golden hour, the deepest state pigment to reach) --
+  wash rgba(232, 197, 71, 0.24) over ground rgb(252, 250, 246)  ->  rgb(247, 237, 204)   (row 910x69, unchanged by the wash)
+  clip-path at t0 circle(22.5064% at calc(42.4979% + 40.9616px) calc(42.4979% + 5.17646px))  ->  after 340ms circle(150% at 275px 35.5px)   SWEPT   transition 0.26s
+  PASS  12.35  .ffe-name      rgb(44, 41, 38) 15px  "Hartland wool rug"
+  PASS   8.21  .ffe-vendor    rgb(78, 67, 57) 11px  "Hartland Looms"
+  PASS  12.35  .ffe-price     rgb(44, 41, 38) 15px  "$2,400"
+  PASS  11.72  stamp word    "Decision due" rgb(44, 41, 38) on its own opaque fill rgb(245, 231, 185)
+  -> 0 text(s) short of 4.5:1 on the washed row
+  -- FF&E, the dining set ANCHORED and hovered (wash over --fill-anchor-tint) --
+  wash rgba(196, 165, 123, 0.16) over ground rgb(231, 232, 232)  ->  rgb(225, 221, 215)   (row 910x69, unchanged by the wash)
+  clip-path at t0 circle(21.2892% at 274.716px 35.3581px)  ->  after 340ms circle(150% at 275px 35.5px)   SWEPT   transition 0.26s
+  PASS  10.69  .ffe-name      rgb(44, 41, 38) 15px  "Dining table + 6 side chairs"
+  PASS   7.10  .ffe-vendor    rgb(78, 67, 57) 11px  "Sturdy Oak Woodworks · Dodgevi"
+  PASS  10.69  .ffe-price     rgb(44, 41, 38) 15px  "$14,880"
+  PASS  11.71  stamp word    "Ordered" rgb(44, 41, 38) on its own opaque fill rgb(239, 230, 218)
+  -> 0 text(s) short of 4.5:1 on the washed row
+  roster name is focusable
+  keyboard focus on the name: wash clip circle(150% at 50% 50%) (instant, transition 0s) + focus ring "2px solid rgb(124, 94, 48)"
+  => swept: roster true / ordered true / damaged true / decision true / anchored true; 0 washed-row text(s) short of 4.5:1
+
+=== (12) horizontal overflow ===
+ @1440 desk: {"frameScroll":"1438/1438","docBody":"1560/1560","scrollers":["div.desk-top 1043>1038","div.desk-acts 448>443","p. 132>127","button.act 132>127","p. 144>139","button.act 144>139","p. 138>133","button.act 138>133"],"pastRightEdge":[]}
+ @1440 doc: {"frameScroll":"1438/1438","docBody":"1560/1560","scrollers":["div.rl-row 885>880","button.act 132>127","button.act 148>143","button.act 171>166","button.act 163>158","button.act 117>112","button.act 186>181"],"pastRightEdge":[]}
+ @1440 sheet: {"frameScroll":"1438/1438","docBody":"1560/1560","scrollers":["div.rl-row 885>880","button.act 132>127","button.act 148>143","button.act 171>166","button.act 163>158","button.act 117>112","button.act 186>181","button.act 55>50"],"pastRightEdge":[]}
+
+=== (9) 390 toggle ===
+ @390: {"frameScroll":"388/388","docBody":"1560/1560","scrollers":["p. 132>127","button.act 132>127","p. 144>139","button.act 144>139","p. 138>133","button.act 138>133"],"pastRightEdge":[]}
+ 390 roster head : Every job · 16 live · 1 overdue
+ 390 whispers    : ["— This is your Desk. Folders that need you gat","— The studio isn’t fully set up.\n             "]
+ 390 job lines   : 16 | mobile bar ["The studioThe Desk","Today0:47","···More"] rgb(44, 41, 38)
+ 390 smallest act hit height: 30px
+
+=== (11) non-file: requests ===
+ external requests: 0 []
+ page errors: 0 []
+
+=== (8) prefers-reduced-motion: reduce ===
+ media matched: true | roster lines at rest & visible: true
+ elements in #frame with ANY non-zero duration: 0 of 1082 []
+  spine breath   animation=none 0s  transition=all 0s
+  doc raise      animation=none 0s  transition=all 0s
+  roster settle  animation=none 0s  transition=all 0s
+  fold           animation=none 0s  transition=none 0s
+  ledger slide   animation=none 0s  transition=none 0s
+  stamp ink      animation=none 0s  transition=none 0s
+  chip           animation=none 0s  transition=none 0s
+  ffe row        animation=none 0s  transition=none 0s
+  act            animation=none 0s  transition=none 0s
+  ink pool       animation=none 0s  transition=none 0s
+  job name       animation=none 0s  transition=all 0s
+  frame          animation=none 0s  transition=all 0s
+ after opening the document under reduce — running animations: [] opacity 1
+ after unfolding under reduce — running animations: 0 | fold height immediately: 119px
+ hover wash under reduce -- immediately: {"clip":"circle(150% at 313.4px 44px)","bg":"rgba(109, 78, 36, 0.06)","dur":"0s","anims":0}
+ hover wash under reduce -- after 320ms clip: circle(150% at 313.4px 44px) (INSTANT: no sweep)

@@ -120,6 +120,52 @@ Once ruled, record the outcome as a new entry in `docs/design/the-document/DECIS
 ledger's last ruling entry is **R125** (2026-08-25, the Wayfinding program's build rulings), so
 this program's ruling entry will be the next `R###` in sequence. No entry exists yet.
 
+## RULED 2026-08-28 — "A, with a little of B's colour"
+
+**Two steps, not one.** The team first ruled Direction B, Honest Materials, preferred, with
+Direction A, Ink on Paper, a strong second. The design lead built a B-on-A hybrid to carry that
+forward — B's materials laid onto A's skeleton, six movement-tinted desk bands bled edge to edge,
+a tinted Project-stock document sheet, one charcoal band carrying the letterhead, the instrument
+row and the red letter — and took it through two rounds of adversarial review (`mock/final/REVIEW.md`,
+R01–R48) before Kody saw it. He ruled against the large tinted surfaces, not the review's own
+findings, verbatim: *"the desk is starting to look silly with the banded colors edge to edge. and
+the document with the dark header and yellow body looks terrible. Direction A would have been
+better guidance, pulling in a little more of direction B's color, Maybe an animated color highlight
+on hover."* The interview that followed produced the direction actually shipped.
+
+**The final direction, in four lines:**
+- Direction A, whole — the type scale, the three rule weights, the section head, the cream desk
+  ground, the untinted paper, the spine/margin rail, margin chips as lifted paper.
+- From B, exactly three things — filled stamps at ~1.18:1, the six saturated stage tabs as small
+  plates on the roster heads, 48px thumbnails on catalog-linked lines. Removed: the tinted desk
+  bands, the tinted document sheet, the charcoal band.
+- New — the hover wash: a roster or FF&E line's own pigment opens under the pointer via the
+  portal's ink-pool mechanic, landing at ~1.12:1 over its ground ("the rule is the ratio, not the
+  alpha"); a flat tint under reduced motion.
+- Depth stays one token, `--elevation-sheet`, at three sites (the Q04 amendment, not canon);
+  motion stays the portal's own vocabulary, the roster settling once per load.
+
+**Published:**
+- Mockup — **https://claude.ai/code/artifact/bf781dba-3938-464d-849d-5787bbd79cd7** —
+  `v2-a-with-b-colour`, one self-contained file, built and reviewed in `mock/final/`.
+- Deck — republished at the same URL, **https://claude.ai/code/artifact/f333f3f1-c2d5-4d79-8480-7e22f7330500**,
+  now carrying a fifteenth section, `mock/deck-parts/15-ruled.html` (id `ruled`, between Questions
+  and Colophon), recording this ruling. 43/43 sampled text pairs ≥4.5:1 (floor 4.68), 0
+  washed-row texts short, 0 external requests, no overflow at 1440/390, reduced-motion sweep 0,
+  roster settle 0 after every return, two adversarial review rounds (R01–R48) dispositioned.
+
+**Still open** — this ruling picks the direction; it does not close the standing questions in
+`13-questions.html`, and it adds one:
+- `Q04` — close R72's dead `.folio-face` exception and build the CSS gate before any elevation
+  ships as canon.
+- `Q06` — the production Strata `product_id` count, still unrun.
+- `Q08` — whether the planks ship as their own lane first, at SP-01's 4–6 days.
+- `Q09` — whether `contrast.test.ts`'s `parseTokens` gets its light/dark split before this ships.
+- `Q10` — who fixes the desk's 390 overflow, `F24`, and when.
+- `Q11` — whether SP-06's hover floor is accepted at `1.097:1` against its own `≥1.09:1` promise.
+- `Q12` — new. Should the hover wash ship as a plank now (UI-only, touching only
+  `desk-roster.tsx` and `ffe-section.tsx`), or wait for the direction it was built inside?
+
 ## NOT DONE / this program does not claim
 
 - **Nothing built in the product.** Every direction is tokens, classes and mockups against
@@ -152,7 +198,7 @@ this program's ruling entry will be the next `R###` in sequence. No entry exists
 
 ```bash
 # from $PROGRAM, unsandboxed (build/QA both touch the filesystem the sandbox restricts):
-node mock/deck-parts/build.mjs      # assembles the 16 parts → presentation.html
+node mock/deck-parts/build.mjs      # assembles the 17 parts → presentation.html
 node mock/deck-parts/qa-run.cjs     # renders + probes into mock/deck-qa/ (not committed)
 
 # to re-shoot the three direction previews (from apps/designer-portal, portal running):
@@ -173,9 +219,16 @@ node ../../artifacts/document-life-directions-2026-08-28/mock/shoot-preview.mjs
   (the D4 question).
 - **`mock/`** — the kit (`kit.css`, `KIT.md`, fonts, product crops), the three direction
   stylesheets, 15 mockup fragments, deck-build tooling (`build.mjs`, `qa-run.cjs`, `DECK.md`),
-  16 deck-part HTML files, 8 JPEG evidence crops in `deck-assets/`, and the preview PNGs/script
-  used to sanity-check each direction before deck assembly. `deck-qa/` (QA screenshots) stays on
-  disk, not staged.
+  17 deck-part HTML files (including `15-ruled.html`), 8 JPEG evidence crops in `deck-assets/`,
+  and the preview PNGs/script used to sanity-check each direction before deck assembly. `deck-qa/`
+  (QA screenshots) stays on disk, not staged.
+- **`mock/final/`** — the ruled direction's own standalone build: `index.html` (the clickable
+  mockup, published as `bf781dba-…`), `FINAL.md` (the direction as revised, token table, click
+  map, gates), `REVIEW.md` (the two-round adversarial review of the pre-ruling B-on-A hybrid, kept
+  as history), `tokens.css` (the `:root` block extracted for the contrast checker),
+  `shoot-final.mjs` / `review-clickthrough.mjs` (the shoot and the adversarial probe),
+  `host-sim.mjs`, `shots/` and `review-shots/` (the evidence PNGs). `node_modules` is a symlink to
+  `apps/designer-portal/node_modules`, not staged.
 
 ## Resume prompt
 
