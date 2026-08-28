@@ -356,6 +356,7 @@ extension CompanionAPIClient {
         case .invoiceDetail: return "invoice_detail"
         case .budget: return "budget"
         case .documentList: return "document_list"
+        case .orderDetail: return "order_detail"
         }
     }
 }

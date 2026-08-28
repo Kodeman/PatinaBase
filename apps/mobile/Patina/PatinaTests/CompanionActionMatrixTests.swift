@@ -72,7 +72,8 @@ struct CompanionActionMatrixTests {
         .invoiceList,
         .invoiceDetail(invoiceId: "invoice-1"),
         .budget,
-        .documentList
+        .documentList,
+        .orderDetail(orderId: "order-1")
     ]
 
     private static let activeRequest = ActiveDesignRequestContext(

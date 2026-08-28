@@ -186,7 +186,11 @@ extension HouseFirstRoot {
             workCoreDestination(for: route)
 
         case .threadList, .threadDetail, .proposalList, .proposalDetail,
-             .invoiceList, .invoiceDetail, .budget, .documentList:
+             .invoiceList, .invoiceDetail, .budget, .documentList,
+             // W5: the case is minted by the purchase lane; the arm inside
+             // `workDocumentsDestination` that renders it belongs to the order
+             // lane, whose inner switch carries a `default:` for exactly this.
+             .orderDetail:
             workDocumentsDestination(for: route)
         }
     }
