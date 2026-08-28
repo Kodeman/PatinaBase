@@ -68,19 +68,16 @@ struct PiecesTabRoot: View {
     }
 }
 
-/// Studio. `StudioHubView` is a section, not a screen — no scroll view, no
-/// title of its own — so this root supplies both. Unlike the other two it does
-/// not hide the system bar, which is why its title is the one that draws.
+/// Studio. The tab's root is the profile composition — the identity line, the
+/// Studio hub, and the `Settings` row that opens the sheet carrying Sign Out
+/// and Delete Account (Apple 5.1.1 (v)). That is exactly what the monogram
+/// opens on the flag-off root, so the door does not move with the bar; only
+/// its name does. `ProfileView` owns the scroll view and the header, and
+/// prints the canonical name itself when it is a tab root — it hides the
+/// system bar, so `navigationTitle` alone would not draw.
 struct StudioTabRoot: View {
     var body: some View {
-        ScrollView {
-            StudioHubView()
-                .padding(.horizontal, 24)
-                .padding(.top, 12)
-                .padding(.bottom, 24)
-        }
-        .background(PatinaColors.Background.primary)
-        .tabRoot(.studio)
-        .navigationBarTitleDisplayMode(.large)
+        ProfileView()
+            .tabRoot(.studio)
     }
 }

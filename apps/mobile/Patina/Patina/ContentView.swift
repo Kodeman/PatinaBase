@@ -240,7 +240,7 @@ struct ContentView: View {
         case .styleQuiz, .styleResult, .arPlacement:
             styleDestination(for: route)
 
-        case .profile, .notifications, .designerConsultation, .designRequests,
+        case .profile, .studio, .notifications, .designerConsultation, .designRequests,
              .projectList, .projectDetail, .decisionList, .decisionDetail:
             workCoreDestination(for: route)
 
@@ -340,6 +340,13 @@ struct ContentView: View {
     private func workCoreDestination(for route: AppRoute) -> some View {
         switch route {
         case .profile:
+            ProfileView()
+
+        // `.studio` is the Studio tab's own root, so it is never pushed — the
+        // tab model selects the tab instead (`RouteTabTable.isTabRoot`). The
+        // arm exists because both dispatchers are exhaustive, and it renders
+        // the composition the tab root renders: one screen, two names.
+        case .studio:
             ProfileView()
 
         case .notifications:

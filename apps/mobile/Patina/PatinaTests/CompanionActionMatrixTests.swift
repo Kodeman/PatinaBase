@@ -57,6 +57,7 @@ struct CompanionActionMatrixTests {
         .styleResult(result: sampleStyle),
         .arPlacement(productId: "piece-1"),
         .profile,
+        .studio,
         .notifications,
         .designerConsultation,
         .designRequests(focusLeadId: nil),

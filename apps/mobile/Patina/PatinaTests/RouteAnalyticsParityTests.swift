@@ -68,6 +68,7 @@ struct RouteAnalyticsParityTests {
         // Only the scan flow consolidated; nothing else dual-emits.
         #expect(AppRoute.heroFrame.legacyScreenName == nil)
         #expect(AppRoute.profile.legacyScreenName == nil)
+        #expect(AppRoute.studio.legacyScreenName == nil)
         #expect(AppRoute.notifications.legacyScreenName == nil)
     }
 
@@ -82,6 +83,9 @@ struct RouteAnalyticsParityTests {
             (.table, "Your Table"),
             (.styleQuiz, "Style Quiz"),
             (.profile, "Profile"),
+            // R2: the Studio tab reports its own name, not Profile's. The two
+            // routes mount the same composition; the funnel reads the name.
+            (.studio, "Your Studio"),
             (.notifications, "Notifications"),
             (.designerConsultation, "Designer"),
             (.designRequests(focusLeadId: nil), "Design Request"),

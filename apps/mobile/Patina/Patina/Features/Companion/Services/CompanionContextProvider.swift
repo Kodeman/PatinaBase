@@ -134,7 +134,7 @@ enum CompanionActionProvider {
             return scanItems(screen, context: context)
         case .styleQuiz, .styleResult:
             return styleItems(screen, context: context)
-        case .projectList, .projectDetail, .decisionList, .decisionDetail,
+        case .studio, .projectList, .projectDetail, .decisionList, .decisionDetail,
              .threadList, .threadDetail, .documentList, .notifications,
              .designerConsultation, .designRequests:
             return studioItems(screen, context: context)
@@ -219,6 +219,8 @@ enum CompanionActionProvider {
 
     private static func studioPanelTitle(for screen: AppRoute) -> String {
         switch screen {
+        case .studio:
+            return "What's next?"
         case .projectList:
             return "What's on your plate?"
         case .projectDetail:

@@ -213,6 +213,18 @@ extension CompanionActionProvider {
         context: CompanionContext
     ) -> [CompanionActionItem] {
         switch screen {
+        // The Studio tab's own root (R2). The four doors the hub lists, in the
+        // order the hub lists them — plus the provider's two-row tail, which is
+        // C8's cap of six exactly. Not `accountItems`: the identity rows belong
+        // to the screen's own composition, and the QR scanner stays on
+        // `.profile` where `CompanionActionMatrixTests` pins it.
+        case .studio:
+            return [
+                decisionsRow(suggested: true),
+                messageDesignerRow(label: "Messages", hint: "Your conversations"),
+                proposalsRow(),
+                budgetRow(label: "Billed to date")
+            ]
         case .projectList, .projectDetail:
             return projectItems(screen, context: context)
         case .decisionList, .decisionDetail:

@@ -183,26 +183,57 @@ struct HouseFirstRootTests {
         #expect(coordinator.tabs.stack(for: .studio).isEmpty)
     }
 
-    /// BL-1, stated rather than hidden: the Studio tab has no `AppRoute` of its
-    /// own, so it stands on `.profile` — and `.profile` is what `trackScreen`
-    /// sends to PostHog and what the Companion is handed, on every entry into
-    /// the tab, while `StudioHubView` under the title "Your Studio" is what is
-    /// on glass. Minting `.studio` means an arm in five exhaustive switches C8
-    /// freezes, in files this lane does not own (`waves/w3/n1-notes.md` §4a).
-    /// This pin is the debt: it reddens the moment the honest route exists.
+    /// BL-1's debt, paid (R2). The Studio tab has a route of its own, so what
+    /// `trackScreen` sends to PostHog and what the Companion is handed on every
+    /// entry into the tab is the name that is on glass — not Profile's.
     @Test
-    func theStudioTabReportsProfileUntilAStudioRouteIsMinted() {
-        #expect(RouteTabTable.rootRoute(for: .studio) == .profile)
+    func theStudioTabReportsItsOwnScreen() {
+        #expect(RouteTabTable.rootRoute(for: .studio) == .studio)
 
         let coordinator = AppCoordinator(houseFirstRoot: true)
         coordinator.selectTab(.studio)
         coordinator.syncCurrentScreen(to: coordinator.tabs.visibleRoute)
 
-        #expect(coordinator.currentScreen == .profile)
-        #expect(coordinator.companionContext.currentScreen == .profile)
-        // What PostHog is told, against what the screen is called.
+        #expect(coordinator.currentScreen == .studio)
+        #expect(coordinator.companionContext.currentScreen == .studio)
+        // What PostHog is told IS what the screen is called (C4 / B-7 a).
+        #expect(AppRoute.studio.analyticsScreenName == "Your Studio")
+        #expect(AppRoute.studio.analyticsScreenName == PatinaTab.studio.canonicalName)
+        // And `.profile` is untouched — still the flag-off monogram's door.
         #expect(AppRoute.profile.analyticsScreenName == "Profile")
-        #expect(PatinaTab.studio.canonicalName == "Your Studio")
+        #expect(RouteTabTable.tab(for: .profile) == .studio)
+    }
+
+    /// The walk's finding: on the flag-on root there was no way to Settings,
+    /// Sign Out or Delete Account, because the Studio tab mounted the hub alone
+    /// and `ProfileView` — which carries the Settings row — was unreachable.
+    /// Apple 5.1.1 (v) makes account deletion a review requirement, so the door
+    /// is pinned rather than only walked.
+    @Test
+    func settingsAndAccountAreOneTapFromTheStudioTab() throws {
+        // The tab root IS the profile composition.
+        let tabRoot = try SourcePin.read("Patina/Features/Navigation/TabRoot.swift")
+        #expect(SourceScan.code(in: tabRoot).contains("struct StudioTabRoot"))
+        #expect(SourceScan.code(in: tabRoot).contains("ProfileView()"))
+        #expect(SourceScan.code(in: tabRoot).contains(".tabRoot(.studio)"))
+
+        // …which carries the Settings row that presents the sheet…
+        let profile = try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
+        #expect(profile.contains("label: \"Settings\""))
+        #expect(SourceScan.code(in: profile).contains("coordinator.presentedSheet = .settings"))
+
+        // …the sheet is `SettingsView`, which carries Sign Out and pushes
+        // `AccountView`, which carries Delete Account.
+        let content = try SourcePin.read("Patina/ContentView.swift")
+        #expect(SourceScan.code(in: content).contains("case .settings:"))
+        #expect(SourceScan.code(in: content).contains("SettingsView()"))
+
+        let settings = try SourcePin.read("Patina/Features/Settings/Views/SettingsView.swift")
+        #expect(settings.contains("\"Sign Out\""))
+        #expect(SourceScan.code(in: settings).contains("AccountView()"))
+
+        let account = try SourcePin.read("Patina/Features/Account/AccountView.swift")
+        #expect(account.contains("AccountView.DeleteAccountButton"))
     }
 
     /// §6a's exit: one Studio door on this root, and B-8's step 3 points at it.

@@ -52,7 +52,8 @@ public struct RouteTabTable {
             return .pieces
 
         // Studio — the work: the designer, the projects, the money, the paper.
-        case .profile,
+        case .studio,
+             .profile,
              .notifications,
              .designerConsultation,
              .designRequests,
@@ -74,19 +75,18 @@ public struct RouteTabTable {
 
     /// The route each tab's root stands for.
     ///
-    /// Studio answers `.profile`. "Your Studio" is a canonical destination with
-    /// no `AppRoute` of its own, and minting one would break five exhaustive
-    /// switches inside `Features/Companion/**` and `Services/Companion/**` —
-    /// including `CompanionActionProvider.screenItems`, which states in a
-    /// comment that it carries no `default:` so a new route cannot reach an
-    /// empty menu. C8 freezes those files. `.profile` is the honest stand-in:
-    /// its screen is the one that already hosts `StudioHubView`.
+    /// Studio answers `.studio` — its own route, minted in W3-fix (R2). It
+    /// stood on `.profile` for one wave, which meant every Studio visit
+    /// reported the PostHog screen `Profile` and was handed Profile's Companion
+    /// rows while "Your Studio" was the name on glass. The screen behind both
+    /// routes is the same profile composition; the names are not, and the
+    /// funnel reads the name.
     public static func rootRoute(for tab: PatinaTab) -> AppRoute {
         switch tab {
         case .today: return .heroFrame
         case .spaces: return .yourSpaces
         case .pieces: return .emergence(pieceId: nil)
-        case .studio: return .profile
+        case .studio: return .studio
         }
     }
 

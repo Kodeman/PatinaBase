@@ -28,7 +28,7 @@ struct RouteTabTableTests {
         confidence: 0.9
     )
 
-    /// Every `AppRoute` case with the tab it belongs to. All 31, by hand.
+    /// Every `AppRoute` case with the tab it belongs to. All 32, by hand.
     /// `tab(for:)` is exhaustive with no `default:`, so a route added later
     /// fails compilation there first — this list then fails to be exhaustive
     /// in review, which is why `everyRouteCaseIsCovered` counts it.
@@ -54,6 +54,7 @@ struct RouteTabTableTests {
         (.styleQuiz, .pieces),
         (.styleResult(result: style), .pieces),
 
+        (.studio, .studio),
         (.profile, .studio),
         (.notifications, .studio),
         (.designerConsultation, .studio),
@@ -86,12 +87,14 @@ struct RouteTabTableTests {
 
     @Test
     func everyRouteCaseIsCovered() {
-        // 31 `AppRoute` cases; `.emergence` twice (both payload shapes) and
-        // `.scanFlow` three times (every reason) — 34 rows in all. The
-        // steward's inventory tallies Today 1 · Spaces 8 · Pieces 6 ·
-        // Studio 16 over distinct cases; the Spaces count here is 11 because
+        // 32 `AppRoute` cases — 31, plus `.studio`, minted in W3-fix so the
+        // Studio tab stops reporting Profile's screen name. `.emergence`
+        // appears twice (both payload shapes) and `.scanFlow` three times
+        // (every reason), so 35 rows in all. The steward's inventory tallies
+        // Today 1 · Spaces 8 · Pieces 6 · Studio 16 over distinct cases at the
+        // base sha; Studio is 17 now, and the Spaces count here is 11 because
         // scanFlow's three reasons and arPlacement are each pinned.
-        #expect(Self.expected.count == 34)
+        #expect(Self.expected.count == 35)
         let today = Self.expected.filter { $0.1 == .today }.count
         let spaces = Self.expected.filter { $0.1 == .spaces }.count
         let pieces = Self.expected.filter { $0.1 == .pieces }.count
@@ -99,7 +102,7 @@ struct RouteTabTableTests {
         #expect(today == 1)
         #expect(spaces == 11)
         #expect(pieces == 6)
-        #expect(studio == 16)
+        #expect(studio == 17)
     }
 
     /// A new `AppRoute` case must fail to compile in `tab(for:)`, not fall
@@ -120,7 +123,7 @@ struct RouteTabTableTests {
         #expect(RouteTabTable.rootRoute(for: .today) == .heroFrame)
         #expect(RouteTabTable.rootRoute(for: .spaces) == .yourSpaces)
         #expect(RouteTabTable.rootRoute(for: .pieces) == .emergence(pieceId: nil))
-        #expect(RouteTabTable.rootRoute(for: .studio) == .profile)
+        #expect(RouteTabTable.rootRoute(for: .studio) == .studio)
     }
 
     @Test
@@ -135,10 +138,14 @@ struct RouteTabTableTests {
         #expect(RouteTabTable.isTabRoot(.heroFrame))
         #expect(RouteTabTable.isTabRoot(.yourSpaces))
         #expect(RouteTabTable.isTabRoot(.emergence(pieceId: nil)))
-        #expect(RouteTabTable.isTabRoot(.profile))
+        #expect(RouteTabTable.isTabRoot(.studio))
 
         // A piece is not the browse root, even though it shares the case.
         #expect(!RouteTabTable.isTabRoot(.emergence(pieceId: "piece-1")))
+        // R2: `.profile` was the Studio tab's stand-in root for one wave. It is
+        // a pushed screen again — the same composition under its own name — so
+        // a link to it must push rather than pop the tab it lands on.
+        #expect(!RouteTabTable.isTabRoot(.profile))
         #expect(!RouteTabTable.isTabRoot(.table))
         #expect(!RouteTabTable.isTabRoot(.invoiceDetail(invoiceId: "invoice-1")))
         #expect(!RouteTabTable.isTabRoot(.roomProject(roomId: Self.roomId)))

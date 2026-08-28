@@ -84,13 +84,23 @@ struct TabRootTitleTests {
         )
     }
 
-    /// `StudioHubView` has no scroll view and no title of its own, so its
-    /// wrapper still supplies both — that responsibility moved into
-    /// `TabRoot.swift`, it did not disappear.
+    /// R2: the Studio tab's root is the whole profile composition, not the hub
+    /// alone — the identity line, the hub, and the Settings/Account door, which
+    /// is what the monogram opens on the flag-off root. `ProfileView` owns the
+    /// scroll view and the header, so the wrapper supplies neither; it supplies
+    /// the canonical name and the tab-root seam.
     @Test
-    func theStudioWrapperSuppliesTheScrollViewTheHubDoesNotHave() throws {
+    func theStudioWrapperMountsTheProfileComposition() throws {
         let source = try SourcePin.read("Patina/Features/Navigation/TabRoot.swift")
-        #expect(source.contains("StudioHubView()"))
-        #expect(source.contains("ScrollView"))
+        #expect(source.contains("ProfileView()"))
+        #expect(!source.contains("ScrollView"), "ProfileView owns the scroll view")
+
+        // The hub is still on that screen — inside `ProfileView`, where the
+        // flag-off root has always drawn it.
+        let profile = try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
+        #expect(profile.contains("StudioHubView()"))
+        // And the canonical name is read, never re-typed.
+        #expect(profile.contains("PatinaTab.studio.canonicalName"))
+        #expect(!profile.contains("\"Your Studio\""))
     }
 }

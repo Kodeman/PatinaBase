@@ -12,6 +12,10 @@ struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// True when this screen is the Studio tab's root rather than a pushed
+    /// copy of itself (W3 · R2). It then carries the tab's canonical name and
+    /// no back chevron; everywhere else it is unchanged.
+    @Environment(\.isTabRoot) private var isTabRoot
     @State private var viewModel = ProfileViewModel()
     /// Drives the contextual help-panel sheet attached to the Profile surface.
     /// Toggled by the `?` button in the top-right corner of the header.
@@ -166,7 +170,10 @@ struct ProfileView: View {
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the avatar/name block above
         // is this screen's header, so the chrome adds only the back chevron.
-        .patinaScreen(title: nil)
+        // As the Studio tab's root there is no chevron and the destination's
+        // canonical name is what the screen is called; the string is read from
+        // `PatinaTab`, never re-typed (B-7 a).
+        .patinaScreen(title: isTabRoot ? PatinaTab.studio.canonicalName : nil)
         .onAppear {
             viewModel.loadData(context: modelContext)
         }
