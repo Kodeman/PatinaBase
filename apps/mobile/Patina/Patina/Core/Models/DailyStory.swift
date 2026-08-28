@@ -23,6 +23,10 @@ struct DailyStory: Identifiable, Hashable {
     let makerLocation: String
     let makerAvatarGradient: LinearGradient
     let featuredProductID: String?
+    /// The day the story was published (`editorial_stories.published_at`).
+    /// Nil where the row carries none — the card then prints the read time
+    /// alone rather than a date the app made up.
+    let publishedAt: Date?
 
     var readTimeLabel: String { "\(readMinutes) min read" }
 
@@ -47,7 +51,8 @@ extension DailyStory {
         makerName: "Jonathan Chilton",
         makerLocation: "Freeport, Maine",
         makerAvatarGradient: PatinaGradients.earth,
-        featuredProductID: nil
+        featuredProductID: nil,
+        publishedAt: nil
     )
 }
 #endif
