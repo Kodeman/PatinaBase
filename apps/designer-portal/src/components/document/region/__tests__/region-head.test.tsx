@@ -50,6 +50,24 @@ describe('RegionHead', () => {
     );
   });
 
+  it('prints the region name at the Life Review’s 24px, over its eyebrow', () => {
+    const { container } = renderHead({ eyebrow: 'The job · project' });
+    const heading = screen.getByRole('heading', { name: 'Approvals' });
+    expect(heading).toHaveClass(
+      'font-heading',
+      'text-[24px]',
+      'text-[var(--text-primary)]',
+    );
+    const eyebrow = container.querySelector('p')!;
+    expect(eyebrow).toHaveTextContent('The job · project');
+    expect(eyebrow).toHaveClass(
+      'font-mono',
+      'text-[11px]',
+      'uppercase',
+      'text-[var(--text-muted)]',
+    );
+  });
+
   it('names the region on a focusable heading', () => {
     renderHead();
     const heading = screen.getByRole('heading', { name: 'Approvals' });

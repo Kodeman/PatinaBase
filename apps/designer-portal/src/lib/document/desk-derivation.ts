@@ -28,6 +28,10 @@ import {
   isCeremonySourceEvent,
   type DeskScheduleInput,
 } from './desk-schedule';
+// Type-only, so it is erased at compile time and buys no runtime dependency:
+// the filled-stamp tones are the Stamp component's contract, not a second
+// vocabulary declared here.
+import type { StampTone } from '@/components/document/stamp';
 
 export type EngagementKind = 'project' | 'proposal' | 'lead' | 'relationship';
 
@@ -218,8 +222,9 @@ export interface NeedLine {
    *  `null` means the card owns a visible TriageBar instead. */
   actionLabel: string | null;
   /** `color` is the stamp border; `ink` (optional) darkens the text for
-   *  contrast on paper, per the prototype's stamp treatment. */
-  stamp: { label: string; color: string; ink?: string };
+   *  contrast on paper, per the prototype's stamp treatment. R126 adds `tone`
+   *  on the states that have a filled recipe; an outline surface ignores it. */
+  stamp: { label: string; color: string; ink?: string; tone?: StampTone };
   urgent: boolean;
   /** When set, the folder's act opens a Drawer ledger (R36: the overdue-invoice
    *  need opens the Accounts book onto Receivables) rather than the document.
@@ -573,7 +578,7 @@ const needOverdueDecision: NeedRule = ({ row }) => {
           ? `1 decision overdue${oldest}`
           : `${n} decisions overdue${oldest}`,
       actionLabel: NEED_ACTION_LABELS.overdue_decision,
-      stamp: { label: 'DECISION DUE', ...STAMP.due },
+      stamp: { label: 'DECISION DUE', ...STAMP.due, tone: 'decision' },
       urgent: true,
       dueOn: row.earliest_overdue_due,
       owner: 'client',
@@ -810,7 +815,7 @@ const needDamageClaim: NeedRule = ({ row }) => {
           ? `${row.open_claim_po ?? 'A delivery'} has an open damage claim`
           : `${n} open damage claims — review receiving`,
       actionLabel: NEED_ACTION_LABELS.damage_claim,
-      stamp: { label: 'CLAIM OPEN', ...STAMP.terracotta },
+      stamp: { label: 'CLAIM OPEN', ...STAMP.terracotta, tone: 'damaged' },
       urgent: false,
     };
   }

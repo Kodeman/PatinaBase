@@ -43,7 +43,7 @@ export function MItemContent({
   return (
     <>
       <span
-        className="mb-0.5 block font-mono text-[8px] font-semibold uppercase tracking-[0.06em]"
+        className="mb-0.5 block font-mono text-[11px] font-semibold uppercase tracking-[0.06em]"
         style={{ color: kindColor }}
       >
         {kindLine}
@@ -61,7 +61,7 @@ export function MItemContent({
 }
 
 const CONTAINER: Record<MItemTone, string> = {
-  paper: 'border-[var(--color-pearl)] bg-[var(--doc-paper)]',
+  paper: 'doc-elevated border-[var(--doc-ink-border)] bg-[var(--doc-paper)]',
   dark: 'border-[rgba(250,247,242,0.15)] bg-[rgba(250,247,242,0.04)]',
 };
 
@@ -87,10 +87,10 @@ export function MItem({
   style?: CSSProperties;
 }) {
   const borderLeft = ownVoice ? 'var(--color-clay)' : accent.border;
-  const kindColor = ownVoice ? 'var(--color-clay)' : accent.label;
+  const kindColor = ownVoice ? 'var(--color-clay-ink)' : accent.label;
   return (
     <div
-      className={`rounded-[5px] border px-3 py-2 ${CONTAINER[tone]} ${className}`}
+      className={`rounded-[4px] border px-3 py-2 ${CONTAINER[tone]} ${className}`}
       style={{ borderLeft: `2.5px solid ${borderLeft}`, ...style }}
     >
       <MItemContent kindLine={kindLine} kindColor={kindColor} title={title} detail={detail} tone={tone} />

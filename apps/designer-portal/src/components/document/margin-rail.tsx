@@ -255,7 +255,7 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
         tabIndex={openAsSheet ? -1 : undefined}
         data-margin-panel
         data-margin-mode={isFullRail ? 'rail' : 'sheet'}
-        className={`z-[32] hidden border-[var(--color-pearl)] bg-[rgba(250,247,242,0.98)] motion-safe:transition-transform motion-safe:duration-200 motion-reduce:transition-none min-[1180px]:fixed min-[1180px]:inset-y-0 min-[1180px]:right-0 min-[1180px]:block min-[1180px]:h-screen min-[1180px]:w-[min(360px,calc(100vw-56px))] min-[1180px]:overflow-y-auto min-[1180px]:border-l min-[1440px]:sticky min-[1440px]:top-0 min-[1440px]:col-start-3 min-[1440px]:h-screen min-[1440px]:w-auto min-[1440px]:translate-x-0 min-[1440px]:overflow-y-auto min-[1440px]:bg-[rgba(250,247,242,0.55)] ${
+        className={`z-[32] hidden border-[var(--color-pearl)] bg-[var(--doc-rail-stock)] motion-safe:transition-transform motion-safe:duration-200 motion-reduce:transition-none min-[1180px]:fixed min-[1180px]:inset-y-0 min-[1180px]:right-0 min-[1180px]:block min-[1180px]:h-screen min-[1180px]:w-[min(360px,calc(100vw-56px))] min-[1180px]:overflow-y-auto min-[1180px]:border-l min-[1440px]:sticky min-[1440px]:top-0 min-[1440px]:col-start-3 min-[1440px]:h-screen min-[1440px]:w-auto min-[1440px]:translate-x-0 min-[1440px]:overflow-y-auto ${
           openAsSheet
             ? 'min-[1180px]:translate-x-0 min-[1180px]:pointer-events-auto'
             : 'min-[1180px]:translate-x-full min-[1180px]:pointer-events-none min-[1440px]:pointer-events-auto'
