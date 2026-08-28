@@ -37,6 +37,26 @@ struct BrowseGridContractTests {
         #expect(RecommendationsViewModel.category(forFilter: "All") == nil)
     }
 
+    /// W3 · N2. SP-02 wired `p_category` and then filtered the result again on
+    /// the client, so the screen never actually depended on the server's
+    /// answer. The subtitle counts what the RPC returned, not what survived a
+    /// second pass.
+    @Test
+    func theSubtitleCountsWhatTheServerReturned() {
+        let viewModel = RecommendationsViewModel()
+        viewModel.products = [
+            Product(
+                id: "a", name: "Brass Arc Floor Lamp", priceCents: 89_000, matchScore: 91,
+                makerName: "Nordic Atelier", makerLocation: nil, makerStory: nil,
+                imageURL: nil, usdzURL: nil, styleTags: [], materialTags: [], badges: [],
+                category: .lighting, tier: .styleMatch
+            )
+        ]
+        viewModel.activeFilter = "Lighting"
+        #expect(viewModel.filteredProducts.count == 1)
+        #expect(viewModel.headerSubtitle == "1 piece chosen for your space")
+    }
+
     @Test
     func subtitleSaysChosenNotCurated() {
         let viewModel = RecommendationsViewModel()
