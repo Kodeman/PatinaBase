@@ -385,11 +385,14 @@ struct HouseFirstRootTests {
         ]
 
         for name in dispatchers {
-            let a = Self.dispatcherBody(name, in: legacy)
-            let b = Self.dispatcherBody(name, in: houseFirst)
-            #expect(a != nil, "ContentView has no \(name)(for:)")
-            #expect(b != nil, "HouseFirstRoot has no \(name)(for:)")
-            #expect(a == b, "\(name)(for:) differs between the two roots:\n\(a ?? "")\n---\n\(b ?? "")")
+            let legacyBody = Self.dispatcherBody(name, in: legacy)
+            let houseFirstBody = Self.dispatcherBody(name, in: houseFirst)
+            #expect(legacyBody != nil, "ContentView has no \(name)(for:)")
+            #expect(houseFirstBody != nil, "HouseFirstRoot has no \(name)(for:)")
+            #expect(
+                legacyBody == houseFirstBody,
+                "\(name)(for:) differs between the two roots:\n\(legacyBody ?? "")\n---\n\(houseFirstBody ?? "")"
+            )
         }
     }
 
