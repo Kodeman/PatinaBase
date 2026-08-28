@@ -22,8 +22,8 @@ see `source/` and `research/` (index in the previous RESUME text, preserved in g
 | W1b planks SP-02…SP-20 (4 lanes, 00533–00536, client-portal AASA + /piece page, delete-account) | DONE | `e9da02569` | `waves/w1b/` (walk PASS after two fix rounds) |
 | W2 the Record (ruling R1 "now": Record card, designer seat, house rail, NEW THIS WEEK, July rail retired, 00537–00538) | DONE | `09ec2f4b5` | `waves/w2/` (walk PASS; XXL orb overlap ruled to W3) |
 | W3 tab bar behind `house-first` (B-1/B-2/B-7/B-8; `AppRoute.studio`; tour on the bar) | DONE | `1cb71c346` | `waves/w3/` (re-walk PASS; Sanity tour copy OWED to Kody before the flag flips) |
-| W4 house on Today (rooms + budgets, saved date/room/note, decays removed, timeline, seat project rule, guest-session durability, 00539) | INTEGRATED; fix round `w4-fix.js` running (rooms hydrate from server, Add to Room writes room_id, fit line mounted, §6 rulings) | — | `waves/w4/` |
-| W5 purchase (`direct-orders`; R3 pre-emption; 00540 attribution + fulfillment intake; needs Kody's real `sk_test` locally + Stripe Tax ruling) | script ready `source/workflows/w5-purchase.js` | — | — |
+| W4 house on Today (rooms + budgets, saved date/room/note, decays removed, timeline, seat project rule, guest-session durability, 00539) | DONE (four fix rounds; rulings in `waves/w4/rulings-fable.md`) | `2fffd48b3` | `waves/w4/` (walk 4 PASS on the wave's items; two Companion-at-AX-size defects → W5 A11Y lane) |
+| W5 purchase (`direct-orders`; R3 pre-emption; 00540 attribution + fulfillment intake; A11Y carry-overs) | DONE (walk PASS; Checkout hand-off BLOCKED by the local placeholder Stripe key) | see git log `chore(daily-return): integrate W5` | `waves/w5/` |
 | W6 widget + deep links (`house-widget`) | script ready `source/workflows/w6-widget.js` | — | — |
 
 ## How a wave runs (the pattern that works)

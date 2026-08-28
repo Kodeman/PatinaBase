@@ -274,6 +274,25 @@ honest); typed room names occasionally truncated under automation typing (not re
 - Acceptance: test-mode end-to-end on the simulator with a Stripe test card; Leah's thread carries
   the settle message; ops sees the fulfillment row; a client with a live designer never sees Buy.
 
+### W5 — DONE 2026-08-28 (merged; `waves/w5/`; 1413 tests; 00540 on main)
+The purchase path is built and gated: `direct-orders` flag + the buyability gate + ruling R3 (a
+live designer relationship pre-empts Buy). Attribution resolves server-side in
+`create_direct_order` (project → lead → roster; commission snapshot immutable after paid; earnings
+credit once); settle enqueues `fulfillment_intake` and posts the designer's thread notice; the
+client reads its own orders over both rails; `get_direct_order_terms()` carries the responsibility
+paragraph + contact + `tax_shipping_enabled` (default false → Path A disabled with honest copy).
+**Unmet by design until Kody acts:** the test-mode Checkout hand-off (local Stripe key is a
+placeholder); Stripe Tax/shipping registration; the roster-attribution path needs the base-table
+read inside `create_direct_order` (done server-side, never widening 00536's view). **Carried to W6
+(a session-isolation lane):** process-lifetime singletons (`BadgeCountService`,
+`DesignRequestStatusService`, `OrdersService`, `RoomSyncCoordinator`, `DesignerThreadOpener`'s
+inputs) are not reset on an in-process sign-out/sign-in — a second account's first act resolved
+against the first account's project (RLS refused it; no leak; the act failed); the Ask-designer
+thread and the seat must pick the project by the W4 rule (the one carrying NEEDS YOU items), not
+`.first`. **Noted:** under R3 the designer-facing settle notice cannot fire from the app until B's
+"Buy it myself" flips on; `_tests/stripe-rail.test.ts` needs `supabase functions serve` and a
+seed fix (`studio_id_not_designer_studio`) — pre-existing.
+
 ### W6 — Widget + deep links (Q8, B §9 W5; `house-widget`; base = main after W5)
 `PatinaWidget` target (small + Lock Screen accessory), timeline from `RecordSnapshotStore` (what
 moved, never what is owed), foreground refresh; opt-in due-date local reminder on the invoice.
