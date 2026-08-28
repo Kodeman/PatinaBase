@@ -9977,3 +9977,14 @@ I114 session; the O10/O11 items; the four e2e fixture defects already fixed at s
 integration lane. The deploy record follows as I152/I153.
 
 *Entries add: I151 · last id = I151*
+
+### R15 amendment · The Handled Desk responds only to the hand — 2026-08-28
+
+R15's Desk stillness remains the rule. The stage-grouped roster gains one narrow exception: a row may
+answer direct pointer hover or descendant keyboard focus with an equal paper wash/rule response, and its
+existing act may shift inward slightly. Nothing moves or changes opacity at rest; no row becomes a tab
+stop or disclosure. `prefers-reduced-motion` removes the transition and transform so the wash/rule state
+changes immediately. The existing `DocumentAction` remains owner of act telemetry and execution, and the
+existing job link remains owner of document pickup; this amendment creates no new action or route.
+
+*Entries add: R15 amendment · last id = I151*

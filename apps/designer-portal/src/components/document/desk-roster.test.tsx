@@ -144,6 +144,70 @@ describe('DeskRoster — the Material Register', () => {
   });
 });
 
+describe('DeskRoster — the Handled Desk response', () => {
+  it('gives pointer hover and descendant focus the same restrained response', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+    const quiet = container.querySelector<HTMLElement>(
+      '[data-roster-line="byrne"]',
+    );
+    const urgent = container.querySelector<HTMLElement>(
+      '[data-roster-line="vandersteen"]',
+    );
+
+    expect(quiet).toHaveAttribute('data-roster-response', 'interaction');
+    expect(quiet?.className).toContain('hover:bg-[var(--bg-muted)]');
+    expect(quiet?.className).toContain('focus-within:bg-[var(--bg-muted)]');
+    expect(quiet?.className).toContain(
+      'hover:border-[var(--color-aged-oak)]',
+    );
+    expect(quiet?.className).toContain(
+      'focus-within:border-[var(--color-aged-oak)]',
+    );
+
+    expect(urgent).toHaveAttribute('data-roster-response', 'interaction');
+    expect(urgent?.className).toContain('bg-[var(--bg-warm)]');
+    expect(urgent?.className).toContain(
+      'hover:border-[var(--color-terracotta)]',
+    );
+    expect(urgent?.className).toContain(
+      'focus-within:border-[var(--color-terracotta)]',
+    );
+  });
+
+  it('moves the existing act only in response to hover or keyboard focus', () => {
+    render(<DeskRoster roster={roster()} />);
+    const acts = [
+      screen.getByRole('link', { name: 'Follow up — Byrne remodel' }),
+      screen.getByRole('button', {
+        name: 'Send reminder — Vandersteen residence',
+      }),
+    ];
+
+    for (const act of acts) {
+      expect(act.className).toContain('group-hover:-translate-x-1');
+      expect(act.className).toContain('group-focus-within:-translate-x-1');
+      expect(act.className).toContain('motion-reduce:transform-none');
+      expect(act.className).toContain('motion-reduce:transition-none');
+      expect(act.className).not.toContain('animate-');
+    }
+  });
+
+  it('adds no disclosure, row tab stop, clipping, or shadow', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+    const lines = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-roster-line]'),
+    );
+
+    expect(container.querySelector('[aria-expanded]')).toBeNull();
+    for (const line of lines) {
+      expect(line).not.toHaveAttribute('tabindex');
+      expect(line.className).not.toContain('overflow-hidden');
+      expect(line.className).not.toContain('shadow');
+      expect(line.className).not.toContain('animate-');
+    }
+  });
+});
+
 describe('DeskRoster — the marks', () => {
   it('marks every job that needs a hand, and leaves a job with no need unmarked', () => {
     const model = roster();

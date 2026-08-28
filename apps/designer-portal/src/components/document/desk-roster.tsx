@@ -39,13 +39,22 @@ const STAGE_EDGE_COLOR: Record<
   care: 'var(--color-charcoal)',
 };
 
+const ACTION_RESPONSE_CLASS =
+  'transition-transform duration-150 ease-out group-hover:-translate-x-1 group-focus-within:-translate-x-1 motion-reduce:transform-none motion-reduce:transition-none';
+
 function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }) {
+  const responseWash =
+    line.mark === 'urgent'
+      ? 'hover:border-[var(--color-terracotta)] focus-within:border-[var(--color-terracotta)]'
+      : 'hover:border-[var(--color-aged-oak)] hover:bg-[var(--bg-muted)] focus-within:border-[var(--color-aged-oak)] focus-within:bg-[var(--bg-muted)]';
+
   return (
     <li
       data-tour-anchor={tourAnchor}
       data-roster-line={line.engagementId}
       data-roster-priority={line.mark === 'urgent' ? 'true' : undefined}
-      className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-dashed border-[var(--border-subtle)] px-2 py-2.5 last:border-b-0 ${
+      data-roster-response="interaction"
+      className={`group flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-dashed border-[var(--border-subtle)] px-2 py-2.5 transition-colors duration-150 ease-out last:border-b-0 motion-reduce:transition-none ${responseWash} ${
         line.mark === 'urgent' ? 'bg-[var(--bg-warm)]' : ''
       }`}
     >
@@ -91,6 +100,7 @@ function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }
           actionKey={`roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`}
           aria-label={`${line.act.label} — ${line.name}`}
           variant="secondary"
+          className={ACTION_RESPONSE_CLASS}
           onClick={() =>
             openLedger(line.act.ledger!.name, line.act.ledger!.context)
           }
@@ -102,6 +112,7 @@ function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }
           actionKey={`roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`}
           aria-label={`${line.act.label} — ${line.name}`}
           variant="secondary"
+          className={ACTION_RESPONSE_CLASS}
           href={line.act.href}
         >
           {line.act.label}
