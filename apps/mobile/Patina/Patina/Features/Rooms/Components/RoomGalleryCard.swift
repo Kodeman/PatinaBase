@@ -114,7 +114,9 @@ struct RoomGalleryCard: View {
         if let budget = budgetString(for: room) {
             cells.append(Stat(value: budget, label: "Budget"))
         }
-        cells.append(Stat(value: matchString(for: room), label: "Match"))
+        if let match = matchString(for: room) {
+            cells.append(Stat(value: match, label: "Match"))
+        }
         return cells
     }
 
@@ -151,11 +153,12 @@ struct RoomGalleryCard: View {
         return "$\(dollars)"
     }
 
-    /// The match score's dash is SP-18's pre-existing idiom for a score not yet
-    /// computed, not a missing figure the person could have supplied; it is
-    /// raised for Fable in `h1-notes.md` §6.2 rather than changed here.
-    static func matchString(for room: RoomModel) -> String {
-        guard let avg = room.averageMatchScore else { return "—" }
+    /// A score Patina has not computed gets no cell. The `—` under the word
+    /// `MATCH` named a number that does not exist anywhere — not a figure the
+    /// person declined to give, which is what SP-18's dash idiom is for
+    /// (h1-notes.md §6.2, ruled in integration.md §6.5).
+    static func matchString(for room: RoomModel) -> String? {
+        guard let avg = room.averageMatchScore else { return nil }
         return "\(avg)%"
     }
 

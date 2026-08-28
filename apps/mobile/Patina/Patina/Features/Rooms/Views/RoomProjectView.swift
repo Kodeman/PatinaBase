@@ -434,9 +434,14 @@ private extension RoomProjectView {
         // to NULL and the direct fetch hard-codes it nil, so `hasARModel` is
         // false on every path — the number could never be anything but zero.
         // "MATCH" now names what it matches against.
+        // A score nobody has computed gets no cell, here as on the Spaces
+        // card (integration.md §6.5) — the `—` named a number that does not
+        // exist rather than one its owner declined to give.
         HStack(spacing: 8) {
             statCell(value: "\(room.items.count)", label: "Saved pieces")
-            statCell(value: room.averageMatchScore.map { "\($0)%" } ?? "—", label: "Room match")
+            if let match = room.averageMatchScore {
+                statCell(value: "\(match)%", label: "Room match")
+            }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
