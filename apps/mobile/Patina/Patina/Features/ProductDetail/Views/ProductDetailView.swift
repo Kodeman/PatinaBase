@@ -62,13 +62,19 @@ struct ProductDetailView: View {
         )?.name
     }
 
-    /// Whether the relationship above is an answer rather than a default. A
-    /// guest is knowable without any fetch; everybody else waits for both
-    /// services, the same rule `EngagementTier` holds for the home's tier.
+    /// Whether the relationship above is an answer rather than a default.
+    ///
+    /// `BadgeCountService.hasLoaded` is deliberately NOT the projects half:
+    /// it goes true when any one of five fetches answers, and on a session
+    /// where `listProjects()` alone fails a client with an active project
+    /// still resolves `.none` — the one relationship that draws Buy.
+    /// `projectsLoaded` says only that the projects answer arrived.
     private var relationshipIsResolved: Bool {
-        guard AuthService.shared.isAuthenticated else { return true }
-        return BadgeCountService.shared.hasLoaded
-            && DesignRequestStatusService.shared.hasLoaded
+        PieceActResolver.relationshipIsResolved(
+            isAuthenticated: AuthService.shared.isAuthenticated,
+            projectsAnswered: BadgeCountService.shared.projectsLoaded,
+            leadAnswered: DesignRequestStatusService.shared.hasLoaded
+        )
     }
 
     /// The one act this piece offers, resolved from the relationship, the
@@ -132,6 +138,14 @@ struct ProductDetailView: View {
             PieceActChannel.shared.publish(currentAct)
             await resolveRelationshipIfNeeded()
             terms = (try? await DirectOrdersAPIClient.shared.fetchTerms()) ?? .unknown
+        }
+        // A session can land while this screen is still up: the wall is a sheet
+        // over it, so `.task` has already run — as a guest, where the
+        // relationship is knowable without any fetch and nothing was asked.
+        // Without this the reader signs in, comes back, and the bar still reads
+        // "Ask about this piece" for the rest of the session.
+        .onChange(of: AuthService.shared.isAuthenticated) { _, _ in
+            Task { await resolveRelationshipIfNeeded() }
         }
         // The act can change under the screen — the piece finishes loading, or
         // the two designer services answer. Both surfaces follow it.
@@ -211,10 +225,15 @@ struct ProductDetailView: View {
                     responsibilityParagraph: terms.responsibilityParagraph,
                     contactLine: terms.contact.map { "Questions or damage: \($0)" },
                     soldBy: displayProduct.map(OrderSheetContent.soldBy) ?? "",
-                    onSeeOrder: { orderId in
-                        presented = nil
-                        coordinator.navigate(to: .orderDetail(orderId: orderId))
-                    },
+                    taxShippingEnabled: terms.taxShippingEnabled,
+                    // The order route and the id it takes belong to the order
+                    // lane (steward map §6: "if an order route is needed, C2
+                    // asks"), and its token is not a bare `direct_orders` uuid
+                    // — a settled order re-keys onto the fulfillment row. This
+                    // lane hands over the direct-order id and draws no control
+                    // until a destination exists, because a control that goes
+                    // nowhere is worse than no control.
+                    onSeeOrder: nil,
                     onBackToToday: {
                         presented = nil
                         coordinator.navigate(to: .heroFrame)
@@ -222,11 +241,13 @@ struct ProductDetailView: View {
                 )
                 .interactiveDismissDisabled(false)
 
-            case .authWall:
+            case .authWall(let title):
                 // SP-09 / C9: a soft wall over the flow the person is in,
                 // with a Cancel. Nothing has been written and nothing will be
-                // until a session lands.
-                AuthSheet(title: "Sign in to order")
+                // until a session lands. The title names the act that raised
+                // it — a reader who tapped "Ask about this piece" is not told
+                // to sign in to order something.
+                AuthSheet(title: title)
             }
         }
     }
@@ -238,20 +259,17 @@ struct ProductDetailView: View {
     private func performPrimaryAct(_ product: Product) {
         let act = act(for: product)
         PostHogService.shared.capture(act.analyticsEvent, properties: ["product_id": product.id])
-        switch act {
+        switch PieceActResolver.entry(
+            for: act,
+            isAuthenticated: AuthService.shared.isAuthenticated
+        ) {
+        case .authWall(let title):
+            presented = .authWall(title: title)
         case .askDesigner:
             presented = .askDesigner
-        case .buy:
-            guard AuthService.shared.isAuthenticated else {
-                presented = .authWall
-                return
-            }
+        case .order:
             presented = .order
         case .askAboutPiece(let reason):
-            guard AuthService.shared.isAuthenticated else {
-                presented = .authWall
-                return
-            }
             presented = .askAboutPiece(reason: reason)
         }
     }

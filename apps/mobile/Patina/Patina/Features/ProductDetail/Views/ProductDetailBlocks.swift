@@ -33,9 +33,10 @@ extension ProductDetailView {
         case order
         /// M5c, over the flow once the row settles.
         case orderPlaced(DirectOrder)
-        /// C9's soft wall. A guest tapping Buy meets this and **nothing is
-        /// written** — `create_direct_order` is never called.
-        case authWall
+        /// C9's soft wall. A guest tapping the act meets this and **nothing
+        /// is written** — `create_direct_order` is never called. The title is
+        /// the one the act raised it with.
+        case authWall(title: String)
 
         var id: String {
             switch self {
@@ -45,7 +46,7 @@ extension ProductDetailView {
             case .askAboutPiece: return "askAboutPiece"
             case .order: return "order"
             case .orderPlaced(let order): return "orderPlaced-\(order.id)"
-            case .authWall: return "authWall"
+            case .authWall(let title): return "authWall-\(title)"
             }
         }
     }

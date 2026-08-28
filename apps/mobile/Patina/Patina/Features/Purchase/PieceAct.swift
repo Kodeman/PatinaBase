@@ -76,7 +76,56 @@ enum PieceAct: Equatable, Sendable {
     }
 }
 
+/// Where the primary tap goes. Extracted from the screen so the guest wall is
+/// a value a test can assert, rather than a `guard` inside a private method on
+/// a SwiftUI view that nothing could reach.
+enum PieceActEntry: Equatable, Sendable {
+    /// C9's soft wall. Nothing is written and nothing will be until a session
+    /// lands — in particular `create_direct_order` is never called.
+    case authWall(title: String)
+    case askDesigner
+    case askAboutPiece(reason: String?)
+    case order
+}
+
 enum PieceActResolver {
+
+    /// Whether the designer relationship is an answer rather than a default.
+    ///
+    /// A guest is knowable without any fetch. Everybody else waits for BOTH
+    /// halves of the resolution to have answered — the projects fetch and the
+    /// lead fetch — because a missing answer reads as `.none`, and `.none` is
+    /// the one relationship that draws Buy. "At least one of five queries came
+    /// back" is not that predicate: a session where decisions and invoices
+    /// answer and `listProjects()` alone fails would hand a client with an
+    /// active project the Buy button R3 forbids her.
+    static func relationshipIsResolved(
+        isAuthenticated: Bool,
+        projectsAnswered: Bool,
+        leadAnswered: Bool
+    ) -> Bool {
+        guard isAuthenticated else { return true }
+        return projectsAnswered && leadAnswered
+    }
+
+    /// The primary control's destination. Every act that writes anything —
+    /// an order, a message, a lead — meets the wall first when there is no
+    /// session.
+    static func entry(for act: PieceAct, isAuthenticated: Bool) -> PieceActEntry {
+        switch act {
+        case .askDesigner:
+            guard isAuthenticated else {
+                return .authWall(title: "Sign in to message your designer")
+            }
+            return .askDesigner
+        case .buy:
+            guard isAuthenticated else { return .authWall(title: "Sign in to order") }
+            return .order
+        case .askAboutPiece(let reason):
+            guard isAuthenticated else { return .authWall(title: "Sign in to ask") }
+            return .askAboutPiece(reason: reason)
+        }
+    }
 
     /// - Parameters:
     ///   - product: the piece as decoded from `products` (the by-id fetch

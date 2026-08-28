@@ -99,6 +99,49 @@ struct PieceActMatrixTests {
         }
     }
 
+    @Test("a failed projects fetch is not an answer, whatever the badge rail says")
+    func aFailedProjectsFetchIsNotAnAnswer() {
+        // `BadgeCountService.hasLoaded` goes true when ANY of five fetches
+        // answers, and `apply` keeps the previous value for a nil fetch —
+        // `[]` on a cold launch. So a signed-in client with an active project,
+        // on a session where decisions and invoices answer and
+        // `listProjects()` alone fails, resolved `.none` and — flag on, gate
+        // passing — drew `Buy — $4,200.00`. The predicate has to mean "the
+        // projects answer arrived".
+        let service = BadgeCountService.makeForTests()
+        service.apply(
+            decisions: [], summaries: [], proposals: [], invoices: [],
+            projects: nil, roster: []
+        )
+        #expect(!service.projectsLoaded)
+        #expect(!PieceActResolver.relationshipIsResolved(
+            isAuthenticated: true,
+            projectsAnswered: service.projectsLoaded,
+            leadAnswered: true
+        ))
+
+        service.apply(
+            decisions: nil, summaries: nil, proposals: nil, invoices: nil,
+            projects: [], roster: nil
+        )
+        #expect(service.projectsLoaded)
+        #expect(PieceActResolver.relationshipIsResolved(
+            isAuthenticated: true,
+            projectsAnswered: service.projectsLoaded,
+            leadAnswered: true
+        ))
+    }
+
+    @Test("the lead half must answer too, and a guest needs no fetch at all")
+    func bothHalvesOrNoBuy() {
+        #expect(!PieceActResolver.relationshipIsResolved(
+            isAuthenticated: true, projectsAnswered: true, leadAnswered: false
+        ))
+        #expect(PieceActResolver.relationshipIsResolved(
+            isAuthenticated: false, projectsAnswered: false, leadAnswered: false
+        ))
+    }
+
     @Test("Path B names her by her first name, and says so plainly when it doesn't know one")
     func askDesignerLabel() {
         let relationship = DesignerRelationship.project(
@@ -175,7 +218,7 @@ struct PieceActMatrixTests {
             designerName: nil,
             directOrdersEnabled: true
         )
-        #expect(act == .askAboutPiece(reason: "We don't have this piece's size and lead time yet."))
+        #expect(act == .askAboutPiece(reason: "We don't have this piece's size yet."))
         #expect(act.reason != nil)
     }
 
@@ -208,7 +251,7 @@ struct PieceActMatrixTests {
         let acts: [PieceAct] = [
             .askDesigner(firstName: "Leah"),
             .buy(priceCents: 420_000),
-            .askAboutPiece(reason: "We don't have this piece's size and lead time yet.")
+            .askAboutPiece(reason: "We don't have this piece's size yet.")
         ]
         for act in acts {
             let row = CompanionActionProvider.pieceActRow(act)
