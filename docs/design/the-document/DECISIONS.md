@@ -9988,3 +9988,23 @@ changes immediately. The existing `DocumentAction` remains owner of act telemetr
 existing job link remains owner of document pickup; this amendment creates no new action or route.
 
 *Entries add: R15 amendment · last id = I151*
+
+### R126 · The Material Register gives the Desk depth without cards — 2026-08-28
+
+The lifecycle groups remain the Desk's live Brief→Care roster and keep one compact
+line per job. Each group may read as a flat paper sheet with a stage-colored bound
+edge and a four-pixel stacked-paper foot; shadows, fabricated material metadata,
+new grouping logic, and card spacing remain declined. One globally pressure-ranked
+urgent job may carry the persistent warm wash. Other urgent jobs keep their truthful
+terracotta marks without multiplying the wash across the Desk.
+
+### R127 · The Maker's Ledger belongs only to an unfolded Piece — 2026-08-28
+
+In the Project/Pieces spread, an unfolded furnishing line may lead with an artifact
+plate built from data already joined to that line: product image, brand as Maker,
+vendor as Source, and the locked configuration snapshot. Collapsed lines keep their
+existing density. Install, Care, selection mode, and trade-presence lines do not gain
+the plate. Missing or failed imagery and absent provenance remain explicit; the plate
+adds no action, workflow state, query, schema, or invented fact.
+
+*Entries add: R126, R127 · last ruling id = R127 · last implementation id = I151*
