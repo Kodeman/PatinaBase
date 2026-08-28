@@ -24,6 +24,7 @@ struct InvoiceDetailView: View {
                     confirmBanner(invoice)
                     amountSummary(invoice)
                     dueLine(invoice)
+                    InvoiceReminderRow(invoice: invoice)
                     InvoiceLineItemsBlock(invoice: invoice)
                     memoSection(invoice)
                     InvoicePaymentsBlock(invoice: invoice)
