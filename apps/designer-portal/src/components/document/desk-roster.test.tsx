@@ -100,6 +100,50 @@ describe('DeskRoster — the density rule', () => {
   });
 });
 
+describe('DeskRoster — the Material Register', () => {
+  it('binds each lifecycle stage as a flat paper sheet', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+    const sheets = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-material-sheet]'),
+    );
+
+    expect(sheets).toHaveLength(2);
+    expect(sheets.map((sheet) => sheet.dataset.rosterStage)).toEqual([
+      'proposal',
+      'project',
+    ]);
+    expect(sheets[0].getAttribute('style')).toContain(
+      'border-inline-start-color: var(--color-clay)',
+    );
+    expect(sheets[1].getAttribute('style')).toContain(
+      'border-inline-start-color: var(--color-terracotta)',
+    );
+
+    for (const sheet of sheets) {
+      expect(sheet.querySelector('[data-sheet-edge]')).toHaveAttribute(
+        'aria-hidden',
+        'true',
+      );
+      expect(sheet.className).not.toContain('shadow');
+    }
+  });
+
+  it('reserves the restrained priority treatment for urgent lines', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+    const quiet = container.querySelector<HTMLElement>(
+      '[data-roster-line="byrne"]',
+    );
+    const urgent = container.querySelector<HTMLElement>(
+      '[data-roster-line="vandersteen"]',
+    );
+
+    expect(quiet).not.toHaveAttribute('data-roster-priority');
+    expect(quiet?.className).not.toContain('bg-[var(--bg-warm)]');
+    expect(urgent).toHaveAttribute('data-roster-priority', 'true');
+    expect(urgent?.className).toContain('bg-[var(--bg-warm)]');
+  });
+});
+
 describe('DeskRoster — the marks', () => {
   it('marks every job that needs a hand, and leaves a job with no need unmarked', () => {
     const model = roster();

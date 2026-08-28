@@ -26,12 +26,28 @@ const MARK_COLOR = {
   quiet: 'var(--color-dusty-blue)',
 } as const;
 
+const STAGE_EDGE_COLOR: Record<
+  DeskRosterModel['groups'][number]['key'],
+  string
+> = {
+  brief: 'var(--color-aged-oak)',
+  discovery: 'var(--color-dusty-blue)',
+  direction: 'var(--color-golden-hour)',
+  proposal: 'var(--color-clay)',
+  project: 'var(--color-terracotta)',
+  install: 'var(--color-sage)',
+  care: 'var(--color-charcoal)',
+};
+
 function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }) {
   return (
     <li
       data-tour-anchor={tourAnchor}
       data-roster-line={line.engagementId}
-      className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-dashed border-[var(--border-subtle)] py-2.5 last:border-b-0"
+      data-roster-priority={line.mark === 'urgent' ? 'true' : undefined}
+      className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-dashed border-[var(--border-subtle)] px-2 py-2.5 last:border-b-0 ${
+        line.mark === 'urgent' ? 'bg-[var(--bg-warm)]' : ''
+      }`}
     >
       {/* The mark tells a dated overdue item from a setup chore at the margin.
           It never grows a count, a label, or a second urgency tier (C4/D8). */}
@@ -123,14 +139,25 @@ export function DeskRoster({ roster }: { roster: DeskRosterModel }) {
               seven `region` landmarks nested inside this one group, and the
               <h3> already navigates a screen reader to each of them. */}
           {roster.groups.map((group) => (
-            <div key={group.key} className="mb-8 last:mb-0">
+            <div
+              key={group.key}
+              data-material-sheet="true"
+              data-roster-stage={group.key}
+              className="relative mb-8 border border-l-[3px] border-[var(--border-subtle)] bg-[var(--doc-sheet-front)] px-4 pb-1 pt-3 last:mb-0 sm:px-5"
+              style={{ borderInlineStartColor: STAGE_EDGE_COLOR[group.key] }}
+            >
+              <span
+                aria-hidden="true"
+                data-sheet-edge
+                className="pointer-events-none absolute inset-x-1.5 -bottom-[4px] h-[4px] border-x border-b border-[var(--border-subtle)] bg-[var(--doc-sheet-back)]"
+              />
               <h3
                 id={`roster-stage-${group.key}`}
-                className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]"
+                className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]"
               >
                 {group.label} · {group.count}
               </h3>
-              <ul>
+              <ul className="-mx-2">
                 {group.lines.map((line) => {
                   const anchor = lineIndex === 0 ? 'desk-folio' : undefined;
                   lineIndex += 1;
