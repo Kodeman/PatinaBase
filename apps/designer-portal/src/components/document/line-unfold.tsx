@@ -40,6 +40,7 @@ import {
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { DateTextInput } from './date-text-input';
 import { DocumentAction, DocumentActionGroup } from './document-action';
+import { PieceArtifactPlate } from './piece-artifact-plate';
 
 type FFERow = any;
 
@@ -385,6 +386,8 @@ export function LineUnfold({
 
   return (
     <div className="mb-2 mt-1 rounded-r-[5px] border-l-[3px] border-[var(--color-clay)] bg-[rgba(196,165,123,0.05)] px-4 py-3.5">
+      <PieceArtifactPlate item={item} />
+
       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Cell
           label="Purchase order"

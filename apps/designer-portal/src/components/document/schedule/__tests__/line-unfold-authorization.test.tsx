@@ -181,6 +181,57 @@ describe('LineUnfold · the authorization gate', () => {
   });
 });
 
+describe('LineUnfold · piece artifact plate', () => {
+  it('uses the joined product image, maker, and configuration language', () => {
+    renderUnfold({
+      item: {
+        ...item,
+        name: 'Halden Sofa',
+        quantity: 1,
+        product: {
+          id: 'product-1',
+          name: 'Halden Sofa',
+          brand: 'Hollowell Woodshop',
+          images: ['https://images.example.com/halden-sofa.jpg'],
+        },
+        spec: {
+          configuration_snapshot: {
+            selections: [
+              { groupName: 'Wood', valueLabel: 'Walnut' },
+              { groupName: 'Hardware Finish', valueLabel: 'Antique Brass' },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(
+      screen.getByRole('img', { name: 'Halden Sofa by Hollowell Woodshop' }),
+    ).toHaveAttribute(
+      'src',
+      'https://images.example.com/halden-sofa.jpg',
+    );
+    expect(screen.getByText('Maker').parentElement).toHaveTextContent(
+      'Maker · Hollowell Woodshop',
+    );
+    expect(screen.getByText('Walnut')).toBeInTheDocument();
+    expect(screen.getByText('Antique Brass')).toBeInTheDocument();
+  });
+
+  it('states missing image, maker, and configuration data without inventing it', () => {
+    renderUnfold();
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('Image not on file')).toBeInTheDocument();
+    expect(screen.getByText(/Maker/).parentElement).toHaveTextContent(
+      'Maker · Not recorded',
+    );
+    expect(
+      screen.getByText('Configuration not recorded on this line.'),
+    ).toBeInTheDocument();
+  });
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // R7 (F6) — where the lifecycle trail is allowed to appear
 // ══════════════════════════════════════════════════════════════════════════
