@@ -150,7 +150,6 @@ struct OrderRailMergeTests {
             directOrders: []
         )
         #expect(rows[0].placedBy == .designer(firstName: "Leah"))
-        #expect(ClientOrderCopy.placedByLabel(rows[0]) == "Ordered by Leah")
         #expect(ClientOrderCopy.attributionFooter(rows[0], projectName: "Aspen Loft Refresh")
                 == "Leah ordered this for Aspen Loft Refresh.")
     }
@@ -163,7 +162,8 @@ struct OrderRailMergeTests {
             shipments: [],
             directOrders: []
         )
-        #expect(ClientOrderCopy.placedByLabel(rows[0]) == "Ordered by your designer")
+        #expect(ClientOrderCopy.attributionFooter(rows[0], projectName: nil)
+                == "Your designer ordered this for you.")
     }
 
     @Test("the app's own designer name is used only where the order's embed brought none")
