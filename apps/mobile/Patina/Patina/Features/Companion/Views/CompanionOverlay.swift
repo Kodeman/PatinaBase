@@ -119,6 +119,16 @@ public struct CompanionOverlay: View {
 
         if state.isExpanded { return .expanded }
 
+        // B-2: on the house-first root the bar's trailing slot IS the collapsed
+        // Companion, so the floating dock retires entirely — mark, caption,
+        // nudge pill and all. Everything below this line describes where the
+        // dock rests over content, and there is no dock to rest.
+        //
+        // Placed AFTER the `.expanded` return on purpose: the panel is still
+        // this view's, and returning `.hidden` before it resolves would strand
+        // the Companion with a door that opens onto nothing.
+        if coordinator.isHouseFirstRoot, !state.isExpanded { return .hidden }
+
         // Legacy journey mode remains source-compatible for context adapters
         // outside the in-flow scan. If another flow publishes walk progress,
         // it still maps to the canonical progress capsule.
@@ -138,7 +148,10 @@ public struct CompanionOverlay: View {
         if case .arPlacement = screen { return .minimal }
         // A screen with a pinned money act keeps the act; the dock yields to
         // its corner mark. See `CompanionHearthMetrics.yieldsToPinnedFooter`.
-        if CompanionHearthMetrics.yieldsToPinnedFooter(for: screen) { return .minimal }
+        if CompanionHearthMetrics.yieldsToPinnedFooter(
+            for: screen,
+            houseFirst: coordinator.isHouseFirstRoot
+        ) { return .minimal }
         if case .styleResult = screen { return .resting }
 
         if let nudge = CompanionActionProvider.nudge(
@@ -352,6 +365,21 @@ public struct CompanionOverlay: View {
         )
     }
 
+    /// The Hearth's lift off the bottom safe area.
+    ///
+    /// `CompanionOverlay` is mounted as a SIBLING of the four stacks on the
+    /// house-first root, not inside the bar's `safeAreaInset`, so it does not
+    /// inherit the bar's height — without this the expanded panel's bottom
+    /// edge and its ✕ sit under the bar. `itemHeight` (49) rather than
+    /// `barHeight` (83) because `safeAreaPadding` already adds the
+    /// home-indicator safe area the remaining 34 pt of the bar occupies.
+    private var expandedBottomLift: CGFloat {
+        let base: CGFloat = state.isExpanded ? 24 : 28
+        // `PatinaTabBar` is generic over its trailing slot, so the static
+        // needs a witness; any `Trailing` answers the same 49.
+        return coordinator.isHouseFirstRoot ? base + PatinaTabBar<EmptyView>.itemHeight : base
+    }
+
     public init() {}
 
     public var body: some View {
@@ -404,7 +432,7 @@ public struct CompanionOverlay: View {
             case .resting, .nudging, .expanded, .journeyMode:
                 canonicalHearthView
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .safeAreaPadding(.bottom, state.isExpanded ? 24 : 28)
+                    .safeAreaPadding(.bottom, expandedBottomLift)
             }
         }
         .animation(
@@ -424,6 +452,19 @@ public struct CompanionOverlay: View {
             expanded
                 ? .impact(flexibility: .soft, intensity: 0.5)
                 : .impact(weight: .light)
+        }
+        // B-2: the bar's trailing slot is the collapsed Companion's only
+        // control on the house-first root, and it can reach this view no other
+        // way — `expandToPanel()` is file-private. It writes
+        // `coordinator.isCompanionExpanded`; this is what reads it.
+        //
+        // The overlay's own `expandToPanel()` / `collapseToButton()` write that
+        // same flag, so this fires on their writes too. Both arms are guarded
+        // on `state`, which has already moved by then, so the second pass is a
+        // no-op rather than a loop.
+        .onChange(of: coordinator.isCompanionExpanded) { _, expanded in
+            if expanded, !state.isExpanded { expandToPanel() }
+            if !expanded, state.isExpanded { collapseToButton() }
         }
         .onChange(of: coordinator.companionContext) { _, newContext in
             viewModel.updateContext(newContext)

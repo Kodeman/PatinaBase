@@ -124,25 +124,33 @@ public struct HouseFirstRoot: View {
         }
     }
 
-    /// M1 §6's fifth slot — the Strata mark, and deliberately NOT a control
-    /// yet.
+    /// M1 §6's fifth slot — the Strata mark, and the Companion's only door on
+    /// this root (B-2).
     ///
-    /// Expanding the panel is `CompanionOverlay.expandToPanel()`, reachable
-    /// only from inside that view. `AppCoordinator.toggleCompanion()` flips
-    /// `isCompanionExpanded`, which nothing observes — the overlay writes that
-    /// flag when it expands itself and never reads it — so a button here would
-    /// present nothing while `accessibilityHidden(isCompanionExpanded)` above
-    /// took the whole screen out of the VoiceOver tree. Until the overlay
-    /// observes the flag (B-2, N3; the patch is in `waves/w3/n1-notes.md` §2a),
-    /// the floating dock is still the Companion's only door and this slot is
-    /// the mark alone.
+    /// Expanding the panel is `CompanionOverlay.expandToPanel()`, file-private
+    /// to that view, so the door is `isCompanionExpanded`: this writes it and
+    /// the overlay observes it. N1 shipped this slot as a mark and NOT a
+    /// control because nothing observed the flag yet — a tap presented nothing
+    /// while `accessibilityHidden(isCompanionExpanded)` above took all four
+    /// stacks out of the VoiceOver tree. N3 added the observer first
+    /// (`CompanionOverlay`'s `.onChange(of: coordinator.isCompanionExpanded)`),
+    /// which is what makes this button safe; the three lines are N1's own,
+    /// written out in `waves/w3/n1-notes.md` §2a step 3.
     private var companionSlot: some View {
-        StrataMarkView(
-            color: PatinaColors.mocha,
-            scale: 0.8,
-            accessibility: .decorative
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Button {
+            coordinator.toggleCompanion()
+        } label: {
+            StrataMarkView(
+                color: PatinaColors.mocha,
+                scale: 0.8,
+                accessibility: .decorative
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Companion")
+        .accessibilityHint("Opens quick actions for this screen.")
     }
 }
 
