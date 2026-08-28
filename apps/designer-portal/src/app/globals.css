@@ -49,6 +49,13 @@
   /* — The Document (spec v1.1 §10) — paper-object surfaces. D4: depth comes
      from these values + flat stacked edges, never from shadows. */
   --doc-paper: #FCFAF6;
+  /* R126 — the third and last paper stock. The spine and the margin are one
+     deeper sheet than the document; a margin chip is a lifted piece of
+     --doc-paper laid on it (1.225:1 off the sheet, 1.195:1 off the desk
+     ground). Its register is PARTIAL by ruling: charcoal, the muted ramp and
+     clay-ink print on it; terracotta-, golden-hour- and sage-ink never do, and
+     contrast.test.ts gates exactly that set rather than the cross-product. */
+  --doc-rail-stock: #E8E3DB;
   --doc-sheet-2: #EFE9DD;
   --doc-sheet-3: #E2DACA;
   --doc-ink-border: rgba(44, 41, 38, 0.18);
@@ -65,8 +72,13 @@
 
   --text-primary: var(--color-charcoal);
   --text-body: var(--color-mocha);
-  --text-muted: var(--color-quiet-ink);
-  --text-subtle: var(--color-quiet-ink);
+  /* R126 — three real muted steps, where all three were --color-quiet-ink.
+     Muted / subtle / faint now separate by value, and each clears 4.5:1 on all
+     three paper stocks (paper · desk ground · rail): 9.22/8.99/7.52,
+     7.73/7.54/6.31, 6.51/6.36/5.32. --text-faint keeps --color-quiet-ink's own
+     value, so it is the step the other two were collapsed onto. */
+  --text-muted: #4E4339;
+  --text-subtle: #5A4E43;
 
   /* — Quiet type floors —
      These are roles, not a blanket rewrite. Adopt the matching class when a
@@ -89,7 +101,7 @@
      the warm-neutral ramp stays consistent and centrally tunable. */
   --color-taupe: #A3927C;   /* warm mid-tone between aged-oak and clay */
   /* Text hierarchy comes from type role, not low contrast. */
-  --text-faint: var(--color-quiet-ink);
+  --text-faint: #65594E;
   --bg-subtle: #F5F1ED;     /* panel tint between off-white and pearl */
   --bg-warm: #EEE6DB;       /* warm light fill */
   --color-bark: #4A453F;    /* dark warm gray between mocha and charcoal */
@@ -108,6 +120,71 @@
   --phase-procurement: #E8C547;
   --phase-installation: #D4A090;
   --phase-walkthrough: #A8B5A0;
+
+  /* — The Life Review (R126): three rule weights, three ranks —
+     A hairline ends a row · 1.5px charcoal ends a section · the double rule
+     opens a movement. --rule-strong carries only the charcoal half a single
+     custom property can hold; the second, fainter line is --doc-ink-border,
+     and .doc-rule-strong below spends both. Dashed goes back to meaning "not
+     filled in" and appears nowhere. */
+  --rule-hair: 1px solid rgba(44, 41, 38, 0.10);
+  --rule-mid: 1.5px solid #2C2926;
+  --rule-strong: 2px solid #2C2926;
+
+  /* — The Life Review (R126): filled stamps —
+     One recipe: the state's own canon pigment composited over --doc-paper to a
+     common ~1.18:1, a 1.5px pigment border (the state's own -ink), and a
+     CHARCOAL word at 11.7:1. State is hue; legibility is charcoal. Light
+     enough that every canon ink clears 4.5:1 on all four (floor 4.56). */
+  --fill-ordered-tint: #EFE6DA;   /* clay @23% — paper 1.185, charcoal 11.71 */
+  --fill-decision-tint: #F5E7B9;  /* golden hour @35% — paper 1.184, charcoal 11.72 */
+  --fill-damaged-tint: #F3E5DF;   /* terracotta @23% — paper 1.179, charcoal 11.76 */
+  --fill-anchor-tint: #E7E8E8;    /* dusty-blue @19% — paper 1.178, charcoal 11.78 */
+
+  /* — The Life Review (R126): the six saturated stage tabs —
+     Six pigments on BOTH ladders: no two hues closer than 30°, and each a clear
+     value step (≥ 1.08:1) darker than the one before it, cool to warm across
+     the six movements. White label 5.22–8.20:1. They print as a small plate on
+     a roster head line and nowhere else — there is no tinted band under a
+     stage group. */
+  --tab-brief: #497093;     /* hue 208 — white 5.22 */
+  --tab-discovery: #307063; /* hue 168 — white 5.80 */
+  --tab-direction: #366A3A; /* hue 125 — white 6.40 */
+  --tab-proposal: #575D1D;  /* hue  66 — white 7.03 */
+  --tab-project: #6D4E24;   /* hue  35 — white 7.59 */
+  --tab-install: #823832;   /* hue   5 — white 8.20 */
+
+  /* — The Life Review (R126): the hover wash —
+     THE RULE IS THE RATIO, NOT THE ALPHA. Every wash lands at ~1.12:1 over its
+     own ground and the alpha follows the pigment's value: the six stage
+     pigments are dark and reach it at 8%, the three state pigments are light
+     and need 16 / 24 / 16%. One highlight, and it reads on both surfaces.
+     Every --wash-*-still is three quarters of the swept alpha — the flat tint
+     reduced motion takes, with no sweep. */
+  --wash-brief: rgba(73, 112, 147, 0.08);
+  --wash-discovery: rgba(48, 112, 99, 0.08);
+  --wash-direction: rgba(54, 106, 58, 0.08);
+  --wash-proposal: rgba(87, 93, 29, 0.08);
+  --wash-project: rgba(109, 78, 36, 0.08);
+  --wash-install: rgba(130, 56, 50, 0.08);
+  --wash-clay: rgba(196, 165, 123, 0.16);
+  --wash-golden: rgba(232, 197, 71, 0.24);
+  --wash-terracotta: rgba(212, 160, 144, 0.16);
+  --wash-brief-still: rgba(73, 112, 147, 0.06);
+  --wash-discovery-still: rgba(48, 112, 99, 0.06);
+  --wash-direction-still: rgba(54, 106, 58, 0.06);
+  --wash-proposal-still: rgba(87, 93, 29, 0.06);
+  --wash-project-still: rgba(109, 78, 36, 0.06);
+  --wash-install-still: rgba(130, 56, 50, 0.06);
+  --wash-clay-still: rgba(196, 165, 123, 0.12);
+  --wash-golden-still: rgba(232, 197, 71, 0.18);
+  --wash-terracotta-still: rgba(212, 160, 144, 0.12);
+
+  /* — The Life Review (R126): the one depth token —
+     D4 amended: one token, spent at exactly three sites (the margin chips, the
+     open ledger sheet, the studio drawer) and nowhere else. shadow-gate.test.ts
+     holds the budget at the CSS level, which the D4 ESLint rules cannot reach. */
+  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, 0.08);
 
   /* — Animation Tokens — */
   --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
@@ -208,24 +285,136 @@
   }
 }
 
-/* The folio pickup (Desk light restyle): the one sanctioned lift + shadow on
-   Desk content. Defined here in CSS — never as a TSX shadow literal — so the
-   D4 shadow-ban lint stays enforced everywhere else. Gated to no-preference so
-   reduced-motion gets a still, shadowless folio. The faint resting drop-shadow
-   is only the start of the hover transition (imperceptible at 0.06 alpha). */
-@media (prefers-reduced-motion: no-preference) {
-  .folio-face {
-    filter: drop-shadow(0 2px 4px rgba(44, 41, 38, 0.06));
-    transition:
-      transform 280ms var(--ease-editorial),
-      filter 280ms var(--ease-editorial);
+/* ===== The Life Review (R126) ===================================== */
+
+/* D4 as amended: the ONE depth declaration in this stylesheet, and the only
+   one shadow-gate.test.ts permits. Three sites spend it — the margin chips,
+   the open ledger sheet, the studio drawer. */
+.doc-elevated {
+  box-shadow: var(--elevation-sheet);
+}
+
+/* Three rule weights, three ranks. The strong rule is the double rule: the
+   charcoal line the token holds, plus the fainter line under it. */
+.doc-rule-hair {
+  border-bottom: var(--rule-hair);
+}
+
+.doc-rule-mid {
+  border-bottom: var(--rule-mid);
+}
+
+.doc-rule-strong {
+  height: 6px;
+  border-top: var(--rule-strong);
+  border-bottom: 1px solid var(--doc-ink-border);
+}
+
+/* The hover wash. The row's own pigment, laid over the ground the row sits on
+   and swept open from the point of contact by the same mechanic the Scored Ink
+   bead uses (--ink-x/--ink-y written on pointermove; see RowWash). The wash is
+   an absolutely positioned sibling at z-index -1 inside the row's own stacking
+   context, so it paints over the ground and under every word: the row keeps its
+   exact geometry and gains not one pixel of scrollWidth. No text ever changes
+   colour and the row never moves. Keyboard focus takes the same wash
+   statically — the focus ring is still drawn by :focus-visible on the control. */
+.has-wash {
+  position: relative;
+  isolation: isolate;
+}
+
+.row-wash {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 2px;
+  pointer-events: none;
+  background: var(--wash, var(--wash-clay));
+  clip-path: circle(0 at var(--ink-x, 50%) var(--ink-y, 50%));
+  transition: clip-path 200ms var(--ease-editorial);
+}
+
+.has-wash:hover .row-wash,
+.has-wash:focus-within .row-wash {
+  clip-path: circle(150% at var(--ink-x, 50%) var(--ink-y, 50%));
+  transition-duration: 260ms;
+}
+
+/* Focus is a state, not a gesture: it arrives with no sweep and from the
+   centre, because a keyboard has no point of contact. */
+.has-wash:focus-within .row-wash {
+  clip-path: circle(150% at 50% 50%);
+  transition: none;
+}
+
+/* The score under the row's name turns clay as the wash opens. Lanes put
+   .row-wash-score on the name; the wash and the score are one gesture. */
+.row-wash-score {
+  position: relative;
+}
+
+.row-wash-score::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+  height: 1px;
+  background: var(--color-pearl);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition:
+    transform var(--duration-fast) var(--ease-editorial),
+    background-color var(--duration-fast) var(--ease-editorial);
+}
+
+.has-wash:hover .row-wash-score::after,
+.has-wash:focus-within .row-wash-score::after {
+  background: var(--color-clay);
+  transform: scaleX(1);
+}
+
+/* The one orchestrated moment: the roster settles in, once per page load.
+   Transform only — the lines are never invisible. The 60ms stagger is capped
+   at the 7th line, because sixteen uncapped lines would settle for a full
+   second. Lanes drop .desk-settle on animationend; `display: none` cancels and
+   REPLAYS a running animation, so a class left on re-settles the whole roster
+   on every return to the desk. */
+@keyframes desk-settle {
+  from {
+    transform: translateY(14px);
   }
-  .group:hover .folio-face {
-    transform: translateY(-10px);
-    filter: drop-shadow(0 22px 34px rgba(92, 74, 60, 0.18));
+
+  to {
+    transform: none;
   }
-  .group:active .folio-face {
-    transform: translateY(-4px);
+}
+
+.desk-settle {
+  animation: desk-settle 320ms var(--ease-editorial) both;
+  animation-delay: calc(min(var(--i, 0), 6) * 60ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desk-settle {
+    animation: none;
+  }
+
+  /* The wash still appears — a flat tint at three quarters of the alpha,
+     applied instantly, with no sweep. */
+  .row-wash {
+    background: var(--wash-still, var(--wash-clay-still));
+    transition: none;
+  }
+
+  .has-wash:hover .row-wash,
+  .has-wash:focus-within .row-wash {
+    clip-path: none;
+    transition: none;
+  }
+
+  .row-wash-score::after {
+    transition: none;
   }
 }
 

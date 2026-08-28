@@ -190,6 +190,176 @@ describe('F56 · text-grade ink tokens clear WCAG AA', () => {
   });
 });
 
+/* ── R126 · The Life Review ──────────────────────────────────────────────
+ *
+ * The direction added three kinds of token the F56 guard above cannot see: a
+ * third paper stock, four stamp fills, and six saturated tabs. LIGHT_GROUNDS
+ * is a hand-authored map, so a new ground is silently unmeasured until someone
+ * names it — these describes name them.
+ *
+ * The rail is gated against the register it ACTUALLY prints, not the
+ * cross-product. Its register is partial by ruling (charcoal, the muted ramp,
+ * clay-ink); terracotta-, golden-hour- and sage-ink never appear on it, and
+ * measuring those three deliberate absences would read them as failures.
+ */
+
+/** `--x: var(--y)` aliases, so a token declared through another resolves to a
+ *  real hex rather than dropping out of parseTokens' hex-only map. */
+function parseAliases(css: string): Map<string, string> {
+  const aliases = new Map<string, string>();
+  const declaration = /(--[a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)\s*;/g;
+  let match: RegExpExecArray | null;
+  while ((match = declaration.exec(css)) !== null) {
+    aliases.set(match[1]!, match[2]!);
+  }
+  return aliases;
+}
+
+const aliases = parseAliases(css);
+
+function resolveToken(name: string): string {
+  let current = name;
+  for (let hop = 0; hop < 8; hop += 1) {
+    const hex = tokens.get(current);
+    if (hex) return hex;
+    const next = aliases.get(current);
+    if (!next) break;
+    current = next;
+  }
+  throw new Error(`${name} resolves to no hex in globals.css`);
+}
+
+/** The three real muted steps (R126). All three were --color-quiet-ink. */
+const MUTED_RAMP = ['--text-muted', '--text-subtle', '--text-faint'] as const;
+
+/** The three paper stocks, and only three. */
+const PAPER_STOCKS = {
+  '--doc-paper': '#FCFAF6',
+  '--color-off-white': '#FAF7F2',
+  '--doc-rail-stock': '#E8E3DB',
+} as const;
+
+const STAMP_FILLS = [
+  '--fill-ordered-tint',
+  '--fill-decision-tint',
+  '--fill-damaged-tint',
+  '--fill-anchor-tint',
+] as const;
+
+const STAGE_TABS = [
+  '--tab-brief',
+  '--tab-discovery',
+  '--tab-direction',
+  '--tab-proposal',
+  '--tab-project',
+  '--tab-install',
+] as const;
+
+const WHITE = '#FFFFFF';
+
+/** Reported as a labelled map so a failure names the pair and the ratio. */
+function failuresBelowAA(
+  pairs: [label: string, ink: string, ground: string][],
+): [string, number][] {
+  return pairs
+    .map(([label, ink, ground]) => [
+      label,
+      Number(contrastRatio(ink, ground).toFixed(2)),
+    ] as [string, number])
+    .filter(([, ratio]) => ratio < AA_NORMAL_TEXT);
+}
+
+describe('R126 · the three muted steps are three, and all three are legible', () => {
+  it('declares muted, subtle and faint as three DIFFERENT values', () => {
+    // The defect this replaces: all three aliased --color-quiet-ink, so the
+    // ramp had one step wearing three names. A regression that re-collapses
+    // any two of them must fail here rather than read as a quiet ramp.
+    const values = MUTED_RAMP.map(resolveToken);
+    expect(new Set(values).size).toBe(MUTED_RAMP.length);
+  });
+
+  it('clears 4.5:1 on the paper, the desk ground and the rail', () => {
+    const pairs = MUTED_RAMP.flatMap((ink) =>
+      Object.entries(PAPER_STOCKS).map(
+        ([ground, groundHex]) =>
+          [`${ink} on ${ground} (${groundHex})`, resolveToken(ink), groundHex] as [
+            string,
+            string,
+            string,
+          ],
+      ),
+    );
+    expect(failuresBelowAA(pairs)).toEqual([]);
+  });
+});
+
+describe('R126 · --doc-rail-stock holds the register it prints', () => {
+  it('is declared, and at the ruled value', () => {
+    // The rail was ruled to #E8E3DB over A's own #EFE7DA — separation over
+    // register — so a retune has to be a ruling, not an edit.
+    expect(tokens.get('--doc-rail-stock')).toBe('#E8E3DB');
+  });
+
+  it('carries charcoal, the muted ramp and clay-ink at 4.5:1', () => {
+    const rail = resolveToken('--doc-rail-stock');
+    const printed = ['--text-primary', ...MUTED_RAMP, '--color-clay-ink'];
+    const pairs = printed.map(
+      (ink) => [`${ink} on the rail`, resolveToken(ink), rail] as [string, string, string],
+    );
+    expect(failuresBelowAA(pairs)).toEqual([]);
+  });
+
+  it('separates from the sheet and the desk ground it flanks', () => {
+    // The rail is a GROUND against two other grounds: it has to be seen as a
+    // different stock without becoming a second colour field.
+    const rail = resolveToken('--doc-rail-stock');
+    for (const ground of ['--doc-paper', '--color-off-white'] as const) {
+      expect(contrastRatio(rail, resolveToken(ground))).toBeGreaterThan(1.1);
+    }
+  });
+});
+
+describe('R126 · the four stamp fills are grounds, and fully gated', () => {
+  it.each(STAMP_FILLS)('%s carries charcoal and the muted ramp', (fill) => {
+    // The recipe's whole unlock: a CHARCOAL word, not the state's own ink, is
+    // what let the fill sit deep enough to read as filled. State is hue;
+    // legibility is charcoal.
+    const ground = resolveToken(fill);
+    const pairs = ['--text-primary', ...MUTED_RAMP].map(
+      (ink) => [`${ink} on ${fill}`, resolveToken(ink), ground] as [string, string, string],
+    );
+    expect(failuresBelowAA(pairs)).toEqual([]);
+  });
+
+  it('keeps all four at one value, so they separate by hue and not by depth', () => {
+    // One recipe at one common value (~1.18:1 off the paper) is the ruling.
+    // A fill that drifts deeper would read as a different rank of state.
+    const paper = resolveToken('--doc-paper');
+    for (const fill of STAMP_FILLS) {
+      const ratio = contrastRatio(resolveToken(fill), paper);
+      expect(ratio).toBeGreaterThan(1.15);
+      expect(ratio).toBeLessThan(1.22);
+    }
+  });
+});
+
+describe('R126 · the six stage tabs are dark grounds for a white label', () => {
+  it.each(STAGE_TABS)('%s reaches 4.5:1 against white', (tab) => {
+    // White is a literal, not a token: naming it as a text token would measure
+    // it against every paper ground it never touches.
+    expect(failuresBelowAA([[`white on ${tab}`, WHITE, resolveToken(tab)]])).toEqual([]);
+  });
+
+  it('steps down in value across the six, so the naming survives greyscale', () => {
+    // The six carry a movement's name on two ladders at once. The value ladder
+    // is the one a colourblind read and a greyscale print are left with.
+    const ratios = STAGE_TABS.map((tab) => contrastRatio(WHITE, resolveToken(tab)));
+    for (let i = 1; i < ratios.length; i += 1) {
+      expect(ratios[i]! / ratios[i - 1]!).toBeGreaterThanOrEqual(1.05);
+    }
+  });
+});
+
 /** Every source file under src/, so a base pigment spent as text is caught
  *  wherever it is written — not only in the five files the finding named. */
 function sourceFiles(dir: string, out: string[] = []): string[] {

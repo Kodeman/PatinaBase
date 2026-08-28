@@ -38,7 +38,16 @@ describe('Quiet Work type foundation', () => {
     const quietInk = globals.match(/--color-quiet-ink:\s*(#[\dA-F]{6})/i)?.[1];
     expect(quietInk).toBeDefined();
     expect(contrastRatio(quietInk!, '#FAF7F2')).toBeGreaterThanOrEqual(6.3);
-    expect(globals).toContain('--text-muted: var(--color-quiet-ink)');
-    expect(globals).toContain('--text-faint: var(--color-quiet-ink)');
+    // R126 split the ramp: muted, subtle and faint were three names on this one
+    // ink and are now three real steps. The guarantee is unchanged and now
+    // covers all three — small copy is a quiet ink, never a material pigment —
+    // so it is asserted on the values rather than on the alias form.
+    for (const step of ['--text-muted', '--text-subtle', '--text-faint']) {
+      const hex = globals.match(
+        new RegExp(`${step}:\\s*(#[\\dA-F]{6})`, 'i'),
+      )?.[1];
+      expect(hex).toBeDefined();
+      expect(contrastRatio(hex!, '#FAF7F2')).toBeGreaterThanOrEqual(6.3);
+    }
   });
 });
