@@ -223,13 +223,31 @@ public actor RoomsAPIClient {
 
     // MARK: - Rooms
 
-    public func listRooms() async throws -> [RemoteRoom] {
-        let url = baseURL.appendingPathComponent("/rest/v1/rooms")
-            .appending(queryItems: [URLQueryItem(name: "select", value: "*"),
-                                    URLQueryItem(name: "order", value: "created_at.desc")])
-        var request = URLRequest(url: url)
+    /// The URL of "this account's rooms", as a value so the owner filter is a
+    /// pinned fact rather than a claim about a request nobody can see.
+    ///
+    /// `public.rooms` carries two SELECT policies (`00019_roomplan_features.sql`
+    /// :50-60): the owner's, and one that lets a designer read every room of
+    /// every client on her roster. So an unfiltered read is not "the account's
+    /// house" — a designer signing into this app would hydrate her whole client
+    /// book as her own rooms. The filter sits beside RLS, not instead of it.
+    static func roomsListURL(base: URL, userId: String) -> URL {
+        base.appendingPathComponent("/rest/v1/rooms")
+            .appending(queryItems: [
+                URLQueryItem(name: "select", value: "*"),
+                URLQueryItem(name: "user_id", value: "eq.\(userId)"),
+                URLQueryItem(name: "order", value: "created_at.desc")
+            ])
+    }
+
+    public func listRooms(userId: String) async throws -> [RemoteRoom] {
+        var request = URLRequest(url: Self.roomsListURL(base: baseURL, userId: userId))
         await applyHeaders(to: &request)
-        let (data, _) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
+        // Every other call on this client validates the status; this one
+        // decoded straight through, so a 401 arrived as a decode error and the
+        // log line named the wrong cause (fix-review m-8).
+        try Self.ensureOK(response, data: data)
         return try decoder.decode([RemoteRoom].self, from: data)
     }
 

@@ -20,6 +20,10 @@ struct RoomSyncTests {
 
     // MARK: - Fixtures
 
+    /// The account signing in. Every fixture row below belongs to it unless a
+    /// test says otherwise.
+    nonisolated static let owner = "a0000000-0000-0000-0000-000000000005"
+
     nonisolated private static let calendar = Calendar(identifier: .gregorian)
 
     nonisolated private static func moment(_ month: Int, _ day: Int, hour: Int = 9) -> Date {
@@ -77,7 +81,7 @@ struct RoomSyncTests {
     @Test("a server room the store has no mirror of is created locally")
     func aServerRoomTheStoreLacksIsCreated() throws {
         let store = try makeStore()
-        RoomSyncCoordinator().apply([remote()], in: store)
+        RoomSyncCoordinator().apply([remote()], in: store, owner: Self.owner)
 
         let rooms = store.allRooms()
         #expect(rooms.count == 1)
@@ -97,7 +101,7 @@ struct RoomSyncTests {
         room.updatedAt = Self.moment(8, 28)
         try store.context.save()
 
-        RoomSyncCoordinator().apply([remote(updatedAt: Self.moment(8, 20))], in: store)
+        RoomSyncCoordinator().apply([remote(updatedAt: Self.moment(8, 20))], in: store, owner: Self.owner)
 
         #expect(store.allRooms().count == 1)
         #expect(store.allRooms().first?.budgetCents == 750_000)
@@ -112,7 +116,7 @@ struct RoomSyncTests {
         room.updatedAt = Self.moment(8, 10)
         try store.context.save()
 
-        RoomSyncCoordinator().apply([remote(updatedAt: Self.moment(8, 20))], in: store)
+        RoomSyncCoordinator().apply([remote(updatedAt: Self.moment(8, 20))], in: store, owner: Self.owner)
 
         #expect(store.allRooms().count == 1)
         #expect(store.allRooms().first?.budgetCents == 900_000)
@@ -125,7 +129,7 @@ struct RoomSyncTests {
         store.setBudget(guestRoom, cents: 120_000)
         let guestId = guestRoom.id
 
-        RoomSyncCoordinator().apply([remote()], in: store)
+        RoomSyncCoordinator().apply([remote()], in: store, owner: Self.owner)
 
         let rooms = store.allRooms()
         #expect(rooms.count == 2)
@@ -147,8 +151,8 @@ struct RoomSyncTests {
     func reconcilingTwiceLeavesOneRoom() throws {
         let store = try makeStore()
         let coordinator = RoomSyncCoordinator()
-        coordinator.apply([remote()], in: store)
-        coordinator.apply([remote()], in: store)
+        coordinator.apply([remote()], in: store, owner: Self.owner)
+        coordinator.apply([remote()], in: store, owner: Self.owner)
 
         #expect(store.allRooms().count == 1)
         #expect(store.allRooms().first?.budgetCents == 900_000)
@@ -162,9 +166,59 @@ struct RoomSyncTests {
         room.updatedAt = Self.moment(8, 10)
         try store.context.save()
 
-        RoomSyncCoordinator().apply([remote()], in: store)
+        RoomSyncCoordinator().apply([remote()], in: store, owner: Self.owner)
 
         #expect(store.allRooms().count == 1)
+    }
+
+    // MARK: - The owner boundary (SP-06)
+
+    @Test("the request asks for the account's own rooms and no one else's")
+    func theRequestCarriesTheOwnerFilter() throws {
+        let url = RoomsAPIClient.roomsListURL(
+            base: URL(string: "https://example.supabase.co")!,
+            userId: Self.owner
+        )
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(items.contains(URLQueryItem(name: "user_id", value: "eq.\(Self.owner)")))
+        #expect(url.path == "/rest/v1/rooms")
+    }
+
+    @Test("a row belonging to another account is never applied to this one")
+    func aForeignRowIsRejectedByTheMerge() throws {
+        let store = try makeStore()
+        // `rooms` lets a designer read every room of every client on her
+        // roster, so a row reaching this device is not proof it is this
+        // account's. The merge decides, not the response.
+        RoomSyncCoordinator().apply(
+            [remote(id: "d0000000-0000-4000-8000-000000000009", name: "A Client's Living Room")],
+            in: store,
+            owner: "f0000000-0000-0000-0000-00000000000f"
+        )
+
+        #expect(store.allRooms().isEmpty)
+    }
+
+    @Test("the account's own row still lands when a foreign row rides beside it")
+    func theOwnRowLandsBesideAForeignOne() throws {
+        let store = try makeStore()
+        let foreign = RemoteRoom(
+            id: "d0000000-0000-4000-8000-000000000009",
+            user_id: "f0000000-0000-0000-0000-00000000000f",
+            name: "A Client's Living Room",
+            type: "living_room",
+            length_meters: 5, width_meters: 4, height_meters: 2.7,
+            floor_area_sqm: 20, volume_cbm: 54,
+            saved_item_count: 0, scan_count: 0, style_signals: nil,
+            created_at: Self.iso.string(from: Self.moment(8, 20)),
+            updated_at: Self.iso.string(from: Self.moment(8, 20)),
+            budget_cents: nil
+        )
+
+        RoomSyncCoordinator().apply([foreign, remote()], in: store, owner: Self.owner)
+
+        #expect(store.allRooms().count == 1)
+        #expect(store.allRooms().first?.name == "Guest Bedroom")
     }
 
     // MARK: - The debounce

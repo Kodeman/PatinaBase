@@ -29,7 +29,7 @@ import SwiftData
 /// client — the same shape `RoomCreationRemote` takes.
 public protocol RoomListRemote: Sendable {
     func resolveUserId() async throws -> String
-    func listRooms() async throws -> [RemoteRoom]
+    func listRooms(userId: String) async throws -> [RemoteRoom]
 }
 
 extension RoomsAPIClient: RoomListRemote {}
@@ -148,7 +148,7 @@ public final class RoomSyncCoordinator {
 
         let rows: [RemoteRoom]
         do {
-            rows = try await api.listRooms()
+            rows = try await api.listRooms(userId: owner)
         } catch {
             #if DEBUG
             PatinaLog.sync.error("[RoomSync] listRooms failed: \(error.localizedDescription)")
@@ -156,7 +156,7 @@ public final class RoomSyncCoordinator {
             return
         }
 
-        apply(rows, in: store)
+        apply(rows, in: store, owner: owner)
         lastOwner = owner
         lastRunAt = now
     }
@@ -169,7 +169,14 @@ public final class RoomSyncCoordinator {
 
     /// The plan, executed. Split out so a test can run it twice and assert the
     /// second pass changes nothing.
-    func apply(_ rows: [RemoteRoom], in store: RoomStore) {
+    ///
+    /// `owner` is the account the rows are being merged into, and a row
+    /// belonging to anyone else is dropped here whatever the request asked
+    /// for — the filter on the query and this check are two independent
+    /// answers to the same question (SP-06: an account's rooms are the
+    /// account's, never another user's).
+    func apply(_ rows: [RemoteRoom], in store: RoomStore, owner: String) {
+        let rows = rows.filter { $0.user_id.lowercased() == owner.lowercased() }
         let local = store.allRooms()
         let plan = RoomMerge.plan(
             server: rows,
