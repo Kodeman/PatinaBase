@@ -112,6 +112,10 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
             syncCompanionContext()
             await viewModel.refreshProjectRooms()
             await viewModel.refreshRecord()
+            // The visit is stamped inside that rebuild; the server mirror
+            // follows it (B §3 — the second device needs `last_seen_at`
+            // before the widget does).
+            await ProfileService.shared.mirrorLastSeenIfNeeded()
         }
         .task {
             await viewModel.refreshNewThisWeek()
@@ -144,6 +148,7 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                 syncCompanionContext()
                 await viewModel.refreshProjectRooms()
                 await viewModel.refreshRecord()
+                await ProfileService.shared.mirrorLastSeenIfNeeded()
                 await viewModel.refreshNewThisWeek()
                 // The feed is what the primer trigger reads, and signing in
                 // inside this view's lifetime does not re-run the `.task`
@@ -183,7 +188,18 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
     }
 
     private var designerSeat: DesignerSeat? {
-        DesignerSeat.make(liveLead: requestStatus.liveLead, projects: badges.projects)
+        DesignerSeat.make(
+            liveLead: requestStatus.liveLead,
+            projects: badges.projects,
+            // W4: the seat follows the Record, not `updated_at` — the project
+            // carrying the most urgent NEEDS YOU row, so `Message` opens the
+            // conversation the screen is about (W2 walk §2).
+            record: viewModel.record,
+            decisions: badges.pendingDecisions,
+            proposals: badges.pendingProposals,
+            invoices: badges.payableInvoices,
+            nextMoveDetail: nextMove.detail
+        )
     }
 
     private var compositionInput: HomeCompositionInput {
@@ -389,8 +405,7 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     story: story,
                     namespace: cardNamespace,
                     isExpanded: expandedStory?.id == story.id,
-                    height: storyHeight,
-                    publishedAt: viewModel.todayStoryPublishedAt
+                    height: storyHeight
                 )
             }
             .buttonStyle(.plain)
@@ -440,8 +455,18 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
         ))
     }
 
+    /// W4: literally the same pick the seat makes — one function, called
+    /// twice. "See where <project> stands" naming one project while the seat
+    /// under it names another is the seat's W2 defect wearing the Next Move's
+    /// clothes.
     private var liveProject: RemoteProject? {
-        badges.projects.first { !StudioQueueBuilder.projectIsArchived($0) }
+        DesignerSeat.activeProject(
+            projects: badges.projects,
+            record: viewModel.record,
+            decisions: badges.pendingDecisions,
+            proposals: badges.pendingProposals,
+            invoices: badges.payableInvoices
+        )
     }
 
     private func performNextMove() { // swiftlint:disable:this cyclomatic_complexity

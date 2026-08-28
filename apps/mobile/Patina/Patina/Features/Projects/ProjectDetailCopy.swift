@@ -35,6 +35,49 @@ enum ProjectDetailCopy {
         return facts
     }
 
+    /// W4 (F76/F125): which phase the project is actually on, so the timeline
+    /// can mark it. `projects.current_phase` is the designer's own answer and
+    /// wins. Failing that, a single `in_progress` row is unambiguous enough to
+    /// stand in for it.
+    ///
+    /// Two rows claiming `in_progress` is not an answer, and nothing is marked
+    /// — the timeline still draws every phase in order, it just does not
+    /// invent a position the server never took.
+    /// A phase the project names as current whose own row says `completed` is
+    /// two server facts arguing on one line — `CURRENT / Design / Completed`.
+    /// Neither is invented, and the app has no way to know which one the
+    /// designer meant, so it marks nothing: the row still prints its own
+    /// status, and the timeline does not put a contradiction in front of the
+    /// reader (C5). Fall through to the unambiguous `in_progress` row, if
+    /// there is one.
+    static func currentPhaseId(
+        phases: [RemoteProjectPhase],
+        currentPhaseKey: String?
+    ) -> String? {
+        if let currentPhaseKey,
+           let named = phases.first(where: { $0.phase_key == currentPhaseKey }),
+           named.status?.lowercased() != "completed" {
+            return named.id
+        }
+        let running = phases.filter { $0.status?.lowercased() == "in_progress" }
+        return running.count == 1 ? running.first?.id : nil
+    }
+
+    /// What VoiceOver reads for one timeline row. The row is combined into a
+    /// single element, so this string is the whole row: leave the fee out and
+    /// a money figure that is on screen is silent for the reader who most
+    /// needs it spoken.
+    static func phaseVoiceLabel(
+        name: String,
+        statusLine: String,
+        isCurrent: Bool,
+        fee: String?
+    ) -> String {
+        let prefix = isCurrent ? "Current phase. " : ""
+        let feeSuffix = fee.map { " \($0)." } ?? ""
+        return "\(prefix)\(name). \(statusLine)\(feeSuffix)"
+    }
+
     /// One client-voiced line per section that has no data yet. Never sends a
     /// homeowner to the designer's portal.
     static func missingSectionLines(phases: Bool, payments: Bool, ffe: Bool) -> [String] {

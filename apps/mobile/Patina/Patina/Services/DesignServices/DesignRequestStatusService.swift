@@ -93,13 +93,9 @@ public enum DesignRequestStage: String, Sendable, CaseIterable {
     }
 
     /// A successful, active match. The ceremony stages (`.introduced`/`.booked`)
-    /// are deliberately NOT "matched": they are live, always-promoted, in-motion
-    /// stages, not the 14-day-windowed matched relationship.
+    /// are deliberately NOT "matched": they are live, in-motion stages, and a
+    /// match is the settled relationship they arrive at.
     public var isMatched: Bool { self == .matched }
-
-    /// Whether promotion visibility uses the 14-day window (terminal or
-    /// matched) rather than always-on (non-terminal in-progress stages).
-    public var isTerminalOrMatched: Bool { isTerminal || isMatched }
 
     /// Stages that merit a hub-row attention badge — the user has something to
     /// act on (a designer reached out, an introduction awaits her pick, or a
@@ -345,16 +341,25 @@ public struct DesignRequestStatus: Identifiable, Sendable, Equatable {
 
     /// Whether the promoted home card should surface this request now.
     ///
-    /// Unified rule: a request dismissed AT its current stage is hidden; a
-    /// non-terminal request is otherwise always shown (so it reappears once
-    /// the stage advances past a prior dismissal); a terminal/matched request
-    /// is shown only within 14 days of reaching that stage. Terminal/matched
-    /// stages never advance, so a dismissal there is permanent.
+    /// W4: **a matched request stays until it resolves.** It carried the same
+    /// 14-day window as a closed one, and a dismissal at that stage was
+    /// permanent because a matched stage never advances — two silent decays
+    /// that between them deleted a live relationship from the home. Neither
+    /// remains: a match is always visible here, and its dismissal collapses
+    /// the card for the session only (`sessionDismissedLeadIds`, never the
+    /// receipt).
+    ///
+    /// The rest of the rule stands: a request dismissed AT its current stage
+    /// is hidden and reappears when the stage advances past that dismissal;
+    /// a terminal request (declined/expired) is shown for 14 days after it
+    /// resolved, and a dismissal there is permanent because a resolved
+    /// request never advances again.
     public func isVisibleForPromotion(now: Date = Date(), window: TimeInterval = 14 * 86_400) -> Bool {
+        if stage.isMatched { return true }
         if let dismissedStageRaw, dismissedStageRaw == stage.rawValue {
             return false
         }
-        if stage.isTerminalOrMatched {
+        if stage.isTerminal {
             return now.timeIntervalSince(stageAnchor) <= window
         }
         return true
@@ -390,6 +395,11 @@ public final class DesignRequestStatusService {
 
     @ObservationIgnored private var pendingRefresh: Task<Void, Never>?
 
+    /// Matched requests the reader dismissed **in this session**. W4: a match
+    /// is a fact about the house, so nothing writes it to the receipt — the
+    /// card folds away now and the relationship is back on the next launch.
+    private(set) var sessionDismissedLeadIds: Set<UUID> = []
+
     private init() {}
 
     // MARK: Derived surfaces
@@ -399,6 +409,7 @@ public final class DesignRequestStatusService {
     public var promotedRequest: DesignRequestStatus? {
         requests
             .filter { $0.isVisibleForPromotion() }
+            .filter { !sessionDismissedLeadIds.contains($0.leadId) }
             .max(by: { $0.createdAt < $1.createdAt })
     }
 
@@ -444,6 +455,11 @@ public final class DesignRequestStatusService {
         guard AuthService.shared.isAuthenticated else {
             requests = []
             hasLoaded = false
+            // A dismissal collapses the card for this reader's session. When
+            // the session ends the collapse ends with it — otherwise "session"
+            // quietly means the process, and signing back in returns a card
+            // still hidden.
+            sessionDismissedLeadIds = []
             return
         }
 
@@ -475,11 +491,19 @@ public final class DesignRequestStatusService {
     // MARK: Dismissal
 
     /// Record a dismissal of the promoted card for `request` at its current
-    /// stage. The card reappears once the stage advances; a terminal/matched
-    /// dismissal is permanent.
+    /// stage. The card reappears once the stage advances; a terminal
+    /// dismissal is permanent, because a resolved request never advances.
+    ///
+    /// W4: a **matched** request is the one stage this does not persist. The
+    /// dismissal collapses the card for the session and nothing more — a
+    /// relationship does not end because the reader tidied their home screen.
     public func dismiss(_ request: DesignRequestStatus) {
         let stageRaw = request.stage.rawValue
         let leadId = request.leadId
+        guard !request.stage.isMatched else {
+            sessionDismissedLeadIds.insert(leadId)
+            return
+        }
         let context = PersistenceController.shared.container.mainContext
         let descriptor = FetchDescriptor<SubmittedDesignRequest>(
             predicate: #Predicate { $0.leadId == leadId }

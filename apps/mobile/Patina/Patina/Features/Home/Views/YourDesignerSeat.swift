@@ -36,15 +36,32 @@ struct DesignerSeat: Equatable {
     /// - Parameters:
     ///   - liveLead: `DesignRequestStatusService.liveLead` — the newest open
     ///     request a designer is actually on (W1a's ruling: never
-    ///     `promotedRequest`, which carries a 14-day display window).
+    ///     `promotedRequest`, which carries a display window).
     ///   - projects: `BadgeCountService.projects`, retained rows.
+    ///   - record: the Record as drawn. Its first NEEDS YOU row is the most
+    ///     urgent thing the house is waiting on, and the seat's project is the
+    ///     one that row belongs to (W2 walk §2: the seat printed `Birch
+    ///     Hollow` while every NEEDS YOU row was `Aspen Loft Refresh`, and
+    ///     `Message` opened the wrong conversation).
+    ///   - decisions/proposals/invoices: the retained rows the record's own
+    ///     rows were composed from — the only place a row's `project_id`
+    ///     survives, since `HouseRecordRow` carries a route and not a project.
+    ///   - nextMoveDetail: what the Next Move card is already printing. Where
+    ///     the seat would repeat it, the seat says something else instead
+    ///     (`waves/w2/r2-notes.md` §4.3).
     static func make(
         liveLead: DesignRequestStatus?,
-        projects: [RemoteProject]
+        projects: [RemoteProject],
+        record: HouseRecord? = nil,
+        decisions: [RemoteClientDecision] = [],
+        proposals: [RemoteProposal] = [],
+        invoices: [RemoteInvoice] = [],
+        nextMoveDetail: String? = nil
     ) -> DesignerSeat? {
-        let project = projects.first {
-            !StudioQueueBuilder.projectIsArchived($0) && $0.designer != nil
-        }
+        let project = activeProject(
+            projects: projects, record: record,
+            decisions: decisions, proposals: proposals, invoices: invoices
+        )
 
         if let project, let name = project.designer?.displayName, !name.isEmpty {
             let meta = [project.designerStudioName, project.name]
@@ -62,17 +79,86 @@ struct DesignerSeat: Equatable {
         guard let lead = liveLead, let name = lead.designerName, !name.isEmpty else {
             return nil
         }
+        // What she is doing, in the app's own words for that stage.
+        let stageLine = lead.stage.cardTitle(
+            studioName: lead.studioName,
+            designerName: name,
+            bookedSlotStartsAt: lead.introduction?.pickedSlotStartsAt
+        )
         return DesignerSeat(
             designerId: lead.designerId,
             name: name,
-            // What she is doing, in the app's own words for that stage.
-            meta: lead.stage.cardTitle(
-                studioName: lead.studioName,
-                designerName: name,
-                bookedSlotStartsAt: lead.introduction?.pickedSlotStartsAt
-            ),
+            meta: meta(stageLine: stageLine, lead: lead, nextMoveDetail: nextMoveDetail),
             projectId: nil
         )
+    }
+
+    /// At engaged the seat and the Next Move both took the lead's stage
+    /// sentence, so one screen carried it twice. Where that happens the seat
+    /// names the studio and the stage instead — the two facts the Next Move
+    /// is not printing. Both lines stay true; neither is a paraphrase.
+    private static func meta(
+        stageLine: String,
+        lead: DesignRequestStatus,
+        nextMoveDetail: String?
+    ) -> String {
+        guard let nextMoveDetail,
+              nextMoveDetail.trimmingCharacters(in: .whitespacesAndNewlines) == stageLine
+        else { return stageLine }
+        return [lead.studioName, lead.stage.badgeTitle]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
+    /// **The one pick.** The project the house is waiting on, else the most
+    /// recently updated active one (`ProjectsAPIClient.listProjects` orders
+    /// `updated_at.desc`).
+    ///
+    /// The seat and the Next Move both call this, and neither narrows the set
+    /// first. The seat used to filter to `designer != nil` *before* resolving
+    /// the urgent row, so an urgent project whose `designer` embed was nil —
+    /// no designer yet, a decode predating the embed, or a `profiles` row the
+    /// client cannot SELECT — left the Next Move naming that project while the
+    /// seat named a different one and `Message` opened the wrong thread. Where
+    /// the picked project carries no designer the seat draws from the lead
+    /// instead, or not at all; it never names a second project.
+    static func activeProject(
+        projects: [RemoteProject],
+        record: HouseRecord?,
+        decisions: [RemoteClientDecision] = [],
+        proposals: [RemoteProposal] = [],
+        invoices: [RemoteInvoice] = []
+    ) -> RemoteProject? {
+        let active = projects.filter { !StudioQueueBuilder.projectIsArchived($0) }
+        let urgentId = urgentProjectId(
+            record: record, decisions: decisions, proposals: proposals, invoices: invoices
+        )
+        return urgentId.flatMap { id in active.first { $0.id == id } } ?? active.first
+    }
+
+    /// The project behind the record's most urgent NEEDS YOU row. The row
+    /// carries a route, so the id in it is matched back to the collection it
+    /// came from — the one place `project_id` still exists.
+    static func urgentProjectId(
+        record: HouseRecord?,
+        decisions: [RemoteClientDecision],
+        proposals: [RemoteProposal],
+        invoices: [RemoteInvoice]
+    ) -> String? {
+        guard let route = record?.needsYou.first?.route else { return nil }
+        switch route {
+        case .decisionDetail(let decisionId):
+            return decisions.first { $0.id == decisionId }?.project_id
+        case .proposalDetail(let proposalId):
+            return proposals.first { $0.id == proposalId }?.project_id
+        case .invoiceDetail(let invoiceId):
+            return invoices.first { $0.id == invoiceId }?.project_id
+        case .projectDetail(let projectId):
+            return projectId
+        default:
+            return nil
+        }
     }
 }
 

@@ -69,10 +69,12 @@ enum DesignerRelationshipResolver {
     /// this with an explicit "who is on this job" choice.
     /// `lead` is the client's live lead (`DesignRequestStatusService.liveLead`),
     /// NOT `promotedRequest`. The promoted one is a display value —
-    /// `isVisibleForPromotion` makes it nil once the client dismisses the card
-    /// or the matched stage is more than 14 days old — so reading it here made
-    /// the longest-lived relationships resolve `.none`, `isLive == false`, and
-    /// would have drawn Buy in W5 for exactly the clients R3 pre-empts.
+    /// `isVisibleForPromotion` still makes it nil for a card the client
+    /// dismissed at its current stage, and for a request that has already
+    /// resolved — so reading it here would resolve `.none` and `isLive ==
+    /// false` for a client who has a designer, and would draw Buy in W5 for
+    /// exactly the clients R3 pre-empts. (W4 removed the other half of that
+    /// hazard: a match no longer ages out of promotion at 14 days.)
     static func resolve(
         lead: DesignRequestStatus?,
         projects: [RemoteProject],

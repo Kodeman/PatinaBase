@@ -148,7 +148,12 @@ extension DailyStory {
             makerName: remote.makerName ?? "",
             makerLocation: remote.makerLocation ?? "",
             makerAvatarGradient: avatar,
-            featuredProductID: remote.featuredProductID
+            featuredProductID: remote.featuredProductID,
+            // The story is a dated thing, and the card says which day it is
+            // (B §2 block 5). `dateOrDay` because `published_at` has arrived
+            // as a bare `yyyy-MM-dd` from rows written through the admin
+            // route, which the ISO8601 parsers reject outright.
+            publishedAt: remote.publishedAt.flatMap(ISO8601DateParsing.dateOrDay(from:))
         )
     }
 }

@@ -87,6 +87,10 @@ public final class AuthService {
                 // transition keeps the guest's local scans (see the helper).
                 if let user = session?.user {
                     Self.reconcileLocalStoreOwner(userId: user.id.uuidString)
+                    // W3 ruling 9: a real session ends the guest session. An
+                    // `.initialSession` carrying no user clears nothing —
+                    // that is the cold launch the persisted opt-in exists for.
+                    GuestSessionStore.shared.clear()
                 }
 
                 // Mark auth state as ready after first event and fan out
@@ -143,6 +147,9 @@ public final class AuthService {
                     PatinaLog.auth.debug("User signed out")
                     PostHogService.shared.reset()
                     await ProfileService.shared.clear()
+                    // Signing out is owed the gate again, not a silent slide
+                    // into guest mode on the way back to `.auth`.
+                    GuestSessionStore.shared.clear()
                 case .userUpdated:
                     PatinaLog.auth.debug("User updated")
                 default:
