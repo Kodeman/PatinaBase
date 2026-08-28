@@ -98,7 +98,7 @@ export function RoomsRail({
         <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
           <span
             aria-hidden
-            className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+            className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
           >
             Rooms
           </span>

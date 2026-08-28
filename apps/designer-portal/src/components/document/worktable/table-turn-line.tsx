@@ -20,7 +20,7 @@ export function TableTurnLine({ onTurn }: { onTurn: () => void }) {
     >
       <span
         data-table-turn
-        className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+        className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
       >
         The table is ready to turn —
       </span>

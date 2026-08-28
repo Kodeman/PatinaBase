@@ -103,14 +103,14 @@ function Figure({
 }) {
   return (
     <div className="flex-1 px-4 first:pl-0">
-      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         {label}
       </p>
       <p className="mt-1 truncate font-heading text-[1.05rem] leading-none text-[var(--color-charcoal)]">
         {value}
       </p>
       {sub && (
-        <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           {sub}
         </p>
       )}
@@ -185,7 +185,7 @@ export function ProposalWatch({
     >
       {/* Eyebrow + the state stamp */}
       <div className="mb-2.5 flex items-center justify-between gap-3">
-        <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
           With the client
         </p>
         <Stamp label={w.stamp.label} color={w.stamp.color} ink={w.stamp.ink} />
@@ -210,7 +210,7 @@ export function ProposalWatch({
       {/* The client's copy, as sent — a quiet peek; Preview opens it full-screen */}
       <div className="mt-4">
         <div className="mb-2 flex items-baseline justify-between gap-3">
-          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             The client&rsquo;s copy · as sent
           </span>
           {hoistedLeader !== 'preview' && (
@@ -247,7 +247,7 @@ export function ProposalWatch({
             type="button"
             onClick={() => setRecordOpen((o) => !o)}
             aria-expanded={recordOpen}
-            className="shrink-0 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
+            className="shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             the record {recordOpen ? '↑' : '↓'}
           </button>
@@ -261,10 +261,10 @@ export function ProposalWatch({
               key={`${r.at}-${i}`}
               className="flex items-baseline gap-3 border-b border-dashed border-[var(--color-pearl)] py-1.5 last:border-b-0"
             >
-              <span className="w-[46px] shrink-0 font-mono text-[10px] text-[var(--color-charcoal)]">
+              <span className="w-[46px] shrink-0 font-mono text-[11px] text-[var(--color-charcoal)]">
                 {fmtDay(r.at)}
               </span>
-              <span className="w-[52px] shrink-0 font-mono text-[9px] text-[var(--text-muted)]">
+              <span className="w-[52px] shrink-0 font-mono text-[11px] text-[var(--text-muted)]">
                 {fmtTime(r.at)}
               </span>
               <span className="text-[11.5px] text-[var(--color-charcoal)]">

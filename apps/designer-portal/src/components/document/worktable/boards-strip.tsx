@@ -70,7 +70,7 @@ function BoardTile({
       <span className="max-w-full truncate font-heading text-[13px] font-medium italic text-[var(--color-charcoal)]">
         {board.name}
       </span>
-      <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
         {board.item_count} {board.item_count === 1 ? "piece" : "pieces"}
       </span>
     </Link>
@@ -160,7 +160,7 @@ export function BoardsStrip({ proposalId, roomFilter }: BoardsStripProps) {
     <div data-boards-strip className="min-w-0">
       {/* ≥1440 — the strip proper. */}
       <div data-boards-strip-wide className="hidden min-[1440px]:block">
-        <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <p className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           Boards
         </p>
         <div className="flex items-center gap-3">
@@ -192,10 +192,10 @@ export function BoardsStrip({ proposalId, roomFilter }: BoardsStripProps) {
           <span className="font-heading text-[12.5px] font-medium italic text-[var(--color-charcoal)]">
             Boards
           </span>
-          <span className="truncate font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+          <span className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
             {countLabel}
           </span>
-          <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
             {expanded ? "fold ↑" : "unfold ↓"}
           </span>
         </button>

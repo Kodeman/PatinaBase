@@ -60,10 +60,10 @@ function MilestoneRow({
   return (
     <div className="grid grid-cols-[1fr_auto] items-baseline gap-2 border-b border-dashed border-[var(--color-pearl)] py-1.5 min-[700px]:grid-cols-[minmax(0,1.2fr)_auto_auto_minmax(0,1.4fr)_auto]">
       <span className="text-[11.5px] text-[var(--color-charcoal)]">{m.label}</span>
-      <span className="font-mono text-[10px] text-[var(--color-charcoal)]">
+      <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
         {fmtUsd(m.amount_cents)}
       </span>
-      <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
         {m.paid_at ? `paid ${fmtDay(m.paid_at)}` : m.status}
       </span>
       <span className="flex items-baseline gap-1.5">
@@ -78,7 +78,7 @@ function MilestoneRow({
             })
           }
           aria-label={`${m.label} trigger`}
-          className="bg-transparent font-mono text-[9px] uppercase tracking-[0.04em] text-[var(--text-muted)] outline-none"
+          className="bg-transparent font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--text-muted)] outline-none"
         >
           {/* R33 F4: the honest word for a designer-act milestone is MANUAL. */}
           <option value="">manual</option>
@@ -99,7 +99,7 @@ function MilestoneRow({
               })
             }
             aria-label={`${m.label} section`}
-            className="bg-transparent font-mono text-[9px] uppercase tracking-[0.04em] text-[var(--color-clay-ink)] outline-none"
+            className="bg-transparent font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-clay-ink)] outline-none"
           >
             <option value="">pick a section</option>
             {GATE_SECTIONS.map((s) => (
@@ -120,7 +120,7 @@ function MilestoneRow({
               })
             }
             ariaLabel={`${m.label} date`}
-            className="bg-transparent font-mono text-[9px] text-[var(--color-clay-ink)] outline-none"
+            className="bg-transparent font-mono text-[11px] text-[var(--color-clay-ink)] outline-none"
           />
         )}
       </span>
@@ -160,7 +160,7 @@ function MilestoneRow({
       )}
       {invoiceNote && (
         <p
-          className="col-span-full font-mono text-[8.5px] normal-case tracking-normal"
+          className="col-span-full font-mono text-[11px] normal-case tracking-normal"
           style={{ color: TERRACOTTA_INK }}
           role="alert"
         >
@@ -226,7 +226,7 @@ export function AccountBand({
 
   if (!data) {
     return (
-      <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
         No account record is available for this project.
       </p>
     );
@@ -251,13 +251,13 @@ export function AccountBand({
         <span className="font-heading text-[12.5px] font-medium italic text-[var(--color-charcoal)]">
           The accounts · this project
         </span>
-        <span className="truncate font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <span className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           {collapsedLine}
         </span>
-        <span className="font-mono text-[7.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak,#8B7355)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak,#8B7355)]">
           Studio eyes only
         </span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
           {open ? 'fold ↑' : 'unfold ↓'}
         </span>
       </button>
@@ -266,16 +266,16 @@ export function AccountBand({
         <div className="border-t border-[var(--color-pearl)] px-3 pb-3 pt-2">
           {/* Variance by room (× category beneath) — R25's rooms, one source. */}
           <div className="mb-1 grid grid-cols-[1fr_auto_auto_auto] gap-x-4">
-            <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               Room
             </span>
-            <span className="text-right font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            <span className="text-right font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               Allocated
             </span>
-            <span className="text-right font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            <span className="text-right font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               Committed
             </span>
-            <span className="text-right font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            <span className="text-right font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               Variance
             </span>
           </div>
@@ -286,14 +286,14 @@ export function AccountBand({
             >
               <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4">
                 <span className="text-[11.5px] text-[var(--color-charcoal)]">{r.roomName}</span>
-                <span className="text-right font-mono text-[10px] text-[var(--color-charcoal)]">
+                <span className="text-right font-mono text-[11px] text-[var(--color-charcoal)]">
                   {r.allocatedCents > 0 ? fmtUsd(r.allocatedCents) : '—'}
                 </span>
-                <span className="text-right font-mono text-[10px] text-[var(--color-charcoal)]">
+                <span className="text-right font-mono text-[11px] text-[var(--color-charcoal)]">
                   {fmtUsd(r.committedCents)}
                 </span>
                 <span
-                  className="text-right font-mono text-[10px]"
+                  className="text-right font-mono text-[11px]"
                   style={{
                     color: r.varianceCents >= 0 ? SAGE_INK : TERRACOTTA_INK,
                   }}
@@ -304,7 +304,7 @@ export function AccountBand({
                 </span>
               </div>
               {r.categories.length > 0 && (
-                <p className="mt-px font-mono text-[8.5px] lowercase tracking-[0.03em] text-[var(--text-muted)]">
+                <p className="mt-px font-mono text-[11px] lowercase tracking-[0.03em] text-[var(--text-muted)]">
                   {r.categories
                     .map((c) => `${c.name.replace(/_/g, ' ')} ${fmtUsd(c.committedCents)}`)
                     .join(' · ')}
@@ -323,7 +323,7 @@ export function AccountBand({
             ) : (
               'No trade pricing on committed lines yet.'
             )}
-            <span className="ml-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+            <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
               trade cost on {data.tradeCoverage.withTrade} of {data.tradeCoverage.total} committed
               lines
             </span>
@@ -352,7 +352,7 @@ export function AccountBand({
           {/* Payment milestones — inline trigger config (R26/R23). */}
           {data.milestones.length > 0 && (
             <div className="mt-3">
-              <p className="mb-0.5 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+              <p className="mb-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                 Payment milestones
               </p>
               {data.milestones.map((m) => (
@@ -410,7 +410,7 @@ export function AccountBand({
               {changeOnly ? 'Add a change' : 'Amendment'}
             </DocumentAction>
             {exportNote && (
-              <span className="font-mono text-[8.5px] text-[var(--text-muted)]">{exportNote}</span>
+              <span className="font-mono text-[11px] text-[var(--text-muted)]">{exportNote}</span>
             )}
           </DocumentActionGroup>
         </div>

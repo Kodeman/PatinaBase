@@ -1516,7 +1516,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         <p className="mb-3 font-heading text-[16px] text-[var(--color-charcoal)]">
           This document could not be picked up.
         </p>
-        <div className="flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.08em]">
+        <div className="flex items-center gap-4 font-mono text-[11px] uppercase tracking-[0.08em]">
           <button
             type="button"
             className="text-[var(--color-clay-ink)]"
@@ -1540,7 +1540,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         </p>
         <Link
           href="/desk"
-          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
+          className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
         >
           ← Back to the desk
         </Link>
@@ -2008,7 +2008,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                       {spreadSection === 'direction' ? 'Direction' : 'Proposal'}
                       {liveProposal?.version ? ` · v${liveProposal.version}` : ''}
                     </h2>
-                    <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {sections.find((s) => s.key === spreadSection)?.sub}
                     </span>
                   </div>
@@ -2020,7 +2020,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   {row.engagement_kind === 'proposal' &&
                     verdictSummary &&
                     !finalizeTable && (
-                      <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                         {verdictSummary}
                       </p>
                     )}
@@ -2048,7 +2048,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   {/* S18: name the model — what's below is a read-only preview of
                       the proposal; the editing happens in the Drafting Room. */}
                   {row.engagement_kind === 'proposal' && liveProposal?.status === 'draft' && (
-                    <p className="mb-2 mt-3 font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+                    <p className="mb-2 mt-3 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
                       Read-only preview · edit in the Drafting Room
                     </p>
                   )}
@@ -2266,7 +2266,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               <>
                 <ProposalBlocksReadOnly proposalId={unfoldProposalId} />
                 {s.key === 'proposal' && seal && (
-                  <p className="mt-4 border-t border-[var(--color-pearl)] pt-3 text-[10.5px] text-[var(--text-muted)]">
+                  <p className="mt-4 border-t border-[var(--color-pearl)] pt-3 text-[11px] text-[var(--text-muted)]">
                     {seal.by ? `Signed by ${seal.by} · ${seal.date}` : `Signed · ${seal.date}`}
                   </p>
                 )}

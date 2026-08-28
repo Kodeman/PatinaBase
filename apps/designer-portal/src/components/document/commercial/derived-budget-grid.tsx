@@ -96,7 +96,7 @@ function TargetCell({
         data-version-id={versionId}
       />
       {error && (
-        <span role="alert" className="mt-1 block text-[9.5px] text-[var(--color-terracotta-ink)]">
+        <span role="alert" className="mt-1 block text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
         </span>
       )}
@@ -215,7 +215,7 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             Working budget{" "}
             {version ? `· version ${version.version}` : "· not started"}
           </p>
@@ -256,7 +256,7 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
       </div>
 
       {editable && !agreementId && (
-        <p className="mt-2 text-[10px] text-[var(--text-muted)]">
+        <p className="mt-2 text-[11px] text-[var(--text-muted)]">
           An executed design agreement is required before publishing.
         </p>
       )}
@@ -264,7 +264,7 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
       {version && version.lines.length > 0 ? (
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[620px] border-collapse text-left text-[11px]">
-            <thead className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <thead className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               <tr className="border-b border-[var(--doc-ink-border)]">
                 <th className="py-2 pr-3">Room</th>
                 <th className="py-2 pr-3">Category</th>
@@ -378,7 +378,7 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
           )}
           {checkpoint.state === "open" && showOverride && (
             <div className="mt-3 max-w-xl">
-              <label className="text-[10px] text-[var(--text-muted)]">
+              <label className="text-[11px] text-[var(--text-muted)]">
                 Required reason
                 <Textarea
                   className="mt-1"

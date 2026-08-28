@@ -107,7 +107,7 @@ export function GhostLabel({
 }) {
   return (
     <span
-      className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.06em]"
+      className="absolute whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.06em]"
       style={{ left: `${leftPct}%`, top, marginLeft, color: TONE_COLOR[tone] }}
     >
       {children}

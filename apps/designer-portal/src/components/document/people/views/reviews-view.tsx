@@ -291,7 +291,7 @@ function Stat({ n, l }: { n: number | string; l: string }) {
       <div className="font-heading text-[1.4rem] font-medium leading-none text-[var(--color-charcoal)]">
         {n}
       </div>
-      <div className="mt-1 font-mono text-[0.46rem] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+      <div className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
         {l}
       </div>
     </div>

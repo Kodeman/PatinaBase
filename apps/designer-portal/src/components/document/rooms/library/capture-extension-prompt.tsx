@@ -67,7 +67,7 @@ export function CaptureExtensionPrompt() {
       className="mx-6 mt-5 border-y border-[rgba(196,165,123,0.34)] px-1 py-4 sm:mx-9 sm:flex sm:items-center sm:justify-between sm:gap-6"
     >
       <div className="min-w-0">
-        <p className="font-mono text-[8.5px] font-semibold uppercase tracking-[0.11em] text-[var(--color-clay-ink)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.11em] text-[var(--color-clay-ink)]">
           Chrome capture
         </p>
         <h2

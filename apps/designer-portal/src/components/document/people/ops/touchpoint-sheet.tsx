@@ -98,7 +98,7 @@ export function TouchpointSheet({
 
       <div className="mt-5 space-y-4">
         <div>
-          <label className="mb-1.5 block font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <label className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             Occasion
           </label>
           <div className="flex flex-wrap gap-1.5">
@@ -124,7 +124,7 @@ export function TouchpointSheet({
         </div>
 
         <div>
-          <span className="mb-1.5 block font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <span className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             When
           </span>
           <DateTextInput
@@ -138,7 +138,7 @@ export function TouchpointSheet({
         <div>
           <label
             htmlFor="touchpoint-reason"
-            className="mb-1.5 block font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
           >
             Why now (a note to yourself)
           </label>

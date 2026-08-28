@@ -14,7 +14,7 @@ export function SectionEyebrow({
   count?: number;
 }) {
   return (
-    <h2 className="mb-4 flex items-center gap-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+    <h2 className="mb-4 flex items-center gap-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
       <span aria-hidden className="inline-flex flex-col gap-[2px]">
         <i className="block h-[1.5px] w-[34px] rounded-[1px] bg-[var(--color-mocha)]" />
         <i className="block h-[1.5px] w-[24px] rounded-[1px] bg-[var(--color-clay)] opacity-70" />

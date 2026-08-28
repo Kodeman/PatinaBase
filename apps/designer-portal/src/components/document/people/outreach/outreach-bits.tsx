@@ -35,7 +35,7 @@ export function SubNav<T extends string>({
             role="tab"
             aria-selected={on}
             onClick={() => onSelect(key)}
-            className={`relative pb-1.5 font-mono text-[0.54rem] font-semibold uppercase tracking-[0.06em] transition-colors ${
+            className={`relative pb-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors ${
               on
                 ? 'text-[var(--color-charcoal)]'
                 : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -71,7 +71,7 @@ export function StatGrid({
           <div className="font-mono text-[1.4rem] font-medium leading-none text-[var(--color-charcoal)]">
             {s.n}
           </div>
-          <div className="mt-1 font-mono text-[0.46rem] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+          <div className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
             {s.label}
           </div>
         </div>
@@ -178,7 +178,7 @@ export function ListHeader({
 }) {
   return (
     <div className="mb-3 flex items-center justify-between">
-      <h2 className="font-mono text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
         {label}
       </h2>
       {action}

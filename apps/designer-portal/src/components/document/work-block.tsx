@@ -189,11 +189,11 @@ export function WorkBlock({
   return (
     <div id="document-task-controls" tabIndex={-1} className="mb-2 mt-4 rounded-[6px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
       <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-3 py-1.5">
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
           The work{total > 0 ? ` · ${doneCount} of ${total}` : ''}
         </span>
         {estTotal > 0 && (
-          <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
             {fmtHours(loggedMinutes ?? 0)} of {fmtHours(estTotal)} est.
           </span>
         )}
@@ -217,7 +217,7 @@ export function WorkBlock({
                     + a sage ✓ when done (HTML §1 .tick.done). */}
                 <span
                   aria-hidden
-                  className="relative top-px inline-flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.5px] text-[8px] font-bold leading-none"
+                  className="relative top-px inline-flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.5px] text-[11px] font-bold leading-none"
                   style={{
                     borderColor: done
                       ? 'var(--color-sage)'
@@ -238,7 +238,7 @@ export function WorkBlock({
                   {t.title}
                 </span>
                 <span
-                  className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.05em]"
+                  className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.05em]"
                   style={{ color: overdue ? 'var(--color-terracotta-ink)' : 'var(--text-muted)' }}
                 >
                   {done
@@ -294,7 +294,7 @@ export function WorkBlock({
               aria-haspopup="dialog"
               aria-expanded={folioOpen}
               aria-label="Due date"
-              className={`whitespace-nowrap bg-transparent font-mono text-[9.5px] outline-none ${
+              className={`whitespace-nowrap bg-transparent font-mono text-[11px] outline-none ${
                 whenLabel ? 'text-[var(--text-muted)]' : 'italic text-[var(--text-muted)]'
               }`}
             >
@@ -326,7 +326,7 @@ export function WorkBlock({
                         <button
                           type="button"
                           onClick={() => setFolioMode('thread')}
-                          className="mt-1 block font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-aged-oak)]"
+                          className="mt-1 block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-aged-oak)]"
                         >
                           Place it in the schedule
                         </button>
@@ -357,7 +357,7 @@ export function WorkBlock({
             }
             placeholder="est h"
             aria-label="Estimate (hours)"
-            className="w-10 bg-transparent text-right font-mono text-[9.5px] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)]"
+            className="w-10 bg-transparent text-right font-mono text-[11px] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)]"
           />
           <DocumentAction
             actionKey="create-task"

@@ -101,7 +101,7 @@ export function VoidAct({
 
   return (
     <div className="border-l-2 border-[var(--color-terracotta)] pl-3">
-      <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
+      <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
         Void authorization № {instrument.number}
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-mocha)]">
@@ -109,7 +109,7 @@ export function VoidAct({
         undone.
       </p>
 
-      <label className="mt-3 block text-[10px] text-[var(--text-muted)]">
+      <label className="mt-3 block text-[11px] text-[var(--text-muted)]">
         Reason for the void
         <Textarea
           className="mt-1"
@@ -120,7 +120,7 @@ export function VoidAct({
         />
       </label>
 
-      <label className="mt-3 block text-[10px] text-[var(--text-muted)]">
+      <label className="mt-3 block text-[11px] text-[var(--text-muted)]">
         Type <strong className="font-mono text-[var(--color-charcoal)]">{expectedConfirm}</strong> to confirm
         <input
           className="mt-1 w-full rounded-[3px] border border-[var(--doc-ink-border)] bg-white px-3 py-2 font-mono text-[12px] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-terracotta)]"

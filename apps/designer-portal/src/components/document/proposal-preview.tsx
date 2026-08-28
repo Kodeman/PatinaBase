@@ -42,14 +42,14 @@ export function ProposalPreview({
     >
       {/* The thin charcoal banner — same frame as the project mirror. */}
       <div className="flex items-baseline justify-between bg-[var(--color-charcoal)] px-7 py-2">
-        <p className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.75)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.75)]">
           You&rsquo;re seeing what they see
         </p>
         <button
           type="button"
           autoFocus
           onClick={onClose}
-          className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+          className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
         >
           ← Back to your copy
         </button>

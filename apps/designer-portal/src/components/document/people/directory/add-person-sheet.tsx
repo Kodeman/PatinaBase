@@ -61,7 +61,7 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const FIELD_LABEL =
-  'mb-1 block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 const FIELD_INPUT =
   'w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
@@ -90,7 +90,7 @@ function KindChoice({
           type="button"
           onClick={() => onKind(k)}
           aria-current={kind === k ? 'true' : undefined}
-          className={`min-h-11 rounded-[3px] font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+          className={`min-h-11 rounded-[3px] font-mono text-[11px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
             kind === k
               ? 'text-[var(--color-clay-ink)]'
               : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
@@ -355,7 +355,7 @@ export function AddPersonSheet({
 
   return (
     <RoomSheet open={open} onClose={close} title="Add someone to your people">
-      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
+      <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         Add · to your roster
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">

@@ -57,13 +57,13 @@ export function RecentBoardsStrip() {
                   <p className="truncate font-heading text-[14px] text-[var(--text-primary)]">
                     {board.name}
                   </p>
-                  <p className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  <p className="mt-0.5 truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     {board.roomName ?? board.ownerName}
                   </p>
                   <BoardVerdictSummary counts={board.verdictCounts} className="mt-1.5" />
                   <p
                     suppressHydrationWarning
-                    className="mt-1 font-mono text-[9px] text-[var(--text-muted)]"
+                    className="mt-1 font-mono text-[11px] text-[var(--text-muted)]"
                   >
                     {formatRelativeTime(board.updatedAt)}
                   </p>

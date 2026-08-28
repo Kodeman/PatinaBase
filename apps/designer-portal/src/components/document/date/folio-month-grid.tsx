@@ -158,7 +158,7 @@ export function FolioMonthGrid({
             key={name}
             role="columnheader"
             aria-label={name}
-            className="pb-2 pt-[5px] text-center font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+            className="pb-2 pt-[5px] text-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
           >
             {name.slice(0, 1)}
           </span>

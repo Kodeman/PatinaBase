@@ -175,7 +175,7 @@ export function DraftingStrip({
   return (
     <div className="border border-[var(--color-pearl)] bg-[var(--doc-paper)]">
       {/* The paper card's header band — the deck's `doc-hd`. */}
-      <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-4 py-2 font-mono text-[0.54rem] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
+      <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
         <span>Frame · Schedule</span>
         <span>Phase Dates</span>
       </div>
@@ -187,7 +187,7 @@ export function DraftingStrip({
           <span className="font-heading text-[1.28rem] leading-none text-[var(--color-charcoal)]">
             {headerName}
           </span>
-          <span className="font-mono text-[0.56rem] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
             {headerMeta}
           </span>
         </div>
@@ -197,7 +197,7 @@ export function DraftingStrip({
           {months.map((m) => (
             <span
               key={m.key}
-              className="absolute font-mono text-[0.52rem] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]"
+              className="absolute font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]"
               style={{ left: `${m.xPct}%` }}
             >
               {m.label}
@@ -351,7 +351,7 @@ export function DraftingStrip({
         {todayXPct != null && (
           <div className="relative h-4">
             <span
-              className="absolute whitespace-nowrap font-mono text-[0.52rem] uppercase tracking-[0.14em] text-[var(--color-terracotta-ink)]"
+              className="absolute whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-terracotta-ink)]"
               style={{ left: `${clampPct(todayXPct)}%`, top: 3, marginLeft: 4 }}
             >
               Today · {fmtDay(today)}
@@ -359,7 +359,7 @@ export function DraftingStrip({
           </div>
         )}
 
-        <p className="mt-5 font-mono text-[0.52rem] uppercase tracking-[0.13em] text-[var(--color-aged-oak)]">
+        <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.13em] text-[var(--color-aged-oak)]">
           Drag the bar to move it · Drag its right edge to resize · Others follow
         </p>
       </div>
@@ -404,7 +404,7 @@ function LaneRow({
       <button
         type="button"
         onClick={() => onRevealPhase(lane.id)}
-        className="absolute left-0 top-[3px] z-[5] flex items-center gap-[6px] whitespace-nowrap font-mono text-[0.52rem] uppercase tracking-[0.11em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+        className="absolute left-0 top-[3px] z-[5] flex items-center gap-[6px] whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.11em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
       >
         {name}
         {ghost?.deltaDays != null && ghost.deltaDays !== 0 && (

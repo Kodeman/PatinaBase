@@ -60,13 +60,13 @@ function Cell({
 }) {
   return (
     <div>
-      <p className="mb-0.5 font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <p className="mb-0.5 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         {label}
       </p>
       <p className="text-[11.5px] font-medium text-[var(--color-charcoal)]">
         {value}
       </p>
-      {sub && <p className="text-[10px] text-[var(--text-muted)]">{sub}</p>}
+      {sub && <p className="text-[11px] text-[var(--text-muted)]">{sub}</p>}
     </div>
   );
 }
@@ -115,7 +115,7 @@ function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
 
   return (
     <div>
-      <p className="mb-0.5 font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <p className="mb-0.5 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         Movement
       </p>
       <p className="text-[11.5px] font-medium text-[var(--color-charcoal)]">
@@ -124,7 +124,7 @@ function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
       {po ? (
         <>
           <label className="flex items-baseline gap-1.5">
-            <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               arrives
             </span>
             <DateTextInput
@@ -136,23 +136,23 @@ function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
                 setEta(next);
                 save(next);
               }}
-              className="bg-transparent text-[10.5px] text-[var(--color-charcoal)] outline-none"
+              className="bg-transparent text-[11px] text-[var(--color-charcoal)] outline-none"
             />
           </label>
           {!eta && po.status === 'shipped' && !error && (
-            <p className="text-[10px] text-[var(--text-muted)]">
+            <p className="text-[11px] text-[var(--text-muted)]">
               shipped — no scheduled arrival
             </p>
           )}
           {saved && !error && (
             // R51: the quiet confirmation.
-            <p className="text-[10px] text-[var(--text-muted)]">
+            <p className="text-[11px] text-[var(--text-muted)]">
               eta updated — arrives ~{fmtDay(saved)}
             </p>
           )}
           {error && (
             // R83: inline at the act — the reason and a retry.
-            <div role="alert" className="text-[10px] text-[var(--color-terracotta-ink)]">
+            <div role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
               <p>{error}</p>
               <DocumentAction
                 actionKey="retry-save-ffe-eta"
@@ -169,7 +169,7 @@ function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
         </>
       ) : (
         item.eta && (
-          <p className="text-[10px] text-[var(--text-muted)]">
+          <p className="text-[11px] text-[var(--text-muted)]">
             eta ~{fmtDay(item.eta)}
           </p>
         )
@@ -224,7 +224,7 @@ function ClaimActs({ claims }: { claims: { id: string; state: string }[] }) {
       {claims.map((c) => (
         <div key={c.id} className="py-0.5">
           <div className="flex flex-wrap items-baseline gap-2">
-            <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
               Claim ·{' '}
               {c.state === 'vendor_notified' ? 'vendor notified' : 'drafted'}
             </span>
@@ -285,11 +285,11 @@ function ClaimActs({ claims }: { claims: { id: string; state: string }[] }) {
       ))}
       {confirmed && !error && (
         // R51: the quiet confirmation.
-        <p className="text-[10px] text-[var(--text-muted)]">{confirmed}</p>
+        <p className="text-[11px] text-[var(--text-muted)]">{confirmed}</p>
       )}
       {error && (
         // R83: inline at the act.
-        <p role="alert" className="text-[10px] text-[var(--color-terracotta-ink)]">
+        <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}
@@ -433,14 +433,14 @@ export function LineUnfold({
           className="mb-2.5 border-l-[2px] border-[var(--color-sage)] pl-2.5"
         >
           {auth.track === 'authorized' && (
-            <p className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               signed price {fmtUsd(auth.signedLineTotalCents)} ·{' '}
               {auth.depositClear ? 'deposit clear' : 'deposit not yet clear'}
             </p>
           )}
           {delta && (
             // The signed price stands; the drift is stated, never silent.
-            <p className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
               {delta}
             </p>
           )}
@@ -450,7 +450,7 @@ export function LineUnfold({
             </p>
           )}
           {softLock && (
-            <p className="mt-px font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <p className="mt-px font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               {softLock}
             </p>
           )}
@@ -465,7 +465,7 @@ export function LineUnfold({
       {/* R25: room assignment, in the unfold's quiet grammar. */}
       {canEditSelection && (
         <div className="mb-2.5 flex items-baseline gap-2">
-          <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             Room
           </span>
           <select
@@ -485,7 +485,7 @@ export function LineUnfold({
               });
             }}
             aria-label="Assign to room"
-            className="bg-transparent text-[10.5px] text-[var(--color-charcoal)] outline-none disabled:opacity-60"
+            className="bg-transparent text-[11px] text-[var(--color-charcoal)] outline-none disabled:opacity-60"
           >
             <option value="unassigned">Unsorted</option>
             <option value="throughout">Throughout</option>
@@ -496,7 +496,7 @@ export function LineUnfold({
             ))}
           </select>
           {softLock && (
-            <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               {softLock}
             </span>
           )}

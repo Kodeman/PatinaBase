@@ -109,10 +109,10 @@ export function PortfolioView(_props: PeopleViewProps) {
                     {p.name}
                   </div>
                   {sub && (
-                    <div className="truncate text-[0.58rem] text-[var(--color-aged-oak)]">{sub}</div>
+                    <div className="truncate text-[11px] text-[var(--color-aged-oak)]">{sub}</div>
                   )}
                   {showOwner && (
-                    <div className="mt-1 truncate text-[0.54rem]">
+                    <div className="mt-1 truncate text-[11px]">
                       <OwnerByline
                         name={p.designer?.full_name ?? p.designer?.display_name ?? null}
                         avatarUrl={p.designer?.avatar_url ?? null}

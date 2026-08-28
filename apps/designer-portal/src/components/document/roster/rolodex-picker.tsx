@@ -58,13 +58,13 @@ const DEFAULT_SCOPE_KINDS: PartyKind[] = [
 ];
 
 const WORD =
-  'da-score-hover min-h-11 inline-flex items-center font-mono text-[9px] uppercase tracking-[0.1em] transition-colors';
+  'da-score-hover min-h-11 inline-flex items-center font-mono text-[11px] uppercase tracking-[0.1em] transition-colors';
 const WORD_ON = 'da-score-on text-[var(--color-charcoal)]';
 const WORD_OFF = 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]';
 const UNDERLINE_INPUT =
   'min-h-11 w-full border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.85rem] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--color-aged-oak)] focus:border-[var(--color-clay)]';
 const FIELD_LABEL =
-  'mb-1 block font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
+  'mb-1 block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
 
 /** A rolodex kind is free TEXT; anything the party CHECK doesn't admit lands
  *  on 'other' rather than failing the insert. */
@@ -372,7 +372,7 @@ export function RolodexPicker({
 
       {adding && (
         <div className="mt-4 border-t border-[var(--color-pearl)] pt-4">
-          <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
             Someone new
           </p>
 
@@ -469,7 +469,7 @@ export function RolodexPicker({
           >
             <span
               aria-hidden
-              className="relative top-[3px] inline-flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-[2px] border-[1.5px] text-[8px] font-bold leading-none"
+              className="relative top-[3px] inline-flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-[2px] border-[1.5px] text-[11px] font-bold leading-none"
               style={{
                 borderColor: stamp ? 'var(--color-sage)' : 'var(--doc-ink-border)',
                 background: stamp ? 'rgba(168,181,160,0.15)' : 'transparent',

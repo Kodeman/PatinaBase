@@ -64,7 +64,7 @@ export function AuthorizationStamp({
       <span
         data-authorization-track="none"
         aria-label="Not yet released for authorization"
-        className="inline-block whitespace-nowrap px-[9px] font-mono text-[10px] text-[var(--text-muted)]"
+        className="inline-block whitespace-nowrap px-[9px] font-mono text-[11px] text-[var(--text-muted)]"
       >
         —
       </span>

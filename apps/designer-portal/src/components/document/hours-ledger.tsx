@@ -339,7 +339,7 @@ export function HoursLedger({
             Hours{' '}
             <em className="italic text-[var(--color-clay-ink)]">· {weekLabel}</em>
             {lensName && (
-              <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+              <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 · {lensName}
                 <button
                   type="button"
@@ -351,7 +351,7 @@ export function HoursLedger({
               </span>
             )}
           </h2>
-          <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
+          <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
             {weekOffset === 0 && (
               <>Today · {fmtMinutes(todayMin)} &nbsp;·&nbsp; </>
             )}
@@ -394,7 +394,7 @@ export function HoursLedger({
               initialTimeEntryIds: weekUnbilled.map((e) => e.id),
             })
           }
-          className="whitespace-nowrap rounded-[3px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:border-[var(--color-pearl)] disabled:text-[var(--color-aged-oak)] disabled:hover:bg-transparent"
+          className="whitespace-nowrap rounded-[3px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:border-[var(--color-pearl)] disabled:text-[var(--color-aged-oak)] disabled:hover:bg-transparent"
         >
           Export week → Accounts
         </button>
@@ -437,7 +437,7 @@ export function HoursLedger({
 
       {/* R77 — the all-time unbilled balance, with its one act. */}
       {unbilledMinutes > 0 && (
-        <div className="-mt-2 mb-4 flex flex-wrap items-baseline gap-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <div className="-mt-2 mb-4 flex flex-wrap items-baseline gap-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           <span className="text-[var(--color-clay-ink)]">unbilled · all time</span>
           <span className="text-[var(--color-charcoal)]">
             {fmtUsd(unbilledCents)} · {fmtMinutes(unbilledMinutes)}
@@ -450,7 +450,7 @@ export function HoursLedger({
               aria-label="Project to bill"
               value={billingTargetProjectId ?? ''}
               onChange={(event) => setBillingProjectId(event.target.value)}
-              className="rounded-[3px] border border-[var(--color-pearl)] bg-white px-2 py-1 text-[9px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--doc-paper)]"
+              className="rounded-[3px] border border-[var(--color-pearl)] bg-white px-2 py-1 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--doc-paper)]"
             >
               <option value="">Choose a document…</option>
               {unbilledProjects.map((projectId) => (
@@ -483,7 +483,7 @@ export function HoursLedger({
 
       {note && (
         <p
-          className="mb-3 rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1.5 font-mono text-[9px] uppercase tracking-[0.05em]"
+          className="mb-3 rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1.5 font-mono text-[11px] uppercase tracking-[0.05em]"
           style={{ color: TERRACOTTA_INK }}
         >
           {note}
@@ -515,7 +515,7 @@ export function HoursLedger({
 
       {days.map(([day, rows]) => (
         <section key={day} className="mb-4">
-          <p className="mb-1 flex items-baseline justify-between font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
+          <p className="mb-1 flex items-baseline justify-between font-mono text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
             <span>
               {day === todayKey ? 'Today' : fmtDay(rows[0].started_at)}
             </span>
@@ -637,7 +637,7 @@ function EntryRow({
           <p className="truncate text-[12.5px] font-medium text-[var(--color-charcoal)]">
             {e.project?.name ?? 'Project'}
           </p>
-          <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+          <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
             {[
               e.phase_key,
               SOURCE_LABEL[e.source] ?? e.source,
@@ -657,7 +657,7 @@ function EntryRow({
         <select
           aria-label="Activity"
           disabled={billed}
-          className="rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-1.5 py-1 text-[10.5px] text-[var(--color-mocha)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-40 [&_option]:bg-[var(--doc-paper)]"
+          className="rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-1.5 py-1 text-[11px] text-[var(--color-mocha)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-40 [&_option]:bg-[var(--doc-paper)]"
           value={e.activity ?? ''}
           onChange={(ev) => onCommit(e, { activity: ev.target.value || null })}
         >
@@ -682,7 +682,7 @@ function EntryRow({
           }}
         />
         <span
-          className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] font-mono text-[8px] uppercase tracking-[0.06em]"
+          className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] font-mono text-[11px] uppercase tracking-[0.06em]"
           style={
             billed
               ? { borderColor: 'var(--color-sage)', color: 'var(--color-sage)' }
@@ -740,7 +740,7 @@ function EntryRow({
       </div>
       {rowNote && (
         <p
-          className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em]"
+          className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em]"
           style={{ color: TERRACOTTA_INK }}
         >
           {rowNote}

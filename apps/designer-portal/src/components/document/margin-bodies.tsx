@@ -55,7 +55,7 @@ const INPUT =
 
 function Quiet({ children }: { children: React.ReactNode }) {
   return (
-    <p className="py-1 text-[10.5px] italic text-[var(--text-muted)]">
+    <p className="py-1 text-[11px] italic text-[var(--text-muted)]">
       {children}
     </p>
   );
@@ -229,11 +229,11 @@ export function DecisionBody({
       {/* R56 kind-line + status — the subject, the shape/court, the lifecycle word. */}
       <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         {kindParts.length > 0 && (
-          <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
             {kindParts.join(' · ')}
           </span>
         )}
-        <span className="ml-auto font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           {statusWord(row.state)}
         </span>
       </div>
@@ -252,7 +252,7 @@ export function DecisionBody({
           {options.map((o) => {
             const val = optionValue(o);
             return (
-              <li key={o.id} className="flex items-start gap-2 text-[10.5px]">
+              <li key={o.id} className="flex items-start gap-2 text-[11px]">
                 {o.image_url ? (
                   <img
                     src={o.image_url}
@@ -274,24 +274,24 @@ export function DecisionBody({
                       {o.name}
                     </span>
                     {val != null && (
-                      <span className="font-mono text-[9px] text-[var(--color-aged-oak)]">
+                      <span className="font-mono text-[11px] text-[var(--color-aged-oak)]">
                         {fmtUsd(val)}
                         {(o.quantity ?? 1) > 1 ? ` · ×${o.quantity}` : ''}
                       </span>
                     )}
                     {o.is_recommended && (
-                      <span className="font-mono text-[8px] uppercase text-[var(--color-clay-ink)]">
+                      <span className="font-mono text-[11px] uppercase text-[var(--color-clay-ink)]">
                         your pick
                       </span>
                     )}
                     {o.selected && (
-                      <span className="font-mono text-[8px] uppercase text-[var(--color-sage-ink)]">
+                      <span className="font-mono text-[11px] uppercase text-[var(--color-sage-ink)]">
                         chosen
                       </span>
                     )}
                   </span>
                   {o.designer_note && (
-                    <span className="mt-0.5 block text-[9.5px] italic leading-snug text-[var(--text-muted)]">
+                    <span className="mt-0.5 block text-[11px] italic leading-snug text-[var(--text-muted)]">
                       {o.designer_note}
                     </span>
                   )}
@@ -367,8 +367,8 @@ export function DecisionBody({
             <p
               className={
                 extendNote.startsWith("Couldn't")
-                  ? 'rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.05em]'
-                  : 'font-mono text-[9px] uppercase tracking-[0.05em]'
+                  ? 'rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1 font-mono text-[11px] uppercase tracking-[0.05em]'
+                  : 'font-mono text-[11px] uppercase tracking-[0.05em]'
               }
               style={{
                 color: extendNote.startsWith("Couldn't")
@@ -448,10 +448,10 @@ export function DecisionBody({
           method + evidence + timestamp (was a date-only "Resolved · date" line). */}
       {row.state === 'responded' && (
         <div className="space-y-2 border-t border-dashed border-[var(--color-pearl)] pt-2">
-          <p className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
             Resolution
           </p>
-          <div className="space-y-0.5 text-[10.5px] text-[var(--text-body)]">
+          <div className="space-y-0.5 text-[11px] text-[var(--text-body)]">
             {selectedOption && (
               <p>
                 <span className="text-[var(--text-muted)]">Chosen: </span>
@@ -486,18 +486,18 @@ export function DecisionBody({
               className="rounded-[4px] border border-[var(--color-pearl)] px-2 py-1.5"
             >
               <div className="flex items-baseline justify-between gap-2">
-                <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-charcoal)]">
+                <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-charcoal)]">
                   {user && ov.acted_by === user.id
                     ? 'You recorded'
                     : 'Recorded'}
                 </span>
-                <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                   {String(ov.consent_method).replace('_', ' ')} ·{' '}
                   {fmtDay(ov.created_at)}
                 </span>
               </div>
               {ov.consent_evidence && (
-                <p className="mt-1 whitespace-pre-wrap text-[10px] leading-snug text-[var(--text-body)]">
+                <p className="mt-1 whitespace-pre-wrap text-[11px] leading-snug text-[var(--text-body)]">
                   {ov.consent_evidence}
                 </p>
               )}
@@ -547,7 +547,7 @@ export function MessageBody({
         {messages.map((m) => (
           <li
             key={m.id}
-            className="text-[10.5px] leading-relaxed text-[var(--text-body)]"
+            className="text-[11px] leading-relaxed text-[var(--text-body)]"
           >
             <span className="font-semibold text-[var(--color-charcoal)]">
               {m.sender?.full_name ?? 'Message'}
@@ -641,13 +641,13 @@ export function InvoiceBody({
         {lines.slice(0, 5).map((l) => (
           <li
             key={l.id}
-            className="flex justify-between gap-2 text-[10.5px] text-[var(--text-body)]"
+            className="flex justify-between gap-2 text-[11px] text-[var(--text-body)]"
           >
             <span>{l.description}</span>
             <span className="whitespace-nowrap">{fmtUsd(l.amount_cents)}</span>
           </li>
         ))}
-        <li className="flex justify-between gap-2 border-t border-[var(--color-pearl)] pt-1 text-[10.5px] font-semibold text-[var(--color-charcoal)]">
+        <li className="flex justify-between gap-2 border-t border-[var(--color-pearl)] pt-1 text-[11px] font-semibold text-[var(--color-charcoal)]">
           <span>Total</span>
           <span>{fmtUsd(invoice.total_cents ?? 0)}</span>
         </li>
@@ -685,7 +685,7 @@ export function InvoiceBody({
           awaiting payment
         </Quiet>
       )}
-      {error && <p className="mt-1 text-[10px] text-[#C77B6E]">{error}</p>}
+      {error && <p className="mt-1 text-[11px] text-[#C77B6E]">{error}</p>}
     </div>
   );
 }
@@ -769,7 +769,7 @@ export function PulseBody({
 
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
-      <p className="mb-1.5 text-[10px] italic text-[var(--text-muted)]">
+      <p className="mb-1.5 text-[11px] italic text-[var(--text-muted)]">
         Drafted from this week&apos;s stamps — edit before it goes.
       </p>
       <textarea
@@ -799,7 +799,7 @@ export function PulseBody({
         </DocumentAction>
       </DocumentActionRow>
       {sendPulse.isError && (
-        <p className="mt-1 text-[10px] text-[#C77B6E]">
+        <p className="mt-1 text-[11px] text-[#C77B6E]">
           {sendPulse.error instanceof Error
             ? sendPulse.error.message
             : 'Send failed'}
@@ -837,7 +837,7 @@ export function NoteBody({
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
       {row.payload.author_name ? (
-        <p className="mb-2 text-[10px] text-[var(--text-muted)]">
+        <p className="mb-2 text-[11px] text-[var(--text-muted)]">
           {String(row.payload.author_name)}
         </p>
       ) : null}
@@ -872,7 +872,7 @@ export function NoteBody({
         </DocumentActionGroup>
       )}
       {toDecision.isError && (
-        <p className="mt-1 text-[10px] text-[#C77B6E]">
+        <p className="mt-1 text-[11px] text-[#C77B6E]">
           Escalation failed — try again.
         </p>
       )}
@@ -923,7 +923,7 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
         </p>
       )}
       {effectLine && (
-        <p className="mb-2 font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           {needsReview ? 'Proposed' : 'Applied'} · {effectLine}
         </p>
       )}
@@ -932,7 +932,7 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
         {needsReview && (
           <Link
             href="/desk"
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] hover:opacity-80"
+            className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] hover:opacity-80"
           >
             review on the desk →
           </Link>
@@ -940,7 +940,7 @@ export function FieldSmsBody({ row }: { row: MarginItemRow }) {
         {threadHref && (
           <Link
             href={threadHref}
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
+            className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             open the thread →
           </Link>

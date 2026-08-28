@@ -394,7 +394,7 @@ export function RulePhaseBar({
 
         {!pinned && modeLabelVisible && (
           <span
-            className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]"
+            className="absolute whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]"
             style={{ left: 0, top: g.modeTop - g.top }}
           >
             {resizing ? 'Resize' : 'Move'}
@@ -403,7 +403,7 @@ export function RulePhaseBar({
 
         {!pinned && previewing && startIso && endIso && (
           <span
-            className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]"
+            className="absolute whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]"
             style={{ left: 0, top: g.tipTop - g.top }}
           >
             {fmtDay(startIso)} — {fmtDay(endIso)} · {value.durationDays}d

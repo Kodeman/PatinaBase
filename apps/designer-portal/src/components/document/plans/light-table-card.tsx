@@ -35,7 +35,7 @@ const KIND_WORD: Record<LightTableProposal['kind'], { label: string; color: stri
 };
 
 const FORK_CLASS =
-  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center border px-3 py-2 font-mono text-[11px] uppercase tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
 export interface LightTableCardProps {
   proposal: LightTableProposal;
@@ -145,7 +145,7 @@ export function LightTableCard({
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
           p.{proposal.pageIndex + 1}
         </span>
         <StatusChip label={kind.label} color={kind.color} />
@@ -161,11 +161,11 @@ export function LightTableCard({
           />
         ) : thumbnail === null ? (
           // The page is still placeable — only its picture is missing.
-          <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
             No preview
           </span>
         ) : (
-          <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
             Drawing the page…
           </span>
         )}
@@ -248,7 +248,7 @@ export function LightTableCard({
       )}
 
       {becomes && proposal.kind !== 'unmatched' && (
-        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           becomes Rev {becomes}
         </p>
       )}

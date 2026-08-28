@@ -63,7 +63,7 @@ function Stepper({
         aria-label={`Decrease ${label}`}
         disabled={value <= min}
         onClick={() => onChange(Math.max(min, value - 1))}
-        className="flex h-[18px] w-[18px] items-center justify-center rounded-[2px] border border-[var(--color-pearl)] font-mono text-[10px] leading-none text-[var(--color-mocha)] hover:border-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-[18px] w-[18px] items-center justify-center rounded-[2px] border border-[var(--color-pearl)] font-mono text-[11px] leading-none text-[var(--color-mocha)] hover:border-[var(--color-clay)] disabled:cursor-not-allowed disabled:opacity-40"
       >
         −
       </button>
@@ -72,7 +72,7 @@ function Stepper({
         type="button"
         aria-label={`Increase ${label}`}
         onClick={() => onChange(value + 1)}
-        className="flex h-[18px] w-[18px] items-center justify-center rounded-[2px] border border-[var(--color-pearl)] font-mono text-[10px] leading-none text-[var(--color-mocha)] hover:border-[var(--color-clay)]"
+        className="flex h-[18px] w-[18px] items-center justify-center rounded-[2px] border border-[var(--color-pearl)] font-mono text-[11px] leading-none text-[var(--color-mocha)] hover:border-[var(--color-clay)]"
       >
         +
       </button>
@@ -131,7 +131,7 @@ function MiniStrip({
             className="absolute top-0 h-full overflow-hidden bg-[rgba(196,165,123,0.14)]"
             style={{ left: `${left}%`, width: `${width}%` }}
           >
-            <span className="block truncate px-1 pt-[3px] font-mono text-[6.5px] uppercase leading-none tracking-[0.06em] text-[var(--color-aged-oak)]">
+            <span className="block truncate px-1 pt-[3px] font-mono text-[11px] uppercase leading-none tracking-[0.06em] text-[var(--color-aged-oak)]">
               {p.name}
             </span>
           </div>
@@ -233,7 +233,7 @@ export function ScheduleThreadPanel({ projectId, today, onSet, onBack }: Schedul
         <button
           type="button"
           onClick={onBack}
-          className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-clay-ink)]"
+          className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-clay-ink)]"
         >
           Back
         </button>
@@ -247,7 +247,7 @@ export function ScheduleThreadPanel({ projectId, today, onSet, onBack }: Schedul
 
   return (
     <div className="w-[420px] max-w-full p-4 pb-[14px]">
-      <p className="mb-2.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
+      <p className="mb-2.5 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
         Where does this work belong?
       </p>
 
@@ -268,7 +268,7 @@ export function ScheduleThreadPanel({ projectId, today, onSet, onBack }: Schedul
               type="button"
               aria-pressed={on}
               onClick={() => setSelectedKey(a.key)}
-              className={`flex items-center justify-between gap-2 rounded-[2px] border px-2 py-1 text-left font-mono text-[9.5px] uppercase tracking-[0.05em] ${
+              className={`flex items-center justify-between gap-2 rounded-[2px] border px-2 py-1 text-left font-mono text-[11px] uppercase tracking-[0.05em] ${
                 on
                   ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.12)] text-[var(--color-charcoal)]'
                   : 'border-[var(--color-pearl)] text-[var(--color-aged-oak)] hover:border-[var(--color-clay)]'
@@ -281,7 +281,7 @@ export function ScheduleThreadPanel({ projectId, today, onSet, onBack }: Schedul
         })}
       </div>
 
-      <p className="mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--color-mocha)]">
+      <p className="mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-mocha)]">
         <span>After</span>
         <span className="normal-case italic text-[var(--color-charcoal)]">{selectedAnchor?.label ?? '—'}</span>
         <span>by</span>
@@ -311,7 +311,7 @@ export function ScheduleThreadPanel({ projectId, today, onSet, onBack }: Schedul
         <button
           type="button"
           onClick={onBack}
-          className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-clay-ink)]"
+          className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-clay-ink)]"
         >
           Back
         </button>

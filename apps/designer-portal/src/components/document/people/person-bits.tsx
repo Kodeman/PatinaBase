@@ -192,7 +192,7 @@ export function ConsentChip({
   }
 
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[0.5rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+    <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
       <span
         aria-hidden
         data-consent-dot={key}

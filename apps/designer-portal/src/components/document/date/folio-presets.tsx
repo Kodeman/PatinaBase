@@ -73,7 +73,7 @@ export function FolioPresets({ today, onPick, minDate, className }: FolioPresets
             }`}
           >
             <span>{preset.label}</span>
-            <span className="font-mono text-[9px] tracking-[0.06em] text-[var(--color-aged-oak)]">
+            <span className="font-mono text-[11px] tracking-[0.06em] text-[var(--color-aged-oak)]">
               {annotate(preset.iso)}
             </span>
           </button>

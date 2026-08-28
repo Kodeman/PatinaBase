@@ -98,7 +98,7 @@ export function ScopeEditor({ draft, commit }: { draft: DiscoveryDraft; commit: 
         />
       </Field>
       <div>
-        <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+        <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
           Rooms in scope
         </p>
         <RowListEditor
@@ -206,7 +206,7 @@ export function StyleEditor({
         />
       </Field>
       <div>
-        <p className="font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
           Inspiration board
         </p>
         <DiscoveryFolio designerClientId={designerClientId} />
@@ -246,7 +246,7 @@ export function KeepAvoidEditor({ draft, commit }: { draft: DiscoveryDraft; comm
   return (
     <div className="space-y-3">
       <div>
-        <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+        <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
           Keep
         </p>
         <RowListEditor
@@ -260,7 +260,7 @@ export function KeepAvoidEditor({ draft, commit }: { draft: DiscoveryDraft; comm
         />
       </div>
       <div>
-        <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+        <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
           Avoid
         </p>
         <RowListEditor

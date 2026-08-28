@@ -88,7 +88,7 @@ export function CallPlan({
       onClose={onClose}
       title="The call plan · checklist"
     >
-      <span className="mb-3 inline-block rounded-[2px] border border-[var(--color-rule-strong,#D8CCB8)] px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--color-mocha)]">
+      <span className="mb-3 inline-block rounded-[2px] border border-[var(--color-rule-strong,#D8CCB8)] px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-mocha)]">
         The call plan · checklist
       </span>
       <h2 className="font-heading text-[22px] font-medium text-[var(--color-charcoal)]">
@@ -109,7 +109,7 @@ export function CallPlan({
           >
             <span
               aria-hidden
-              className={`mt-0.5 flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-[3px] border-[1.5px] text-[0.6rem] font-bold ${
+              className={`mt-0.5 flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-[3px] border-[1.5px] text-[11px] font-bold ${
                 done[c.block]
                   ? 'border-[var(--color-sage)] bg-[rgba(168,181,160,0.18)] text-[var(--color-sage)]'
                   : 'border-[#cfc8bb] text-transparent'
@@ -130,7 +130,7 @@ export function CallPlan({
       </div>
 
       <div className="mt-5 border-t border-[var(--color-pearl)] pt-4">
-        <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
+        <p className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
           Note from the call → the margin (tone, not facts)
         </p>
         <textarea

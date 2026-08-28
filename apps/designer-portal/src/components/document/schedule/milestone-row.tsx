@@ -73,7 +73,7 @@ export function MilestoneRow({ milestone, today, highlighted = false, onUnpinAnc
       </span>
       {milestone.anchored && <AnchorChip date={milestone.date} className="flex-none" onUnpin={onUnpinAnchor} />}
       <span
-        className="ml-auto whitespace-nowrap pl-3 font-mono text-[0.58rem] uppercase tracking-[0.06em]"
+        className="ml-auto whitespace-nowrap pl-3 font-mono text-[11px] uppercase tracking-[0.06em]"
         style={{ color: stamp.late ? 'var(--color-terracotta-ink)' : 'var(--color-aged-oak)' }}
       >
         {stamp.text}
@@ -92,7 +92,7 @@ export function MilestoneRow({ milestone, today, highlighted = false, onUnpinAnc
  * <span>, byte-identical to the read-only Slice 01 markup.
  */
 const chipCls =
-  'inline-block whitespace-nowrap rounded-[2px] border border-[var(--color-charcoal)] px-[0.45rem] py-[0.15rem] font-mono text-[0.56rem] font-medium uppercase leading-none tracking-[0.08em] text-[var(--color-charcoal)]';
+  'inline-block whitespace-nowrap rounded-[2px] border border-[var(--color-charcoal)] px-[0.45rem] py-[0.15rem] font-mono text-[11px] font-medium uppercase leading-none tracking-[0.08em] text-[var(--color-charcoal)]';
 
 export function AnchorChip({
   date,

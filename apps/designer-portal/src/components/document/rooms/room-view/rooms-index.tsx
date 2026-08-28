@@ -33,7 +33,7 @@ export function RoomsIndex() {
         {isLoading && (
           <div className="flex items-center justify-center gap-2 py-16">
             <StrataSweep size="sm" label="Reading the roster" />
-            <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] opacity-60">
+            <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] opacity-60">
               reading the roster…
             </span>
           </div>

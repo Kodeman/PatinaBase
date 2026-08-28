@@ -197,7 +197,7 @@ export function AccountSheet() {
               </p>
             )}
             {studio && (
-              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
+              <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
                 {studio.name}
                 <span className="text-[var(--color-aged-oak)]">
                   {' '}
@@ -210,7 +210,7 @@ export function AccountSheet() {
 
         {/* Availability — declared, not live (same model as the old AccountMenu). */}
         <div className="mt-4">
-          <p className="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <p className="mb-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             Status
           </p>
           <div
@@ -253,7 +253,7 @@ export function AccountSheet() {
               type="button"
               onClick={() => setPage(p.key)}
               aria-current={page === p.key ? 'page' : undefined}
-              className={`min-h-11 min-w-11 font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+              className={`min-h-11 min-w-11 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                 page === p.key
                   ? 'text-[var(--color-clay-ink)]'
                   : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'

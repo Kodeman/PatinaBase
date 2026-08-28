@@ -15,7 +15,7 @@ const inputCls =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-2.5 py-1.5 text-[12.5px] text-[var(--color-charcoal)] outline-none transition-colors focus:border-[var(--color-clay)]';
 
 const labelCls =
-  'mb-1 block font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]';
+  'mb-1 block font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]';
 const FieldLabelContext = createContext<string | undefined>(undefined);
 
 export function Field({
@@ -351,7 +351,7 @@ export function RowListEditor({
               return (
                 <label
                   key={c.key}
-                  className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
+                  className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]"
                 >
                   <input
                     type="checkbox"

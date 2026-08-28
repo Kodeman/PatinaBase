@@ -25,7 +25,7 @@ type SheetMode = 'sources' | 'route_product' | 'name_need';
 const FIELD_CLASS =
   'min-h-11 w-full rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2.5 text-[13px] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]';
 const LABEL_CLASS =
-  'mb-1 block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
 export function openAddToProject(source: 'section' | 'command_palette' | 'empty_state' = 'section') {
   window.dispatchEvent(new CustomEvent('document:open-add-to-project', { detail: { source } }));

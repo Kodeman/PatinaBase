@@ -47,7 +47,7 @@ export function PieceFolio({
     if (list.length === 0) {
       return (
         <div className="flex h-[260px] items-center justify-center rounded-[10px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)]">
-          <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] opacity-60">
+          <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] opacity-60">
             no image
           </span>
         </div>
@@ -162,7 +162,7 @@ export function PieceFolio({
         </div>
       ) : (
         <div className="flex h-[220px] items-center justify-center rounded-[10px] border border-dashed border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)]">
-          <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] opacity-60">
+          <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] opacity-60">
             no image yet — paste a URL or upload below
           </span>
         </div>
@@ -190,7 +190,7 @@ export function PieceFolio({
                 <img src={src} alt="" className="h-full w-full object-cover" />
               </button>
               {i === 0 && (
-                <span className="absolute left-0 top-0 bg-[var(--color-clay)] px-1 font-mono text-[7px] font-semibold uppercase tracking-[0.06em] text-white">
+                <span className="absolute left-0 top-0 bg-[var(--color-clay)] px-1 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-white">
                   primary
                 </span>
               )}
@@ -198,7 +198,7 @@ export function PieceFolio({
                 type="button"
                 aria-label={`Remove image ${i + 1}`}
                 onClick={() => remove(i)}
-                className="absolute right-0 top-0 bg-[rgba(44,41,38,0.65)] px-1 font-mono text-[9px] text-white hover:bg-[var(--color-terracotta)]"
+                className="absolute right-0 top-0 bg-[rgba(44,41,38,0.65)] px-1 font-mono text-[11px] text-white hover:bg-[var(--color-terracotta)]"
               >
                 ✕
               </button>
@@ -208,7 +208,7 @@ export function PieceFolio({
                   aria-label={`Move image ${i + 1} left`}
                   onClick={() => move(i, -1)}
                   disabled={i === 0}
-                  className="font-mono text-[9px] text-white disabled:opacity-30"
+                  className="font-mono text-[11px] text-white disabled:opacity-30"
                 >
                   ←
                 </button>
@@ -217,7 +217,7 @@ export function PieceFolio({
                     type="button"
                     aria-label={`Set image ${i + 1} as primary`}
                     onClick={() => makePrimary(i)}
-                    className="font-mono text-[9px] text-white hover:text-[var(--color-golden-hour)]"
+                    className="font-mono text-[11px] text-white hover:text-[var(--color-golden-hour)]"
                   >
                     ★
                   </button>
@@ -227,7 +227,7 @@ export function PieceFolio({
                   aria-label={`Move image ${i + 1} right`}
                   onClick={() => move(i, 1)}
                   disabled={i === list.length - 1}
-                  className="font-mono text-[9px] text-white disabled:opacity-30"
+                  className="font-mono text-[11px] text-white disabled:opacity-30"
                 >
                   →
                 </button>

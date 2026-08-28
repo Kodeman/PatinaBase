@@ -57,7 +57,7 @@ const EXPIRY_OPTIONS = [
 ];
 
 const labelCls =
-  'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
 const fieldCls =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
@@ -635,7 +635,7 @@ export function SendSheet({
             {/* Link-a-client banner */}
             {!proposal.client_id && (
               <div className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3.5">
-                <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
+                <p className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
                   Link a client to send
                 </p>
                 {proposal.designer_client_id && capturedHouseholdLoading ? (
@@ -702,7 +702,7 @@ export function SendSheet({
             {/* Accepted-sibling warning */}
             {hasAcceptedSibling && (
               <div className="rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3.5">
-                <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
+                <p className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)]">
                   Another version is already accepted
                 </p>
                 <p className="text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
@@ -814,7 +814,7 @@ export function SendSheet({
 
             {/* Canonical client-copy validation */}
             <div className="rounded-[4px] border border-[var(--color-pearl)] bg-white/70 p-3.5">
-              <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+              <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 Client copy check
               </p>
 

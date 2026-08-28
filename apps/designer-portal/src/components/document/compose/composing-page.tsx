@@ -460,7 +460,7 @@ export function ComposingPage() {
                     onClick={() =>
                       setImages((prev) => prev.filter((_, j) => j !== i))
                     }
-                    className="da-glyph-btn absolute right-0 top-0 inline-flex min-h-11 min-w-11 items-center justify-center px-1 font-mono text-[9px]"
+                    className="da-glyph-btn absolute right-0 top-0 inline-flex min-h-11 min-w-11 items-center justify-center px-1 font-mono text-[11px]"
                   >
                     ✕
                   </button>

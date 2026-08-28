@@ -37,7 +37,7 @@ export function RoomPlanThumb({ geometry }: { geometry: RoomGeometry | null }) {
         className="flex aspect-[19/14] w-full items-center justify-center rounded-[2px] border border-dashed border-[var(--doc-ink-border)]"
         data-testid="room-plan-thumb-placeholder"
       >
-        <span className="font-mono text-[8.5px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-60">
+        <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-60">
           Awaiting drawing
         </span>
       </div>

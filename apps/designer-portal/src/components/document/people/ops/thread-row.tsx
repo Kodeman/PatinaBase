@@ -64,7 +64,7 @@ export function ThreadRow({
           {subline}
         </span>
       </span>
-      <span className="shrink-0 font-mono text-[0.5rem] text-[var(--color-aged-oak)]">
+      <span className="shrink-0 font-mono text-[11px] text-[var(--color-aged-oak)]">
         {relativeStamp(thread.last_message_at, now)}
       </span>
     </button>

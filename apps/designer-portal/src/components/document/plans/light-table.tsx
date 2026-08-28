@@ -286,7 +286,7 @@ export function LightTable({
         <p
           role="status"
           aria-live="polite"
-          className="mb-4 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
+          className="mb-4 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]"
         >
           {STAGE_LINE[stage]}
         </p>
@@ -320,7 +320,7 @@ export function LightTable({
             type="button"
             onClick={() => setShowMatched((open) => !open)}
             aria-expanded={showMatched}
-            className="inline-flex min-h-[44px] items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             {cleanlyMatched.length} further{' '}
             {cleanlyMatched.length === 1 ? 'page' : 'pages'} matched cleanly ·{' '}
@@ -353,12 +353,12 @@ export function LightTable({
                   key={proposal.pageIndex}
                   className="flex flex-wrap items-center justify-between gap-3 border border-[var(--doc-ink-border)] px-3 py-2"
                 >
-                  <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
                     p.{proposal.pageIndex + 1}
                     {proposal.sheetTitle ? ` · ${proposal.sheetTitle}` : ''}
                   </span>
                   {state === 'sent' ? (
-                    <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-sage-ink)]">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-sage-ink)]">
                       In the Folio
                     </span>
                   ) : (
@@ -380,7 +380,7 @@ export function LightTable({
                   {state && state !== 'sent' && state !== 'sending' && (
                     <p
                       role="alert"
-                      className="w-full font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
+                      className="w-full font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
                     >
                       {state}
                     </p>

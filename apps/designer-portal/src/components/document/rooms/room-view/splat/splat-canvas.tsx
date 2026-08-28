@@ -326,7 +326,7 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
       >
         {status === 'loading' && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
               Bringing the walkthrough up…
             </p>
           </div>
@@ -342,7 +342,7 @@ export default function SplatCanvas({ splatUrl }: SplatCanvasProps) {
           {debug && failure && (
             <pre
               data-testid="splat-debug"
-              className="max-h-[380px] max-w-full overflow-auto whitespace-pre-wrap break-all border border-[var(--doc-ink-border)] px-3 py-2 text-left font-mono text-[10px] leading-[1.5] text-[var(--color-aged-oak)]"
+              className="max-h-[380px] max-w-full overflow-auto whitespace-pre-wrap break-all border border-[var(--doc-ink-border)] px-3 py-2 text-left font-mono text-[11px] leading-[1.5] text-[var(--color-aged-oak)]"
             >
               {failure.stage}: {failure.message}
               {failure.stack ? `\n${failure.stack}` : ''}

@@ -48,7 +48,7 @@ export function ScopeLens({
             type="button"
             onClick={() => onScope(key)}
             aria-current={on ? 'true' : undefined}
-            className={`da-score-hover min-h-11 inline-flex items-center font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors ${
+            className={`da-score-hover min-h-11 inline-flex items-center font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${
               on
                 ? 'da-score-on text-[var(--color-charcoal)]'
                 : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'

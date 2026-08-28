@@ -132,7 +132,7 @@ function TermsAgreementBodyState({ proposalId }: { proposalId: string }) {
         >
           Agreement
         </label>
-        <span className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           Reaches the client&apos;s copy
         </span>
       </div>

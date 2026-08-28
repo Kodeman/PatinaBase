@@ -61,7 +61,7 @@ export function CourtBar({ summary, onNewItem, onJumpCourt }: CourtBarProps) {
             <span className="font-heading text-[18px] font-medium leading-none text-[var(--color-charcoal)]">
               {count.open}
             </span>
-            <span className="font-mono text-[9px] uppercase leading-[1.3] tracking-[0.04em] text-[var(--color-aged-oak)]">
+            <span className="font-mono text-[11px] uppercase leading-[1.3] tracking-[0.04em] text-[var(--color-aged-oak)]">
               <span className="flex items-center gap-1">
                 <span
                   aria-hidden

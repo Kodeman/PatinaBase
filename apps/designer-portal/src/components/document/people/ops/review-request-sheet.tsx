@@ -88,7 +88,7 @@ export function ReviewRequestSheet({
         <div>
           <label
             htmlFor="review-message"
-            className="mb-1.5 block font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
           >
             A personal note (optional)
           </label>
@@ -103,7 +103,7 @@ export function ReviewRequestSheet({
         </div>
 
         <div>
-          <span className="mb-1.5 block font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <span className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             Send when (leave blank to send now)
           </span>
           <DateTextInput

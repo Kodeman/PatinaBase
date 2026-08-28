@@ -56,7 +56,7 @@ export function ProposalVersionHistory({ proposalId }: { proposalId: string }) {
             return (
               <span
                 key={v.id}
-                className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
+                className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
               >
                 v{v.version} · {label}
               </span>
@@ -79,7 +79,7 @@ export function ProposalVersionHistory({ proposalId }: { proposalId: string }) {
       {viewing && (
         <DocSheet open onClose={() => setViewing(null)} title="Earlier version">
           <div className="mx-auto max-w-[680px]">
-            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
               {(() => {
                 const v = versions.find((x) => x.id === viewing);
                 return v

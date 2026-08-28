@@ -47,11 +47,11 @@ export function PlanLinkOnce({
     <div className="mt-2 border-l-2 border-[var(--color-golden-hour)] pl-2.5">
       <p
         data-plan-token-line
-        className="ph-no-capture break-all font-mono text-[10px] text-[var(--color-charcoal)]"
+        className="ph-no-capture break-all font-mono text-[11px] text-[var(--color-charcoal)]"
       >
         {url}
       </p>
-      <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-golden-hour)]">
+      <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-golden-hour)]">
         This link won&rsquo;t be shown again &mdash; copy it now.
       </p>
       <DocumentActionRow surfaceKey="plan-room" regionKey={regionKey}>
@@ -66,7 +66,7 @@ export function PlanLinkOnce({
       {copyFailed && (
         <p
           role="alert"
-          className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
+          className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
         >
           Copy failed &mdash; select the link text
         </p>

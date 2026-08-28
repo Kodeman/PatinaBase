@@ -157,7 +157,7 @@ export function ImportSheet({
 
   return (
     <RoomSheet open={open} onClose={close} title="Import into My Library">
-      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
+      <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         Import · onto My Library
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
@@ -198,7 +198,7 @@ export function ImportSheet({
       {(step === 'map' || step === 'importing') && (
         <div>
           <div className="mb-4 flex items-center justify-between gap-3">
-            <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
               {fileName} · {dataRows.length} row
               {dataRows.length === 1 ? '' : 's'}
             </span>
@@ -263,7 +263,7 @@ export function ImportSheet({
             </p>
           )}
 
-          <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             {built.validCount} will land
             {built.invalidCount > 0
               ? ` · ${built.invalidCount} skipped (no name or bad price)`

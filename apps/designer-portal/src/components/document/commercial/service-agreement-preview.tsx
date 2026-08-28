@@ -72,7 +72,7 @@ export function ServiceAgreementPreview({
       className={compact ? "space-y-5" : "mx-auto max-w-[720px] space-y-7"}
     >
       <header className="border-b border-[var(--doc-ink-border)] pb-4">
-        <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
           Design services agreement · v{preview.version}
         </p>
         <h2 className="mt-1 font-heading text-[1.65rem] leading-tight text-[var(--color-charcoal)]">
@@ -83,7 +83,7 @@ export function ServiceAgreementPreview({
             Prepared for {clientName}
           </p>
         )}
-        <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           {status.label}
         </p>
       </header>
@@ -140,7 +140,7 @@ export function ServiceAgreementPreview({
           ))}
         </div>
         <div className="mt-3 flex items-baseline justify-between gap-4 rounded-[4px] bg-[rgba(229,221,208,0.45)] px-3 py-2.5">
-          <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Design authorization ceiling
           </span>
           <strong
@@ -159,7 +159,7 @@ export function ServiceAgreementPreview({
 
       <section className="grid gap-3 border-y border-[var(--doc-ink-border)] py-4 sm:grid-cols-2">
         <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Retainer
           </p>
           <p
@@ -182,7 +182,7 @@ export function ServiceAgreementPreview({
           </p>
         </div>
         <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Billing cadence
           </p>
           <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
@@ -190,7 +190,7 @@ export function ServiceAgreementPreview({
           </p>
         </div>
         <div className="sm:col-span-2">
-          <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Furnishings deposit
           </p>
           <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
@@ -221,14 +221,14 @@ export function ServiceAgreementPreview({
               key={party}
               className="border-t border-[var(--doc-ink-border)] pt-2"
             >
-              <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                 {party === "client" ? "Client" : "Studio"} signature
               </p>
               <p className="mt-1 text-[12px] text-[var(--color-charcoal)]">
                 {signature?.signerName || "Awaiting"}
               </p>
               {signature?.executedOnPaper && (
-                <p className="mt-0.5 text-[10.5px] italic text-[var(--text-muted)]">
+                <p className="mt-0.5 text-[11px] italic text-[var(--text-muted)]">
                   {signedOnPaperNote(signature.paperSignedOn)}
                 </p>
               )}
@@ -237,7 +237,7 @@ export function ServiceAgreementPreview({
         })}
       </section>
 
-      <p className="border-t border-[var(--doc-ink-border)] pt-3 text-[10.5px] italic leading-relaxed text-[var(--text-muted)]">
+      <p className="border-t border-[var(--doc-ink-border)] pt-3 text-[11px] italic leading-relaxed text-[var(--text-muted)]">
         Furnishings, freight, tax, installation, and permission to purchase are
         outside this design services agreement.
       </p>

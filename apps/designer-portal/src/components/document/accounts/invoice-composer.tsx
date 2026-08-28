@@ -53,7 +53,7 @@ import type { InvoiceComposerContext } from './invoice-overlays';
 const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
 
 const LABEL =
-  'font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
+  'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
 const INPUT =
   'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11.5px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 const CHECK = 'relative top-[1px] accent-[var(--color-clay)]';
@@ -307,7 +307,7 @@ export function InvoiceComposer({
         <h2 className="font-heading text-[20px] font-medium text-[var(--color-charcoal)]">
           Draw an invoice
         </h2>
-        <span className="font-mono text-[7.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak,#8B7355)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak,#8B7355)]">
           Studio eyes only
         </span>
       </div>
@@ -364,10 +364,10 @@ export function InvoiceComposer({
                   <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
                     {m.label}
                   </span>
-                  <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     {m.status === 'outstanding' ? 'due now' : 'upcoming'}
                   </span>
-                  <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
+                  <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
                     {formatCurrency(m.amount_cents)}
                   </span>
                 </label>
@@ -393,7 +393,7 @@ export function InvoiceComposer({
                         : new Set(unbilledEntries.map((e) => e.id)),
                     )
                   }
-                  className="ml-2 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] hover:opacity-80"
+                  className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] hover:opacity-80"
                 >
                   {tickedTimeIds.size === unbilledEntries.length
                     ? 'clear all'
@@ -430,16 +430,16 @@ export function InvoiceComposer({
                         </span>
                       )}
                     </span>
-                    <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {formatHoursLabel(entry.duration_minutes)} ·{' '}
                       {formatCurrency(entry.resolved_rate_cents)}/h
                     </span>
-                    <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
+                    <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
                       {formatCurrency(entry.amount_cents)}
                     </span>
                   </label>
                 ))}
-                <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                   ticked entries bill as one line and lock to the draft ·
                   voiding releases them
                 </p>
@@ -482,10 +482,10 @@ export function InvoiceComposer({
                       </span>
                     )}
                   </span>
-                  <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                     ×{it.quantity ?? 1}
                   </span>
-                  <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
+                  <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
                     {formatCurrency(
                       (it.quantity ?? 1) * (it.unit_price_cents ?? 0),
                     )}
@@ -500,7 +500,7 @@ export function InvoiceComposer({
             {(skippedFfe.covered > 0 ||
               skippedFfe.unpriced > 0 ||
               ffePartition.unpriced.length > 0) && (
-              <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+              <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                 {[
                   skippedFfe.covered > 0
                     ? `${skippedFfe.covered} asked-for item${skippedFfe.covered === 1 ? '' : 's'} already invoiced · skipped`
@@ -625,13 +625,13 @@ export function InvoiceComposer({
             <div className="flex items-baseline gap-4">
               <span className="flex items-baseline gap-1.5">
                 <span className={LABEL}>subtotal</span>
-                <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
+                <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
                   {formatCurrency(totals.subtotalCents)}
                 </span>
               </span>
               <span className="flex items-baseline gap-1.5">
                 <span className={LABEL}>tax</span>
-                <span className="font-mono text-[10.5px] text-[var(--color-charcoal)]">
+                <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
                   {formatCurrency(totals.taxCents)}
                 </span>
               </span>
@@ -641,7 +641,7 @@ export function InvoiceComposer({
                   {formatCurrency(totals.totalCents)}
                 </span>
               </span>
-              <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+              <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                 {lines.length} line{lines.length === 1 ? '' : 's'}
               </span>
             </div>
@@ -662,7 +662,7 @@ export function InvoiceComposer({
           {/* R83 — the inline failure band, at the act site. */}
           {error && (
             <div
-              className="mt-2 rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1.5 font-mono text-[9px] uppercase tracking-[0.05em]"
+              className="mt-2 rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1.5 font-mono text-[11px] uppercase tracking-[0.05em]"
               style={{ color: TERRACOTTA_INK }}
             >
               {error}

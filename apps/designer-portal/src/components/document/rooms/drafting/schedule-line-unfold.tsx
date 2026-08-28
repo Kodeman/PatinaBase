@@ -73,7 +73,7 @@ function fmtCents(cents: number | null | undefined): string {
 
 function CellLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-0.5 font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+    <p className="mb-0.5 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
       {children}
     </p>
   );
@@ -218,7 +218,7 @@ export function ScheduleLineUnfold({
         <div>
           <CellLabel>Specification</CellLabel>
           <label className="flex items-baseline gap-1.5">
-            <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               code
             </span>
             <input
@@ -241,12 +241,12 @@ export function ScheduleLineUnfold({
             />
           </label>
           {categoryLabelText && (
-            <p className="text-[10px] text-[var(--text-muted)]">
+            <p className="text-[11px] text-[var(--text-muted)]">
               {categoryLabelText}
             </p>
           )}
           {item.vendor_name && (
-            <p className="text-[10px] text-[var(--text-muted)]">
+            <p className="text-[11px] text-[var(--text-muted)]">
               {item.vendor_name}
             </p>
           )}
@@ -267,7 +267,7 @@ export function ScheduleLineUnfold({
             }
             className="!w-auto"
           />
-          <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
+          <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
             feeds the piece&apos;s ETA when the project activates
           </p>
         </div>
@@ -278,7 +278,7 @@ export function ScheduleLineUnfold({
             <p className="text-[11.5px] font-medium text-[var(--color-charcoal)]">
               {fmtCents(item.budget_min_cents)} –{' '}
               {fmtCents(item.budget_max_cents)}
-              <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">
+              <span className="ml-1 text-[11px] font-normal text-[var(--text-muted)]">
                 allowance
               </span>
             </p>
@@ -292,7 +292,7 @@ export function ScheduleLineUnfold({
                 {fmtCents(item.unit_sell_price)} client
                 {item.quantity > 1 ? ` × ${item.quantity}` : ''}
               </p>
-              <p className="text-[10px] text-[var(--text-muted)]">
+              <p className="text-[11px] text-[var(--text-muted)]">
                 trade {fmtCents(item.unit_price)}
                 {item.markup_percent != null && Number(item.markup_percent) > 0
                   ? ` · markup ${Number(item.markup_percent)}%`
@@ -356,13 +356,13 @@ export function ScheduleLineUnfold({
           {fill && (
             <span className="flex items-center gap-2">
               <StrataMark size="sm" fill={fill} />
-              <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                 record {pct}% complete
               </span>
             </span>
           )}
           {product.brand && (
-            <span className="text-[10.5px] text-[var(--color-mocha)]">
+            <span className="text-[11px] text-[var(--color-mocha)]">
               {product.brand}
             </span>
           )}
@@ -371,13 +371,13 @@ export function ScheduleLineUnfold({
               href={product.source_url}
               target="_blank"
               rel="noreferrer"
-              className="max-w-[260px] truncate text-[10.5px] text-[var(--color-clay-ink)] hover:underline"
+              className="max-w-[260px] truncate text-[11px] text-[var(--color-clay-ink)] hover:underline"
             >
               {product.source_url.replace(/^https?:\/\//, '')}
             </a>
           )}
           {capturedByName && (
-            <span className="text-[10px] text-[var(--text-muted)]">
+            <span className="text-[11px] text-[var(--text-muted)]">
               captured by {capturedByName}
             </span>
           )}
@@ -444,11 +444,11 @@ export function ScheduleLineUnfold({
 
       {saved && !error && (
         // R51 — the quiet confirmation.
-        <p className="mb-2 text-[10px] text-[var(--text-muted)]">{saved}</p>
+        <p className="mb-2 text-[11px] text-[var(--text-muted)]">{saved}</p>
       )}
       {error && (
         // R83 — inline at the act.
-        <p role="alert" className="mb-2 text-[10px] text-[var(--color-terracotta-ink)]">
+        <p role="alert" className="mb-2 text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}
@@ -636,7 +636,7 @@ function AlternativesBand({
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <CellLabel>Alternatives · taught from your library</CellLabel>
         {keywords.length > 0 && (
-          <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             matched · {keywords.join(' · ')}
           </span>
         )}
@@ -659,7 +659,7 @@ function AlternativesBand({
               <p className="truncate text-[11.5px] text-[var(--color-charcoal)]">
                 {p.name}
               </p>
-              <p className="flex items-center gap-2 text-[9px] text-[var(--text-muted)]">
+              <p className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
                 <LayerBadge layer={p.layer} />
                 {p.price_retail != null && (
                   <span>
@@ -714,10 +714,10 @@ function AlternativesBand({
       )}
 
       {saved && !error && (
-        <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">{saved}</p>
+        <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">{saved}</p>
       )}
       {error && (
-        <p role="alert" className="mt-1.5 text-[10px] text-[var(--color-terracotta-ink)]">
+        <p role="alert" className="mt-1.5 text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}
@@ -732,7 +732,7 @@ function LayerBadge({ layer }: { layer: string }) {
   const taught = layer === 'personal' || layer === 'studio';
   return (
     <span
-      className={`font-mono text-[7.5px] uppercase tracking-[0.08em] ${
+      className={`font-mono text-[11px] uppercase tracking-[0.08em] ${
         taught ? 'text-[var(--color-clay-ink)]' : 'text-[var(--text-muted)]'
       }`}
     >
@@ -810,9 +810,9 @@ function LineFeedbackBlock({
           {thread.map((ev) => (
             <li
               key={ev.id}
-              className="text-[10.5px] leading-snug text-[var(--text-muted)]"
+              className="text-[11px] leading-snug text-[var(--text-muted)]"
             >
-              <span className="font-mono text-[8px] uppercase tracking-[0.06em]">
+              <span className="font-mono text-[11px] uppercase tracking-[0.06em]">
                 {ev.kind}
               </span>
               {ev.body ? (
@@ -878,10 +878,10 @@ function LineFeedbackBlock({
       </DocumentActionRow>
 
       {saved && !error && (
-        <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">{saved}</p>
+        <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">{saved}</p>
       )}
       {error && (
-        <p role="alert" className="mt-1.5 text-[10px] text-[var(--color-terracotta-ink)]">
+        <p role="alert" className="mt-1.5 text-[11px] text-[var(--color-terracotta-ink)]">
           {error}
         </p>
       )}

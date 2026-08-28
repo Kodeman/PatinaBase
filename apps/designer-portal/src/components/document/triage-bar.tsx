@@ -157,7 +157,7 @@ export function TriageBar({
   if (pickingDate) {
     return (
       <div className={wrapClass}>
-        <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           Reconnect…
         </p>
         <DocumentActionGroup

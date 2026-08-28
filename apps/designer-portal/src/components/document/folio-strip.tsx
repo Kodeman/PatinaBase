@@ -69,7 +69,7 @@ function FileChip({
       <button
         type="button"
         onClick={() => onOpen(head)}
-        className="inline-flex min-h-11 min-w-11 max-w-[180px] items-center justify-center text-[10.5px] text-[var(--color-mocha)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+        className="inline-flex min-h-11 min-w-11 max-w-[180px] items-center justify-center text-[11px] text-[var(--color-mocha)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
         title={head.title}
       >
         <span className="da-score-hover block min-w-0 max-w-full">
@@ -81,7 +81,7 @@ function FileChip({
           type="button"
           onClick={() => setSlidOut((v) => !v)}
           aria-expanded={slidOut}
-          className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[8.5px] uppercase tracking-[0.05em]"
+          className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[11px] uppercase tracking-[0.05em]"
           title={slidOut ? 'Slide versions back' : 'Slide older versions out'}
         >
           <span
@@ -94,7 +94,7 @@ function FileChip({
       <button
         type="button"
         onClick={() => onToggleVisibility(head)}
-        className="inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[8.5px] uppercase tracking-[0.05em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[11px] uppercase tracking-[0.05em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
         style={{
           color: head.client_visible
             ? 'var(--color-sage-ink)'
@@ -119,7 +119,7 @@ function FileChip({
             key={v.id}
             type="button"
             onClick={() => onOpen(v)}
-            className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center text-[10px]"
+            className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center text-[11px]"
             title={`Superseded ${fmtDay(v.created_at)}`}
           >
             <span className="da-score-hover block">{fmtDay(v.created_at)}</span>
@@ -203,7 +203,7 @@ export function FolioStrip({
             : 'border border-dashed border-transparent'
         }`}
       >
-        <span className="font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           Folio{chains.length > 0 ? ` · ${chains.length}` : ''}
         </span>
         {chains.map((chain) => (
@@ -288,7 +288,7 @@ export function ProposalFolioStrip({ proposalId }: { proposalId: string }) {
             : 'border border-dashed border-transparent'
         }`}
       >
-        <span className="font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           Folio{chains.length > 0 ? ` · ${chains.length}` : ''}
         </span>
         {chains.map((chain) => (
@@ -382,7 +382,7 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[9px] uppercase tracking-[0.08em]"
+        className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[11px] uppercase tracking-[0.08em]"
       >
         <span className={`da-score-hover block${open ? ' da-score-on' : ''}`}>
           The folio · {chains.length} {chains.length === 1 ? 'file' : 'files'}{' '}
@@ -396,7 +396,7 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
               key={key}
               className="mb-1.5 flex flex-wrap items-baseline gap-x-5 gap-y-2"
             >
-              <span className="w-20 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+              <span className="w-20 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                 {groupLabel(key)}
               </span>
               {group.map((chain) => (

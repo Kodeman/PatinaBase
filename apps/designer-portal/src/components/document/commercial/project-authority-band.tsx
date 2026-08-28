@@ -49,11 +49,11 @@ export function ProjectAuthorityBand({
       className="mb-5 border-l-[3px] border-[var(--color-sage)] bg-[rgba(168,181,160,0.1)] px-4 py-3.5"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Budget · {authority.state.replace("_", " ")}
         </p>
         {authority.billingThrough && (
-          <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             Billing through {authority.billingThrough}
           </span>
         )}
@@ -85,7 +85,7 @@ export function ProjectAuthorityBand({
       </div>
 
       {authority.rates.length > 0 && (
-        <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           Agreement v{authority.activeRateVersion} ·{" "}
           {authority.rates
             .map(
@@ -110,7 +110,7 @@ export function ProjectAuthorityBand({
 function AuthorityFigure({ label, value }: { label: string; value: string }) {
   return (
     <span>
-      <span className="block font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <span className="block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         {label}
       </span>
       <strong>{value}</strong>

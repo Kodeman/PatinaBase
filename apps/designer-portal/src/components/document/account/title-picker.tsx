@@ -101,7 +101,7 @@ export function TitlePicker({
           >
             <span>{label}</span>
             {showTierHints && (
-              <span className="shrink-0 font-mono text-[8.5px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
+              <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
                 {STAFF_ROLE_DEFAULT_TIER[role]}
               </span>
             )}
@@ -136,13 +136,13 @@ export function TitlePicker({
           className="flex w-full min-h-11 items-baseline justify-between gap-3.5 px-3 py-1.5 text-left font-heading text-[13.5px] italic text-[var(--color-mocha)] hover:bg-[rgba(196,165,123,0.08)]"
         >
           <span>Custom title…</span>
-          <span className="shrink-0 font-mono text-[8.5px] uppercase not-italic tracking-[0.14em] text-[var(--color-aged-oak)]">
+          <span className="shrink-0 font-mono text-[11px] uppercase not-italic tracking-[0.14em] text-[var(--color-aged-oak)]">
             free text
           </span>
         </button>
       )}
 
-      <p className="mt-1 max-w-[280px] px-3 pb-1 text-[10.5px] italic leading-snug text-[var(--color-aged-oak)]">
+      <p className="mt-1 max-w-[280px] px-3 pb-1 text-[11px] italic leading-snug text-[var(--color-aged-oak)]">
         Changing a title never changes permissions.
       </p>
     </div>

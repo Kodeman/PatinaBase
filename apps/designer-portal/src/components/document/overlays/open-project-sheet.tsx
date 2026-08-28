@@ -106,7 +106,7 @@ export function OpenProjectSheet({
   return (
     <DocSheet open={open} onClose={onClose} title="Open a project">
       <form onSubmit={submit} className="mx-auto w-full max-w-[34rem]">
-        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]">
           New project · no proposal needed
         </span>
         <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-charcoal)]">
@@ -207,7 +207,7 @@ export function OpenProjectSheet({
           >
             Cancel
           </DocumentAction>
-          <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
             opens the document
           </span>
         </DocumentActionGroup>
@@ -225,7 +225,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+      <span className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         {label}
       </span>
       {children}

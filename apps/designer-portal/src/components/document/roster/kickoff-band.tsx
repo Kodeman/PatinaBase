@@ -82,7 +82,7 @@ export function KickoffBand({
           – You&rsquo;re on the call sheet as lead. Who else is on the job?
         </p>
         {grown && (
-          <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             {rows.length} on the call sheet
           </p>
         )}

@@ -39,7 +39,7 @@ export function ReachChip({ state }: { state: ReachState }) {
   return (
     <span
       data-reach-state={state}
-      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-[3px] border px-[7px] py-[2px] font-mono text-[8.5px] font-semibold uppercase tracking-[0.1em]"
+      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-[3px] border px-[7px] py-[2px] font-mono text-[11px] font-semibold uppercase tracking-[0.1em]"
       style={{ color: tint.color, borderColor: tint.border, background: tint.background }}
     >
       {REACH_STATE_LABELS[state]}

@@ -297,7 +297,7 @@ export function PlanConfirmStrip({
           {summary.sentence}
         </span>
         {!summary.ready && (
-          <p className="mt-1 font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             {Object.keys(summary.conflicts).length > 0
               ? 'Two cards want the same sheet — settle it before the table files'
               : 'Answer every card before the table files'}
@@ -307,7 +307,7 @@ export function PlanConfirmStrip({
           <p
             role="status"
             aria-live="polite"
-            className="mt-1 font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]"
+            className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]"
           >
             {STAGE_LINE[stage]}
           </p>
@@ -315,7 +315,7 @@ export function PlanConfirmStrip({
         {failure && (
           <p
             role="alert"
-            className="mt-1 font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]"
+            className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]"
           >
             {STAGE_LINE[failure.stage].replace('…', '')} failed — nothing moved.{' '}
             {failure.message}

@@ -50,7 +50,7 @@ function JourneyRow({
       <span className="font-mono text-[0.42rem] font-semibold uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
         {event.label}
       </span>
-      <span className="block font-mono text-[0.5rem] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
+      <span className="block font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
         {dateLabel}
       </span>
       <span className="mt-[0.1rem] block text-[0.78rem] leading-relaxed text-[var(--color-charcoal)] group-hover:text-[var(--color-mocha)]">
@@ -86,7 +86,7 @@ export function RelationshipJourney({
 }) {
   return (
     <>
-      <div className="mb-[0.7rem] mt-[1.3rem] font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+      <div className="mb-[0.7rem] mt-[1.3rem] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         Relationship journey
       </div>
       {events.length === 0 ? (

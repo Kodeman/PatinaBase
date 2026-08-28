@@ -47,7 +47,7 @@ const PURPOSES = ['pricing', 'production', 'information', 'record'] as const;
 type Purpose = (typeof PURPOSES)[number];
 
 const CHIP_CLASS =
-  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center border px-3 py-2 font-mono text-[11px] uppercase tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
 interface Recipient {
   /** party_id when off the roster, else the folded name — the same key the
@@ -334,7 +334,7 @@ export function PlanIssueCeremony({
                       {row.title}
                     </span>
                     <span
-                      className={`font-mono text-[9px] uppercase tracking-[0.08em] ${
+                      className={`font-mono text-[11px] uppercase tracking-[0.08em] ${
                         moved
                           ? 'text-[var(--color-golden-hour)]'
                           : 'text-[var(--text-muted)]'
@@ -443,7 +443,7 @@ export function PlanIssueCeremony({
                           {recipient.company ? ` · ${recipient.company}` : ''}
                         </span>
                         {held && (
-                          <span className="block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                          <span className="block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                             {held}
                           </span>
                         )}
@@ -506,13 +506,13 @@ export function PlanIssueCeremony({
                   <StatusChip label="Not yet minted" color="var(--color-aged-oak)" />
                 )}
               </div>
-              <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+              <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
                 {selectedIds.length}{' '}
                 {selectedIds.length === 1 ? 'sheet' : 'sheets'} · for {purpose} ·{' '}
                 {minted.length} of {recipients.length} sent
               </p>
               {preview.data && (
-                <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                   checksum {preview.data.checksumPreview.slice(0, 8)}
                 </p>
               )}

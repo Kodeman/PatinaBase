@@ -39,7 +39,7 @@ export function Card({
       className="mb-[0.8rem] rounded-[9px] border border-[var(--color-pearl)] bg-white p-[0.9rem]"
       style={edge ? { borderLeft: `3px solid ${edge}` } : undefined}
     >
-      <header className="mb-2 flex items-center justify-between font-mono text-[0.46rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+      <header className="mb-2 flex items-center justify-between font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
         <span>{title}</span>
         {action}
       </header>
@@ -83,7 +83,7 @@ export function ProjectsCard({
                 <span className="flex-1 truncate text-[0.74rem] font-medium text-[var(--color-charcoal)]">
                   {pr.name}
                 </span>
-                <span className="shrink-0 font-mono text-[0.46rem] uppercase text-[var(--color-aged-oak)]">
+                <span className="shrink-0 font-mono text-[11px] uppercase text-[var(--color-aged-oak)]">
                   {pr.state}
                 </span>
               </button>
@@ -138,7 +138,7 @@ export function NurtureCard({
       <button
         type="button"
         onClick={onReachOut}
-        className="mt-[0.6rem] rounded-[6px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-[0.7rem] py-[0.4rem] font-mono text-[0.46rem] font-semibold uppercase tracking-[0.06em] text-white transition-colors hover:bg-[var(--color-aged-oak)]"
+        className="mt-[0.6rem] rounded-[6px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-[0.7rem] py-[0.4rem] font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-white transition-colors hover:bg-[var(--color-aged-oak)]"
       >
         Reach out
       </button>

@@ -126,10 +126,10 @@ export function DocSpine({
               are set to fit that measure and allowed to break rather than be
               clipped by the rail's own overflow-x-hidden; from 1440 the column
               is 200px and they take their full size. */}
-          <span className="block break-words text-[10.5px] font-semibold leading-tight text-[var(--color-charcoal)] min-[1440px]:text-[12px]">
+          <span className="block break-words text-[11px] font-semibold leading-tight text-[var(--color-charcoal)] min-[1440px]:text-[12px]">
             {activeSection.label}
           </span>
-          <span className="mt-px block break-words font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] min-[1440px]:text-[12px]">
+          <span className="mt-px block break-words font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)] min-[1440px]:text-[12px]">
             {activeSection.sub}
           </span>
         </p>
@@ -147,7 +147,7 @@ export function DocSpine({
         {/* Presence, unlabelled, at the spine's foot: the running index above
             already names what is on this paper, and one rail cannot carry a
             second heading for the same thing. */}
-        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.08em] leading-relaxed text-[var(--text-faint)]">
+        <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.08em] leading-relaxed text-[var(--text-faint)]">
           {others.length === 0
             ? 'Just you · visible to the studio'
             : `You and ${others.join(', ')}`}

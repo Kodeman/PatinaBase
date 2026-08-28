@@ -38,7 +38,7 @@ export function SettledBar({
           {name}
         </span>
         {(hint || expandable) && (
-          <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
             {[hint, expandable ? (open ? 'fold ↑' : 'unfold ↓') : null].filter(Boolean).join(' · ')}
           </span>
         )}

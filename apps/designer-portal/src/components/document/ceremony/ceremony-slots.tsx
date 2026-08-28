@@ -91,7 +91,7 @@ export function CeremonySlots({
             aria-label="Offered time"
             className="min-w-0 flex-1 bg-transparent font-heading text-[15.5px] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           />
-          <span className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+          <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
             {slot.duration_minutes} min
           </span>
           {/* A bare glyph that darkens on request (I107) — no plate, no rounded
@@ -119,7 +119,7 @@ export function CeremonySlots({
         </DocumentAction>
       )}
 
-      <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         {n} of {MAX_SLOTS} offered ·{' '}
         {n < 2 ? 'offer at least two' : 'offer two or three'}
       </p>

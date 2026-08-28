@@ -109,7 +109,7 @@ function useRequestQuote(vendorId: string) {
 }
 
 const FIELD_LABEL =
-  'mb-1 block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 const FIELD_INPUT =
   'w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
@@ -165,7 +165,7 @@ function QuoteSheet({
       onClose={close}
       title={`Request a quote from ${vendorName}`}
     >
-      <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
+      <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
         Quote · {vendorName}
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
@@ -177,7 +177,7 @@ function QuoteSheet({
           {/* R51's quiet settled grammar — inline, in the sheet, no toast. */}
           <p
             role="status"
-            className="mt-4 border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] py-2 pl-3 pr-2 font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[#6f8268]"
+            className="mt-4 border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] py-2 pl-3 pr-2 font-mono text-[11px] uppercase tracking-[0.07em] text-[#6f8268]"
           >
             Quote request sent — it&apos;s in {vendorName}&apos;s hands.
           </p>
@@ -233,7 +233,7 @@ function QuoteSheet({
             placeholder="Describe what you need a quote for…"
             className={`${FIELD_INPUT} resize-none`}
           />
-          <p className="mt-1 font-mono text-[0.46rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
             at least 10 characters
           </p>
 
@@ -400,7 +400,7 @@ export function MakerProfile({
               }
             />
             {isSaved ? (
-              <span className="border border-[var(--color-sage)] px-2 py-[3px] font-mono text-[0.46rem] font-semibold uppercase tracking-[0.08em] text-[#6f8268]">
+              <span className="border border-[var(--color-sage)] px-2 py-[3px] font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6f8268]">
                 On your roster
               </span>
             ) : (
@@ -417,7 +417,7 @@ export function MakerProfile({
       {(rosterNote || rosterError) && (
         <p
           role="status"
-          className={`mt-3 border-l-2 py-1.5 pl-3 font-mono text-[0.56rem] uppercase tracking-[0.07em] ${
+          className={`mt-3 border-l-2 py-1.5 pl-3 font-mono text-[11px] uppercase tracking-[0.07em] ${
             rosterError
               ? 'border-[var(--color-terracotta)] text-[var(--color-terracotta-ink)]'
               : 'border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] text-[#6f8268]'
@@ -430,7 +430,7 @@ export function MakerProfile({
       <div className="mt-[1.3rem] grid grid-cols-1 gap-7 lg:grid-cols-[1.4fr_1fr]">
         <div>
           {/* ── The maker, in facts ── */}
-          <div className="mb-[0.7rem] font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <div className="mb-[0.7rem] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             The maker
           </div>
           <ul className="mb-6">
@@ -452,7 +452,7 @@ export function MakerProfile({
                   }
                   target="_blank"
                   rel="noreferrer"
-                  className="font-mono text-[0.56rem] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:text-[var(--color-aged-oak)]"
+                  className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] hover:text-[var(--color-aged-oak)]"
                 >
                   their site →
                 </a>
@@ -461,7 +461,7 @@ export function MakerProfile({
           </ul>
 
           {/* ── Products carried ── */}
-          <div className="mb-[0.7rem] font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <div className="mb-[0.7rem] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             Products carried · {productTotal}
           </div>
           {products.length === 0 ? (
@@ -482,7 +482,7 @@ export function MakerProfile({
                       {p.name}
                     </span>
                     {price && (
-                      <span className="shrink-0 font-mono text-[0.6rem] text-[var(--color-aged-oak)]">
+                      <span className="shrink-0 font-mono text-[11px] text-[var(--color-aged-oak)]">
                         {price}
                       </span>
                     )}
@@ -493,7 +493,7 @@ export function MakerProfile({
           )}
 
           {/* ── Reviews ── */}
-          <div className="mb-[0.7rem] font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <div className="mb-[0.7rem] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             Reviews
             {avgRating != null && reviewTotal > 0
               ? ` · ${avgRating.toFixed(1)}★ across ${reviewTotal}`
@@ -515,7 +515,7 @@ export function MakerProfile({
                       {r.designer?.full_name ?? 'A designer'}
                     </span>
                     {typeof r.overall_rating === 'number' && (
-                      <span className="shrink-0 font-mono text-[0.6rem] text-[var(--color-aged-oak)]">
+                      <span className="shrink-0 font-mono text-[11px] text-[var(--color-aged-oak)]">
                         {Number(r.overall_rating).toFixed(1)}★
                       </span>
                     )}

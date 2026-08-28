@@ -371,7 +371,7 @@ export function ProjectMoodBoards({
             const body = (
               <>
                 <span className="font-heading text-[13px] text-[var(--color-charcoal)]">{item.label}</span>
-                <span className="text-[10.5px] text-[var(--text-muted)]">{item.detail}</span>
+                <span className="text-[11px] text-[var(--text-muted)]">{item.detail}</span>
                 <span aria-hidden className="ml-auto text-[var(--color-clay-ink)]">→</span>
               </>
             );
@@ -392,7 +392,7 @@ export function ProjectMoodBoards({
 
       {liveBoards.length > 0 && (
         <div className="mt-5">
-          <h3 className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <h3 className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Working boards
           </h3>
           <div className="mt-2 flex gap-3 overflow-x-auto pb-2">
@@ -417,7 +417,7 @@ export function ProjectMoodBoards({
                     <p className="truncate font-heading text-[14px] text-[var(--text-primary)]">
                       {board.name}
                     </p>
-                    <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {board.item_count} {board.item_count === 1 ? 'piece' : 'pieces'} · Open room
                     </p>
                   </div>
@@ -441,7 +441,7 @@ export function ProjectMoodBoards({
 
       {frozenBoards.length > 0 && (
         <div className="mt-6 space-y-3">
-          <h3 className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <h3 className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Signed direction
           </h3>
           {frozenBoards.map((snapshot) => {
@@ -457,14 +457,14 @@ export function ProjectMoodBoards({
                     <h4 className="font-heading text-[14px] text-[var(--text-primary)]">
                       {snapshot.name}
                     </h4>
-                    <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       Frozen at signing · {snapshot.items.length} {snapshot.items.length === 1 ? 'piece' : 'pieces'}
                     </p>
                   </div>
                   {continued ? (
                     <Link
                       href={roomHref(continued.id, pathname)}
-                      className="inline-flex min-h-11 items-center rounded-[4px] border border-[var(--color-clay)] px-3 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                      className="inline-flex min-h-11 items-center rounded-[4px] border border-[var(--color-clay)] px-3 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                     >
                       Open continued board
                     </Link>
@@ -473,12 +473,12 @@ export function ProjectMoodBoards({
                       type="button"
                       onClick={() => void handleContinue(snapshot)}
                       disabled={busy || continueBoard.isPending}
-                      className="inline-flex min-h-11 items-center rounded-[4px] bg-[var(--color-clay)] px-3 font-mono text-[10px] uppercase tracking-[0.06em] text-white disabled:cursor-wait disabled:opacity-60"
+                      className="inline-flex min-h-11 items-center rounded-[4px] bg-[var(--color-clay)] px-3 font-mono text-[11px] uppercase tracking-[0.06em] text-white disabled:cursor-wait disabled:opacity-60"
                     >
                       {busy ? 'Continuing…' : 'Continue in project'}
                     </button>
                   ) : (
-                    <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                       Historical
                     </span>
                   )}
@@ -486,7 +486,7 @@ export function ProjectMoodBoards({
 
                 {snapshot.items.length > 0 && (
                   <details className="mt-4 border-t border-[var(--border-subtle)] pt-3">
-                    <summary className="cursor-pointer font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                    <summary className="cursor-pointer font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                       View frozen composition
                     </summary>
                     <BoardComposition

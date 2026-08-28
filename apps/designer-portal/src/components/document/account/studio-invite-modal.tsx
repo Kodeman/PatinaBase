@@ -245,7 +245,7 @@ export function StudioInviteModal({
                 <span className={jobTitle ? '' : 'italic text-[var(--text-muted)]'}>
                   {jobTitle || 'None yet'}
                 </span>
-                <span aria-hidden className="font-mono text-[10px] text-[var(--color-aged-oak)]">
+                <span aria-hidden className="font-mono text-[11px] text-[var(--color-aged-oak)]">
                   ▾
                 </span>
               </button>
@@ -272,7 +272,7 @@ export function StudioInviteModal({
                       role="radio"
                       aria-checked={selected}
                       onClick={() => setTier(value)}
-                      className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-[5px] border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                      className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-[5px] border px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
                         selected
                           ? 'border-[rgba(196,165,123,0.45)] bg-[rgba(196,165,123,0.12)] font-semibold text-[var(--color-charcoal)]'
                           : 'border-[var(--color-pearl)] text-[var(--color-mocha)] hover:border-[rgba(196,165,123,0.4)]'

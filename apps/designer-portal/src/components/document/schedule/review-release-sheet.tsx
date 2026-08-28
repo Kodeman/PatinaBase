@@ -104,7 +104,7 @@ function checkpointRoomIds(budget: unknown): string[] {
 function Figure({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="font-mono text-[9px] lowercase tracking-[0.08em] text-[var(--text-muted)]">
+      <p className="font-mono text-[11px] lowercase tracking-[0.08em] text-[var(--text-muted)]">
         {label}
       </p>
       <p className="font-heading text-[15px] font-medium text-[var(--color-charcoal)]">
@@ -331,7 +331,7 @@ export function ReviewReleaseSheet({
             <h4 className="font-heading text-[13.5px] font-medium italic text-[var(--color-charcoal)]">
               {room.name}
             </h4>
-            <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
               {room.lines.length} {room.lines.length === 1 ? 'line' : 'lines'} ·{' '}
               {fmtUsd(
                 room.lines.reduce(
@@ -343,7 +343,7 @@ export function ReviewReleaseSheet({
           </div>
           <table className="w-full">
             <thead>
-              <tr className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+              <tr className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                 <th scope="col" className="py-1 text-left font-normal">
                   Item
                 </th>
@@ -402,7 +402,7 @@ export function ReviewReleaseSheet({
 
       {/* Deposit is chips, not a field — four common answers and an "other". */}
       <fieldset className="mb-4">
-        <legend className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+        <legend className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
           Deposit
         </legend>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -457,7 +457,7 @@ export function ReviewReleaseSheet({
           )}
         </div>
         {agreementPercent !== null && (
-          <p className="mt-1.5 text-[10.5px] text-[var(--text-muted)]">
+          <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">
             Your agreement&rsquo;s default is {agreementPercent}%. Changing it
             here changes this authorization only.
           </p>
@@ -478,7 +478,7 @@ export function ReviewReleaseSheet({
       >
         {blocked && !awaitingAcknowledgment ? (
           <>
-            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               Budget checkpoint
             </p>
             <p className="mt-0.5 text-[11.5px] text-[var(--color-charcoal)]">
@@ -505,7 +505,7 @@ export function ReviewReleaseSheet({
           </>
         ) : blocked && awaitingAcknowledgment ? (
           <>
-            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               Budget checkpoint
             </p>
             <p className="mt-0.5 text-[11.5px] text-[var(--color-charcoal)]">
@@ -525,7 +525,7 @@ export function ReviewReleaseSheet({
               </DocumentAction>
             ) : (
               <div className="mt-2 max-w-md">
-                <label className="block text-[10px] text-[var(--text-muted)]">
+                <label className="block text-[11px] text-[var(--text-muted)]">
                   Reason for the override
                   <textarea
                     className="mt-1 w-full rounded-[3px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[11.5px] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
@@ -568,7 +568,7 @@ export function ReviewReleaseSheet({
           </>
         ) : (
           <>
-            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
               Budget checkpoint
               {budget.data?.checkpoint?.checkpointCode
                 ? ` · ${budget.data.checkpoint.checkpointCode}`

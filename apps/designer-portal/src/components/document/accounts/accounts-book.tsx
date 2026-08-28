@@ -121,7 +121,7 @@ export function AccountsBook({
             Revenue, what&apos;s owed, what you earn — the sum of every engagement&apos;s account.
           </p>
         </div>
-        <span className="whitespace-nowrap font-mono text-[7.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <span className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Studio eyes only
         </span>
       </div>
@@ -134,7 +134,7 @@ export function AccountsBook({
             type="button"
             onClick={() => setPage(p.key)}
             aria-current={page === p.key ? 'page' : undefined}
-            className={`font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors ${
+            className={`font-mono text-[11px] uppercase tracking-[0.08em] transition-colors ${
               page === p.key
                 ? 'text-[var(--color-clay-ink)]'
                 : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
@@ -163,7 +163,7 @@ export function AccountsBook({
           <button
             type="button"
             onClick={() => openLedger('Library')}
-            className="-mt-2 mb-4 flex items-baseline gap-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay-ink)]"
+            className="-mt-2 mb-4 flex items-baseline gap-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay-ink)]"
           >
             <span className="text-[var(--color-clay-ink)]">teaching</span>
             <span className="text-[var(--color-charcoal)]">{taughtCount} taught</span>

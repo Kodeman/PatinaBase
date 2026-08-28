@@ -140,7 +140,7 @@ export function DraftingEstimateFlow({ proposalId }: { proposalId: string }) {
                 <li
                   key={item.id}
                   data-current={current ? 'true' : 'false'}
-                  className="border-t-2 pt-2 font-mono text-[0.58rem] uppercase tracking-[0.06em]"
+                  className="border-t-2 pt-2 font-mono text-[11px] uppercase tracking-[0.06em]"
                   style={{
                     borderColor: reached
                       ? 'var(--color-clay)'
@@ -197,7 +197,7 @@ export function DraftingEstimateFlow({ proposalId }: { proposalId: string }) {
                 {autosave.error ?? 'The time estimate could not be saved.'}
               </p>
             ) : (
-              <p className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 {saveLabel}
               </p>
             )}

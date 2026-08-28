@@ -87,7 +87,7 @@ const ROW_CLASS =
   '-mx-1.5 flex w-[calc(100%+0.75rem)] items-baseline gap-3 px-1.5 py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
 const LABEL_CLASS =
-  'w-[5.5rem] shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
+  'w-[5.5rem] shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
 
 const VALUE_CLASS =
   'min-w-0 flex-1 text-[13.5px] leading-snug text-[var(--color-charcoal)]';
@@ -95,16 +95,16 @@ const VALUE_CLASS =
 const DOOR_CLASS = 'shrink-0 font-mono text-[11px] text-[var(--color-aged-oak)]';
 
 const FOLD_CLASS =
-  'shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'shrink-0 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
 const META_CLASS =
-  'font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
+  'font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
 
 /** M4's `.b-seam2-l1` — the seam's identity is set in the primary ink, not the
  *  quiet one the band's head wears. Two utilities of the same property in one
  *  class attribute do not resolve by order, so this is its own string. */
 const SEAM_IDENTITY_CLASS =
-  'font-mono text-[10.5px] uppercase tracking-[0.09em] text-[var(--color-charcoal)]';
+  'font-mono text-[11px] uppercase tracking-[0.09em] text-[var(--color-charcoal)]';
 
 /**
  * The tier, read on the FIRST render rather than corrected by an effect: a
@@ -415,7 +415,7 @@ export function JobTicket({
                   className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pb-2 pl-[5.5rem]"
                 >
                   {row.door.rooms.length === 0 ? (
-                    <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                       No rooms yet
                     </p>
                   ) : (
@@ -439,11 +439,11 @@ export function JobTicket({
                           >
                             {chip.name}
                           </span>
-                          <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                          <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                             {chip.lineCount}
                           </span>
                           {held && (
-                            <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-charcoal)]">
+                            <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-charcoal)]">
                               · In hand
                             </span>
                           )}

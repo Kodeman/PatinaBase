@@ -19,7 +19,7 @@ import { SectionLoadingLine } from './section-loading-line';
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[4px] border border-[var(--color-pearl)] bg-[rgba(229,226,221,0.3)] px-3 py-2.5">
-      <p className="mb-0.5 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <p className="mb-0.5 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         {label}
       </p>
       <p className="text-[12px] font-medium text-[var(--color-charcoal)]">{value}</p>
@@ -67,7 +67,7 @@ export function BriefSection({ leadId }: { leadId: string }) {
       <div className="mb-1.5 mt-5 flex items-baseline justify-between">
         <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">Brief</h2>
         {lead.response_deadline && (
-          <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
             {/* R65 — response_deadline doubles as the reconnect date once
                 nurtured; the label follows the status. */}
             {lead.status === 'contacted'
@@ -87,7 +87,7 @@ export function BriefSection({ leadId }: { leadId: string }) {
             )}
             {contactEmail && <span className="text-[var(--text-muted)]">{contactEmail}</span>}
           </p>
-          <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             {source}
           </span>
         </div>
@@ -142,7 +142,7 @@ export function BriefSection({ leadId }: { leadId: string }) {
           arrivalEligible={Boolean(lead.homeowner_id)}
         />
       ) : (
-        <p className="mt-4 border-t border-[var(--color-pearl)] pt-3.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        <p className="mt-4 border-t border-[var(--color-pearl)] pt-3.5 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           {lead.status === 'accepted'
             ? 'Accepted — now in Discovery'
             : lead.status === 'declined'

@@ -30,7 +30,7 @@ type AnyVendor = any;
 // itself, so it rides an inner span (see the category line below). Scoring the
 // padded box would rule 17px under the word and as wide as the halo.
 const MONO_LINK =
-  'group inline-flex min-h-11 min-w-11 items-center font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none';
+  'group inline-flex min-h-11 min-w-11 items-center font-mono text-[11px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none';
 
 const MONO_SCORE =
   'da-score-hover group-hover:after:scale-x-100 group-focus-visible:after:scale-x-100';
@@ -217,7 +217,7 @@ export function MakersMarketplace({
                         {line || 'Maker'}
                       </span>
                       {rowError !== null && rowError.id === v.id && (
-                        <span className="mt-[0.15rem] block font-mono text-[0.52rem] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
+                        <span className="mt-[0.15rem] block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-terracotta-ink)]">
                           {rowError.text}
                         </span>
                       )}
@@ -225,7 +225,7 @@ export function MakersMarketplace({
                   </button>
                   {isSaved ? (
                     // The quiet admission stamp — unsave lives on the profile.
-                    <span className="shrink-0 border border-[var(--color-sage)] px-2 py-[3px] font-mono text-[0.46rem] font-semibold uppercase tracking-[0.08em] text-[#6f8268]">
+                    <span className="shrink-0 border border-[var(--color-sage)] px-2 py-[3px] font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6f8268]">
                       On your roster
                     </span>
                   ) : (

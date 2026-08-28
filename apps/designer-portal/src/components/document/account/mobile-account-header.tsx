@@ -70,7 +70,7 @@ export function MobileAccountHeader({ onOpen }: { onOpen: () => void }) {
         <span className="block truncate font-heading text-[14px] font-medium text-[rgba(250,247,242,0.92)]">
           {name ?? email ?? 'Account'}
         </span>
-        <span className="block truncate font-mono text-[9px] uppercase tracking-[0.07em] text-[rgba(250,247,242,0.45)]">
+        <span className="block truncate font-mono text-[11px] uppercase tracking-[0.07em] text-[rgba(250,247,242,0.45)]">
           {studio ? studio.name : email}
         </span>
       </span>

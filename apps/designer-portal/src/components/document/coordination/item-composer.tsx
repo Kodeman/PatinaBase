@@ -182,14 +182,14 @@ const PHASE_PICK = '__phase__';
 // ─── field chrome (paper grammar — DM Mono labels, 1px pearl edges) ───────────
 
 const fieldLabelCls =
-  'mb-1.5 block font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'mb-1.5 block font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 const inputCls =
   'w-full rounded-[6px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)] placeholder:italic placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)] focus:outline-none';
 
 /** The scored word that opens the rolodex from the court block (flag-on only) —
  *  the portal's shared SCORED INK idiom, not a button. */
 const SCORED_WORD =
-  'da-score-hover min-h-11 inline-flex items-center font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
+  'da-score-hover min-h-11 inline-flex items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-mocha)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
 export function ItemComposer({
   projectId,
@@ -476,7 +476,7 @@ export function ItemComposer({
     <div className="mx-auto w-full max-w-[640px] rounded-[8px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-6 py-6">
       {/* Header: the New-item chip + Playfair title. */}
       <div
-        className="mb-1 inline-block -rotate-[1.5deg] rounded-[3px] border-[1.5px] px-[9px] py-[3px] font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
+        className="mb-1 inline-block -rotate-[1.5deg] rounded-[3px] border-[1.5px] px-[9px] py-[3px] font-mono text-[11px] font-semibold uppercase tracking-[0.1em]"
         style={{ borderColor: 'var(--color-clay)', color: 'var(--color-clay-ink)' }}
       >
         {isEdit ? 'Edit draft' : 'New decision'}
@@ -509,12 +509,12 @@ export function ItemComposer({
               }}
             >
               <span
-                className="inline-block rounded-[3px] border px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.04em]"
+                className="inline-block rounded-[3px] border px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-[0.04em]"
                 style={chipStyle(k)}
               >
                 {token.label}
               </span>
-              <span className="mt-1.5 block text-[0.56rem] leading-tight text-[var(--color-aged-oak)]">
+              <span className="mt-1.5 block text-[11px] leading-tight text-[var(--color-aged-oak)]">
                 {token.who}
               </span>
             </button>
@@ -540,7 +540,7 @@ export function ItemComposer({
                   type="button"
                   onClick={() => setDecisionType(t.key)}
                   aria-pressed={on}
-                  className="min-h-11 rounded-[5px] border px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.04em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                  className="min-h-11 rounded-[5px] border px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.04em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                   style={{
                     borderColor: on
                       ? 'var(--color-clay)'
@@ -582,7 +582,7 @@ export function ItemComposer({
                 className="mx-auto mb-1.5 block h-[9px] w-[9px] rounded-full"
                 style={{ background: token.dotColor }}
               />
-              <span className="block font-mono text-[9px] font-semibold uppercase tracking-[0.03em] text-[var(--color-charcoal)]">
+              <span className="block font-mono text-[11px] font-semibold uppercase tracking-[0.03em] text-[var(--color-charcoal)]">
                 {token.label}
               </span>
             </button>
@@ -759,7 +759,7 @@ export function ItemComposer({
                   </span>
                 ) : null}
               </span>
-              <span className="ml-auto font-mono text-[8.5px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
+              <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
                 FF&amp;E
               </span>
             </button>
@@ -782,7 +782,7 @@ export function ItemComposer({
             >
               <BlockTick on={on} />
               <span className="flex-1">{t.title}</span>
-              <span className="ml-auto inline-flex items-center gap-1 font-mono text-[8.5px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
+              <span className="ml-auto inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
                 <span
                   aria-hidden
                   className="h-[7px] w-[7px] rounded-full"
@@ -875,7 +875,7 @@ export function ItemComposer({
         {/* Delete (draft only, R87) — a two-tap inline confirm, never a modal (D1). */}
         {canDelete &&
           (confirmingDelete ? (
-            <span className="flex flex-wrap items-center gap-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+            <span className="flex flex-wrap items-center gap-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
               Delete draft?
               <DocumentAction
                 actionKey="confirm-delete-coordination-draft"
@@ -904,7 +904,7 @@ export function ItemComposer({
             </DocumentAction>
           ))}
 
-        <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
+        <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
           {landsHint}
         </span>
       </DocumentActionGroup>
@@ -918,7 +918,7 @@ function BlockTick({ on }: { on: boolean }) {
   return (
     <span
       aria-hidden
-      className="relative inline-flex h-[13px] w-[13px] flex-shrink-0 items-center justify-center rounded-[3px] border-[1.5px] text-[8px] font-bold leading-none text-white"
+      className="relative inline-flex h-[13px] w-[13px] flex-shrink-0 items-center justify-center rounded-[3px] border-[1.5px] text-[11px] font-bold leading-none text-white"
       style={{
         borderColor: on ? 'var(--color-clay)' : 'var(--doc-ink-border)',
         background: on ? 'var(--color-clay)' : 'transparent',

@@ -31,7 +31,7 @@ const ROW =
   'flex min-h-[52px] w-full items-center gap-3 border-b border-[var(--color-pearl)] py-2 text-left last:border-b-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
 const LABEL =
-  'font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]';
+  'font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]';
 
 function pieces(count: number): string {
   return `${count} ${count === 1 ? 'piece' : 'pieces'}`;
@@ -52,7 +52,7 @@ function BoardRow({
         <span className="block truncate font-heading text-[15px] text-[var(--color-charcoal)]">
           {name}
         </span>
-        <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        <span className="mt-0.5 block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           {detail}
         </span>
       </span>
@@ -118,14 +118,14 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
           {draftingProposalId && (
             <Link
               href={`/drafting/${draftingProposalId}`}
-              className="inline-flex min-h-[44px] items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]"
+              className="inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]"
             >
               Open the Drafting Room →
             </Link>
           )}
           <Link
             href={`/doc/${routeId}`}
-            className="inline-flex min-h-[44px] items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
+            className="inline-flex min-h-[44px] items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             ← Back to the document
           </Link>
@@ -149,13 +149,13 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
         <div className="mx-auto flex max-w-[1100px] flex-wrap items-center gap-4">
           <Link
             href={`/doc/${routeId}`}
-            className="inline-flex min-h-11 items-center py-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
+            className="inline-flex min-h-11 items-center py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             ← {projectName}
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-heading text-xl">Boards</h1>
-            <p className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {empty
                 ? 'No boards yet · start one'
                 : `${liveBoards.length} working · ${frozenBoards.length} signed`}
@@ -226,7 +226,7 @@ export function ProjectBoardsView({ routeId }: { routeId: string }) {
                         <span className="block truncate font-heading text-[15px] text-[var(--color-charcoal)]">
                           {snapshot.name}
                         </span>
-                        <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                        <span className="mt-0.5 block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                           Frozen at signing · {pieces(snapshot.items.length)}
                         </span>
                       </span>

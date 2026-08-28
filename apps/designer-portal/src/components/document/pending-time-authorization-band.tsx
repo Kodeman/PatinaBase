@@ -44,7 +44,7 @@ export function PendingTimeAuthorizationBand({
       role="status"
       className="mb-4 border-l-2 border-[var(--color-clay)] bg-[rgba(196,165,123,0.08)] px-3 py-2.5"
     >
-      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-charcoal)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--color-charcoal)]">
         {minutesLabel(totalMinutes)} pending billing authority
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-aged-oak)]">
@@ -59,7 +59,7 @@ export function PendingTimeAuthorizationBand({
               type="button"
               aria-label={`Review ${name} billing setup`}
               onClick={() => onSelectProject(projectId)}
-              className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+              className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
             >
               {name} · {minutesLabel(minutes)} →
             </button>

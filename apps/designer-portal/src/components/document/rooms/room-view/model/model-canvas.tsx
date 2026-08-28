@@ -179,7 +179,7 @@ export default function ModelCanvas({ modelUrl }: ModelCanvasProps) {
       >
         {status === 'loading' && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
               Bringing the mesh up…
             </p>
           </div>

@@ -62,7 +62,7 @@ import { WorkOrderSheet } from './work-order-sheet';
 function Figure({ label, value }: { label: string; value: string }) {
   return (
     <span>
-      <span className="block font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+      <span className="block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
         {label}
       </span>
       <strong className="text-[13px] text-[var(--color-charcoal)]">
@@ -84,7 +84,7 @@ function JourneyBand({ scope }: { scope: TradeScopeView }) {
         <li key={step.key} className="flex items-center gap-2">
           <span
             data-journey-state={step.state}
-            className="font-mono text-[9px] uppercase tracking-[0.06em]"
+            className="font-mono text-[11px] uppercase tracking-[0.06em]"
             style={{
               color:
                 step.state === 'done'
@@ -97,7 +97,7 @@ function JourneyBand({ scope }: { scope: TradeScopeView }) {
             {step.label}
           </span>
           {index < steps.length - 1 && (
-            <span aria-hidden className="text-[9px] text-[var(--text-muted)]">
+            <span aria-hidden className="text-[11px] text-[var(--text-muted)]">
               ·
             </span>
           )}
@@ -136,7 +136,7 @@ function GatedAct({
         {label}
       </DocumentAction>
       {!gate.allowed && (
-        <span className="font-mono text-[8.5px] lowercase tracking-[0.04em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] lowercase tracking-[0.04em] text-[var(--text-muted)]">
           {gate.reason}
         </span>
       )}
@@ -179,14 +179,14 @@ function TradeVoidAct({
 
   return (
     <div className="border-l-2 border-[var(--color-terracotta)] pl-3">
-      <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
+      <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
         Void trade scope № {scope.number}
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-[var(--color-mocha)]">
         This retires the scope and marks it superseded. It cannot be undone.
       </p>
 
-      <label className="mt-3 block text-[10px] text-[var(--text-muted)]">
+      <label className="mt-3 block text-[11px] text-[var(--text-muted)]">
         Reason for the void
         <textarea
           rows={2}
@@ -197,7 +197,7 @@ function TradeVoidAct({
         />
       </label>
 
-      <label className="mt-3 block text-[10px] text-[var(--text-muted)]">
+      <label className="mt-3 block text-[11px] text-[var(--text-muted)]">
         Type{' '}
         <strong className="font-mono text-[var(--color-charcoal)]">
           {expectedConfirm}
@@ -350,7 +350,7 @@ export function TradeScopeDetail({
       pageLabel={`№ ${scope.number}`}
     >
       <div>
-        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
           Trade scope № {scope.number}
         </p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
@@ -376,7 +376,7 @@ export function TradeScopeDetail({
             .join(' · ')}
         </p>
         {scope.state === 'executed' && executedOnPaper && (
-          <p className="mt-1 text-[10.5px] italic text-[var(--text-muted)]">
+          <p className="mt-1 text-[11px] italic text-[var(--text-muted)]">
             {signedOnPaperNote(paperSignature?.paperSignedOn)}
           </p>
         )}
@@ -493,7 +493,7 @@ export function TradeScopeDetail({
 
         {scope.progressState !== 'accepted' && scope.state === 'executed' && (
           <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <p className="text-[10.5px] italic text-[var(--text-muted)]">
+            <p className="text-[11px] italic text-[var(--text-muted)]">
               Acceptance is the client&rsquo;s — they close the scope from
               their copy, and the final draw follows. For a client who
               accepted a printed copy instead, record it here.
@@ -513,7 +513,7 @@ export function TradeScopeDetail({
         )}
 
         {scope.progressState === 'accepted' && terms?.acceptedOnPaper && (
-          <p className="mt-2 text-[10.5px] italic text-[var(--text-muted)]" data-testid="trade-acceptance-paper-note">
+          <p className="mt-2 text-[11px] italic text-[var(--text-muted)]" data-testid="trade-acceptance-paper-note">
             {SIGNED_ON_PAPER_NOTE}
             {terms.acceptanceRecordedByName
               ? ` Recorded by ${terms.acceptanceRecordedByName}.`
@@ -529,7 +529,7 @@ export function TradeScopeDetail({
 
         {/* ── The draws ── */}
         <div className="mt-6">
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             Draws
           </p>
           {scope.draws.length === 0 ? (
@@ -538,7 +538,7 @@ export function TradeScopeDetail({
             </p>
           ) : (
             <table className="mt-2 w-full text-left text-[11px]">
-              <thead className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+              <thead className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                 <tr>
                   <th scope="col" className="py-1 font-normal">
                     Draw
@@ -570,7 +570,7 @@ export function TradeScopeDetail({
                       <td className="py-2 pr-2 text-[var(--color-charcoal)]">
                         {draw.label}
                         {draw.percentage !== null && (
-                          <span className="ml-1 font-mono text-[9px] text-[var(--text-muted)]">
+                          <span className="ml-1 font-mono text-[11px] text-[var(--text-muted)]">
                             {draw.percentage}%
                           </span>
                         )}
@@ -578,7 +578,7 @@ export function TradeScopeDetail({
                       <td className="whitespace-nowrap py-2 pr-2 text-right font-heading text-[12px] font-medium text-[var(--color-charcoal)]">
                         {money(draw.amountCents)}
                       </td>
-                      <td className="py-2 pr-2 text-right font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                      <td className="py-2 pr-2 text-right font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                         {state}
                       </td>
                       <td className="py-2 text-right">
@@ -611,10 +611,10 @@ export function TradeScopeDetail({
 
         {/* ── On the schedule ── */}
         <div className="mt-6">
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             On the schedule
           </p>
-          <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
+          <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
             One line per room, in the rooms the work happens in.
           </p>
           {sections.length === 0 ? (
@@ -632,7 +632,7 @@ export function TradeScopeDetail({
                     {section.roomName || 'Throughout'}
                   </h4>
                   {section.allocationCents !== null && (
-                    <span className="font-mono text-[9px] text-[var(--text-muted)]">
+                    <span className="font-mono text-[11px] text-[var(--text-muted)]">
                       {money(section.allocationCents)}
                     </span>
                   )}

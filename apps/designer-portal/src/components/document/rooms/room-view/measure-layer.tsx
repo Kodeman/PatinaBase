@@ -108,7 +108,7 @@ function MeasureChip({ a, b, distanceFt }: { a: Pt; b: Pt; distanceFt: number })
        *  (it special-cases this in its namespace-propagation logic), so this
        *  div is created via createElement, not createElementNS — no xmlns
        *  attribute needed or accepted on React's HTMLDivElement typing. */}
-      <div className="pointer-events-none inline-block whitespace-nowrap rounded-[3px] bg-[var(--color-charcoal)] px-2.5 py-1 font-mono text-[10px] tracking-[0.08em] text-[var(--color-off-white)]">
+      <div className="pointer-events-none inline-block whitespace-nowrap rounded-[3px] bg-[var(--color-charcoal)] px-2.5 py-1 font-mono text-[11px] tracking-[0.08em] text-[var(--color-off-white)]">
         {ftIn(distanceFt)}
       </div>
     </foreignObject>

@@ -68,7 +68,7 @@ export function StyleDna({
 
   return (
     <>
-      <div className="mb-[0.7rem] mt-[1.3rem] font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)] first:mt-0">
+      <div className="mb-[0.7rem] mt-[1.3rem] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)] first:mt-0">
         Style DNA · the Engine&rsquo;s read
       </div>
 

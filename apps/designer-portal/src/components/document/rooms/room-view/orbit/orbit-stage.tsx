@@ -22,7 +22,7 @@ const OrbitCanvas = dynamic(() => import('./orbit-canvas'), {
   ssr: false,
   loading: () => (
     <div className="flex h-[560px] w-full items-center justify-center">
-      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+      <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
         Bringing the room up…
       </p>
     </div>
@@ -53,7 +53,7 @@ export function OrbitStage({ geometry, photoPoses, onPhotoClick }: OrbitStagePro
       <ErrorBoundary fallback={ORBIT_FALLBACK}>
         <OrbitCanvas geometry={geometry} photoPoses={photoPoses} onPhotoClick={onPhotoClick} />
       </ErrorBoundary>
-      <div className="flex items-center justify-between border-t border-[var(--doc-ink-border)] px-3.5 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+      <div className="flex items-center justify-between border-t border-[var(--doc-ink-border)] px-3.5 py-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
         <span>Orbit · the room as a volume</span>
         <span>drag to orbit · scroll to move closer</span>
       </div>

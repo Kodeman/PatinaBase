@@ -23,7 +23,7 @@ export function FutureSeam({ name, opens }: { name: string; opens: string }) {
       <span className="font-heading text-[13px] font-medium italic text-[var(--text-muted)]">
         {name}
       </span>
-      <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
         {opens}
       </span>
     </div>

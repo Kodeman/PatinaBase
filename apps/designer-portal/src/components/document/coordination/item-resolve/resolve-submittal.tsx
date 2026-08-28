@@ -89,7 +89,7 @@ export function ResolveSubmittal({
       {/* Rev-N history (R48) */}
       {revisions && revisions.length > 0 && (
         <div className="mb-3">
-          <div className="mb-1.5 font-mono text-[0.46rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          <div className="mb-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             Revision history
           </div>
           <ul>
@@ -98,10 +98,10 @@ export function ResolveSubmittal({
                 key={r.id}
                 className="flex items-baseline gap-2 border-b border-dashed border-[var(--color-pearl)] py-1 text-[0.72rem] text-[var(--color-mocha)] last:border-b-0"
               >
-                <span className="font-mono text-[0.6rem] font-semibold text-[var(--color-charcoal)]">
+                <span className="font-mono text-[11px] font-semibold text-[var(--color-charcoal)]">
                   Rev {r.rev_number}
                 </span>
-                <span className="font-mono text-[0.46rem] uppercase tracking-[0.04em] text-[var(--text-muted)]">
+                <span className="font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--text-muted)]">
                   {REV_STATUS_LABEL[r.status] ?? r.status}
                 </span>
                 {r.note && (
@@ -109,7 +109,7 @@ export function ResolveSubmittal({
                     “{r.note}”
                   </span>
                 )}
-                <span className="ml-auto whitespace-nowrap font-mono text-[0.46rem] text-[var(--text-muted)]">
+                <span className="ml-auto whitespace-nowrap font-mono text-[11px] text-[var(--text-muted)]">
                   {fmtDay(r.created_at)}
                 </span>
               </li>

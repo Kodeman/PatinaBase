@@ -54,7 +54,7 @@ export function NurtureView({ openPerson, notify }: PeopleViewProps) {
         <>
           {due.length > 0 && (
             <>
-              <div className="mb-2 mt-1 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-terracotta-ink)]">
+              <div className="mb-2 mt-1 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-terracotta-ink)]">
                 Reconnect now · {due.length}
               </div>
               {due.map((entry) => (
@@ -70,7 +70,7 @@ export function NurtureView({ openPerson, notify }: PeopleViewProps) {
 
           {warm.length > 0 && (
             <>
-              <div className="mb-2 mt-5 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+              <div className="mb-2 mt-5 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
                 Warm · keep tending
               </div>
               {warm.map((entry) => (

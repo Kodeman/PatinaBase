@@ -73,7 +73,7 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
 
   return (
     <section aria-labelledby="document-next-up" className="my-5 border-y border-[var(--color-pearl)] py-4">
-      <p className="font-mono text-[9px] uppercase tracking-[0.09em] text-[var(--color-clay-ink)]">{model.eyebrow}</p>
+      <p className="font-mono text-[11px] uppercase tracking-[0.09em] text-[var(--color-clay-ink)]">{model.eyebrow}</p>
       <div className="mt-1 flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <div className="min-w-0 flex-1">
           <h2 id="document-next-up" className="font-heading text-[19px] font-medium text-[var(--color-charcoal)]">{model.headline}</h2>

@@ -44,7 +44,7 @@ import { ReachChip } from './reach-chip';
 import { rosterMetaLine } from './party-mini-row';
 
 const META =
-  'font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
 /** The mono second element — a different sentence per group (slide 11). */
 export function rosterSecondLine(row: ProjectRosterRow, group: RosterGroup): string {

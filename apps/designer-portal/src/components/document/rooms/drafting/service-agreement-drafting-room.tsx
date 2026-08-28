@@ -25,7 +25,7 @@ import { ServiceAgreementSendSheet } from "../../commercial/service-agreement-se
 import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
 
 const labelClass =
-  "font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
 
 const DEFAULT_DELIVERABLES = [
   "Concept presentation",
@@ -280,7 +280,7 @@ function ServiceAgreementEditor({
     >
       <div className="mx-auto max-w-[1240px] px-6 py-7 sm:px-8">
         <header className="border-b border-[var(--doc-ink-border)] pb-5">
-          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
             Yes to the designer · professional services only
           </p>
           <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
@@ -530,7 +530,7 @@ function ServiceAgreementEditor({
                     </label>
                   </div>
                   {terms.furnishingsDepositPercent === null && (
-                    <p className="mt-1.5 text-[10.5px] normal-case tracking-normal text-[var(--text-muted)]">
+                    <p className="mt-1.5 text-[11px] normal-case tracking-normal text-[var(--text-muted)]">
                       No furnishings deposit set — authorizations will
                       default to 50%.
                     </p>
@@ -616,7 +616,7 @@ function ServiceAgreementEditor({
 
           <aside className="hidden min-[1180px]:block">
             <div className="sticky top-[82px] rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5">
-              <p className="mb-4 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+              <p className="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
                 The client&apos;s copy · live
               </p>
               <ServiceAgreementPreview
@@ -678,7 +678,7 @@ function AgreementFacet({
   return (
     <section className="border-t border-[var(--doc-ink-border)] pt-4">
       <div className="mb-4 grid gap-2 sm:grid-cols-[40px_190px_minmax(0,1fr)]">
-        <span className="font-mono text-[9px] text-[var(--color-clay-ink)]">
+        <span className="font-mono text-[11px] text-[var(--color-clay-ink)]">
           {index}
         </span>
         <h2 className="font-heading text-[1.15rem] italic text-[var(--color-charcoal)]">

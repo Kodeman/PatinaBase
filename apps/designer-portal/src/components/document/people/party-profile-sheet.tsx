@@ -45,14 +45,14 @@ import { DocumentAction, DocumentActionRow } from '../document-action';
 import { PromoteBand } from './promote-band';
 
 const META =
-  'font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
 function ConsentChip({ status }: { status: string | null | undefined }) {
   const cfg =
     SMS_CONSENT_DISPLAY[(status ?? 'not_asked') as SmsConsentStatus] ??
     SMS_CONSENT_DISPLAY.not_asked;
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-mocha)]">
+    <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] px-2 py-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-mocha)]">
       <span
         aria-hidden
         className={`inline-block h-2 w-2 rounded-full ${cfg.dotClass}`}
@@ -364,7 +364,7 @@ export function PartyProfileSheet({
         </p>
         {mintedUrl && (
           <div className="mb-2 rounded-[6px] border border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] px-3 py-2">
-            <p className="mb-1 font-mono text-[8px] uppercase tracking-[0.06em] text-[#6f8268]">
+            <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[#6f8268]">
               {copied
                 ? 'Copied to clipboard · shown once'
                 : 'Copy now — shown once'}

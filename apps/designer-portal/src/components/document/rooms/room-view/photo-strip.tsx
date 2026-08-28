@@ -63,10 +63,10 @@ export function PhotoStrip({ photos, onOpen }: PhotoStripProps) {
   return (
     <div className="mt-3">
       <div className="mb-1.5 flex items-baseline justify-between">
-        <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
           Photos
         </span>
-        <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-[var(--color-mocha)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-mocha)]">
           {photos.length}
         </span>
       </div>
@@ -126,12 +126,12 @@ function ThumbTile({ photo, onClick }: { photo: RoomScanPhoto; onClick: () => vo
       ) : (
         // Mime-agnostic on purpose: a JPEG row with no derivatives and an
         // unreachable original lands here too, so "HEIC" was a guess.
-        <span className="flex h-full w-full items-center justify-center bg-[var(--color-aged-oak)]/[0.06] font-mono text-[7.5px] uppercase leading-tight tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <span className="flex h-full w-full items-center justify-center bg-[var(--color-aged-oak)]/[0.06] font-mono text-[11px] uppercase leading-tight tracking-[0.1em] text-[var(--color-aged-oak)]">
           no preview
         </span>
       )}
       {caption && (
-        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-[var(--color-charcoal)]/85 px-1 py-0.5 text-center font-mono text-[7.5px] tracking-[0.06em] text-[var(--color-off-white)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-[var(--color-charcoal)]/85 px-1 py-0.5 text-center font-mono text-[11px] tracking-[0.06em] text-[var(--color-off-white)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
           {caption}
         </span>
       )}

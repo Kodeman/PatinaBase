@@ -68,7 +68,7 @@ function useSyncedValue<T>(serverValue: T) {
 
 function FacetLabel({ children, needed }: { children: React.ReactNode; needed?: boolean }) {
   return (
-    <span className="mb-1.5 flex items-center gap-1.5 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+    <span className="mb-1.5 flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
       {children}
       {needed && (
         <span className="rounded-[3px] bg-[rgba(196,165,123,0.14)] px-1 py-px text-[0.42rem] tracking-[0.06em] text-[var(--color-clay-ink)]">
@@ -85,7 +85,7 @@ function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | nul
     <span
       role="status"
       aria-live="polite"
-      className={`ml-2 inline-flex items-center gap-1 font-mono text-[0.5rem] uppercase tracking-[0.06em] ${
+      className={`ml-2 inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.06em] ${
         state === 'error' ? 'text-[var(--color-terracotta-ink)]' : 'text-[var(--color-sage)]'
       }`}
     >
@@ -661,7 +661,7 @@ export function FacetDimensions({
       <div className="flex items-end gap-2">
         {(['width', 'depth', 'height'] as const).map((k) => (
           <label key={k} className="flex-1">
-            <span className="mb-1 block text-center font-mono text-[0.46rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+            <span className="mb-1 block text-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
               {k}
             </span>
             <input
@@ -900,14 +900,14 @@ export function FacetVendorPicker({
                 setOpen(true);
                 setActive(0);
               }}
-              className="font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)] hover:text-[var(--color-aged-oak)]"
+              className="font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay-ink)] hover:text-[var(--color-aged-oak)]"
             >
               Change
             </button>
             <button
               type="button"
               onClick={clear}
-              className="font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-terracotta-ink)]"
+              className="font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-terracotta-ink)]"
             >
               Clear
             </button>

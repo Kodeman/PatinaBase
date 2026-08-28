@@ -71,7 +71,7 @@ export function ServiceAgreementSendSheet({
   return (
     <DocSheet open={open} onClose={onClose} title="Send design agreement">
       <div className="mx-auto max-w-xl">
-        <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
+        <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
           Yes to the designer
         </p>
         <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
@@ -85,7 +85,7 @@ export function ServiceAgreementSendSheet({
         </p>
 
         <div className="mt-5 rounded-[4px] border border-[var(--doc-ink-border)] px-4 py-3">
-          <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Recipient
           </p>
           <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
@@ -95,7 +95,7 @@ export function ServiceAgreementSendSheet({
 
         {terms && (
           <div className="mt-3 rounded-[4px] border border-[var(--doc-ink-border)] px-4 py-3">
-            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               Furnishings deposit
             </p>
             <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
@@ -122,7 +122,7 @@ export function ServiceAgreementSendSheet({
           </p>
         ) : (
           <div className="mt-4 border-l-2 border-[var(--color-terracotta)] pl-3">
-            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               Finish before sending
             </p>
             <ul className="mt-2 space-y-1 text-[12px] text-[var(--color-mocha)]">
@@ -133,7 +133,7 @@ export function ServiceAgreementSendSheet({
           </div>
         )}
 
-        <label className="mt-5 block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <label className="mt-5 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           A note to the client · optional
           <Textarea
             className="mt-2 min-h-24 normal-case tracking-normal"

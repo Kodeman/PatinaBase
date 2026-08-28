@@ -60,7 +60,7 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
     <div className="relative mt-[26px]">
       {/* Status tab — the field-triage accent (golden-hour). */}
       <div
-        className="absolute -top-[26px] left-0 flex h-[26px] items-center rounded-t-[7px] px-3.5 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-white"
+        className="absolute -top-[26px] left-0 flex h-[26px] items-center rounded-t-[7px] px-3.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
         style={{ background: 'var(--color-golden-hour)' }}
       >
         Field text · needs review
@@ -77,7 +77,7 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
 
         {effectLine && (
           <div className="mt-4 border-t border-[var(--border-default)] pt-3.5">
-            <p className="font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
               Proposed
             </p>
             <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-body)]">

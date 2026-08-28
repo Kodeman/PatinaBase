@@ -78,9 +78,9 @@ export function LogAckInline({
   const [error, setError] = useState<string | null>(null);
 
   const label =
-    'font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]';
+    'font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]';
   const input =
-    'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1 font-mono text-[10.5px] text-[var(--color-charcoal)] outline-none';
+    'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1 font-mono text-[11px] text-[var(--color-charcoal)] outline-none';
 
   const confirm = async () => {
     if (logAck.isPending) return;
@@ -117,7 +117,7 @@ export function LogAckInline({
   if (done) {
     // R51: the quiet confirmation — a line of text at the act site.
     return (
-      <p className="text-[10.5px] text-[var(--color-charcoal)]">
+      <p className="text-[11px] text-[var(--color-charcoal)]">
         Acknowledged — logged {fmtDay(new Date().toISOString())}.
       </p>
     );
@@ -125,7 +125,7 @@ export function LogAckInline({
 
   return (
     <div>
-      <p className="mb-1.5 text-[10px] text-[var(--text-muted)]">
+      <p className="mb-1.5 text-[11px] text-[var(--text-muted)]">
         Stamped as of today — PO # and ETA are optional, blank keeps
         what&rsquo;s on file.
       </p>
@@ -164,7 +164,7 @@ export function LogAckInline({
       </div>
       {error && (
         // R83: the failure renders as a quiet inline band at the act site.
-        <div role="alert" className="mt-1.5 text-[10.5px] text-[var(--color-terracotta-ink)]">
+        <div role="alert" className="mt-1.5 text-[11px] text-[var(--color-terracotta-ink)]">
           <p>{error}</p>
           <DocumentActionGroup
             surfaceKey="orders"
@@ -288,7 +288,7 @@ export function PoPreview({
       <div className="absolute inset-x-0 top-[4vh] mx-auto flex h-[92vh] w-[min(720px,94vw)] flex-col rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)]">
         <div className="flex items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] px-5 py-3">
           <div>
-            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-clay-ink)]">
               {mode === 'resend' ? 'Resend purchase order' : 'Purchase order'}
               {poNumber ? ` · ${poNumber}` : ''}
             </p>
@@ -299,7 +299,7 @@ export function PoPreview({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="rounded-[3px] border border-transparent px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[rgba(196,165,123,0.35)] hover:text-[var(--color-clay-ink)]"
+            className="rounded-[3px] border border-transparent px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[rgba(196,165,123,0.35)] hover:text-[var(--color-clay-ink)]"
           >
             Close
           </button>
@@ -323,7 +323,7 @@ export function PoPreview({
             the paper itself — the vendor phoned or emailed; log it here. */}
         {mode === 'resend' && sentAt && !acknowledgedAt && (
           <div className="border-t border-[var(--color-pearl)] px-5 py-2.5">
-            <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
+            <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
               Vendor confirmed by phone or email?
             </p>
             <LogAckInline

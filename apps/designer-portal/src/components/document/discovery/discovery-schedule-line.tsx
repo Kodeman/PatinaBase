@@ -155,7 +155,7 @@ export function DiscoveryScheduleLine({
             {state.slots.map((s) => (
               <li
                 key={s.id}
-                className="font-mono text-[10.5px] text-[var(--text-muted)]"
+                className="font-mono text-[11px] text-[var(--text-muted)]"
               >
                 {fmtCeremonySlot(s.starts_at, ceremony.timezone)}
               </li>
@@ -203,7 +203,7 @@ export function DiscoveryScheduleLine({
                     aria-label="Offered time"
                     className="min-w-0 flex-1 bg-transparent font-heading text-[13.5px] text-[var(--color-charcoal)]"
                   />
-                  <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                  <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                     {SLOT_DURATION_MINUTES} min
                   </span>
                   {draft.length > MIN_SLOTS && (
@@ -264,7 +264,7 @@ export function DiscoveryScheduleLine({
       )}
 
       {ceremony.thread_id && (
-        <p className="mt-2 border-t border-dashed border-[var(--color-pearl)] pt-2 font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <p className="mt-2 border-t border-dashed border-[var(--color-pearl)] pt-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           The introduction ·{' '}
           {/* a real navigation, so it takes the action grammar: an unscored
               whisper until asked, and the rule draws in under the word (I107) */}

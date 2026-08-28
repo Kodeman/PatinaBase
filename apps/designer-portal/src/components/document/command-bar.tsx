@@ -967,7 +967,7 @@ export function CommandBar() {
   const renderTrailing = (row: PaletteRow) => {
     if (row.kind === 'document' && row.hint) {
       return (
-        <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+        <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
           {row.hint}
         </span>
       );
@@ -977,7 +977,7 @@ export function CommandBar() {
       row.shortcut?.length
     ) {
       return (
-        <span className="shrink-0 rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+        <span className="shrink-0 rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-px font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
           {row.shortcut.join(' ')}
         </span>
       );
@@ -1036,13 +1036,13 @@ export function CommandBar() {
         {asking ? (
           <div className="max-h-[60vh] overflow-y-auto px-4 pb-3 pt-2">
             <div className="mb-1 flex items-center justify-between gap-3">
-              <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
+              <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay-ink)]">
                 Results · “{asking}”
               </span>
               <button
                 type="button"
                 onClick={() => setAsking(null)}
-                className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-charcoal)]"
+                className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-charcoal)]"
               >
                 ← results
               </button>
@@ -1054,7 +1054,7 @@ export function CommandBar() {
             {rendered.map((section) => (
               <div key={section.eyebrow ?? 'results'}>
                 {section.eyebrow && (
-                  <div className="px-4 pb-1 pt-3 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                  <div className="px-4 pb-1 pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
                     {section.eyebrow}
                   </div>
                 )}
@@ -1074,7 +1074,7 @@ export function CommandBar() {
                           <span className="block truncate text-[13px] font-medium text-[var(--color-charcoal)]">
                             {row.label}
                           </span>
-                          <span className="block truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                          <span className="block truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                             {row.sub}
                           </span>
                         </span>

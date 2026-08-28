@@ -104,7 +104,7 @@ export function ScheduleProposals({
 
   return (
     <div className="mt-4" data-schedule-proposals aria-label="Proposed anchors">
-      <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+      <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         Proposed
       </p>
       <ul className="mt-2 flex flex-col gap-3">

@@ -45,7 +45,7 @@ export function NurtureQueueRow({
         <button
           type="button"
           onClick={onReachOut}
-          className="shrink-0 rounded-[6px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3 py-1.5 font-mono text-[0.46rem] font-semibold uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90"
+          className="shrink-0 rounded-[6px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-white transition-opacity hover:opacity-90"
         >
           Reach out
         </button>
@@ -53,7 +53,7 @@ export function NurtureQueueRow({
         <button
           type="button"
           onClick={onOpen}
-          className="shrink-0 rounded-[6px] border border-[var(--color-pearl)] px-3 py-1.5 font-mono text-[0.46rem] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)]"
+          className="shrink-0 rounded-[6px] border border-[var(--color-pearl)] px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)]"
         >
           Open
         </button>

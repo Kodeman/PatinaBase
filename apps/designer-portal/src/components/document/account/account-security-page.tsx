@@ -125,7 +125,7 @@ export function AccountSecurityPage() {
       )}
 
       {/* Enrolled factors */}
-      <h3 className="mb-2 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+      <h3 className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         Status
       </h3>
       {hasMfa ? (
@@ -139,7 +139,7 @@ export function AccountSecurityPage() {
                 <span className="block text-[13px] text-[var(--color-charcoal)]">
                   {factor.friendlyName || 'Authenticator app'}
                 </span>
-                <span className="block font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+                <span className="block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                   Enabled
                   {factor.createdAt
                     ? ` · added ${new Date(factor.createdAt).toLocaleDateString()}`
@@ -207,7 +207,7 @@ export function AccountSecurityPage() {
           )}
 
           <div className="mb-4">
-            <span className="block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+            <span className="block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
               Or enter this secret manually
             </span>
             <code className="mt-1 block break-all font-mono text-[12px] text-[var(--color-charcoal)]">
@@ -217,7 +217,7 @@ export function AccountSecurityPage() {
 
           <label
             htmlFor="account-mfa-code"
-            className="mb-1 block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+            className="mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
           >
             Verification code
           </label>

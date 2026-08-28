@@ -142,7 +142,7 @@ function FieldProvenance({
           {displayResolvedValue(resolved)}
         </span>
       </div>
-      <p className="mt-1 text-right font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+      <p className="mt-1 text-right font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
         {resolved.source.replaceAll("_", " ")}
         {resolved.verifiedAt
           ? ` · verified ${new Date(resolved.verifiedAt).toLocaleDateString()}`
@@ -162,7 +162,7 @@ function ReadinessMark({
   const ready = status === "ready";
   return (
     <span
-      className={`inline-flex items-center gap-1 font-mono text-[8px] uppercase tracking-[0.08em] ${readinessColor(status)}`}
+      className={`inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] ${readinessColor(status)}`}
     >
       {ready ? (
         <Check className="h-3 w-3" />
@@ -215,7 +215,7 @@ function ItemCard({
         {image ? (
           <img src={image} alt="" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full items-center justify-center text-[9px] text-[var(--text-muted)]">
+          <div className="flex h-full items-center justify-center text-[11px] text-[var(--text-muted)]">
             No image
           </div>
         )}
@@ -231,7 +231,7 @@ function ItemCard({
         <div className="mt-3 flex items-center gap-3">
           <ReadinessMark status={readiness} missingFields={missingFields} />
           {drift && (
-            <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
               changed since issue
             </span>
           )}
@@ -446,7 +446,7 @@ export function SelectionEditor({
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
             Project selection · v{item.spec.row_version}
           </p>
           <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
@@ -467,7 +467,7 @@ export function SelectionEditor({
           />
           {item.product_id && configuration.configurationId && (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--color-pearl)] pt-3">
-              <p className="text-[10px] text-[var(--text-muted)]">
+              <p className="text-[11px] text-[var(--text-muted)]">
                 {revisionClosed
                   ? "Released lines and their custom promises stay intact; changes begin on a new project line."
                   : "A replacement creates a new snapshot and returns this line to approval."}
@@ -478,7 +478,7 @@ export function SelectionEditor({
                     ? `/library/${item.product_id}`
                     : `/library/${item.product_id}?projectId=${encodeURIComponent(item.project_id)}&ffeItemId=${encodeURIComponent(item.id)}&configurationId=${encodeURIComponent(configuration.configurationId)}&snapshotHash=${encodeURIComponent(configuration.hash ?? "")}`
                 }
-                className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-4 hover:underline"
+                className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-4 hover:underline"
               >
                 {!canReviseConfiguration
                   ? "View source piece"
@@ -531,7 +531,7 @@ export function SelectionEditor({
                 <button
                   type="button"
                   onClick={switchToStructuredDimensions}
-                  className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-4 hover:underline"
+                  className="mt-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline-offset-4 hover:underline"
                 >
                   Use structured editor
                 </button>
@@ -545,7 +545,7 @@ export function SelectionEditor({
                 <button
                   type="button"
                   onClick={switchToRawDimensions}
-                  className="mt-2 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-4 hover:underline"
+                  className="mt-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-4 hover:underline"
                 >
                   Edit raw JSON
                 </button>
@@ -658,12 +658,12 @@ function AudiencePreview({
           : null;
   return (
     <div className="mx-auto min-h-[680px] max-w-[540px] bg-white px-10 py-12 text-[#2f302d]">
-      <p className="font-mono text-[8px] uppercase tracking-[0.16em] text-[#857f74]">
+      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#857f74]">
         {audience} edition · item sheet
       </p>
       <div className="mt-8 grid grid-cols-[1fr_auto] gap-6">
         <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[#857f74]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#857f74]">
             {item.document_code}
           </p>
           <h2 className="mt-2 font-heading text-3xl">{item.name}</h2>
@@ -698,7 +698,7 @@ function AudiencePreview({
             const value = resolveSpecValue(item, field);
             return (
               <div key={field} className="border-t border-[#ddd8ce] py-3">
-                <dt className="text-[10px] uppercase tracking-[0.08em] text-[#857f74]">
+                <dt className="text-[11px] uppercase tracking-[0.08em] text-[#857f74]">
                   {field.replaceAll("_", " ")}
                 </dt>
                 <dd className="mt-1 text-sm">{displayResolvedValue(value)}</dd>
@@ -707,7 +707,7 @@ function AudiencePreview({
           })}
         {audienceAllows(audience, "exact_location") && (
           <div className="border-t border-[#ddd8ce] py-3">
-            <dt className="text-[10px] uppercase tracking-[0.08em] text-[#857f74]">
+            <dt className="text-[11px] uppercase tracking-[0.08em] text-[#857f74]">
               Exact location
             </dt>
             <dd className="mt-1 text-sm">
@@ -718,7 +718,7 @@ function AudiencePreview({
         {audienceAllows(audience, "trade_price") && (
           <>
             <div className="border-t border-[#ddd8ce] py-3">
-              <dt className="text-[10px] uppercase tracking-[0.08em] text-[#857f74]">
+              <dt className="text-[11px] uppercase tracking-[0.08em] text-[#857f74]">
                 Trade price
               </dt>
               <dd className="mt-1 text-sm">
@@ -728,7 +728,7 @@ function AudiencePreview({
               </dd>
             </div>
             <div className="border-t border-[#ddd8ce] py-3">
-              <dt className="text-[10px] uppercase tracking-[0.08em] text-[#857f74]">
+              <dt className="text-[11px] uppercase tracking-[0.08em] text-[#857f74]">
                 Markup
               </dt>
               <dd className="mt-1 text-sm">{item.markup_percent ?? "—"}%</dd>
@@ -1091,13 +1091,13 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-4">
           <Link
             href={`/doc/${projectId}`}
-            className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
+            className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay-ink)]"
           >
             ← {projectName}
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-heading text-xl">{data.book.title}</h1>
-            <p className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               Working book · {data.items.length} selections ·{" "}
               {data.revisions.length} revisions
             </p>
@@ -1119,7 +1119,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                 type="button"
                 onClick={() => setView(id)}
                 aria-current={view === id ? "page" : undefined}
-                className={`px-3 py-2 font-mono text-[9px] uppercase tracking-[0.08em] ${
+                className={`px-3 py-2 font-mono text-[11px] uppercase tracking-[0.08em] ${
                   view === id
                     ? "border-b border-[var(--color-clay)] text-[var(--color-charcoal)]"
                     : "text-[var(--text-muted)]"
@@ -1138,7 +1138,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
       {view === "workbench" && (
         <div className="mx-auto grid max-w-[1500px] md:grid-cols-[220px_minmax(340px,1fr)_minmax(360px,0.9fr)]">
           <aside className="border-r border-[var(--color-pearl)] p-4 md:min-h-[calc(100vh-70px)]">
-            <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
               Chapters
             </p>
             <ol className="mt-3 space-y-1">
@@ -1149,12 +1149,12 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                     className="flex items-center justify-between gap-2 px-2 py-2 text-[12px] hover:bg-[rgba(196,165,123,0.05)]"
                   >
                     <span>
-                      <span className="mr-2 font-mono text-[8px] text-[var(--text-muted)]">
+                      <span className="mr-2 font-mono text-[11px] text-[var(--text-muted)]">
                         {String(index + 1).padStart(2, "0")}
                       </span>
                       {group.title}
                     </span>
-                    <span className="font-mono text-[8px] text-[var(--text-muted)]">
+                    <span className="font-mono text-[11px] text-[var(--text-muted)]">
                       {group.items.length}
                     </span>
                   </a>
@@ -1162,7 +1162,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
               ))}
             </ol>
             <div className="mt-8">
-              <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
                 Readiness
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -1184,7 +1184,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                   </FilterPill>
                 ))}
               </div>
-              <p className="mt-4 text-[10px] leading-4 text-[var(--text-muted)]">
+              <p className="mt-4 text-[11px] leading-4 text-[var(--text-muted)]">
                 Readiness is calculated from the active spec template. Complete the listed fields to advance it.
               </p>
             </div>
@@ -1204,7 +1204,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                   <h2 className="font-heading text-base italic">
                     {group.title}
                   </h2>
-                  <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                     {group.items.length} items
                   </span>
                 </div>
@@ -1305,7 +1305,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
       {view === "preview" && (
         <div className="mx-auto grid max-w-[1300px] gap-6 px-5 py-8 lg:grid-cols-[230px_1fr]">
           <aside>
-            <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
               Edition
             </p>
             <div className="mt-3 space-y-2">
@@ -1323,13 +1323,13 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                   <span className="block text-[12px] font-medium">
                     {audience.label}
                   </span>
-                  <span className="mt-1 block text-[10px] text-[var(--text-muted)]">
+                  <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
                     {audience.description}
                   </span>
                 </button>
               ))}
             </div>
-            <label className="mt-6 block text-[10px] text-[var(--text-muted)]">
+            <label className="mt-6 block text-[11px] text-[var(--text-muted)]">
               Item sheet
               <Select
                 className="mt-1"
@@ -1376,7 +1376,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
             </div>
 
             <div className="mt-8">
-              <h3 className="font-mono text-[9px] uppercase tracking-[0.1em]">
+              <h3 className="font-mono text-[11px] uppercase tracking-[0.1em]">
                 Blocking
               </h3>
               <ul className="mt-3 divide-y divide-[var(--color-pearl)] border-y border-[var(--color-pearl)]">
@@ -1398,7 +1398,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                             setSelectedItemId(issue.itemId!);
                             setView("workbench");
                           }}
-                          className="min-h-11 px-2 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
+                          className="min-h-11 px-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]"
                         >
                           Resolve
                         </button>
@@ -1410,7 +1410,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
             </div>
 
             <div className="mt-8">
-              <h3 className="font-mono text-[9px] uppercase tracking-[0.1em]">
+              <h3 className="font-mono text-[11px] uppercase tracking-[0.1em]">
                 Warnings
               </h3>
               <ul className="mt-3 divide-y divide-[var(--color-pearl)] border-y border-[var(--color-pearl)]">
@@ -1438,7 +1438,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
           </section>
 
           <aside className="border-l border-[var(--color-pearl)] pl-6">
-            <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
               Issue
             </p>
             <div className="mt-4 space-y-2">
@@ -1457,7 +1457,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                     <span className="block text-[12px] font-medium">
                       {audience.label}
                     </span>
-                    <span className="mt-0.5 block text-[10px] text-[var(--text-muted)]">
+                    <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">
                       {audience.description}
                     </span>
                   </span>
@@ -1509,7 +1509,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
               Issue {audiences.length} edition
               {audiences.length === 1 ? "" : "s"}
             </Button>
-            <p className="mt-3 text-[10px] leading-4 text-[var(--text-muted)]">
+            <p className="mt-3 text-[11px] leading-4 text-[var(--text-muted)]">
               Issuing freezes an immutable revision. Each audience renders
               independently and failed artifacts retry in place.
             </p>
@@ -1521,7 +1521,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         <div className="mx-auto max-w-[1100px] px-5 py-8">
           <div className="flex items-end justify-between">
             <div>
-              <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
                 Immutable ledger
               </p>
               <h2 className="mt-2 font-heading text-2xl">Revisions</h2>
@@ -1568,10 +1568,10 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                       <p className="font-heading text-xl">
                         Revision {revision.revision_number}
                       </p>
-                      <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                      <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                         {revision.issue_type} · {revision.status}
                       </p>
-                      <p className="mt-2 text-[10px] text-[var(--text-muted)]">
+                      <p className="mt-2 text-[11px] text-[var(--text-muted)]">
                         {new Date(revision.created_at).toLocaleString()}
                       </p>
                     </div>
@@ -1596,7 +1596,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                           <span className="min-w-24 text-[12px] capitalize">
                             {artifact.audience} PDF
                           </span>
-                          <span className="flex-1 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                          <span className="flex-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                             {artifact.status}
                             {artifact.error_message
                               ? ` · ${artifact.error_message}`
@@ -1632,12 +1632,12 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                           )}
                           {shareResult?.artifactId === artifact.id && (
                             <div className="basis-full border-t border-[var(--color-pearl)] pt-2">
-                              <label className="text-[9px] text-[var(--text-muted)]">
+                              <label className="text-[11px] text-[var(--text-muted)]">
                                 Copy this tokenized link now; the raw token is
                                 shown only once.
                                 <Input
                                   readOnly
-                                  className="mt-1 font-mono text-[10px]"
+                                  className="mt-1 font-mono text-[11px]"
                                   value={shareResult.url}
                                   onFocus={(event) =>
                                     event.currentTarget.select()

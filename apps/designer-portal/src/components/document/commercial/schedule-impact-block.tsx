@@ -165,7 +165,7 @@ export function ScheduleImpactBlock({
       data-schedule-impact={impact.status}
       className="mt-3 border-t border-[var(--doc-ink-border)] pt-3"
     >
-      <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+      <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         Impact
       </p>
       <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--color-charcoal)]">

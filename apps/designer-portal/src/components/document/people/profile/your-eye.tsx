@@ -223,7 +223,7 @@ function GravityRow({
   const pct = value == null ? null : ((value + 1) / 2) * 100;
   return (
     <div>
-      <div className="flex justify-between font-mono text-[0.6rem] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+      <div className="flex justify-between font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
         <span>{pole.left}</span>
         <span>{pole.right}</span>
       </div>
@@ -234,7 +234,7 @@ function GravityRow({
             style={{ left: `${pct}%` }}
           />
         ) : (
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-[0.6rem] text-[var(--text-muted)]">
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-[11px] text-[var(--text-muted)]">
             —
           </span>
         )}
@@ -264,7 +264,7 @@ function BiasRow({
         <span className="font-heading text-[0.98rem] font-medium text-[var(--text-primary)]">
           {bias.name}
         </span>
-        <span className="font-mono text-[0.58rem] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           {bias.status === 'proposed' ? 'the Engine proposes' : bias.status}
         </span>
       </div>

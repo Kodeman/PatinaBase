@@ -167,7 +167,7 @@ export function InstallWindowCeremony({ projectId }: { projectId: string }) {
       }
       aria-label="Install window"
     >
-      <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+      <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         Install window
       </p>
       <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-2">
@@ -422,7 +422,7 @@ function InstallWindowSheet({
               <div className="relative mt-3">
                 <span
                   id={folioCaptionId}
-                  className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
+                  className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
                 >
                   The window
                 </span>
@@ -614,7 +614,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+      <span className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
         {label}
       </span>
       {children}

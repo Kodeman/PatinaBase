@@ -86,10 +86,10 @@ export function CoordinationWork({
   if (sectionTasks.length === 0 && !capturing) {
     return (
       <div className="mb-1 mt-4 flex items-baseline gap-4">
-        <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
           The work
         </span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
           the dependency web
         </span>
         <DocumentAction
@@ -108,10 +108,10 @@ export function CoordinationWork({
   return (
     <div className="mb-2 mt-4 rounded-[6px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)]">
       <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-3 py-1.5">
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
           The work{total > 0 ? ` · ${doneN} of ${total} done` : ''}
         </span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           the dependency web
         </span>
       </div>
@@ -161,7 +161,7 @@ export function CoordinationWork({
                         ? `"${t.title}" is blocked`
                         : `Mark "${t.title}" done`
                   }
-                  className={`relative top-px inline-flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.5px] text-[8px] font-bold leading-none ${
+                  className={`relative top-px inline-flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.5px] text-[11px] font-bold leading-none ${
                     isBlockedTick ? 'cursor-not-allowed' : ''
                   }`}
                   style={{
@@ -207,7 +207,7 @@ export function CoordinationWork({
                   <OwnerChip task={t} parties={parties} />
                   {(done || t.due_date) && (
                     <span
-                      className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.05em]"
+                      className="whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.05em]"
                       style={{
                         color: overdue ? 'var(--color-terracotta-ink)' : 'var(--text-muted)',
                       }}

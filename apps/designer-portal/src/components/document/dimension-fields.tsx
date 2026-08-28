@@ -69,12 +69,12 @@ const UNIT_CLS =
   "rounded-[6px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-50";
 
 const MINI_LABEL_CLS =
-  "mb-1 block text-center font-mono text-[0.46rem] uppercase tracking-[0.08em] text-[var(--text-muted)]";
+  "mb-1 block text-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]";
 
 function PreservedHint({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <p className="mt-2 text-[10px] italic text-[var(--text-muted)]">
+    <p className="mt-2 text-[11px] italic text-[var(--text-muted)]">
       +{count} captured field{count === 1 ? "" : "s"} preserved
     </p>
   );

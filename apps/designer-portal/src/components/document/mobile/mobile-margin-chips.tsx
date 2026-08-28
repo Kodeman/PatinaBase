@@ -115,7 +115,7 @@ export function MobileMarginChips({
             style={{ borderLeft: `2.5px solid ${accent.border}` }}
           >
             <span
-              className="shrink-0 font-mono text-[7.5px] font-semibold uppercase tracking-[0.07em]"
+              className="shrink-0 font-mono text-[11px] font-semibold uppercase tracking-[0.07em]"
               style={{ color: accent.label }}
             >
               {deriveKindLine(row)}

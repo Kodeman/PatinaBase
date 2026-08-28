@@ -192,7 +192,7 @@ export function FolioCalendar({
                 type="button"
                 aria-pressed={on}
                 onClick={() => switchMode(mode)}
-                className={`border-l border-[var(--color-pearl)] px-[11px] py-[6px] font-mono text-[9px] uppercase tracking-[0.13em] first:border-l-0 ${
+                className={`border-l border-[var(--color-pearl)] px-[11px] py-[6px] font-mono text-[11px] uppercase tracking-[0.13em] first:border-l-0 ${
                   on
                     ? 'bg-[var(--color-charcoal)] text-[var(--doc-paper)]'
                     : 'bg-[var(--doc-paper)] text-[var(--color-aged-oak)]'
@@ -210,7 +210,7 @@ export function FolioCalendar({
           <span className="font-[family-name:var(--font-display)] text-[19px] text-[var(--color-charcoal)]">
             {monthName}
           </span>
-          <span className="ml-[7px] font-mono text-[9.5px] tracking-[0.14em] text-[var(--color-aged-oak)]">
+          <span className="ml-[7px] font-mono text-[11px] tracking-[0.14em] text-[var(--color-aged-oak)]">
             {view.year}
           </span>
         </div>
@@ -269,7 +269,7 @@ export function FolioCalendar({
             {/* The trailing space is load-bearing, not stray: it keeps the
                 aria-live region's text content one readable sentence rather
                 than "WORKING WINDOWAug 14". */}
-            <span className="block font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
+            <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
               {`${label} `}
             </span>
             <span className="block font-[family-name:var(--font-display)] text-[17px] text-[var(--color-charcoal)]">
@@ -284,7 +284,7 @@ export function FolioCalendar({
           onClick={() => {
             if (committable != null) onCommit(committable);
           }}
-          className="inline-flex shrink-0 items-center gap-2 rounded-[2px] bg-[var(--color-charcoal)] px-[13px] py-[8px] font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--doc-paper)] disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex shrink-0 items-center gap-2 rounded-[2px] bg-[var(--color-charcoal)] px-[13px] py-[8px] font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--doc-paper)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {/* The loaded fonts carry no ✓ — the check is drawn, not typed. */}
           <svg viewBox="0 0 12 10" aria-hidden="true" className="h-[9px] w-[11px]">

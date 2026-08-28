@@ -49,7 +49,7 @@ export function RevisionLedger({ projectId }: RevisionLedgerProps) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+        className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
       >
         {open ? '– ' : '+ '}Revisions · {revisions.length}
       </button>

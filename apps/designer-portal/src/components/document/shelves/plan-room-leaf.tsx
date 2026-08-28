@@ -47,7 +47,7 @@ export function PlanRoomLeaf({
           {behind.map((holder) => (
             <p
               key={holder.partyKey}
-              className="font-mono text-[10px] uppercase leading-relaxed tracking-[0.08em] text-[var(--color-golden-hour)]"
+              className="font-mono text-[11px] uppercase leading-relaxed tracking-[0.08em] text-[var(--color-golden-hour)]"
             >
               {holderSentence(holder)}
             </p>

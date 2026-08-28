@@ -228,7 +228,7 @@ export function PlanRoomSet({
                   {held.map(({ holder, sheet }) => (
                     <span
                       key={holder.partyKey}
-                      className={`font-mono text-[8.5px] uppercase tracking-[0.1em] ${
+                      className={`font-mono text-[11px] uppercase tracking-[0.1em] ${
                         sheet.behind
                           ? 'text-[var(--color-golden-hour)]'
                           : 'text-[var(--text-muted)]'
@@ -249,7 +249,7 @@ export function PlanRoomSet({
           and a screen reader counting it as one miscounts the log. */}
       <div
         aria-hidden
-        className="grid grid-cols-[5.5rem_7rem_minmax(0,1fr)] gap-3 border-b border-[var(--color-pearl)] pb-1.5 font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--text-muted)] sm:grid-cols-[6rem_7rem_minmax(0,1fr)_12rem]"
+        className="grid grid-cols-[5.5rem_7rem_minmax(0,1fr)] gap-3 border-b border-[var(--color-pearl)] pb-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] sm:grid-cols-[6rem_7rem_minmax(0,1fr)_12rem]"
       >
         <span>When</span>
         <span>Event</span>
@@ -263,7 +263,7 @@ export function PlanRoomSet({
             role="listitem"
             className="grid grid-cols-[5.5rem_7rem_minmax(0,1fr)] gap-3 border-b border-[var(--color-pearl)] py-2 sm:grid-cols-[6rem_7rem_minmax(0,1fr)_12rem]"
           >
-            <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               {fmtDay(row.at)}
             </span>
             <span>
@@ -272,7 +272,7 @@ export function PlanRoomSet({
             <span className="text-[0.8rem] text-[var(--color-charcoal)]">
               {row.what}
             </span>
-            <span className="col-span-3 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] sm:col-span-1">
+            <span className="col-span-3 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)] sm:col-span-1">
               {row.who ?? ''}
             </span>
           </div>
@@ -284,7 +284,7 @@ export function PlanRoomSet({
           <SectionEyebrow count={transmittals.length}>Transmittals</SectionEyebrow>
           <div
             aria-hidden
-            className="grid grid-cols-[minmax(0,1fr)_6rem_5.5rem] gap-3 border-b border-[var(--color-pearl)] pb-1.5 font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--text-muted)] sm:grid-cols-[minmax(0,1fr)_6rem_5.5rem_8rem_minmax(0,14rem)]"
+            className="grid grid-cols-[minmax(0,1fr)_6rem_5.5rem] gap-3 border-b border-[var(--color-pearl)] pb-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)] sm:grid-cols-[minmax(0,1fr)_6rem_5.5rem_8rem_minmax(0,14rem)]"
           >
             <span>Recipient</span>
             <span>For</span>
@@ -322,13 +322,13 @@ export function PlanRoomSet({
                         ? ` · ${transmittal.party_company}`
                         : ''}
                     </span>
-                    <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                       {transmittal.purpose}
                     </span>
-                    <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                       {fmtDay(transmittal.sent_at)}
                     </span>
-                    <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                       {token?.first_opened_at
                         ? fmtDay(token.first_opened_at)
                         : 'not opened'}
@@ -387,7 +387,7 @@ export function PlanRoomSet({
                   {outcome[transmittal.id] && (
                     <p
                       role="status"
-                      className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
+                      className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]"
                     >
                       {outcome[transmittal.id]}
                     </p>
