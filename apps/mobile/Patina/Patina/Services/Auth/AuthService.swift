@@ -86,7 +86,7 @@ public final class AuthService {
                 // whenever a DIFFERENT real account signs in. A guest→account
                 // transition keeps the guest's local scans (see the helper).
                 if let user = session?.user {
-                    Self.reconcileLocalStoreOwner(userId: user.id.uuidString)
+                    let claimPending = Self.reconcileLocalStoreOwner(userId: user.id.uuidString)
                     // W3 ruling 9: a real session ends the guest session. An
                     // `.initialSession` carrying no user clears nothing —
                     // that is the cold launch the persisted opt-in exists for.
@@ -98,8 +98,16 @@ public final class AuthService {
                     // sign-out and a sign-in, and a room made anywhere else
                     // never arrived. Debounced and owner-keyed inside the
                     // coordinator; it does nothing for a guest (SP-06).
-                    Task { @MainActor in
-                        await RoomSyncCoordinator.shared.reconcileSharedStore()
+                    //
+                    // While the claim sheet is up it waits: the person is
+                    // being asked what to do with the guest's work, and
+                    // hydrating underneath that question puts the account's
+                    // own rooms inside the answer. `LocalStoreClaim` runs it
+                    // when the sheet is answered, either way.
+                    if !claimPending {
+                        Task { @MainActor in
+                            await RoomSyncCoordinator.shared.reconcileSharedStore()
+                        }
                     }
                 }
 
@@ -193,8 +201,10 @@ public final class AuthService {
     /// (relaunch, token refresh) are a no-op. Never wiped on sign-out — the same
     /// user re-signing-in keeps their rooms (the app doesn't sync rooms back
     /// down, so a sign-out wipe would lose them).
+    /// Returns whether the claim sheet is now up, and therefore whether the
+    /// store is still waiting on a decision.
     @MainActor
-    private static func reconcileLocalStoreOwner(userId: String) {
+    private static func reconcileLocalStoreOwner(userId: String) -> Bool {
         let defaults = UserDefaults.standard
         let stored = defaults.string(forKey: localStoreOwnerKey)
         if shouldWipeLocalStore(previousOwner: stored, incomingUser: userId) {
@@ -206,10 +216,11 @@ public final class AuthService {
         // it — on a shared phone the silent version handed one person's room
         // and saves to a different person's account, and then counted them as
         // account data everywhere.
-        LocalStoreClaim.shared.askIfNeeded(previousOwner: stored)
+        let asking = LocalStoreClaim.shared.askIfNeeded(previousOwner: stored)
         if stored != userId {
             defaults.set(userId, forKey: localStoreOwnerKey)
         }
+        return asking
     }
 
     /// Pure decision (unit-tested): wipe only when a DIFFERENT real account

@@ -53,6 +53,44 @@ enum LocalStoreReset {
         RecordSnapshotStore.shared.remove()
         LastSeenStore.shared.clear()
         RecordOwnerStamp.shared.clear()
+
+        // The rooms the sync debounce was protecting are gone; the next
+        // screen must ask again rather than wait out the window.
+        RoomSyncCoordinator.shared.forget()
+    }
+
+    /// "Start fresh" on the SP-06 claim sheet — the guest's work, and only the
+    /// guest's.
+    ///
+    /// The claim is offered to an account taking over a store no account has
+    /// owned, and everything in it at that moment is a guest's. Everything
+    /// except a room carrying a `remoteId`: those are the account's own rooms,
+    /// mirrored down from the server, and "start fresh" must never be a way to
+    /// delete them. The whole-store wipe above is for the other case — a
+    /// DIFFERENT account taking over — where the rows really do belong to
+    /// somebody else.
+    static func wipeGuestWork(in context: ModelContext? = nil) {
+        let context = context ?? PersistenceController.shared.container.mainContext
+        do {
+            for room in (try? context.fetch(FetchDescriptor<RoomModel>())) ?? [] {
+                guard room.remoteId == nil else { continue }
+                // `items` cascades with the room.
+                context.delete(room)
+            }
+            try context.delete(model: RoomScanPackage.self)
+            try context.delete(model: StylePreferenceModel.self)
+            try context.delete(model: SubmittedDesignRequest.self)
+            try context.delete(model: DesignRequestDraft.self)
+            try context.delete(model: SyncQueueItem.self)
+            try context.delete(model: TableItemModel.self)
+            try context.save()
+        } catch {
+            PatinaLog.auth.error("[LocalStoreReset] guest wipe failed: \(error.localizedDescription)")
+        }
+
+        RoomSelectionStore.shared.clear()
+        deleteScanBundles()
+        RoomSyncCoordinator.shared.forget()
     }
 
     /// `Application Support/Scans/` — the root `ScanBundleWriter` writes each
