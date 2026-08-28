@@ -25,7 +25,12 @@ public struct PatinaTabBar<Trailing: View>: View {
     /// The tappable row, above the bottom safe area.
     public static var itemHeight: CGFloat { 49 }
 
-    /// The row plus the home-indicator safe area it paints through.
+    /// M1's drawn height: the row plus a 34 pt home indicator. Nothing lays
+    /// out against it — the bar frames itself at `itemHeight` and lets
+    /// `safeAreaInset` add whatever the device's bottom inset actually is, so
+    /// on a home-button device the bar is 49. It is published for callers
+    /// sizing content against the mock, and it is the figure B-2 compares to
+    /// the Hearth's 120.
     public static var barHeight: CGFloat { 83 }
 
     private static var trailingSlotWidth: CGFloat { 54 }

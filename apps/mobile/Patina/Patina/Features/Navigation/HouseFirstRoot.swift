@@ -124,24 +124,25 @@ public struct HouseFirstRoot: View {
         }
     }
 
-    /// The Companion's resting slot (B-2). Until N3 moves the collapsed
-    /// Companion into the bar, this is the mark only — `CompanionOverlay` above
-    /// still owns the panel, the coaching and every row.
+    /// M1 §6's fifth slot — the Strata mark, and deliberately NOT a control
+    /// yet.
+    ///
+    /// Expanding the panel is `CompanionOverlay.expandToPanel()`, reachable
+    /// only from inside that view. `AppCoordinator.toggleCompanion()` flips
+    /// `isCompanionExpanded`, which nothing observes — the overlay writes that
+    /// flag when it expands itself and never reads it — so a button here would
+    /// present nothing while `accessibilityHidden(isCompanionExpanded)` above
+    /// took the whole screen out of the VoiceOver tree. Until the overlay
+    /// observes the flag (B-2, N3; the patch is in `waves/w3/n1-notes.md` §2a),
+    /// the floating dock is still the Companion's only door and this slot is
+    /// the mark alone.
     private var companionSlot: some View {
-        Button {
-            coordinator.toggleCompanion()
-        } label: {
-            StrataMarkView(
-                color: PatinaColors.mocha,
-                scale: 0.8,
-                accessibility: .decorative
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Companion")
-        .accessibilityHint("Double tap to open")
+        StrataMarkView(
+            color: PatinaColors.mocha,
+            scale: 0.8,
+            accessibility: .decorative
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

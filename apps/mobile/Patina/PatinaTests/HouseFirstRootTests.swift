@@ -166,6 +166,70 @@ struct HouseFirstRootTests {
         #expect(coordinator.tabs.visibleRoute == .projectList)
     }
 
+    /// MJ-4: "one tap to its canonical destination" is true of an empty stack.
+    /// A tab a deep link or an APNs tap has already pushed onto reveals what
+    /// was pushed — standard iOS, and the reason a second tap exists.
+    @Test
+    func aTabWithAStackRevealsItsStackTopAndRetappingRevealsTheRoot() {
+        let coordinator = AppCoordinator(houseFirstRoot: true)
+        coordinator.openExternal(.invoiceDetail(invoiceId: "invoice-1"))
+        coordinator.selectTab(.today)
+
+        coordinator.selectTab(.studio)
+        #expect(coordinator.tabs.visibleRoute == .invoiceDetail(invoiceId: "invoice-1"))
+
+        coordinator.selectTab(.studio)
+        #expect(coordinator.tabs.visibleRoute == RouteTabTable.rootRoute(for: .studio))
+        #expect(coordinator.tabs.stack(for: .studio).isEmpty)
+    }
+
+    /// BL-1, stated rather than hidden: the Studio tab has no `AppRoute` of its
+    /// own, so it stands on `.profile` — and `.profile` is what `trackScreen`
+    /// sends to PostHog and what the Companion is handed, on every entry into
+    /// the tab, while `StudioHubView` under the title "Your Studio" is what is
+    /// on glass. Minting `.studio` means an arm in five exhaustive switches C8
+    /// freezes, in files this lane does not own (`waves/w3/n1-notes.md` §4a).
+    /// This pin is the debt: it reddens the moment the honest route exists.
+    @Test
+    func theStudioTabReportsProfileUntilAStudioRouteIsMinted() {
+        #expect(RouteTabTable.rootRoute(for: .studio) == .profile)
+
+        let coordinator = AppCoordinator(houseFirstRoot: true)
+        coordinator.selectTab(.studio)
+        coordinator.syncCurrentScreen(to: coordinator.tabs.visibleRoute)
+
+        #expect(coordinator.currentScreen == .profile)
+        #expect(coordinator.companionContext.currentScreen == .profile)
+        // What PostHog is told, against what the screen is called.
+        #expect(AppRoute.profile.analyticsScreenName == "Profile")
+        #expect(PatinaTab.studio.canonicalName == "Your Studio")
+    }
+
+    /// The bar's fifth slot may be a control only once something acts on
+    /// `isCompanionExpanded`. `CompanionOverlay` writes that flag when it
+    /// expands itself and never reads it, so a slot button would present
+    /// nothing while `accessibilityHidden(isCompanionExpanded)` took the whole
+    /// screen out of the VoiceOver tree. N3 may wire either half; it must not
+    /// ship the half that blinds the screen.
+    @Test
+    func theCompanionSlotOpensThePanelOrIsNotAControl() throws {
+        let root = try SourcePin.read("Patina/Features/Navigation/HouseFirstRoot.swift")
+        let overlay = try SourcePin.read("Patina/Features/Companion/Views/CompanionOverlay.swift")
+
+        let slotTogglesTheFlag = SourceScan.code(in: root).contains("coordinator.toggleCompanion()")
+        let overlayObservesTheFlag = SourceScan.code(in: overlay)
+            .contains("onChange(of: coordinator.isCompanionExpanded)")
+
+        #expect(
+            overlayObservesTheFlag || !slotTogglesTheFlag,
+            "the bar's Companion slot toggles isCompanionExpanded and nothing expands the panel"
+        )
+        #expect(
+            root.contains(".accessibilityHidden(coordinator.isCompanionExpanded)"),
+            "the tab content still leaves the VoiceOver tree while the panel is up"
+        )
+    }
+
     @Test
     func selectingATabMovesTheVisibleRouteWithIt() {
         let coordinator = AppCoordinator(houseFirstRoot: true)
@@ -263,11 +327,17 @@ struct HouseFirstRootTests {
         // `tabs` is the coordinator's own tab model, reached only from inside
         // `AppCoordinator`; `nav` is `let nav = coordinator` in the scan host.
         let allowedReceivers: Set<String> = [
-            "coordinator", "nav", "tabs", "DeepLinkHandler.shared", ""
+            "coordinator", "nav", "tabs", "DeepLinkHandler.shared"
         ]
+        // A bare `navigate(to:)` — no receiver at all — is a call on `self`,
+        // and only `AppCoordinator` is allowed to be that self. Allowing it
+        // everywhere (the shape this pin shipped with) would let any view grow
+        // its own `func navigate(to:)` and call it unqualified, invisibly.
+        let bareCallOwner = "AppCoordinator.swift"
         var offenders: [String] = []
 
         for path in SourcePin.swiftFiles(under: "Patina") {
+            let file = (path as NSString).lastPathComponent
             let source = try String(contentsOfFile: path, encoding: .utf8)
             for line in source.components(separatedBy: .newlines) {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -279,13 +349,73 @@ struct HouseFirstRootTests {
                     .components(separatedBy: CharacterSet(charactersIn: " \t({[,=>"))
                     .last?
                     .trimmingCharacters(in: CharacterSet(charactersIn: ".")) ?? ""
-                if !allowedReceivers.contains(receiver) {
-                    offenders.append("\((path as NSString).lastPathComponent): \(trimmed)")
+                let allowed = receiver.isEmpty
+                    ? file == bareCallOwner
+                    : allowedReceivers.contains(receiver)
+                if !allowed {
+                    offenders.append("\(file): \(trimmed)")
                 }
             }
         }
 
         #expect(offenders.isEmpty, "navigate(to:) must go through the coordinator — \(offenders)")
+    }
+
+    /// MJ-1: the two roots dispatch the same route to the same screen.
+    ///
+    /// `HouseFirstRoot` carries a second copy of `ContentView`'s dispatcher —
+    /// duplicated on purpose, so the flag-off root's body is not edited at all.
+    /// Both switches are exhaustive, so a NEW route breaks both; nothing
+    /// otherwise catches a CHANGED destination, and one root quietly rendering
+    /// a different screen for the same route turns `house-first` from a layout
+    /// flag into a behaviour flag. This compares the six bodies verbatim, with
+    /// comments and whitespace normalised away.
+    @Test
+    func theTwoRootsDispatchTheSameDestinations() throws {
+        let legacy = try SourcePin.read("Patina/ContentView.swift")
+        let houseFirst = try SourcePin.read("Patina/Features/Navigation/HouseFirstRoot.swift")
+
+        let dispatchers = [
+            "destinationView",
+            "roomsDestination",
+            "discoveryDestination",
+            "styleDestination",
+            "workCoreDestination",
+            "workDocumentsDestination"
+        ]
+
+        for name in dispatchers {
+            let a = Self.dispatcherBody(name, in: legacy)
+            let b = Self.dispatcherBody(name, in: houseFirst)
+            #expect(a != nil, "ContentView has no \(name)(for:)")
+            #expect(b != nil, "HouseFirstRoot has no \(name)(for:)")
+            #expect(a == b, "\(name)(for:) differs between the two roots:\n\(a ?? "")\n---\n\(b ?? "")")
+        }
+    }
+
+    /// The body of `func <name>(for route: AppRoute) -> some View { … }`, with
+    /// whole-line comments dropped and every run of whitespace collapsed, so
+    /// only the dispatch itself is compared. `nil` when the function is absent.
+    private static func dispatcherBody(_ name: String, in source: String) -> String? {
+        let code = SourceScan.code(in: source)
+        guard let marker = code.range(of: "func \(name)(for route: AppRoute) -> some View {") else {
+            return nil
+        }
+        var depth = 1
+        var body = ""
+        var index = marker.upperBound
+        while index < code.endIndex, depth > 0 {
+            let character = code[index]
+            if character == "{" { depth += 1 }
+            if character == "}" {
+                depth -= 1
+                if depth == 0 { break }
+            }
+            body.append(character)
+            index = code.index(after: index)
+        }
+        guard depth == 0 else { return nil }   // ran off the end unbalanced
+        return body.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
     /// Only the two roots bind a root navigation path. A third would be a stack
