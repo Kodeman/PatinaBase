@@ -12,7 +12,8 @@
 --   3. the designer of record reads it — through an ACTIVE project;
 --   4. an unrelated authenticated designer reads ZERO, and a designer whose
 --      lead is not accepted reads ZERO;
---   5. nobody but the owner may WRITE it — a designer's update touches no row;
+--   5. nobody but the owner may WRITE it — a designer's update touches no row
+--      and her insert for somebody else is refused;
 --   6. profiles.last_seen_at no longer exists.
 --
 -- How to run:
@@ -143,6 +144,17 @@ BEGIN
    WHERE user_id = u_client;
   GET DIAGNOSTICS v_count = ROW_COUNT;
   ASSERT v_count = 0, 'a designer must not be able to write a client''s presence';
+
+  -- …nor invent one. `WITH CHECK (user_id = auth.uid())` makes this true by
+  -- construction; the assertion is here so a later policy edit cannot quietly
+  -- take the WITH CHECK off.
+  BEGIN
+    INSERT INTO public.profile_presence (user_id, last_seen_at)
+    VALUES (u_client_b, now());
+    ASSERT false, 'a designer must not be able to insert a presence row for somebody else';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
 
   -- ── 3. the designer of record, through an active project ──
   PERFORM pg_temp.assume_user(u_proj_des);
