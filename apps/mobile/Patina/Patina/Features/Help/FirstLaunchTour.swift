@@ -89,12 +89,13 @@ public enum FirstLaunchTourAnchor: String, CaseIterable, Sendable {
     case todayRecord = "today-record"
     /// The "+ Add" save affordance on a daily product card.
     ///
-    /// Carried by `preHouseFirstSteps` only. W2 removed `DailyProductCard`, so
-    /// from that wave on this anchor has mounted in no production view and the
-    /// step it carries is dropped every launch — the flag-off tour runs two
-    /// steps while declaring three (`research/2x-panel-{u1,u2,d2,h1}.json`).
-    /// `defaultSteps` retired it; the flag-off list keeps it because B-8's
-    /// rollback clause holds that root byte-for-byte.
+    /// **Retired from every step list** (R4). W2 removed `DailyProductCard`, so
+    /// from that wave on this anchor mounted in no production view and the step
+    /// it carried was dropped every launch — the tour ran two steps while
+    /// declaring three (`research/2x-panel-{u1,u2,d2,h1}.json`, and observed
+    /// live as "Step 1 of 2"). The case survives its step because the raw value
+    /// is pinned by `FirstLaunchTourTests` and a DEBUG preview still mounts it;
+    /// no step list may name it again while no view carries it.
     case addToRoom = "add-to-room"
     /// The Studio door in Today's header (step 3).
     ///
@@ -242,8 +243,7 @@ public final class FirstLaunchTourModel {
     /// task brief and surfaced in PostHog.
     public static let defaultTourKey: String = "ios-first-launch-tour"
 
-    /// Canonical default step list — rewritten in W3 (B-8), and spoken only on
-    /// the **house-first** root.
+    /// The step list, rewritten in W3 (B-8) and spoken on **both** roots (R4).
     ///
     /// Two of the three sentences the tour shipped with had stopped being true.
     /// Step 1 named the **Daily Room**, a name B-7(c) retires in favour of the
@@ -255,13 +255,18 @@ public final class FirstLaunchTourModel {
     /// record — the block step 1 has just named, and the one thing on Today
     /// that mounts at every tier.
     ///
-    /// This list is reached ONLY when the root is house-first. B-8's own
-    /// *Rollback* clause is literal — *"the tour is gated by the same
-    /// `house-first` flag as the root it describes"* — and W3's acceptance line
-    /// is equally literal: *"flag off restores the W2 root byte-for-byte."*
-    /// `preHouseFirstSteps` below is that byte-for-byte list, and
-    /// `DailyRoomView` picks between the two off `AppCoordinator.isHouseFirstRoot`
-    /// (resolved once, at launch, from `FeatureFlags`).
+    /// It was gated behind `house-first` for one wave, because B-8's *Rollback*
+    /// clause reads *"the tour is gated by the same `house-first` flag as the
+    /// root it describes"* and W3's acceptance line reads *"flag off restores
+    /// the W2 root byte-for-byte"*. R4 rules the other way: every sentence this
+    /// list replaces is just as untrue on the flag-off root, and a second list
+    /// existed only to keep a dead step alive there. The tour copy is now
+    /// explicitly outside the byte-for-byte promise.
+    ///
+    /// Both roots mount every anchor this list names — step 3's on the bar's
+    /// Studio tab where there is a bar, on the header's Studio pill where there
+    /// is not. Where the record draws nothing (a guest with an empty record)
+    /// step 2 is dropped and the tour renumbers by the existing mechanism.
     ///
     /// The surface keys do NOT move with the copy — they key Sanity documents,
     /// and renaming them would orphan three of them. Only the bodies change;
@@ -291,46 +296,6 @@ public final class FirstLaunchTourModel {
                 body: "Your studio — projects, proposals, invoices and files"
             )
         ),
-    ]
-
-    /// The step list the **flag-off** root keeps, verbatim as it shipped after
-    /// W2 — B-8's *Rollback* clause and W3's "byte-for-byte" acceptance line
-    /// both require the pre-house-first root to be untouched by this wave, and
-    /// its tour is part of that root.
-    ///
-    /// Two things about this list are wrong, and are kept wrong on purpose:
-    /// step 1 says "Daily Room", a name B-7(c) retires; step 2's `.addToRoom`
-    /// anchor has mounted in no production view since W2 removed
-    /// `DailyProductCard`, so the flag-off tour drops that step and runs two
-    /// while declaring three (`research/2x-panel-{u1,u2,d2,h1}.json` caught it
-    /// as "Step 1 of 2"). Both are pre-existing defects of the root scheduled
-    /// for deletion one release from now — naming them here rather than fixing
-    /// them under a flag that promises this root does not move.
-    public static let preHouseFirstSteps: [FirstLaunchTourStep] = [
-        FirstLaunchTourStep(
-            surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step1Home,
-            anchor: .homeGreeting,
-            fallback: (
-                heading: "Welcome to Patina",
-                body: "This is your Daily Room — picks and stories chosen for your space."
-            )
-        ),
-        FirstLaunchTourStep(
-            surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step2Saved,
-            anchor: .addToRoom,
-            fallback: (
-                heading: "Save what you love",
-                body: "Add pieces to a room with + Add — they follow you everywhere."
-            )
-        ),
-        FirstLaunchTourStep(
-            surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step3Profile,
-            anchor: .profileMonogram,
-            fallback: (
-                heading: "Your profile",
-                body: "Rooms, saved pieces, and settings live here."
-            )
-        )
     ]
 
     // MARK: - First-launch detection

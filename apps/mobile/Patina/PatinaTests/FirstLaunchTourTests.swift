@@ -846,69 +846,7 @@ struct FirstLaunchTourTests {
         #expect(FirstLaunchTourAnchor.profileMonogram.rawValue == "profile-monogram")
     }
 
-    // MARK: - The flag-off root's tour (B-8 Rollback, W3 acceptance)
-
-    @Test
-    func theFlagOffRootKeepsTheTourItShipped() {
-        // B-8's Rollback clause is literal — "the tour is gated by the same
-        // `house-first` flag as the root it describes" — and W3's acceptance
-        // line is "flag off restores the W2 root byte-for-byte". This pins the
-        // flag-off list as the copy that shipped after W2, character for
-        // character, so the rewrite cannot leak onto that root by accident.
-        let steps = FirstLaunchTourModel.preHouseFirstSteps
-        #expect(steps.count == 3)
-        #expect(steps.map(\.anchor) == [.homeGreeting, .addToRoom, .profileMonogram])
-
-        #expect(steps[0].surfaceKey == "ios-app/first-launch-tour/step-1-home")
-        #expect(steps[0].fallback?.heading == "Welcome to Patina")
-        #expect(steps[0].fallback?.body == "This is your Daily Room — picks and stories chosen for your space.")
-        #expect(steps[1].surfaceKey == "ios-app/first-launch-tour/step-2-saved")
-        #expect(steps[1].fallback?.heading == "Save what you love")
-        #expect(steps[1].fallback?.body == "Add pieces to a room with + Add — they follow you everywhere.")
-        #expect(steps[2].surfaceKey == "ios-app/first-launch-tour/step-3-profile")
-        #expect(steps[2].fallback?.heading == "Your profile")
-        #expect(steps[2].fallback?.body == "Rooms, saved pieces, and settings live here.")
-    }
-
-    @Test
-    func theTwoStepListsAreActuallyDifferentCopy() {
-        // A guard against the branch being wired to the same array twice — the
-        // failure mode that would make every other pin here pass while the
-        // rewrite still reached the flag-off root.
-        let houseFirst = FirstLaunchTourModel.defaultSteps.compactMap { $0.fallback?.body }
-        let flagOff = FirstLaunchTourModel.preHouseFirstSteps.compactMap { $0.fallback?.body }
-        #expect(houseFirst.count == 3 && flagOff.count == 3)
-        for (new, old) in zip(houseFirst, flagOff) {
-            #expect(new != old, "a step's body is identical on both roots — is the branch wired to one array?")
-        }
-        // The surface keys are the one thing that must NOT differ: they key the
-        // same three Sanity documents on both roots.
-        #expect(
-            FirstLaunchTourModel.defaultSteps.map(\.surfaceKey)
-                == FirstLaunchTourModel.preHouseFirstSteps.map(\.surfaceKey)
-        )
-    }
-
-    @Test
-    func theFlagOffTourKeepsTheStepThatNeverMounts() throws {
-        // Honesty (C5), stated as a test rather than a comment: `.addToRoom`
-        // has mounted in no production view since W2 retired
-        // `DailyProductCard`, so the flag-off tour drops step 2 and runs two
-        // steps while declaring three. That is a pre-existing defect of the
-        // root B-8's rollback clause promises not to move, and it is kept, not
-        // overlooked. If a view ever mounts `.addToRoom` again, this fails and
-        // the note above it needs rewriting.
-        let views = SourcePin.swiftFiles(under: "Patina/Features")
-            .filter { !$0.hasSuffix("FirstLaunchTour.swift") }
-            .compactMap { try? String(contentsOfFile: $0, encoding: .utf8) }
-        let mounts = views.reduce(0) { total, source in
-            total + SourceScan.code(in: source)
-                .components(separatedBy: ".firstLaunchTourAnchor(.addToRoom)")
-                .count - 1
-        }
-        #expect(mounts == 0, "`.addToRoom` mounts again — the flag-off tour's dead step is no longer dead")
-        #expect(FirstLaunchTourModel.preHouseFirstSteps.map(\.anchor).contains(.addToRoom))
-    }
+    // MARK: - One host per root, one step list (R1, R4)
 
     @Test
     func eachRootHostsExactlyOneTourModel() throws {
@@ -944,27 +882,69 @@ struct FirstLaunchTourTests {
     }
 
     @Test
-    func theRecordAnchorMountsOnceAndIsInertOnTheFlagOffRoot() throws {
-        // The record is unflagged (R1), so its `.todayRecord` anchor modifier
-        // is unconditional — and must stay that way, or the mount would move
-        // with a flag the record does not answer to. It is inert on the
-        // flag-off root because `preHouseFirstSteps` never names the anchor:
-        // `isShowingPopover(forAnchor:)` reads the step list, so the binding is
-        // never true and nothing draws.
-        #expect(!FirstLaunchTourModel.preHouseFirstSteps.map(\.anchor).contains(.todayRecord))
+    func theRecordAnchorMountsOnceAndIsUnconditional() throws {
+        // The record is unflagged (R1), so its `.todayRecord` anchor modifier is
+        // unconditional — and must stay that way, or the mount would move with a
+        // flag the record does not answer to. R4 makes the step list the same on
+        // both roots, so the anchor is live on both; what varies is whether the
+        // record itself draws, which the drop-and-renumber test below covers.
+        let daily = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
+        )
+        let mounts = daily.components(separatedBy: ".firstLaunchTourAnchor(.todayRecord)").count - 1
+        #expect(mounts == 1)
+        #expect(FirstLaunchTourModel.defaultSteps.map(\.anchor).contains(.todayRecord))
+    }
 
+    @Test
+    func theRetiredAnchorIsInNoStepList() throws {
+        // W2 removed `DailyProductCard`, so `.addToRoom` has mounted in no
+        // production view since. It ran as a declared-but-dropped step for two
+        // waves — "Step 1 of 2" against a list of three, in four research walks
+        // — and R4 retires it from the list rather than keeping a dead step to
+        // hold a root still. The case survives (its raw value is pinned above,
+        // and a DEBUG preview mounts it); the step does not.
+        #expect(!FirstLaunchTourModel.defaultSteps.map(\.anchor).contains(.addToRoom))
+
+        let views = SourcePin.swiftFiles(under: "Patina/Features")
+            .filter { !$0.hasSuffix("FirstLaunchTour.swift") }
+            .compactMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+        let mounts = views.reduce(0) { total, source in
+            total + SourceScan.code(in: source)
+                .components(separatedBy: ".firstLaunchTourAnchor(.addToRoom)")
+                .count - 1
+        }
+        #expect(mounts == 0, "`.addToRoom` mounts again — it may be a step once more")
+    }
+
+    @Test
+    func aGuestWithAnEmptyRecordSeesStepOneOfTwo() async {
+        // R4's honesty clause, pinned at the caption a walker reads. At guest
+        // and discovering tiers `HomeComposition` draws no record, so step 2's
+        // anchor never mounts — the step is dropped and the tour RENUMBERS,
+        // rather than counting a step nobody is shown.
         let stub = StubFirstLaunchTourDefaults()
         setFirstLaunchTourDefaults(stub)
         defer { resetFirstLaunchTourDefaults() }
 
-        let model = FirstLaunchTourModel(steps: FirstLaunchTourModel.preHouseFirstSteps)
+        let model = FirstLaunchTourModel()
+        model.anchorMountGracePeriod = .milliseconds(20)
+        // The greeting and the Studio door mount; the record does not.
         model.registerAnchor(.homeGreeting)
-        model.registerAnchor(.todayRecord)
         model.registerAnchor(.profileMonogram)
         model.startTour(triggerSource: "test")
-        #expect(!model.isShowingPopover(forAnchor: .todayRecord))
-        #expect(model.currentStepDescriptor(forAnchor: .todayRecord) == nil)
+
+        let settled = await waitUntil { model.totalSteps == 2 }
+        #expect(settled, "the record's step never settled as unmountable")
+        #expect(model.currentStepNumber == 1)
+        #expect(model.totalSteps == 2)          // "Step 1 of 2"
+        #expect(model.isShowingPopover(forAnchor: .homeGreeting))
+
         model.advance()
-        #expect(!model.isShowingPopover(forAnchor: .todayRecord))
+        #expect(model.currentStepNumber == 2)   // "Step 2 of 2"
+        #expect(model.totalSteps == 2)
+        #expect(model.isShowingPopover(forAnchor: .profileMonogram))
+        #expect(model.isOnFinalStep)
+        #expect(model.isActive)
     }
 }

@@ -51,16 +51,18 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
     /// second model over Today's anchors and split the tour in half.
     /// `isHouseFirstRoot` is the flag read once at launch and held
     /// (`AppCoordinator`), not a live re-read.
+    ///
+    /// Only the HOST is gated. Both hosts run the same step list (R4): the
+    /// sentences B-8 replaces were untrue on this root too, and the second list
+    /// existed only to keep a step alive whose anchor no view has mounted since
+    /// W2.
     @ViewBuilder
     var body: some View {
         if coordinator.isHouseFirstRoot {
             screenBody
         } else {
-            FirstLaunchTour(
-                steps: FirstLaunchTourModel.preHouseFirstSteps,
-                // `navigationPath` is the flag-off root's single stack.
-                canAutoStart: coordinator.navigationPath.isEmpty
-            ) {
+            // `navigationPath` is the flag-off root's single stack.
+            FirstLaunchTour(canAutoStart: coordinator.navigationPath.isEmpty) {
                 screenBody
             }
         }
