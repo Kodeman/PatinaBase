@@ -66,6 +66,11 @@ final class FeatureFlags {
     /// `Flag` raw values.
     static let launchArgument = "-PatinaFlags"
 
+    /// False when the App Group suite was unreachable at resolution and the
+    /// mirror is app-local — the widget would then read nothing and draw its
+    /// no-data state. Reported, not hidden, exactly as `LastSeenStore` does.
+    private(set) var usesAppGroupDefaults = false
+
     private(set) var isResolved = false
     private var values: [Flag: Bool] = [:]
 
@@ -85,8 +90,18 @@ final class FeatureFlags {
 
     /// The full resolution, with its inputs injected. Idempotent: the first
     /// answer is held for the session.
-    func resolveAtLaunch(arguments: [String], provider: FeatureFlagProvider) {
+    ///
+    /// - Parameter mirror: where the resolved set is written for the widget to
+    ///   read. The widget process has no PostHog SDK and never runs
+    ///   `PatinaApp.init()`, so the App Group suite is the only way it can be
+    ///   told what `house-widget` resolved to.
+    func resolveAtLaunch(
+        arguments: [String],
+        provider: FeatureFlagProvider,
+        mirror: FeatureFlagMirror = .appGroup
+    ) {
         guard !isResolved else { return }
+        defer { write(to: mirror) }
         if let inline = Self.inlineValues(arguments: arguments) {
             values = inline
             isResolved = true
@@ -98,6 +113,20 @@ final class FeatureFlags {
         )
         isResolved = true
         logResolution(source: "posthog-cache")
+    }
+
+    private func write(to mirror: FeatureFlagMirror) {
+        usesAppGroupDefaults = mirror.isAppGroup && mirror.defaults != nil
+        guard let defaults = mirror.defaults else {
+            PatinaLog.ui.debug(
+                "[FeatureFlags] App Group defaults unavailable — the widget reads nothing"
+            )
+            return
+        }
+        let resolved = Dictionary(
+            uniqueKeysWithValues: Flag.allCases.map { ($0.rawValue, isOn($0)) }
+        )
+        defaults.set(resolved, forKey: FeatureFlagMirror.key)
     }
 
     /// A walk has no other way to see which flags a launch resolved — nothing
@@ -141,6 +170,51 @@ final class FeatureFlags {
         #else
         return nil
         #endif
+    }
+}
+
+/// Where the resolved flag set is written so a second process can read it.
+///
+/// `FeatureFlags` holds its answers in memory on a `@MainActor` class, and
+/// nothing is persisted — which is the right shape for the app and useless to
+/// the widget. The widget is a separate process with its own bundle: it never
+/// runs `PatinaApp.init()`, has no PostHog SDK, and its `UserDefaults.standard`
+/// is the EXTENSION's domain, not the app's. The mechanism that already works
+/// here is the one `LastSeenStore` and `RecordOwnerStamp` use — the App Group
+/// suite — so the resolved set goes there under one key, and the key is a
+/// contract (`waves/w6/x2-tasks.md` §0), not a detail.
+///
+/// The cost is stated rather than papered over: the mirror is only written
+/// after a launch resolves, so a first-ever launch has none, and
+/// `FeatureFlags` itself resolves every flag off on that launch anyway (no
+/// persisted PostHog payload yet). Absent mirror → `house-widget` false → the
+/// widget draws its no-data state. That is the honest answer.
+struct FeatureFlagMirror {
+
+    /// The one key. Changing it blinds every installed widget.
+    static let key = "patina.flags.resolved"
+
+    static let appGroupIdentifier = "group.cloud.patina.app"
+
+    let defaults: UserDefaults?
+    /// True for the real shared suite, false for a suite a test handed in —
+    /// so `usesAppGroupDefaults` never claims a shared container it hasn't got.
+    let isAppGroup: Bool
+
+    static let appGroup = FeatureFlagMirror(
+        defaults: UserDefaults(suiteName: appGroupIdentifier),
+        isAppGroup: true
+    )
+
+    static func testing(_ defaults: UserDefaults) -> FeatureFlagMirror {
+        FeatureFlagMirror(defaults: defaults, isAppGroup: false)
+    }
+
+    /// The flag as the last launch resolved it, read the way the widget reads
+    /// it — synchronously, from any actor, with `false` for "no mirror yet".
+    static func isOn(_ flag: FeatureFlags.Flag, in mirror: FeatureFlagMirror = .appGroup) -> Bool {
+        guard let resolved = mirror.defaults?.dictionary(forKey: key) else { return false }
+        return resolved[flag.rawValue] as? Bool ?? false
     }
 }
 
