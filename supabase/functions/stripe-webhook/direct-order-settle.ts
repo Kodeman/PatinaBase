@@ -24,6 +24,128 @@ export interface SettleEffectsResult {
 }
 
 /**
+ * The four numbers fulfillment_orders is filed with — and the reason this is a
+ * function and not four lines at the call site.
+ *
+ * `fulfillment_orders` carries `chk_fulfillment_captured_identity` (00360:428):
+ * `captured_total = product_subtotal + freight_charged + tax`. Behind it,
+ * `fulfillment_intake_order` posts a T1 ledger entry of the same shape
+ * (`Dr 1000 = Cr 4000 + Cr 4100 + Cr 2100`, 00352:178-186) whose balance is a
+ * deferred constraint trigger. A split that does not sum is refused at the
+ * INSERT and aborts the ENTIRE intake transaction: no fulfillment_orders row,
+ * no lines, no "where is it", and a fulfillment_intake task that fails
+ * identically on every retry until it parks.
+ *
+ * The old metadata split could not sum once tax or a shipping rate was on the
+ * session, because it was written before Checkout ran. So this reconstructs the
+ * split from what was actually captured, and it is BALANCED BY CONSTRUCTION:
+ * subtotal is whatever is left after tax and freight, and both are clamped
+ * inside the captured total. There is no input that makes the four numbers
+ * disagree, which is the only property the ledger cares about.
+ */
+export interface IntakeTotals {
+  captured_total_cents: number;
+  product_subtotal_cents: number;
+  freight_charged_cents: number;
+  tax_cents: number;
+}
+
+const nonNegativeInt = (n: unknown): number => {
+  const v = Math.round(Number(n));
+  return Number.isFinite(v) && v > 0 ? v : 0;
+};
+
+export function directOrderIntakeTotals(args: {
+  /** What Stripe actually took: session.amount_total, else pi.amount. */
+  capturedTotalCents: number;
+  /** quantity × unit_price_cents on the direct_orders row. */
+  pieceSubtotalCents: number;
+  /** The flat freight create_direct_order folded into amount_cents. */
+  foldedFreightCents: number;
+  /**
+   * session.total_details.amount_tax. Omit on a PaymentIntent-only settle: a
+   * PI carries no breakdown, so everything above piece + freight is booked as
+   * tax rather than silently inflating the piece.
+   */
+  taxCents?: number | null;
+  /** session.total_details.amount_shipping — a Stripe shipping rate, if any. */
+  shippingCents?: number | null;
+}): IntakeTotals {
+  const captured = nonNegativeInt(args.capturedTotalCents);
+  const piece = nonNegativeInt(args.pieceSubtotalCents);
+  const folded = nonNegativeInt(args.foldedFreightCents);
+
+  const inferredTax =
+    args.taxCents === undefined || args.taxCents === null
+      ? captured - piece - folded
+      : args.taxCents;
+
+  const tax = Math.min(nonNegativeInt(inferredTax), captured);
+  const freight = Math.min(folded + nonNegativeInt(args.shippingCents), captured - tax);
+
+  return {
+    captured_total_cents: captured,
+    product_subtotal_cents: captured - tax - freight,
+    freight_charged_cents: freight,
+    tax_cents: tax,
+  };
+}
+
+/** The snapshot half of a direct_orders row the totals are reconstructed from. */
+export interface SettledOrderAmounts {
+  quantity: number;
+  unit_price_cents: number;
+  amount_cents: number;
+}
+
+const pieceAndFreight = (order: SettledOrderAmounts) => {
+  const piece = order.quantity * order.unit_price_cents;
+  return { piece, folded: Math.max(0, order.amount_cents - piece) };
+};
+
+/**
+ * Totals off a settled Checkout session — the authoritative path, and the one
+ * every session-backed settle takes. `amount_subtotal` is the line-item sum
+ * (piece + the folded Delivery line); tax and any Stripe shipping rate sit
+ * outside it in `total_details`.
+ */
+export function directOrderTotalsFromSession(
+  order: SettledOrderAmounts,
+  session: {
+    amount_total?: number | null;
+    total_details?: { amount_tax?: number | null; amount_shipping?: number | null } | null;
+  },
+): IntakeTotals {
+  const { piece, folded } = pieceAndFreight(order);
+  return directOrderIntakeTotals({
+    capturedTotalCents: session.amount_total ?? order.amount_cents,
+    pieceSubtotalCents: piece,
+    foldedFreightCents: folded,
+    taxCents: session.total_details?.amount_tax ?? 0,
+    shippingCents: session.total_details?.amount_shipping ?? 0,
+  });
+}
+
+/**
+ * Totals off a PaymentIntent alone — the belt-and-suspenders settle, reached
+ * only when the session event never arrived. A PI carries no tax breakdown, so
+ * anything above piece + folded freight is booked as tax rather than inflating
+ * the piece. Stated rather than hidden: it keeps the ledger balanced and keeps
+ * the overstatement in the account an operator would look in.
+ */
+export function directOrderTotalsFromPaymentIntent(
+  order: SettledOrderAmounts,
+  pi: { amount?: number | null; amount_received?: number | null },
+): IntakeTotals {
+  const { piece, folded } = pieceAndFreight(order);
+  return directOrderIntakeTotals({
+    capturedTotalCents: pi.amount_received || pi.amount || order.amount_cents,
+    pieceSubtotalCents: piece,
+    foldedFreightCents: folded,
+  });
+}
+
+/**
  * The idempotency key an intake task is claimed under: the bare PaymentIntent
  * id, and it must stay bare.
  *
@@ -67,6 +189,7 @@ export async function runDirectOrderSettleEffects(
   admin: SettleRpcClient,
   orderId: string,
   paymentIntentId: string | null,
+  totals?: IntakeTotals,
 ): Promise<SettleEffectsResult> {
   const result: SettleEffectsResult = {
     attribution: null,
@@ -97,7 +220,14 @@ export async function runDirectOrderSettleEffects(
   try {
     const { error } = await admin.rpc('enqueue_agent_task', {
       p_task_type: 'fulfillment_intake',
-      p_payload: { payment_intent_id: paymentIntentId },
+      // `totals` overrides the PI metadata's provisional split at intake. It is
+      // written here rather than back onto the PaymentIntent because a Stripe
+      // write can fail and this cannot, and because the numbers are ours: the
+      // metadata was stamped before Checkout ran and cannot know what Stripe
+      // Tax or a shipping rate added.
+      p_payload: totals
+        ? { payment_intent_id: paymentIntentId, totals }
+        : { payment_intent_id: paymentIntentId },
       p_source: 'stripe-webhook',
       p_entity_type: 'direct_order',
       p_entity_id: orderId,

@@ -507,7 +507,6 @@ interface DirectOrderRow {
   stripe_payment_intent_id: string | null;
   designer_id: string | null;
   project_id: string | null;
-  commission_rate: number | string | null;
 }
 
 /**
@@ -539,7 +538,7 @@ async function loadDirectOrderPayable(
       `
       id, client_id, product_id, product_name, quantity, unit_price_cents, amount_cents,
       currency, status, stripe_checkout_session_id, stripe_payment_intent_id,
-      designer_id, project_id, commission_rate
+      designer_id, project_id
     `
     )
     .eq('id', directOrderId)

@@ -92,7 +92,10 @@ import { enqueueAgentTask, type RpcClient } from '../_shared/agent-queue.ts';
 // Direct-order settle side effects (00540 / W5): the earnings credit + project
 // notice, and the intake enqueue that gives the client a "where is it".
 import {
+  directOrderTotalsFromPaymentIntent,
+  directOrderTotalsFromSession,
   runDirectOrderSettleEffects,
+  type IntakeTotals,
   type SettleRpcClient,
 } from './direct-order-settle.ts';
 
@@ -1211,12 +1214,14 @@ async function markDirectOrderPaid(
 async function logDirectOrderSettleEffects(
   admin: SupabaseClient,
   orderId: string,
-  paymentIntentId: string | null
+  paymentIntentId: string | null,
+  totals?: IntakeTotals
 ): Promise<void> {
   const outcome = await runDirectOrderSettleEffects(
     admin as unknown as SettleRpcClient,
     orderId,
-    paymentIntentId
+    paymentIntentId,
+    totals
   );
   for (const problem of outcome.problems) {
     console.error('stripe-webhook: direct_order settle effect —', orderId, problem);
@@ -1453,12 +1458,17 @@ async function handleDirectOrderSessionCompleted(
     const shipping = extractDirectOrderShipping(session);
     const flipped = await markDirectOrderPaid(admin, row, paymentIntentId, shipping);
     if (flipped) {
-      await sendDirectOrderPaidEmails(admin, row.id);
+      // The credit and the intake go FIRST. Both hang off a flip that returns
+      // true exactly once, and sendDirectOrderPaidEmails only swallows its own
+      // failures by convention — if that ever changes, the money effects must
+      // not be the work that is lost.
       await logDirectOrderSettleEffects(
         admin,
         row.id,
-        paymentIntentId ?? row.stripe_payment_intent_id
+        paymentIntentId ?? row.stripe_payment_intent_id,
+        directOrderTotalsFromSession(row, session)
       );
+      await sendDirectOrderPaidEmails(admin, row.id);
     }
   } else if (paymentIntentId && !row.stripe_payment_intent_id) {
     // ACH initiated ('unpaid'): stamp the PI id, leave status pending. The
@@ -1488,12 +1498,13 @@ async function handleDirectOrderAsyncPaymentSucceeded(
   const shipping = extractDirectOrderShipping(session);
   const flipped = await markDirectOrderPaid(admin, row, paymentIntentId, shipping);
   if (flipped) {
-    await sendDirectOrderPaidEmails(admin, row.id);
     await logDirectOrderSettleEffects(
       admin,
       row.id,
-      paymentIntentId ?? row.stripe_payment_intent_id
+      paymentIntentId ?? row.stripe_payment_intent_id,
+      directOrderTotalsFromSession(row, session)
     );
+    await sendDirectOrderPaidEmails(admin, row.id);
   }
 }
 
@@ -1558,8 +1569,13 @@ async function handleDirectOrderPaymentIntentSettled(
     // a prior session-backed shipping write is never clobbered with null).
     const flipped = await markDirectOrderPaid(admin, row, pi.id, undefined);
     if (flipped) {
+      await logDirectOrderSettleEffects(
+        admin,
+        row.id,
+        pi.id,
+        directOrderTotalsFromPaymentIntent(row, pi)
+      );
       await sendDirectOrderPaidEmails(admin, row.id);
-      await logDirectOrderSettleEffects(admin, row.id, pi.id);
     }
   }
   // outcome 'failed': a card decline leaves the Checkout session open for retry;
@@ -1800,10 +1816,39 @@ async function handleDirectOrderRefund(
     throw new Error(`failed to mark direct_order ${row.id} refunded: ${error.message}`);
   }
   if ((flipped ?? []).length > 0) {
+    // The commission goes back with the money. 00540 §7b posts a contra row
+    // keyed on reverses_order_id, so a redelivered refund reverses once and a
+    // never-credited order is a no-op. Rides the same guarded flip the ops
+    // email does, and like it, never fails the webhook — the payable state is
+    // already correct and a retry would only re-run an event.
+    await reverseDirectOrderEarnings(admin, row.id);
     await sendDirectOrderRefundOpsEmail(admin, row.id, {
       partial: false,
       refundedAmount,
     });
+  }
+}
+
+/** Net out a refunded direct order's designer commission (00540 §7b). Never throws. */
+async function reverseDirectOrderEarnings(
+  admin: SupabaseClient,
+  orderId: string
+): Promise<void> {
+  try {
+    const { data, error } = await admin.rpc('reverse_direct_order_earnings', {
+      p_order_id: orderId,
+    });
+    if (error) {
+      console.error(
+        'stripe-webhook: direct_order earnings reversal failed —',
+        orderId,
+        error.message
+      );
+      return;
+    }
+    console.log('stripe-webhook: direct_order earnings reversal', orderId, data);
+  } catch (err) {
+    console.error('stripe-webhook: direct_order earnings reversal threw —', orderId, String(err));
   }
 }
 

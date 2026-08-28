@@ -22,7 +22,6 @@ export interface DirectOrderFacts {
   amount_cents: number;
   designer_id: string | null;
   project_id: string | null;
-  commission_rate: number | string | null;
 }
 
 /** `fulfillment_config` → `direct_orders.tax_shipping_enabled`, parsed. */
@@ -37,6 +36,14 @@ export interface DirectOrderLineItem {
     currency: string;
     unit_amount: number;
     product_data: { name: string };
+    /**
+     * Set only when automatic_tax is on. Stripe Tax refuses an inline price
+     * with no tax behavior and no account default, so omitting it would fail
+     * the session the moment the flag flips. 'exclusive' is the only honest
+     * value here: the order sheet's flag-on copy says "Delivery and tax are
+     * added at payment", i.e. on top of the price it just printed.
+     */
+    tax_behavior?: 'exclusive';
   };
 }
 
@@ -111,6 +118,7 @@ export function directOrderSessionExtras(args: {
           currency: args.currency,
           unit_amount: freight,
           product_data: { name: 'Delivery' },
+          ...(args.taxShipping.enabled ? { tax_behavior: 'exclusive' as const } : {}),
         },
       },
     ];
@@ -132,20 +140,29 @@ export function directOrderSessionExtras(args: {
  * The PaymentIntent metadata, in the shape fulfillment-intake/core.ts
  * `normalizeIntakePayload` reads (it reads pi.metadata and nothing else).
  *
- * DELIBERATELY ABSENT — `captured_total_cents`: normalizeIntakePayload falls
- * back to `pi.amount`, which is the real captured total including anything
- * Stripe Tax or a shipping rate added AFTER this metadata was written.
- * Stamping our pre-checkout number here would understate what was taken.
- *
  * DELIBERATELY ABSENT — `ship_to`: the address is collected inside the Checkout
  * session, after this runs. normalizeIntakePayload falls back to the
  * PaymentIntent's own copy of it.
  *
- * Consequence, stated once: while tax_shipping_enabled is TRUE, the
- * subtotal/freight/tax split can be lower than the captured total. The split is
- * what we charged; captured_total_cents is what Stripe took; ops reconciles.
- * While the flag is FALSE — its default, and the only state Path A ships in
- * today — the three components sum exactly.
+ * THE TOTALS HERE ARE PROVISIONAL, and the settle overrides them. They are
+ * still written because a BOH-shaped PI is expected to carry them and because
+ * they are the right answer whenever the flag is off. What they cannot be is
+ * authoritative: with automatic_tax or a shipping rate on the session, Stripe
+ * adds to the total AFTER this metadata is stamped, and the three components
+ * would no longer sum to `pi.amount`. That is not a rounding nuisance:
+ * `fulfillment_orders` carries `chk_fulfillment_captured_identity` (00360:428)
+ * — `captured = subtotal + freight + tax` — with a T1 ledger entry of the same
+ * shape behind it (00352:178-186), so an unbalanced split is refused at the
+ * INSERT and aborts the whole intake, and the client's "where is it" never
+ * appears. So stripe-webhook computes the real split from the settled session
+ * and passes it on the fulfillment_intake task (see directOrderIntakeTotals).
+ *
+ * DELIBERATELY ABSENT — the commission rate. `fulfillment_intake_order` stores
+ * this whole sub-object as `fulfillment_orders.designer_attribution` (00353:87),
+ * and 00540's new client policy lets the buyer read her own order row — so a
+ * rate in here is a rate she reads. Direction B §5 discloses THAT a commission
+ * exists and that it does not change her price, never its size. Ops reads the
+ * snapshot off `direct_orders` as service_role.
  *
  * Stripe caps metadata at 50 keys and 500 characters per value; `lines` is one
  * JSON object for one product, well inside both.
@@ -179,14 +196,12 @@ export function buildDirectOrderIntakeMetadata(args: {
 
   if (order.designer_id) {
     md.designer_profile_id = order.designer_id;
-    // fulfillment_intake_order stores the whole `designer` sub-object as
-    // fulfillment_orders.designer_attribution (00353), so this records HOW the
-    // order was attributed, not only to whom.
+    // Records HOW the order was attributed, not only to whom — and no
+    // commercial term, because this lands on a row the buyer can read.
     md.designer_attribution = JSON.stringify({
       source: 'direct_order',
       direct_order_id: order.id,
       project_id: order.project_id,
-      commission_rate: order.commission_rate == null ? null : Number(order.commission_rate),
     });
   }
 
