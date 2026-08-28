@@ -88,12 +88,17 @@ public struct RemoteProjectRoom: Codable, Sendable, Identifiable {
 public struct RemoteProjectPhase: Codable, Sendable, Identifiable {
     public let id: String
     public let project_id: String
-    public let phase_key: String
+    /// Nullable on the table, and null on most seeded rows. Declared
+    /// non-optional, one null failed the decode of the **whole array**, so
+    /// `listPhases` threw and every project reported having no phases at all.
+    public let phase_key: String?
     public let name: String?
     public let status: String?
     public let fee_cents: Int?
     public let start_date: String?
-    public let end_date: String?
+    /// The column is `target_end_date` (`project_phases`); there is no
+    /// `end_date`, so the old name decoded nil on every row.
+    public let target_end_date: String?
     public let sort_order: Int?
 }
 

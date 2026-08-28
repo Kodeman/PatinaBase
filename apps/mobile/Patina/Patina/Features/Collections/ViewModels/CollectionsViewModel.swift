@@ -32,6 +32,16 @@ final class CollectionsViewModel {
         boardCount == 0 ? allItemsTab : boardsTab
     }
 
+    /// U06: the saved rows a room's own Saved screen shows. A room shows the
+    /// pieces put in it and nothing else; with no room in hand the list is the
+    /// whole table. Only reachable once a save can carry a room at all —
+    /// before W4's fix round nothing ever wrote `roomId`, so this filter was
+    /// always empty (`waves/w4/walk.md` item 4).
+    static func items(_ items: [TableItemModel], inRoom roomId: UUID?) -> [TableItemModel] {
+        guard let roomId else { return items }
+        return items.filter { $0.roomId == roomId }
+    }
+
     // MARK: - Loading
 
     func loadData(context: ModelContext) {
@@ -63,6 +73,15 @@ final class CollectionsViewModel {
             let remoteIds = rooms.compactMap { $0.remoteId }
             guard !remoteIds.isEmpty else { return }
 
+            // B §3: the row names the room it was saved into, so the pulled
+            // row's `room_id` has to land on the local model. Without this the
+            // room half of the line is unreachable for anything the server
+            // sent, which on a real account is most of the list.
+            let localRoomIdByRemoteId = Dictionary(
+                rooms.compactMap { room in room.remoteId.map { ($0, room.id) } },
+                uniquingKeysWith: { first, _ in first }
+            )
+
             var pulled: [RemoteSavedItem] = []
             for remoteId in remoteIds {
                 let rows = (try? await RoomsAPIClient.shared.listItems(forRoomId: remoteId)) ?? []
@@ -72,16 +91,9 @@ final class CollectionsViewModel {
             let knownProductIds = Set(savedItems.compactMap { $0.productId })
             var didInsert = false
             for row in pulled {
-                guard let productId = row.product_id else { continue }
-                if knownProductIds.contains(productId) { continue }
-                let item = TableItemModel(
-                    name: row.name,
-                    productId: productId,
-                    imageURL: row.image_url,
-                    savedAt: ISO8601DateFormatter().date(from: row.created_at) ?? Date(),
-                    brandName: nil,
-                    priceInCents: row.price_in_cents
-                )
+                guard !knownProductIds.contains(row.product_id ?? ""),
+                      let item = Self.localRow(from: row, roomIdByRemoteId: localRoomIdByRemoteId)
+                else { continue }
                 context.insert(item)
                 didInsert = true
             }
@@ -91,6 +103,40 @@ final class CollectionsViewModel {
                 savedItems = (try? context.fetch(itemDescriptor)) ?? savedItems
             }
         }
+    }
+
+    /// One pulled `saved_items` row as the local model. Nil where the row
+    /// names no product — there is nothing to show a reader without one.
+    ///
+    /// Two facts have to survive the crossing, and neither did before W4's
+    /// fix round:
+    ///
+    /// - **the save date.** `saved_items.created_at` is `timestamptz DEFAULT
+    ///   NOW()`, so PostgREST sends fractional seconds
+    ///   (`2026-06-14T18:22:07.418293+00:00`). A bare `ISO8601DateFormatter`
+    ///   rejects those and returns nil, and the `?? Date()` behind it stamped
+    ///   every pulled row with the moment of the sync — the row printed
+    ///   `Saved Aug 28` for a piece saved in June (C5).
+    /// - **the room.** `room_id` is the server's id; the row draws the local
+    ///   `RoomModel.name`, which is keyed by the local `UUID`.
+    /// - **the note.** `saved_items.notes` reaches the DTO as of W4 lane H1
+    ///   (`RemoteSavedItem.notes`); carrying it here is what lets a note
+    ///   written on one device draw on another (`waves/w4/h2-notes.md` §3).
+    static func localRow(
+        from row: RemoteSavedItem,
+        roomIdByRemoteId: [String: UUID]
+    ) -> TableItemModel? {
+        guard let productId = row.product_id else { return nil }
+        return TableItemModel(
+            name: row.name,
+            productId: productId,
+            imageURL: row.image_url,
+            savedAt: ISO8601DateParsing.dateOrDay(from: row.created_at) ?? Date(),
+            notes: row.notes,
+            brandName: nil,
+            priceInCents: row.price_in_cents,
+            roomId: row.room_id.flatMap { roomIdByRemoteId[$0] }
+        )
     }
 
     // MARK: - Board Management
@@ -122,10 +168,31 @@ final class CollectionsViewModel {
 
     /// R26: remove a saved item from the local store (the source the
     /// "All Items" tab reads). Backs the row's context-menu Remove action.
+    ///
+    /// Through `SavedRemoval` so the room's own copy and the account's mirror
+    /// go with the row. Deleting the `TableItemModel` alone left the room the
+    /// piece was added to still counting it (fix2-review MAJ-2).
     func removeSavedItem(_ item: TableItemModel, context: ModelContext) {
-        context.delete(item)
+        if let productId = item.productId {
+            SavedRemoval.remove(productId: productId, context: context)
+        } else {
+            context.delete(item)
+        }
         savedItems.removeAll { $0.id == item.id }
         HapticManager.shared.impact(.light)
+    }
+
+    /// W4 (B §3): the reader's own sentence about a piece. Written locally
+    /// first — that is where they typed it and where it must survive a failed
+    /// network — then mirrored onto `saved_items.notes`.
+    func setNote(_ note: String?, on item: TableItemModel, context: ModelContext) {
+        item.notes = note
+        try? context.save()
+        if let index = savedItems.firstIndex(where: { $0.id == item.id }) {
+            savedItems[index] = item
+        }
+        guard let productId = item.productId else { return }
+        Task { await SavedItemNoteMirror.mirror(note: note, productId: productId) }
     }
 
     /// R26: pull-to-refresh — re-fetch the local store and await the remote

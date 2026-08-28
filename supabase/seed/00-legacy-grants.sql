@@ -11815,3 +11815,33 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.purge_client_account(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00539_saved_item_note_and_presence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.profile_presence FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00539_saved_item_note_and_presence.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON TABLE public.profile_presence TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00539_saved_item_note_and_presence.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.profile_presence TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00539_saved_item_note_and_presence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.purge_client_account(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00539_saved_item_note_and_presence.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.purge_client_account(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

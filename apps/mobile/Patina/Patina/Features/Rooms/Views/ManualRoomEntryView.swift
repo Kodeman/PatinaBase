@@ -173,7 +173,11 @@ struct ManualRoomEntryView: View {
                 ceilingHeightFeet: ceilingHeightFeetValue,
                 orientationRaw: orientationRaw,
                 windowCount: Int(windowCountRaw) ?? 0,
-                doorCount: 1
+                doorCount: 1,
+                // These fields are labelled in feet and are typed on
+                // purpose, so the room counts as measured and the fit line
+                // can quote its longest wall (integration.md §6.8).
+                measuredWithUnitControl: true
             )
             coordinator.goBack()
         }

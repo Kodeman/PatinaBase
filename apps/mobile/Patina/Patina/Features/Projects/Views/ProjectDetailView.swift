@@ -147,18 +147,32 @@ struct ProjectDetailView: View {
         .accessibilityIdentifier("projectDetail.notReadyYet")
     }
 
-    // MARK: - Phases
+    // MARK: - Phases (W4 — F76/F125)
 
     // R23: only rendered when phases exist — the empty state collapses
     // into `notReadyYetCard` instead.
+    //
+    // W4: the rows the detail has always fetched, drawn as the timeline they
+    // are — a connecting rail down the dots and the current phase marked. The
+    // data was on the wire the whole time; this draws it. Nothing is composed:
+    // every line is a column of `project_phases`.
     private var phasesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let currentId = ProjectDetailCopy.currentPhaseId(
+            phases: viewModel.phases,
+            currentPhaseKey: viewModel.project?.current_phase
+        )
+        return VStack(alignment: .leading, spacing: 8) {
             MonoLabel(text: "Phases")
                 .padding(.horizontal, 24)
 
             VStack(spacing: 0) {
-                ForEach(viewModel.phases) { phase in
-                    phaseRow(phase)
+                ForEach(Array(viewModel.phases.enumerated()), id: \.element.id) { index, phase in
+                    phaseRow(
+                        phase,
+                        isCurrent: phase.id == currentId,
+                        isFirst: index == 0,
+                        isLast: index == viewModel.phases.count - 1
+                    )
                 }
             }
             .background(PatinaColors.Background.secondary)
@@ -167,44 +181,82 @@ struct ProjectDetailView: View {
         }
     }
 
-    private func phaseRow(_ phase: RemoteProjectPhase) -> some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(phaseColor(for: phase.status))
-                .frame(width: 10, height: 10)
+    private func phaseRow(
+        _ phase: RemoteProjectPhase,
+        isCurrent: Bool,
+        isFirst: Bool,
+        isLast: Bool
+    ) -> some View {
+        // The vertical padding sits on the *content*, not on the row. On the
+        // row it fenced the rail into the middle of each cell, and the column
+        // read as a stack of 8 pt ticks with 28 pt of nothing between them —
+        // the opposite of the one run of time the timeline is for.
+        HStack(alignment: .top, spacing: 12) {
+            phaseMarker(phase, isCurrent: isCurrent, isFirst: isFirst, isLast: isLast)
             VStack(alignment: .leading, spacing: 2) {
+                if isCurrent {
+                    MonoLabel(text: "Current")
+                }
                 // R16: designer-defined name wins; otherwise the formatted
                 // designer label for the slug — never `phase_key.capitalized`.
-                Text(phase.name ?? PhaseDisplay.label(for: phase.phase_key))
-                    .font(PatinaTypography.bodySmallMedium)
+                Text(phaseTitle(phase))
+                    .font(isCurrent ? PatinaTypography.bodyMedium : PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.primary)
-                Text(PhaseDisplay.statusLabel(for: phase.status ?? "pending"))
+                Text(phaseStatusLine(phase))
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
+            .padding(.vertical, 14)
             Spacer()
-            if let fee = phase.fee_cents {
-                Text(formatPrice(fee))
+            if let fee = ProjectDetailCopy.phaseFee(cents: phase.fee_cents, format: formatPrice) {
+                Text(fee)
                     .font(PatinaTypography.monoTiny)
                     .foregroundStyle(PatinaColors.Text.secondary)
+                    .padding(.vertical, 14)
             }
         }
-        .padding(.vertical, 14)
         .padding(.horizontal, 16)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(PatinaColors.pearl)
-                .frame(height: 1)
-                .padding(.leading, 38)
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(phaseAccessibilityLabel(
+            phase,
+            isCurrent: isCurrent,
+            fee: ProjectDetailCopy.phaseFee(cents: phase.fee_cents, format: formatPrice)
+        ))
     }
 
-    private func phaseColor(for status: String?) -> Color {
-        switch status?.lowercased() {
-        case "in_progress": return PatinaColors.clay
-        case "completed":   return PatinaColors.sage
-        default:            return PatinaColors.agedOak.opacity(0.4)
+    /// The rail: a dot per phase, joined above and below except at the ends,
+    /// so the column reads as one run of time rather than a stack of chips.
+    private func phaseMarker(
+        _ phase: RemoteProjectPhase,
+        isCurrent: Bool,
+        isFirst: Bool,
+        isLast: Bool
+    ) -> some View {
+        let color = phaseColor(for: phase.status)
+        return VStack(spacing: 0) {
+            // 14 pt — the content's own top padding, so the dot lands beside
+            // the phase name and the rail meets the row above with no gap.
+            Rectangle()
+                .fill(isFirst ? Color.clear : PatinaColors.pearl)
+                .frame(width: 1, height: 14)
+            ZStack {
+                if isCurrent {
+                    Circle()
+                        .stroke(color, lineWidth: 1.5)
+                        .frame(width: 16, height: 16)
+                }
+                Circle()
+                    .fill(color)
+                    .frame(width: 10, height: 10)
+            }
+            .frame(width: 16, height: 16)
+            Rectangle()
+                .fill(isLast ? Color.clear : PatinaColors.pearl)
+                .frame(width: 1)
+                .frame(maxHeight: .infinity)
         }
+        .frame(width: 16)
+        .accessibilityHidden(true)
     }
 
     // MARK: - Milestones
@@ -303,130 +355,58 @@ struct ProjectDetailView: View {
     }
 }
 
-// MARK: - Proposal link (Wave 2 / D.1)
-
-/// A real push to the signed proposal this project activated from. Extracted
-/// as its own view so ProjectDetailView stays under the type-body ceiling.
-private struct ProjectProposalLink: View {
-    let proposalId: String
-    @Environment(\.appCoordinator) private var coordinator
-
-    var body: some View {
-        Button {
-            coordinator.navigate(to: .proposalDetail(proposalId: proposalId))
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "doc.text")
-                    .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.Text.interactive)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Proposal")
-                        .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.Text.primary)
-                    Text("View the signed proposal")
-                        .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.Text.muted)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.Text.muted)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(PatinaColors.Background.secondary)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 24)
-        .accessibilityIdentifier("projectDetail.proposalLink")
-    }
-}
-
-// MARK: - Invoices link (Wave 2 / D.2)
-
-/// A push to the client's invoices where this project has any. Extracted as
-/// its own view so ProjectDetailView stays under the type-body ceiling.
-private struct ProjectInvoicesLink: View {
-    @Environment(\.appCoordinator) private var coordinator
-
-    var body: some View {
-        Button {
-            coordinator.navigate(to: .invoiceList)
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "creditcard")
-                    .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.Text.interactive)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Invoices")
-                        .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.Text.primary)
-                    Text("View and pay your invoices")
-                        .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.Text.muted)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.Text.muted)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(PatinaColors.Background.secondary)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 24)
-        .accessibilityIdentifier("projectDetail.invoicesLink")
-    }
-}
-
-// MARK: - Documents link (Wave 3 / D.4)
-
-/// A push to the client's shared documents where this project has any.
-/// Extracted as its own view so ProjectDetailView stays under the type-body
-/// ceiling.
-private struct ProjectDocumentsLink: View {
-    @Environment(\.appCoordinator) private var coordinator
-
-    var body: some View {
-        Button {
-            coordinator.navigate(to: .documentList)
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "folder")
-                    .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.Text.interactive)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Documents")
-                        .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.Text.primary)
-                    Text("Contracts, drawings, and shared files")
-                        .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.Text.muted)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(PatinaTypography.uiSmall)
-                    .foregroundStyle(PatinaColors.Text.muted)
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(PatinaColors.Background.secondary)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 24)
-        .accessibilityIdentifier("projectDetail.documentsLink")
-    }
-}
-
 #Preview {
     NavigationStack {
         ProjectDetailView(projectId: "preview")
+    }
+}
+
+// MARK: - What a phase row says
+
+/// Pure reads over one `RemoteProjectPhase`. Outside the view's own body so the
+/// screen's type stays inside the house limit; same file, same visibility.
+private extension ProjectDetailView {
+
+    /// R16: designer-defined name wins; otherwise the formatted designer
+    /// label for the slug — never `phase_key.capitalized`. `phase_key` is
+    /// nullable, so a row can carry neither.
+    func phaseTitle(_ phase: RemoteProjectPhase) -> String {
+        if let name = phase.name, !name.isEmpty { return name }
+        if let key = phase.phase_key, !key.isEmpty { return PhaseDisplay.label(for: key) }
+        return "Phase"
+    }
+
+    /// The status the server gave, plus the dates it gave — never a date the
+    /// app worked out for itself.
+    func phaseStatusLine(_ phase: RemoteProjectPhase) -> String {
+        var parts = [PhaseDisplay.statusLabel(for: phase.status ?? "pending")]
+        if let start = phase.start_date {
+            parts.append(DateDisplay.fromDateString(start))
+        }
+        if let end = phase.target_end_date {
+            parts.append(DateDisplay.fromDateString(end))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    func phaseAccessibilityLabel(
+        _ phase: RemoteProjectPhase,
+        isCurrent: Bool,
+        fee: String?
+    ) -> String {
+        ProjectDetailCopy.phaseVoiceLabel(
+            name: phaseTitle(phase),
+            statusLine: phaseStatusLine(phase),
+            isCurrent: isCurrent,
+            fee: fee
+        )
+    }
+
+    func phaseColor(for status: String?) -> Color {
+        switch status?.lowercased() {
+        case "in_progress": return PatinaColors.clay
+        case "completed":   return PatinaColors.sage
+        default:            return PatinaColors.agedOak.opacity(0.4)
+        }
     }
 }

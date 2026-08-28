@@ -209,7 +209,7 @@ final class RecommendationsViewModel {
                         image_url: product.imageURL,
                         price_in_cents: product.priceCents,
                         price_cents_at_save: product.priceCents,
-                        source: "ios",
+                        source: SavedItemMirror.discoverySource,
                         notes: nil
                     )
                     let created = try await RoomsAPIClient.shared.createItem(payload)
@@ -248,25 +248,15 @@ final class RecommendationsViewModel {
     func unsaveProduct(_ product: Product, context: ModelContext) {
         savedProductIds.remove(product.id)
 
-        let productId = product.id
-        let descriptor = FetchDescriptor<TableItemModel>(
-            predicate: #Predicate { $0.productId == productId }
+        // Through `SavedRemoval` so the room's own copy goes with the table
+        // rows. Deleting the `TableItemModel`s alone left a room the piece had
+        // been added to still counting it (fix2-review MAJ-2). The remote id
+        // this instance already holds is handed over rather than looked up.
+        SavedRemoval.remove(
+            productId: product.id,
+            context: context,
+            knownRemoteId: remoteSavedItemIds.removeValue(forKey: product.id)
         )
-        if let matches = try? context.fetch(descriptor) {
-            for match in matches { context.delete(match) }
-        }
-
-        if let remoteId = remoteSavedItemIds.removeValue(forKey: product.id) {
-            Task {
-                do {
-                    try await RoomsAPIClient.shared.deleteItem(id: remoteId)
-                } catch {
-                    #if DEBUG
-                    PatinaLog.ui.error("[Recommendations] unsave remote delete failed: \(error.localizedDescription)")
-                    #endif
-                }
-            }
-        }
 
         HapticManager.shared.notification(.success)
     }

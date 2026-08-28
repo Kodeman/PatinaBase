@@ -143,4 +143,16 @@ enum SavedItemMirror {
     /// account copy did not get written — and neither blames a connection the
     /// app cannot see nor promises a retry that does not exist.
     static let deferredNotice = "Saved on this phone. We couldn't reach your account just now."
+
+    /// `saved_items.source` names **where the piece was discovered**, and the
+    /// column has carried a CHECK since `00055_saved_items.sql:32`:
+    /// `emergence`, `search`, `companion`, `extension`. Both iOS save paths
+    /// sent `"ios"` — the platform, not the surface — so every POST came back
+    /// 400 (`23514`) and no save this app has ever made reached the account.
+    /// It was invisible: the local row is the saved thing (SP-14) and the
+    /// failure only logged.
+    ///
+    /// The browse grid and the piece detail are the recommendation surface,
+    /// which is what `emergence` names.
+    static let discoverySource = "emergence"
 }

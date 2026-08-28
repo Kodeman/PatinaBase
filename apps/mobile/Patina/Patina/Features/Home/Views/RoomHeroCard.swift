@@ -63,10 +63,18 @@ struct RoomHero: Equatable {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
+    /// `3 saved pieces · budget $9,000` (M2 block 3). W4 gives the local room
+    /// a budget of its own (`RoomModel.budgetCents`, mirrored to
+    /// `rooms.budget_cents`), so the figure the mock draws now has a source —
+    /// and where no budget has been set the clause simply is not there.
     static func pieces(for room: RoomModel) -> String? {
+        var parts: [String] = []
         let count = room.items.count
-        guard count > 0 else { return nil }
-        return "\(count) saved \(count == 1 ? "piece" : "pieces")"
+        if count > 0 {
+            parts.append("\(count) saved \(count == 1 ? "piece" : "pieces")")
+        }
+        if let budgetLine = room.budgetLine { parts.append(budgetLine) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// The most recent save, by its own date. Within the week it reads as a

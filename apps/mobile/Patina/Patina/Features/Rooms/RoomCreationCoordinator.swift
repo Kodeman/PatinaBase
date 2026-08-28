@@ -81,7 +81,11 @@ public final class RoomCreationCoordinator {
         ceilingHeightFeet: Double?,
         orientationRaw: String,
         windowCount: Int,
-        doorCount: Int
+        doorCount: Int,
+        /// Passed straight through to `RoomStore.createRoom` — true only for
+        /// the manual-entry screen, whose width and length fields name their
+        /// unit (integration.md §6.8).
+        measuredWithUnitControl: Bool = false
     ) async -> Result {
         // 1. Local insert — UI updates immediately. This is the only insert
         //    this method ever performs.
@@ -94,7 +98,8 @@ public final class RoomCreationCoordinator {
             orientationRaw: orientationRaw,
             windowCount: windowCount,
             doorCount: doorCount,
-            manualEntry: true
+            manualEntry: true,
+            measuredWithUnitControl: measuredWithUnitControl
         )
 
         // Parity with `RoomScanSyncService.uploadRoomScan`: on a cold launch

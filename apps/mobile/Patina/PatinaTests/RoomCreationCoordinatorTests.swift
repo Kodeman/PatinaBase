@@ -63,7 +63,8 @@ struct RoomCreationCoordinatorTests {
                 scan_count: 0,
                 style_signals: nil,
                 created_at: "",
-                updated_at: ""
+                updated_at: "",
+                budget_cents: nil
             )
         }
     }

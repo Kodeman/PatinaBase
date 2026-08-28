@@ -14,9 +14,14 @@ struct ProductDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ProductDetailViewModel()
 
-    /// Drives the contextual help-panel sheet for the Product Detail surface.
-    /// Triggered by the `?` floating button in the top bar.
-    @State private var isHelpPanelPresented: Bool = false
+    /// One presentation for both sheets (`Presented` is in the blocks file).
+    @State private var presented: Presented?
+
+    /// SP-11: the rooms `Add to Room` can offer.
+    @State private var roomOptions: [RoomSummary] = []
+
+    /// Held, not computed in `body`: it reads every room out of SwiftData.
+    @State private var fitLine: RoomFitLine?
 
     /// Product ID to load (from navigation)
     var productId: String?
@@ -45,13 +50,6 @@ struct ProductDetailView: View {
         }
         .background(PatinaColors.Background.primary)
         .toolbar(.hidden, for: .navigationBar)
-        // Contextual help panel — `?` floating button in the top bar
-        // toggles `isHelpPanelPresented`. Empty state ships until Sanity
-        // authoring catches up (Sprint 2 expectation).
-        .helpPanel(
-            isPresented: $isHelpPanelPresented,
-            surfaceKey: SurfaceKeys.IOSApp.ProductDetail.root
-        )
         .task {
             viewModel.attachRoomContext(
                 localId: roomLocalId,
@@ -64,8 +62,66 @@ struct ProductDetailView: View {
             // SP-14: a piece saved on a previous visit must not offer to be
             // saved again — seed from the store before the bar draws.
             viewModel.seedSavedState(productId: displayProduct?.id, context: modelContext)
+            roomOptions = RoomStore(context: modelContext).allRooms().map(RoomSummary.init(from:))
+            refreshFitLine()
             viewModel.trackView()
         }
+        .sheet(item: $presented) { which in
+            switch which {
+            case .help:
+                // Empty state ships until Sanity authoring catches up.
+                HelpPanelSheet(
+                    surfaceKey: SurfaceKeys.IOSApp.ProductDetail.root,
+                    isPresented: Binding(
+                        get: { presented == .help },
+                        set: { if !$0 { presented = nil } }
+                    )
+                )
+            case .roomPicker:
+                if let product = displayProduct {
+                    AddToRoomSheet(
+                        product: product,
+                        rooms: roomOptions,
+                        onSelect: { summary in
+                            presented = nil
+                            let store = RoomStore(context: modelContext)
+                            guard let room = store.room(id: summary.id) else { return }
+                            viewModel.addToRoom(
+                                localId: room.id,
+                                remoteId: room.remoteId,
+                                context: modelContext
+                            )
+                            roomOptions = store.allRooms().map(RoomSummary.init(from:))
+                            refreshFitLine()
+                        },
+                        onNewRoom: {
+                            presented = nil
+                            coordinator.navigate(to: .manualRoomEntry)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    /// Recomputed when the screen appears and when the piece is put in a room
+    /// — the two moments the answer can change.
+    private func refreshFitLine() {
+        fitLine = Self.fitLine(
+            for: displayProduct,
+            rooms: RoomStore(context: modelContext).allRooms(),
+            preferredLocalId: viewModel.roomContextLocalId,
+            preferredRemoteId: viewModel.roomContextRemoteId
+        )
+    }
+
+    /// The room this screen was opened from, if any (in the blocks file).
+    private func contextRoom() -> RoomModel? {
+        Self.contextRoom(
+            in: RoomStore(context: modelContext),
+            localId: viewModel.roomContextLocalId,
+            remoteId: viewModel.roomContextRemoteId
+        )
     }
 
     // MARK: - Product Content
@@ -102,7 +158,7 @@ struct ProductDetailView: View {
                             // a sheet listing every help article for this
                             // surface (`ios-app/product-detail`).
                             Button {
-                                isHelpPanelPresented = true
+                                presented = .help
                             } label: {
                                 floatingCircleButton(icon: "questionmark")
                             }
@@ -199,6 +255,17 @@ struct ProductDetailView: View {
                         // measurement it does not have.
                         specRows(product)
 
+                        // B §5 item 4 / M3 block 8: the room's longest wall
+                        // beside the piece's own width. Two numbers and a full
+                        // stop — no verdict, because the app does not know
+                        // what else is in the room (C5). Drawn only for a room
+                        // measured on the segmented unit control, and only for
+                        // a piece that carries dimensions.
+                        if let fit = fitLine {
+                            RoomFitLineView(line: fit)
+                                .padding(.bottom, 16)
+                        }
+
                         // Room-aware "Place in your room" header + spatial pills.
                         // Patina-specific concept — the pills explain why
                         // the piece fits this specific room. A HelpInfoIcon
@@ -288,114 +355,7 @@ struct ProductDetailView: View {
         }
     }
 
-    // MARK: - Components
-
-    /// Web deep link for a piece — matches the Library piece route at
-    /// `app/(document)/library/[id]` on app.patina.cloud.
-    private static func shareURL(for product: Product) -> URL {
-        PatinaDeepLinks.productURL(forProductId: product.id)
-    }
-
-    /// `makerName` is the vendor join and can be the literal "Unknown Maker";
-    /// the share text names a maker only when one resolves (a-notes.md §3).
-    static func shareMessage(for product: Product) -> String {
-        guard let maker = product.resolvedMakerName else {
-            return "\(product.name) on Patina"
-        }
-        return "\(product.name) by \(maker) on Patina"
-    }
-
-    private func floatingCircleButton(icon: String) -> some View {
-        Circle()
-            .fill(.ultraThinMaterial)
-            .frame(width: 36, height: 36)
-            .overlay(
-                Image(systemName: icon)
-                    .font(.system(size: 16))
-                    .foregroundStyle(PatinaColors.Text.primary)
-            )
-    }
-
-    /// SP-10 — size · lead time · maker · story, drawn only for the columns
-    /// this piece actually carries. A piece with none of them draws nothing.
-    @ViewBuilder
-    private func specRows(_ product: Product) -> some View {
-        let rows: [(String, String)] = [
-            product.dimensionsLine.map { ("Size", $0) },
-            product.leadTimeLine.map { ("Lead time", $0) },
-            product.resolvedMakerName.map { ("Maker", $0) },
-            product.finish.map { ("Finish", $0) }
-        ].compactMap { $0 }
-
-        if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(rows, id: \.0) { label, value in
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        MonoLabel(text: label, size: PatinaTypography.monoSmall)
-                            .frame(width: 78, alignment: .leading)
-                        Text(value)
-                            .font(PatinaTypography.bodySmall)
-                            .foregroundStyle(PatinaColors.Text.primary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(label): \(value)")
-                }
-            }
-            .padding(.bottom, 16)
-        }
-
-        if let story = product.productDescription {
-            Text(story)
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 16)
-        }
-    }
-
-    private func materialBadge(text: String) -> some View {
-        HStack(spacing: 5) {
-            Text(text)
-                .font(PatinaTypography.caption)
-                .foregroundStyle(PatinaColors.Text.secondary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(PatinaColors.Background.secondary)
-        .clipShape(Capsule())
-    }
-
-    private func makerStoryCard(name: String, location: String?, story: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(PatinaGradients.earth)
-                    .frame(width: 44, height: 44)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name)
-                        .font(PatinaTypography.bodySmallMedium)
-                        .foregroundStyle(PatinaColors.Text.primary)
-
-                    if let location {
-                        MonoLabel(text: location, size: PatinaTypography.monoSmall)
-                    }
-                }
-            }
-
-            Text("\u{201C}\(story)\u{201D}")
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
-                .italic()
-                .lineSpacing(4)
-        }
-        .padding(20)
-        .background(PatinaColors.Background.secondary)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
+    // MARK: - The act
 
     /// W2's clearance under the pinned act on a root with nothing else at that
     /// edge: the home indicator's own room, and no more.
@@ -432,10 +392,17 @@ struct ProductDetailView: View {
                 .accessibilityIdentifier("ProductDetailView.ARButton")
             }
 
-            // Add to room button
+            // Add to room. The act names a room, so it puts the piece in one:
+            // the room this screen was opened from where there is one, the
+            // room the reader picks where there is not, and the plain
+            // account-wide save only where the reader has no room at all.
             Button {
-                if viewModel.roomContextRemoteId != nil {
-                    Task { await viewModel.addToAttachedRoom(context: modelContext) }
+                if viewModel.isSaved {
+                    viewModel.toggleSave(context: modelContext)
+                } else if let room = contextRoom() {
+                    viewModel.addToRoom(localId: room.id, remoteId: room.remoteId, context: modelContext)
+                } else if !roomOptions.isEmpty {
+                    presented = .roomPicker
                 } else {
                     viewModel.toggleSave(context: modelContext)
                 }
@@ -524,80 +491,6 @@ struct ProductDetailView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: - Badge Display Names
-
-private extension String {
-    var badgeDisplayName: String {
-        switch self {
-        case "fsc_certified": return "🌿 FSC Certified"
-        case "handcrafted": return "✋ Handcrafted"
-        case "made_in_usa": return "📍 Made in USA"
-        case "sustainable": return "♻️ Sustainable"
-        default: return self.replacingOccurrences(of: "_", with: " ").capitalized
-        }
-    }
-}
-
-// MARK: - Glass Action Bar Background (PT-5-7)
-
-/// Applies the Liquid Glass material behind the product-detail action bar on
-/// iOS 26+, and falls back to the prior flat off-white + soft shadow on older
-/// OS versions. Gated with `#available` because `.glassEffect` is iOS 26.0+
-/// while the app still deploys to iOS 18.
-private struct GlassActionBarBackground: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.glassEffect(.regular, in: .rect)
-        } else {
-            content.background(
-                PatinaColors.Background.primary
-                    .shadow(color: PatinaColors.mocha.opacity(0.08), radius: 8, y: -4)
-            )
-        }
-    }
-}
-
-// MARK: - Flow Layout
-
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = arrange(proposal: proposal, subviews: subviews)
-        return result.size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = arrange(proposal: proposal, subviews: subviews)
-        for (index, position) in result.positions.enumerated() {
-            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
-        }
-    }
-
-    private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
-        let maxWidth = proposal.width ?? .infinity
-        var positions: [CGPoint] = []
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var maxHeight: CGFloat = 0
-        var rowMaxY: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth && x > 0 {
-                x = 0
-                y = rowMaxY + spacing
-            }
-            positions.append(CGPoint(x: x, y: y))
-            rowMaxY = max(rowMaxY, y + size.height)
-            x += size.width + spacing
-            maxHeight = max(maxHeight, y + size.height)
-        }
-
-        return (CGSize(width: maxWidth, height: maxHeight), positions)
     }
 }
 

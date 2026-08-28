@@ -35,6 +35,13 @@ public final class RoomStore {
         return (try? context.fetch(descriptor))?.first
     }
 
+    /// The local room mirroring a given `rooms.id`. `nil` for a room this
+    /// phone has never synced — which is exactly the room a merge must leave
+    /// alone (SP-06).
+    public func room(remoteId: String) -> RoomModel? {
+        allRooms().first { $0.remoteId?.caseInsensitiveCompare(remoteId) == .orderedSame }
+    }
+
     public func allItems() -> [SavedItem] {
         let descriptor = FetchDescriptor<SavedItem>(
             sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
@@ -72,7 +79,13 @@ public final class RoomStore {
         orientationRaw: String = "",
         windowCount: Int = 0,
         doorCount: Int = 0,
-        manualEntry: Bool
+        manualEntry: Bool,
+        /// True where the person typed these numbers into fields that name
+        /// their unit. `ManualRoomEntryView`'s width/length fields are
+        /// labelled in feet and are typed on purpose, so a room made there
+        /// counts for the fit line (integration.md §6.8). The scan-fallback
+        /// draft does not: nobody read a unit off a control there.
+        measuredWithUnitControl: Bool = false
     ) -> RoomModel {
         // Convert feet → meters for RoomModel's internal storage when provided.
         let wMeters = widthFeet.map { $0 * 0.3048 }
@@ -91,6 +104,7 @@ public final class RoomStore {
         room.windowCount = windowCount
         room.doorCount = doorCount
         room.ceilingHeightFeet = ceilingHeightFeet
+        room.measuredWithUnitControl = measuredWithUnitControl
         context.insert(room)
         save()
         return room
@@ -149,6 +163,51 @@ public final class RoomStore {
         return room
     }
 
+    /// Create the local mirror of a room the account already owns on the
+    /// server — a room typed on another phone, or one that outlived a
+    /// reinstall. It arrives `.synced` carrying its `remoteId`, because that
+    /// is what it is: the server's row, on this device.
+    @discardableResult
+    public func insertMirrored(_ remote: RemoteRoom) -> RoomModel {
+        let room = RoomModel(
+            name: remote.name,
+            roomType: remote.type,
+            hasBeenScanned: (remote.scan_count ?? 0) > 0,
+            width: remote.width_meters,
+            length: remote.length_meters,
+            height: remote.height_meters,
+            syncStatus: .synced
+        )
+        room.remoteId = remote.id
+        room.budgetCents = remote.budget_cents
+        room.savedItemCount = remote.saved_item_count ?? 0
+        room.lastSyncedAt = Date()
+        if let updated = ISO8601DateParsing.dateOrDay(from: remote.updated_at) {
+            room.updatedAt = updated
+        }
+        context.insert(room)
+        save()
+        return room
+    }
+
+    /// Take the server's version of a room this phone already mirrors. Only
+    /// called where the server's row is the newer of the two — a local edit
+    /// made after the server's `updated_at` stands (`RoomMerge`).
+    public func applyRemote(_ remote: RemoteRoom, to room: RoomModel) {
+        room.name = remote.name
+        room.roomType = remote.type
+        room.width = remote.width_meters
+        room.length = remote.length_meters
+        room.height = remote.height_meters
+        room.budgetCents = remote.budget_cents
+        room.syncStatus = .synced
+        room.lastSyncedAt = Date()
+        if let updated = ISO8601DateParsing.dateOrDay(from: remote.updated_at) {
+            room.updatedAt = updated
+        }
+        save()
+    }
+
     /// Mark a local room as fully synced with its server-side counterparts.
     /// Called after `RoomScanSyncService.uploadRoomScan` returns successfully.
     public func markRoomSynced(
@@ -189,6 +248,34 @@ public final class RoomStore {
 
     public func updateType(_ room: RoomModel, to newType: String) {
         room.roomType = newType
+        room.updatedAt = Date()
+        save()
+    }
+
+    /// The local half of the room budget. Always succeeds — the mirror to
+    /// `rooms.budget_cents` is `RoomBudgetCoordinator`'s, and a room that has
+    /// never synced still keeps the figure its owner typed.
+    public func setBudget(_ room: RoomModel, cents: Int?) {
+        room.budgetCents = cents
+        room.updatedAt = Date()
+        save()
+    }
+
+    /// Dimensions the person typed against the segmented unit control.
+    ///
+    /// Deliberately NOT `RoomModel.updateDimensions`, which sets
+    /// `hasBeenScanned = true`: a typed correction is still a typed room, and
+    /// flipping the flag would relabel it `SCANNED` on every surface (F51).
+    public func updateTypedDimensions(
+        _ room: RoomModel,
+        widthMeters: Double?,
+        lengthMeters: Double?,
+        heightMeters: Double?
+    ) {
+        room.width = widthMeters
+        room.length = lengthMeters
+        if let heightMeters { room.height = heightMeters }
+        room.measuredWithUnitControl = true
         room.updatedAt = Date()
         save()
     }

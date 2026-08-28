@@ -61,7 +61,9 @@ struct RoomGalleryCard: View {
                     .padding(.top, 10)
                     .padding(.trailing, 10)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            } else if room.items.isEmpty {
+            } else if room.items.isEmpty && room.hasBeenScanned {
+                // A room the person typed was never scanned; the badge said it
+                // was, on the same card whose meta line said "Manual entry".
                 badge(label: "Just scanned", color: PatinaColors.dustyBlue)
                     .padding(.top, 10)
                     .padding(.trailing, 10)
@@ -87,14 +89,35 @@ struct RoomGalleryCard: View {
 
     private var stats: some View {
         HStack(spacing: 0) {
-            stat(value: "\(room.items.count)", label: "Items")
-            divider
-            stat(value: budgetString, label: "Budget")
-            divider
-            stat(value: matchString, label: "Match")
+            let cells = Self.statCells(for: room)
+            ForEach(Array(cells.enumerated()), id: \.element.id) { index, cell in
+                if index > 0 { divider }
+                stat(value: cell.value, label: cell.label)
+            }
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
+    }
+
+    struct Stat: Identifiable, Equatable {
+        let value: String
+        let label: String
+        var id: String { label }
+    }
+
+    /// A room with no budget draws no `Budget` cell at all — B M4's states row
+    /// is "no budget → the ghost act, never a `—`", and this card has no room
+    /// for an act, so it prints nothing rather than a dash under a word it has
+    /// no number for (C5).
+    static func statCells(for room: RoomModel) -> [Stat] {
+        var cells = [Stat(value: "\(room.items.count)", label: "Items")]
+        if let budget = budgetString(for: room) {
+            cells.append(Stat(value: budget, label: "Budget"))
+        }
+        if let match = matchString(for: room) {
+            cells.append(Stat(value: match, label: "Match"))
+        }
+        return cells
     }
 
     private var divider: some View {
@@ -117,17 +140,25 @@ struct RoomGalleryCard: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var budgetString: String {
-        let dollars = room.totalInvestmentCents / 100
-        if dollars == 0 { return "—" }
+    /// The budget the person set, under the word `Budget`. It used to be the
+    /// sum of the room's saved pieces — a different number entirely, printed
+    /// under a label that did not describe it (C5). W4 gives the room a real
+    /// `budgetCents`, so the cell reads that, or the cell does not draw.
+    static func budgetString(for room: RoomModel) -> String? {
+        guard let cents = room.budgetCents else { return nil }
+        let dollars = cents / 100
         if dollars >= 1000 {
             return "$\(String(format: "%.1f", Double(dollars) / 1000))K"
         }
         return "$\(dollars)"
     }
 
-    private var matchString: String {
-        guard let avg = room.averageMatchScore else { return "—" }
+    /// A score Patina has not computed gets no cell. The `—` under the word
+    /// `MATCH` named a number that does not exist anywhere — not a figure the
+    /// person declined to give, which is what SP-18's dash idiom is for
+    /// (h1-notes.md §6.2, ruled in integration.md §6.5).
+    static func matchString(for room: RoomModel) -> String? {
+        guard let avg = room.averageMatchScore else { return nil }
         return "\(avg)%"
     }
 

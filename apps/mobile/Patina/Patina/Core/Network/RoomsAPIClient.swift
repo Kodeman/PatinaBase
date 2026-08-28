@@ -33,6 +33,10 @@ public struct RemoteRoom: Codable, Sendable {
     public let style_signals: [String: String]?
     public let created_at: String
     public let updated_at: String
+    /// `rooms.budget_cents` (00537 §1). Without it a room hydrated from the
+    /// server arrives with no budget and the Spaces card draws nothing under
+    /// `Budget` for a figure the account is actually holding.
+    public let budget_cents: Int?
 }
 
 public struct RemoteRoomScan: Codable, Sendable {
@@ -56,6 +60,14 @@ public struct RemoteSavedItem: Codable, Sendable {
     public let price_in_cents: Int?
     public let source: String?
     public let created_at: String
+    /// The note the person left on the save (`saved_items.notes`, 00055:29) and
+    /// what the piece cost the day they saved it (`price_cents_at_save`,
+    /// 00535:21). Both columns have existed longer than this decode; the saved
+    /// row cannot print "date · room · note" from the server leg without them
+    /// (`waves/w4/steward.md` §4a). Optional, so a row carrying neither still
+    /// decodes.
+    public let notes: String?
+    public let price_cents_at_save: Int? // swiftlint:disable:this identifier_name
 }
 
 public struct CreateRoomPayload: Encodable {
@@ -211,13 +223,31 @@ public actor RoomsAPIClient {
 
     // MARK: - Rooms
 
-    public func listRooms() async throws -> [RemoteRoom] {
-        let url = baseURL.appendingPathComponent("/rest/v1/rooms")
-            .appending(queryItems: [URLQueryItem(name: "select", value: "*"),
-                                    URLQueryItem(name: "order", value: "created_at.desc")])
-        var request = URLRequest(url: url)
+    /// The URL of "this account's rooms", as a value so the owner filter is a
+    /// pinned fact rather than a claim about a request nobody can see.
+    ///
+    /// `public.rooms` carries two SELECT policies (`00019_roomplan_features.sql`
+    /// :50-60): the owner's, and one that lets a designer read every room of
+    /// every client on her roster. So an unfiltered read is not "the account's
+    /// house" — a designer signing into this app would hydrate her whole client
+    /// book as her own rooms. The filter sits beside RLS, not instead of it.
+    static func roomsListURL(base: URL, userId: String) -> URL {
+        base.appendingPathComponent("/rest/v1/rooms")
+            .appending(queryItems: [
+                URLQueryItem(name: "select", value: "*"),
+                URLQueryItem(name: "user_id", value: "eq.\(userId)"),
+                URLQueryItem(name: "order", value: "created_at.desc")
+            ])
+    }
+
+    public func listRooms(userId: String) async throws -> [RemoteRoom] {
+        var request = URLRequest(url: Self.roomsListURL(base: baseURL, userId: userId))
         await applyHeaders(to: &request)
-        let (data, _) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
+        // Every other call on this client validates the status; this one
+        // decoded straight through, so a 401 arrived as a decode error and the
+        // log line named the wrong cause (fix-review m-8).
+        try Self.ensureOK(response, data: data)
         return try decoder.decode([RemoteRoom].self, from: data)
     }
 
@@ -245,6 +275,16 @@ public actor RoomsAPIClient {
         let rows = try decoder.decode([RemoteRoom].self, from: data)
         guard let first = rows.first else { throw RoomsAPIError.emptyResponse }
         return first
+    }
+
+    /// Mirror a room's budget onto `rooms.budget_cents` (00537 §1). `nil`
+    /// clears it — an explicit null, not an omitted key, so removing a budget
+    /// on one device removes it everywhere rather than leaving the old figure
+    /// standing.
+    @discardableResult
+    public func updateRoomBudget(id: String, cents: Int?) async throws -> RemoteRoom {
+        let value: Any = cents.map { $0 as Any } ?? NSNull()
+        return try await updateRoom(id: id, patch: ["budget_cents": AnyCodable(value)])
     }
 
     public func deleteRoom(id: String) async throws {
@@ -320,6 +360,26 @@ public actor RoomsAPIClient {
         request.httpMethod = "POST"
         await applyHeaders(to: &request, prefer: "return=representation")
         request.httpBody = try encoder.encode(payload)
+        let (data, response) = try await session.data(for: request)
+        try Self.ensureOK(response, data: data)
+        let rows = try decoder.decode([RemoteSavedItem].self, from: data)
+        guard let first = rows.first else { throw RoomsAPIError.emptyResponse }
+        return first
+    }
+
+    /// Move an already-mirrored save into a room. The save path writes
+    /// `room_id` at insert time; this is the second case — a piece saved from
+    /// the account (roomless) that its owner later puts in a room. Without it
+    /// the local row would name a room the server's row does not.
+    @discardableResult
+    public func updateItemRoom(id: String, roomId: String?) async throws -> RemoteSavedItem {
+        let url = baseURL.appendingPathComponent("/rest/v1/saved_items")
+            .appending(queryItems: [URLQueryItem(name: "id", value: "eq.\(id)")])
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        await applyHeaders(to: &request, prefer: "return=representation")
+        let value: Any = roomId.map { $0 as Any } ?? NSNull()
+        request.httpBody = try encoder.encode(["room_id": AnyCodable(value)])
         let (data, response) = try await session.data(for: request)
         try Self.ensureOK(response, data: data)
         let rows = try decoder.decode([RemoteSavedItem].self, from: data)

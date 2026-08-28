@@ -111,12 +111,71 @@ public final class ProfileService {
         }
     }
 
+    // MARK: - Last seen (B §3, 00537 §2)
+
+    /// `UserDefaults` watermark for the last stamp actually mirrored. Without
+    /// it every home re-render would PATCH the same second over again.
+    static let lastSeenMirrorKey = "patina.house.lastSeenAt.mirrored"
+
+    /// Whether `stamp` is worth a write: something to write, and newer than
+    /// whatever reached the server last.
+    static func mirrorIsDue(stamp: Date?, mirrored: Date?) -> Bool {
+        guard let stamp else { return false }
+        guard let mirrored else { return true }
+        return stamp > mirrored
+    }
+
+    /// Mirror the local visit stamp onto the caller's own `profile_presence`
+    /// row — the second device's half of "when were you last here" (B §3).
+    ///
+    /// It used to write `profiles.last_seen_at`, and `profiles` is
+    /// `FOR SELECT USING (true)`, so every authenticated reader could see when
+    /// a homeowner last opened the app. 00539 §2 moved the fact onto a table
+    /// whose RLS names two readers — the person, and her designer of record.
+    ///
+    /// Owner UPSERT under that RLS; best effort, never awaited by anything the
+    /// reader is looking at, and a failure leaves the local stamp — the
+    /// authority — untouched.
+    @MainActor
+    func mirrorLastSeenIfNeeded(
+        stamp: Date? = LastSeenStore.shared.lastSeenAt,
+        defaults: UserDefaults = .standard
+    ) async {
+        guard AuthService.shared.isAuthenticated,
+              let userId = AuthService.shared.currentUserId else { return }
+        let mirrored = (defaults.object(forKey: Self.lastSeenMirrorKey) as? Double)
+            .map { Date(timeIntervalSince1970: $0) }
+        guard let stamp, Self.mirrorIsDue(stamp: stamp, mirrored: mirrored) else { return }
+
+        do {
+            try await supabase.database
+                .from("profile_presence")
+                .upsert(
+                    [
+                        "user_id": userId,
+                        "last_seen_at": ISO8601DateFormatter().string(from: stamp)
+                    ],
+                    onConflict: "user_id"
+                )
+                .execute()
+            defaults.set(stamp.timeIntervalSince1970, forKey: Self.lastSeenMirrorKey)
+        } catch {
+            PatinaLog.sync.debug(
+                "ProfileService: last_seen_at mirror deferred — \(error.localizedDescription)"
+            )
+        }
+    }
+
     /// Clear profile data on sign-out
     @MainActor
     public func clear() {
         currentProfile = nil
         roles = []
         isLoaded = false
+        // The watermark belongs to the account that wrote it: the next
+        // account's first visit must reach its own row, not be swallowed as
+        // "already mirrored".
+        UserDefaults.standard.removeObject(forKey: Self.lastSeenMirrorKey)
     }
 
     // MARK: - Convenience

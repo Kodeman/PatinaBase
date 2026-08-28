@@ -9,6 +9,40 @@
 import SwiftUI
 import SwiftData
 
+/// The three lines M4 draws under the room's name, resolved from the model so
+/// every rule is testable without rendering anything.
+///
+/// The room screen only ever opens a local `RoomModel`. A room a project owns
+/// lives in `project_rooms`, is drawn read-only on the house rail, and opens
+/// the project — so there is no edit act to withhold here, by construction.
+struct RoomScreenLines: Equatable {
+
+    /// `18 × 14 ft · 252 sq ft · TYPED, NOT SCANNED` (M4 block 2).
+    let meta: String
+    /// `$2,400 in saved pieces · budget $9,000` (B §3) — labelled figures,
+    /// never a spend figure, and nil where there are neither pieces nor a
+    /// budget (never a `—`).
+    let figures: String?
+    /// `You added the Brass Arc Floor Lamp on Tuesday` — dated state, never
+    /// news. The same composer the Today hero uses, so the two cannot drift.
+    let state: String?
+
+    static func make(
+        room: RoomModel,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> RoomScreenLines {
+        var parts: [String] = []
+        if let dimensions = RoomHero.dimensions(for: room) { parts.append(dimensions) }
+        parts.append(room.hasBeenScanned ? "SCANNED" : "TYPED, NOT SCANNED")
+        return RoomScreenLines(
+            meta: parts.joined(separator: " · "),
+            figures: room.savedPiecesFigureLine,
+            state: RoomHero.stateLine(for: room, now: now, calendar: calendar)
+        )
+    }
+}
+
 struct RoomProjectView: View {
     let roomId: UUID
 
@@ -16,11 +50,22 @@ struct RoomProjectView: View {
     @Environment(\.appCoordinator) private var coordinator
     @Query private var rooms: [RoomModel]
 
-    // MARK: - Budget context (from user preferences / quiz; defaults for now)
-    private let budgetMinCents: Int = 200_000   // $2K
-    private let budgetMaxCents: Int = 500_000   // $5K
+    /// One presentation, not two. A second `.sheet` attached further down the
+    /// hierarchy never presented on the sim walk (`waves/w4/h1-notes.md`), so
+    /// both sheets go through one `item:` binding on the root.
+    enum Presented: Identifiable {
+        case itemActions(SavedItem)
+        case budget
 
-    @State private var actionItem: SavedItem?
+        var id: String {
+            switch self {
+            case .itemActions(let item): return "item:\(item.id.uuidString)"
+            case .budget: return "budget"
+            }
+        }
+    }
+
+    @State private var presented: Presented?
 
     init(roomId: UUID) {
         self.roomId = roomId
@@ -46,26 +91,29 @@ struct RoomProjectView: View {
                                 .padding(.bottom, 16)
                             emptyBlock(for: room)
                         } else {
+                            // No budget, no bar and no nudge: there is
+                            // nothing to measure against, and inventing a
+                            // range to measure against is what this replaced.
                             let level = BudgetAssessment.level(
                                 totalCents: room.totalInvestmentCents,
-                                minCents: budgetMinCents,
-                                maxCents: budgetMaxCents
+                                budgetCents: room.budgetCents
                             )
-                            if BudgetAssessment.shouldShowBar(level) {
+                            if let level, let budget = room.budgetCents,
+                               BudgetAssessment.shouldShowBar(level) {
                                 RoomBudgetBar(
                                     totalCents: room.totalInvestmentCents,
-                                    minCents: budgetMinCents,
-                                    maxCents: budgetMaxCents
+                                    budgetCents: budget
                                 )
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 16)
                             }
                             itemsSection(for: room)
-                            budgetNudge(for: level, room: room)
+                            if let level { budgetNudge(for: level, room: room) }
                             cta(primary: "Get design help with this room") {
                                 coordinator.presentDesignServices(roomId: room.id)
                             }
                         }
+                        actsRow(for: room)
                         Spacer().frame(height: 100)
                     }
                 }
@@ -74,11 +122,19 @@ struct RoomProjectView: View {
                 notFoundState
             }
         }
-        .sheet(item: $actionItem) { item in
-            ItemActionMenu(item: item) { action in
-                handle(action, item: item)
+        .sheet(item: $presented) { which in
+            switch which {
+            case .itemActions(let item):
+                ItemActionMenu(item: item) { action in
+                    handle(action, item: item)
+                }
+                .presentationDetents([.medium])
+            case .budget:
+                if let room {
+                    RoomBudgetSheet(room: room)
+                        .presentationDetents([.medium])
+                }
             }
-            .presentationDetents([.medium])
         }
         // U18: standard pushed-screen chrome — covers both the populated
         // room (its own header carries the title) and `notFoundState`
@@ -150,116 +206,6 @@ struct RoomProjectView: View {
         }
     }
 
-    // MARK: - Sections
-
-    private func hero(for room: RoomModel) -> some View {
-        ZStack(alignment: .top) {
-            heroGradient(for: room)
-                .frame(height: 240)
-                .clipped()
-            LinearGradient(
-                colors: [.clear, PatinaColors.Background.primary],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(height: 120)
-            .frame(maxHeight: .infinity, alignment: .bottom)
-
-            HStack {
-                Spacer()
-                Button {
-                    coordinator.navigate(to: .roomSettings(roomId: room.id))
-                } label: {
-                    Text("⚙")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(PatinaColors.Text.primary)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(PatinaColors.Background.primary.opacity(0.92)))
-                        .overlay(Circle().stroke(PatinaColors.pearl, lineWidth: 0.5))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.top, 56)
-            .padding(.horizontal, 18)
-        }
-        .frame(height: 240)
-    }
-
-    private func heroGradient(for room: RoomModel) -> LinearGradient {
-        switch room.roomType.lowercased() {
-        case "living", "living_room", "living room": return PatinaGradients.warm
-        case "bedroom":                               return PatinaGradients.dusk
-        case "office":                                return PatinaGradients.sageGradient
-        case "dining", "dining_room":                 return PatinaGradients.earth
-        case "kitchen":                               return PatinaGradients.rattan
-        default:                                      return PatinaGradients.linen
-        }
-    }
-
-    private func header(for room: RoomModel) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(room.name)
-                .font(PatinaTypography.h2)
-                .foregroundStyle(PatinaColors.Text.primary)
-            Text(metaLine(for: room))
-                .font(PatinaTypography.monoSmall)
-                .tracking(0.4)
-                .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.Text.muted)
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 16)
-    }
-
-    private func metaLine(for room: RoomModel) -> String {
-        var parts: [String] = []
-        if let sf = room.squareFeet { parts.append(String(format: "%.0f sq ft", sf)) }
-        if !room.orientationLabel.isEmpty { parts.append(room.orientationLabel) }
-        if room.windowCount > 0 { parts.append("\(room.windowCount) window\(room.windowCount == 1 ? "" : "s")") }
-        if room.hasBeenScanned {
-            parts.append("Scanned \(Self.scannedDateFormatter.string(from: room.updatedAt))")
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    /// Shared formatter — avoids a `DateFormatter` allocation on every render of `metaLine`.
-    private static let scannedDateFormatter: DateFormatter = {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "MMM d"
-        return fmt
-    }()
-
-    private func statRow(for room: RoomModel) -> some View {
-        // SP-18: "IN AR" is gone. `get_recommendations` hard-codes `usdz_url`
-        // to NULL and the direct fetch hard-codes it nil, so `hasARModel` is
-        // false on every path — the number could never be anything but zero.
-        // "MATCH" now names what it matches against.
-        HStack(spacing: 8) {
-            statCell(value: "\(room.items.count)", label: "Items")
-            statCell(value: room.averageMatchScore.map { "\($0)%" } ?? "—", label: "Room match")
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 16)
-    }
-
-    private func statCell(value: String, label: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.custom("PlayfairDisplay-Medium", size: 20, relativeTo: .title3))
-                .foregroundStyle(PatinaColors.Text.primary)
-            Text(label)
-                .font(.custom("DMMono-Regular", size: 7, relativeTo: .caption2))
-                .tracking(0.6)
-                .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.Text.muted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(PatinaColors.Background.secondary)
-        )
-    }
-
     private func itemsSection(for room: RoomModel) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -283,7 +229,7 @@ struct RoomProjectView: View {
                         coordinator.navigate(to: .pieceDetail(pieceId: pair.element.productId))
                     },
                     onActions: {
-                        actionItem = pair.element
+                        presented = .itemActions(pair.element)
                     }
                 )
                 if pair.offset < room.items.count - 1 {
@@ -322,6 +268,50 @@ struct RoomProjectView: View {
         .padding(.vertical, 40)
     }
 
+    // MARK: - M4 block 6 — the two ghost acts
+
+    /// `Edit dimensions` and `Set a budget`, side by side. Both are the
+    /// person's own numbers on their own room; neither exists on a room a
+    /// project owns, which is drawn read-only on the rail and never opens here.
+    private func actsRow(for room: RoomModel) -> some View {
+        HStack(spacing: 10) {
+            ghostAct(
+                title: "Edit dimensions",
+                identifier: "RoomProjectView.EditDimensions"
+            ) {
+                coordinator.navigate(to: .roomSettings(roomId: room.id))
+            }
+            ghostAct(
+                title: room.budgetCents == nil ? "Set a budget" : "Edit budget",
+                identifier: "RoomProjectView.SetABudget"
+            ) {
+                presented = .budget
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+    }
+
+    private func ghostAct(
+        title: String,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(
+                    Capsule().stroke(PatinaColors.pearl, lineWidth: 1.5)
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+    }
+
     private func cta(primary title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
@@ -353,6 +343,126 @@ struct RoomProjectView: View {
         case .remove:
             store.removeItem(item)
         }
-        actionItem = nil
+        presented = nil
+    }
+}
+
+// MARK: - Sections
+
+/// The room's hero, header and stat row live outside the view's own body so
+/// the screen's type stays inside the house limit. Same file, same visibility
+/// to `body`.
+private extension RoomProjectView {
+
+    func hero(for room: RoomModel) -> some View {
+        ZStack(alignment: .top) {
+            heroGradient(for: room)
+                .frame(height: 240)
+                .clipped()
+            LinearGradient(
+                colors: [.clear, PatinaColors.Background.primary],
+                startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: 120)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+
+            HStack {
+                Spacer()
+                Button {
+                    coordinator.navigate(to: .roomSettings(roomId: room.id))
+                } label: {
+                    Text("⚙")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(PatinaColors.Text.primary)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(PatinaColors.Background.primary.opacity(0.92)))
+                        .overlay(Circle().stroke(PatinaColors.pearl, lineWidth: 0.5))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 56)
+            .padding(.horizontal, 18)
+        }
+        .frame(height: 240)
+    }
+
+    func heroGradient(for room: RoomModel) -> LinearGradient {
+        switch room.roomType.lowercased() {
+        case "living", "living_room", "living room": return PatinaGradients.warm
+        case "bedroom":                               return PatinaGradients.dusk
+        case "office":                                return PatinaGradients.sageGradient
+        case "dining", "dining_room":                 return PatinaGradients.earth
+        case "kitchen":                               return PatinaGradients.rattan
+        default:                                      return PatinaGradients.linen
+        }
+    }
+
+    func header(for room: RoomModel) -> some View {
+        let lines = RoomScreenLines.make(room: room)
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(room.name)
+                .font(PatinaTypography.h2)
+                .foregroundStyle(PatinaColors.Text.primary)
+            Text(lines.meta)
+                .font(PatinaTypography.monoSmall)
+                .tracking(0.4)
+                .textCase(.uppercase)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            if let figures = lines.figures {
+                Text(figures)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+            }
+            if let state = lines.state {
+                Text(state)
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+        .accessibilityIdentifier("RoomProjectView.Header")
+    }
+
+    func statRow(for room: RoomModel) -> some View {
+        // SP-18: "IN AR" is gone. `get_recommendations` hard-codes `usdz_url`
+        // to NULL and the direct fetch hard-codes it nil, so `hasARModel` is
+        // false on every path — the number could never be anything but zero.
+        // "MATCH" now names what it matches against.
+        // A score nobody has computed gets no cell, here as on the Spaces
+        // card (integration.md §6.5) — the `—` named a number that does not
+        // exist rather than one its owner declined to give.
+        HStack(spacing: 8) {
+            statCell(value: "\(room.items.count)", label: "Saved pieces")
+            if let match = room.averageMatchScore {
+                statCell(value: "\(match)%", label: "Room match")
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+    }
+
+    func statCell(value: String, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.custom("PlayfairDisplay-Medium", size: 20, relativeTo: .title3))
+                .foregroundStyle(PatinaColors.Text.primary)
+            Text(label)
+                .font(.custom("DMMono-Regular", size: 7, relativeTo: .caption2))
+                .tracking(0.6)
+                .textCase(.uppercase)
+                .foregroundStyle(PatinaColors.Text.muted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(PatinaColors.Background.secondary)
+        )
     }
 }

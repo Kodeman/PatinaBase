@@ -13,16 +13,15 @@ struct DailyStoryCard: View {
     /// footprint on a quiet day and drops to a row when the Record carried the
     /// screen. `HomeComposition.storyWeight` decides which.
     var height: CGFloat = 180
-    /// When it was published. M1 block 5 draws the date beside the read time
-    /// ("AUG 25 · 4 MIN"): a story is a dated thing, and on a screen built
-    /// around what is new the reader is owed which day this one is.
-    var publishedAt: Date?
 
     /// "AUG 25 · 4 MIN", or the read time alone where no publish date came
-    /// back — never an invented one.
+    /// back — never an invented one. M1 block 5: a story is a dated thing, and
+    /// on a screen built around what is new the reader is owed which day this
+    /// one is. The date comes off the story itself — there is no override, so
+    /// no caller can hand the card a date the story does not carry.
     private var datedReadTimeLabel: String {
-        guard let publishedAt else { return story.readTimeLabel }
-        return "\(HouseRecordDates.short(publishedAt)) · \(story.readTimeLabel)"
+        guard let date = story.publishedAt else { return story.readTimeLabel }
+        return "\(HouseRecordDates.short(date)) · \(story.readTimeLabel)"
     }
 
     var body: some View {
@@ -101,7 +100,16 @@ struct DailyStoryCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
         }
-        .frame(height: height)
+        // A MINIMUM, not a fixed height. `height` is the card's weight on a
+        // normal day (180 hero / a shorter row when the Record carried the
+        // screen); at an accessibility text size the tag, title and subtitle
+        // are taller than any of those figures, and a hard `.frame(height:)`
+        // reported the small number to the enclosing VStack while the text
+        // drew past it — so the story overlapped the house rail above it by
+        // ~13pt at XXL and, being the later sibling, hit-tested on top of it:
+        // the covered portion of the room cards was untappable (w4 re-walk,
+        // item 8). Growing with the content is what keeps the column honest.
+        .frame(minHeight: height)
         .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
         .padding(.top, PatinaSpacing.md)
         .padding(.horizontal, PatinaSpacing.mdLarge)

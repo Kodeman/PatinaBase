@@ -7,6 +7,11 @@
 
 import SwiftUI
 
+/// Enough of a tall phone for the panel's rows and its own chrome, and short
+/// enough that it still clears the bar it sits above. File scope: a generic
+/// type may not hold a static stored property.
+private let companionAccessibilityPanelMaxHeight: CGFloat = 460
+
 public struct CompanionHearthView<ExpandedContent: View>: View {
     public let presentation: CompanionPresentationState
 
@@ -310,21 +315,13 @@ private extension CompanionHearthView {
     private func expandedView(_ content: CompanionExpandedPresentation) -> some View {
         VStack(spacing: 0) {
             shell(cornerRadius: presentation.usesFullSheet ? 30 : 26) {
-                VStack(alignment: .leading, spacing: 16) {
-                    expandedHeader(content)
-
-                    if let progress = content.progress {
-                        expandedProgress(progress)
-                    }
-
-                    expandedContent
-                }
-                .padding(20)
-                .frame(
-                    maxWidth: .infinity,
-                    minHeight: presentation.usesFullSheet ? 360 : 0,
-                    alignment: .topLeading
-                )
+                expandedColumn(content)
+                    .padding(20)
+                    .frame(
+                        maxWidth: .infinity,
+                        minHeight: presentation.usesFullSheet ? 360 : 0,
+                        alignment: .topLeading
+                    )
             }
             .frame(maxWidth: presentation.usesFullSheet ? .infinity : 380)
             .padding(.horizontal, presentation.usesFullSheet ? 0 : 24)
@@ -335,6 +332,40 @@ private extension CompanionHearthView {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("companion.state.expanded")
+    }
+
+    /// The panel's column: header, optional progress, then the action rows.
+    ///
+    /// At an accessibility text size the rows are taller than the panel and the
+    /// last of them — `Your spaces` and `Your profile` — fell off the bottom
+    /// with no way to reach them: on the flag-off root the Companion is the
+    /// app's only nav surface, so those destinations became unreachable by
+    /// touch (w4 re-walk, item 8's second note). The column scrolls at those
+    /// sizes and is unchanged at every other one, so the normal panel keeps
+    /// sizing itself to its content.
+    @ViewBuilder
+    private func expandedColumn(_ content: CompanionExpandedPresentation) -> some View {
+        let column = VStack(alignment: .leading, spacing: 16) {
+            expandedHeader(content)
+
+            if let progress = content.progress {
+                expandedProgress(progress)
+            }
+
+            expandedContent
+        }
+
+        if dynamicTypeSize.isAccessibilitySize {
+            ScrollView(.vertical, showsIndicators: true) {
+                column
+            }
+            // Bounded so the panel cannot grow past the screen; the rows inside
+            // it scroll instead of being cut off.
+            .frame(maxHeight: companionAccessibilityPanelMaxHeight)
+            .scrollBounceBehavior(.basedOnSize)
+        } else {
+            column
+        }
     }
 
     private func expandedHeader(_ content: CompanionExpandedPresentation) -> some View {

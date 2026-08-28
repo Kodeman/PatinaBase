@@ -135,20 +135,22 @@ struct DesignerRelationshipTests {
     }
 
     /// M3. `promotedRequest` filters on `isVisibleForPromotion`, which is
-    /// false past a 14-day window on a matched request and false once the
-    /// client dismisses the card. Reading it here made the longest-lived
-    /// relationships resolve `.none` — and R3's pre-emption fails open, so in
-    /// W5 Buy would have drawn for a client who has had a designer for a year.
+    /// false once the client dismisses the card at its current stage. Reading
+    /// it here made the longest-lived relationships resolve `.none` — and R3's
+    /// pre-emption fails open, so in W5 Buy would have drawn for a client who
+    /// has had a designer for a year.
+    ///
+    /// W4 removed the matched half of that hazard at the source (a match no
+    /// longer ages out of promotion, and its dismissal no longer persists), so
+    /// the fixture that still proves the rule is a dismissal at an in-progress
+    /// stage — where a dismissal is still recorded and still hides the card.
     @Test("a relationship outlives the card that displays it")
     func aRelationshipOutlivesItsCard() {
         let designerId = UUID()
 
         let longMatched = lead(status: "accepted", designerId: designerId, anchoredDaysAgo: 30)
         #expect(longMatched.stage == .matched)
-        #expect(
-            !longMatched.isVisibleForPromotion(),
-            "fixture must be past the promotion window, or it proves nothing"
-        )
+        #expect(longMatched.isVisibleForPromotion(), "W4: a match does not age out")
         let stillLive = DesignerRelationshipResolver.resolve(
             lead: longMatched, projects: [], roster: []
         )
@@ -156,9 +158,13 @@ struct DesignerRelationshipTests {
         #expect(stillLive.designerId == designerId)
 
         let dismissed = lead(
-            status: "accepted", designerId: designerId, dismissedAtStage: "matched"
+            status: "viewed", designerId: designerId, dismissedAtStage: "held"
         )
-        #expect(!dismissed.isVisibleForPromotion())
+        #expect(dismissed.stage == .held)
+        #expect(
+            !dismissed.isVisibleForPromotion(),
+            "fixture must be hidden from the card, or it proves nothing"
+        )
         #expect(
             DesignerRelationshipResolver.resolve(
                 lead: dismissed, projects: [], roster: []

@@ -30,7 +30,7 @@ public final class LocalStoreClaim {
     /// The host surface presents the sheet off this.
     public private(set) var isAsking = false
 
-    private init() {}
+    init() {}
 
     /// The pure decision, unit-tested. Ask only when a real account is taking
     /// over a store that no account has ever owned AND there is guest work in
@@ -50,25 +50,44 @@ public final class LocalStoreClaim {
 
     /// Reads the shared container itself so callers outside the persistence
     /// layer (`AuthService`) need no SwiftData import.
-    public func askIfNeeded(previousOwner: String?) {
-        let context = PersistenceController.shared.container.mainContext
+    ///
+    /// Returns whether the sheet is now up — which is also the answer to "is
+    /// anything else allowed to write to this store yet?". Nothing must: the
+    /// server hydrate would put the account's own rooms in beside the guest's,
+    /// and "Start fresh" would then delete rooms that were never the guest's.
+    @discardableResult
+    public func askIfNeeded(
+        previousOwner: String?,
+        context: ModelContext? = nil
+    ) -> Bool {
+        let context = context ?? PersistenceController.shared.container.mainContext
         guard Self.shouldAsk(
             previousOwner: previousOwner,
             hasGuestWork: Self.hasGuestWork(context: context)
-        ) else { return }
+        ) else { return false }
         isAsking = true
+        return true
     }
 
     /// "Keep them" — exactly the behaviour that used to happen silently.
     public func keep() {
         isAsking = false
+        hydrate()
     }
 
     /// "Start fresh" — the account starts with its own rows and nothing else.
-    /// Routed through the existing `LocalStoreReset` so the on-disk scan
-    /// bundles go with the rows.
+    /// Routed through `LocalStoreReset` so the on-disk scan bundles go with the
+    /// rows, and scoped to rooms that never synced: the account's own rooms
+    /// are not the guest's work and are not what this button offers to clear.
     public func startFresh() {
-        LocalStoreReset.wipeUserScopedData()
+        LocalStoreReset.wipeGuestWork()
         isAsking = false
+        hydrate()
+    }
+
+    /// The account's rooms, now that the claim has been answered and the store
+    /// is settled. Held until this point rather than run off the auth event.
+    private func hydrate() {
+        Task { await RoomSyncCoordinator.shared.reconcileSharedStore() }
     }
 }
