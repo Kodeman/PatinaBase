@@ -811,3 +811,36 @@ Method notes (both non-obvious, both real, neither an app defect):
 
 Simulator left booted, light appearance, Dynamic Type medium, signed in as `client@patina.dev`, on
 the Daily Room.
+
+---
+
+## w3-n1
+
+Lane N1 (root + routing), 2026-08-27. Build `4a92058b5` on `daily-return/w3-n1`, signed simulator
+`.app` from `.build/dd` (no `CODE_SIGNING_ALLOWED=NO`). Simulator **`dr-w3-n1`**
+`3D350836-BAF9-443A-8598-588D8D4AEBF6` (iPhone 17 Pro · iOS 26.5 · 402×874 pt, shots 1206×2622 @3×) —
+**not** the walker's review device. Every launch carries `-DeploymentTarget local`; the flag-on rows
+add `-PatinaFlags house-first`. Taps via `mcp__blitz-iphone__device_action` with the explicit UDID.
+
+| Shot | Launch | What it shows |
+|---|---|---|
+| `w3-n1-01-guest-today-flagon.png` | flag **on**, guest | The bar draws: `Today` `Spaces` `Pieces` `Studio` + the Strata mark in the trailing slot, over the guest Today (record, `Start with a room`, story, `Sign in to keep this on every device.`). `Today` is the active label after one tap from Pieces |
+| `w3-n1-02-guest-spaces-flagon.png` | flag on, guest | One tap on `Spaces` → `Your Spaces` (empty state). ⚠ `YourSpacesView` still draws its own back chevron at a tab root — N2's wrapper item |
+| `w3-n1-03-guest-pieces-flagon.png` | flag on, guest | One tap on `Pieces` → `Browse pieces` |
+| `w3-n1-04-guest-studio-flagon.png` | flag on, guest | One tap on `Studio` → `Your Studio` (the canonical title) over `StudioHubView`'s guest state. AX tree on this screen: four `AXTabButton`s labelled `Today` / `Your Spaces` / `Browse pieces` / `Your Studio` plus `Companion`, with `AXValue: 1` on the selected one only — B-7's VoiceOver contract, verified in the tree rather than assumed |
+| `w3-n1-05-client-today-flagon.png` | flag on, `client@patina.dev` | W2's Record under the bar, unchanged: NEEDS YOU (invoice `$4,250.00 · DUE SEP 2`, proposal `BY SEP 10`, decision `BY SEP 1`) / MOVED (message `AUG 27`, story `AUG 26`), designer seat, house rail |
+| `w3-n1-06-record-row-pushes-on-today.png` | flag on, client | **The in-tab push rule.** Tapping the invoice row on Today pushes `INV-2026-0142` onto the **Today** stack — `Today` is still the active tab, so Back returns to Today rather than stranding the person in Studio |
+| `w3-n1-07-money-footer-under-bar.png` | flag on, client | Same screen scrolled: `Pay $4,250.00` clears the bar, and ⚠ `MoneyScreenChrome`'s 148 pt dock clearance is now ~150 pt of dead space under it (steward §7·C, unowned file, not edited) |
+| `w3-n1-08-deeplink-piece-switches-to-pieces-tab.png` | flag on, client | **Deep link → tab.** `xcrun simctl openurl … patina://piece/a0000000-…-004` fired while the app sat on **Today** switched to **Pieces** and pushed the piece — `openExternal` reading `RouteTabTable`, on the simulator. `https://client.patina.cloud/invoices/…` opened Safari instead: the AASA association is not installed on this simulator, which is a device claim this program does not make (`build-plan.md` "Global constraints"), so the Studio landing is pinned by `HouseFirstRootTests` rather than shot |
+| `w3-n1-09-client-today-flagoff.png` | flag **off**, client | The W2 root, unchanged: **no bar**, the floating Companion dock, the Studio pill in the header, the Record, the designer seat, the house rail |
+
+**Flag-off equivalence — how it is actually proven.** A screenshot diff against `w2-r2-03` reports
+13.8% of pixels differing, and none of it is this lane: that shot predates W2's own one-`See all`
+footer fix, and the seed's relative dates and the time-of-day greeting both moved between runs. The
+proof that holds is the diff, not the pixels — `git diff 83b8c3340 HEAD -- ContentView.swift` is
+**+19 lines and zero deletions inside the old body**: the whole W2 root moved into
+`legacyMainContent` character for character, `companionHearthReservation` and `CompanionOverlay()`
+included. Across the other three touched files the only removed lines are two signatures that gained
+a defaulted `houseFirst: Bool = false`, `public init()` becoming a convenience initialiser, one
+`navigate(to: route)` becoming `openExternal(route)` (identical on the off root), and a statement
+reorder in `PatinaApp.init()`.
