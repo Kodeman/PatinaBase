@@ -75,13 +75,33 @@ import SwiftUI
 /// Stable identifiers for each tour-step anchor. Used by the orchestrator to
 /// gate which anchor view should display the popover for the current step.
 public enum FirstLaunchTourAnchor: String, CaseIterable, Sendable {
-    /// Home / Daily Room greeting header (step 1).
+    /// Today's greeting header (step 1).
     case homeGreeting = "home-greeting"
-    /// The "+ Add" save affordance on the topmost daily product card (step 2).
-    /// The Daily Room ships no heart control — this anchor names the button
-    /// that actually exists.
+    /// The record card on Today (step 2 of `defaultSteps`, B-8 + steward §7·E).
+    ///
+    /// The record is the block step 1 has just named, and it lives inside the
+    /// tour's own subtree — `FirstLaunchTour` owns the model and publishes it
+    /// down from `DailyRoomView`, so an anchor on another tab could never
+    /// receive the popover. The mount site in `DailyRoomView` is unconditional
+    /// (the record itself is unflagged, R1), but only `defaultSteps` names this
+    /// anchor, so on the flag-off root the modifier is inert: its popover
+    /// binding is never true and nothing draws.
+    case todayRecord = "today-record"
+    /// The "+ Add" save affordance on a daily product card.
+    ///
+    /// Carried by `preHouseFirstSteps` only. W2 removed `DailyProductCard`, so
+    /// from that wave on this anchor has mounted in no production view and the
+    /// step it carries is dropped every launch — the flag-off tour runs two
+    /// steps while declaring three (`research/2x-panel-{u1,u2,d2,h1}.json`).
+    /// `defaultSteps` retired it; the flag-off list keeps it because B-8's
+    /// rollback clause holds that root byte-for-byte.
     case addToRoom = "add-to-room"
-    /// Profile monogram / avatar entry point (step 3).
+    /// The Studio door in Today's header (step 3).
+    ///
+    /// The raw value predates two moves of the control it names — a monogram,
+    /// then W2's labelled `Studio` pill — and is deliberately NOT renamed with
+    /// them: it is pinned by `FirstLaunchTourTests` and keys the Sanity
+    /// document behind step 3.
     case profileMonogram = "profile-monogram"
 }
 
@@ -222,9 +242,71 @@ public final class FirstLaunchTourModel {
     /// task brief and surfaced in PostHog.
     public static let defaultTourKey: String = "ios-first-launch-tour"
 
-    /// Canonical default step list. Aligned with the Sanity content authored
-    /// in Sprint 3 G9.
+    /// Canonical default step list — rewritten in W3 (B-8), and spoken only on
+    /// the **house-first** root.
+    ///
+    /// Two of the three sentences the tour shipped with had stopped being true.
+    /// Step 1 named the **Daily Room**, a name B-7(c) retires in favour of the
+    /// word already on the screen; step 3 named a **profile** reached from a
+    /// monogram that no longer exists. Step 2 was worse than untrue — its
+    /// anchor mounted in no production view after W2 retired
+    /// `DailyProductCard`, so the tour silently ran two steps while declaring
+    /// three. All three are rewritten here, and step 2 is re-anchored onto the
+    /// record — the block step 1 has just named, and the one thing on Today
+    /// that mounts at every tier.
+    ///
+    /// This list is reached ONLY when the root is house-first. B-8's own
+    /// *Rollback* clause is literal — *"the tour is gated by the same
+    /// `house-first` flag as the root it describes"* — and W3's acceptance line
+    /// is equally literal: *"flag off restores the W2 root byte-for-byte."*
+    /// `preHouseFirstSteps` below is that byte-for-byte list, and
+    /// `DailyRoomView` picks between the two off `AppCoordinator.isHouseFirstRoot`
+    /// (resolved once, at launch, from `FeatureFlags`).
+    ///
+    /// The surface keys do NOT move with the copy — they key Sanity documents,
+    /// and renaming them would orphan three of them. Only the bodies change;
+    /// the new bodies are in `waves/w3/n3-sanity-copy.md`.
     public static let defaultSteps: [FirstLaunchTourStep] = [
+        FirstLaunchTourStep(
+            surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step1Home,
+            anchor: .homeGreeting,
+            fallback: (
+                heading: "Welcome to Patina",
+                body: "This is Today — what moved in your house, and what is waiting on you."
+            )
+        ),
+        FirstLaunchTourStep(
+            surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step2Saved,
+            anchor: .todayRecord,
+            fallback: (
+                heading: "What needs you",
+                body: "Anything waiting on you lands here, dated. Tap a line to go straight to it."
+            )
+        ),
+        FirstLaunchTourStep(
+            surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step3Profile,
+            anchor: .profileMonogram,
+            fallback: (
+                heading: "Your Studio",
+                body: "Your studio — projects, proposals, invoices and files"
+            )
+        ),
+    ]
+
+    /// The step list the **flag-off** root keeps, verbatim as it shipped after
+    /// W2 — B-8's *Rollback* clause and W3's "byte-for-byte" acceptance line
+    /// both require the pre-house-first root to be untouched by this wave, and
+    /// its tour is part of that root.
+    ///
+    /// Two things about this list are wrong, and are kept wrong on purpose:
+    /// step 1 says "Daily Room", a name B-7(c) retires; step 2's `.addToRoom`
+    /// anchor has mounted in no production view since W2 removed
+    /// `DailyProductCard`, so the flag-off tour drops that step and runs two
+    /// while declaring three (`research/2x-panel-{u1,u2,d2,h1}.json` caught it
+    /// as "Step 1 of 2"). Both are pre-existing defects of the root scheduled
+    /// for deletion one release from now — naming them here rather than fixing
+    /// them under a flag that promises this root does not move.
+    public static let preHouseFirstSteps: [FirstLaunchTourStep] = [
         FirstLaunchTourStep(
             surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step1Home,
             anchor: .homeGreeting,
@@ -248,7 +330,7 @@ public final class FirstLaunchTourModel {
                 heading: "Your profile",
                 body: "Rooms, saved pieces, and settings live here."
             )
-        ),
+        )
     ]
 
     // MARK: - First-launch detection

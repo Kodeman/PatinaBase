@@ -306,10 +306,16 @@ struct InvoicesMoneyRailTests {
     @Test("the overlay resolves a yielding route to the minimal dock")
     func overlayHonoursTheYield() throws {
         let source = try SourcePin.read("Patina/Features/Companion/Views/CompanionOverlay.swift")
-        let yield = try #require(
-            source.range(of: "yieldsToPinnedFooter(for: screen) { return .minimal }")
+        // W3/B-2 widened the call: the policy now takes the root, because on
+        // the house-first root there is no dock to yield, only a fixed bar slot
+        // (`waves/w3/n1-notes.md` §2b). The ordering this test exists to pin —
+        // the yield resolves BEFORE the nudge — is unchanged.
+        let yield = try #require(source.range(of: "yieldsToPinnedFooter("))
+        let minimal = try #require(
+            source.range(of: "houseFirst: coordinator.isHouseFirstRoot\n        ) { return .minimal }")
         )
         let nudge = try #require(source.range(of: "CompanionActionProvider.nudge("))
         #expect(yield.lowerBound < nudge.lowerBound)
+        #expect(minimal.lowerBound < nudge.lowerBound)
     }
 }

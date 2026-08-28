@@ -349,18 +349,19 @@ struct FirstLaunchTourTests {
 
         let model = FirstLaunchTourModel()
         model.anchorMountGracePeriod = .milliseconds(20)
-        // Zero-room home: greeting + profile mount, but the `.addToRoom`
-        // product card (and its "+ Add" button) never does.
+        // A guest with nothing true to say: greeting + Studio door mount,
+        // but the record card — which draws only where the record has rows —
+        // never does.
         model.registerAnchor(.homeGreeting)
         model.registerAnchor(.profileMonogram)
         model.startTour(triggerSource: "test")
 
         #expect(model.currentStep == 0)   // homeGreeting
         model.advance()
-        #expect(model.currentStep == 1)   // lands on .addToRoom first…
+        #expect(model.currentStep == 1)   // lands on .todayRecord first…
         // …then auto-skips once the grace window elapses with no mount.
         let dropped = await waitUntil { model.currentStep == 2 }
-        #expect(dropped, "`.addToRoom` never dropped after its grace window elapsed unmounted")
+        #expect(dropped, "`.todayRecord` never dropped after its grace window elapsed unmounted")
         #expect(model.currentStep == 2)   // .profileMonogram (mounted)
         #expect(model.isActive)
 
@@ -374,7 +375,7 @@ struct FirstLaunchTourTests {
         // U32 walk regression: a real launch takes several seconds for a user
         // to read and dismiss the first coachmark — far longer than
         // `anchorMountGracePeriod`. The old implementation only started the
-        // "will `.addToRoom` ever mount?" clock once `advance()` had already
+        // "will `.todayRecord` ever mount?" clock once `advance()` had already
         // landed on it, so a fast-reading grace window vs. a slow-reading user
         // produced the SAME `currentStep == 1` intermediate landing either way
         // — the model-level tests above pass under both the old and the new
@@ -393,8 +394,8 @@ struct FirstLaunchTourTests {
 
         let model = FirstLaunchTourModel()
         model.anchorMountGracePeriod = .milliseconds(20)
-        // Zero-room home: greeting + profile mount immediately; `.addToRoom`
-        // never does (no product card exists to carry the anchor).
+        // A guest with nothing true to say: greeting + Studio door mount
+        // immediately; `.todayRecord` never does (no record card is drawn).
         model.registerAnchor(.homeGreeting)
         model.registerAnchor(.profileMonogram)
         model.startTour(triggerSource: "test")
@@ -406,12 +407,12 @@ struct FirstLaunchTourTests {
         // BEFORE ever tapping "Next" — the realistic case. Wait on the model's
         // own "this step is settled as unmountable" signal rather than a
         // literal sleep (see `waitUntil`); the ordering under test is
-        // "`.addToRoom`'s fate is decided BEFORE advance()", not any particular
+        // "`.todayRecord`'s fate is decided BEFORE advance()", not any particular
         // wall-clock duration.
         let settledBeforeAdvance = await waitUntil { model.totalSteps == 2 }
         #expect(
             settledBeforeAdvance,
-            "`.addToRoom` never settled as unmountable — the upfront availability check never ran"
+            "`.todayRecord` never settled as unmountable — the upfront availability check never ran"
         )
         // Settling a step the tour is not sitting on must not move the pointer
         // on its own; the jump below has to come out of `advance()`.
@@ -445,16 +446,16 @@ struct FirstLaunchTourTests {
 
         let model = FirstLaunchTourModel()
         model.registerAnchor(.homeGreeting)
-        model.registerAnchor(.addToRoom)
+        model.registerAnchor(.todayRecord)
         model.registerAnchor(.profileMonogram)
         model.startTour(triggerSource: "test")
 
         model.advance()
-        #expect(model.currentStep == 1)          // .addToRoom, mounted normally
+        #expect(model.currentStep == 1)          // .todayRecord, mounted normally
         #expect(model.currentStepNumber == 2)
         #expect(model.totalSteps == 3)
 
-        model.unregisterAnchor(.addToRoom)
+        model.unregisterAnchor(.todayRecord)
 
         #expect(model.currentStep == 2)          // walked forward automatically
         #expect(model.currentStepNumber == 2)    // renumbered — "Step 2 of 2"
@@ -482,14 +483,14 @@ struct FirstLaunchTourTests {
         model.startTour(triggerSource: "test")
 
         model.advance()
-        #expect(model.currentStep == 1)   // .addToRoom, not mounted yet
+        #expect(model.currentStep == 1)   // .todayRecord, not mounted yet
         // The product card mounts a beat later, inside the grace window — the
         // pending skip must cancel so the coachmark is kept (the regression the
         // async-skip fix guards against).
         try? await Task.sleep(for: .milliseconds(20))
-        model.registerAnchor(.addToRoom)
+        model.registerAnchor(.todayRecord)
         try? await Task.sleep(for: .milliseconds(850))
-        #expect(model.currentStep == 1)   // stayed on .addToRoom
+        #expect(model.currentStep == 1)   // stayed on .todayRecord
         #expect(model.isActive)
     }
 
@@ -552,22 +553,22 @@ struct FirstLaunchTourTests {
         let model = FirstLaunchTourModel()
         // Dormant — nothing should claim any anchor.
         #expect(!model.isShowingPopover(forAnchor: .homeGreeting))
-        #expect(!model.isShowingPopover(forAnchor: .addToRoom))
+        #expect(!model.isShowingPopover(forAnchor: .todayRecord))
         #expect(!model.isShowingPopover(forAnchor: .profileMonogram))
 
         model.startTour(triggerSource: "test")
         #expect(model.isShowingPopover(forAnchor: .homeGreeting))
-        #expect(!model.isShowingPopover(forAnchor: .addToRoom))
+        #expect(!model.isShowingPopover(forAnchor: .todayRecord))
         #expect(!model.isShowingPopover(forAnchor: .profileMonogram))
 
         model.advance()
         #expect(!model.isShowingPopover(forAnchor: .homeGreeting))
-        #expect(model.isShowingPopover(forAnchor: .addToRoom))
+        #expect(model.isShowingPopover(forAnchor: .todayRecord))
         #expect(!model.isShowingPopover(forAnchor: .profileMonogram))
 
         model.advance()
         #expect(!model.isShowingPopover(forAnchor: .homeGreeting))
-        #expect(!model.isShowingPopover(forAnchor: .addToRoom))
+        #expect(!model.isShowingPopover(forAnchor: .todayRecord))
         #expect(model.isShowingPopover(forAnchor: .profileMonogram))
     }
 
@@ -584,7 +585,7 @@ struct FirstLaunchTourTests {
         #expect(descriptor?.surfaceKey == "ios-app/first-launch-tour/step-1-home")
 
         // Non-matching anchor → nil.
-        #expect(model.currentStepDescriptor(forAnchor: .addToRoom) == nil)
+        #expect(model.currentStepDescriptor(forAnchor: .todayRecord) == nil)
     }
 
     @Test
@@ -622,9 +623,9 @@ struct FirstLaunchTourTests {
         #expect(model.currentStepNumber == 1)
         #expect(model.totalSteps == 3)
 
-        model.advance()                                   // lands on .addToRoom
+        model.advance()                                   // lands on .todayRecord
         let renumbered = await waitUntil { model.currentStep == 2 }  // …which never mounts
-        #expect(renumbered, "`.addToRoom` never dropped, so the caption never renumbered")
+        #expect(renumbered, "`.todayRecord` never dropped, so the caption never renumbered")
 
         #expect(model.currentStep == 2)                   // .profileMonogram
         #expect(model.currentStepNumber == 2)             // renumbered, not 3
@@ -639,7 +640,8 @@ struct FirstLaunchTourTests {
         let model = FirstLaunchTourModel()
         #expect(model.tourKey == "ios-first-launch-tour")
         #expect(model.steps.count == 3)
-        #expect(model.steps.map(\.anchor) == [.homeGreeting, .addToRoom, .profileMonogram])
+        // B-8: step 2 moved off `.addToRoom`, whose view W2 retired.
+        #expect(model.steps.map(\.anchor) == [.homeGreeting, .todayRecord, .profileMonogram])
     }
 
     @Test
@@ -656,12 +658,96 @@ struct FirstLaunchTourTests {
         // Sanity-served copy still overrides these at runtime — these are the
         // offline / CMS-miss strings, and they are design-authority verbatim.
         let steps = FirstLaunchTourModel.defaultSteps
+        // B-8, verbatim. Step 1 no longer says "Daily Room" (B-7 c retires the
+        // name); step 2 describes the record it now points at; step 3 names the
+        // studio rather than a profile reached from a monogram that is gone.
         #expect(steps[0].fallback?.heading == "Welcome to Patina")
-        #expect(steps[0].fallback?.body == "This is your Daily Room — picks and stories chosen for your space.")
-        #expect(steps[1].fallback?.heading == "Save what you love")
-        #expect(steps[1].fallback?.body == "Add pieces to a room with + Add — they follow you everywhere.")
-        #expect(steps[2].fallback?.heading == "Your profile")
-        #expect(steps[2].fallback?.body == "Rooms, saved pieces, and settings live here.")
+        #expect(steps[0].fallback?.body == "This is Today — what moved in your house, and what is waiting on you.")
+        #expect(steps[1].fallback?.heading == "What needs you")
+        #expect(steps[1].fallback?.body == "Anything waiting on you lands here, dated. Tap a line to go straight to it.")
+        #expect(steps[2].fallback?.heading == "Your Studio")
+        #expect(steps[2].fallback?.body == "Your studio — projects, proposals, invoices and files")
+    }
+
+    @Test
+    func defaultStepFallbacksNameNothingTheAppRetired() {
+        // B-7(c) retires "Daily Room" in favour of the word already on the
+        // screen; W2 retired `DailyProductCard` and with it the "+ Add"
+        // capsule step 2 used to name; M1 removed the monogram step 3 named.
+        // Each of these was live copy on a shipped build.
+        let copy = FirstLaunchTourModel.defaultSteps
+            .compactMap { $0.fallback }
+            .map { "\($0.heading) \($0.body)" }
+            .joined(separator: " ")
+            .lowercased()
+
+        #expect(!copy.contains("daily room"))
+        #expect(!copy.contains("+ add"))
+        #expect(!copy.contains("monogram"))
+    }
+
+    @Test
+    func everyDefaultStepAnchorHasExactlyOneProductionMount() throws {
+        // The defect this whole rewrite starts from: an anchor in the step list
+        // that no view carries. The tour drops it silently and runs short —
+        // "Step 1 of 2" against a three-step list, seen in four research walks.
+        // A second mount would be just as wrong: two popovers, one step.
+        //
+        // Scoped to `defaultSteps` — the house-first list — on purpose.
+        // `preHouseFirstSteps` still carries the dead `.addToRoom` anchor, and
+        // `theFlagOffTourKeepsTheStepThatNeverMounts` below names that rather
+        // than letting this pin quietly cover it.
+        let views = SourcePin.swiftFiles(under: "Patina/Features")
+            .filter { !$0.hasSuffix("FirstLaunchTour.swift") }
+            .compactMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+
+        for step in FirstLaunchTourModel.defaultSteps {
+            let mounts = views.reduce(0) { total, source in
+                total + SourceScan.code(in: source)
+                    .components(separatedBy: ".firstLaunchTourAnchor(.\(step.anchor))")
+                    .count - 1
+            }
+            #expect(
+                mounts == 1,
+                "anchor .\(step.anchor) is mounted \(mounts) times in production views, not once"
+            )
+        }
+    }
+
+    @Test
+    func theTourStillRunsAllThreeStepsWhenEveryAnchorMounts() {
+        // The counterpart to the drop tests above: with the record on screen —
+        // an activeProject client, which is who the tour's copy is written for
+        // — the tour is three steps, numbered 1, 2, 3, and completes on the
+        // third.
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        model.registerAnchor(.homeGreeting)
+        model.registerAnchor(.todayRecord)
+        model.registerAnchor(.profileMonogram)
+        model.startTour(triggerSource: "test")
+
+        #expect(model.currentStepNumber == 1)
+        #expect(model.totalSteps == 3)
+        #expect(model.isShowingPopover(forAnchor: .homeGreeting))
+
+        model.advance()
+        #expect(model.currentStepNumber == 2)
+        #expect(model.totalSteps == 3)
+        #expect(model.isShowingPopover(forAnchor: .todayRecord))
+        #expect(!model.isOnFinalStep)
+
+        model.advance()
+        #expect(model.currentStepNumber == 3)
+        #expect(model.isShowingPopover(forAnchor: .profileMonogram))
+        #expect(model.isOnFinalStep)
+
+        model.advance()
+        #expect(!model.isActive)
+        #expect(getFirstLaunchTourState(model.tourKey).completed == true)
     }
 
     @Test
@@ -744,6 +830,113 @@ struct FirstLaunchTourTests {
         // them down so a rename forces an explicit migration.
         #expect(FirstLaunchTourAnchor.homeGreeting.rawValue == "home-greeting")
         #expect(FirstLaunchTourAnchor.addToRoom.rawValue == "add-to-room")
+        #expect(FirstLaunchTourAnchor.todayRecord.rawValue == "today-record")
+        // Deliberately NOT renamed with the control it names (steward §7·F):
+        // it keys the Sanity document behind step 3.
         #expect(FirstLaunchTourAnchor.profileMonogram.rawValue == "profile-monogram")
+    }
+
+    // MARK: - The flag-off root's tour (B-8 Rollback, W3 acceptance)
+
+    @Test
+    func theFlagOffRootKeepsTheTourItShipped() {
+        // B-8's Rollback clause is literal — "the tour is gated by the same
+        // `house-first` flag as the root it describes" — and W3's acceptance
+        // line is "flag off restores the W2 root byte-for-byte". This pins the
+        // flag-off list as the copy that shipped after W2, character for
+        // character, so the rewrite cannot leak onto that root by accident.
+        let steps = FirstLaunchTourModel.preHouseFirstSteps
+        #expect(steps.count == 3)
+        #expect(steps.map(\.anchor) == [.homeGreeting, .addToRoom, .profileMonogram])
+
+        #expect(steps[0].surfaceKey == "ios-app/first-launch-tour/step-1-home")
+        #expect(steps[0].fallback?.heading == "Welcome to Patina")
+        #expect(steps[0].fallback?.body == "This is your Daily Room — picks and stories chosen for your space.")
+        #expect(steps[1].surfaceKey == "ios-app/first-launch-tour/step-2-saved")
+        #expect(steps[1].fallback?.heading == "Save what you love")
+        #expect(steps[1].fallback?.body == "Add pieces to a room with + Add — they follow you everywhere.")
+        #expect(steps[2].surfaceKey == "ios-app/first-launch-tour/step-3-profile")
+        #expect(steps[2].fallback?.heading == "Your profile")
+        #expect(steps[2].fallback?.body == "Rooms, saved pieces, and settings live here.")
+    }
+
+    @Test
+    func theTwoStepListsAreActuallyDifferentCopy() {
+        // A guard against the branch being wired to the same array twice — the
+        // failure mode that would make every other pin here pass while the
+        // rewrite still reached the flag-off root.
+        let houseFirst = FirstLaunchTourModel.defaultSteps.compactMap { $0.fallback?.body }
+        let flagOff = FirstLaunchTourModel.preHouseFirstSteps.compactMap { $0.fallback?.body }
+        #expect(houseFirst.count == 3 && flagOff.count == 3)
+        for (new, old) in zip(houseFirst, flagOff) {
+            #expect(new != old, "a step's body is identical on both roots — is the branch wired to one array?")
+        }
+        // The surface keys are the one thing that must NOT differ: they key the
+        // same three Sanity documents on both roots.
+        #expect(
+            FirstLaunchTourModel.defaultSteps.map(\.surfaceKey)
+                == FirstLaunchTourModel.preHouseFirstSteps.map(\.surfaceKey)
+        )
+    }
+
+    @Test
+    func theFlagOffTourKeepsTheStepThatNeverMounts() throws {
+        // Honesty (C5), stated as a test rather than a comment: `.addToRoom`
+        // has mounted in no production view since W2 retired
+        // `DailyProductCard`, so the flag-off tour drops step 2 and runs two
+        // steps while declaring three. That is a pre-existing defect of the
+        // root B-8's rollback clause promises not to move, and it is kept, not
+        // overlooked. If a view ever mounts `.addToRoom` again, this fails and
+        // the note above it needs rewriting.
+        let views = SourcePin.swiftFiles(under: "Patina/Features")
+            .filter { !$0.hasSuffix("FirstLaunchTour.swift") }
+            .compactMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+        let mounts = views.reduce(0) { total, source in
+            total + SourceScan.code(in: source)
+                .components(separatedBy: ".firstLaunchTourAnchor(.addToRoom)")
+                .count - 1
+        }
+        #expect(mounts == 0, "`.addToRoom` mounts again — the flag-off tour's dead step is no longer dead")
+        #expect(FirstLaunchTourModel.preHouseFirstSteps.map(\.anchor).contains(.addToRoom))
+    }
+
+    @Test
+    func theTourIsGatedByTheSameFlagAsTheRootItDescribes() throws {
+        // The gate itself, pinned at its one production call site. The flag is
+        // read through `AppCoordinator.isHouseFirstRoot` — resolved once at
+        // launch from `FeatureFlags` and held — never re-read mid-session.
+        let source = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
+        let code = SourceScan.code(in: source)
+
+        #expect(code.contains("steps: coordinator.isHouseFirstRoot"))
+        #expect(code.contains("? FirstLaunchTourModel.defaultSteps"))
+        #expect(code.contains(": FirstLaunchTourModel.preHouseFirstSteps"))
+        // The flag must not be read live in the view layer.
+        #expect(!code.contains("FeatureFlags.shared.isOn(.houseFirst)"))
+    }
+
+    @Test
+    func theRecordAnchorMountsOnceAndIsInertOnTheFlagOffRoot() throws {
+        // The record is unflagged (R1), so its `.todayRecord` anchor modifier
+        // is unconditional — and must stay that way, or the mount would move
+        // with a flag the record does not answer to. It is inert on the
+        // flag-off root because `preHouseFirstSteps` never names the anchor:
+        // `isShowingPopover(forAnchor:)` reads the step list, so the binding is
+        // never true and nothing draws.
+        #expect(!FirstLaunchTourModel.preHouseFirstSteps.map(\.anchor).contains(.todayRecord))
+
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel(steps: FirstLaunchTourModel.preHouseFirstSteps)
+        model.registerAnchor(.homeGreeting)
+        model.registerAnchor(.todayRecord)
+        model.registerAnchor(.profileMonogram)
+        model.startTour(triggerSource: "test")
+        #expect(!model.isShowingPopover(forAnchor: .todayRecord))
+        #expect(model.currentStepDescriptor(forAnchor: .todayRecord) == nil)
+        model.advance()
+        #expect(!model.isShowingPopover(forAnchor: .todayRecord))
     }
 }
