@@ -79,7 +79,13 @@ public final class RoomStore {
         orientationRaw: String = "",
         windowCount: Int = 0,
         doorCount: Int = 0,
-        manualEntry: Bool
+        manualEntry: Bool,
+        /// True where the person typed these numbers into fields that name
+        /// their unit. `ManualRoomEntryView`'s width/length fields are
+        /// labelled in feet and are typed on purpose, so a room made there
+        /// counts for the fit line (integration.md §6.8). The scan-fallback
+        /// draft does not: nobody read a unit off a control there.
+        measuredWithUnitControl: Bool = false
     ) -> RoomModel {
         // Convert feet → meters for RoomModel's internal storage when provided.
         let wMeters = widthFeet.map { $0 * 0.3048 }
@@ -98,6 +104,7 @@ public final class RoomStore {
         room.windowCount = windowCount
         room.doorCount = doorCount
         room.ceilingHeightFeet = ceilingHeightFeet
+        room.measuredWithUnitControl = measuredWithUnitControl
         context.insert(room)
         save()
         return room
