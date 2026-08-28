@@ -12,6 +12,7 @@
 
 import Testing
 import Foundation
+import SwiftUI
 @testable import Patina
 
 @MainActor
@@ -95,6 +96,122 @@ struct CompanionSheetDriverTests {
         )
         #expect(source.contains("dynamicTypeSize.isAccessibilitySize"))
         #expect(source.contains("ScrollView(.vertical, showsIndicators: true)"))
+    }
+
+    // MARK: - w5: why round 3's scroll fix did not reach the last row
+    //
+    // This test above is the one that went green while walk 4 still could not
+    // reach `Your spaces` and `Your profile`. Measured on `dr-w5-a11y`
+    // (402×874 pt, `accessibility-extra-extra-large`): the ScrollView is real
+    // and it does scroll — but it was capped at a hardcoded 460 pt, so its
+    // viewport ran 336…796 on an 874 pt screen while the column measured
+    // 1,522 pt. Three-and-a-third viewports of travel, and ~250 pt of screen
+    // left unused above the panel. The 20 pt shell inset sat OUTSIDE the
+    // ScrollView, so the visible strip 796…816 — the bottom edge of the panel,
+    // where a thumb lands — was panel that did not scroll. Walk 4's four
+    // attempts all began at y=800 or y=850, in that strip or below the panel
+    // entirely; a drag from y=790 moved the column and a drag from y=800 did
+    // not. Both facts are pinned below.
+
+    /// Cause (a). 460 was a guess: right on no device in particular, and on
+    /// the review device it threw away a quarter of the screen. The panel now
+    /// takes the room it is actually given, and keeps sizing to its content
+    /// whenever the content fits.
+    @Test("the panel takes the height it is given, not a hardcoded 460")
+    func thePanelIsNotCappedAtAGuessedHeight() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Companion/Components/CompanionHearthView.swift"
+        )
+        #expect(source.contains("companionAccessibilityPanelMaxHeight") == false)
+        #expect(source.contains("ViewThatFits(in: .vertical)"))
+    }
+
+    /// Cause (b). The inset has to travel WITH the rows: applied to the
+    /// container instead, it is a strip of panel that does not scroll.
+    @Test("the panel's inset scrolls with the rows, leaving no dead strip")
+    func thePanelInsetRidesInsideTheScrollingColumn() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/Companion/Components/CompanionHearthView.swift"
+        )
+        let columnDecl = try #require(source.range(of: "private func expandedColumn("))
+        let inset = try #require(source.range(of: ".padding(companionPanelPadding)"))
+        let viewThatFits = try #require(source.range(of: "ViewThatFits(in: .vertical)"))
+
+        // Declared on the column, before the ViewThatFits that wraps it —
+        // i.e. inside whatever scrolls, never around it.
+        #expect(columnDecl.upperBound < inset.lowerBound)
+        #expect(inset.upperBound < viewThatFits.lowerBound)
+    }
+
+    // MARK: - w5: the orb yields at accessibility text sizes
+    //
+    // Walk 4 finding 1: on the flag-off root at an accessibility size the
+    // 64 pt dock's frame (y=748…812, x=169…233) sat wholly inside the
+    // editorial story card (y=711…961) and won the hit test, so a tap meant
+    // for the story opened the Companion. The dock is the flag-off root's only
+    // nav surface, and the ruling for this already exists — W1b's
+    // `yieldsToPinnedFooter`: the dock steps aside to the 44 pt corner mark
+    // rather than trying to solve an overlap with an inset. Same yield, same
+    // reason, one more condition.
+
+    @Test("at an accessibility text size the dock yields to the corner mark")
+    func theDockYieldsAtAccessibilityTextSizes() {
+        #expect(CompanionHearthMetrics.yieldsToAccessibilityText(.accessibility1))
+        #expect(CompanionHearthMetrics.yieldsToAccessibilityText(.accessibility5))
+        // `.xxxLarge` is the largest NON-accessibility size, and walk 4 proved
+        // the rail behaves correctly there — the yield must not reach it.
+        #expect(CompanionHearthMetrics.yieldsToAccessibilityText(.xxxLarge) == false)
+        #expect(CompanionHearthMetrics.yieldsToAccessibilityText(.large) == false)
+    }
+
+    /// The reservation has to shrink with the dock or the surface pays 120 pt
+    /// for a 72 pt mark — which is the story card and the house rail losing
+    /// space they need at exactly the text size that needs it most.
+    @Test("the reservation shrinks to the mark it now reserves for")
+    func theReservationFollowsTheYield() {
+        #expect(CompanionHearthMetrics.reservation(accessibilityText: false)
+                == CompanionHearthMetrics.reservedHeight)
+        #expect(CompanionHearthMetrics.reservation(accessibilityText: true)
+                == CompanionHearthMetrics.minimalDockHeight)
+        #expect(CompanionHearthMetrics.minimalDockHeight
+                < CompanionHearthMetrics.reservedHeight)
+        // The mark plus `minimalView`'s own lift, and nothing else — no
+        // caption row, because the corner mark has no caption.
+        #expect(CompanionHearthMetrics.minimalDockHeight
+                == CompanionHearthMetrics.minimalDiameter
+                    + CompanionHearthMetrics.overlayBottomInset)
+    }
+
+    /// The two halves must read the same environment value. When they
+    /// disagree the surface either keeps dead space under a dock that yielded
+    /// or hands its taps to a dock that did not.
+    @Test("the overlay and the reservation yield on the same rule")
+    func theOverlayAndTheReservationAgree() throws {
+        let overlay = try SourcePin.read(
+            "Patina/Features/Companion/Views/CompanionOverlay.swift"
+        )
+        #expect(overlay.contains("@Environment(\\.dynamicTypeSize) private var dynamicTypeSize"))
+        #expect(overlay.contains(
+            "if CompanionHearthMetrics.yieldsToAccessibilityText(dynamicTypeSize) { return .minimal }"
+        ))
+
+        let reservation = try SourcePin.read(
+            "Patina/Design/Components/CompanionSafeArea.swift"
+        )
+        #expect(reservation.contains("@Environment(\\.dynamicTypeSize) private var dynamicTypeSize"))
+        #expect(reservation.contains("CompanionHearthMetrics.reservation("))
+    }
+
+    /// Yielding must not cost VoiceOver the one thing the collapsed Hearth
+    /// announced — `collapsedView` hides the caption at accessibility sizes on
+    /// the promise that "the same context remains available as the Companion
+    /// button's announced accessibility value".
+    @Test("the corner mark still announces what needs the eye")
+    func theCornerMarkKeepsItsAnnouncedValue() throws {
+        let overlay = try SourcePin.read(
+            "Patina/Features/Companion/Views/CompanionOverlay.swift"
+        )
+        #expect(overlay.contains(".accessibilityValue(contextualCollapsedHint)"))
     }
 
     // MARK: - The two fixed heights that overlapped the column

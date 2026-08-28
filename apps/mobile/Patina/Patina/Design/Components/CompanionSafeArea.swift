@@ -39,6 +39,15 @@ public enum CompanionHearthMetrics {
     public static let dockHeight: CGFloat =
         collapsedDiameter + captionSpacing + captionRowHeight + overlayBottomInset
 
+    /// The yielded dock: `CompanionOverlay.minimalView`'s glass circle.
+    public static let minimalDiameter: CGFloat = 44
+
+    /// What the yielded dock draws above the bottom safe area — the 44 pt mark
+    /// plus `minimalView`'s own 28 pt lift, and nothing else. There is no
+    /// caption row, because the corner mark carries no caption.
+    public static let minimalDockHeight: CGFloat =
+        minimalDiameter + overlayBottomInset
+
     /// The house-first bar's tappable row, above the bottom safe area.
     ///
     /// The figure belongs to `PatinaTabBar.itemHeight`; it is restated here so
@@ -108,30 +117,80 @@ public enum CompanionHearthMetrics {
             return false
         }
     }
+
+    /// The same yield, on one more condition: an accessibility text size, on
+    /// every route that draws the Hearth.
+    ///
+    /// W4 walk 4, finding 1. At `accessibility-extra-extra-large` on the
+    /// flag-off root, the 64 pt dock's frame (y=748…812, x=169…233) sat wholly
+    /// inside the editorial story card's bounds (y=711…961) and — being the
+    /// later sibling — won the hit test: a tap aimed at the story opened the
+    /// Companion instead. Same family as the money screens' defect, and it
+    /// takes the same answer for the same reason `yieldsToPinnedFooter` gives:
+    /// no inset settles it, because the card travels under the dock while the
+    /// surface scrolls. The dock steps aside to the corner mark instead, out of
+    /// the content's column at every scroll offset.
+    ///
+    /// Route-independent on purpose. At an accessibility size *every* card on
+    /// every surface is taller and the centred dock lands on one of them; a
+    /// per-route list would be a list of the surfaces someone happened to walk.
+    static func yieldsToAccessibilityText(_ size: DynamicTypeSize) -> Bool {
+        size.isAccessibilitySize
+    }
+
+    /// What a surface reserves for the dock, given the text size it is drawn
+    /// at. The yielded dock is 72 pt, not 140, so reserving `reservedHeight`
+    /// after the yield would cost the story card and the house rail 48 pt of
+    /// the space they need at exactly the size that needs it most.
+    ///
+    /// Named apart from `reservedHeight` so the two never get confused: this
+    /// is the answer a *screen* uses, that one is the resting-dock constant it
+    /// is still built from.
+    public static func reservation(accessibilityText: Bool) -> CGFloat {
+        accessibilityText ? minimalDockHeight : reservedHeight
+    }
 }
 
-extension View {
-    /// Reserves the invisible Hearth so scrollable content cannot settle under
-    /// the centered Companion circle and contextual hint.
-    ///
-    /// SP-19: the inset used to paint an opaque primary-canvas band that
-    /// extended past the bottom safe area. A safe-area inset only moves the
-    /// RESTING position of a scroll view — content still travels through that
-    /// region while scrolling — so the band drew over it, and on a pushed
-    /// screen it sat on top of "Sign proposal" and clipped the label. C8 calls
-    /// the Hearth "a reserved layout region, never a painted bar"; the band
-    /// contradicted the contract this type documents, so it is gone. The
-    /// reservation, its height and its hit/accessibility behaviour are
-    /// unchanged — nothing moves, the paint simply stops.
-    func companionHearthReservation(isActive: Bool = true) -> some View {
-        safeAreaInset(edge: .bottom, spacing: 0) {
+/// Reserves the invisible Hearth so scrollable content cannot settle under the
+/// Companion.
+///
+/// SP-19: the inset used to paint an opaque primary-canvas band that extended
+/// past the bottom safe area. A safe-area inset only moves the RESTING
+/// position of a scroll view — content still travels through that region while
+/// scrolling — so the band drew over it, and on a pushed screen it sat on top
+/// of "Sign proposal" and clipped the label. C8 calls the Hearth "a reserved
+/// layout region, never a painted bar"; the band contradicted the contract
+/// `CompanionHearthMetrics` documents, so it is gone.
+///
+/// A `ViewModifier` rather than a plain `View` extension because the height is
+/// no longer a constant: at an accessibility text size the dock has yielded to
+/// the corner mark (`yieldsToAccessibilityText`) and reserves 72 pt instead of
+/// 120. Reading `dynamicTypeSize` here — the same environment value
+/// `CompanionOverlay.displayMode` reads — is what keeps the two halves from
+/// disagreeing. When they disagree the surface either keeps dead space under a
+/// dock that yielded, or hands its taps to a dock that did not.
+private struct CompanionHearthReservation: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let isActive: Bool
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
             if isActive {
                 Color.clear
-                    .frame(height: CompanionHearthMetrics.reservedHeight)
+                    .frame(height: CompanionHearthMetrics.reservation(
+                        accessibilityText: dynamicTypeSize.isAccessibilitySize
+                    ))
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
         }
+    }
+}
+
+extension View {
+    func companionHearthReservation(isActive: Bool = true) -> some View {
+        modifier(CompanionHearthReservation(isActive: isActive))
     }
 
     /// Source-compatible name retained for existing and in-flight call sites.

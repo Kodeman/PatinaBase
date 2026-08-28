@@ -26,6 +26,9 @@ enum CompanionDisplayMode: Equatable {
 public struct CompanionOverlay: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Read here so `displayMode`'s yield and `companionHearthReservation`'s
+    /// height come from the same value (see `CompanionHearthReservation`).
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var viewModel = CompanionViewModel()
     @State private var state: CompanionState = .button
     @State private var voiceInputState: VoiceInputState = .idle
@@ -168,6 +171,16 @@ public struct CompanionOverlay: View {
 
         if case .pieceDetail = screen { return .minimal }
         if case .arPlacement = screen { return .minimal }
+        // W4 walk 4, finding 1: at an accessibility text size the centred dock
+        // lands inside a card and takes its taps — the story card on Today,
+        // and every other card that grew with the type. The dock yields to its
+        // corner mark on every route that draws it. See
+        // `CompanionHearthMetrics.yieldsToAccessibilityText`.
+        //
+        // Ahead of the nudge check on purpose: the nudge pill is already
+        // suppressed at these sizes (`collapsedView`), so returning `.nudging`
+        // here would only draw the same dock under a different name.
+        if CompanionHearthMetrics.yieldsToAccessibilityText(dynamicTypeSize) { return .minimal }
         // A screen with a pinned money act keeps the act; the dock yields to
         // its corner mark. See `CompanionHearthMetrics.yieldsToPinnedFooter`.
         if CompanionHearthMetrics.yieldsToPinnedFooter(
@@ -745,6 +758,11 @@ public struct CompanionOverlay: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Patina companion — menu")
+        // `collapsedView` hides its caption at accessibility text sizes on the
+        // promise that "the same context remains available as the Companion
+        // button's announced accessibility value". Those sizes now land here
+        // instead, so the value has to come with them.
+        .accessibilityValue(contextualCollapsedHint)
         .accessibilityHint("Opens quick actions for this screen.")
         .accessibilityIdentifier("companion.bubble")
     }

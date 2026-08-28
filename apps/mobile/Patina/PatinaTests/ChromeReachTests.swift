@@ -62,9 +62,12 @@ struct ChromeReachTests {
     func hearthReservationDrawsNothing() throws {
         let source = try SourcePin.read("Patina/Design/Components/CompanionSafeArea.swift")
         // Scope the pin to the reservation itself — the file's #Preview draws
-        // its own background legitimately.
-        let start = try #require(source.range(of: "func companionHearthReservation"))
-        let end = try #require(source.range(of: "func companionSafeArea"))
+        // its own background legitimately. W5: the body moved into a
+        // `ViewModifier` (the height now reads `dynamicTypeSize`, which a plain
+        // `View` extension cannot hold), so the anchors follow it there. Same
+        // four facts, same region of code.
+        let start = try #require(source.range(of: "struct CompanionHearthReservation"))
+        let end = try #require(source.range(of: "extension View {"))
         let reservation = String(source[start.lowerBound..<end.lowerBound])
         #expect(!reservation.contains(".background"))
         #expect(!reservation.contains("ignoresSafeArea"))
