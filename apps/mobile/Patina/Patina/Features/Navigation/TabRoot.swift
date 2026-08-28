@@ -1,0 +1,83 @@
+//
+//  TabRoot.swift
+//  Patina
+//
+//  W3 · N2. The three tab roots the house-first bar mounts beside Today, and
+//  the one seam that tells a screen it is a root rather than a pushed copy of
+//  itself.
+//
+//  Why a seam at all: `YourSpacesView` and `RecommendationsView` are pushed
+//  destinations that existed long before the bar, so both call `.patinaScreen`,
+//  which pins a back chevron. As a tab root neither has anywhere to go back to,
+//  and both drew the chevron anyway in the first flag-on shots. Rather than
+//  branch inside two screens — and rather than fork them — the wrapper puts
+//  `isTabRoot` in the environment and the chrome reads it. Every other screen
+//  in the app, and the whole flag-off root, gets the default `false` and is
+//  unchanged.
+//
+//  The canonical title comes from `PatinaTab.canonicalName` and is never
+//  re-typed here — not even in a comment, which `TabRootTitleTests` pins.
+//  B-7 (a) splits the word on the bar from the destination's canonical name,
+//  and one source for the second half is what stops the two from drifting.
+//
+
+import SwiftUI
+
+// MARK: - The seam
+
+private struct IsTabRootKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// True only for the view a `PatinaTab` mounts as its stack's root. False
+    /// everywhere else, including every pushed appearance of the same screen.
+    var isTabRoot: Bool {
+        get { self[IsTabRootKey.self] }
+        set { self[IsTabRootKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Marks this view as `tab`'s root and gives it that destination's
+    /// canonical name (C4).
+    func tabRoot(_ tab: PatinaTab) -> some View {
+        environment(\.isTabRoot, true)
+            .navigationTitle(tab.canonicalName)
+    }
+}
+
+// MARK: - The three roots
+
+/// Spaces. `YourSpacesView` already prints its canonical name in its own
+/// header, so the navigation title here is the canonical record rather than a
+/// second drawn string — the screen hides the system bar via `.patinaScreen`.
+struct SpacesTabRoot: View {
+    var body: some View {
+        YourSpacesView()
+            .tabRoot(.spaces)
+    }
+}
+
+/// Pieces. `RecommendationsView` prints its canonical name in its own header
+/// and, as a tab root, draws M9's `Saved` door above the chips.
+struct PiecesTabRoot: View {
+    var body: some View {
+        RecommendationsView()
+            .tabRoot(.pieces)
+    }
+}
+
+/// Studio. The tab's root is the profile composition — the identity line, the
+/// Studio hub, and the `Settings` row that opens the sheet carrying Sign Out
+/// and Delete Account (Apple 5.1.1 (v)). That is exactly what the monogram
+/// opens on the flag-off root, so the door does not move with the bar; only
+/// its name does. `ProfileView` owns the scroll view and the header, and
+/// prints the canonical name itself when it is a tab root — it hides the
+/// system bar, so `navigationTitle` alone would not draw.
+struct StudioTabRoot: View {
+    var body: some View {
+        ProfileView()
+            .tabRoot(.studio)
+    }
+}

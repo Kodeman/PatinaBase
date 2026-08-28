@@ -179,6 +179,8 @@ public struct CompanionContext: Equatable {
             return "Placing furniture"
         case .profile:
             return "Your profile"
+        case .studio:
+            return "Your Studio"
         case .notifications:
             return "Notifications"
         case .designerConsultation:
@@ -246,6 +248,8 @@ public struct CompanionContext: Equatable {
             return "arkit"
         case .profile:
             return "person.circle"
+        case .studio:
+            return "folder"
         case .notifications:
             return "bell"
         case .designerConsultation:

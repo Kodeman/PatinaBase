@@ -20,6 +20,11 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
 
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.modelContext) private var modelContext
+    /// True only when this screen is the Pieces tab's root (`TabRoot.swift`).
+    /// M9's `Saved` door belongs to the tab, not to every appearance of the
+    /// browse grid — a room-scoped browse, and the whole flag-off root, must
+    /// render exactly as they did before.
+    @Environment(\.isTabRoot) private var isTabRoot
     @State private var viewModel = RecommendationsViewModel()
 
     /// U06/U07: when set, this browse is scoped to a single room — the
@@ -102,6 +107,17 @@ struct RecommendationsView: View { // swiftlint:disable:this type_body_length
                     .padding(.horizontal, 24)
                     .padding(.bottom, 8)
                     .transition(.opacity)
+            }
+
+            // M9: the door that cannot hide. Above the chips, below the
+            // title, drawn at every count including zero (F14). Only on the
+            // tab root — see `isTabRoot` above.
+            if isTabRoot {
+                SavedDoorRow(count: viewModel.savedProductIds.count) {
+                    coordinator.navigate(to: .table)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 14)
             }
 
             // Filter bar. SP-02: at XXL Dynamic Type the five chips are wider

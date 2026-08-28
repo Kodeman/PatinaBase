@@ -42,9 +42,29 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
         BadgeCountService.shared
     }
 
+    /// One tour model per root, and this view hosts only the flag-off root's.
+    ///
+    /// `FirstLaunchTour` publishes its model down its own subtree. On the
+    /// house-first root Today is one of four sibling stacks and B-8's step 3
+    /// points at the bar, so the host has to sit above all four —
+    /// `HouseFirstRoot` owns it there. Hosting it here as well would put a
+    /// second model over Today's anchors and split the tour in half.
+    /// `isHouseFirstRoot` is the flag read once at launch and held
+    /// (`AppCoordinator`), not a live re-read.
+    ///
+    /// Only the HOST is gated. Both hosts run the same step list (R4): the
+    /// sentences B-8 replaces were untrue on this root too, and the second list
+    /// existed only to keep a step alive whose anchor no view has mounted since
+    /// W2.
+    @ViewBuilder
     var body: some View {
-        FirstLaunchTour(canAutoStart: coordinator.navigationPath.isEmpty) {
+        if coordinator.isHouseFirstRoot {
             screenBody
+        } else {
+            // `navigationPath` is the flag-off root's single stack.
+            FirstLaunchTour(canAutoStart: coordinator.navigationPath.isEmpty) {
+                screenBody
+            }
         }
     }
 
@@ -192,7 +212,11 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     onHelpTap: { isHelpPanelPresented = true },
                     onStudioTap: { coordinator.navigate(to: .profile) },
                     onBellTap: { coordinator.navigate(to: .notifications) },
-                    unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count
+                    unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count,
+                    // M1's header is date, greeting and a bell. The pill is
+                    // B-1's fallback door for the root without a bar; where
+                    // the bar draws, the Studio tab IS the door.
+                    showsStudioControl: !coordinator.isHouseFirstRoot
                 )
 
                 if blocks.contains(.record) {
@@ -209,6 +233,13 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     )
                     .padding(.horizontal, PatinaSpacing.mdLarge)
                     .padding(.top, PatinaSpacing.md)
+                    // First-launch tour step 2 (B-8). The record is the block
+                    // step 1 has just named; when it does not draw — a guest
+                    // with nothing true to say — the tour drops the step and
+                    // renumbers rather than pointing at nothing. Unconditional
+                    // because the record is unflagged (R1); inert on the
+                    // flag-off root, whose step list does not name this anchor.
+                    .firstLaunchTourAnchor(.todayRecord)
                 }
 
                 if blocks.contains(.nextMove) {

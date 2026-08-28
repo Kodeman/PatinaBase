@@ -46,6 +46,14 @@ struct DailyGreetingHeader: View {
     /// PT-3-7: unread-notification count rendered as a badge over the bell.
     /// 0 hides the badge.
     var unreadCount: Int = 0
+    /// Whether this header draws the Studio pill at all.
+    ///
+    /// B-1 makes the pill the fallback door "if the flag never flips", and M1
+    /// draws this header as date over greeting and a belled dot — no monogram,
+    /// one Studio door. On the house-first root the bar carries that door, so
+    /// `DailyRoomView` passes `false` and the pill (with the tour anchor it
+    /// hosts, which moves to the bar with it) does not draw.
+    var showsStudioControl: Bool = true
 
     var body: some View {
         HStack(alignment: .top) {
@@ -117,11 +125,15 @@ struct DailyGreetingHeader: View {
                     .accessibilityIdentifier("DailyRoomView.HelpButton")
                 }
             }
-            studioControl
-                // First-launch tour anchor — Step 3 popover attaches to the
-                // same slot the monogram held; the control there is now
-                // labelled, and carries the count.
-                .firstLaunchTourAnchor(.profileMonogram)
+            if showsStudioControl {
+                studioControl
+                    // First-launch tour anchor — Step 3 popover attaches to the
+                    // same slot the monogram held; the control there is now
+                    // labelled, and carries the count. The anchor travels with
+                    // the control: on the house-first root the door is the bar's
+                    // Studio tab and the anchor is mounted there instead.
+                    .firstLaunchTourAnchor(.profileMonogram)
+            }
         }
         .padding(.top, 56)
         .padding(.horizontal, PatinaSpacing.mdLarge)

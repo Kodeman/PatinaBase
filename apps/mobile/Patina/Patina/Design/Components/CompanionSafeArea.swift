@@ -39,9 +39,41 @@ public enum CompanionHearthMetrics {
     public static let dockHeight: CGFloat =
         collapsedDiameter + captionSpacing + captionRowHeight + overlayBottomInset
 
+    /// The house-first bar's tappable row, above the bottom safe area.
+    ///
+    /// The figure belongs to `PatinaTabBar.itemHeight`; it is restated here so
+    /// the Design layer does not reach into `Features/Navigation` for it, and
+    /// `HouseFirstRootTests` pins the two equal.
+    public static let barRowHeight: CGFloat = 49
+
+    /// The bottom clearance a screen with a pinned money act must reserve.
+    ///
+    /// Both answers are measured from the **bottom safe area**, because a
+    /// `safeAreaInset` on the root — the flag-off root's 120 pt Hearth
+    /// reservation, the house-first root's bar — does not reach a
+    /// `NavigationStack`'s pushed destinations. Measured on `dr-w3-int`: the
+    /// piece screen's pinned capsule sits at the identical y on both roots, and
+    /// a money screen's content ends `bottomClearance` above the home indicator
+    /// rather than above the reservation. So a pushed screen clears whatever
+    /// draws over that edge by itself:
+    ///
+    ///  • flag-off — the Companion dock, 140 pt of mark, caption and lift (W1b).
+    ///  • house-first — the bar's 49 pt row (B-2: the bar replaces the dock).
+    ///    Not zero: the bar is drawn over the screen, not reserved out of it.
+    ///
+    /// Plus the same 8 pt of air in both cases.
+    public static func pinnedFooterClearance(houseFirst: Bool) -> CGFloat {
+        houseFirst ? barRowHeight + 8 : dockHeight + 8
+    }
+
     /// Root overlay ownership policy. Scan and quiz render their own in-flow
     /// Companion, so reserving the root Hearth there would create dead space.
-    static func reservesRootHearth(for route: AppRoute) -> Bool {
+    ///
+    /// B-2: on the house-first root the bar replaces the dock, so nothing is
+    /// reserved at all. (`HouseFirstRoot` never applies the reservation, so
+    /// this answer is belt-and-braces for any other caller.)
+    static func reservesRootHearth(for route: AppRoute, houseFirst: Bool = false) -> Bool {
+        guard !houseFirst else { return false }
         switch route {
         case .scanFlow, .styleQuiz:
             return false
@@ -63,7 +95,12 @@ public enum CompanionHearthMetrics {
     /// drops to its minimal resting state — the 44-point mark in the trailing
     /// corner, caption retired — out of the act's column at every scroll
     /// offset. The same yield `pieceDetail` and `arPlacement` already take.
-    static func yieldsToPinnedFooter(for route: AppRoute) -> Bool {
+    ///
+    /// B-2 retires the policy on the house-first root: there is no dock to
+    /// yield, only a fixed bar slot, and a slot cannot step aside. The W1b
+    /// policy stands, unchanged, on the flag-off root.
+    static func yieldsToPinnedFooter(for route: AppRoute, houseFirst: Bool = false) -> Bool {
+        guard !houseFirst else { return false }
         switch route {
         case .invoiceDetail, .proposalDetail, .decisionDetail:
             return true

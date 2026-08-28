@@ -13,6 +13,8 @@ import SwiftData
 struct YourSpacesView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appCoordinator) private var coordinator
+    /// True only when this screen is the Spaces tab's root (W3 · N2's seam).
+    @Environment(\.isTabRoot) private var isTabRoot
     @Query(sort: \RoomModel.createdAt, order: .reverse) private var rooms: [RoomModel]
     /// Drives the contextual help-panel sheet attached to the Rooms surface.
     /// Toggled by the `?` button in the header.
@@ -27,7 +29,21 @@ struct YourSpacesView: View {
             PatinaColors.Background.primary.ignoresSafeArea()
 
             if rooms.isEmpty {
-                emptyState
+                // The populated branch draws "Your Spaces" in its own header;
+                // the empty one never did, which was invisible under a back
+                // chevron and is not invisible as a tab root — the canonical
+                // name (C4) would be nowhere on glass (`w3-n2-05`). Pushed,
+                // the screen is byte-for-byte what it was.
+                if isTabRoot {
+                    VStack(spacing: 0) {
+                        header
+                            .padding(.horizontal, 20)
+                            .padding(.top, 56)
+                        emptyState
+                    }
+                } else {
+                    emptyState
+                }
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 16) {
@@ -159,7 +175,7 @@ struct YourSpacesView: View {
             // R14: a just-finished scan uploads before any local room card
             // exists, so the empty state needs the pill too.
             syncStatusPill
-                .padding(.top, 72)
+                .padding(.top, isTabRoot ? 8 : 72)
             Spacer()
             ZStack {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)

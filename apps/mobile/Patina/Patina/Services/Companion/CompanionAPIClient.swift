@@ -335,6 +335,7 @@ extension CompanionAPIClient {
         case .styleResult: return "style_result"
         case .arPlacement: return "ar_placement"
         case .profile: return "profile"
+        case .studio: return "studio"
         case .notifications: return "notifications"
         case .designerConsultation: return "designer_consultation"
         case .designRequests: return "design_requests"

@@ -57,6 +57,7 @@ struct CompanionActionMatrixTests {
         .styleResult(result: sampleStyle),
         .arPlacement(productId: "piece-1"),
         .profile,
+        .studio,
         .notifications,
         .designerConsultation,
         .designRequests(focusLeadId: nil),
@@ -192,6 +193,31 @@ struct CompanionActionMatrixTests {
             let ctx = Self.context(for: .heroFrame, roomCount: 2, active: false)
             let items = CompanionActionProvider.actions(for: .heroFrame, context: ctx, isAuthenticated: signedIn)
             #expect(!items.contains { $0.route == .heroFrame })
+        }
+    }
+
+    /// No menu offers the screen the reader is already standing on. The tail's
+    /// PROFILE row is the one that can: R2 minted `.studio` over the same
+    /// `ProfileView` composition and the tail's exclusion still named only
+    /// `.profile`, so the Studio tab offered "Your profile" — a second copy of
+    /// its own root, pushed on top of itself with a back chevron. The row count
+    /// stayed inside C8's six, which is why only this pin catches it.
+    @Test
+    func noMenuOffersTheScreenItIsAlreadyOn() {
+        // `.profile` and `.studio` draw the same composition (`workCoreDestination`),
+        // so on either one a row to either is the screen offering itself.
+        let profileComposition: Set<AppRoute> = [.profile, .studio]
+        Self.everyCombination { route, signedIn, items in
+            for item in items {
+                guard let destination = item.route else { continue }
+                let offersItself = profileComposition.contains(route)
+                    ? profileComposition.contains(destination)
+                    : destination == route
+                #expect(
+                    !offersItself,
+                    "\(route) signedIn=\(signedIn) offers a row to \(destination) — the screen itself"
+                )
+            }
         }
     }
 

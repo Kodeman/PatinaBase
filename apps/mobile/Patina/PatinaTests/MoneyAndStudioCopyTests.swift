@@ -235,8 +235,44 @@ struct MoneyAndStudioCopyTests {
 
     @Test("nothing on a money screen is drawn inside the Hearth")
     func moneyScreensClearTheHearth() {
-        #expect(MoneyScreenMetrics.bottomClearance >= CompanionHearthMetrics.reservedHeight)
+        #expect(MoneyScreenMetrics.bottomClearance(houseFirst: false)
+                >= CompanionHearthMetrics.reservedHeight)
         #expect(CompanionHearthMetrics.reservedHeight == 120)
+    }
+
+    /// R3: one owner, two answers. The flag-off root keeps W1b's constant — the
+    /// dock draws 140 pt over that edge — and the house-first root clears the
+    /// bar instead, which is 49 pt of row, not 140. Both are measured from the
+    /// bottom safe area: a `safeAreaInset` on the root does not reach a pushed
+    /// destination, so a money screen clears what draws over it by itself.
+    @Test("a money screen clears the bar on one root and the dock on the other")
+    func theClearanceAnswersToWhateverOwnsTheBottomEdge() {
+        #expect(MoneyScreenMetrics.bottomClearance(houseFirst: true)
+                == CompanionHearthMetrics.barRowHeight + 8)
+        #expect(MoneyScreenMetrics.bottomClearance(houseFirst: false)
+                == CompanionHearthMetrics.dockHeight + 8)
+        // The bar is the cheaper edge, and by a lot — this is the ~99 pt of
+        // dead space `shots/w3-n1-07-money-footer-under-bar.png` caught.
+        #expect(MoneyScreenMetrics.bottomClearance(houseFirst: true)
+                < MoneyScreenMetrics.bottomClearance(houseFirst: false))
+        // And the seam is the shared one, not a second private constant.
+        for houseFirst in [true, false] {
+            #expect(MoneyScreenMetrics.bottomClearance(houseFirst: houseFirst)
+                    == CompanionHearthMetrics.pinnedFooterClearance(houseFirst: houseFirst))
+        }
+    }
+
+    /// The piece screen's pinned `Add to Room` capsule sat 13 pt under the bar
+    /// (`shots/w3-n1-13-piece-footer-under-bar-dark-xxl.png`). It takes the
+    /// money screens' house-first clearance rather than a second hand-rolled
+    /// number, and keeps W2's on the root where nothing is over that edge.
+    @Test("the piece screen's pinned act clears the bar too")
+    func theAddToRoomCapsuleClearsTheBar() throws {
+        let source = try SourcePin.read("Patina/Features/ProductDetail/Views/ProductDetailView.swift")
+        #expect(source.contains("MoneyScreenMetrics.bottomClearance(houseFirst: true)"))
+        #expect(source.contains("coordinator.isHouseFirstRoot"))
+        #expect(!SourceScan.code(in: source).contains(".padding(.bottom, 36)"),
+                "the hand-rolled home-indicator clearance is named, not repeated")
     }
 
     @Test("every money screen reserves the status bar and the Hearth from one place")
@@ -247,8 +283,10 @@ struct MoneyAndStudioCopyTests {
             // W1b ruling 1: the band is folded into PatinaScreenChrome, so a
             // pushed money screen gets it from `.patinaScreen(…)`.
             #expect(source.contains(".patinaScreen("), "\(name) misses the status-bar band")
-            #expect(source.contains("MoneyScreenMetrics.bottomClearance"),
+            #expect(source.contains("MoneyScreenMetrics.bottomClearance(houseFirst:"),
                     "\(name) hard-codes its Hearth clearance")
+            #expect(source.contains("coordinator.isHouseFirstRoot"),
+                    "\(name) reads the clearance without the flag that decides it")
             #expect(!source.contains(".padding(.bottom, 120)"), "\(name) still hard-codes 120")
             #expect(!source.contains(".padding(.bottom, 140)"), "\(name) still hard-codes 140")
         }

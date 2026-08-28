@@ -69,20 +69,24 @@ struct PatinaApp: App {
             AppSettings.shared.hasCompletedOnboarding = false
             AppSettings.shared.roomCount = 0
         }
-        _coordinator = State(initialValue: AppCoordinator())
-
-        // Configure sync service with SwiftData context for persistent queue
-        let modelContext = PersistenceController.shared.container.mainContext
-        RoomScanSyncService.shared.configure(modelContext: modelContext)
-
-        // Initialize PostHog analytics (skip during UI testing)
+        // Initialize PostHog analytics (skip during UI testing). It runs first
+        // because `FeatureFlags` reads the payload its SDK persisted, and the
+        // coordinator below reads `FeatureFlags`.
         if !Self.isUITesting {
             PostHogService.shared.initialize()
         }
 
         // Resolve every feature flag once, before the root is chosen, and hold
-        // the answer for the session.
+        // the answer for the session. This MUST stay above the coordinator:
+        // `AppCoordinator.init` reads `house-first` here and holds it in a
+        // `let`, and that `let` is what picks the root in `ContentView`.
         FeatureFlags.shared.resolveAtLaunch()
+
+        _coordinator = State(initialValue: AppCoordinator())
+
+        // Configure sync service with SwiftData context for persistent queue
+        let modelContext = PersistenceController.shared.container.mainContext
+        RoomScanSyncService.shared.configure(modelContext: modelContext)
     }
 
     var body: some Scene {

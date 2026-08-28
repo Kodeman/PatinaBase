@@ -134,7 +134,7 @@ enum CompanionActionProvider {
             return scanItems(screen, context: context)
         case .styleQuiz, .styleResult:
             return styleItems(screen, context: context)
-        case .projectList, .projectDetail, .decisionList, .decisionDetail,
+        case .studio, .projectList, .projectDetail, .decisionList, .decisionDetail,
              .threadList, .threadDetail, .documentList, .notifications,
              .designerConsultation, .designRequests:
             return studioItems(screen, context: context)
@@ -149,7 +149,11 @@ enum CompanionActionProvider {
 
     /// HOME on every non-`.heroFrame` screen, then the identity row: guests get
     /// SIGN-IN (suggested only if no screen row already is — fixes the historical
-    /// double-suggestion), signed-in users get PROFILE (except on `.profile`).
+    /// double-suggestion), signed-in users get PROFILE — except on the two routes
+    /// that already render the profile composition. `.studio` is the second of
+    /// them (R2 gave the Studio tab its own route over `ProfileView`); offering
+    /// the row there pushed a duplicate `ProfileView`, back chevron and all, onto
+    /// the tab whose root it already was.
     /// "Connect to portal" is NOT here — it lives in the `.profile` menu,
     /// signed-in only.
     private static func appendTail(
@@ -163,7 +167,7 @@ enum CompanionActionProvider {
         if !isAuthenticated {
             let hasSuggested = items.contains(where: \.isSuggested)
             items.append(signInRow(suggested: !hasSuggested))
-        } else if screen != .profile {
+        } else if screen != .profile && screen != .studio {
             items.append(profileRow())
         }
     }
@@ -219,6 +223,8 @@ enum CompanionActionProvider {
 
     private static func studioPanelTitle(for screen: AppRoute) -> String {
         switch screen {
+        case .studio:
+            return "What's next?"
         case .projectList:
             return "What's on your plate?"
         case .projectDetail:

@@ -46,6 +46,25 @@ struct HomeHeaderTests {
         #expect(source.contains("badges.studioHint"))
     }
 
+    /// M1 draws this header as date over greeting and a belled dot. The pill
+    /// is B-1's fallback door "if the flag never flips", so it draws on the
+    /// flag-off root and not where the bar carries the Studio tab — and the
+    /// tour anchor it hosts travels with it rather than being left mounted on
+    /// a control that is not there.
+    @Test("the Studio pill is the root-without-a-bar's door, and only that root's")
+    func theStudioPillIsGatedOffWhereTheBarDraws() throws {
+        let header = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
+        #expect(header.contains("var showsStudioControl: Bool = true"))
+        #expect(header.contains("if showsStudioControl {"))
+        // The anchor is inside the gate, not beside it.
+        let gated = try #require(header.range(of: "if showsStudioControl {"))
+        let anchor = try #require(header.range(of: ".firstLaunchTourAnchor(.profileMonogram)"))
+        #expect(gated.lowerBound < anchor.lowerBound)
+
+        let home = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
+        #expect(home.contains("showsStudioControl: !coordinator.isHouseFirstRoot"))
+    }
+
     /// SP-19: 44 pt. The Studio control replaced the bare monogram on the
     /// screen every session opens on, so it is held to the ruled target.
     @Test("the Studio control is a 44 pt target")

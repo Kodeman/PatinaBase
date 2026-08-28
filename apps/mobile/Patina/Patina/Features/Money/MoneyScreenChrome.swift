@@ -26,11 +26,20 @@ import SwiftUI
 enum MoneyScreenMetrics {
 
     /// Clearance under the last element of a money screen, so nothing lands
-    /// inside the Hearth. Derived from what the dock actually draws — the
-    /// mark, its caption row and the overlay's lift — not from
-    /// `reservedHeight`, which is 20 points shorter than the dock and left the
-    /// old 144 clearing it by luck.
-    static let bottomClearance: CGFloat = CompanionHearthMetrics.dockHeight + 8
+    /// under whatever owns the bottom edge.
+    ///
+    /// One owner, one seam: `CompanionHearthMetrics.pinnedFooterClearance`
+    /// answers for the dock on the flag-off root and for the bar on the
+    /// house-first one. Before W3-fix this was a `static let` sized to the dock
+    /// alone, so on the house-first root every money screen carried ~99 pt of
+    /// dead space above a bar that is only 49 pt tall
+    /// (`shots/w3-n1-07-money-footer-under-bar.png`).
+    ///
+    /// Callers pass the flag they already hold — `coordinator.isHouseFirstRoot`,
+    /// resolved once at launch — never a live `FeatureFlags` read.
+    static func bottomClearance(houseFirst: Bool) -> CGFloat {
+        CompanionHearthMetrics.pinnedFooterClearance(houseFirst: houseFirst)
+    }
 }
 
 // The status-bar band that lived here is now `.patinaTopBand()` in

@@ -75,13 +75,34 @@ import SwiftUI
 /// Stable identifiers for each tour-step anchor. Used by the orchestrator to
 /// gate which anchor view should display the popover for the current step.
 public enum FirstLaunchTourAnchor: String, CaseIterable, Sendable {
-    /// Home / Daily Room greeting header (step 1).
+    /// Today's greeting header (step 1).
     case homeGreeting = "home-greeting"
-    /// The "+ Add" save affordance on the topmost daily product card (step 2).
-    /// The Daily Room ships no heart control — this anchor names the button
-    /// that actually exists.
+    /// The record card on Today (step 2 of `defaultSteps`, B-8 + steward §7·E).
+    ///
+    /// The record is the block step 1 has just named, and it lives inside the
+    /// tour's own subtree — `FirstLaunchTour` owns the model and publishes it
+    /// down from `DailyRoomView`, so an anchor on another tab could never
+    /// receive the popover. The mount site in `DailyRoomView` is unconditional
+    /// (the record itself is unflagged, R1), but only `defaultSteps` names this
+    /// anchor, so on the flag-off root the modifier is inert: its popover
+    /// binding is never true and nothing draws.
+    case todayRecord = "today-record"
+    /// The "+ Add" save affordance on a daily product card.
+    ///
+    /// **Retired from every step list** (R4). W2 removed `DailyProductCard`, so
+    /// from that wave on this anchor mounted in no production view and the step
+    /// it carried was dropped every launch — the tour ran two steps while
+    /// declaring three (`research/2x-panel-{u1,u2,d2,h1}.json`, and observed
+    /// live as "Step 1 of 2"). The case survives its step because the raw value
+    /// is pinned by `FirstLaunchTourTests` and a DEBUG preview still mounts it;
+    /// no step list may name it again while no view carries it.
     case addToRoom = "add-to-room"
-    /// Profile monogram / avatar entry point (step 3).
+    /// The Studio door in Today's header (step 3).
+    ///
+    /// The raw value predates two moves of the control it names — a monogram,
+    /// then W2's labelled `Studio` pill — and is deliberately NOT renamed with
+    /// them: it is pinned by `FirstLaunchTourTests` and keys the Sanity
+    /// document behind step 3.
     case profileMonogram = "profile-monogram"
 }
 
@@ -222,31 +243,57 @@ public final class FirstLaunchTourModel {
     /// task brief and surfaced in PostHog.
     public static let defaultTourKey: String = "ios-first-launch-tour"
 
-    /// Canonical default step list. Aligned with the Sanity content authored
-    /// in Sprint 3 G9.
+    /// The step list, rewritten in W3 (B-8) and spoken on **both** roots (R4).
+    ///
+    /// Two of the three sentences the tour shipped with had stopped being true.
+    /// Step 1 named the **Daily Room**, a name B-7(c) retires in favour of the
+    /// word already on the screen; step 3 named a **profile** reached from a
+    /// monogram that no longer exists. Step 2 was worse than untrue — its
+    /// anchor mounted in no production view after W2 retired
+    /// `DailyProductCard`, so the tour silently ran two steps while declaring
+    /// three. All three are rewritten here, and step 2 is re-anchored onto the
+    /// record — the block step 1 has just named, and the one thing on Today
+    /// that mounts at every tier.
+    ///
+    /// It was gated behind `house-first` for one wave, because B-8's *Rollback*
+    /// clause reads *"the tour is gated by the same `house-first` flag as the
+    /// root it describes"* and W3's acceptance line reads *"flag off restores
+    /// the W2 root byte-for-byte"*. R4 rules the other way: every sentence this
+    /// list replaces is just as untrue on the flag-off root, and a second list
+    /// existed only to keep a dead step alive there. The tour copy is now
+    /// explicitly outside the byte-for-byte promise.
+    ///
+    /// Both roots mount every anchor this list names — step 3's on the bar's
+    /// Studio tab where there is a bar, on the header's Studio pill where there
+    /// is not. Where the record draws nothing (a guest with an empty record)
+    /// step 2 is dropped and the tour renumbers by the existing mechanism.
+    ///
+    /// The surface keys do NOT move with the copy — they key Sanity documents,
+    /// and renaming them would orphan three of them. Only the bodies change;
+    /// the new bodies are in `waves/w3/n3-sanity-copy.md`.
     public static let defaultSteps: [FirstLaunchTourStep] = [
         FirstLaunchTourStep(
             surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step1Home,
             anchor: .homeGreeting,
             fallback: (
                 heading: "Welcome to Patina",
-                body: "This is your Daily Room — picks and stories chosen for your space."
+                body: "This is Today — what moved in your house, and what is waiting on you."
             )
         ),
         FirstLaunchTourStep(
             surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step2Saved,
-            anchor: .addToRoom,
+            anchor: .todayRecord,
             fallback: (
-                heading: "Save what you love",
-                body: "Add pieces to a room with + Add — they follow you everywhere."
+                heading: "What needs you",
+                body: "Anything waiting on you lands here, dated. Tap a line to go straight to it."
             )
         ),
         FirstLaunchTourStep(
             surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step3Profile,
             anchor: .profileMonogram,
             fallback: (
-                heading: "Your profile",
-                body: "Rooms, saved pieces, and settings live here."
+                heading: "Your Studio",
+                body: "Your studio — projects, proposals, invoices and files"
             )
         ),
     ]
@@ -627,6 +674,10 @@ public struct FirstLaunchTour<Content: View>: View {
 
     public var body: some View {
         content()
+            // Names the root the anchors measure themselves against, so each
+            // one can place its card on the side of itself that has room
+            // (`FirstLaunchTourPopoverPlacement`).
+            .coordinateSpace(.named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace))
             // `.environment(\.firstLaunchTourModel, …)` is the load-bearing
             // injection — the anchor modifier reads via `@Environment` so
             // previews of anchored views render outside a tour host without
@@ -694,14 +745,34 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
     let anchor: FirstLaunchTourAnchor
     @Environment(\.firstLaunchTourModel) private var model: FirstLaunchTourModel?
 
+    /// Where this anchor sits inside the tour's root, refreshed whenever the
+    /// layout moves it. Drives `arrowEdge` — see
+    /// `FirstLaunchTourPopoverPlacement` for why the edge cannot be a constant.
+    @State private var geometry = FirstLaunchTourPopoverPlacement.AnchorGeometry.unmeasured
+
     func body(content: Content) -> some View {
         content
+            .onGeometryChange(for: FirstLaunchTourPopoverPlacement.AnchorGeometry.self) { proxy in
+                FirstLaunchTourPopoverPlacement.AnchorGeometry(
+                    midY: proxy.frame(
+                        in: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
+                    ).midY,
+                    containerHeight: proxy.bounds(
+                        of: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
+                    )?.height ?? 0
+                )
+            } action: { measured in
+                geometry = measured
+            }
             // Track this anchor's presence so the orchestrator can skip a step
             // whose anchor never mounts (e.g. `.addToRoom` for a zero-room
             // user) instead of stalling on an invisible popover.
             .onAppear { model?.registerAnchor(anchor) }
             .onDisappear { model?.unregisterAnchor(anchor) }
-            .popover(isPresented: isShownBinding, arrowEdge: .top) {
+            .popover(
+                isPresented: isShownBinding,
+                arrowEdge: FirstLaunchTourPopoverPlacement.arrowEdge(for: geometry)
+            ) {
                 popoverContent
                     .presentationCompactAdaptation(.popover)
             }

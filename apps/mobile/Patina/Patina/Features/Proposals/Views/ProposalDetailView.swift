@@ -13,6 +13,9 @@ import SwiftUI
 
 struct ProposalDetailView: View {
     let proposalId: String
+    /// Read for the pinned-footer clearance only: the bar owns the bottom
+    /// edge on the house-first root, the Companion dock on the flag-off one.
+    @Environment(\.appCoordinator) private var coordinator
     @State private var viewModel = ProposalDetailViewModel()
 
     var body: some View {
@@ -30,7 +33,7 @@ struct ProposalDetailView: View {
                         .padding(.top, 80)
                 }
             }
-            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance(houseFirst: coordinator.isHouseFirstRoot))
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries

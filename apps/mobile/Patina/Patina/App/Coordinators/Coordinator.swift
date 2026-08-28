@@ -75,6 +75,16 @@ public enum AppRoute: Hashable {
 
     // Phase 6 routes
     case profile
+    /// "Your Studio" — the Studio tab's own root (W3, R2).
+    ///
+    /// The screen is the profile composition `.profile` also mounts: the
+    /// identity line, the Studio hub, and the Settings/Account door. It is a
+    /// second route to one screen on purpose — the tab is a canonical
+    /// destination with its own name, its own PostHog screen and its own
+    /// Companion context, and borrowing `.profile` reported every Studio visit
+    /// as `Profile` while "Your Studio" was on glass (n1-notes §4a).
+    /// `.profile` stays exactly what the flag-off root's monogram opens.
+    case studio
     case notifications
     case designerConsultation
     /// Submitted design-request status + detail. `focusLeadId` selects which
@@ -125,6 +135,9 @@ public enum AppRoute: Hashable {
         case .styleResult: return "Your Style"
         case .arPlacement: return "AR Placement"
         case .profile: return "Profile"
+        // C4 / B-7 (a): the canonical name of the destination the bar's
+        // `Studio` label opens, in full. `analyticsScreenName` falls out of it.
+        case .studio: return "Your Studio"
         case .notifications: return "Notifications"
         case .designerConsultation: return "Designer"
         case .designRequests: return "Design Request"

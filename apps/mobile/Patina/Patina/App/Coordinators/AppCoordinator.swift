@@ -96,13 +96,31 @@ public final class AppCoordinator: Coordinator {
     /// restore the user to where they were.
     public var pendingReturnRoute: AppRoute?
 
+    // MARK: - The house-first root (B-1, R2)
+
+    /// Whether this session runs the four-tab root. Read ONCE, here, from the
+    /// flag `PatinaApp.init()` resolved a moment earlier, and held for the
+    /// life of the coordinator — a PostHog payload arriving later cannot swap
+    /// the root under a session that is already running.
+    public let isHouseFirstRoot: Bool
+
+    /// The four stacks. Only the house-first root reads them; on the flag-off
+    /// root this stays empty and `navigationPath` is still the whole model.
+    public let tabs = TabNavigationModel()
+
     // MARK: - Dependencies
 
     private let settings = AppSettings.shared
 
     // MARK: - Initialization
 
-    public init() {
+    public convenience init() {
+        self.init(houseFirstRoot: FeatureFlags.shared.isOn(.houseFirst))
+    }
+
+    init(houseFirstRoot: Bool) {
+        self.isHouseFirstRoot = houseFirstRoot
+
         // Phase is now derived from `AuthService.session`, onboarding
         // completion, and guest opt-in by `recomputePhase()`. We start at
         // `.launching` (the default for the stored property) and let the
@@ -226,7 +244,9 @@ public final class AppCoordinator: Coordinator {
         // is resolved by re-auth. Drained on entry to `.main`.
         if newPhase == .main, let route = pendingReturnRoute {
             pendingReturnRoute = nil
-            navigate(to: route)
+            // A restore is an outside entry: the person did not walk here, so
+            // it lands on the route's own tab (no-op on the flag-off root).
+            openExternal(route)
         }
     }
 
@@ -286,6 +306,18 @@ public final class AppCoordinator: Coordinator {
         // flow; `reason` rides along as an event property — PT-3-5).
         trackScreen(for: route)
 
+        // House-first root: an in-app tap pushes onto the tab already on
+        // screen, so Back returns the person where they were and a room's own
+        // "browse pieces for this room" never strands the room behind a tab
+        // switch. Only `openExternal(_:)` — a link, a push, a restore — reads
+        // the route→tab table. A route that IS a tab's root still switches:
+        // the bar already carries that door, so a second copy is never pushed.
+        if isHouseFirstRoot {
+            tabs.push(route)
+            updateContext(for: route)
+            return
+        }
+
         switch route {
         case .heroFrame:
             rootScreen = route
@@ -298,7 +330,7 @@ public final class AppCoordinator: Coordinator {
              .table, .scanFlow, .emergence, .roomEmergence, .pieceDetail,
              .styleQuiz, .styleResult,
              .arPlacement,
-             .profile, .notifications, .designerConsultation, .designRequests,
+             .profile, .studio, .notifications, .designerConsultation, .designRequests,
              .projectList, .projectDetail,
              .decisionList, .decisionDetail,
              .threadList, .threadDetail,
@@ -308,6 +340,60 @@ public final class AppCoordinator: Coordinator {
             push(route)
             updateContext(for: route)
         }
+    }
+
+    /// The app entered from outside: a deep link, a universal link, an APNs
+    /// tap, or the restore after a forced sign-out was resolved by re-auth.
+    ///
+    /// This is the one entry that reads `RouteTabTable` — it lands on the
+    /// route's OWN tab and pushes there, because the person did not come from
+    /// wherever the app happened to be sitting. On the flag-off root there is
+    /// one stack, so it is exactly `navigate(to:)`.
+    public func openExternal(_ route: AppRoute) {
+        guard isHouseFirstRoot else {
+            navigate(to: route)
+            return
+        }
+
+        // Same SP-07 guard as `navigate(to:)`: a link must not file a second
+        // lead for a client who already has a live one.
+        if case .designerConsultation = route {
+            switch DesignHelpDestination.current {
+            case .existingRequest(let leadId):
+                openExternal(.designRequests(focusLeadId: leadId.uuidString))
+                return
+            case .requestList:
+                openExternal(.designRequests(focusLeadId: nil))
+                return
+            case .newRequest:
+                break
+            }
+        }
+
+        currentScreen = route
+        trackScreen(for: route)
+        tabs.navigate(to: route)
+        updateContext(for: route)
+    }
+
+    /// A tap on the bar. Re-tapping the selected tab pops it to root.
+    /// `currentScreen` follows through `syncCurrentScreen(to:)`, driven by the
+    /// root's `onChange`, so tab taps and stack pops take one path.
+    public func selectTab(_ tab: PatinaTab) {
+        guard isHouseFirstRoot else { return }
+        tabs.select(tab)
+    }
+
+    /// Re-derives `currentScreen` from whichever tab stack is on screen. This
+    /// is the multi-stack twin of the `navigationPath.didSet` trim: a pop
+    /// SwiftUI performs itself — an edge swipe, a system back button, a tab
+    /// switch — must restore the revealed screen's companion context, or a
+    /// nudge outlives the screen that earned it (R11).
+    public func syncCurrentScreen(to route: AppRoute) {
+        guard isHouseFirstRoot, currentScreen != route else { return }
+        currentScreen = route
+        trackScreen(for: route)
+        updateContext(for: route)
     }
 
     /// The one way to open the design-request compose sheet (SP-07). A client
@@ -382,6 +468,12 @@ public final class AppCoordinator: Coordinator {
     }
 
     public func goBack() {
+        if isHouseFirstRoot {
+            // The root's `onChange` on `tabs.visibleRoute` restores
+            // `currentScreen` + companion context for the revealed screen.
+            tabs.pop()
+            return
+        }
         if !navigationPath.isEmpty {
             // `navigationPath.didSet` trims the mirror stack and restores
             // `currentScreen` + companion context to the revealed screen.
@@ -413,7 +505,7 @@ public final class AppCoordinator: Coordinator {
             companionContext.walkProgress = nil
         case .arPlacement:
             companionContext.walkProgress = nil
-        case .profile, .notifications, .designerConsultation, .designRequests:
+        case .profile, .studio, .notifications, .designerConsultation, .designRequests:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
 
@@ -593,6 +685,10 @@ public final class AppCoordinator: Coordinator {
         settings.hasSeenThreshold = false
         settings.hasCompletedOnboarding = false
         navigationPath = NavigationPath()
+        if isHouseFirstRoot {
+            for tab in PatinaTab.allCases { tabs.popToRoot(tab) }
+            tabs.selected = .today
+        }
     }
 
     // MARK: - Companion
