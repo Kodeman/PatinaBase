@@ -1,0 +1,319 @@
+//
+//  HouseFirstRoot.swift
+//  Patina
+//
+//  The root the `house-first` flag chooses (B-1, R2). Four `NavigationStack`s
+//  under one bar, where the flag-off root has one stack under a floating orb.
+//
+//  Two things this root deliberately does NOT do:
+//
+//   • It never applies `companionHearthReservation`. The 83 pt bar replaces the
+//     120 pt Hearth (B-2); reserving both would put 203 pt of dead space under
+//     every screen.
+//   • It does not re-read the flag. `ContentView` asks `AppCoordinator` once,
+//     and the coordinator resolved it in `init` — a payload landing late can
+//     never swap the root under a session that is already running.
+//
+//  Tabs mount lazily and then stay mounted, which is what `TabView` does: a tab
+//  you have never opened costs nothing on launch, and one you have opened keeps
+//  its scroll position and its stack when you come back to it.
+//
+
+import SwiftUI
+
+public struct HouseFirstRoot: View {
+
+    @Environment(\.appCoordinator) private var coordinator
+
+    /// Tabs whose content has been built at least once. Today is built at
+    /// launch; the other three wait for their first tap so a cold launch pays
+    /// for one surface, not four.
+    @State private var mounted: Set<PatinaTab> = [.today]
+
+    public init() {}
+
+    public var body: some View {
+        ZStack {
+            PatinaColors.Background.primary
+                .ignoresSafeArea()
+
+            tabContent
+                .safeAreaInset(edge: .bottom, spacing: 0) { bar }
+                .accessibilityHidden(coordinator.isCompanionExpanded)
+
+            CompanionOverlay()
+        }
+        .onChange(of: coordinator.tabs.selected, initial: true) { _, tab in
+            mounted.insert(tab)
+        }
+        .onChange(of: coordinator.tabs.visibleRoute) { _, route in
+            coordinator.syncCurrentScreen(to: route)
+        }
+    }
+
+    // MARK: - The four stacks
+
+    private var tabContent: some View {
+        ZStack {
+            ForEach(PatinaTab.allCases) { tab in
+                if mounted.contains(tab) {
+                    stack(for: tab)
+                        .opacity(tab == coordinator.tabs.selected ? 1 : 0)
+                        .allowsHitTesting(tab == coordinator.tabs.selected)
+                        .accessibilityHidden(tab != coordinator.tabs.selected)
+                }
+            }
+        }
+    }
+
+    private func stack(for tab: PatinaTab) -> some View {
+        NavigationStack(path: path(for: tab)) {
+            root(for: tab)
+                .navigationDestination(for: AppRoute.self) { route in
+                    destinationView(for: route)
+                }
+                // R04: pushed destinations hide the system nav bar, which
+                // disables UIKit's edge-swipe-back. Re-enable it per stack.
+                .interactivePopGestureEnabled()
+        }
+    }
+
+    private func path(for tab: PatinaTab) -> Binding<NavigationPath> {
+        Binding(
+            get: { coordinator.tabs.paths[tab] ?? NavigationPath() },
+            set: { coordinator.tabs.paths[tab] = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private func root(for tab: PatinaTab) -> some View {
+        switch tab {
+        case .today:
+            DailyRoomView()
+        case .spaces:
+            YourSpacesView()
+        case .pieces:
+            RecommendationsView()
+        case .studio:
+            studioRoot
+        }
+    }
+
+    /// The Studio tab's root. `StudioHubView` is a section, not a screen — it
+    /// carries no scroll view and no title of its own — so this supplies both
+    /// until N2's tab-root wrapper lands in the hub's own file.
+    private var studioRoot: some View {
+        ScrollView {
+            StudioHubView()
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+        }
+        .background(PatinaColors.Background.primary)
+        .navigationTitle(PatinaTab.studio.canonicalName)
+        .navigationBarTitleDisplayMode(.large)
+    }
+
+    // MARK: - The bar
+
+    private var bar: some View {
+        PatinaTabBar(selected: coordinator.tabs.selected) { tab in
+            coordinator.selectTab(tab)
+        } trailing: {
+            companionSlot
+        }
+    }
+
+    /// The Companion's resting slot (B-2). Until N3 moves the collapsed
+    /// Companion into the bar, this is the mark only — `CompanionOverlay` above
+    /// still owns the panel, the coaching and every row.
+    private var companionSlot: some View {
+        Button {
+            coordinator.toggleCompanion()
+        } label: {
+            StrataMarkView(
+                color: PatinaColors.mocha,
+                scale: 0.8,
+                accessibility: .decorative
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Companion")
+        .accessibilityHint("Double tap to open")
+    }
+}
+
+// MARK: - Navigation Destinations
+
+// A verbatim second copy of `ContentView`'s dispatcher. It is duplicated rather
+// than shared on purpose: W3's acceptance is that the flag-off root renders
+// byte-for-byte as W2 left it, which is easiest to prove when `ContentView`'s
+// existing branch is not edited at all. Both copies are exhaustive over
+// `AppRoute` with no `default:`, so a new route breaks compilation in both.
+// This copy dies with the flag-off root, one release from now.
+extension HouseFirstRoot {
+
+    @ViewBuilder
+    fileprivate func destinationView(for route: AppRoute) -> some View {
+        switch route {
+        case .heroFrame, .yourSpaces, .roomProject,
+             .roomSettings, .crossRoom, .manualRoomEntry, .roomSavedItems:
+            roomsDestination(for: route)
+
+        case .scanFlow, .emergence, .roomEmergence, .table, .pieceDetail:
+            discoveryDestination(for: route)
+
+        case .styleQuiz, .styleResult, .arPlacement:
+            styleDestination(for: route)
+
+        case .profile, .notifications, .designerConsultation, .designRequests,
+             .projectList, .projectDetail, .decisionList, .decisionDetail:
+            workCoreDestination(for: route)
+
+        case .threadList, .threadDetail, .proposalList, .proposalDetail,
+             .invoiceList, .invoiceDetail, .budget, .documentList:
+            workDocumentsDestination(for: route)
+        }
+    }
+
+    @ViewBuilder
+    fileprivate func roomsDestination(for route: AppRoute) -> some View {
+        switch route {
+        case .yourSpaces:
+            YourSpacesView()
+
+        case .roomProject(let roomId):
+            RoomProjectView(roomId: roomId)
+
+        case .roomSettings(let roomId):
+            RoomSettingsView(roomId: roomId)
+
+        case .crossRoom:
+            CrossRoomView()
+
+        case .manualRoomEntry:
+            ManualRoomEntryView()
+
+        case .roomSavedItems(let roomId):
+            CollectionsView(roomId: roomId)
+
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+
+    @ViewBuilder
+    fileprivate func discoveryDestination(for route: AppRoute) -> some View {
+        switch route {
+        case .scanFlow:
+            QuietConversationFlowHost()
+                .toolbar(.hidden, for: .navigationBar)
+
+        case .emergence(let pieceId):
+            if let pieceId {
+                ProductDetailView(productId: pieceId)
+                    .toolbar(.hidden, for: .navigationBar)
+            } else {
+                RecommendationsView()
+            }
+
+        case .roomEmergence(let roomId):
+            RecommendationsView(roomId: roomId.uuidString)
+
+        case .table:
+            CollectionsView()
+
+        case .pieceDetail(let pieceId):
+            ProductDetailView(productId: pieceId)
+                .toolbar(.hidden, for: .navigationBar)
+
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+
+    @ViewBuilder
+    fileprivate func styleDestination(for route: AppRoute) -> some View {
+        switch route {
+        case .styleQuiz:
+            StyleQuizView()
+                .toolbar(.hidden, for: .navigationBar)
+
+        case .styleResult(let result):
+            StyleResultView(result: result, showsChrome: true)
+
+        case .arPlacement(let productId, let roomRemoteId):
+            ARPlacementView(productId: productId, roomRemoteId: roomRemoteId)
+                .toolbar(.hidden, for: .navigationBar)
+
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+
+    @ViewBuilder
+    fileprivate func workCoreDestination(for route: AppRoute) -> some View {
+        switch route {
+        case .profile:
+            ProfileView()
+
+        case .notifications:
+            NotificationFeedView()
+
+        case .designerConsultation:
+            DesignerConsultationView()
+
+        case .designRequests(let focusLeadId):
+            DesignRequestStatusView(focusLeadId: focusLeadId)
+
+        case .projectList:
+            ProjectListView()
+
+        case .projectDetail(let projectId):
+            ProjectDetailView(projectId: projectId)
+
+        case .decisionList:
+            DecisionListView()
+
+        case .decisionDetail(let decisionId):
+            DecisionDetailView(decisionId: decisionId)
+
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+
+    @ViewBuilder
+    fileprivate func workDocumentsDestination(for route: AppRoute) -> some View {
+        switch route {
+        case .threadList:
+            ThreadListView()
+
+        case .threadDetail(let threadId):
+            ThreadDetailView(threadId: threadId)
+
+        case .proposalList:
+            ProposalListView()
+
+        case .proposalDetail(let proposalId):
+            ProposalDetailView(proposalId: proposalId)
+
+        case .invoiceList:
+            InvoiceListView()
+
+        case .invoiceDetail(let invoiceId):
+            InvoiceDetailView(invoiceId: invoiceId)
+
+        case .budget:
+            BudgetView()
+
+        case .documentList:
+            DocumentListView()
+
+        default:
+            EmptyView() // unreachable — dispatched only for the cases above
+        }
+    }
+}

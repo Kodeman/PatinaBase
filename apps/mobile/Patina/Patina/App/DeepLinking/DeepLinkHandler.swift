@@ -36,7 +36,7 @@ public final class DeepLinkHandler {
         self.coordinator = coordinator
         if let pending = pendingRoute {
             pendingRoute = nil
-            coordinator.navigate(to: pending)
+            coordinator.openExternal(pending)
         }
     }
 
@@ -45,7 +45,7 @@ public final class DeepLinkHandler {
     /// Used by `PatinaAppDelegate` to deliver APNs taps.
     public func navigate(to route: AppRoute) {
         if let coordinator {
-            coordinator.navigate(to: route)
+            coordinator.openExternal(route)
         } else {
             pendingRoute = route
         }
@@ -65,7 +65,7 @@ public final class DeepLinkHandler {
             if let coordinator, coordinator.phase == .launching {
                 coordinator.pendingDeepLink = url
             } else {
-                coordinator?.navigate(to: route)
+                coordinator?.openExternal(route)
             }
             return true
         }
@@ -184,7 +184,7 @@ public final class DeepLinkHandler {
             return false
         }
 
-        coordinator?.navigate(to: .roomProject(roomId: roomId))
+        coordinator?.openExternal(.roomProject(roomId: roomId))
         return true
     }
 
@@ -196,7 +196,7 @@ public final class DeepLinkHandler {
             return false
         }
 
-        coordinator?.navigate(to: .pieceDetail(pieceId: pieceId))
+        coordinator?.openExternal(.pieceDetail(pieceId: pieceId))
         return true
     }
 
