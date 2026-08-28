@@ -199,3 +199,107 @@ describe('DeskRoster — an empty desk', () => {
     ).not.toBeNull();
   });
 });
+
+describe('DeskRoster — the stage tabs (R126)', () => {
+  it('prints each stage head as a plate in its own pigment', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const proposal = container.querySelector('[data-stage-tab="proposal"]')!;
+    const project = container.querySelector('[data-stage-tab="project"]')!;
+    expect(proposal.className).toContain('bg-[var(--tab-proposal)]');
+    expect(project.className).toContain('bg-[var(--tab-project)]');
+    // A plate, not a band: it hugs its own words and nothing sits behind the
+    // rows below it.
+    expect(proposal.className).toContain('inline-flex');
+    expect(proposal.className).toContain('text-white');
+    expect(proposal.textContent).toBe('Proposal · 1');
+  });
+
+  it('gives every stage a tab, and lends Care the Install pigment', () => {
+    const model = roster();
+    const stages: Array<[DeskRosterModel['groups'][number]['key'], string]> = [
+      ['brief', 'bg-[var(--tab-brief)]'],
+      ['discovery', 'bg-[var(--tab-discovery)]'],
+      ['direction', 'bg-[var(--tab-direction)]'],
+      ['proposal', 'bg-[var(--tab-proposal)]'],
+      ['project', 'bg-[var(--tab-project)]'],
+      ['install', 'bg-[var(--tab-install)]'],
+      ['care', 'bg-[var(--tab-install)]'],
+    ];
+    model.groups = stages.map(([key], i) => ({
+      key,
+      label: key,
+      count: 1,
+      lines: [{ ...roster().groups[0].lines[0], engagementId: `job-${i}` }],
+    }));
+    const { container } = render(<DeskRoster roster={model} />);
+
+    for (const [key, pigment] of stages) {
+      expect(
+        container.querySelector(`[data-stage-tab="${key}"]`)!.className,
+      ).toContain(pigment);
+    }
+  });
+});
+
+describe('DeskRoster — the hover wash (R126)', () => {
+  it('gives every row a wash in its stage’s own pigment', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const rows = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-roster-line]'),
+    );
+    expect(rows).toHaveLength(2);
+    const tones = rows.map((row) => {
+      expect(row.className).toContain('has-wash');
+      const wash = row.querySelector<HTMLElement>('span.row-wash')!;
+      // First child: the wash paints over the ground and under every word.
+      expect(row.firstElementChild).toBe(wash);
+      expect(wash.getAttribute('aria-hidden')).toBe('true');
+      return wash.style.getPropertyValue('--wash');
+    });
+    expect(tones).toEqual(['var(--wash-proposal)', 'var(--wash-project)']);
+  });
+
+  it('scores the job name with the wash, keeping today’s clay underline', () => {
+    render(<DeskRoster roster={roster()} />);
+
+    const name = screen.getByRole('link', { name: 'Vandersteen residence' });
+    expect(name.className).toContain('row-wash-score');
+    expect(name.className).toContain('hover:decoration-[var(--color-clay)]');
+  });
+
+  it('leaves the act as the row’s own focusable control', () => {
+    render(<DeskRoster roster={roster()} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Send reminder — Vandersteen residence' }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('DeskRoster — the marks are unchanged by the wash', () => {
+  it('keeps terracotta for urgent and dusty blue for quiet', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    const [quiet, urgent] = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-roster-mark]'),
+    );
+    expect(quiet.getAttribute('data-mark-color')).toBe(
+      'var(--color-dusty-blue)',
+    );
+    expect(urgent.getAttribute('data-mark-color')).toBe(
+      'var(--color-terracotta)',
+    );
+  });
+});
+
+describe('DeskRoster — no shadow reaches the roster', () => {
+  it('writes no shadow utility on any element it prints', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+
+    for (const el of container.querySelectorAll('*')) {
+      expect(el.className.toString()).not.toMatch(/(^|[\s:])(drop-)?shadow-/);
+    }
+  });
+});

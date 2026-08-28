@@ -286,7 +286,7 @@ export function StudioDrawer() {
       <nav
         aria-label="Studio drawer"
         data-tour-anchor="studio-drawer"
-        className="fixed inset-x-0 bottom-0 z-40 hidden h-[60px] grid-cols-[1fr_auto_1fr] items-center gap-4 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-[22px] min-[1180px]:grid"
+        className="doc-elevated fixed inset-x-0 bottom-0 z-40 hidden h-[60px] grid-cols-[1fr_auto_1fr] items-center gap-4 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-[22px] min-[1180px]:grid"
       >
         {/* Left — the studio wordmark (home) + a quiet breadcrumb. */}
         <div className="flex min-w-0 items-center gap-2.5">
