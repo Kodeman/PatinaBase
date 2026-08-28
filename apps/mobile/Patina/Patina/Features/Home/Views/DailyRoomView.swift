@@ -50,7 +50,15 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
             steps: coordinator.isHouseFirstRoot
                 ? FirstLaunchTourModel.defaultSteps
                 : FirstLaunchTourModel.preHouseFirstSteps,
-            canAutoStart: coordinator.navigationPath.isEmpty
+            // `navigationPath` is the flag-off root's single stack; on the
+            // house-first root it is inert and permanently empty, so the gate
+            // read `true` at any Today depth and the tour could auto-start
+            // against a screen the reader was not looking at (n1-notes §3c,
+            // n3-notes §3b — observed live). The tab-aware twin asks the
+            // Today stack instead.
+            canAutoStart: coordinator.isHouseFirstRoot
+                ? coordinator.tabs.stack(for: .today).isEmpty
+                : coordinator.navigationPath.isEmpty
         ) {
             screenBody
         }
