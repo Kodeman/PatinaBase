@@ -32,6 +32,16 @@ final class CollectionsViewModel {
         boardCount == 0 ? allItemsTab : boardsTab
     }
 
+    /// U06: the saved rows a room's own Saved screen shows. A room shows the
+    /// pieces put in it and nothing else; with no room in hand the list is the
+    /// whole table. Only reachable once a save can carry a room at all —
+    /// before W4's fix round nothing ever wrote `roomId`, so this filter was
+    /// always empty (`waves/w4/walk.md` item 4).
+    static func items(_ items: [TableItemModel], inRoom roomId: UUID?) -> [TableItemModel] {
+        guard let roomId else { return items }
+        return items.filter { $0.roomId == roomId }
+    }
+
     // MARK: - Loading
 
     func loadData(context: ModelContext) {

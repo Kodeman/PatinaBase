@@ -28,8 +28,7 @@ struct CollectionsView: View {
 
     /// U06: All Items filtered to `roomId` when set, else the full table.
     private var scopedSavedItems: [TableItemModel] {
-        guard let roomId else { return viewModel.savedItems }
-        return viewModel.savedItems.filter { $0.roomId == roomId }
+        CollectionsViewModel.items(viewModel.savedItems, inRoom: roomId)
     }
 
     /// U06: resolved room name for the header scope line, when `roomId` is set.

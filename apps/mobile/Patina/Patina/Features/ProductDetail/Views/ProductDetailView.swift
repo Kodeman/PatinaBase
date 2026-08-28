@@ -18,6 +18,10 @@ struct ProductDetailView: View {
     /// Triggered by the `?` floating button in the top bar.
     @State private var isHelpPanelPresented: Bool = false
 
+    /// SP-11: the rooms `Add to Room` can offer, and whether it is asking.
+    @State private var roomOptions: [RoomSummary] = []
+    @State private var isChoosingRoom = false
+
     /// Product ID to load (from navigation)
     var productId: String?
 
@@ -64,8 +68,46 @@ struct ProductDetailView: View {
             // SP-14: a piece saved on a previous visit must not offer to be
             // saved again — seed from the store before the bar draws.
             viewModel.seedSavedState(productId: displayProduct?.id, context: modelContext)
+            roomOptions = RoomStore(context: modelContext).allRooms().map(RoomSummary.init(from:))
             viewModel.trackView()
         }
+        .sheet(isPresented: $isChoosingRoom) {
+            if let product = displayProduct {
+                AddToRoomSheet(
+                    product: product,
+                    rooms: roomOptions,
+                    onSelect: { summary in
+                        isChoosingRoom = false
+                        let store = RoomStore(context: modelContext)
+                        guard let room = store.room(id: summary.id) else { return }
+                        viewModel.addToRoom(
+                            localId: room.id,
+                            remoteId: room.remoteId,
+                            context: modelContext
+                        )
+                        roomOptions = store.allRooms().map(RoomSummary.init(from:))
+                    },
+                    onNewRoom: {
+                        isChoosingRoom = false
+                        coordinator.navigate(to: .manualRoomEntry)
+                    }
+                )
+            }
+        }
+    }
+
+    /// The room this screen already belongs to — a room-scoped browse, a
+    /// Daily Room chip. Resolved through the local store so a screen that
+    /// only carries the server's id still writes the local row's room.
+    private func contextRoom() -> RoomModel? {
+        let store = RoomStore(context: modelContext)
+        if let localId = viewModel.roomContextLocalId, let room = store.room(id: localId) {
+            return room
+        }
+        if let remoteId = viewModel.roomContextRemoteId {
+            return store.room(remoteId: remoteId)
+        }
+        return nil
     }
 
     // MARK: - Product Content
@@ -432,10 +474,17 @@ struct ProductDetailView: View {
                 .accessibilityIdentifier("ProductDetailView.ARButton")
             }
 
-            // Add to room button
+            // Add to room. The act names a room, so it puts the piece in one:
+            // the room this screen was opened from where there is one, the
+            // room the reader picks where there is not, and the plain
+            // account-wide save only where the reader has no room at all.
             Button {
-                if viewModel.roomContextRemoteId != nil {
-                    Task { await viewModel.addToAttachedRoom(context: modelContext) }
+                if viewModel.isSaved {
+                    viewModel.toggleSave(context: modelContext)
+                } else if let room = contextRoom() {
+                    viewModel.addToRoom(localId: room.id, remoteId: room.remoteId, context: modelContext)
+                } else if !roomOptions.isEmpty {
+                    isChoosingRoom = true
                 } else {
                     viewModel.toggleSave(context: modelContext)
                 }

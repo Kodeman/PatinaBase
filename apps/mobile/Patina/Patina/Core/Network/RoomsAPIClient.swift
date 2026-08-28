@@ -349,6 +349,26 @@ public actor RoomsAPIClient {
         return first
     }
 
+    /// Move an already-mirrored save into a room. The save path writes
+    /// `room_id` at insert time; this is the second case — a piece saved from
+    /// the account (roomless) that its owner later puts in a room. Without it
+    /// the local row would name a room the server's row does not.
+    @discardableResult
+    public func updateItemRoom(id: String, roomId: String?) async throws -> RemoteSavedItem {
+        let url = baseURL.appendingPathComponent("/rest/v1/saved_items")
+            .appending(queryItems: [URLQueryItem(name: "id", value: "eq.\(id)")])
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        await applyHeaders(to: &request, prefer: "return=representation")
+        let value: Any = roomId.map { $0 as Any } ?? NSNull()
+        request.httpBody = try encoder.encode(["room_id": AnyCodable(value)])
+        let (data, response) = try await session.data(for: request)
+        try Self.ensureOK(response, data: data)
+        let rows = try decoder.decode([RemoteSavedItem].self, from: data)
+        guard let first = rows.first else { throw RoomsAPIError.emptyResponse }
+        return first
+    }
+
     public func deleteItem(id: String) async throws {
         let url = baseURL.appendingPathComponent("/rest/v1/saved_items")
             .appending(queryItems: [URLQueryItem(name: "id", value: "eq.\(id)")])
