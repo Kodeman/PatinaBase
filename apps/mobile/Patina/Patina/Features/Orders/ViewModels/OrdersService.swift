@@ -109,9 +109,38 @@ final class OrdersService {
         isLoading = false
     }
 
-    /// One order by its prefixed routing token.
+    /// One order by its routing token — `"fulfillment:<uuid>"` /
+    /// `"direct:<uuid>"`.
+    ///
+    /// A **bare uuid also resolves**, against both the row's own id and the
+    /// direct order merged behind it. The purchase path navigates to
+    /// `.orderDetail` straight off `Order placed.` carrying the raw
+    /// `direct_orders.id`, and a settled direct order has by then become a
+    /// fulfillment row whose `recordId` is a different uuid entirely. A
+    /// terminal CTA that lands on "we couldn't find that order" seconds after a
+    /// charge is the worst screen in this program to get wrong.
     func order(withId id: String) -> ClientOrder? {
-        orders.first { $0.id == id }
+        Self.resolve(id, in: orders)
+    }
+
+    /// The resolution itself, pure, so the seam between the purchase path and
+    /// this screen is pinned by a test rather than by a walk.
+    nonisolated static func resolve(_ id: String, in orders: [ClientOrder]) -> ClientOrder? {
+        if let exact = orders.first(where: { $0.id == id }) { return exact }
+        guard !id.contains(":") else { return nil }
+        return orders.first { $0.recordId == id || $0.directOrderId == id }
+    }
+
+    /// Whether a miss on the detail screen is worth one re-read.
+    ///
+    /// `OrdersService` is session-lifetime and `hasLoaded` is set by whichever
+    /// surface loaded first — Today's record build, or the Studio hub — so on
+    /// any warm app `refreshIfNeeded()` is a no-op. An order minted since that
+    /// load (a push about a shipment; the direct order placed thirty seconds
+    /// ago) is therefore simply not in `orders` yet, and the empty state would
+    /// be a lie. One refresh, then the empty state means it.
+    nonisolated static func shouldRefetchOnMiss(found: Bool, alreadyRefetched: Bool) -> Bool {
+        !found && !alreadyRefetched
     }
 
     /// A failure costs its own source and nothing else. The server's own words

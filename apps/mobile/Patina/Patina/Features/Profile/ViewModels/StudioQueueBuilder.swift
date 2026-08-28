@@ -424,20 +424,47 @@ extension StudioQueueBuilder {
     /// exists (M8: "no orders → the section does not render").
     static func orderRecordRow(_ orders: [ClientOrder]) -> StudioQueueRow? {
         guard !orders.isEmpty else { return nil }
-        // The furthest-along live order names the row, because "Shipped" is the
-        // fact a reader opens the Studio for. Refunded and cancelled orders are
-        // in the list and are not what the meta line reports.
+        // "On its way" is a claim about a specific set of orders: the ones that
+        // are live and have not arrived. A delivered order is not on its way,
+        // and a refunded one never will be — counting all of them was a false
+        // sentence in the one place a reader glances rather than reads.
         let live = orders.filter { $0.state != .refunded && $0.state != .cancelled }
-        let furthest = live.max { $0.state.progressRank < $1.state.progressRank }
+        let moving = live.filter { $0.state != .delivered }
+        let delivered = live.count - moving.count
+
+        let detail: String
+        if !moving.isEmpty {
+            detail = countLabel(
+                moving.count,
+                singular: "1 piece on its way",
+                plural: "\(moving.count) pieces on their way"
+            )
+        } else if delivered > 0 {
+            detail = countLabel(
+                delivered,
+                singular: "1 piece delivered",
+                plural: "\(delivered) pieces delivered"
+            )
+        } else {
+            // Everything she has is refunded or cancelled. The door still
+            // draws — the orders are in the list — and says nothing more.
+            detail = countLabel(
+                orders.count,
+                singular: "1 past order",
+                plural: "\(orders.count) past orders"
+            )
+        }
+
+        // The meta names the furthest-along order in whatever set the detail
+        // just counted, so the two halves of the row cannot describe different
+        // orders.
+        let furthest = (moving.isEmpty ? live : moving)
+            .max { $0.state.progressRank < $1.state.progressRank }
 
         return StudioQueueRow(
             id: "records.orders",
             title: "Ordered",
-            detail: countLabel(
-                orders.count,
-                singular: "1 piece on its way",
-                plural: "\(orders.count) pieces on their way"
-            ),
+            detail: detail,
             meta: furthest?.state.railLabel,
             systemImage: "shippingbox",
             route: .orderList,

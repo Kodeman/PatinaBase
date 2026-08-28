@@ -62,12 +62,12 @@ struct OrderedListView: View {
         } else {
             VStack(spacing: 14) {
                 ForEach(service.orders) { order in
-                    Button {
-                        coordinator.navigate(to: .orderDetail(orderId: order.id))
-                    } label: {
-                        OrderCard(order: order, projectName: projectName(for: order))
-                    }
-                    .buttonStyle(.plain)
+                    OrderCard(
+                        order: order,
+                        projectName: projectName(for: order),
+                        onOpen: { coordinator.navigate(to: .orderDetail(orderId: order.id)) },
+                        onMessage: { coordinator.navigate(to: .threadList) }
+                    )
                 }
             }
             .padding(.horizontal, 24)
@@ -95,20 +95,52 @@ struct OrderedListView: View {
 
 // MARK: - Card
 
+/// M8's card, in full: the piece, the rail, the state line, the money (only
+/// where the reader paid it), the carrier and the designer, then the footer.
+///
+/// The card is **not** one big button. `Track with the carrier` and
+/// `Message <first name>` are on the card in M8, and a Button nested inside
+/// another Button's label is inert in SwiftUI — so the summary is the tappable
+/// part and the action rows are their own controls beneath it.
 struct OrderCard: View {
     let order: ClientOrder
     let projectName: String?
+    let onOpen: () -> Void
+    let onMessage: () -> Void
+
+    @Environment(\.openURL) private var openURL
+
+    private var trackingURL: URL? {
+        CarrierTracking.url(carrier: order.carrier, tracking: order.tracking)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            Button(action: onOpen) { summary }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(accessibilityLine)
+                .accessibilityIdentifier("Ordered.Card.\(order.id)")
+
+            if trackingURL != nil || order.isAttributed {
+                actionRows
+                    .padding(.top, 12)
+            }
+
+            Text(ClientOrderCopy.attributionFooter(order, projectName: projectName))
+                .font(PatinaTypography.captionSmall)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .padding(.top, 10)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(PatinaColors.Background.secondary)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
-                if let eyebrow = ClientOrderCopy.placedByLabel(order) {
-                    Text(eyebrow)
-                        .font(PatinaTypography.monoLabel)
-                        .tracking(0.4)
-                        .textCase(.uppercase)
-                        .foregroundStyle(PatinaColors.Text.muted)
-                }
                 Text(order.title)
                     .font(PatinaTypography.h5)
                     .foregroundStyle(PatinaColors.Text.primary)
@@ -132,30 +164,72 @@ struct OrderCard: View {
             Text(ClientOrderCopy.stateLine(order))
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.primary)
+                .multilineTextAlignment(.leading)
                 .padding(.top, order.state.drawsRail ? 10 : 12)
 
-            Text(ClientOrderCopy.moneyLine(order))
-                .font(PatinaTypography.monoLabel)
-                .tracking(0.4)
-                .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.Text.muted)
-                .padding(.top, 4)
-
-            Text(ClientOrderCopy.attributionFooter(order, projectName: projectName))
-                .font(PatinaTypography.captionSmall)
-                .foregroundStyle(PatinaColors.Text.muted)
-                .padding(.top, 10)
+            // Money draws only where the reader paid it herself — M8's
+            // designer-sourced card carries no money line at all.
+            if let money = ClientOrderCopy.moneyLine(order) {
+                Text(money)
+                    .font(PatinaTypography.monoLabel)
+                    .tracking(0.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(PatinaColors.Text.muted)
+                    .padding(.top, 4)
+            }
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(PatinaColors.Background.secondary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(order.title). \(ClientOrderCopy.stateLine(order)) "
-            + "\(ClientOrderCopy.attributionFooter(order, projectName: projectName))"
-        )
-        .accessibilityIdentifier("Ordered.Card.\(order.id)")
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var actionRows: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(PatinaColors.pearl)
+                .frame(height: 1)
+            if let trackingURL {
+                cardAction(CarrierTracking.label(carrier: order.carrier)) {
+                    openURL(trackingURL)
+                }
+            }
+            if order.isAttributed {
+                if trackingURL != nil {
+                    Rectangle().fill(PatinaColors.pearl).frame(height: 1)
+                }
+                cardAction(messageLabel, action: onMessage)
+            }
+        }
+    }
+
+    private func cardAction(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.interactive)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(PatinaColors.Text.muted)
+            }
+            // 44 pt, per SP-19.
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var messageLabel: String {
+        guard let name = order.designerFirstName else { return "Message your designer" }
+        return "Message \(name)"
+    }
+
+    private var accessibilityLine: String {
+        var parts = ["\(order.title).", ClientOrderCopy.stateLine(order)]
+        if let money = ClientOrderCopy.moneyLine(order) { parts.append(money) }
+        parts.append(ClientOrderCopy.attributionFooter(order, projectName: projectName))
+        return parts.joined(separator: " ")
     }
 }
 

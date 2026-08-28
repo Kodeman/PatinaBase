@@ -106,10 +106,19 @@ enum AppNotificationType: Equatable {
     case invoice
     case decision
     /// W5: the six fulfillment transitions
-    /// (`_shared/fulfillment-templates.ts:38-49`). Without its own bucket an
-    /// order arriving in the bell fell to `.newRecommendations` and a shipped
-    /// sofa was titled "New pieces for you" — the same SP-08 failure, one rail
-    /// over.
+    /// (`_shared/fulfillment-templates.ts:38-49`).
+    ///
+    /// ⚠ What this bucket serves TODAY is the **push** path only:
+    /// `fulfillment-notify` sends `entity_type: 'fulfillment_order'`
+    /// (`fulfillment-notify/core.ts:265`) and `NotificationRouter` routes it.
+    /// **Nothing writes an order row to `notification_log`** — verified:
+    /// `fulfillment-notify` calls `sendPush` with no `notification_log_id`,
+    /// `apns-send` only ever updates a log row (`apns-send/index.ts:217-238`)
+    /// and never inserts one, and `_shared/client-attention.ts` (00534) knows
+    /// only `proposal | invoice | decision`. So the bucket cannot yet fire in
+    /// the bell; it exists so that when the server side lands, an order does
+    /// not arrive as "New pieces for you" with a sparkles icon (the SP-08
+    /// failure, one rail over). The server gap is W6's, not this screen's.
     case order
 
     var icon: String {

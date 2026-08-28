@@ -172,10 +172,9 @@ extension AppNotificationType {
         case "proposal": self = .proposal
         case "invoice": self = .invoice
         case "decision": self = .decision
-        // W5: what `fulfillment-notify` actually writes
-        // (`fulfillment-notify/core.ts:265`), plus the direct rail's own
-        // spelling, so an order never arrives in the "New pieces for you"
-        // bucket with a sparkles icon.
+        // `fulfillment_order` is the real contract — it is what
+        // `fulfillment-notify/core.ts:265` puts in the push envelope. The two
+        // shorter spellings are accepted defensively; nothing emits them today.
         case "fulfillment_order", "order", "direct_order": self = .order
         default: return nil
         }
@@ -206,8 +205,12 @@ extension AppNotificationType {
             self = .invoice
         case "decision_raised", "decision_reminder", "decision_attention":
             self = .decision
-        // The six transitions `_shared/fulfillment-templates.ts:38-49` names,
-        // plus the intake the settle writes.
+        // ⚠ FORWARD-COMPATIBLE, NOT OBSERVED. `notification_log.type` carries
+        // none of these today — nothing writes an order row to that table at
+        // all (see `AppNotificationType.order`). They are the spellings the six
+        // client transitions in `_shared/fulfillment-templates.ts:38-49` would
+        // take, kept so an order row landing later does not fall through to
+        // `.newRecommendations`. Delete them if W6 settles on other names.
         case "order_confirmed", "order_in_production", "order_shipped",
              "order_delivered", "order_eta_change", "order_substitution",
              "fulfillment_order", "direct_order_paid":

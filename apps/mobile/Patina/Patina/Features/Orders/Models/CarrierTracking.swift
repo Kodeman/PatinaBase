@@ -30,7 +30,7 @@ enum CarrierTracking {
         "dhl": "https://www.dhl.com/en/express/tracking.html?AWB=%@",
         "estes": "https://www.estes-express.com/myestes/shipment-tracking/?searchValue=%@",
         "xpo": "https://www.xpo.com/tracking/?reference=%@",
-        "oldedominion": "https://www.odfl.com/us/en/tracking.html?pro=%@",
+        "olddominion": "https://www.odfl.com/us/en/tracking.html?pro=%@",
         "odfl": "https://www.odfl.com/us/en/tracking.html?pro=%@",
         "saia": "https://www.saia.com/track/details?pro=%@",
         "rlcarriers": "https://www.rlcarriers.com/shipping/tracking?pro=%@",

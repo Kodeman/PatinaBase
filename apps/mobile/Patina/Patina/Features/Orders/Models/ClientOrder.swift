@@ -115,7 +115,16 @@ struct ClientOrder: Identifiable, Sendable, Equatable {
     /// The row's own uuid, unprefixed.
     let recordId: String
     /// `"fulfillment:<uuid>"` / `"direct:<uuid>"` — the routing token.
-    var id: String { "\(rail.rawValue):\(recordId)" }
+    var id: String { Self.routingToken(rail: rail, recordId: recordId) }
+
+    /// The one place the token is minted, so a caller in another feature
+    /// cannot mint a different shape. The purchase path's terminal CTA
+    /// (`Order placed.` → `See your order`) navigates with a `direct_orders`
+    /// id; it should pass `routingToken(rail: .direct, recordId:)`, and
+    /// `OrdersService.order(withId:)` resolves a bare uuid either way.
+    static func routingToken(rail: Rail, recordId: String) -> String {
+        "\(rail.rawValue):\(recordId)"
+    }
 
     /// What the client bought. The first line's name for a fulfillment order,
     /// `direct_orders.product_name` for a direct one.
@@ -454,11 +463,29 @@ enum ClientOrderCopy {
         }
     }
 
-    /// `$4,200.00 · paid Sep 3`.
-    static func moneyLine(_ order: ClientOrder) -> String {
+    /// `$4,200.00 · paid Sep 3` — and **only** for an order the reader paid
+    /// for herself.
+    ///
+    /// A designer-sourced order prints no money at all, which is exactly what
+    /// M8's second card does. Two claims the wire will not support otherwise:
+    /// `fulfillment_orders.captured_total_cents` is what Patina captured on the
+    /// designer's rail, not what this reader was billed (a designer-sourced
+    /// piece bills on the invoice rail); and `intake_at` is when the order
+    /// reached the rail, not when anybody paid.
+    static func moneyLine(_ order: ClientOrder) -> String? {
+        guard case .reader = order.placedBy else { return nil }
         let amount = PatinaCurrency.format(cents: order.amountCents, currencyCode: order.currency)
         guard let placed = order.placedAt else { return amount }
         return "\(amount) · paid \(DateDisplay.short(placed))"
+    }
+
+    /// The label over the amount on the detail screen. `PAID` is a claim, and
+    /// it stops being true once the money came back — so it follows the state
+    /// rather than being printed unconditionally over a refunded order.
+    /// Nil where `moneyLine` is nil, for the same reason.
+    static func moneyLabel(_ order: ClientOrder) -> String? {
+        guard case .reader = order.placedBy else { return nil }
+        return order.state == .refunded ? "REFUNDED" : "PAID"
     }
 
     /// The footer. M8 prints one under every card.
@@ -471,12 +498,5 @@ enum ClientOrderCopy {
             guard let projectName, !projectName.isEmpty else { return "\(who) ordered this for you." }
             return "\(who) ordered this for \(projectName)."
         }
-    }
-
-    /// The list-row eyebrow. Named rather than composed at the call site so the
-    /// Companion, the record and the card cannot disagree.
-    static func placedByLabel(_ order: ClientOrder) -> String? {
-        guard case .designer(let name) = order.placedBy else { return nil }
-        return "Ordered by \(name ?? "your designer")"
     }
 }

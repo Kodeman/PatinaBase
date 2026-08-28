@@ -21,6 +21,9 @@ struct OrderDetailView: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.openURL) private var openURL
     @State private var service = OrdersService.shared
+    /// One re-read per appearance, and no more — see
+    /// `OrdersService.shouldRefetchOnMiss`.
+    @State private var refetchedOnMiss = false
 
     private var order: ClientOrder? { service.order(withId: orderId) }
 
@@ -33,8 +36,18 @@ struct OrderDetailView: View {
                     moneyBlock(order)
                     actions(order)
                     responsibility
-                } else if service.isLoading {
+                } else if service.isLoading || !refetchedOnMiss {
                     PatinaLoadingState().padding(.top, 60)
+                } else if service.lastRefreshFailed {
+                    // We could not reach the orders at all — that is not the
+                    // same fact as "this order does not exist", and saying the
+                    // second when the first is true is the lie.
+                    PatinaErrorState(
+                        message: "We couldn’t reach your orders. "
+                            + "Check your connection and try again.",
+                        action: { Task { await service.refresh() } }
+                    )
+                    .padding(.top, 60)
                 } else {
                     PatinaEmptyState(
                         icon: "shippingbox",
@@ -51,7 +64,15 @@ struct OrderDetailView: View {
         }
         .background(PatinaColors.Background.primary)
         .patinaScreen(title: nil)
-        .task { await service.refreshIfNeeded() }
+        .task {
+            await service.refreshIfNeeded()
+            if OrdersService.shouldRefetchOnMiss(
+                found: order != nil, alreadyRefetched: refetchedOnMiss
+            ) {
+                await service.refresh()
+            }
+            refetchedOnMiss = true
+        }
         .refreshable { await service.refresh() }
     }
 
@@ -87,51 +108,99 @@ struct OrderDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
+    /// Money draws only for an order the reader paid for herself, and the label
+    /// follows the state — see `ClientOrderCopy.moneyLabel`. A designer-sourced
+    /// order prints none: the capture total is not this reader's bill and
+    /// `intake_at` is not a payment date.
+    @ViewBuilder
     private func moneyBlock(_ order: ClientOrder) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MonoLabel(text: "PAID")
-                .tracking(0.4)
-            Text(PatinaCurrency.format(
-                cents: order.amountCents, currencyCode: order.currency
-            ))
-            .font(PatinaTypography.h4)
-            .foregroundStyle(PatinaColors.Text.primary)
-            if let placed = order.placedAt {
-                Text(DateDisplay.long(placed))
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.muted)
+        if let label = ClientOrderCopy.moneyLabel(order) {
+            VStack(alignment: .leading, spacing: 6) {
+                MonoLabel(text: label)
+                    .tracking(0.4)
+                Text(PatinaCurrency.format(
+                    cents: order.amountCents, currencyCode: order.currency
+                ))
+                .font(PatinaTypography.h4)
+                .foregroundStyle(PatinaColors.Text.primary)
+                if let placed = order.placedAt {
+                    Text(DateDisplay.long(placed))
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                }
             }
         }
     }
 
-    @ViewBuilder
-    private func actions(_ order: ClientOrder) -> some View {
-        VStack(spacing: 0) {
-            if let tracking = CarrierTracking.url(carrier: order.carrier, tracking: order.tracking) {
-                rowButton(CarrierTracking.label(carrier: order.carrier)) {
-                    openURL(tracking)
-                }
-                divider
-            }
-            if order.isAttributed {
-                rowButton(messageLabel(order)) {
-                    coordinator.navigate(to: .threadList)
-                }
-                divider
-            }
-            if let piece = order.productId {
-                rowButton("See the piece") {
-                    coordinator.navigate(to: .pieceDetail(pieceId: piece))
-                }
-                if service.terms?.reachableContact != nil { divider }
-            }
-            if let contact = service.terms?.reachableContact {
-                rowButton("Report a problem") { reach(contact) }
+    /// The rows are built as a list first and the dividers drawn between them,
+    /// so no arrangement can leave a rule hanging under the last row, and an
+    /// empty list draws no card at all rather than a padded box around nothing.
+    private func actionRows(_ order: ClientOrder) -> [OrderDetailAction] {
+        var rows: [OrderDetailAction] = []
+        if let tracking = CarrierTracking.url(carrier: order.carrier, tracking: order.tracking) {
+            rows.append(.track(label: CarrierTracking.label(carrier: order.carrier), url: tracking))
+        }
+        if order.isAttributed {
+            rows.append(.message(label: messageLabel(order)))
+        }
+        if let piece = order.productId {
+            rows.append(.piece(pieceId: piece))
+        }
+        if let contact = service.terms?.reachableContact {
+            // A contact that resolves to no scheme is printed, not offered as a
+            // tap that would do nothing. Today's config value is an address;
+            // the moment Kody's copy becomes "Patina Concierge, 9–5 CT" this is
+            // the branch that keeps the row honest.
+            if let url = OrderContactLink.url(for: contact) {
+                rows.append(.report(url: url))
+            } else {
+                rows.append(.contact(text: contact))
             }
         }
-        .padding(.horizontal, 16)
-        .background(PatinaColors.Background.secondary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        return rows
+    }
+
+    @ViewBuilder
+    private func actions(_ order: ClientOrder) -> some View {
+        let rows = actionRows(order)
+        if !rows.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    if index > 0 { divider }
+                    actionRow(row)
+                }
+            }
+            .padding(.horizontal, 16)
+            .background(PatinaColors.Background.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+    }
+
+    @ViewBuilder
+    private func actionRow(_ row: OrderDetailAction) -> some View {
+        switch row {
+        case .track(let label, let url):
+            rowButton(label) { openURL(url) }
+        case .message(let label):
+            rowButton(label) { coordinator.navigate(to: .threadList) }
+        case .piece(let pieceId):
+            rowButton("See the piece") {
+                coordinator.navigate(to: .pieceDetail(pieceId: pieceId))
+            }
+        case .report(let url):
+            rowButton("Report a problem") { openURL(url) }
+        case .contact(let text):
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Report a problem")
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                Text(text)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        }
     }
 
     /// The responsibility paragraph, when the config holds one. Direction B §5
@@ -140,7 +209,7 @@ struct OrderDetailView: View {
     private var responsibility: some View {
         if let paragraph = service.terms?.paragraph {
             VStack(alignment: .leading, spacing: 6) {
-                MonoLabel(text: "IF SOMETHING'S WRONG")
+                MonoLabel(text: "IF SOMETHING’S WRONG")
                     .tracking(0.4)
                 Text(paragraph)
                     .font(PatinaTypography.bodySmall)
@@ -186,12 +255,29 @@ struct OrderDetailView: View {
         return BadgeCountService.shared.projects.first { $0.id == projectId }?.name
     }
 
-    /// The contact resolves to whatever it is: an address opens mail, a number
-    /// opens the dialler, and anything else is left to the system rather than
-    /// forced into a scheme it does not fit.
-    private func reach(_ contact: String) {
-        let trimmed = contact.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let url = OrderContactLink.url(for: trimmed) { openURL(url) }
+}
+
+/// One row of the order's action card. Named so the rows can be assembled
+/// before they are drawn — that is what keeps the dividers between them and
+/// the card off the screen when there are none.
+enum OrderDetailAction: Identifiable {
+    case track(label: String, url: URL)
+    case message(label: String)
+    case piece(pieceId: String)
+    /// The config's contact, resolved to something tappable.
+    case report(url: URL)
+    /// The config's contact, printed plainly because it resolves to no scheme
+    /// (T5's third branch). A row that cannot act must not look like one.
+    case contact(text: String)
+
+    var id: String {
+        switch self {
+        case .track: return "track"
+        case .message: return "message"
+        case .piece: return "piece"
+        case .report: return "report"
+        case .contact: return "contact"
+        }
     }
 }
 
