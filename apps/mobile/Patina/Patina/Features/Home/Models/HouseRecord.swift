@@ -226,7 +226,8 @@ enum HouseRecordBuilder {
             : defaultWindowStart(now: now, lastSeen: anchor)
         let window = DateInterval(start: min(windowStart, now), end: now)
 
-        let designerName = resolveDesignerName(badges: badges, liveLead: liveLead)
+        let designer = resolveDesigner(badges: badges, liveLead: liveLead)
+        let designerName = designer?.name
 
         // Everything waiting, including the items that carry no date and so
         // cannot draw. `hasMoreNeedsYou` counts against THIS, not against the
@@ -238,6 +239,7 @@ enum HouseRecordBuilder {
             proposals: badges.pendingProposals,
             invoices: badges.payableInvoices,
             designerFallback: designerName,
+            designerFallbackIsPerson: designer?.isPerson ?? false,
             now: now
         )
 
@@ -309,23 +311,36 @@ enum HouseRecordBuilder {
     /// The one place a designer's name is chosen, so two rows of one card
     /// cannot name the same person two ways. Nil when nobody is known — the
     /// rows then say "Your designer", never a guess.
-    private static func resolveDesignerName(
+    ///
+    /// `isPerson` travels with the name because the Record's decision copy
+    /// takes a FIRST name, and only a person has one. It is decided by which
+    /// field carried the name, never by inspecting the string: "Hartwell
+    /// Studio" is one word away from reading as a colleague (MJ-A).
+    static func resolveDesigner(
         badges: BadgeCountService,
         liveLead: DesignRequestStatus?
-    ) -> String? {
-        if let name = liveLead?.designerName, !name.isEmpty { return name }
-        if let name = badges.projects.compactMap({ $0.designer?.displayName }).first {
-            return name
+    ) -> (name: String, isPerson: Bool)? {
+        // The lead names the designer beside the studio (`studioName`), so
+        // this field is a person's.
+        if let name = liveLead?.designerName, !name.isEmpty { return (name, true) }
+        if let ref = badges.projects.compactMap({ $0.designer }).first,
+           let name = ref.displayName {
+            return (name, ref.personName != nil)
         }
-        if let name = badges.pendingDecisions
-            .compactMap({ $0.project?.designer?.displayName }).first { return name }
+        if let ref = badges.pendingDecisions
+            .compactMap({ $0.project?.designer }).first,
+           let name = ref.displayName {
+            return (name, ref.personName != nil)
+        }
         // `RemoteInvoiceDesignerRef.displayName` (a type this lane does not
         // own) returns the literal "your designer" when its embed brought no
         // name. That sentinel is not a name: skip it and keep looking, rather
         // than printing it lower-case mid-sentence.
-        if let name = badges.payableInvoices
-            .compactMap({ $0.designer?.displayName })
-            .first(where: { $0 != invoiceDesignerSentinel }) { return name }
+        if let ref = badges.payableInvoices
+            .compactMap({ $0.designer })
+            .first(where: { $0.displayName != invoiceDesignerSentinel }) {
+            return (ref.displayName, ref.full_name?.isEmpty == false)
+        }
         return nil
     }
 
@@ -337,7 +352,9 @@ enum HouseRecordBuilder {
 
 // MARK: - NEEDS YOU
 
-private extension HouseRecordBuilder {
+/// Internal rather than private: the row copy is a ruling (MJ-5), and a
+/// ruling is pinned by a test that calls it directly.
+extension HouseRecordBuilder {
 
     static func needsYouRows(
         waiting: [StudioQueueItemRow],
@@ -369,9 +386,25 @@ private extension HouseRecordBuilder {
         }
     }
 
+    /// MJ-5, ruled by Fable: a decision row names the question it is asking
+    /// — "Leah asked about Rug color — Natural vs Sand." — using the
+    /// designer's first name, the way the mock's "Leah asked about the rug
+    /// colour." reads.
+    ///
+    /// The first name is taken only from a PERSON (`designerIsPerson`, decided
+    /// by which field carried the name). A studio keeps its whole name and the
+    /// same question — "Hartwell Studio asked about …" — because halving one
+    /// reads as addressing a business as a colleague (MJ-A). With no designer
+    /// known, or no question of its own, the row falls back to the plain
+    /// sentence: "Your asked about …" is the failure a bare first name would
+    /// produce.
     static func title(for item: StudioQueueItemRow) -> String {
         switch item.kind {
-        case .decision: return "\(subject(item.designerName)) asked you to choose."
+        case .decision:
+            guard let name = item.designerName, !name.isEmpty,
+                  item.title != StudioQueueBuilder.untitledDecisionTitle
+            else { return "\(subject(item.designerName)) asked you to choose." }
+            return "\(item.designerIsPerson ? firstName(of: name) : name) asked about \(item.title)."
         case .proposal: return "\(subject(item.designerName)) sent a proposal to review."
         // Not attributed: an invoice is due whoever sent it, and the mock's
         // line is the plain one.
@@ -379,10 +412,23 @@ private extension HouseRecordBuilder {
         }
     }
 
+    /// The first word of a person's name. Only ever called for a person — a
+    /// studio name goes through whole (see `title(for:)`).
+    static func firstName(of name: String) -> String {
+        name.split(separator: " ").first.map(String.init) ?? name
+    }
+
     static func detail(for item: StudioQueueItemRow) -> String? {
-        // The subject of the thing — the decision's own question, the
-        // proposal's own name, the invoice's own number.
-        item.title
+        switch item.kind {
+        case .decision:
+            // The question is in the headline now; the second line names the
+            // project it belongs to, and nothing when there is none.
+            return item.title == StudioQueueBuilder.untitledDecisionTitle ? item.title : item.detail
+        case .proposal, .invoice:
+            // The subject of the thing — the proposal's own name, the
+            // invoice's own number.
+            return item.title
+        }
     }
 
     static func state(for item: StudioQueueItemRow, now: Date) -> HouseRecordRow.State {

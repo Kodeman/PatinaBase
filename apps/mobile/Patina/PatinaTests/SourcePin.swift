@@ -21,4 +21,23 @@ enum SourcePin {
             .appendingPathComponent(relativePath)
         return try String(contentsOf: url, encoding: .utf8)
     }
+
+    /// Every `.swift` file under a directory in the app target, so a pin can
+    /// say "nowhere in the app" instead of "not in these twelve files" — a
+    /// hard-coded list goes green the moment a thirteenth file reintroduces
+    /// what the pin forbids.
+    static func swiftFiles(under relativePath: String) -> [String] {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let walker = FileManager.default.enumerator(
+            at: root, includingPropertiesForKeys: nil
+        ) else { return [] }
+        return walker
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+            .map(\.path)
+            .sorted()
+    }
 }

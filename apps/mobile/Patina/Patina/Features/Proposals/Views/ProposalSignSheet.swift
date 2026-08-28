@@ -82,7 +82,7 @@ struct ProposalSignSheet: View {
             .padding(24)
         }
         .background(PatinaColors.Background.primary)
-        .moneyScreenTopBand()
+        .patinaTopBand()
     }
 
     /// SP-04: what is being agreed to, above the name field. Every row is a

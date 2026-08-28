@@ -68,7 +68,7 @@ public actor EditorialStoriesAPIClient {
     }
 
     /// Fetch the most recent published editorial story for the home feed.
-    /// Ordering: highest `sort_order`, then most recent `published_at`.
+    /// Ordering: most recent `published_at`, then highest `sort_order`.
     public func fetchTodaysStory() async throws -> RemoteEditorialStory? {
         try await fetchCandidates(limit: 1).first
     }
@@ -77,13 +77,18 @@ public actor EditorialStoriesAPIClient {
     /// `limit=1` could only ever return the same single row — which is why the
     /// same card appeared on the guest home, the engaged home, in dark mode,
     /// and after every relaunch. The reader's own read record chooses from
-    /// this list; the ordering (`sort_order desc, published_at desc`) is the
-    /// fallback when they have opened all of them.
+    /// this list; the ordering is the fallback when they have opened all of
+    /// them.
+    ///
+    /// B §2 reorders it to `published_at desc, sort_order desc`: with
+    /// `sort_order` first, a newer story is buried by any older row carrying a
+    /// higher sort order, which is the mechanism behind F46=F61 and F131 —
+    /// one article nobody can reach twice.
     public func fetchCandidates(limit: Int = 5) async throws -> [RemoteEditorialStory] {
         let url = baseURL.appendingPathComponent("/rest/v1/editorial_stories")
             .appending(queryItems: [
                 URLQueryItem(name: "select", value: "*"),
-                URLQueryItem(name: "order", value: "sort_order.desc,published_at.desc"),
+                URLQueryItem(name: "order", value: "published_at.desc,sort_order.desc"),
                 URLQueryItem(name: "limit", value: String(limit))
             ])
         var request = URLRequest(url: url)

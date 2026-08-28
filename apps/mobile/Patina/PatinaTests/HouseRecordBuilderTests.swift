@@ -157,7 +157,10 @@ struct HouseRecordBuilderTests {
                            lastSeen: day("2026-08-20T12:00:00Z"))
 
         #expect(record.needsYou.count == 3)
-        #expect(record.needsYou.map(\.detail) == ["One", "Two", "Three"])
+        // The three oldest survive, in the order they were asked. (Their
+        // second line is the project, and these fixtures carry none — MJ-5
+        // moved the question itself into the row's title.)
+        #expect(record.needsYou.map(\.id) == ["decision:d1", "decision:d2", "decision:d3"])
         #expect(record.hasMoreNeedsYou)
         #expect(!record.hasMoreMoved)
     }
@@ -324,8 +327,10 @@ struct HouseRecordBuilderTests {
             lastSeen: day("2026-08-20T12:00:00Z")
         )
 
-        #expect(record.needsYou[0].title == "Leah Hartwell asked you to choose.")
-        #expect(record.needsYou[0].detail == "Rug color — Natural vs Sand")
+        // MJ-5 (Fable's ruling): the decision row names the question, with the
+        // designer's first name, the way the mock reads it.
+        #expect(record.needsYou[0].title == "Leah asked about Rug color — Natural vs Sand.")
+        #expect(record.needsYou[0].detail == "Aspen Loft Refresh")
         #expect(record.needsYou[1].title == "Leah Hartwell sent a proposal to review.")
         #expect(record.needsYou[2].title == "Your invoice is due.")
         #expect(record.needsYou[2].detail == "INV-2026-0142")
@@ -801,5 +806,117 @@ struct HouseRecordSavedPieceTests {
         """.utf8))
 
         #expect(product.deletedAt == nil)
+    }
+}
+
+// MARK: - MJ-5, the decision line
+
+@MainActor
+struct HouseRecordDecisionCopyTests {
+
+    private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
+        try JSONDecoder().decode(type, from: Data(json.utf8))
+    }
+
+    private func row(
+        title: String,
+        designerName: String?,
+        isPerson: Bool = true,
+        project: String? = "Aspen Loft Refresh"
+    ) -> StudioQueueItemRow {
+        StudioQueueItemRow(
+            id: "decision:d1", kind: .decision, entityId: "d1", title: title,
+            detail: project, askedAt: Date(timeIntervalSince1970: 1_755_000_000),
+            dueAt: nil, amountCents: nil, designerName: designerName,
+            designerIsPerson: isPerson,
+            route: .decisionDetail(decisionId: "d1")
+        )
+    }
+
+    @Test("a decision with a question names it, with the designer's first name")
+    func aTitledDecisionNamesTheQuestion() {
+        let item = row(title: "Rug color — Natural vs Sand", designerName: "Leah Hartwell")
+        #expect(HouseRecordBuilder.title(for: item)
+                == "Leah asked about Rug color — Natural vs Sand.")
+        #expect(HouseRecordBuilder.detail(for: item) == "Aspen Loft Refresh")
+    }
+
+    @Test("a decision with no question of its own falls back to the full name")
+    func anUntitledDecisionFallsBack() {
+        let item = row(title: StudioQueueBuilder.untitledDecisionTitle,
+                       designerName: "Leah Hartwell")
+        #expect(HouseRecordBuilder.title(for: item) == "Leah Hartwell asked you to choose.")
+    }
+
+    @Test("with no designer resolved the row never says Your asked about")
+    func noDesignerNeverProducesTheBrokenSentence() {
+        let item = row(title: "Rug color", designerName: nil)
+        #expect(HouseRecordBuilder.title(for: item) == "Your designer asked you to choose.")
+    }
+
+    @Test("a one-word name is its own first name")
+    func aStudioNameIsItsOwnFirstName() {
+        #expect(HouseRecordBuilder.firstName(of: "Hartwell") == "Hartwell")
+        #expect(HouseRecordBuilder.firstName(of: "Leah Hartwell") == "Leah")
+    }
+
+    // MARK: - MJ-A: a studio is not a colleague
+
+    @Test("a studio keeps its whole name, and still names the question")
+    func aStudioIsNeverHalved() {
+        let item = row(
+            title: "Rug color — Natural vs Sand",
+            designerName: "Hartwell Studio",
+            isPerson: false
+        )
+        #expect(HouseRecordBuilder.title(for: item)
+                == "Hartwell Studio asked about Rug color — Natural vs Sand.")
+    }
+
+    @Test("a business_name-only profile resolves as a studio, not a person")
+    func businessNameAloneIsAStudio() throws {
+        let ref = try decode(RemoteDesignerRef.self, """
+        { "id": "d1", "business_name": "Hartwell Studio" }
+        """)
+        #expect(ref.displayName == "Hartwell Studio")
+        #expect(ref.personName == nil)
+        #expect(ref.studioName == "Hartwell Studio")
+
+        let named = StudioQueueBuilder.naming(ref, fallback: nil, fallbackIsPerson: false)
+        #expect(named.name == "Hartwell Studio")
+        #expect(!named.isPerson)
+    }
+
+    @Test("a display_name or full_name profile resolves as a person")
+    func aNamedProfileIsAPerson() throws {
+        let display = try decode(RemoteDesignerRef.self, """
+        { "id": "d1", "display_name": "Leah Hartwell", "business_name": "Hartwell Studio" }
+        """)
+        #expect(StudioQueueBuilder.naming(display, fallback: nil, fallbackIsPerson: false).isPerson)
+
+        let full = try decode(RemoteDesignerRef.self, """
+        { "id": "d1", "full_name": "Leah Hartwell" }
+        """)
+        #expect(StudioQueueBuilder.naming(full, fallback: nil, fallbackIsPerson: false).isPerson)
+    }
+
+    @Test("the studio's own decision row reads with the whole studio name")
+    func theRowBuiltFromAStudioEmbedIsWhole() throws {
+        let decision = try decode(RemoteClientDecision.self, """
+        {
+          "id": "d1", "title": "Rug color — Natural vs Sand",
+          "created_at": "2026-08-22T10:00:00Z",
+          "project": { "name": "Aspen Loft Refresh",
+                       "designer": { "id": "d", "business_name": "Hartwell Studio" } }
+        }
+        """)
+        let rows = StudioQueueBuilder.itemizedAwaitingRows(
+            decisions: [decision], proposals: [], invoices: [],
+            designerFallback: nil, now: Date(timeIntervalSince1970: 1_756_000_000)
+        )
+        let item = try #require(rows.first)
+        #expect(!item.designerIsPerson)
+        #expect(HouseRecordBuilder.title(for: item)
+                == "Hartwell Studio asked about Rug color — Natural vs Sand.")
     }
 }

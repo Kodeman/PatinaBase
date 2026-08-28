@@ -52,6 +52,26 @@ enum StudioQueueBuilder {
         return value
     }
 
+    /// What a decision with no question of its own is called. Named because
+    /// the Record has to tell it apart from a real question to choose its copy
+    /// (MJ-5).
+    static let untitledDecisionTitle = "A project choice is ready"
+
+    /// Whether a name belongs to a person or a studio, resolved from WHICH
+    /// field carried it rather than from the string itself. `display_name` and
+    /// `full_name` name a person; `business_name` names a studio, and the two
+    /// take different copy on the Record (MJ-A).
+    static func naming(
+        _ ref: RemoteDesignerRef?,
+        fallback: String?,
+        fallbackIsPerson: Bool
+    ) -> (name: String?, isPerson: Bool) {
+        if let resolved = ref?.displayName {
+            return (resolved, ref?.personName != nil)
+        }
+        return (fallback, fallback == nil ? false : fallbackIsPerson)
+    }
+
     /// The same waiting things, one row each, with their own dates and their
     /// own destinations — what the Record's NEEDS YOU half is built from.
     ///
@@ -63,27 +83,36 @@ enum StudioQueueBuilder {
     ///
     /// Ordered by the date each was asked, ascending — the Record's order.
     /// `designerFallback` is used only where the row's own embed brought no
-    /// name; nil leaves the row unattributed rather than guessing.
+    /// name; nil leaves the row unattributed rather than guessing, and
+    /// `designerFallbackIsPerson` says whether that borrowed name is a person's
+    /// or a studio's (MJ-A).
     static func itemizedAwaitingRows( // swiftlint:disable:this function_body_length
         decisions: [RemoteClientDecision],
         proposals: [RemoteProposal],
         invoices: [RemoteInvoice],
         designerFallback: String?,
+        designerFallbackIsPerson: Bool = false,
         now: Date
     ) -> [StudioQueueItemRow] {
         let decisionRows = decisions
             .filter { !$0.isResolved }
             .map { decision in
-                StudioQueueItemRow(
+                let designer = naming(
+                    decision.project?.designer,
+                    fallback: designerFallback,
+                    fallbackIsPerson: designerFallbackIsPerson
+                )
+                return StudioQueueItemRow(
                     id: "decision:\(decision.id)",
                     kind: .decision,
                     entityId: decision.id,
-                    title: decision.title ?? "A project choice is ready",
+                    title: decision.title ?? StudioQueueBuilder.untitledDecisionTitle,
                     detail: decision.project?.name,
                     askedAt: parsedDate(decision.created_at),
                     dueAt: parsedDate(decision.due_date),
                     amountCents: nil,
-                    designerName: decision.project?.designer?.displayName ?? designerFallback,
+                    designerName: designer.name,
+                    designerIsPerson: designer.isPerson,
                     route: .decisionDetail(decisionId: decision.id)
                 )
             }
@@ -104,6 +133,7 @@ enum StudioQueueBuilder {
                     // PostgREST embed, so a proposal has no designer of its
                     // own to read.
                     designerName: designerFallback,
+                    designerIsPerson: designerFallback == nil ? false : designerFallbackIsPerson,
                     route: .proposalDetail(proposalId: proposal.id)
                 )
             }
@@ -122,6 +152,12 @@ enum StudioQueueBuilder {
                     amountCents: invoice.balanceCents,
                     designerName: Self.named(invoice.designer?.displayName)
                         ?? designerFallback,
+                    // The invoice embed carries `full_name` and `business_name`
+                    // with no display name between them, so a person is one
+                    // only where `full_name` actually resolved.
+                    designerIsPerson: Self.named(invoice.designer?.displayName) != nil
+                        ? invoice.designer?.full_name?.isEmpty == false
+                        : (designerFallback == nil ? false : designerFallbackIsPerson),
                     route: .invoiceDetail(invoiceId: invoice.id)
                 )
             }
@@ -153,6 +189,10 @@ struct StudioQueueItemRow: Identifiable, Sendable, Equatable {
     /// decision, which has no one figure.
     let amountCents: Int?
     let designerName: String?
+    /// True where `designerName` came from a person's field (`display_name` /
+    /// `full_name`) rather than a studio's (`business_name`). The Record's
+    /// decision copy takes a first name only from a person (MJ-A).
+    var designerIsPerson: Bool = false
     let route: AppRoute
 }
 

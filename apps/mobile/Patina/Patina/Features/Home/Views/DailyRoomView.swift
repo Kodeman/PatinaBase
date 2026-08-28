@@ -2,7 +2,15 @@
 //  DailyRoomView.swift
 //  Patina
 //
-//  Option B Today: one next move, one real editorial story, one active room.
+//  Today, recomposed around the Record (R1 "now", Direction B §2).
+//
+//  The blocks this screen mounts are decided by `HomeComposition`, not by the
+//  order somebody typed them in: the record draws at every tier that has
+//  something true to say, and at guest and discovering an empty record draws
+//  nothing at all. The Next Move keeps the second slot only when nothing needs
+//  the person — when something does, the record IS the next move.
+//
+//  The record is UNFLAGGED (R1): rolling it back is deleting one mount.
 //
 
 import SwiftUI
@@ -74,12 +82,18 @@ struct DailyRoomView: View {
             presentPushPrimerIfEarned()
         }
         .task {
+            // One pass, in order: the record is built over whatever these two
+            // services are holding, so it is rebuilt after both have landed —
+            // and `markSeen` is stamped inside that rebuild, never before it
+            // (`RecordRefresh`).
             await badges.refresh()
-            syncCompanionContext()
-        }
-        .task {
             await requestStatus.refresh()
             syncCompanionContext()
+            await viewModel.refreshProjectRooms()
+            await viewModel.refreshRecord()
+        }
+        .task {
+            await viewModel.refreshNewThisWeek()
         }
         .task {
             let candidates = await ScanRecoveryService.shared
@@ -93,6 +107,8 @@ struct DailyRoomView: View {
             guard isAuthenticated else { return }
             Task {
                 await badges.refresh()
+                await viewModel.refreshProjectRooms()
+                await viewModel.refreshRecord()
                 await notificationsViewModel.load()
                 presentPushPrimerIfEarned()
             }
@@ -105,6 +121,9 @@ struct DailyRoomView: View {
                 await badges.refresh()
                 await requestStatus.refresh()
                 syncCompanionContext()
+                await viewModel.refreshProjectRooms()
+                await viewModel.refreshRecord()
+                await viewModel.refreshNewThisWeek()
                 // The feed is what the primer trigger reads, and signing in
                 // inside this view's lifetime does not re-run the `.task`
                 // above — so a client who signed in on this screen would not
@@ -130,46 +149,196 @@ struct DailyRoomView: View {
         isPushPrimerPresented = true
     }
 
+    // MARK: - Composition
+
+    private var tier: EngagementTier {
+        switch EngagementTier.currentState {
+        case .known(let tier): return tier
+        // While the two services are still in flight the screen asserts
+        // nothing about the person: the record's truthful empties wait for a
+        // real answer, and the snapshot it painted stands in the meantime.
+        case .unknown: return .discovering
+        }
+    }
+
+    private var designerSeat: DesignerSeat? {
+        DesignerSeat.make(liveLead: requestStatus.liveLead, projects: badges.projects)
+    }
+
+    private var compositionInput: HomeCompositionInput {
+        HomeCompositionInput(
+            isSignedIn: AuthService.shared.isAuthenticated,
+            tier: tier,
+            record: viewModel.record,
+            roomCount: viewModel.houseRoomCards.count,
+            newThisWeekCount: viewModel.newThisWeek.count,
+            hasStory: viewModel.todayStory != nil || viewModel.storyLoadFailed,
+            hasDesigner: designerSeat != nil,
+            localRoomCount: viewModel.roomModels.count,
+            savedPieceCount: viewModel.savedItems.count
+        )
+    }
+
+    private var blocks: [HomeBlock] { HomeComposition.blocks(for: compositionInput) }
+
     private var content: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
                 DailyGreetingHeader(
                     dateString: viewModel.greetingDate.uppercased(),
-                    monogram: UserIdentity.initial,
+                    greeting: TimeOfDay.current.greeting,
+                    attentionCount: BadgeCountService.shared.attentionCount,
                     onHelpTap: { isHelpPanelPresented = true },
-                    onMonogramTap: { coordinator.navigate(to: .profile) },
+                    onStudioTap: { coordinator.navigate(to: .profile) },
                     onBellTap: { coordinator.navigate(to: .notifications) },
                     unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count
                 )
 
-                TodayNextMoveCard(
-                    move: nextMove,
-                    onTap: performNextMove
-                )
-                .padding(.horizontal, 20)
-                .padding(.top, 22)
+                if blocks.contains(.record) {
+                    HouseRecordCard(
+                        record: viewModel.record,
+                        drawsEmpties: AuthService.shared.isAuthenticated && tier >= .engaged,
+                        onRow: openRecordRow,
+                        onSeeAll: { half in
+                            PostHogService.shared.capture("today_record_see_all_tapped", properties: [
+                                "half": half.rawValue
+                            ])
+                            coordinator.navigate(to: .profile)
+                        }
+                    )
+                    .padding(.horizontal, PatinaSpacing.mdLarge)
+                    .padding(.top, PatinaSpacing.md)
+                }
 
-                editorialModule
+                if blocks.contains(.nextMove) {
+                    TodayNextMoveCard(move: nextMove, onTap: performNextMove)
+                        .padding(.horizontal, PatinaSpacing.mdLarge)
+                        .padding(.top, PatinaSpacing.md)
+                }
 
-                if let room = viewModel.activeRoomModel {
-                    TodayActiveRoomCard(
-                        room: room,
-                        recentSavedItem: viewModel.recentSavedItem,
-                        onTap: {
-                            PostHogService.shared.capture("today_active_room_tapped", properties: [
-                                "has_scan": room.hasBeenScanned,
-                                "saved_item_count": room.items.count
+                if blocks.contains(.designerSeat), let seat = designerSeat {
+                    YourDesignerSeat(
+                        seat: seat,
+                        isOpeningThread: viewModel.isOpeningDesignerThread,
+                        onMessage: { openDesignerThread(seat) }
+                    )
+                    .padding(.horizontal, PatinaSpacing.mdLarge)
+                    .padding(.top, PatinaSpacing.xsm)
+                }
+
+                if blocks.contains(.roomHero), let room = viewModel.roomModels.first {
+                    RoomHeroCard(
+                        hero: RoomHero.make(room: room),
+                        onOpen: {
+                            PostHogService.shared.capture("house_room_opened", properties: [
+                                "read_only": false
                             ])
                             ContextMemoryStore.shared.rememberRoom(id: room.id)
                             coordinator.navigate(to: .roomProject(roomId: room.id))
+                        },
+                        onAddRoom: addRoom
+                    )
+                    .padding(.top, PatinaSpacing.md)
+                }
+
+                if blocks.contains(.houseRail) {
+                    YourHouseRail(
+                        cards: viewModel.houseRoomCards,
+                        onCard: openHouseRoom,
+                        onAddRoom: addRoom
+                    )
+                    .padding(.top, PatinaSpacing.xsm)
+                }
+
+                if blocks.contains(.startWithARoom) {
+                    StartWithARoomBlock(onAct: addRoom)
+                        .padding(.top, PatinaSpacing.md)
+                }
+
+                if blocks.contains(.newThisWeek) {
+                    NewThisWeekRail(
+                        products: viewModel.newThisWeek,
+                        onProduct: { product in
+                            PostHogService.shared.capture("piece_card_tapped", properties: [
+                                "product_id": product.id, "source": "new_this_week"
+                            ])
+                            coordinator.navigate(to: .pieceDetail(pieceId: product.id))
                         }
                     )
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
+                    .padding(.top, PatinaSpacing.md)
+                }
+
+                if blocks.contains(.savedSummary),
+                   let summary = SavedSummary.make(items: viewModel.savedItems) {
+                    SavedSummaryRow(summary: summary, onOpen: {
+                        PostHogService.shared.capture("today_saved_summary_tapped", properties: [
+                            "saved_count": summary.count
+                        ])
+                        coordinator.navigate(to: .table)
+                    })
+                    .padding(.top, PatinaSpacing.md)
+                }
+
+                if blocks.contains(.story) {
+                    editorialModule
+                }
+
+                if blocks.contains(.signInLine) {
+                    Text("Sign in to keep this on every device.")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, PatinaSpacing.mdLarge)
+                        .padding(.top, PatinaSpacing.md)
+                        .accessibilityIdentifier("DailyRoomView.SignInLine")
                 }
 
                 Spacer().frame(height: 120)
             }
+        }
+    }
+
+    // MARK: - Intent
+
+    private func openRecordRow(_ row: HouseRecordRow) {
+        PostHogService.shared.capture("today_record_line_tapped", properties: [
+            "kind": row.kind.rawValue
+        ])
+        guard let route = row.route else { return }
+        coordinator.navigate(to: route)
+    }
+
+    private func openDesignerThread(_ seat: DesignerSeat) {
+        PostHogService.shared.capture("designer_card_message_tapped")
+        Task {
+            guard let threadId = await viewModel.openDesignerThread(seat) else { return }
+            coordinator.navigate(to: .threadDetail(threadId: threadId))
+        }
+    }
+
+    private func openHouseRoom(_ card: HouseRoomCard) {
+        PostHogService.shared.capture("house_room_opened", properties: [
+            "read_only": card.isReadOnly
+        ])
+        switch card.origin {
+        case .project(let projectId):
+            coordinator.navigate(to: .projectDetail(projectId: projectId))
+        case .local(let roomId):
+            ContextMemoryStore.shared.rememberRoom(id: roomId)
+            coordinator.navigate(to: .roomProject(roomId: roomId))
+        }
+    }
+
+    private func addRoom(_ act: StartWithARoomAct) {
+        PostHogService.shared.capture("house_add_room_tapped", properties: [
+            "method": act.rawValue
+        ])
+        switch act {
+        case .typeTheDimensions:
+            coordinator.navigate(to: .manualRoomEntry)
+        case .scanIt:
+            OnboardingFunnel.shared.markFirstSessionScanStarted()
+            coordinator.navigate(to: .scanFlow(reason: .fresh))
         }
     }
 
@@ -187,7 +356,9 @@ struct DailyRoomView: View {
                 DailyStoryCard(
                     story: story,
                     namespace: cardNamespace,
-                    isExpanded: expandedStory?.id == story.id
+                    isExpanded: expandedStory?.id == story.id,
+                    height: storyHeight,
+                    publishedAt: viewModel.todayStoryPublishedAt
                 )
             }
             .buttonStyle(.plain)
@@ -202,6 +373,15 @@ struct DailyRoomView: View {
                 .frame(maxWidth: .infinity, minHeight: 120)
                 .padding(.top, 16)
                 .accessibilityIdentifier("DailyRoomView.EditorialStory")
+        }
+    }
+
+    /// Card weight follows content: the story keeps the hero footprint on a
+    /// quiet day and gives way when the record filled the screen.
+    private var storyHeight: CGFloat {
+        switch HomeComposition.storyWeight(for: compositionInput) {
+        case .hero: return 180
+        case .row(let height): return height
         }
     }
 
@@ -221,8 +401,15 @@ struct DailyRoomView: View {
             pendingDecisionCount: badges.pendingDecisionCount,
             unreadMessageCount: badges.unreadMessageCount,
             hasStyleProfile: viewModel.hasStyleProfile,
-            activeRoom: viewModel.activeRoomCandidate
+            activeRoom: viewModel.activeRoomCandidate,
+            activeProjectID: liveProject?.id,
+            activeProjectName: liveProject?.name,
+            activeProjectPhase: liveProject?.current_phase
         ))
+    }
+
+    private var liveProject: RemoteProject? {
+        badges.projects.first { !StudioQueueBuilder.projectIsArchived($0) }
     }
 
     private func performNextMove() {
@@ -249,6 +436,9 @@ struct DailyRoomView: View {
             coordinator.navigate(to: .decisionList)
         case .readMessages:
             coordinator.navigate(to: .threadList)
+        case .openProject:
+            guard let projectId = move.targetID else { break }
+            coordinator.navigate(to: .projectDetail(projectId: projectId))
         case .scanFirstRoom:
             OnboardingFunnel.shared.markFirstSessionScanStarted()
             coordinator.navigate(to: .scanFlow(reason: .fresh))

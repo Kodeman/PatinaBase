@@ -80,6 +80,23 @@ final class RecordSnapshotStore: Sendable {
         }
     }
 
+    /// Whether anything is on disk at all — so a caller can tell "no record
+    /// yet" from "a record that had to be thrown away".
+    var hasSnapshot: Bool {
+        fileManager.fileExists(atPath: fileURL.path)
+    }
+
+    /// Remove the snapshot entirely. Called at the auth boundary
+    /// (`LocalStoreReset`) and by the paint path when the record on disk turns
+    /// out to belong to another account — the file is device-global and
+    /// outlives a sign-out, so deleting it is the only thing that keeps one
+    /// client's record off the next client's home.
+    func remove() {
+        lock.lock()
+        defer { lock.unlock() }
+        try? fileManager.removeItem(at: fileURL)
+    }
+
     /// nil when nothing has been saved, or when what was saved no longer
     /// decodes — a stale shape must not stop the app from launching.
     func load() -> HouseRecord? {

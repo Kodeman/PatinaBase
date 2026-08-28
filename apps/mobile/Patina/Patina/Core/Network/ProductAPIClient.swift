@@ -148,6 +148,31 @@ actor ProductAPIClient {
         return raw.toProduct()
     }
 
+    /// The saved pieces' products, fetched **by id, withdrawn ones included**.
+    ///
+    /// The Record's "no longer available" row is composed over
+    /// `products.deleted_at`, and `get_recommendations` filters a withdrawn
+    /// row out by construction — so the row can only ever be fed by a direct
+    /// table read that does not filter on `deleted_at` either. This is that
+    /// read, and it is the record's only caller.
+    func fetchProducts(ids: [String]) async throws -> [Product] {
+        guard !ids.isEmpty else { return [] }
+        let url = baseURL.appendingPathComponent("/rest/v1/products")
+            .appending(queryItems: [
+                URLQueryItem(name: "id", value: "in.(\(ids.joined(separator: ",")))"),
+                URLQueryItem(name: "select", value: Self.productSelect)
+            ])
+        var request = URLRequest(url: url)
+        await applyHeaders(to: &request)
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw ProductAPIError.http(status: http.statusCode)
+        }
+        return try JSONDecoder()
+            .decode([RawProductWithVendor].self, from: data)
+            .map { $0.toProduct() }
+    }
+
     // MARK: - Interactions
 
     /// Track a user interaction with a product

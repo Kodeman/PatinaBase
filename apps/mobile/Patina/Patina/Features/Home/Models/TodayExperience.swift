@@ -17,6 +17,14 @@ struct TodayPriorityInput: Equatable {
     var unreadMessageCount: Int = 0
     var hasStyleProfile: Bool = false
     var activeRoom: ContextRoomCandidate?
+    /// The client's live project, where there is one. With nothing waiting,
+    /// the Next Move names the phase the project is actually in rather than
+    /// inventing a chore (synthesis §5's graft from Direction A).
+    var activeProjectID: String?
+    var activeProjectName: String?
+    /// `projects.current_phase`, raw. Empty or nil means the app does not know
+    /// the phase and says nothing about it.
+    var activeProjectPhase: String?
 }
 
 struct TodayNextMove: Equatable {
@@ -26,6 +34,7 @@ struct TodayNextMove: Equatable {
         case trackDesignRequest
         case reviewDecisions
         case readMessages
+        case openProject
         case scanFirstRoom
         case discoverStyle
         case exploreActiveRoom
@@ -118,6 +127,22 @@ enum TodayExperience {
                 targetID: nil
             )
         }
+
+        // Nothing is waiting. The queue is empty and the project is still
+        // moving, so the move names where it has got to — the phase is already
+        // on the wire (`projects.current_phase`) and was being discarded.
+        if let projectId = input.activeProjectID,
+           let phase = input.activeProjectPhase,
+           !phase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return TodayNextMove(
+                kind: .openProject,
+                title: input.activeProjectName.map { "See where \($0) stands" }
+                    ?? "See where your project stands",
+                detail: "Now in \(PhaseDisplay.clientLabel(for: phase)).",
+                symbol: "list.bullet.rectangle",
+                targetID: projectId
+            )
+        }
         return nil
     }
 
@@ -161,5 +186,113 @@ enum TodayExperience {
             symbol: "house",
             targetID: room.id.uuidString
         )
+    }
+}
+
+// MARK: - Home composition (Direction B §2)
+
+/// One block of the home, top to bottom. The list a tier mounts is a rule, not
+/// a view — so it can be pinned by a test that renders nothing.
+enum HomeBlock: String, Equatable, CaseIterable {
+    case header
+    case record
+    case nextMove
+    case designerSeat
+    case houseRail
+    /// M2 block 3: at discovering the house is ONE room, so it is drawn whole
+    /// rather than as a rail of one card.
+    case roomHero
+    case startWithARoom
+    case newThisWeek
+    /// M2 block 5: the door to the pieces the person has gathered.
+    case savedSummary
+    case story
+    case signInLine
+}
+
+/// How much room a card takes. Weight follows content: the record takes the
+/// hero footprint the moment it has something true to say, and the story drops
+/// to a row when it does.
+enum HomeCardWeight: Equatable {
+    case hero
+    case row(CGFloat)
+}
+
+struct HomeCompositionInput: Equatable {
+    var isSignedIn: Bool = false
+    var tier: EngagementTier = .discovering
+    var record: HouseRecord = .empty
+    /// Every room the person's house holds — the rooms they typed or scanned
+    /// AND the project rooms a designer owns. An activeProject client whose
+    /// rooms all live on the project is not an empty house.
+    var roomCount: Int = 0
+    var newThisWeekCount: Int = 0
+    var hasStory: Bool = false
+    var hasDesigner: Bool = false
+    /// Rooms the PERSON made, as opposed to the designer's project rooms. The
+    /// discovering house draws the one they made; a project room is not theirs
+    /// to be shown as theirs.
+    var localRoomCount: Int = 0
+    var savedPieceCount: Int = 0
+}
+
+enum HomeComposition {
+
+    /// `NEW THIS WEEK` renders at three or more genuinely new rows, or not at
+    /// all. It is never padded (B §2, supply floor).
+    static let newThisWeekFloor = 3
+
+    /// The story's demoted height when the record carried the screen.
+    static let storyRowHeight: CGFloat = 96
+
+    /// Honesty (C5), the tier half: at guest and discovering an empty record
+    /// draws NOTHING — an empty half is not drawn, and no "Nothing moved since
+    /// Thursday." is printed to a person with no house on file (synthesis §5,
+    /// which overrides B §2's guest bullet). From engaged upward the truthful
+    /// empties do draw, because there a silence is itself the answer.
+    static func recordDraws(for input: HomeCompositionInput) -> Bool {
+        if !input.record.isEmpty { return true }
+        return input.isSignedIn && input.tier >= .engaged
+    }
+
+    /// The record is the next move whenever it holds one. The Next Move card
+    /// keeps the second slot only when nothing needs the person.
+    static func nextMoveDraws(for input: HomeCompositionInput) -> Bool {
+        guard recordDraws(for: input) else { return true }
+        return input.record.needsYou.isEmpty
+    }
+
+    static func recordWeight(for input: HomeCompositionInput) -> HomeCardWeight {
+        input.record.isEmpty ? .row(storyRowHeight) : .hero
+    }
+
+    static func storyWeight(for input: HomeCompositionInput) -> HomeCardWeight {
+        input.record.isEmpty ? .hero : .row(storyRowHeight)
+    }
+
+    static func blocks(for input: HomeCompositionInput) -> [HomeBlock] {
+        var blocks: [HomeBlock] = [.header]
+        if recordDraws(for: input) { blocks.append(.record) }
+        if nextMoveDraws(for: input) { blocks.append(.nextMove) }
+        // The seat persists from the moment a designer exists until she is
+        // gone — never at discovering, where naming one would be a guess.
+        if input.isSignedIn, input.tier >= .engaged, input.hasDesigner {
+            blocks.append(.designerSeat)
+        }
+        // Below engaged the house is the person's own rooms, and one room is
+        // a card, not a rail (M2 block 3). From engaged upward the rail holds
+        // the designer's project rooms beside them.
+        if input.tier < .engaged, input.localRoomCount == 1, input.roomCount == 1 {
+            blocks.append(.roomHero)
+        } else {
+            blocks.append(input.roomCount > 0 ? .houseRail : .startWithARoom)
+        }
+        if input.newThisWeekCount >= newThisWeekFloor { blocks.append(.newThisWeek) }
+        // The Saved door, where the person has saved anything. Signed in only:
+        // a guest's saves are not on file anywhere yet (M2's tier note).
+        if input.isSignedIn, input.savedPieceCount > 0 { blocks.append(.savedSummary) }
+        if input.hasStory { blocks.append(.story) }
+        if !input.isSignedIn { blocks.append(.signInLine) }
+        return blocks
     }
 }

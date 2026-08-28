@@ -70,4 +70,12 @@ struct LastSeenStore: Sendable {
     func markSeen(now: Date = Date()) {
         defaults.set(now.timeIntervalSince1970, forKey: Self.key)
     }
+
+    /// Forget the visit. The stamp is device-global and survives a sign-out,
+    /// and a visit belonging to one account must never decide what is "new"
+    /// for the next — so the auth boundary (`LocalStoreReset`) and the record's
+    /// own identity guard both clear it.
+    func clear() {
+        defaults.removeObject(forKey: Self.key)
+    }
 }
