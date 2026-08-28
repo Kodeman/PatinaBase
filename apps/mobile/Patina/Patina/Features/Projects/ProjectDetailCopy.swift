@@ -63,6 +63,15 @@ enum ProjectDetailCopy {
         return running.count == 1 ? running.first?.id : nil
     }
 
+    /// The fee a phase actually carries. A stored `0` is not a fee — it is
+    /// the designer not having priced the phase — and a column of `$0` beside
+    /// five real phases says something the project does not (integration.md
+    /// §6.7). Nothing to say, nothing drawn.
+    static func phaseFee(cents: Int?, format: (Int) -> String) -> String? {
+        guard let cents, cents != 0 else { return nil }
+        return format(cents)
+    }
+
     /// What VoiceOver reads for one timeline row. The row is combined into a
     /// single element, so this string is the whole row: leave the fee out and
     /// a money figure that is on screen is silent for the reader who most

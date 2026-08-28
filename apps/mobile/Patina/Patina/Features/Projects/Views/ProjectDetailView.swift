@@ -208,8 +208,8 @@ struct ProjectDetailView: View {
             }
             .padding(.vertical, 14)
             Spacer()
-            if let fee = phase.fee_cents {
-                Text(formatPrice(fee))
+            if let fee = ProjectDetailCopy.phaseFee(cents: phase.fee_cents, format: formatPrice) {
+                Text(fee)
                     .font(PatinaTypography.monoTiny)
                     .foregroundStyle(PatinaColors.Text.secondary)
                     .padding(.vertical, 14)
@@ -218,7 +218,9 @@ struct ProjectDetailView: View {
         .padding(.horizontal, 16)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(phaseAccessibilityLabel(
-            phase, isCurrent: isCurrent, fee: phase.fee_cents.map(formatPrice)
+            phase,
+            isCurrent: isCurrent,
+            fee: ProjectDetailCopy.phaseFee(cents: phase.fee_cents, format: formatPrice)
         ))
     }
 
