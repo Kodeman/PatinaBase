@@ -83,7 +83,16 @@ public struct PatinaTabBar<Trailing: View>: View {
                     tab == selected ? PatinaColors.Text.primary : PatinaColors.Text.muted
                 )
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.7)
+                // Four words share one 402 pt row beside a fixed 54 pt slot,
+                // so the label's growth is capped and each word is given its
+                // own gutter: uncapped, `Spaces` truncated mid-word and every
+                // label touched its neighbour at accessibility XXL
+                // (`w3-n2-09`, `w3-n3-11`). The cap is on the drawn word only
+                // — VoiceOver still speaks `tab.canonicalName` in full, and
+                // nothing else in the app is capped.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                .padding(.horizontal, 4)
                 .frame(maxWidth: .infinity)
                 .frame(height: Self.itemHeight)
                 .contentShape(.rect)
@@ -99,9 +108,13 @@ public struct PatinaTabBar<Trailing: View>: View {
 #Preview {
     VStack {
         Spacer()
-        PatinaTabBar(selected: .today, onSelect: { _ in }) {
-            StrataMarkView(color: PatinaColors.mocha, scale: 0.8, accessibility: .decorative)
-        }
+        PatinaTabBar(
+            selected: .today,
+            onSelect: { _ in },
+            trailing: {
+                StrataMarkView(color: PatinaColors.mocha, scale: 0.8, accessibility: .decorative)
+            }
+        )
     }
     .background(PatinaColors.Background.primary)
 }
