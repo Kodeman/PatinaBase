@@ -107,6 +107,36 @@ Deno.test('normalizeIntakePayload: livemode defaults to false when the PI carrie
   assertEquals(payload.payment_intent, { id: 'pi_no_livemode', livemode: false });
 });
 
+Deno.test('normalizeIntakePayload: ship_to falls back to the PI\'s own shipping (00540)', () => {
+  // A direct order cannot carry ship_to in its metadata: create-checkout-session
+  // writes that metadata when the session OPENS, and the address is collected
+  // inside the session, after. Stripe copies the collected address onto the
+  // PaymentIntent, which is what the worker re-fetches — so without this
+  // fallback every direct order files with nowhere to ship.
+  const shipping = {
+    name: 'Ruth Calder',
+    address: { line1: '1412 Aspen Grove Rd', city: 'Aspen', state: 'CO', postal_code: '81611', country: 'US' },
+  };
+  const pi = { id: 'pi_direct_order_1', amount: 420000, metadata: {}, shipping };
+  assertEquals(normalizeIntakePayload(pi).ship_to, shipping);
+});
+
+Deno.test('normalizeIntakePayload: metadata ship_to still wins over the PI\'s (BOH unchanged)', () => {
+  const fromMetadata = { line1: '1 Main St', city: 'Austin' };
+  const pi = {
+    id: 'pi_boh_1',
+    amount: 100,
+    metadata: { ship_to: JSON.stringify(fromMetadata) },
+    shipping: { name: 'Should Not Win' },
+  };
+  assertEquals(normalizeIntakePayload(pi).ship_to, fromMetadata);
+});
+
+Deno.test('normalizeIntakePayload: no metadata and no PI shipping → null, never a guess', () => {
+  const pi = { id: 'pi_bare_1', amount: 100, metadata: {} };
+  assertEquals(normalizeIntakePayload(pi).ship_to, null);
+});
+
 // ─── intakeInlinePI ───────────────────────────────────────────────────────────
 
 /** A fake RPC that mimics the real fulfillment_intake_order's idempotency:

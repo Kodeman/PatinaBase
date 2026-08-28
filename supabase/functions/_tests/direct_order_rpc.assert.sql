@@ -27,6 +27,8 @@ DECLARE
   v_zeroprice      UUID := gen_random_uuid();  -- price_retail = 0
   v_nullprice      UUID := gen_random_uuid();  -- price_retail = NULL
   v_missing        UUID := gen_random_uuid();  -- never inserted
+  v_ungated        UUID := gen_random_uuid();  -- 00540 gate: photo_verified_at NULL
+  v_freighted      UUID := gen_random_uuid();  -- 00540 fold: shipping_flat_cents 2500
   v_order          public.direct_orders;
 BEGIN
   -- A real profile to satisfy the client_id FK (RESTRICT). Rolled back anyway.
@@ -46,15 +48,32 @@ BEGIN
 
   -- catalog-layer products satisfy products_catalog_requires_management when
   -- patina_managed=true; personal-layer products need an owner_user_id.
+  --
+  -- 00540 added four more gate fields — dimensions, lead_time_weeks, brand and
+  -- photo_verified_at — so every fixture that is MEANT to be buyable now
+  -- carries them, and v_ungated withholds one so the new refusal has a case.
+  -- (A product row with a price and a seller but no size was buyable before
+  -- 00540; that is the hole the gate closes.)
   INSERT INTO public.products
-    (id, name, captured_at, layer, status, patina_managed, owner_user_id, vendor_id, price_retail, deleted_at)
+    (id, name, captured_at, layer, status, patina_managed, owner_user_id, vendor_id, price_retail, deleted_at,
+     brand, dimensions, lead_time_weeks, photo_verified_at, shipping_flat_cents)
   VALUES
-    (v_buyable_pm, 'DO_RPC Buyable PM', now(), 'catalog',  'published', true,  NULL,    NULL,            12345, NULL),
-    (v_buyable_vc, 'DO_RPC Buyable VC', now(), 'personal', 'published', false, v_buyer, v_cat_vendor,     5000, NULL),
-    (v_nonbuyable, 'DO_RPC NonBuyable', now(), 'personal', 'published', false, v_buyer, v_noncat_vendor,  5000, NULL),
-    (v_deleted,    'DO_RPC Deleted',    now(), 'catalog',  'published', true,  NULL,    NULL,             5000, now()),
-    (v_zeroprice,  'DO_RPC ZeroPrice',  now(), 'catalog',  'published', true,  NULL,    NULL,                0, NULL),
-    (v_nullprice,  'DO_RPC NullPrice',  now(), 'catalog',  'published', true,  NULL,    NULL,             NULL, NULL);
+    (v_buyable_pm, 'DO_RPC Buyable PM', now(), 'catalog',  'published', true,  NULL,    NULL,            12345, NULL,
+     'DO_RPC Maker', '{"width":40,"depth":20,"height":30,"unit":"in"}'::jsonb, 8, now(), NULL),
+    (v_buyable_vc, 'DO_RPC Buyable VC', now(), 'personal', 'published', false, v_buyer, v_cat_vendor,     5000, NULL,
+     'DO_RPC Maker', '{"width":20}'::jsonb, 4, now(), NULL),
+    (v_nonbuyable, 'DO_RPC NonBuyable', now(), 'personal', 'published', false, v_buyer, v_noncat_vendor,  5000, NULL,
+     'DO_RPC Maker', '{"width":20}'::jsonb, 4, now(), NULL),
+    (v_deleted,    'DO_RPC Deleted',    now(), 'catalog',  'published', true,  NULL,    NULL,             5000, now(),
+     'DO_RPC Maker', '{"width":20}'::jsonb, 4, now(), NULL),
+    (v_zeroprice,  'DO_RPC ZeroPrice',  now(), 'catalog',  'published', true,  NULL,    NULL,                0, NULL,
+     'DO_RPC Maker', '{"width":20}'::jsonb, 4, now(), NULL),
+    (v_nullprice,  'DO_RPC NullPrice',  now(), 'catalog',  'published', true,  NULL,    NULL,             NULL, NULL,
+     'DO_RPC Maker', '{"width":20}'::jsonb, 4, now(), NULL),
+    (v_ungated,    'DO_RPC Ungated',    now(), 'catalog',  'published', true,  NULL,    NULL,             5000, NULL,
+     'DO_RPC Maker', '{"width":20}'::jsonb, 4, NULL,  NULL),
+    (v_freighted,  'DO_RPC Freighted',  now(), 'catalog',  'published', true,  NULL,    NULL,            10000, NULL,
+     'DO_RPC Maker', '{"width":20}'::jsonb, 4, now(), 2500);
 
   -- ── A1: happy path (patina_managed), quantity 2, exact snapshot + math ─────
   v_order := public.create_direct_order(v_buyable_pm, 2);
@@ -154,6 +173,35 @@ BEGIN
     END IF;
   END;
 
+  -- ── A11: 00540 gate — unverified photography refused, by name ─────────────
+  BEGIN
+    PERFORM public.create_direct_order(v_ungated, 1);
+    RAISE NOTICE 'A11 FAIL: expected the buyability gate to refuse an unverified photo';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE '%not_buyable:photo_verified_at%'
+      THEN RAISE NOTICE 'A11 PASS: %', SQLERRM;
+      ELSE RAISE NOTICE 'A11 FAIL: wrong error: %', SQLERRM;
+    END IF;
+  END;
+
+  -- ── A12: 00540 fold — flat freight lands in amount_cents ONCE ─────────────
+  -- 2 × 10000 + 2500. Once, not per unit: freight is per delivery.
+  v_order := public.create_direct_order(v_freighted, 2);
+  IF v_order.amount_cents = 22500
+     AND v_order.amount_cents - (v_order.quantity * v_order.unit_price_cents) = 2500 THEN
+    RAISE NOTICE 'A12 PASS: freight folded, amount_cents=% freight=%',
+      v_order.amount_cents, v_order.amount_cents - (v_order.quantity * v_order.unit_price_cents);
+  ELSE
+    RAISE NOTICE 'A12 FAIL: amount_cents=% (expected 22500)', v_order.amount_cents;
+  END IF;
+
+  -- ── A13: 00540 snapshot — every order carries a commission rate ───────────
+  IF v_order.commission_rate IS NOT NULL AND v_order.commission_rate BETWEEN 0 AND 1 THEN
+    RAISE NOTICE 'A13 PASS: commission_rate snapshotted as a fraction (%)', v_order.commission_rate;
+  ELSE
+    RAISE NOTICE 'A13 FAIL: commission_rate=%', v_order.commission_rate;
+  END IF;
+
   -- ── A10: anonymous caller rejected ────────────────────────────────────────
   PERFORM set_config('request.jwt.claims', '', true);  -- auth.uid() → NULL
   BEGIN
@@ -169,7 +217,7 @@ END $$;
 
 ROLLBACK;
 
--- ── A11/A12: RLS SELECT boundary ────────────────────────────────────────────
+-- ── A14/A15: RLS SELECT boundary ────────────────────────────────────────────
 -- A client sees only their own orders. Run under SET ROLE authenticated (the
 -- postgres superuser bypasses RLS). Uses two existing profiles + a buyable
 -- product as fixtures; the whole thing is rolled back.
@@ -185,15 +233,15 @@ INSERT INTO public.direct_orders
 
 SET LOCAL ROLE authenticated;
 
--- A11: owner sees their order (expect owner_sees=1).
+-- A14: owner sees their order (expect owner_sees=1).
 SELECT set_config('request.jwt.claims',
   json_build_object('sub', :'b1', 'role', 'authenticated')::text, true);
-SELECT 'A11 owner_sees=' || count(*) AS a11 FROM public.direct_orders WHERE product_name = 'DO_RPC RLS';
+SELECT 'A14 owner_sees=' || count(*) AS a14 FROM public.direct_orders WHERE product_name = 'DO_RPC RLS';
 
--- A12: a different authenticated user sees nothing (expect other_sees=0).
+-- A15: a different authenticated user sees nothing (expect other_sees=0).
 SELECT set_config('request.jwt.claims',
   json_build_object('sub', :'b2', 'role', 'authenticated')::text, true);
-SELECT 'A12 other_sees=' || count(*) AS a12 FROM public.direct_orders WHERE product_name = 'DO_RPC RLS';
+SELECT 'A15 other_sees=' || count(*) AS a15 FROM public.direct_orders WHERE product_name = 'DO_RPC RLS';
 
 RESET ROLE;
 ROLLBACK;
