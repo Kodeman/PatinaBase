@@ -21,7 +21,7 @@ struct RecordRefreshOrderTests {
         return url
     }
 
-    private func stores() -> (RecordSnapshotStore, LastSeenStore, UserDefaults) {
+    private func stores() -> (RecordSnapshotStore, LastSeenStore, RecordOwnerStamp) {
         let suiteName = "record-refresh-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         return (
@@ -30,7 +30,7 @@ struct RecordRefreshOrderTests {
                 fallbackDirectory: temporaryDirectory()
             ),
             LastSeenStore(defaults: defaults),
-            defaults
+            RecordOwnerStamp(defaults: defaults)
         )
     }
 
@@ -53,16 +53,18 @@ struct RecordRefreshOrderTests {
 
     @Test("the snapshot paints before the record is built, and the stamp lands last")
     func theOrderIsSnapshotBuildSaveStamp() {
-        let (snapshots, lastSeen, _) = stores()
+        let (snapshots, lastSeen, owner) = stores()
         let visit = Date(timeIntervalSince1970: 1_755_500_000)
         lastSeen.markSeen(now: visit)
         snapshots.save(record(lastSeenAt: visit, moved: [row(id: "snapshot")]))
+        owner.stamp("client-a")
 
         var painted: [String] = []
         var visitAtBuildTime: Date?
 
         let outcome = RecordRefresh.run(
-            snapshots: snapshots, lastSeen: lastSeen,
+            snapshots: snapshots, lastSeen: lastSeen, owner: owner,
+            sessionUserId: "client-a",
             now: Date(timeIntervalSince1970: 1_756_100_000),
             build: { previous, lastSeenAt in
                 // The build reads the visit that is still on disk…
@@ -74,7 +76,7 @@ struct RecordRefreshOrderTests {
             paint: { painted.append($0.moved.first?.id ?? "empty") }
         )
 
-        #expect(outcome.steps == [.paintedSnapshot, .built, .saved, .stamped])
+        #expect(outcome.steps == [.paintedSnapshot, .built, .saved, .attributed, .stamped])
         #expect(painted == ["snapshot", "fresh"])
         // …and it was still the OLD visit while the build ran.
         #expect(visitAtBuildTime == visit)
@@ -84,11 +86,12 @@ struct RecordRefreshOrderTests {
 
     @Test("with no snapshot on disk nothing is painted before the build")
     func aFirstRunPaintsOnlyTheBuiltRecord() {
-        let (snapshots, lastSeen, _) = stores()
+        let (snapshots, lastSeen, owner) = stores()
         var painted = 0
 
         let outcome = RecordRefresh.run(
-            snapshots: snapshots, lastSeen: lastSeen,
+            snapshots: snapshots, lastSeen: lastSeen, owner: owner,
+            sessionUserId: "client-a",
             build: { previous, lastSeenAt in
                 #expect(previous == nil)
                 #expect(lastSeenAt == nil)
@@ -97,20 +100,96 @@ struct RecordRefreshOrderTests {
             paint: { _ in painted += 1 }
         )
 
-        #expect(outcome.steps == [.built, .saved, .stamped])
+        // Nothing was on disk, so nothing was discarded — a first run must not
+        // read as a leak that was caught.
+        #expect(outcome.steps == [.built, .saved, .attributed, .stamped])
         #expect(painted == 1)
     }
 
     @Test("the record that was built is the record that was saved")
     func theSavedRecordIsTheBuiltOne() {
-        let (snapshots, lastSeen, _) = stores()
+        let (snapshots, lastSeen, owner) = stores()
         let built = record(lastSeenAt: nil, moved: [row(id: "fresh")])
 
         RecordRefresh.run(
-            snapshots: snapshots, lastSeen: lastSeen,
+            snapshots: snapshots, lastSeen: lastSeen, owner: owner,
+            sessionUserId: "client-a",
             build: { _, _ in built }, paint: { _ in }
         )
 
         #expect(snapshots.load()?.moved.first?.id == "fresh")
+        #expect(owner.ownerId == "client-a")
+    }
+
+    // MARK: - B-1: the record must not outlive the account
+
+    @Test("another account's record is discarded before it can be painted or built against")
+    func aForeignRecordNeverReachesTheScreen() {
+        let (snapshots, lastSeen, owner) = stores()
+        let visit = Date(timeIntervalSince1970: 1_755_500_000)
+
+        // Client A's device state: a record, a visit, and A's name on it.
+        lastSeen.markSeen(now: visit)
+        snapshots.save(record(lastSeenAt: visit, moved: [row(id: "client-a-invoice")]))
+        owner.stamp("client-a")
+
+        var painted: [String] = []
+
+        let outcome = RecordRefresh.run(
+            snapshots: snapshots, lastSeen: lastSeen, owner: owner,
+            sessionUserId: "client-b",
+            now: Date(timeIntervalSince1970: 1_756_100_000),
+            build: { previous, lastSeenAt in
+                // B builds against nothing: not A's rows, and not A's visit —
+                // which would otherwise decide what is "new" for B.
+                #expect(previous == nil)
+                #expect(lastSeenAt == nil)
+                return record(lastSeenAt: nil, moved: [row(id: "client-b")])
+            },
+            paint: { painted.append($0.moved.first?.id ?? "empty") }
+        )
+
+        #expect(outcome.steps == [.discardedForeignRecord, .built, .saved, .attributed, .stamped])
+        #expect(painted == ["client-b"])
+        #expect(owner.ownerId == "client-b")
+    }
+
+    @Test("a snapshot no account claims is discarded rather than shown")
+    func anUnattributedSnapshotIsNotShown() {
+        let (snapshots, lastSeen, owner) = stores()
+        snapshots.save(record(lastSeenAt: nil, moved: [row(id: "from-before-the-guard")]))
+
+        var painted: [String] = []
+        let outcome = RecordRefresh.run(
+            snapshots: snapshots, lastSeen: lastSeen, owner: owner,
+            sessionUserId: "client-a",
+            build: { previous, _ in
+                #expect(previous == nil)
+                return record(lastSeenAt: nil)
+            },
+            paint: { painted.append($0.moved.first?.id ?? "empty") }
+        )
+
+        #expect(outcome.steps.first == .discardedForeignRecord)
+        #expect(painted == ["empty"])
+    }
+
+    @Test("the same account keeps its own record")
+    func theOwnRecordSurvives() {
+        let (snapshots, lastSeen, owner) = stores()
+        snapshots.save(record(lastSeenAt: nil, moved: [row(id: "mine")]))
+        owner.stamp("client-a")
+
+        let outcome = RecordRefresh.run(
+            snapshots: snapshots, lastSeen: lastSeen, owner: owner,
+            sessionUserId: "client-a",
+            build: { previous, _ in
+                #expect(previous?.moved.first?.id == "mine")
+                return record(lastSeenAt: nil, moved: [row(id: "mine")])
+            },
+            paint: { _ in }
+        )
+
+        #expect(!outcome.steps.contains(.discardedForeignRecord))
     }
 }

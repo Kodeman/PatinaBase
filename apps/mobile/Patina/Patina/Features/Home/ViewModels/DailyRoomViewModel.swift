@@ -35,6 +35,13 @@ final class DailyRoomViewModel {
     /// UI model, because it needs the real `published_at`.
     var todayStoryRow: RemoteEditorialStory?
 
+    /// The story's own publish date, for the card's chip. The raw row is
+    /// already retained for the record's MOVED row, so no model change is
+    /// needed to print the date the mock draws.
+    var todayStoryPublishedAt: Date? {
+        todayStoryRow?.publishedAt.flatMap(ISO8601DateParsing.dateOrDay(from:))
+    }
+
     /// The Record — what moved on the house while the person was away, and
     /// what is waiting on them. Painted from the snapshot first, then rebuilt.
     var record: HouseRecord = .empty
@@ -312,9 +319,16 @@ final class DailyRoomViewModel {
     // MARK: - The Record
 
     /// What we already knew, painted before anything is fetched. A guest has
-    /// no house on file, so nothing of a previous session is put on screen.
+    /// no house on file, so nothing of a previous session is put on screen —
+    /// and neither does a record belonging to a DIFFERENT account, which the
+    /// App Group container would otherwise hand straight to the next person to
+    /// sign in on this device (`RecordIdentity`).
     func paintRecordSnapshot() {
         guard AuthService.shared.isAuthenticated else {
+            record = .empty
+            return
+        }
+        guard RecordIdentity.admits(session: AuthService.shared.currentUserId) else {
             record = .empty
             return
         }
@@ -345,6 +359,7 @@ final class DailyRoomViewModel {
         let story = todayStoryRow
 
         RecordRefresh.run(
+            sessionUserId: AuthService.shared.currentUserId,
             build: { previous, lastSeenAt in
                 HouseRecordBuilder.build(
                     from: BadgeCountService.shared,
@@ -393,6 +408,10 @@ final class DailyRoomViewModel {
             #if DEBUG
             PatinaLog.ui.error("[DailyRoomVM] project rooms failed: \(error)")
             #endif
+            // Keep only what still belongs to a project THIS account has. A
+            // flaky read must not empty a real house, and it must not leave
+            // another account's — or an ended project's — rooms on the rail.
+            projectRooms = projectRooms.filter { ids.contains($0.project_id) }
         }
     }
 
@@ -419,15 +438,27 @@ final class DailyRoomViewModel {
     private func fetchSavedPieceProducts(for saved: [TableItemModel]) async -> [Product] {
         let ids = Array(Set(saved.compactMap(\.productId)))
         guard !ids.isEmpty else { return [] }
-        do {
-            return try await ProductAPIClient.shared.fetchProducts(ids: ids)
-        } catch {
-            #if DEBUG
-            PatinaLog.ui.error("[DailyRoomVM] saved-piece products failed: \(error)")
-            #endif
-            return []
+        // Chunked: every id goes into one `id=in.(…)` query string, and a few
+        // hundred saved pieces would push the URL past what PostgREST and the
+        // edge in front of it will accept — costing both discovering rows.
+        var products: [Product] = []
+        for chunk in stride(from: 0, to: ids.count, by: Self.productIdsPerRead) {
+            let slice = Array(ids[chunk..<min(chunk + Self.productIdsPerRead, ids.count)])
+            do {
+                products += try await ProductAPIClient.shared.fetchProducts(ids: slice)
+            } catch {
+                #if DEBUG
+                PatinaLog.ui.error("[DailyRoomVM] saved-piece products failed: \(error)")
+                #endif
+                return []
+            }
         }
+        return products
     }
+
+    /// Ids per `id=in.(…)` read. A uuid plus its separator is ~37 characters,
+    /// so 100 keeps the query string well inside every hop's limit.
+    private static let productIdsPerRead = 100
 
     /// True while the Message tap is opening (or finding) the thread.
     var isOpeningDesignerThread: Bool = false
