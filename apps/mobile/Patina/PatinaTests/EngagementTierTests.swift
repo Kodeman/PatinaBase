@@ -19,7 +19,8 @@ struct EngagementTierTests {
     private func request(
         status: String,
         designerId: UUID? = nil,
-        anchoredDaysAgo: Int = 0
+        anchoredDaysAgo: Int = 0,
+        dismissedAtStage: String? = nil
     ) -> DesignRequestStatus {
         let anchor = Date().addingTimeInterval(-Double(anchoredDaysAgo) * 86_400)
         return DesignRequestStatus(
@@ -34,8 +35,8 @@ struct EngagementTierTests {
             scanCount: 0,
             createdAt: anchor,
             updatedAt: anchor,
-            dismissedAt: nil,
-            dismissedStageRaw: nil
+            dismissedAt: dismissedAtStage == nil ? nil : Date(),
+            dismissedStageRaw: dismissedAtStage
         )
     }
 
@@ -299,17 +300,30 @@ struct EngagementTierTests {
     }
 
     /// M3. The guard used to read `promotedRequest`, which
-    /// `isVisibleForPromotion` makes nil past a 14-day window on a matched
-    /// request — so a client matched a month ago was handed the compose sheet
-    /// again. `openRequest` carries no display window.
+    /// `isVisibleForPromotion` makes nil for a card the client dismissed at
+    /// its current stage — so a client with a live request was handed the
+    /// compose sheet again. `openRequest` carries no display state.
+    ///
+    /// W4 removed the 14-day matched window this fixture used to rely on, so
+    /// the case that still proves the rule is a dismissal at an in-progress
+    /// stage, where the card is still hidden and the request is still open.
     @Test
-    func designHelpOpensARequestOlderThanThePromotionWindow() {
+    func designHelpOpensARequestTheCardIsNotShowing() {
         let longMatched = request(status: "accepted", designerId: UUID(), anchoredDaysAgo: 30)
         #expect(longMatched.stage == .matched)
-        #expect(!longMatched.isVisibleForPromotion())
+        #expect(longMatched.isVisibleForPromotion(), "W4: a match does not age out")
         #expect(
             DesignHelpDestination.resolve(state: .known(.engaged), openRequest: longMatched)
                 == .existingRequest(leadId: longMatched.leadId)
+        )
+
+        let dismissed = request(
+            status: "viewed", designerId: UUID(), dismissedAtStage: "held"
+        )
+        #expect(!dismissed.isVisibleForPromotion())
+        #expect(
+            DesignHelpDestination.resolve(state: .known(.engaged), openRequest: dismissed)
+                == .existingRequest(leadId: dismissed.leadId)
         )
     }
 

@@ -134,11 +134,10 @@ struct DesignRequestStageTests {
         #expect(!DesignRequestStage.introduced.isTerminal)
         #expect(!DesignRequestStage.booked.isTerminal)
 
-        // The ceremony stages are live and always-promoted — NOT the
-        // 14-day-windowed "matched" relationship.
-        #expect(DesignRequestStage.matched.isTerminalOrMatched)
-        #expect(!DesignRequestStage.introduced.isTerminalOrMatched)
-        #expect(!DesignRequestStage.booked.isTerminalOrMatched)
+        // W4 retired `isTerminalOrMatched`: it existed only to name the set
+        // the 14-day promotion window covered, and a match is no longer in
+        // that set. The ceremony stages were never a match to begin with.
+        #expect(DesignRequestStage.matched.isMatched)
         #expect(!DesignRequestStage.introduced.isMatched)
         #expect(!DesignRequestStage.booked.isMatched)
 
@@ -243,13 +242,24 @@ struct DesignRequestStageTests {
         #expect(!dismissed.isVisibleForPromotion())
     }
 
+    /// W4: this used to assert the opposite — a matched request carried the
+    /// 14-day window and a dismissal there was permanent, so the card that
+    /// said "you have a designer" quietly went away and never came back. No
+    /// decay deletes a fact (B §1): a match stays until it resolves, and its
+    /// dismissal lives in the session, not on the receipt.
     @Test
-    func matchedWithinWindowIsVisibleButPermanentlyDismissible() {
+    func aMatchIsAlwaysVisibleAndItsDismissalIsNotPermanent() {
         let recent = makeStatus(status: "accepted", designerId: designer)
         #expect(recent.isVisibleForPromotion())
 
+        let old = Date().addingTimeInterval(-400 * 86_400)
+        let ancient = makeStatus(
+            status: "accepted", designerId: designer, createdAt: old, updatedAt: old
+        )
+        #expect(ancient.isVisibleForPromotion())
+
         let dismissed = makeStatus(status: "accepted", designerId: designer, dismissedStageRaw: "matched")
-        #expect(!dismissed.isVisibleForPromotion())
+        #expect(dismissed.isVisibleForPromotion())
     }
 
     @Test
