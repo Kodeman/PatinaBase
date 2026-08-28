@@ -187,6 +187,10 @@ struct ProjectDetailView: View {
         isFirst: Bool,
         isLast: Bool
     ) -> some View {
+        // The vertical padding sits on the *content*, not on the row. On the
+        // row it fenced the rail into the middle of each cell, and the column
+        // read as a stack of 8 pt ticks with 28 pt of nothing between them —
+        // the opposite of the one run of time the timeline is for.
         HStack(alignment: .top, spacing: 12) {
             phaseMarker(phase, isCurrent: isCurrent, isFirst: isFirst, isLast: isLast)
             VStack(alignment: .leading, spacing: 2) {
@@ -195,24 +199,27 @@ struct ProjectDetailView: View {
                 }
                 // R16: designer-defined name wins; otherwise the formatted
                 // designer label for the slug — never `phase_key.capitalized`.
-                Text(phase.name ?? PhaseDisplay.label(for: phase.phase_key))
+                Text(phaseTitle(phase))
                     .font(isCurrent ? PatinaTypography.bodyMedium : PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.primary)
                 Text(phaseStatusLine(phase))
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
+            .padding(.vertical, 14)
             Spacer()
             if let fee = phase.fee_cents {
                 Text(formatPrice(fee))
                     .font(PatinaTypography.monoTiny)
                     .foregroundStyle(PatinaColors.Text.secondary)
+                    .padding(.vertical, 14)
             }
         }
-        .padding(.vertical, 14)
         .padding(.horizontal, 16)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(phaseAccessibilityLabel(phase, isCurrent: isCurrent))
+        .accessibilityLabel(phaseAccessibilityLabel(
+            phase, isCurrent: isCurrent, fee: phase.fee_cents.map(formatPrice)
+        ))
     }
 
     /// The rail: a dot per phase, joined above and below except at the ends,
@@ -225,9 +232,11 @@ struct ProjectDetailView: View {
     ) -> some View {
         let color = phaseColor(for: phase.status)
         return VStack(spacing: 0) {
+            // 14 pt — the content's own top padding, so the dot lands beside
+            // the phase name and the rail meets the row above with no gap.
             Rectangle()
                 .fill(isFirst ? Color.clear : PatinaColors.pearl)
-                .frame(width: 1, height: 8)
+                .frame(width: 1, height: 14)
             ZStack {
                 if isCurrent {
                     Circle()
@@ -248,6 +257,15 @@ struct ProjectDetailView: View {
         .accessibilityHidden(true)
     }
 
+    /// R16: designer-defined name wins; otherwise the formatted designer
+    /// label for the slug — never `phase_key.capitalized`. `phase_key` is
+    /// nullable, so a row can carry neither.
+    private func phaseTitle(_ phase: RemoteProjectPhase) -> String {
+        if let name = phase.name, !name.isEmpty { return name }
+        if let key = phase.phase_key, !key.isEmpty { return PhaseDisplay.label(for: key) }
+        return "Phase"
+    }
+
     /// The status the server gave, plus the dates it gave — never a date the
     /// app worked out for itself.
     private func phaseStatusLine(_ phase: RemoteProjectPhase) -> String {
@@ -255,16 +273,23 @@ struct ProjectDetailView: View {
         if let start = phase.start_date {
             parts.append(DateDisplay.fromDateString(start))
         }
-        if let end = phase.end_date {
+        if let end = phase.target_end_date {
             parts.append(DateDisplay.fromDateString(end))
         }
         return parts.joined(separator: " · ")
     }
 
-    private func phaseAccessibilityLabel(_ phase: RemoteProjectPhase, isCurrent: Bool) -> String {
-        let name = phase.name ?? PhaseDisplay.label(for: phase.phase_key)
-        let prefix = isCurrent ? "Current phase. " : ""
-        return "\(prefix)\(name). \(phaseStatusLine(phase))"
+    private func phaseAccessibilityLabel(
+        _ phase: RemoteProjectPhase,
+        isCurrent: Bool,
+        fee: String?
+    ) -> String {
+        ProjectDetailCopy.phaseVoiceLabel(
+            name: phaseTitle(phase),
+            statusLine: phaseStatusLine(phase),
+            isCurrent: isCurrent,
+            fee: fee
+        )
     }
 
     private func phaseColor(for status: String?) -> Color {
