@@ -305,7 +305,11 @@ public final class RoomModel {
             fmt.dateFormat = "MMM d"
             parts.append("Scanned \(fmt.string(from: updatedAt))")
         } else if isManualEntry {
-            parts.append("Manual entry")
+            // F51: one wording for a room nobody scanned, on every surface.
+            // The room screen and the Today hero already read this; the
+            // Spaces gallery card said "Manual entry" (h1-notes.md §6.3,
+            // integration.md §6.4).
+            parts.append("Typed, not scanned")
         }
         return parts.joined(separator: " · ")
     }
