@@ -26,6 +26,12 @@ public enum OrderCheckoutError: Error, Sendable, Equatable {
     case refunded
     case nothingDue
     case notConfigured
+    /// 409 `payment_processing` — a completed session already points at this
+    /// order and the money has not landed yet (an ACH debit settling, or a card
+    /// that cleared before the webhook did). `create-checkout-session` refuses
+    /// a second session precisely so the reader is not charged twice, so this
+    /// must never say "Nothing has been charged."
+    case paymentProcessing
     /// Anything else, including Stripe's own 502. Deliberately carries no
     /// payload — the detail is logged at the boundary and dropped here.
     case unavailable
@@ -42,6 +48,7 @@ public enum OrderCheckoutError: Error, Sendable, Equatable {
         case "direct_order_canceled": return .canceled
         case "direct_order_refunded": return .refunded
         case "nothing_due": return .nothingDue
+        case "payment_processing": return .paymentProcessing
         case "stripe_not_configured": return .notConfigured
         default: return .unavailable
         }
@@ -56,6 +63,7 @@ public enum OrderCheckoutError: Error, Sendable, Equatable {
         case .refunded: return "refunded"
         case .nothingDue: return "nothing_due"
         case .notConfigured: return "not_configured"
+        case .paymentProcessing: return "payment_processing"
         case .unavailable: return "checkout_unavailable"
         }
     }
@@ -136,6 +144,17 @@ enum OrderFailureCopy {
         case .notConfigured:
             return MoneyFailure(
                 "We can't take payment for this piece yet.",
+                offersDesignerMessage: false
+            )
+        case .paymentProcessing:
+            // The invoice rail's sentence, one noun over
+            // (`MoneyFailureCopy.checkout(.paymentProcessing)`). Saying
+            // "Nothing has been charged." here would be false in the exact
+            // window it fires in, and would invite the second tap the server
+            // guard exists to prevent.
+            return MoneyFailure(
+                "A payment on this order is already going through. "
+                    + "We'll update this as soon as it clears.",
                 offersDesignerMessage: false
             )
         case .unavailable:

@@ -110,6 +110,8 @@ final class OrderHandoff {
     private let pollInterval: Duration
     private let pollDeadline: Duration
     @ObservationIgnored private var pollTask: Task<Void, Never>?
+    /// The order whose Safari return has not yet been reported.
+    @ObservationIgnored private var pendingReturn: DirectOrder?
 
     init(
         dependencies: Dependencies = .live,
@@ -172,10 +174,12 @@ final class OrderHandoff {
     }
 
     /// Safari's Done was pressed. Whether the reader paid is not knowable from
-    /// here — the row is.
+    /// here — the row is, once the webhook lands. So the return event is armed
+    /// here and reported with its outcome when the row answers, rather than
+    /// carrying a property nothing at this moment could fill.
     func checkoutDismissed() {
         guard case .awaitingPayment(let order, _) = phase else { return }
-        dependencies.track("order_checkout_returned", ["order_id": order.id])
+        pendingReturn = order
         phase = .confirming(order)
         startPolling(order)
     }
@@ -183,14 +187,28 @@ final class OrderHandoff {
     /// The failure state's one act. Returns the machine to where the reader
     /// can try again rather than stranding the sheet.
     func reset() {
-        pollTask?.cancel()
-        pollTask = nil
+        stopPolling()
         phase = .idle
     }
 
+    /// Cancels the poll. A return still in flight is reported as abandoned —
+    /// the reader closed the sheet before the row answered, which is a real
+    /// outcome and not the same as either of the other two.
     func stopPolling() {
         pollTask?.cancel()
         pollTask = nil
+        reportReturn("abandoned")
+    }
+
+    /// `order_checkout_returned {outcome}` — settled · unconfirmed ·
+    /// abandoned. Fires at most once per return.
+    private func reportReturn(_ outcome: String) {
+        guard let order = pendingReturn else { return }
+        pendingReturn = nil
+        dependencies.track(
+            "order_checkout_returned",
+            ["order_id": order.id, "outcome": outcome]
+        )
     }
 
     private func startPolling(_ order: DirectOrder) {
@@ -200,6 +218,7 @@ final class OrderHandoff {
             while !Task.isCancelled {
                 if let fresh = try? await dependencies.poll(order.id), fresh.isSettled {
                     await MainActor.run {
+                        self?.reportReturn("settled")
                         dependencies.track("order_settled", ["order_id": fresh.id])
                         self?.phase = .placed(fresh)
                     }
@@ -207,6 +226,7 @@ final class OrderHandoff {
                 }
                 if ContinuousClock.now - start >= pollDeadline {
                     await MainActor.run {
+                        self?.reportReturn("unconfirmed")
                         dependencies.track("order_failed", ["reason": "poll_timeout"])
                         self?.phase = .unconfirmed(order)
                     }
