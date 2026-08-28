@@ -33,6 +33,10 @@ public struct RemoteRoom: Codable, Sendable {
     public let style_signals: [String: String]?
     public let created_at: String
     public let updated_at: String
+    /// `rooms.budget_cents` (00537 §1). Without it a room hydrated from the
+    /// server arrives with no budget and the Spaces card draws nothing under
+    /// `Budget` for a figure the account is actually holding.
+    public let budget_cents: Int?
 }
 
 public struct RemoteRoomScan: Codable, Sendable {

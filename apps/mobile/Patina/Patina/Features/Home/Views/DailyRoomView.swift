@@ -121,6 +121,11 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
             await viewModel.refreshNewThisWeek()
         }
         .task {
+            // The house rail draws the account's own rooms beside its project
+            // rooms; they only reach this phone if something asks for them.
+            await RoomSyncCoordinator.shared.reconcile(store: RoomStore(context: modelContext))
+        }
+        .task {
             let candidates = await ScanRecoveryService.shared
                 .scanForRecoverableSessions(in: modelContext)
             resumableScan = candidates.max(by: { $0.createdAt < $1.createdAt })
@@ -131,6 +136,7 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
         .onChange(of: AuthService.shared.isAuthenticated) { _, isAuthenticated in
             guard isAuthenticated else { return }
             Task {
+                await RoomSyncCoordinator.shared.reconcile(store: RoomStore(context: modelContext))
                 await badges.refresh()
                 await viewModel.refreshProjectRooms()
                 await viewModel.refreshRecord()

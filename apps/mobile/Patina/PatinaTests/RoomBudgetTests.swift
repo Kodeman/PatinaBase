@@ -47,7 +47,8 @@ struct RoomBudgetTests {
                 id: id, user_id: "u", name: "Living Room", type: "living",
                 length_meters: nil, width_meters: nil, height_meters: nil,
                 floor_area_sqm: nil, volume_cbm: nil, saved_item_count: nil,
-                scan_count: nil, style_signals: nil, created_at: "", updated_at: ""
+                scan_count: nil, style_signals: nil, created_at: "", updated_at: "",
+                budget_cents: cents
             )
         }
     }

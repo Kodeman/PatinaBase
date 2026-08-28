@@ -91,6 +91,16 @@ public final class AuthService {
                     // `.initialSession` carrying no user clears nothing —
                     // that is the cold launch the persisted opt-in exists for.
                     GuestSessionStore.shared.clear()
+
+                    // The account's rooms live on the server too, and until
+                    // W4's fix round nothing ever read them back — so a room
+                    // typed on this phone and synced was gone after a
+                    // sign-out and a sign-in, and a room made anywhere else
+                    // never arrived. Debounced and owner-keyed inside the
+                    // coordinator; it does nothing for a guest (SP-06).
+                    Task { @MainActor in
+                        await RoomSyncCoordinator.shared.reconcileSharedStore()
+                    }
                 }
 
                 // Mark auth state as ready after first event and fan out

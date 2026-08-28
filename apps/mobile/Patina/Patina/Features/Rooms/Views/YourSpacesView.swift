@@ -99,6 +99,13 @@ struct YourSpacesView: View {
                 }
             }
         }
+        // The gallery reads the local store, and the local store only holds
+        // the rooms this phone made until something asks the server for the
+        // rest. Debounced and owner-keyed; a guest's rooms are never merged
+        // into an account (SP-06).
+        .task {
+            await RoomSyncCoordinator.shared.reconcile(store: RoomStore(context: modelContext))
+        }
         // U18: standard pushed-screen chrome — this screen's own "Your
         // Spaces" header stands in for the chrome title.
         .patinaScreen(title: nil)

@@ -35,6 +35,13 @@ public final class RoomStore {
         return (try? context.fetch(descriptor))?.first
     }
 
+    /// The local room mirroring a given `rooms.id`. `nil` for a room this
+    /// phone has never synced — which is exactly the room a merge must leave
+    /// alone (SP-06).
+    public func room(remoteId: String) -> RoomModel? {
+        allRooms().first { $0.remoteId?.caseInsensitiveCompare(remoteId) == .orderedSame }
+    }
+
     public func allItems() -> [SavedItem] {
         let descriptor = FetchDescriptor<SavedItem>(
             sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
@@ -147,6 +154,51 @@ public final class RoomStore {
         context.insert(room)
         save()
         return room
+    }
+
+    /// Create the local mirror of a room the account already owns on the
+    /// server — a room typed on another phone, or one that outlived a
+    /// reinstall. It arrives `.synced` carrying its `remoteId`, because that
+    /// is what it is: the server's row, on this device.
+    @discardableResult
+    public func insertMirrored(_ remote: RemoteRoom) -> RoomModel {
+        let room = RoomModel(
+            name: remote.name,
+            roomType: remote.type,
+            hasBeenScanned: (remote.scan_count ?? 0) > 0,
+            width: remote.width_meters,
+            length: remote.length_meters,
+            height: remote.height_meters,
+            syncStatus: .synced
+        )
+        room.remoteId = remote.id
+        room.budgetCents = remote.budget_cents
+        room.savedItemCount = remote.saved_item_count ?? 0
+        room.lastSyncedAt = Date()
+        if let updated = ISO8601DateParsing.dateOrDay(from: remote.updated_at) {
+            room.updatedAt = updated
+        }
+        context.insert(room)
+        save()
+        return room
+    }
+
+    /// Take the server's version of a room this phone already mirrors. Only
+    /// called where the server's row is the newer of the two — a local edit
+    /// made after the server's `updated_at` stands (`RoomMerge`).
+    public func applyRemote(_ remote: RemoteRoom, to room: RoomModel) {
+        room.name = remote.name
+        room.roomType = remote.type
+        room.width = remote.width_meters
+        room.length = remote.length_meters
+        room.height = remote.height_meters
+        room.budgetCents = remote.budget_cents
+        room.syncStatus = .synced
+        room.lastSyncedAt = Date()
+        if let updated = ISO8601DateParsing.dateOrDay(from: remote.updated_at) {
+            room.updatedAt = updated
+        }
+        save()
     }
 
     /// Mark a local room as fully synced with its server-side counterparts.
