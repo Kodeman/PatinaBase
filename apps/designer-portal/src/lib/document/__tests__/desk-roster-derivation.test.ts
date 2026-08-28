@@ -411,6 +411,56 @@ describe('deriveDeskRoster — one clock per tier', () => {
       'Two things are overdue — Vandersteen and Byrne.',
     );
   });
+
+  it('selects one global attention lead by pressure, not stage order', () => {
+    const olderProject = row('older-project', 'project');
+    const newerProposal = row('newer-proposal', 'proposal');
+    const undatedClaim = row('undated-claim', 'install', {
+      updated_at: '2026-05-01T00:00:00Z',
+    });
+    const roster = deriveDeskRoster(
+      input({
+        live: [newerProposal, undatedClaim, olderProject],
+        folders: [
+          folder(newerProposal, need({ dueOn: '2026-08-19' })),
+          folder(
+            undatedClaim,
+            need({ kind: 'damage_claim', dueOn: null }),
+          ),
+          folder(olderProject, need({ dueOn: '2026-08-01' })),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(roster.attentionEngagementId).toBe('older-project');
+    expect(
+      roster.groups
+        .flatMap((group) => group.lines)
+        .filter((line) => line.mark === 'urgent'),
+    ).toHaveLength(3);
+  });
+
+  it('uses the existing last-touched clock when urgent work is not overdue', () => {
+    const newerClaim = row('newer-claim', 'proposal', {
+      updated_at: '2026-08-20T00:00:00Z',
+    });
+    const olderClaim = row('older-claim', 'care', {
+      updated_at: '2026-06-01T00:00:00Z',
+    });
+    const roster = deriveDeskRoster(
+      input({
+        live: [newerClaim, olderClaim],
+        folders: [
+          folder(newerClaim, need({ kind: 'damage_claim', dueOn: null })),
+          folder(olderClaim, need({ kind: 'damage_claim', dueOn: null })),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(roster.attentionEngagementId).toBe('older-claim');
+  });
 });
 
 describe('deriveDeskRoster — eleven jobs', () => {

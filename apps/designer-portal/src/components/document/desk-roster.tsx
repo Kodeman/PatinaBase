@@ -40,22 +40,30 @@ const STAGE_EDGE_COLOR: Record<
 };
 
 const ACTION_RESPONSE_CLASS =
-  'transition-transform duration-150 ease-out group-hover:-translate-x-1 group-focus-within:-translate-x-1 motion-reduce:transform-none motion-reduce:transition-none';
+  'motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out motion-safe:group-hover:-translate-x-1 motion-safe:group-focus-within:-translate-x-1';
 
-function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }) {
+function JobLine({
+  line,
+  tourAnchor,
+  isAttentionLead,
+}: {
+  line: RosterLine;
+  tourAnchor?: string;
+  isAttentionLead: boolean;
+}) {
   const responseWash =
     line.mark === 'urgent'
       ? 'hover:border-[var(--color-terracotta)] focus-within:border-[var(--color-terracotta)]'
-      : 'hover:border-[var(--color-aged-oak)] hover:bg-[var(--bg-muted)] focus-within:border-[var(--color-aged-oak)] focus-within:bg-[var(--bg-muted)]';
+      : 'hover:border-[var(--color-aged-oak)] hover:bg-[var(--bg-hover)] focus-within:border-[var(--color-aged-oak)] focus-within:bg-[var(--bg-hover)]';
 
   return (
     <li
       data-tour-anchor={tourAnchor}
       data-roster-line={line.engagementId}
-      data-roster-priority={line.mark === 'urgent' ? 'true' : undefined}
+      data-roster-priority={isAttentionLead ? 'true' : undefined}
       data-roster-response="interaction"
-      className={`group flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-dashed border-[var(--border-subtle)] px-2 py-2.5 transition-colors duration-150 ease-out last:border-b-0 motion-reduce:transition-none ${responseWash} ${
-        line.mark === 'urgent' ? 'bg-[var(--bg-warm)]' : ''
+      className={`group flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-dashed border-[var(--border-subtle)] px-2 py-2.5 last:border-b-0 motion-safe:transition-colors motion-safe:duration-150 motion-safe:ease-out ${responseWash} ${
+        isAttentionLead ? 'bg-[var(--bg-warm)]' : ''
       }`}
     >
       {/* The mark tells a dated overdue item from a setup chore at the margin.
@@ -96,27 +104,35 @@ function JobLine({ line, tourAnchor }: { line: RosterLine; tourAnchor?: string }
           telemetry key carries it for the same reason: two jobs sharing a need
           kind are two acts, not one fired twice. */}
       {line.act.ledger ? (
-        <DocumentAction
-          actionKey={`roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`}
-          aria-label={`${line.act.label} — ${line.name}`}
-          variant="secondary"
-          className={ACTION_RESPONSE_CLASS}
-          onClick={() =>
-            openLedger(line.act.ledger!.name, line.act.ledger!.context)
-          }
+        <span
+          data-roster-act-response
+          className={`inline-flex ${ACTION_RESPONSE_CLASS}`}
         >
-          {line.act.label}
-        </DocumentAction>
+          <DocumentAction
+            actionKey={`roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`}
+            aria-label={`${line.act.label} — ${line.name}`}
+            variant="secondary"
+            onClick={() =>
+              openLedger(line.act.ledger!.name, line.act.ledger!.context)
+            }
+          >
+            {line.act.label}
+          </DocumentAction>
+        </span>
       ) : (
-        <DocumentAction
-          actionKey={`roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`}
-          aria-label={`${line.act.label} — ${line.name}`}
-          variant="secondary"
-          className={ACTION_RESPONSE_CLASS}
-          href={line.act.href}
+        <span
+          data-roster-act-response
+          className={`inline-flex ${ACTION_RESPONSE_CLASS}`}
         >
-          {line.act.label}
-        </DocumentAction>
+          <DocumentAction
+            actionKey={`roster-${line.needKind ?? 'open-the-job'}-${line.engagementId}`}
+            aria-label={`${line.act.label} — ${line.name}`}
+            variant="secondary"
+            href={line.act.href}
+          >
+            {line.act.label}
+          </DocumentAction>
+        </span>
       )}
     </li>
   );
@@ -177,6 +193,9 @@ export function DeskRoster({ roster }: { roster: DeskRosterModel }) {
                       key={line.engagementId}
                       line={line}
                       tourAnchor={anchor}
+                      isAttentionLead={
+                        line.engagementId === roster.attentionEngagementId
+                      }
                     />
                   );
                 })}

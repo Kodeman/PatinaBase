@@ -14,6 +14,7 @@ function roster(over: Partial<DeskRosterModel> = {}): DeskRosterModel {
   return {
     heading: 'Every job · 2 live · 1 overdue',
     overdueLine: 'One thing is overdue — Vandersteen.',
+    attentionEngagementId: 'vandersteen',
     liveCount: 2,
     overdueCount: 1,
     groups: [
@@ -128,7 +129,7 @@ describe('DeskRoster — the Material Register', () => {
     }
   });
 
-  it('reserves the restrained priority treatment for urgent lines', () => {
+  it('reserves the restrained priority treatment for the global attention lead', () => {
     const { container } = render(<DeskRoster roster={roster()} />);
     const quiet = container.querySelector<HTMLElement>(
       '[data-roster-line="byrne"]',
@@ -155,8 +156,8 @@ describe('DeskRoster — the Handled Desk response', () => {
     );
 
     expect(quiet).toHaveAttribute('data-roster-response', 'interaction');
-    expect(quiet?.className).toContain('hover:bg-[var(--bg-muted)]');
-    expect(quiet?.className).toContain('focus-within:bg-[var(--bg-muted)]');
+    expect(quiet?.className).toContain('hover:bg-[var(--bg-hover)]');
+    expect(quiet?.className).toContain('focus-within:bg-[var(--bg-hover)]');
     expect(quiet?.className).toContain(
       'hover:border-[var(--color-aged-oak)]',
     );
@@ -184,11 +185,46 @@ describe('DeskRoster — the Handled Desk response', () => {
     ];
 
     for (const act of acts) {
-      expect(act.className).toContain('group-hover:-translate-x-1');
-      expect(act.className).toContain('group-focus-within:-translate-x-1');
-      expect(act.className).toContain('motion-reduce:transform-none');
-      expect(act.className).toContain('motion-reduce:transition-none');
-      expect(act.className).not.toContain('animate-');
+      const wrapper = act.closest<HTMLElement>('[data-roster-act-response]');
+      const classes = wrapper?.className.split(' ') ?? [];
+      expect(wrapper).not.toHaveAttribute('aria-hidden');
+      expect(wrapper).not.toHaveAttribute('tabindex');
+      expect(classes).toContain('motion-safe:group-hover:-translate-x-1');
+      expect(classes).toContain(
+        'motion-safe:group-focus-within:-translate-x-1',
+      );
+      expect(classes).toContain('motion-safe:transition-transform');
+      expect(classes).not.toContain('group-hover:-translate-x-1');
+      expect(classes).not.toContain('group-focus-within:-translate-x-1');
+      expect(classes).not.toContain('transition-transform');
+      expect(classes.some((token) => token.startsWith('motion-reduce:'))).toBe(
+        false,
+      );
+      expect(classes.some((token) => token.startsWith('animate-'))).toBe(false);
+      expect(act.className).not.toContain('motion-safe:group-hover:');
+      expect(act.className).not.toContain('motion-safe:transition-transform');
+    }
+  });
+
+  it('keeps the wash immediate while gating transitions to motion-safe users', () => {
+    const { container } = render(<DeskRoster roster={roster()} />);
+    const lines = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-roster-line]'),
+    );
+
+    for (const line of lines) {
+      const classes = line.className.split(' ');
+      expect(classes).toContain('motion-safe:transition-colors');
+      expect(classes).not.toContain('transition-colors');
+      expect(classes.some((token) => token.startsWith('motion-reduce:'))).toBe(
+        false,
+      );
+      expect(classes.some((token) => token.startsWith('hover:border-'))).toBe(
+        true,
+      );
+      expect(
+        classes.some((token) => token.startsWith('focus-within:border-')),
+      ).toBe(true);
     }
   });
 
@@ -205,6 +241,25 @@ describe('DeskRoster — the Handled Desk response', () => {
       expect(line.className).not.toContain('shadow');
       expect(line.className).not.toContain('animate-');
     }
+  });
+
+  it('washes only one attention lead when urgent rows cross stage groups', () => {
+    const model = roster();
+    model.groups[0].lines[0].mark = 'urgent';
+    model.groups[0].lines[0].needKind = 'damage_claim';
+    const { container } = render(<DeskRoster roster={model} />);
+
+    expect(
+      container.querySelectorAll('[data-mark-tone="urgent"]'),
+    ).toHaveLength(2);
+    const priorities = container.querySelectorAll(
+      '[data-roster-priority="true"]',
+    );
+    expect(priorities).toHaveLength(1);
+    expect(priorities[0]).toHaveAttribute(
+      'data-roster-line',
+      'vandersteen',
+    );
   });
 });
 
@@ -293,6 +348,7 @@ describe('DeskRoster — an empty desk', () => {
           groups: [],
           liveCount: 0,
           overdueCount: 0,
+          attentionEngagementId: null,
           heading: 'Every job · 0 live · 0 overdue',
           overdueLine: 'Nothing is overdue.',
         })}

@@ -119,6 +119,7 @@ export interface RosterGroup {
 
 export interface DeskRoster {
   groups: RosterGroup[];
+  attentionEngagementId: string | null;
   liveCount: number;
   overdueCount: number;
   /** `Every job · 6 live · 2 overdue` */
@@ -315,6 +316,21 @@ export function deriveDeskRoster(
     .sort((a, b) => a.at - b.at || a.tab.localeCompare(b.tab))
     .map((entry) => entry.tab);
 
+  const attentionEngagementId =
+    entries
+      .filter(
+        (entry) =>
+          ROSTER_STAGE_ORDER.includes(entry.stage) &&
+          entry.line.mark === 'urgent',
+      )
+      .sort(
+        (a, b) =>
+          a.tier - b.tier ||
+          a.at - b.at ||
+          a.tab.localeCompare(b.tab) ||
+          a.line.engagementId.localeCompare(b.line.engagementId),
+      )[0]?.line.engagementId ?? null;
+
   // Counted off the GROUPS, never off `entries`: a row whose `active_section`
   // fell outside `ROSTER_STAGE_ORDER` would otherwise be counted in the header
   // and printed under no heading — the header claiming more jobs than the
@@ -322,6 +338,7 @@ export function deriveDeskRoster(
   const liveCount = groups.reduce((total, group) => total + group.count, 0);
   return {
     groups,
+    attentionEngagementId,
     liveCount,
     overdueCount: overdueNames.length,
     heading: `Every job · ${liveCount} live · ${overdueNames.length} overdue`,
