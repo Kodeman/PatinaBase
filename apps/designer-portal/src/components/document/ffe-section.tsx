@@ -313,6 +313,7 @@ function FFELine({
   onSelectToggle,
   onIncludeInRelease,
   canEditSelection,
+  showArtifactPlate,
 }: LineRow & {
   projectId: string;
   projectName: string;
@@ -329,6 +330,7 @@ function FFELine({
   onSelectToggle: () => void;
   onIncludeInRelease: () => void;
   canEditSelection: boolean;
+  showArtifactPlate: boolean;
 }) {
   const sp = stampProps(stamp);
   const line = vendorLine(item, stamp, showRoom);
@@ -447,6 +449,7 @@ function FFELine({
             isCommercialOrigin={isCommercialOrigin}
             onIncludeInRelease={onIncludeInRelease}
             canEditSelection={canEditSelection}
+            showArtifactPlate={showArtifactPlate}
           />
           {/* SP-19/F57 — Sku/Finish/Material/Colour/Exact Location are only
               editable in the spec-book route; this in-flow act is the
@@ -911,6 +914,7 @@ function FFESectionBody({
       ceremony?.begin([row.item.id]);
     },
     canEditSelection: mode === 'project',
+    showArtifactPlate: mode === 'project',
   });
 
   const roomHeadingProps = (group: LineRow[]) => {
