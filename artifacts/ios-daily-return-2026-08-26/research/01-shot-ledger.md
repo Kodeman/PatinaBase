@@ -1259,3 +1259,237 @@ local-first design).
 
 Leave state: signed in as `client@patina.dev`, flag off, on the Daily Room, light appearance,
 medium (default) text size, scrolled to top (`w4-49`).
+
+## w5-a11y
+
+Lane A11Y, W5. Clone `dr-w5-a11y` `E76EDACA-3C5A-4A3C-B1DC-A9915FEBDF56` (iPhone 17 Pro / iOS 26.5,
+402×874 pt), signed adhoc from
+`.codex/worktrees/agent-dr-w5-a11y/.build/dd/Build/Products/Debug-iphonesimulator/Patina.app`
+(`codesign -dv` → `Identifier=cloud.patina.app`, `Signature=adhoc` — not
+`CODE_SIGNING_ALLOWED=NO`). Signed in as `client@patina.dev` against the local stack. Every frame
+from `xcrun simctl io <udid> screenshot`; taps and swipes from blitz with the explicit udid. No
+`screencapture`.
+
+Text size is `accessibility-extra-extra-large` except where a row says otherwise.
+
+| Shot | What it shows | AX frames quoted |
+|---|---|---|
+| `w5-a11y-01-prefix-panel-460pt-cap-ax-xxl.png` | **Pre-fix.** The Companion panel with round 3's hardcoded 460 pt cap, scrolled. The panel occupies 316…816 on an 874 pt screen — ~250 pt of screen unused above it. Flag off | Panel content top 316 (header `Where to next?` at `y=336`, h=184); `companion.help`/`companion.close` `{258,336}`/`{314,336}` 44×44; rows `bubble.left…` `y=699` h=262, `rectangle.grid.1x2` `y=967` h=177.33, `sparkles` `y=1150.33` h=225.33, `heart` `y=1381.67` h=140.67, **`square.grid.2x2` ("Your spaces") `y=1528.33`**, **`person.circle` ("Your profile") `y=1681`** — reproducing walk 4 item 7's numbers exactly |
+| — (no shot; frames only) | **The diagnosis.** A swipe `fromY:740→400` moved every frame up by 540.33 pt (header `336 → -204.33`) — the ScrollView is real and it does scroll. A swipe `fromY:800→400` (walk 4's own start point) left the header at `y=336` — nothing. A swipe `fromY:790→400` scrolled. The ScrollView's viewport ended at 796; 796…816 was the shell's 20 pt inset, outside it | header `336` → `-204.33` (moved) · header `336` → `336` from y=800 (dead) · `rectangle.grid.1x2` at `y=220.67` from y=790 (moved) |
+| `w5-a11y-02-orb-yields-corner-mark-flagoff-ax-xxl.png` | **Delivery 2.** The dock has yielded: `companion.bubble` is the 44 pt mark in the trailing corner, and the Hearth reservation shrank with it. Flag off, Today | `companion.bubble` **`{{338, 768}, {44, 44}}`** (was `{{169, 748}, {64, 64}}`); reservation `{{0, 768}, {402, 72}}` (was `{{0, 720}, {402, 120}}`); `AXValue: "5 things need your eye"` still announced |
+| `w5-a11y-03-story-card-under-former-bubble-coords.png` | Today scrolled so the editorial story card sits under walk 4's failure point (201, 780) — the same coincidence finding 1 describes | `DailyRoomView.EditorialStory` `{{20, 620.33}, {362, 249.67}}` → spans y=620…870, x=20…382; (201, 780) is inside it, and inside the old bubble's `169…233 × 748…812` |
+| `w5-a11y-04-tap-at-former-bubble-opens-the-story.png` | **Delivery 2 acceptance.** A tap at exactly (201, 780) opened the **story**, not the Companion — walk 4 finding 1's failure case, passing | After the tap: `MAKER SPOTLIGHT`, `The Grain Whisperer of Maine`, `Jonathan Chilton`, `FREEPORT, MAINE`, the article body. The corner mark is still mounted at `{{338, 768}, {44, 44}}`, out of the column |
+| `w5-a11y-05-panel-takes-the-height-it-is-given-754pt.png` | **Delivery 1.** The panel at offset 0 after the fix: it now runs 62…816 — a 754 pt viewport against the old 460 | header `Where to next?` **`y=82`** (was `y=336`); `companion.help`/`companion.close` at `y=82`; rows `bubble.left…` `y=445`, `rectangle.grid.1x2` `y=713`, `sparkles` `y=896.33`, `heart` `y=1127.67`, `square.grid.2x2` `y=1274.33`, `person.circle` `y=1427` |
+| `w5-a11y-06-one-swipe-from-y800-reaches-your-profile.png` | **Delivery 1 acceptance.** **One** swipe, started at **y=800** — the exact point that was dead before — put both last rows fully inside the viewport (62…816) | **`square.grid.2x2` ("Your spaces") `{{44, 466}, {314, 146.67}}`** and **`person.circle` ("Your profile") `{{44, 618.67}, {314, 177.33}}`** — both wholly within 62…816. Header at `y=-726.33` (full 808 pt of travel in one gesture) |
+| `w5-a11y-07-last-row-tappable-profile-opened.png` | The last row is not merely visible but tappable: a tap at (200, 707) opened Your profile | `Client User`, `MEMBER SINCE AUG 28, 2026`, `STUDIO`, `StudioHub.Section.awaitingYou` … |
+| `w5-a11y-08-default-size-panel-unchanged-hugs-content.png` | **Regression control, `content_size large`.** At a non-accessibility size the panel is unchanged: it hugs its content (311…816, 505 pt) rather than filling the screen, so `ViewThatFits` picks the plain column, and the dock is the centred 64 pt mark again | header `y=331.33`; rows at 60 pt each — `y=406/472/538/604/670/736`; panel bottom 796+20=816. Collapsed dock after close: `companion.bubble` `{{169, 724}, {64, 64}}`, label `"Patina companion"` (the resting Hearth, not the corner mark) |
+| `w5-a11y-09-flag-on-direct-orders-same-result.png` | The same two proofs under `-PatinaFlags direct-orders`: identical | One swipe from y=800 → `person.circle` `{{44, 618.67}, {314, 177.33}}`; a point-probe at (201, 707) resolves **to that row**, so it wins the hit test there, not merely draws there |
+
+Leave state: `dr-w5-a11y` booted, signed in as `client@patina.dev`, flag `direct-orders` on, the
+Companion panel open and scrolled at `accessibility-extra-extra-large`. The review device
+`973D1724-90BF-4A0A-B02D-481D561547B3` was shut down only to take the clone and was re-booted
+immediately; nothing was installed on it and its own state is untouched.
+
+## w5-c2
+
+Lane C2, W5 — Ordered over both rails, and the order's return loop. Clone `dr-w5-c2`
+`6611FFA8-1820-4C98-81B8-60DE52086D00` (iPhone 17 Pro / iOS 26.5, 402×874 pt), signed build from
+`.codex/worktrees/agent-dr-w5-c2/.build/dd/Build/Products/Debug-iphonesimulator/Patina.app`
+(`codesign -dv` → `Identifier=cloud.patina.app`; built with a concrete simulator destination, **not**
+`CODE_SIGNING_ALLOWED=NO`). Signed in as `client@patina.dev` against the local stack. Every frame from
+`xcrun simctl io <udid> screenshot`; taps and swipes from blitz with the explicit udid. No
+`screencapture`.
+
+The data is the seed's, unedited except where a row says so: `fulfillment_orders`
+`f5000000-…-0001` (client `a0000000-…-0005`, designer `a0000000-…-0004` = Leah Hartwell,
+`captured_total_cents` 680000, `intake_at` Aug 7), one line `Meadow Linen Sectional` at
+`line_state='shipped'`, `line_state_entered_at` Aug 24, and one shipment
+(`carrier='Pilot Freight'`, `tracking='PFS4820117744'`, `current_eta='2026-09-03'`).
+`direct_orders` is **empty** on this stack — C1's flow has not run yet, so the paid-but-not-on-rail
+card is unit-tested and not on glass here.
+
+| Shot | What it shows |
+|---|---|
+| `w5-c2-00-launch.png` | Launch state on the clone, flag `direct-orders` on. Signed out |
+| `w5-c2-01-today.png` | The record after sign-in. **MOVED carries `Meadow Linen Sectional shipped.` · `AUG 24`** — the `orderMoved` producer, live, dated by the real `line_state_entered_at` and not by "now". No "Order placed" row anywhere: nothing on this stack was placed by the reader |
+| `w5-c2-02-studio.png` | Studio hub top — Awaiting you (5), unchanged |
+| `w5-c2-02-studio-ordered-row.png` | **Money & documents (4), and `Ordered · 1 piece on its way · Shipped` is its first row**, above Proposals / Invoices / Budget. Option B's Studio contract, the count from the same holder the screen reads |
+| `w5-c2-03-ordered-list.png` | **M8.** `ORDERED / Your orders`; one card — eyebrow `ORDERED BY LEAH`, `Meadow Linen Sectional`, the four-step rail `CONFIRMED · IN PRODUCTION · SHIPPED · DELIVERED` with SHIPPED in charcoal and DELIVERED in pearl, `Shipped Aug 24 · arriving Sep 3.`, `$6,800.00 · PAID AUG 7`, footer `Leah ordered this for you.` (no project name: this seeded row carries no `designer_attribution`, so none is invented) |
+| `w5-c2-04-order-detail.png` | The detail: the rail and state line, `PAID / $6,800.00 / August 7, 2026`, rows `Message Leah` · `See the piece` · `Report a problem`, and under `IF SOMETHING'S WRONG` the responsibility paragraph returned by **`get_direct_order_terms()`** — the RPC answering an `authenticated` caller end-to-end. **No `Track with the carrier` row**: `Pilot Freight` is not in the client-side carrier→URL map and the app does not guess a tracking URL (see the finding below) |
+| `w5-c2-05-flag-off-studio.png` | Relaunched with **no** `-PatinaFlags`. The Ordered row is still there, still first in Money & documents — Ordered is deliberately unflagged; `direct-orders` gates *Buy* (R3), and M8's designer-sourced card exists with the flag off |
+| `w5-c2-06-record-after-state-change.png` | **The state change, made unsandboxed in local Postgres** (`set local app.fulfillment_writer='migration'; update fulfillment_order_items set line_state='delivered', line_state_entered_at=now()`). After relaunch the record reads **`Meadow Linen Sectional arrived.` · `AUG 28`**, and it sorts above the Aug 27 story. The row followed the line, and took the line's own new date |
+
+**Restored.** The line was put back to `shipped` / `2026-08-24 19:55:33.903572+00`. The monotonic
+`trg_fulfillment_line_transition` refuses `delivered → shipped`, so it was disabled for that one
+statement and re-enabled inside the same transaction; all three triggers on
+`fulfillment_order_items` verify enabled (`tgenabled='O'`) afterwards. Only `updated_at` differs from
+the seed (its own trigger bumped it) — no other column, no other table, no other row.
+
+**Finding for the record: the one seeded carrier is not in the map.** `Pilot Freight` has no
+verified public tracking-URL template, so `CarrierTracking.url` returns nil and the row does not
+draw — which is the rule working, and also means `Track with the carrier` is unit-tested and
+**compile-green on the walk, not sim-verified**. Adding a Pilot Freight template is a content
+decision that needs a URL somebody has checked; guessing one puts a homeowner on a 404 with her
+sofa's number in the address bar.
+
+Leave state: `dr-w5-c2` booted, signed in as `client@patina.dev`, flag `direct-orders` on, sitting on
+Today. The review device `973D1724-90BF-4A0A-B02D-481D561547B3` was shut down only to take the clone
+and was re-booted immediately; nothing was installed on it.
+
+### w5-c2 — fix round (after `waves/w5/c2-review.md`)
+
+Same clone, same account, same local stack. Rebuilt and reinstalled from
+`.codex/worktrees/agent-dr-w5-c2/.build/dd/Build/Products/Debug-iphonesimulator/Patina.app`
+(`codesign -dv` → `Identifier=cloud.patina.app`; the test-tier build, **not**
+`CODE_SIGNING_ALLOWED=NO`). Every frame from `xcrun simctl io <udid> screenshot`; taps and swipes
+from blitz with the explicit udid. No `screencapture`. `direct_orders` is **still empty** on this
+stack, so everything below is the designer rail.
+
+| Shot | What it shows |
+|---|---|
+| `w5-c2-07-today.png` | The record after relaunch, flag on. `Meadow Linen Sectional shipped. · Ordered by Leah · AUG 24` — the `orderMoved` producer unchanged by the fix round |
+| `w5-c2-08-studio-ordered-row.png` | Money & documents; `Ordered · 1 piece on its way · Shipped` still first. The shipped case reads the same after M1 — as it must |
+| `w5-c2-09-ordered-list.png` | **M2 + M5 + MI-6 on glass.** The card now: `Meadow Linen Sectional`, the four-step rail, `Shipped Aug 24 · arriving Sep 3.`, a rule, **`Message Leah` on the card**, footer `Leah ordered this for you.` — and **no `ORDERED BY LEAH` eyebrow and no `$6,800.00 · PAID AUG 7` money line**, which is M8's designer-sourced card exactly. (`Track with the carrier` still absent: `Pilot Freight` is not in the map) |
+| `w5-c2-10-order-detail.png` | **M7 + M2 + MI-2/3/7 on glass.** No `PAID / $6,800.00 / August 7, 2026` block at all on a designer-sourced order. Three rows — `Message Leah` · `See the piece` · `Report a problem` — with dividers only *between* them, and `IF SOMETHING’S WRONG` with the curly apostrophe |
+| `w5-c2-11-studio-delivered-row.png` | **M1 on glass.** With the seeded line temporarily at `delivered`, the Studio row reads **`Ordered · 1 piece delivered · Delivered`**. Before the fix it read `1 piece on its way` over an arrived order |
+| `w5-c2-12-flag-off-studio.png` | Relaunched with **no** `-PatinaFlags`. `Ordered · 1 piece on its way · Shipped` still first in Money & documents — Ordered stays unflagged |
+
+**The state change, and its restore.** Made unsandboxed in local Postgres, one row, one column pair:
+`f5000000-0000-4000-8000-000000000002` set to `line_state='delivered', line_state_entered_at=now()`
+behind `set local app.fulfillment_writer='migration'`, with `trg_fulfillment_line_transition`
+disabled for that statement (the trigger is monotonic and refuses the way back) and re-enabled in the
+same transaction. Restored immediately after the shot to `shipped` /
+`2026-08-24 19:55:33.903572+00`, verified by `SELECT`; all three triggers on
+`fulfillment_order_items` verified `tgenabled='O'` both times. Only `updated_at` differs from the
+seed (its own trigger bumped it) — no other column, no other table, no other row.
+
+**Claim level, restated (MI-11 stands).** Sim-verified here covers the **designer rail only**. The
+direct rail, `paidNotOnRail`, the two-rail merge, the refund branch and `Track with the carrier` are
+**compile-green + unit-tested, not sim-verified** — `direct_orders` is empty on this stack and
+`Pilot Freight` is not in the carrier map. M4's unlinkable-contact branch is unit-tested only: the
+config value is `hello@patina.cloud`, which takes the `mailto` branch.
+
+Leave state: `dr-w5-c2` booted, signed in as `client@patina.dev`, flag `direct-orders` on, launched
+onto Today. Nothing installed on the review device.
+
+## w5-c1
+
+Lane C1, W5 — the piece's acts and the purchase flow. Clone `dr-w5-c1`
+`38B7C735-6911-4E7A-B8B8-0273BACA59AB` (iPhone 17 Pro / iOS 26.5, 402×874 pt), signed build from
+`.codex/worktrees/agent-dr-w5-c1/.build/dd/Build/Products/Debug-iphonesimulator/Patina.app`
+(`codesign -dv` → `Identifier=cloud.patina.app`, `Signature=adhoc`; built against a concrete
+simulator destination, **not** `CODE_SIGNING_ALLOWED=NO`). Local stack, launched
+`-DeploymentTarget local -PatinaFlags direct-orders` (and once without the flag). Every frame from
+`xcrun simctl io <udid> screenshot`; every tap from blitz with the explicit udid. No
+`screencapture`. The AppleScript helper `shots/_tap.sh` was tried once mid-walk and did **not**
+deliver (the screen did not change); blitz delivered every time and was used for everything after.
+
+Four accounts, because the act is a function of the relationship: `client@patina.dev`
+(three active projects → `.project`), `james.okafor@example.com` (accepted, claimed lead →
+`.lead`), a guest, and `w5c1-discovering@patina.test` — a homeowner created in-app through the OTP
+flow, because **no seeded account has no designer**. The local sign-in mail now renders a 6-digit
+code (`Your Patina sign-in code is 927870`), so `02-steward-boot.md` §7's "OTP cannot be completed
+locally" is superseded.
+
+| Shot | What it shows |
+|---|---|
+| `w5-c1-01-live-client-ask-leah-no-buy.png` | **R3, on glass.** `client@patina.dev` on the Heirloom Oak Dining Table: the primary reads **`Ask Leah to source this`**, the ghost `Add to room`, and there is **no Buy control anywhere** — not as a secondary, not as a disclosure line. `PurchaseActionBar.Primary` `{{24,752},{179.67,52}}`, `.AddToRoom` `{{211.67,752},{118.33,52}}` |
+| `w5-c1-02-ask-designer-sheet.png` | **M7.** `Ask Leah` over `HEIRLOOM OAK DINING TABLE`, the 56 pt thumbnail beside `NORDIC ATELIER · $4,200.00`, the editable message pre-filled `Can we use the Heirloom Oak Dining Table?`, primary `Send to Leah`, caption `She'll see the piece, the price and the room.` |
+| `w5-c1-03-ask-designer-sent.png` | The send, landed. Server-side proof, not a screenshot claim: `comms_messages` gained one row from `a0000000-…-005` into project thread `b0000000-…-d3`, body `Can we use the Heirloom Oak Dining Table?\n\nHeirloom Oak Dining Table · $4,200.00 · Nordic Atelier`. **This frame also carries a defect the walk caught and the branch fixes:** the post-send caption read "…and the room" for a client with no rooms, over a message that carried two of the three. `AskDesignerSheet.caption(hasRoom:sent:)` now branches, and `AskSheetsTests` pins it |
+| `w5-c1-04-guest-buy-draws.png` | Guest ("Look around first"), same piece: **`Buy — $4,200.00`** draws. B §5's Path A row for a guest |
+| `w5-c1-05-guest-buy-auth-wall.png` | **C9 / SP-09.** The guest's tap on Buy raises the soft wall over context — titled `Sign in to order`, with a real `Cancel`. `select count(*) from direct_orders` was **0** before the tap and **0** after: nothing is written for a guest |
+| `w5-c1-06-discovering-buy-draws.png` | `w5c1-discovering@patina.test`, signed in, no designer: `Buy — $4,200.00`. **The frame before this one was the fix:** on first sight the bar read `Ask about this piece` and never changed, because the two designer services never refresh for a session that lands straight on a piece from `patina://piece/<id>` — `ProductDetailView` now asks them for an answer when it has none |
+| `w5-c1-07-order-sheet-tax-off.png` | **M5a, and critique M14.** `Piece $4,200.00`; `Delivery and tax are not included yet.`; `Sold and shipped by Patina.`; the responsibility paragraph and `Questions or damage: hello@patina.cloud` printed verbatim from `get_direct_order_terms()`; **`Continue to payment` disabled**, with `Delivery and tax are not included yet, so we can't take payment for this piece yet.` under it. Path A does not complete while the server setting is off |
+| `w5-c1-08-order-sheet-tax-on.png` | The same sheet with `direct_orders.tax_shipping_enabled` flipped **true** for this capture: the line becomes `Delivery and tax are added at payment. You'll see the full total before you pay.`, the act is live, and the caption is `Payment opens securely in Safari.` The config was restored to `{"enabled": false}` immediately after — verified by re-select |
+| `w5-c1-09-checkout-failure-patina-voice.png` | **C5, closed on this rail.** With the local `STRIPE_SECRET_KEY` still the 32-char placeholder, `Continue to payment` created the order and the Checkout call came back 502. The screen says **`We couldn't start this payment. Nothing has been charged.`** with `Let's try that again`, **above** the act. Stripe's own `Invalid API Key provided: sk_test_…` — the string W0 found on the invoice path — appears nowhere. The order row exists (`1959c6a7-…`, `Heirloom Oak Dining Table`, `420000`, `pending_payment`, `designer_id` NULL, so no credited inset, correctly) |
+| `w5-c1-10-flag-off-no-buy.png` | Relaunched **without** `-PatinaFlags direct-orders`: the primary is `Ask about this piece` and **no reason is printed** — a feature flag is not a fact about the piece |
+| `w5-c1-11-companion-piece-row-buy.png` | The Companion's piece-context menu: `Save` (not suggested) · **`Buy — $4,200.00` / `PAYMENT OPENS SECURELY IN SAFARI`** (the one suggested row) · `Home` · `Your profile`. Four rows, so the ≤6 ceiling holds, and the row carries the bar's exact label |
+| `w5-c1-12-companion-row-opens-order-sheet.png` | Tapping that row opens the **same** sheet the bar opens — `OrderSheet.Primary` present, disabled (the config was back to false by then). The two surfaces cannot say the same words and do different things |
+| `w5-c1-13-engaged-lead-ask-leah.png` | `james.okafor@example.com` — accepted, claimed lead, **no project**: `Ask Leah to source this`. R3's other live shape |
+
+### Fix round (after `c1-review.md`) — shots 14–20
+
+Same clone, same rules. Rebuilt and reinstalled from `.build/dd` after the fix round; launched
+`-DeploymentTarget local -PatinaFlags direct-orders`, and once **without** the flag for `17`.
+
+| Shot | What it shows |
+|---|---|
+| `w5-c1-14-r3-holds-after-fix-ask-leah-no-buy.png` | **R3 survives the round.** `client@patina.dev` on the Heirloom Oak Dining Table: `PurchaseActionBar.Primary` = `Ask Leah to source this`, ghost `Add to room`, no Buy control anywhere |
+| `w5-c1-15-path-b-caption-names-leah.png` | **Minor 8, closed.** `AskDesignerSheet.Caption` reads `Leah will see the piece and the price.` — the designer's name rather than a guessed pronoun, and no room promised to a client with no rooms |
+| `w5-c1-16-guest-buy-wall-sign-in-to-order.png` | **The guest wall, titled.** Guest taps `Buy — $4,200.00`; the wall heading is `Sign in to order`, with a real `Cancel`. `select count(*) from direct_orders` = **1** before and **1** after (the row is the first walk's `1959c6a7-…`; nothing new was written) |
+| `w5-c1-17-path-c-wall-sign-in-to-ask.png` | **Minor 4, closed.** Relaunched without `-PatinaFlags direct-orders`: the guest's `Ask about this piece` raises a wall headed `Sign in to ask` — a reader who asked a question is no longer told to sign in to order something |
+| `w5-c1-18-order-sheet-total-row.png` | **M3, closed.** With `products.shipping_flat_cents = 18000` on the Heirloom Oak, the sheet's money block prints `Piece $4,200.00` · `Delivery $180.00` · `Total $4,380.00` (`OrderSheet.Money.Total`). `Delivery and tax are not included yet.`, `Continue to payment` disabled with its reason — M14 unchanged. The column was set back to NULL immediately after, verified by re-select |
+| `w5-c1-19-discovering-client-buy-still-draws.png` | **M1 did not over-tighten.** `w5c1-discovering@patina.test`, signed in, no designer, after a launch where the projects fetch answered: `Buy — $4,200.00` |
+| `w5-c1-20-buy-after-signing-in-at-the-wall.png` | **A defect this round found on glass and fixed.** Signing in *through the wall* used to leave the bar on `Ask about this piece` for the session — `.task` had already run as a guest, where the relationship is knowable without any fetch, so nothing re-asked when the session landed. `ProductDetailView` now watches `AuthService.shared.isAuthenticated`. The frame is the bar reading `Buy — $4,200.00` with no relaunch; server-side proof is one `auth.sessions` row for that account created inside the preceding five minutes |
+
+Data touched by the fix round, disclosed rather than cleaned: `products.shipping_flat_cents` on
+`a0000000-0000-0000-0000-000000000001` set to `18000` and **restored to NULL**; two simulator
+keychain resets (to reach a guest) and two OTP sign-ins for `w5c1-discovering@patina.test`. **No new
+`direct_orders` row** — the count was 1 before and 1 after. `fulfillment_config` was not touched
+this round.
+
+Data written by this walk, disclosed rather than cleaned: one `auth.users` + `profiles` row
+(`w5c1-discovering@patina.test`, role `homeowner`), one `comms_messages` row in project thread
+`b0000000-…-d3`, and one `direct_orders` row `1959c6a7-78c0-4916-97d4-c5770e7ddcde` left
+`pending_payment` (the Checkout call failed on the placeholder key — a real product state, not a
+stranded write). `fulfillment_config.direct_orders.tax_shipping_enabled` was toggled true and
+**restored to false**; nothing else on the shared local database was changed.
+
+Environment repairs made to reach the walk, both restarts and neither a reset: the
+`supabase_edge_runtime_supabase` container was **Exited** and was started, after which Kong
+answered `{"message":"name resolution failed"}` for every function (the known Kong-DNS trap) until
+`supabase_kong_supabase` was restarted. Edge functions have answered since.
+
+Leave state: `dr-w5-c1` booted, signed in as `james.okafor@example.com`, flag `direct-orders` on,
+on the piece screen, light appearance, status bar overridden to 9:41. The review device
+`973D1724-90BF-4A0A-B02D-481D561547B3` was shut down only to take the clone and was re-booted
+immediately; nothing was installed on it.
+
+## w5 walk
+
+Acceptance walker · review device `973D1724-90BF-4A0A-B02D-481D561547B3` (iPhone 17 Pro / iOS 26.5),
+2026-08-28. Installed `.codex/worktrees/agent-dr-w5-integration/.build/dd/…/Patina.app`
+(`xcrun simctl install`, unsandboxed) — signed `adhoc`, not `CODE_SIGNING_ALLOWED=NO`.
+`-DeploymentTarget local` on every launch; flag-on launches add `-PatinaFlags direct-orders`.
+`STRIPE_SECRET_KEY` re-verified before the walk: still `sk_test_…alls`, 32 chars — the placeholder
+(`w5/steward.md` §2, unchanged). `direct_orders.tax_shipping_enabled` = `false` (00540 default,
+untouched).
+
+| Shot | State | What it shows |
+|---|---|---|
+| `w5-01-activeproject-piece-ask-only.png` | flag on, `client@patina.dev`, Heirloom Oak Dining Table (gate-passing) | Primary `Ask Leah to source this`, secondary `Add to room` — **no Buy anywhere**, no "Buy it myself" (R3 as ruled: pre-emption holds with no secondary Buy act) |
+| `w5-02-activeproject-ask-leah-sent.png` | same | `Ask Leah` sheet sent: `Can we use the Heirloom Oak Dining Table?` / `Heirloom Oak Dining Table · $4,200.00 · Nordic Atelier`. Server: `comms_messages` row landed in a **project** thread (`rpc_start_project_thread`) — but the project it landed on is `Birch Hollow` (`b0000000-…-d3`), not `Aspen Loft Refresh` (`b0000000-…-d1`, created earlier by `created_at`). `DesignerRelationshipResolver.activeProject(in:)` is `projects.first { !archived && designer_id != nil }` over three simultaneously-active projects for this seed, and "first" is not stably `created_at`-ordered here — the same `…-d3` target as `w5-c1`'s own walk (`01-shot-ledger.md` line 1433), so this is a **pre-existing, reproducible ambiguity**, not new. The message itself, the piece, and the price are all correct; only the specific project is arguably wrong when a client has >1 active project |
+| `w5-03-engaged-piece-ask-only.png` | flag on, `james.okafor@example.com` (accepted lead, no project), same piece | Primary `Ask Leah to source this`, no Buy — correct for engaged tier |
+| `w5-04-engaged-ask-leah-sheet.png` | same | `Ask Leah` sheet, same piece/price |
+| `w5-05-engaged-ask-FAIL-wrong-project.png` | same, **sent within the SAME app process right after a Settings→Sign Out from `client@patina.dev`** | **FAIL.** The sheet shows `We couldn't send that. Your designer hasn't seen it yet.` No `comms_messages`/`comms_threads` row written. Postgres log at the same second: `authenticator@postgres ERROR: caller is not part of project b0000000-0000-0000-0000-0000000000d3` — the app tried `rpc_start_project_thread(Birch Hollow)`, **client@patina.dev's own project**, on James's account. `rpc_start_direct_thread(James, designer)` called directly in psql (bypassing the app) succeeds immediately, proving the RPC and the data are fine — the bug is client-side: `DesignerThreadOpener.currentRelationship` reads `BadgeCountService.shared.projects` / `DesignRequestStatusService.shared.liveLead`, process-lifetime `@Observable` singletons that were not cleared/refreshed after the in-process sign-out/sign-in, so `DesignerRelationshipResolver` resolved `.project(Birch Hollow, …)` for James using **client@patina.dev's stale project list** instead of `.lead(…)` for James's own accepted lead. The server's own authorization check correctly refused the cross-tenant write — no data actually leaked — but the user-facing consequence is a silent, wrongly-attributed send failure for anyone who switches accounts without a full relaunch |
+| `w5-06-engaged-ask-succeeds-freshlaunch.png` | same account, **after `simctl terminate` + fresh `simctl launch`** (no sign-out/sign-in involved — the session persisted) | Same tap sequence now succeeds: `comms_messages` row lands in James's own **direct** thread (`rpc_start_direct_thread`, kind `direct`), sender = James, same piece/price text. Confirms the feature itself is correct; the defect is specifically the cross-account cache staleness above |
+| `w5-07-guest-piece-buy-draws.png` | flag on, guest ("Look around first") | `Buy — $4,200.00` primary, `Add to room` secondary |
+| `w5-08-guest-buy-authwall.png` | same, tapped Buy | `Sign in to order` sheet with `Cancel` — SP-09's auth wall, no guest option. `direct_orders` count **0 before and after** |
+| `w5-09-discovering-buy-draws.png` | flag on, fresh sign-up `w5walk-discovering@patina.test` (role `homeowner`; verified server-side: no `leads`, no `projects`, no `designer_clients` row — the one seeded/creatable account this DB has with a genuinely dead relationship; every seeded homeowner in this stack currently resolves `isLive = true` via a non-terminal lead with `designer_id` set, so none could stand in) | `Buy — $4,200.00` draws for a true no-designer client |
+| `w5-10-discovering-order-sheet-honest-taxline-disabled.png` | same, tapped Buy | Order sheet: `HEIRLOOM OAK DINING TABLE` / `Nordic Atelier` / real description / `Dimensions 96″ W × 40″ D × 30″ H` / `Lead time Made to order · ships in 10 weeks` / `Piece $4,200.00` / **`Delivery and tax are not included yet.`** (honest to `tax_shipping_enabled = false`) / `Sold and shipped by Patina.` / the real responsibility paragraph (`fulfillment_config`, not placeholder text) / `Questions or damage: hello@patina.cloud`. `Continue to payment` is **disabled**, subtitled `Delivery and tax are not included yet, so we can't take payment for this piece yet.` — `c1-tasks.md`'s ruled M14 behavior ("Path A stays off"): the sheet is reachable but checkout cannot complete. Tapped anyway — no-op, `direct_orders` count stayed **0** |
+| `w5-11-ordered-list-seeded-shipped.png` | flag on, `client@patina.dev` | Studio → Ordered: `Meadow Linen Sectional` · Shipped Aug 24 · arriving Sep 3 · "Leah ordered this for you." |
+| `w5-12-order-detail-shipped-no-tracking-row.png` | same, tapped in | Rail `Confirmed → In production → **Shipped**(current) → Delivered`; rows `Message Leah` / `See the piece` / `Report a problem`; the responsibility paragraph again. **No `Track with the carrier` row** — correct: the seed's carrier is `Pilot Freight` (white-glove), and `CarrierTracking.templates` only maps parcel carriers (UPS/FedEx/USPS/DHL + named LTL lines); an unmapped carrier resolves to `nil` and the row is withheld by design (`CarrierTracking.swift`'s own comment: "guessing a tracking URL is how a homeowner lands on a 404") |
+| `w5-13-today-moved-delivered-realdate.png` | same, after flipping `fulfillment_order_items.line_state` → `delivered` (+ `fulfillment_shipments.delivered_at`) in local Postgres and a fresh `terminate`+`launch` | Today's MOVED row now reads **`Meadow Linen Sectional arrived. Ordered by Leah. Aug 28.`** — the real date (today), not a stale one. Reverting the flip was attempted and correctly **refused** — `enforce_fulfillment_line_transition()` raises `illegal transition delivered -> shipped`; the state machine is enforced server-side, not cosmetic. Left `delivered`; the next `supabase db reset` restores seed state |
+| `w5-14-flagoff-today.png` / `w5-15-flagoff-activeproject-ask-unchanged.png` | flag **off**, `client@patina.dev` | Today unchanged; the same piece still shows `Ask Leah to source this` / `Add to room`, no Buy — R3's pre-emption is not flag-gated |
+| `w5-16-flagoff-guest-askabout-nobuy.png` | flag off, guest, same piece | `Ask about this piece` primary, no Buy — Path C unchanged |
+| `w5-17-leavestate-flagoff-client-daily-room.png` | flag off, `client@patina.dev`, Daily Room, light, default text | Leave state |
+
+**Unscripted finding, item 2 (see `w5-05`):** a cross-account cache-staleness bug in
+`DesignerThreadOpener`/`BadgeCountService` — switching accounts via Settings → Sign Out → Sign In
+**within the same running app process** can leak the previous account's project id into the new
+account's "Ask your designer" send, which then fails silently (server-side authorization correctly
+blocks the cross-tenant write, so no message is misdelivered, but the user sees an unexplained
+failure). A full `terminate`+`launch` between accounts avoids it. Filed as a **FAIL** for item 2 as
+first attempted; the underlying feature is proven correct on a fresh process (`w5-06`).
+
+Data written by this walk, disclosed rather than cleaned: one `auth.users`+`profiles` row
+(`w5walk-discovering@patina.test`, role `homeowner`, no relationships); two `comms_messages` rows
+(`client@patina.dev` → Birch Hollow project thread; `james.okafor@example.com` → a new direct
+thread) and their two parent `comms_threads` rows; `fulfillment_order_items` id
+`f5000000-…-0002` advanced `shipped → delivered` (irreversible by design — see above) with
+`fulfillment_shipments` id `f5000000-…-0005`'s `delivered_at` set. **No `direct_orders` row was
+ever created** — every path that could have written one either hit the guest auth wall or the
+disabled/tax-gated `Continue to payment` before any RPC fired; count stayed **0** throughout.
+
+Leave state: signed in as `client@patina.dev`, flag off, on the Daily Room, light appearance,
+default text size (`w5-17`).
