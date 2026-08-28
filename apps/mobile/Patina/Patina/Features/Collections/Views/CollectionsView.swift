@@ -142,133 +142,6 @@ struct CollectionsView: View {
         }
     }
 
-    // MARK: - Boards Tab
-
-    private var boardsContent: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            if viewModel.boards.isEmpty {
-                emptyBoardsState
-            } else {
-                ForEach(viewModel.boards) { board in
-                    boardSection(board)
-                }
-            }
-        }
-        .padding(24)
-        .padding(.bottom, 100)
-    }
-
-    private var emptyBoardsState: some View {
-        VStack(spacing: 16) {
-            Spacer().frame(height: 40)
-            Image(systemName: "rectangle.stack")
-                .font(.system(size: 36))
-                .foregroundStyle(PatinaColors.clay.opacity(0.5))
-
-            Text("No boards yet")
-                .font(PatinaTypography.h5)
-                .foregroundStyle(PatinaColors.Text.primary)
-
-            Text("Save pieces from recommendations to create your first board")
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.muted)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 260)
-
-            Button {
-                viewModel.isCreatingBoard = true
-            } label: {
-                Text("Create Board")
-                    .font(PatinaTypography.uiAction)
-                    .foregroundStyle(PatinaColors.Text.inverse)
-                    .padding(.horizontal, 24)
-                    .frame(height: 44)
-                    .background(PatinaColors.Interactive.active)
-                    .clipShape(Capsule())
-            }
-            .padding(.top, 8)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func boardSection(_ board: BoardModel) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(board.name)
-                    .font(PatinaTypography.h5)
-                    .foregroundStyle(PatinaColors.Text.primary)
-                Spacer()
-                MonoLabel(text: "\(board.itemCount) items")
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(board.name), \(board.itemCount) item\(board.itemCount == 1 ? "" : "s")")
-
-            // Grid placeholder (items would show product thumbnails)
-            let columns = [
-                GridItem(.flexible(), spacing: 6),
-                GridItem(.flexible(), spacing: 6),
-                GridItem(.flexible(), spacing: 6)
-            ]
-
-            if board.itemCount > 0 {
-                LazyVGrid(columns: columns, spacing: 6) {
-                    ForEach(Array(board.items.prefix(6).enumerated()), id: \.offset) { _, productId in
-                        if let item = itemsByProductId[productId] {
-                            ProductCard(
-                                data: ProductCardData(tableItem: item),
-                                style: .tile
-                            ) {
-                                coordinator.navigate(to: .pieceDetail(pieceId: productId))
-                            }
-                        } else {
-                            PatinaGradients.warm
-                                .aspectRatio(1, contentMode: .fill)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
-                    }
-                }
-            } else {
-                emptyBoardTile
-            }
-        }
-    }
-
-    // U31: give the empty board tile a real path to pieces instead of
-    // leaving it a dead end. Extracted to keep boardSection(_:) within the
-    // function-body-length gate.
-    private var emptyBoardTile: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(PatinaColors.Background.secondary)
-            .frame(height: 80)
-            .overlay(
-                VStack(spacing: 4) {
-                    Text("This board is empty")
-                        .font(PatinaTypography.caption)
-                        .foregroundStyle(PatinaColors.Text.muted)
-                    Button {
-                        coordinator.navigate(to: .emergence(pieceId: nil))
-                    } label: {
-                        Text("Browse pieces")
-                            .font(PatinaTypography.captionMedium)
-                            .foregroundStyle(PatinaColors.Text.interactive)
-                    }
-                }
-            )
-    }
-
-    /// SP-12: the boards a saved piece can join. Empty until the reader makes
-    /// one, and the action does not draw while it is.
-    private var boardTargets: [ProductCardBoardTarget] {
-        viewModel.boards.map { ProductCardBoardTarget(id: $0.id.uuidString, name: $0.name) }
-    }
-
-    private func addSavedItem(_ item: TableItemModel, toBoardId boardId: String) {
-        guard let productId = item.productId,
-              let board = viewModel.boards.first(where: { $0.id.uuidString == boardId })
-        else { return }
-        viewModel.addToBoard(board, productId: productId)
-    }
-
     // MARK: - All Items Tab
 
     private var allItemsContent: some View {
@@ -397,4 +270,136 @@ struct CollectionsView: View {
 
 #Preview {
     CollectionsView()
+}
+
+// MARK: - Boards Tab
+
+/// The boards half of the screen, outside the view's own body so the type stays
+/// inside the house limit. Same file, so `body` still reaches every member.
+private extension CollectionsView {
+
+    var boardsContent: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            if viewModel.boards.isEmpty {
+                emptyBoardsState
+            } else {
+                ForEach(viewModel.boards) { board in
+                    boardSection(board)
+                }
+            }
+        }
+        .padding(24)
+        .padding(.bottom, 100)
+    }
+
+    var emptyBoardsState: some View {
+        VStack(spacing: 16) {
+            Spacer().frame(height: 40)
+            Image(systemName: "rectangle.stack")
+                .font(.system(size: 36))
+                .foregroundStyle(PatinaColors.clay.opacity(0.5))
+
+            Text("No boards yet")
+                .font(PatinaTypography.h5)
+                .foregroundStyle(PatinaColors.Text.primary)
+
+            Text("Save pieces from recommendations to create your first board")
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 260)
+
+            Button {
+                viewModel.isCreatingBoard = true
+            } label: {
+                Text("Create Board")
+                    .font(PatinaTypography.uiAction)
+                    .foregroundStyle(PatinaColors.Text.inverse)
+                    .padding(.horizontal, 24)
+                    .frame(height: 44)
+                    .background(PatinaColors.Interactive.active)
+                    .clipShape(Capsule())
+            }
+            .padding(.top, 8)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    func boardSection(_ board: BoardModel) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(board.name)
+                    .font(PatinaTypography.h5)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                Spacer()
+                MonoLabel(text: "\(board.itemCount) items")
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(board.name), \(board.itemCount) item\(board.itemCount == 1 ? "" : "s")")
+
+            // Grid placeholder (items would show product thumbnails)
+            let columns = [
+                GridItem(.flexible(), spacing: 6),
+                GridItem(.flexible(), spacing: 6),
+                GridItem(.flexible(), spacing: 6)
+            ]
+
+            if board.itemCount > 0 {
+                LazyVGrid(columns: columns, spacing: 6) {
+                    ForEach(Array(board.items.prefix(6).enumerated()), id: \.offset) { _, productId in
+                        if let item = itemsByProductId[productId] {
+                            ProductCard(
+                                data: ProductCardData(tableItem: item),
+                                style: .tile
+                            ) {
+                                coordinator.navigate(to: .pieceDetail(pieceId: productId))
+                            }
+                        } else {
+                            PatinaGradients.warm
+                                .aspectRatio(1, contentMode: .fill)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                }
+            } else {
+                emptyBoardTile
+            }
+        }
+    }
+
+    // U31: give the empty board tile a real path to pieces instead of
+    // leaving it a dead end. Extracted to keep boardSection(_:) within the
+    // function-body-length gate.
+    var emptyBoardTile: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(PatinaColors.Background.secondary)
+            .frame(height: 80)
+            .overlay(
+                VStack(spacing: 4) {
+                    Text("This board is empty")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                    Button {
+                        coordinator.navigate(to: .emergence(pieceId: nil))
+                    } label: {
+                        Text("Browse pieces")
+                            .font(PatinaTypography.captionMedium)
+                            .foregroundStyle(PatinaColors.Text.interactive)
+                    }
+                }
+            )
+    }
+
+    /// SP-12: the boards a saved piece can join. Empty until the reader makes
+    /// one, and the action does not draw while it is.
+    var boardTargets: [ProductCardBoardTarget] {
+        viewModel.boards.map { ProductCardBoardTarget(id: $0.id.uuidString, name: $0.name) }
+    }
+
+    func addSavedItem(_ item: TableItemModel, toBoardId boardId: String) {
+        guard let productId = item.productId,
+              let board = viewModel.boards.first(where: { $0.id.uuidString == boardId })
+        else { return }
+        viewModel.addToBoard(board, productId: productId)
+    }
 }

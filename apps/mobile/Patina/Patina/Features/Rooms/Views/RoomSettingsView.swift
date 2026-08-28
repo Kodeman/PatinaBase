@@ -36,6 +36,10 @@ struct RoomSettingsView: View {
 
     private var room: RoomModel? { rooms.first }
 
+    /// The face both typed fields wear — the room's name and each dimension.
+    /// One declaration so the two cannot drift apart.
+    private static let fieldFont = Font.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body)
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -102,7 +106,7 @@ struct RoomSettingsView: View {
                 .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.secondary)
             TextField("Room name", text: $name)
-                .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                .font(Self.fieldFont)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.horizontal, 14)
                 .frame(height: 46)
@@ -188,7 +192,7 @@ struct RoomSettingsView: View {
             TextField("", text: text)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
-                .font(.custom("PlayfairDisplay-Regular", size: 16, relativeTo: .body))
+                .font(Self.fieldFont)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
@@ -209,33 +213,18 @@ struct RoomSettingsView: View {
         .frame(maxWidth: .infinity)
     }
 
-    static func restate(_ text: String, from old: RoomUnit, to new: RoomUnit) -> String {
-        guard old != new, let value = Double(text) else { return text }
-        let metres = old.metres(from: value)
-        return Self.entry(fromMetres: metres, unit: new)
-    }
-
-    /// Round to a tenth before asking whether the number is whole: 18 ft
-    /// stored as metres comes back 17.999999999999996, and the field must
-    /// offer the person the number they typed, not the float.
-    static func entry(fromMetres metres: Double, unit: RoomUnit) -> String {
-        let value = (unit.value(fromMetres: metres) * 10).rounded() / 10
-        return value.rounded() == value
-            ? String(Int(value))
-            : String(format: "%.1f", value)
-    }
-
     private var hasUsableDimensions: Bool {
-        guard let l = Double(lengthText), let w = Double(widthText) else { return false }
-        return l > 0 && w > 0
+        guard let length = Double(lengthText), let width = Double(widthText) else { return false }
+        return length > 0 && width > 0
     }
 
     private func saveDimensions(_ room: RoomModel) {
-        guard let l = Double(lengthText), let w = Double(widthText), l > 0, w > 0 else { return }
+        guard let length = Double(lengthText), let width = Double(widthText),
+              length > 0, width > 0 else { return }
         RoomStore(context: modelContext).updateTypedDimensions(
             room,
-            widthMeters: unit.metres(from: w),
-            lengthMeters: unit.metres(from: l),
+            widthMeters: unit.metres(from: width),
+            lengthMeters: unit.metres(from: length),
             heightMeters: nil
         )
         PostHogService.shared.capture("room_dimensions_edited", properties: [
@@ -362,5 +351,28 @@ struct RoomSettingsView: View {
         }
         if room.windowCount > 0 { parts.append("\(room.windowCount) windows detected") }
         return parts.joined(separator: " · ")
+    }
+}
+
+// MARK: - What the fields read back
+
+/// Pure, and outside the view body so the screen's own type stays inside the
+/// house limit. Both are called from the view and from `RoomBudgetTests`.
+extension RoomSettingsView {
+
+    static func restate(_ text: String, from old: RoomUnit, to new: RoomUnit) -> String {
+        guard old != new, let value = Double(text) else { return text }
+        let metres = old.metres(from: value)
+        return Self.entry(fromMetres: metres, unit: new)
+    }
+
+    /// Round to a tenth before asking whether the number is whole: 18 ft
+    /// stored as metres comes back 17.999999999999996, and the field must
+    /// offer the person the number they typed, not the float.
+    static func entry(fromMetres metres: Double, unit: RoomUnit) -> String {
+        let value = (unit.value(fromMetres: metres) * 10).rounded() / 10
+        return value.rounded() == value
+            ? String(Int(value))
+            : String(format: "%.1f", value)
     }
 }

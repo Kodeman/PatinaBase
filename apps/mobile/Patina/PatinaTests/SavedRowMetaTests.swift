@@ -194,7 +194,13 @@ struct SavedItemReconcileTests {
 @MainActor
 struct SavedItemNoteWriteTests {
 
-    private func store() throws -> (CollectionsViewModel, ModelContext, TableItemModel) {
+    private struct Fixture {
+        let viewModel: CollectionsViewModel
+        let context: ModelContext
+        let item: TableItemModel
+    }
+
+    private func store() throws -> Fixture {
         let container = try ModelContainer(
             for: TableItemModel.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
@@ -204,12 +210,15 @@ struct SavedItemNoteWriteTests {
         context.insert(item)
         let viewModel = CollectionsViewModel()
         viewModel.savedItems = [item]
-        return (viewModel, context, item)
+        return Fixture(viewModel: viewModel, context: context, item: item)
     }
 
     @Test("the note lands on the piece and on the list the screen is reading")
     func theNoteIsWrittenLocally() throws {
-        let (viewModel, context, item) = try store()
+        let fixture = try store()
+        let viewModel = fixture.viewModel
+        let context = fixture.context
+        let item = fixture.item
         viewModel.setNote("For the reading corner", on: item, context: context)
         #expect(item.notes == "For the reading corner")
         #expect(viewModel.savedItems.first?.notes == "For the reading corner")
@@ -217,7 +226,10 @@ struct SavedItemNoteWriteTests {
 
     @Test("the note survives a re-read of the store")
     func theNoteSurvivesAReRead() throws {
-        let (viewModel, context, item) = try store()
+        let fixture = try store()
+        let viewModel = fixture.viewModel
+        let context = fixture.context
+        let item = fixture.item
         viewModel.setNote("For the reading corner", on: item, context: context)
         let reread = try context.fetch(FetchDescriptor<TableItemModel>())
         #expect(reread.first?.notes == "For the reading corner")
@@ -225,7 +237,10 @@ struct SavedItemNoteWriteTests {
 
     @Test("clearing a note clears it — an empty note is no note, not an empty one")
     func clearingANoteClearsIt() throws {
-        let (viewModel, context, item) = try store()
+        let fixture = try store()
+        let viewModel = fixture.viewModel
+        let context = fixture.context
+        let item = fixture.item
         viewModel.setNote("For the reading corner", on: item, context: context)
         viewModel.setNote(nil, on: item, context: context)
         #expect(item.notes == nil)

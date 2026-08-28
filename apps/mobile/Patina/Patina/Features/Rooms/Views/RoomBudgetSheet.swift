@@ -55,11 +55,11 @@ struct RoomBudgetSheet: View {
 
             HStack(spacing: 8) {
                 Text("$")
-                    .font(.custom("PlayfairDisplay-Regular", size: 20, relativeTo: .title3))
+                    .font(PatinaTypography.h4)
                     .foregroundStyle(PatinaColors.Text.muted)
                 TextField("9,000", text: $dollars)
                     .keyboardType(.numberPad)
-                    .font(.custom("PlayfairDisplay-Regular", size: 20, relativeTo: .title3))
+                    .font(PatinaTypography.h4)
                     .foregroundStyle(PatinaColors.Text.primary)
                     .accessibilityIdentifier("RoomBudgetSheet.Amount")
             }
