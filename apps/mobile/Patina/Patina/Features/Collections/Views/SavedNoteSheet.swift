@@ -42,6 +42,14 @@ struct SavedNoteSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .focused($isFocused)
                     .accessibilityLabel("Your note about \(pieceName)")
+                    // The column stops at 2000 characters, and a note past it
+                    // is refused by the server and kept only here. The editor
+                    // stops instead, where the person can see it.
+                    .onChange(of: draft) { _, new in
+                        if new.count > SavedRowMeta.noteLimit {
+                            draft = String(new.prefix(SavedRowMeta.noteLimit))
+                        }
+                    }
                     .overlay(alignment: .topLeading) {
                         if draft.isEmpty {
                             Text("Why you saved it, what it's for, what to check.")

@@ -40,10 +40,15 @@ enum SavedRowMeta {
         return "\(day) · \(roomName)"
     }
 
+    /// What `saved_items_notes_length_check` (00539 §1) allows. A longer note
+    /// is a 400 the mirror only logs, so the sentence would sit on the reader's
+    /// row here and be missing from every other device she owns.
+    static let noteLimit = 2000
+
     /// A note is what the reader typed, or nothing. Whitespace is not a note.
     static func note(_ raw: String?) -> String? {
         guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else { return nil }
-        return trimmed
+        return String(trimmed.prefix(noteLimit))
     }
 }

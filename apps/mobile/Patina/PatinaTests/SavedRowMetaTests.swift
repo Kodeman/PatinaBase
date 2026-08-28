@@ -56,6 +56,16 @@ struct SavedRowMetaTests {
         #expect(SavedRowMeta.note("  Check the arm height  ") == "Check the arm height")
     }
 
+    /// `saved_items_notes_length_check` (00539 §1) refuses anything longer,
+    /// and the mirror only logs the refusal — so an uncapped note would live
+    /// on this device and nowhere else.
+    @Test("a note stops where the column stops")
+    func aNoteIsBoundedByTheColumn() {
+        let long = String(repeating: "a", count: SavedRowMeta.noteLimit + 500)
+        #expect(SavedRowMeta.note(long)?.count == SavedRowMeta.noteLimit)
+        #expect(SavedRowMeta.noteLimit == 2000)
+    }
+
     @Test("the note lives on the saved piece the reader saved")
     func theNoteIsOnTheModel() {
         let item = TableItemModel(name: "Velvet Club Chair", productId: "p-1")

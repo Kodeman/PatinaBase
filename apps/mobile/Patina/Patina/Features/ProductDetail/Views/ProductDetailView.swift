@@ -36,6 +36,10 @@ struct ProductDetailView: View {
     /// SP-11: the rooms `Add to Room` can offer.
     @State private var roomOptions: [RoomSummary] = []
 
+    /// Held rather than computed in `body`: building it reads every room out
+    /// of SwiftData, and `body` runs on every scroll frame of this screen.
+    @State private var fitLine: RoomFitLine?
+
     /// Product ID to load (from navigation)
     var productId: String?
 
@@ -76,6 +80,7 @@ struct ProductDetailView: View {
             // saved again — seed from the store before the bar draws.
             viewModel.seedSavedState(productId: displayProduct?.id, context: modelContext)
             roomOptions = RoomStore(context: modelContext).allRooms().map(RoomSummary.init(from:))
+            refreshFitLine()
             viewModel.trackView()
         }
         .sheet(item: $presented) { which in
@@ -105,6 +110,7 @@ struct ProductDetailView: View {
                                 context: modelContext
                             )
                             roomOptions = store.allRooms().map(RoomSummary.init(from:))
+                            refreshFitLine()
                         },
                         onNewRoom: {
                             presented = nil
@@ -116,15 +122,24 @@ struct ProductDetailView: View {
         }
     }
 
-    /// The fit line for this piece, or nothing.
-    private func fitLine(for product: Product) -> RoomFitLine? {
+    /// The fit line for this piece, or nothing. Recomputed when the screen
+    /// appears and when the piece is put in a room — the two moments the
+    /// answer can change.
+    private func refreshFitLine() {
+        guard let product = displayProduct else {
+            fitLine = nil
+            return
+        }
         let rooms = RoomStore(context: modelContext).allRooms()
         guard let room = RoomFitLine.room(
             preferredLocalId: viewModel.roomContextLocalId,
             preferredRemoteId: viewModel.roomContextRemoteId,
             in: rooms
-        ) else { return nil }
-        return RoomFitLine.make(room: room, product: product)
+        ) else {
+            fitLine = nil
+            return
+        }
+        fitLine = RoomFitLine.make(room: room, product: product)
     }
 
     /// The room this screen already belongs to — a room-scoped browse, a
@@ -278,7 +293,7 @@ struct ProductDetailView: View {
                         // what else is in the room (C5). Drawn only for a room
                         // measured on the segmented unit control, and only for
                         // a piece that carries dimensions.
-                        if let fit = fitLine(for: product) {
+                        if let fit = fitLine {
                             RoomFitLineView(line: fit)
                                 .padding(.bottom, 16)
                         }
