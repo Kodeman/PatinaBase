@@ -168,6 +168,37 @@ BEGIN
             FROM public.fulfillment_order_items) q;
   ASSERT n = 1, 'the client-facing columns must all still be readable, got ' || n;
 
+  -- ═══ 4b. …and neither is the commission rate, one table over ═══════════
+  -- 00540 §1b: the same narrowing, on direct_orders. A column privilege is
+  -- checked when the statement is planned, so this is refused whether or not
+  -- the caller owns a row — which is the point: `select('*')` on this table
+  -- now fails for every client, and packages/supabase's hook names its columns.
+  BEGIN
+    SELECT count(commission_rate) INTO n FROM public.direct_orders;
+    ASSERT false,
+      'commission_rate is what the designer of record earns — direction B §5 '
+      'discloses that a commission exists and never its size, so `authenticated` '
+      'must not be able to select it';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;  -- expected: outside authenticated's column grant
+  END;
+
+  BEGIN
+    PERFORM * FROM public.direct_orders LIMIT 1;
+    ASSERT false, 'and a star select over the table must fail with it';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
+  -- the columns her own orders list needs are all still there
+  SELECT count(*) INTO n
+    FROM (SELECT id, client_id, product_id, product_name, quantity, unit_price_cents,
+                 amount_cents, currency, status, stripe_checkout_session_id,
+                 stripe_payment_intent_id, shipping, created_at, paid_at,
+                 designer_id, project_id
+            FROM public.direct_orders) q;
+  ASSERT n >= 0, 'the client-facing direct_orders columns must stay readable';
+
   -- ═══ 5. the leg is read-only ═══════════════════════════════════════════
   --
   -- Asserted as "moves nothing", not as "is refused", and the difference is
@@ -205,8 +236,10 @@ BEGIN
   -- anon is asserted by ROWS, not by grant. 00350 revokes anon inside a
   -- a DO block's EXECUTE format(...) loop, and generate-legacy-grants.py only
   -- replays TOP-LEVEL GRANT/REVOKE statements — so on a local stack the
-  -- legacy-grants seed's blanket GRANT ALL survives on all eight BOH tables
-  -- (and on direct_orders, for the same reason). That is a local-only ACL gap
+  -- legacy-grants seed's blanket GRANT ALL survives on all eight BOH tables.
+  -- (00276 revokes anon off direct_orders the same way and with the same gap,
+  -- though 00540's own top-level column REVOKE/GRANT on that table IS replayed
+  -- — which is why §4b's probe holds locally.) That is a local-only ACL gap
   -- that predates 00540 and belongs to the generator, not to this migration;
   -- what closes it in every environment is that anon has no auth.uid() and so
   -- matches no policy. Assert the thing that is true everywhere.

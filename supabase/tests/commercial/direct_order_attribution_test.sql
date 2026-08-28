@@ -19,9 +19,16 @@
 --      fulfillment_config commission_rate_default (0.16), snapshotted.
 --   5. IMMUTABILITY once paid — a trigger, not a convention, because the
 --      settle path is service_role and bypasses RLS entirely.
---   6. THE EARNINGS CREDIT FIRES ONCE, and the project-thread notice with it.
+--   6. THE EARNINGS CREDIT FIRES ONCE, and the notice with it — into the
+--      project thread when there is a project, else into the direct thread,
+--      which under R3 is the ONLY branch an iOS buyer can reach.
+--   6b. A ZERO-RATE piece is attributed, earns nothing, and the designer is
+--      told anyway; and A REFUND nets the credit out with a contra row rather
+--      than deleting a row that carries payout state.
 --   7. get_direct_order_terms is readable by a signed-in client and by nobody
 --      else, and never returns TRUE for tax/shipping it has not been told is on.
+--   8. THE RATE IS NOT THE BUYER'S: create_direct_order returns it masked and
+--      `authenticated` holds no column privilege on it.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -132,7 +139,20 @@ VALUES
    'Nordic Atelier', '{"width":96}'::jsonb, 10, NULL, NULL, NULL),
   -- freight to fold, and a per-piece commission rate that must beat the default
   ('da050000-0000-4000-8000-000000000006', 'DO Freighted Piece', NOW(), 'catalog', 'published', true, 100000, 70000,
-   'Prairie Workshop', '{"width":40}'::jsonb, 6, NOW(), 18000, 0.25);
+   'Prairie Workshop', '{"width":40}'::jsonb, 6, NOW(), 18000, 0.25),
+  -- dimensions is JSONB with no shape constraint: these three are all NOT NULL
+  -- and all mean "no size". '{}' and a bare {"unit":"in"} are what a catalogue
+  -- import writes; 'null'::jsonb is the one that fools `IS NULL` outright.
+  ('da050000-0000-4000-8000-000000000007', 'DO Empty Dimensions', NOW(), 'catalog', 'published', true, 420000, 273000,
+   'Nordic Atelier', '{}'::jsonb, 10, NOW(), NULL, NULL),
+  ('da050000-0000-4000-8000-000000000008', 'DO Json Null Dimensions', NOW(), 'catalog', 'published', true, 420000, 273000,
+   'Nordic Atelier', 'null'::jsonb, 10, NOW(), NULL, NULL),
+  ('da050000-0000-4000-8000-000000000009', 'DO Unitless Dimensions', NOW(), 'catalog', 'published', true, 420000, 273000,
+   'Nordic Atelier', '{"unit":"in"}'::jsonb, 10, NOW(), NULL, NULL),
+  -- a legal catalogue rate of ZERO: attributed, earns nothing, and the designer
+  -- must still be told her client bought something.
+  ('da050000-0000-4000-8000-00000000000a', 'DO Zero Rate Piece', NOW(), 'catalog', 'published', true, 50000, 30000,
+   'Prairie Workshop', '{"width":24}'::jsonb, 4, NOW(), NULL, 0.00);
 
 DO $$
 DECLARE
@@ -145,11 +165,13 @@ DECLARE
   cn uuid := 'da000000-0000-4000-8000-0000000000a5';
   p_ok      uuid := 'da050000-0000-4000-8000-000000000001';
   p_freight uuid := 'da050000-0000-4000-8000-000000000006';
+  p_zero    uuid := 'da050000-0000-4000-8000-00000000000a';
   o     public.direct_orders;
   o2    public.direct_orders;
   r     jsonb;
   n     int;
   v_body text;
+  v_rate numeric;
 BEGIN
   -- ═══ 1. the buyability gate, one field at a time ═══════════════════════
   PERFORM pg_temp.assume_user(cn);
@@ -188,10 +210,48 @@ BEGIN
       'the refusal must name the field, got: ' || SQLERRM;
   END;
 
-  -- The two 00276 refusals are UNCHANGED and must stay so — iOS and the
-  -- _tests assert suite both read these strings.
-  ASSERT (SELECT count(*) FROM pg_proc WHERE proname = 'create_direct_order') = 1,
-    'there must be exactly one create_direct_order overload';
+  -- 1b. dimensions is JSONB, so IS NOT NULL is not "has a size". All three of
+  --     these are non-NULL and none of them is one.
+  FOR n IN 7..9 LOOP
+    BEGIN
+      o := public.create_direct_order(('da050000-0000-4000-8000-00000000000' || n)::uuid, 1);
+      ASSERT false, 'a JSONB dimensions value carrying no width must not be buyable (row ' || n || ')';
+    EXCEPTION WHEN OTHERS THEN
+      ASSERT SQLERRM LIKE '%not_buyable:dimensions%',
+        'the refusal must name the field, got: ' || SQLERRM;
+    END;
+  END LOOP;
+
+  -- 1c. The two 00276 refusals are UNCHANGED and must stay so — iOS and the
+  --     _tests assert suite both read these strings. Asserted by RAISING them,
+  --     not by counting overloads: the count proved nothing about the strings.
+  -- The unsellable row is layer 'personal', not 'catalog': the CHECK
+  -- products_catalog_requires_management plus products_normalize_layer_defaults
+  -- make every catalog row patina_managed = TRUE, so on this schema the "no
+  -- seller of record" refusal can only ever fire for a personal or studio row —
+  -- which is exactly a client's own captured piece, tapped from her library.
+  INSERT INTO public.products (id, name, captured_at, layer, status, patina_managed, price_retail, brand,
+                               dimensions, lead_time_weeks, photo_verified_at, owner_user_id)
+  VALUES ('da050000-0000-4000-8000-0000000000b1', 'DO Unsellable Piece', NOW(), 'personal', 'published', false, 420000,
+          'Nordic Atelier', '{"width":96}'::jsonb, 10, NOW(), cn),
+         ('da050000-0000-4000-8000-0000000000b2', 'DO Priceless Piece', NOW(), 'catalog', 'published', true, 0,
+          'Nordic Atelier', '{"width":96}'::jsonb, 10, NOW(), NULL);
+
+  BEGIN
+    o := public.create_direct_order('da050000-0000-4000-8000-0000000000b1', 1);
+    ASSERT false, 'a piece with no seller of record must not be buyable';
+  EXCEPTION WHEN OTHERS THEN
+    ASSERT SQLERRM = 'create_direct_order: product da050000-0000-4000-8000-0000000000b1 is not available for direct purchase',
+      'the 00276 seller refusal is a shipped string and must stay byte-identical, got: ' || SQLERRM;
+  END;
+
+  BEGIN
+    o := public.create_direct_order('da050000-0000-4000-8000-0000000000b2', 1);
+    ASSERT false, 'a piece with no price must not be buyable';
+  EXCEPTION WHEN OTHERS THEN
+    ASSERT SQLERRM = 'create_direct_order: product da050000-0000-4000-8000-0000000000b2 has no purchasable price',
+      'the 00276 price refusal is a shipped string and must stay byte-identical, got: ' || SQLERRM;
+  END;
 
   -- ═══ 2. attribution order ══════════════════════════════════════════════
 
@@ -233,21 +293,28 @@ BEGIN
     'two roster designers on one day must file the order uncredited, got '
       || COALESCE(o.designer_id::text, 'NULL');
   -- …and the rate is still snapshotted, so a hand reconciliation later is not
-  -- re-rated at whatever the catalog says then.
-  ASSERT o.commission_rate IS NOT NULL, 'an uncredited order still snapshots its rate';
+  -- re-rated at whatever the catalog says then. Read off the STORED row: the
+  -- returned copy is masked (§1b) and every assertion about the rate in this
+  -- file has to go to the table, which is also the honest thing to assert.
+  ASSERT o.commission_rate IS NULL,
+    'create_direct_order must not hand the buyer the rate';
+  SELECT commission_rate INTO v_rate FROM public.direct_orders WHERE id = o.id;
+  ASSERT v_rate IS NOT NULL, 'but an uncredited order still snapshots it';
 
   -- ═══ 4. the commission fallback chain, and the freight fold ════════════
   PERFORM pg_temp.assume_user(cr);
   o := public.create_direct_order(p_ok, 2);
-  ASSERT o.commission_rate = 0.1600,
+  SELECT commission_rate INTO v_rate FROM public.direct_orders WHERE id = o.id;
+  ASSERT v_rate = 0.1600,
     'with no products.commission_rate the fulfillment_config default (0.16) applies, got '
-      || o.commission_rate::text;
+      || v_rate::text;
   ASSERT o.amount_cents = 840000,
     'no shipping_flat_cents means no freight to fold, got ' || o.amount_cents::text;
 
   o2 := public.create_direct_order(p_freight, 2);
-  ASSERT o2.commission_rate = 0.2500,
-    'products.commission_rate must beat the config default, got ' || o2.commission_rate::text;
+  SELECT commission_rate INTO v_rate FROM public.direct_orders WHERE id = o2.id;
+  ASSERT v_rate = 0.2500,
+    'products.commission_rate must beat the config default, got ' || v_rate::text;
   ASSERT o2.amount_cents = 218000,
     'freight folds ONCE into the total, not once per unit (2*100000 + 18000), got '
       || o2.amount_cents::text;
@@ -277,6 +344,8 @@ BEGIN
   UPDATE public.direct_orders SET shipping = '{"name":"x"}'::jsonb WHERE id = o.id;
 
   -- ═══ 6. the settle credits once, and says so once ══════════════════════
+  -- `o` here is CR's 2 × DO Buyable Piece (840000, rate 0.16), flipped to paid
+  -- by §5.
   r := public.settle_direct_order_attribution(o.id);
   ASSERT (r->>'credited')::boolean, 'the first settle must credit';
   r := public.settle_direct_order_attribution(o.id);
@@ -294,11 +363,43 @@ BEGIN
   ASSERT n = 1, 'source_type must be product_commission (00014:304 already lists it, so no CHECK '
     'migration was needed) and Stripe money lands ''confirmed'' like the invoice rail''s';
 
-  -- a roster credit has no project, so no thread message is owed
-  ASSERT NOT (public.settle_direct_order_attribution(o.id)->>'thread_message')::boolean,
-    'a roster-attributed order posts no project message';
+  -- ═══ 6a. A ROSTER-ATTRIBUTED ORDER — the only shape R3 lets an iOS buyer
+  --         make — posts into the DIRECT thread, because it carries no project.
+  --         Building only the project branch would have shipped the notice
+  --         unreachable on the surface it exists for (direction B §5: "the
+  --         settle notice still fires, into rpc_start_direct_thread's thread").
+  ASSERT (r->>'project_id') IS NULL, 'this order is roster-attributed';
 
-  -- the project-attributed order DOES post one, and only one
+  SELECT m.body INTO v_body
+    FROM public.comms_messages m
+    JOIN public.comms_threads t ON t.id = m.thread_id
+   WHERE t.kind = 'direct' AND m.system AND m.body LIKE '%DO Buyable Piece%';
+  ASSERT v_body = 'Roster Client bought 2 × DO Buyable Piece — $8,400.00, credited at the piece''s trade rate.',
+    'the direct-thread notice names the quantity, so two pieces never read as '
+    'one at twice the price, got: ' || COALESCE(v_body, 'NULL');
+
+  SELECT count(*) INTO n
+    FROM public.comms_messages m
+    JOIN public.comms_threads t ON t.id = m.thread_id
+   WHERE t.kind = 'direct' AND m.system AND m.body LIKE '%DO Buyable Piece%';
+  ASSERT n = 1, 'and it is posted once however many times Stripe redelivers, got ' || n;
+
+  -- ═══ 6b. THE FREIGHTED ORDER proves the two numbers the notice and the
+  --         credit share. o2 is CR's 2 × DO Freighted Piece: 200000 of piece +
+  --         18000 of folded freight = 218000 charged, rate 0.25.
+  UPDATE public.direct_orders SET status = 'paid', paid_at = NOW() WHERE id = o2.id;
+  r := public.settle_direct_order_attribution(o2.id);
+  ASSERT (r->>'gross_amount')::int = 50000,
+    'the commission is on the piece (200000 × 0.25), never on the 18000 of '
+    'freight, got ' || (r->>'gross_amount');
+
+  SELECT m.body INTO v_body FROM public.comms_messages m
+   WHERE m.thread_id = (r->>'thread_id')::uuid AND m.body LIKE '%DO Freighted Piece%';
+  ASSERT v_body = 'Roster Client bought 2 × DO Freighted Piece — $2,000.00, credited at the piece''s trade rate.',
+    'and the sentence prices the same thing the credit does — the piece, not '
+    'the $2,180.00 total with freight folded in, got: ' || COALESCE(v_body, 'NULL');
+
+  -- ═══ 6c. the project-attributed order posts into the PROJECT thread ═════
   PERFORM pg_temp.assume_user(cp);
   o := public.create_direct_order(p_ok, 1);
   UPDATE public.direct_orders SET status = 'paid', paid_at = NOW() WHERE id = o.id;
@@ -320,6 +421,63 @@ BEGIN
 
   r := public.settle_direct_order_attribution(o.id);
   ASSERT NOT (r->>'thread_message')::boolean, 'and it must not be repeated on redelivery';
+
+  -- ═══ 6d. a ZERO-RATE piece is attributed, earns nothing, and she is STILL
+  --         told. Coupling the notice to a positive credit would have made the
+  --         one order a designer most needs to hear about the one she hears
+  --         nothing about.
+  PERFORM pg_temp.assume_user(cr);
+  o := public.create_direct_order(p_zero, 1);
+  SELECT commission_rate INTO v_rate FROM public.direct_orders WHERE id = o.id;
+  ASSERT v_rate = 0, 'a 0.00 catalogue rate is legal and must be snapshotted as 0, got ' || v_rate::text;
+  UPDATE public.direct_orders SET status = 'paid', paid_at = NOW() WHERE id = o.id;
+  r := public.settle_direct_order_attribution(o.id);
+  ASSERT (r->>'credited')::boolean, 'the attribution row is filed even at rate 0';
+  ASSERT (r->>'gross_amount')::int = 0, 'and it earns nothing';
+  ASSERT (r->>'thread_message')::boolean, 'and the designer is still told';
+
+  SELECT m.body INTO v_body FROM public.comms_messages m
+   WHERE m.thread_id = (r->>'thread_id')::uuid AND m.body LIKE '%DO Zero Rate Piece%';
+  ASSERT v_body = 'Roster Client bought the DO Zero Rate Piece — $500.00.',
+    'a rate-free order must not claim a credit it did not earn (C5), got: ' || COALESCE(v_body, 'NULL');
+
+  -- ═══ 6e. a REFUND takes the commission back — once, and never by deleting
+  --         the credit, because designer_earnings carries payout state (00277).
+  UPDATE public.direct_orders SET status = 'refunded' WHERE id = o.id;   -- the zero-rate order
+  r := public.reverse_direct_order_earnings(o.id);
+  ASSERT (r->>'reversed')::boolean, 'a refunded, credited order reverses (even at gross 0)';
+
+  UPDATE public.direct_orders SET status = 'refunded' WHERE id = o2.id;  -- the 50000 credit
+  r := public.reverse_direct_order_earnings(o2.id);
+  ASSERT (r->>'reversed')::boolean, 'a refunded, credited order must be reversed';
+
+  SELECT COALESCE(sum(gross_amount), 0)::int INTO n FROM public.designer_earnings
+   WHERE order_id = o2.id OR reverses_order_id = o2.id;
+  ASSERT n = 0, 'credit + contra must net to zero, got ' || n;
+
+  SELECT count(*) INTO n FROM public.designer_earnings WHERE reverses_order_id = o2.id;
+  ASSERT n = 1, 'exactly one contra row, got ' || n;
+
+  SELECT count(*) INTO n FROM public.designer_earnings WHERE order_id = o2.id;
+  ASSERT n = 1, 'and the credit itself is never deleted, got ' || n;
+
+  r := public.reverse_direct_order_earnings(o2.id);
+  ASSERT NOT (r->>'reversed')::boolean, 'a redelivered refund must not reverse twice';
+
+  -- an order that was never credited (no designer) reverses nothing
+  PERFORM pg_temp.assume_user(cn);
+  o := public.create_direct_order(p_ok, 1);
+  UPDATE public.direct_orders SET status = 'paid', paid_at = NOW() WHERE id = o.id;
+  PERFORM public.settle_direct_order_attribution(o.id);
+  UPDATE public.direct_orders SET status = 'refunded' WHERE id = o.id;
+  ASSERT NOT (public.reverse_direct_order_earnings(o.id)->>'reversed')::boolean,
+    'an uncredited order has nothing to take back';
+
+  -- ═══ 6f. attribution stays frozen AFTER the refund, not only after payment.
+  BEGIN
+    UPDATE public.direct_orders SET designer_id = d2 WHERE id = o2.id;
+    ASSERT false, 'attribution must be immutable from paid ONWARD, refunds included';
+  EXCEPTION WHEN check_violation THEN NULL; END;
 
   -- ═══ 7. an unpaid order settles nothing ════════════════════════════════
   PERFORM pg_temp.assume_user(cr);
@@ -359,6 +517,21 @@ BEGIN
     'the settle RPC writes money and belongs to service_role alone';
   ASSERT has_function_privilege('service_role', 'public.settle_direct_order_attribution(uuid)', 'EXECUTE'),
     'and service_role must be able to call it';
+  ASSERT NOT has_function_privilege('authenticated', 'public.reverse_direct_order_earnings(uuid)', 'EXECUTE'),
+    'nor may a client claw back her designer''s commission';
+  ASSERT has_function_privilege('service_role', 'public.reverse_direct_order_earnings(uuid)', 'EXECUTE'),
+    'the refund reversal is service_role''s';
+
+  -- §1b: the buyer reads her own order and not the rate on it. A column
+  -- privilege, because an RLS policy is row-level and cannot express this.
+  ASSERT has_column_privilege('authenticated', 'public.direct_orders', 'amount_cents', 'SELECT'),
+    'she must still read what she paid';
+  ASSERT has_column_privilege('authenticated', 'public.direct_orders', 'designer_id', 'SELECT'),
+    'and who it is credited to';
+  ASSERT NOT has_column_privilege('authenticated', 'public.direct_orders', 'commission_rate', 'SELECT'),
+    'but never the rate — direction B §5 discloses that a commission exists, never its size';
+  ASSERT has_column_privilege('service_role', 'public.direct_orders', 'commission_rate', 'SELECT'),
+    'while the settle path, which is service_role, must read it';
 END $$;
 
 -- ─── 9. the earnings index is partial, and global to the column ────────────
@@ -370,6 +543,12 @@ BEGIN
   ASSERT v_def IS NOT NULL, 'the one-credit-per-order index must exist';
   ASSERT v_def LIKE '%UNIQUE%' AND v_def LIKE '%order_id IS NOT NULL%',
     'it must be UNIQUE and partial — every pre-existing row has a NULL order_id: ' || v_def;
+
+  SELECT indexdef INTO v_def FROM pg_indexes
+   WHERE schemaname = 'public' AND indexname = 'uniq_designer_earnings_order_reversal';
+  ASSERT v_def IS NOT NULL, 'the one-reversal-per-order index must exist too';
+  ASSERT v_def LIKE '%UNIQUE%' AND v_def LIKE '%reverses_order_id IS NOT NULL%',
+    'and be UNIQUE and partial, so a redelivered refund claws back once: ' || v_def;
 END $$;
 
 ROLLBACK;

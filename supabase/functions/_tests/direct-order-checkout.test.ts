@@ -22,6 +22,9 @@ import {
   type DirectOrderFacts,
 } from '../create-checkout-session/direct-order.ts';
 import {
+  directOrderIntakeTotals,
+  directOrderTotalsFromPaymentIntent,
+  directOrderTotalsFromSession,
   fulfillmentIntakeIdempotencyKey,
   runDirectOrderSettleEffects,
   type SettleRpcClient,
@@ -45,7 +48,6 @@ function baseOrder(over: Partial<DirectOrderFacts> = {}): DirectOrderFacts {
     amount_cents: 420000,
     designer_id: null,
     project_id: null,
-    commission_rate: '0.1600',
     ...over,
   };
 }
@@ -188,12 +190,24 @@ Deno.test('PI metadata carries the attribution when one resolved', () => {
 
   assertEquals(md.designer_profile_id, DESIGNER_ID);
   assertEquals(md.designer_client_id, 'dc000000-0000-0000-0000-00000000000f');
-  assertEquals(JSON.parse(md.designer_attribution), {
+  // No commission_rate. fulfillment_intake_order files this whole sub-object as
+  // fulfillment_orders.designer_attribution (00353:87) and 00540's client policy
+  // hands the buyer her own order row — so a rate here is a rate she reads, and
+  // direction B §5 discloses that a commission exists, never its size.
+  const attribution = JSON.parse(md.designer_attribution);
+  assertEquals(attribution, {
     source: 'direct_order',
     direct_order_id: ORDER_ID,
     project_id: PROJECT_ID,
-    commission_rate: 0.16,
   });
+  assert(
+    !('commission_rate' in attribution),
+    'the buyer must not read her designer\'s rate off her own order',
+  );
+  assert(
+    !JSON.stringify(md).includes('commission'),
+    'and no metadata key may carry it either',
+  );
 
   // A missing buyer profile must not block a payment — the intake RPC defaults
   // the name too, and this mirrors it rather than throwing.
@@ -211,6 +225,98 @@ Deno.test('PI metadata stays inside Stripe’s 50-key / 500-char caps', () => {
   assert(Object.keys(md).length <= 50, `too many metadata keys: ${Object.keys(md).length}`);
   for (const [k, v] of Object.entries(md)) {
     assert(v.length <= 500, `metadata value ${k} is ${v.length} chars, over Stripe's 500 cap`);
+  }
+});
+
+// ─── the intake split ────────────────────────────────────────────────────────
+//
+// The one property that matters: subtotal + freight + tax MUST equal captured.
+// fulfillment_orders carries chk_fulfillment_captured_identity (00360:428) and
+// posts a T1 ledger entry of the same shape behind it, so a split that does not
+// sum is refused at the INSERT and takes the whole intake with it — no order
+// row, no "where is it", and a task that fails identically on every retry.
+// supabase/tests/commercial/fulfillment_intake_ledger_balance_test.sql proves
+// the database really does refuse it; these prove we never hand it one.
+
+function assertBalanced(t: ReturnType<typeof directOrderIntakeTotals>) {
+  assertEquals(
+    t.product_subtotal_cents + t.freight_charged_cents + t.tax_cents,
+    t.captured_total_cents,
+    `unbalanced split: ${JSON.stringify(t)}`,
+  );
+  assert(t.product_subtotal_cents >= 0, 'subtotal may never go negative');
+}
+
+Deno.test('flag OFF: the split is exactly what the order snapshotted', () => {
+  const totals = directOrderTotalsFromSession(
+    { quantity: 2, unit_price_cents: 420000, amount_cents: 420000 * 2 + 18000 },
+    { amount_total: 858000, total_details: { amount_tax: 0, amount_shipping: 0 } },
+  );
+  assertEquals(totals, {
+    captured_total_cents: 858000,
+    product_subtotal_cents: 840000,
+    freight_charged_cents: 18000,
+    tax_cents: 0,
+  });
+  assertBalanced(totals);
+});
+
+Deno.test('flag ON: Stripe Tax and a shipping rate land in their own buckets', () => {
+  // 420000 piece + 18000 folded Delivery = 438000 amount_subtotal; Stripe adds
+  // 33200 of tax and a 9500 shipping rate on top.
+  const totals = directOrderTotalsFromSession(
+    { quantity: 1, unit_price_cents: 420000, amount_cents: 438000 },
+    { amount_total: 480700, total_details: { amount_tax: 33200, amount_shipping: 9500 } },
+  );
+  assertEquals(totals, {
+    captured_total_cents: 480700,
+    product_subtotal_cents: 420000,
+    freight_charged_cents: 27500,   // 18000 folded + 9500 Stripe rate
+    tax_cents: 33200,
+  });
+  assertBalanced(totals);
+});
+
+Deno.test('flag ON, the OLD metadata split is what this replaces', () => {
+  // What buildDirectOrderIntakeMetadata alone would have said: captured falls
+  // back to pi.amount (tax included), tax hardcoded 0. It does not sum, and the
+  // intake would abort on chk_fulfillment_captured_identity.
+  const stale = { captured: 480700, subtotal: 420000, freight: 18000, tax: 0 };
+  assert(
+    stale.subtotal + stale.freight + stale.tax !== stale.captured,
+    'this is the split the fix exists to stop producing',
+  );
+});
+
+Deno.test('PaymentIntent-only settle: the remainder is booked as tax, never as piece', () => {
+  const totals = directOrderTotalsFromPaymentIntent(
+    { quantity: 1, unit_price_cents: 420000, amount_cents: 438000 },
+    { amount: 471200, amount_received: 471200 },
+  );
+  assertEquals(totals.product_subtotal_cents, 420000);
+  assertEquals(totals.freight_charged_cents, 18000);
+  assertEquals(totals.tax_cents, 33200);
+  assertBalanced(totals);
+});
+
+Deno.test('the split is balanced by construction, even on nonsense input', () => {
+  // A captured total BELOW the snapshot (impossible without a coupon we never
+  // set, but the ledger does not care why): freight and tax are clamped inside
+  // it rather than driving the subtotal negative.
+  const low = directOrderIntakeTotals({
+    capturedTotalCents: 5000,
+    pieceSubtotalCents: 420000,
+    foldedFreightCents: 18000,
+    taxCents: 33200,
+  });
+  assertBalanced(low);
+
+  for (const captured of [0, -1, 1, 999999999]) {
+    assertBalanced(directOrderIntakeTotals({
+      capturedTotalCents: captured,
+      pieceSubtotalCents: 420000,
+      foldedFreightCents: 18000,
+    }));
   }
 });
 
@@ -265,6 +371,27 @@ Deno.test('settle credits attribution and enqueues intake, in that order', async
   assertEquals(out.intakeEnqueued, true);
   assertEquals(out.attribution, { credited: true, thread_message: true });
   assertEquals(out.problems, []);
+});
+
+Deno.test('the settled split rides the task payload, where the worker reads it', async () => {
+  const { client, calls } = rpcRecorder();
+  const totals = directOrderTotalsFromSession(
+    { quantity: 1, unit_price_cents: 420000, amount_cents: 438000 },
+    { amount_total: 471200, total_details: { amount_tax: 33200, amount_shipping: 0 } },
+  );
+  await runDirectOrderSettleEffects(client, ORDER_ID, 'pi_test_123', totals);
+
+  // On the task, not back onto the PaymentIntent: a Stripe write can fail and
+  // this cannot, and the metadata was stamped before Checkout ran anyway.
+  assertEquals(calls[1].args.p_payload, {
+    payment_intent_id: 'pi_test_123',
+    totals: {
+      captured_total_cents: 471200,
+      product_subtotal_cents: 420000,
+      freight_charged_cents: 18000,
+      tax_cents: 33200,
+    },
+  });
 });
 
 Deno.test('a failed credit still enqueues the intake, and never throws', async () => {

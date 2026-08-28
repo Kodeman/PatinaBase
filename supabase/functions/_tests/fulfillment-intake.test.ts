@@ -17,7 +17,7 @@
 
 import { assert, assertEquals, assertNotEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { createFakeSupabase } from './fake-supabase.ts';
-import { normalizeIntakePayload, intakeInlinePI, runIntakeWorker, type IntakeDeps } from '../fulfillment-intake/core.ts';
+import { normalizeIntakePayload, intakeOverridesFromTaskPayload, intakeInlinePI, runIntakeWorker, type IntakeDeps } from '../fulfillment-intake/core.ts';
 
 // ─── normalizeIntakePayload ──────────────────────────────────────────────────
 
@@ -135,6 +135,69 @@ Deno.test('normalizeIntakePayload: metadata ship_to still wins over the PI\'s (B
 Deno.test('normalizeIntakePayload: no metadata and no PI shipping → null, never a guess', () => {
   const pi = { id: 'pi_bare_1', amount: 100, metadata: {} };
   assertEquals(normalizeIntakePayload(pi).ship_to, null);
+});
+
+// ─── the task-payload totals override (00540) ────────────────────────────────
+//
+// A direct order's PI metadata is stamped when the Checkout session OPENS, so
+// with Stripe Tax or a shipping rate on the session its subtotal/freight/tax
+// cannot sum to what was captured — and fulfillment_orders carries
+// chk_fulfillment_captured_identity (00360:428), so a split that does not sum
+// is refused at the INSERT and takes the whole intake with it. stripe-webhook
+// therefore computes the split off the settled session and passes it on the
+// task; this is the reading half.
+
+Deno.test('normalizeIntakePayload: task totals override the PI metadata (00540)', () => {
+  const pi = {
+    id: 'pi_tax_on_1',
+    amount: 471200,                       // includes the tax Stripe added after
+    metadata: {
+      product_subtotal_cents: '420000',   // written pre-Checkout
+      freight_charged_cents: '18000',
+      tax_cents: '0',                     // and wrong the moment tax is on
+    },
+  };
+
+  const stale = normalizeIntakePayload(pi).totals as Record<string, number>;
+  assertNotEquals(
+    stale.product_subtotal_cents + stale.freight_charged_cents + stale.tax_cents,
+    stale.captured_total_cents,
+    'the metadata split is exactly what does NOT sum — that is the bug',
+  );
+
+  const fixed = normalizeIntakePayload(pi, {
+    totals: {
+      captured_total_cents: 471200,
+      product_subtotal_cents: 420000,
+      freight_charged_cents: 18000,
+      tax_cents: 33200,
+    },
+  }).totals as Record<string, number>;
+  assertEquals(
+    fixed.product_subtotal_cents + fixed.freight_charged_cents + fixed.tax_cents,
+    fixed.captured_total_cents,
+  );
+  assertEquals(fixed.tax_cents, 33200);
+});
+
+Deno.test('intakeOverridesFromTaskPayload: reads only real numbers, else nothing', () => {
+  assertEquals(intakeOverridesFromTaskPayload(undefined), undefined);
+  assertEquals(intakeOverridesFromTaskPayload({ payment_intent_id: 'pi_1' }), undefined);
+  // Pre-00540 tasks and the BOH producer carry no totals — unchanged behaviour.
+  assertEquals(intakeOverridesFromTaskPayload({ totals: 'nonsense' }), undefined);
+  assertEquals(intakeOverridesFromTaskPayload({ totals: [] }), undefined);
+  assertEquals(intakeOverridesFromTaskPayload({ totals: { tax_cents: '33200' } }), undefined);
+  assertEquals(
+    intakeOverridesFromTaskPayload({ totals: { captured_total_cents: 100, tax_cents: 5 } }),
+    {
+      totals: {
+        captured_total_cents: 100,
+        product_subtotal_cents: undefined,
+        freight_charged_cents: undefined,
+        tax_cents: 5,
+      },
+    },
+  );
 });
 
 // ─── intakeInlinePI ───────────────────────────────────────────────────────────

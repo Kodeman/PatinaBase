@@ -30,6 +30,7 @@ DECLARE
   v_ungated        UUID := gen_random_uuid();  -- 00540 gate: photo_verified_at NULL
   v_freighted      UUID := gen_random_uuid();  -- 00540 fold: shipping_flat_cents 2500
   v_order          public.direct_orders;
+  v_rate           NUMERIC;
 BEGIN
   -- A real profile to satisfy the client_id FK (RESTRICT). Rolled back anyway.
   SELECT id INTO v_buyer FROM public.profiles LIMIT 1;
@@ -195,11 +196,18 @@ BEGIN
     RAISE NOTICE 'A12 FAIL: amount_cents=% (expected 22500)', v_order.amount_cents;
   END IF;
 
-  -- ── A13: 00540 snapshot — every order carries a commission rate ───────────
-  IF v_order.commission_rate IS NOT NULL AND v_order.commission_rate BETWEEN 0 AND 1 THEN
-    RAISE NOTICE 'A13 PASS: commission_rate snapshotted as a fraction (%)', v_order.commission_rate;
+  -- ── A13: 00540 snapshot — every order carries a commission rate, and the
+  --         BUYER is not the one who reads it. create_direct_order masks the
+  --         rate on the row it returns (00540 §1b) precisely because a
+  --         composite returned by a function is not filtered by the table's
+  --         column ACL — so the snapshot has to be read from the table.
+  SELECT commission_rate INTO v_rate FROM public.direct_orders WHERE id = v_order.id;
+  IF v_order.commission_rate IS NOT NULL THEN
+    RAISE NOTICE 'A13 FAIL: the returned row must not carry the rate (%)', v_order.commission_rate;
+  ELSIF v_rate IS NOT NULL AND v_rate BETWEEN 0 AND 1 THEN
+    RAISE NOTICE 'A13 PASS: commission_rate stored as a fraction (%), returned masked', v_rate;
   ELSE
-    RAISE NOTICE 'A13 FAIL: commission_rate=%', v_order.commission_rate;
+    RAISE NOTICE 'A13 FAIL: stored commission_rate=%', v_rate;
   END IF;
 
   -- ── A10: anonymous caller rejected ────────────────────────────────────────
