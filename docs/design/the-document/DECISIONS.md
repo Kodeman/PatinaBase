@@ -10002,7 +10002,7 @@ terracotta marks without multiplying the wash across the Desk.
 
 In the Project/Pieces spread, an unfolded furnishing line may lead with an artifact
 plate built from data already joined to that line: product image, brand as Maker,
-vendor as Source, and the locked configuration snapshot. Collapsed lines keep their
+vendor as Source, and the current configuration snapshot. Collapsed lines keep their
 existing density. Install, Care, selection mode, and trade-presence lines do not gain
 the plate. Missing or failed imagery and absent provenance remain explicit; the plate
 adds no action, workflow state, query, schema, or invented fact.
