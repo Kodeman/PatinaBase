@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
 const mockLineUnfold = jest.fn(() => null);
@@ -132,6 +132,26 @@ describe('SP-19/F57 — the unfolded FF&E line links to its spec-book entry', ()
     fireEvent.click(screen.getByRole('button', { name: /Walnut bed, king/ }));
     expect(mockLineUnfold).toHaveBeenLastCalledWith(
       expect.objectContaining({ showArtifactPlate: false }),
+    );
+  });
+
+  it('unfolds the Piece named by a direct-link request', async () => {
+    render(
+      <FFESection
+        projectId="project-1"
+        projectName="Ellsworth"
+        mode="project"
+        requestedLineId="line-1"
+      />,
+    );
+
+    await waitFor(() =>
+      expect(mockLineUnfold).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          item: expect.objectContaining({ id: 'line-1' }),
+          showArtifactPlate: true,
+        }),
+      ),
     );
   });
 });

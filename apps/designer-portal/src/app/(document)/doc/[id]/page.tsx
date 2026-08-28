@@ -946,6 +946,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const settledCountRef = useRef(0);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
+  const [requestedFfeItemId, setRequestedFfeItemId] = useState<string | null>(null);
+  useEffect(() => {
+    setRequestedFfeItemId(
+      new URLSearchParams(window.location.search).get('ffeItemId'),
+    );
+  }, []);
   const [pendingNoteAnchor, setPendingNoteAnchor] = useState<string | null>(null);
   // The Call Sheet (Wave 3) — an overlay, never a section (D1). Closed by
   // default; the letterhead instrument and ⌘K's "This surface" row both
@@ -2100,7 +2106,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     projectName={row.title}
                     mode="project"
                     needs={rankedOperationalNeeds}
-                    highlightId={highlightLineId}
+                    highlightId={highlightLineId ?? requestedFfeItemId}
+                    requestedLineId={requestedFfeItemId}
                     onAddNote={setPendingNoteAnchor}
                     sectionKey="project"
                     clientUserId={row.client_profile_id}
