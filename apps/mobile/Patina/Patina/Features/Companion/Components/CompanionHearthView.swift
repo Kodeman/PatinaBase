@@ -8,9 +8,8 @@
 import SwiftUI
 
 /// Enough of a tall phone for the panel's rows and its own chrome, and short
-/// enough that the panel still clears the bar it sits above. File scope
-/// because `CompanionHearthView` is generic over its expanded content and a
-/// generic type may not hold a static stored property.
+/// enough that it still clears the bar it sits above. File scope: a generic
+/// type may not hold a static stored property.
 private let companionAccessibilityPanelMaxHeight: CGFloat = 460
 
 public struct CompanionHearthView<ExpandedContent: View>: View {

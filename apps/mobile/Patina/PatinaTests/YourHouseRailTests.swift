@@ -9,6 +9,7 @@
 
 import Testing
 import Foundation
+import SwiftUI
 @testable import Patina
 
 @MainActor
@@ -53,16 +54,85 @@ struct YourHouseRailTests {
         #expect(HouseRoomCard.card(for: rooms[0]).meta == "budget $9,000")
     }
 
-    @Test("the project's rooms come first, then the rooms the person made")
-    func projectRoomsComeFirst() throws {
+    @Test("the person's own rooms come first, then the project's")
+    func personsRoomsComeFirst() throws {
         let rooms = try projectRooms("""
         [{ "id": "r1", "project_id": "b1", "name": "Dining Room", "budget_cents": 0 }]
         """)
         let local = RoomModel(name: "Garage", roomType: "other")
         let cards = HouseRoomCard.cards(projectRooms: rooms, localRooms: [local])
-        #expect(cards.map(\.name) == ["Dining Room", "Garage"])
-        #expect(cards[0].isReadOnly)
-        #expect(cards[1].isReadOnly == false)
+        #expect(cards.map(\.name) == ["Garage", "Dining Room"])
+        #expect(cards[0].isReadOnly == false)
+        #expect(cards[1].isReadOnly)
+    }
+
+    @Test("with two project rooms the person's room is still the first card")
+    func theRoomSheMadeIsNeverPushedOffTheEdge() throws {
+        // The shape of walk FAIL 1/2: two project rooms drawn before hers put
+        // `Guest Bedroom` at x = 524 on a 402 pt screen.
+        let rooms = try projectRooms("""
+        [{ "id": "r1", "project_id": "b1", "name": "Dining Room", "budget_cents": 0 },
+         { "id": "r2", "project_id": "b1", "name": "Living Room", "budget_cents": 0 }]
+        """)
+        let local = RoomModel(name: "Guest Bedroom", roomType: "bedroom")
+        let cards = HouseRoomCard.cards(projectRooms: rooms, localRooms: [local])
+        #expect(cards.map(\.name) == ["Guest Bedroom", "Dining Room", "Living Room"])
+    }
+
+    @Test("the person's rooms are newest first")
+    func thePersonsRoomsAreNewestFirst() {
+        let older = RoomModel(name: "Garage", roomType: "other")
+        older.createdAt = Date(timeIntervalSince1970: 1_000)
+        let newer = RoomModel(name: "Guest Bedroom", roomType: "bedroom")
+        newer.createdAt = Date(timeIntervalSince1970: 2_000)
+        let cards = HouseRoomCard.cards(projectRooms: [], localRooms: [older, newer])
+        #expect(cards.map(\.name) == ["Guest Bedroom", "Garage"])
+    }
+
+    // MARK: - The next card peeks (W4 ruling 1)
+
+    @Test("a card is 0.72 of the viewport, so the next one peeks")
+    func aCardIsAShareOfTheViewport() {
+        #expect(YourHouseRail.cardWidth(inContainerOfWidth: 320) == 320 * 0.72)
+        #expect(YourHouseRail.gutter == 16)
+    }
+
+    @Test("the card width is clamped at both ends")
+    func theCardWidthIsClamped() {
+        // A 320 pt-wide iPhone SE would give 230; a 1024 pt iPad column would
+        // give 737, and a card that wide has no peek left to give.
+        #expect(YourHouseRail.cardWidth(inContainerOfWidth: 200) == 200)
+        #expect(YourHouseRail.cardWidth(inContainerOfWidth: 0) == 200)
+        #expect(YourHouseRail.cardWidth(inContainerOfWidth: 1024) == 280)
+    }
+
+    @Test("on the walk's 402 pt screen the second card starts on screen")
+    func theSecondCardStartsOnScreen() {
+        let viewport: CGFloat = 402
+        let leading: CGFloat = 20
+        let secondCardX = leading
+            + YourHouseRail.cardWidth(inContainerOfWidth: viewport)
+            + YourHouseRail.gutter
+        #expect(secondCardX == 316)
+        #expect(secondCardX < viewport)
+    }
+
+    // MARK: - The wrap
+
+    @Test("at an accessibility text size the rail wraps to a vertical list")
+    func theRailWrapsAtAnAccessibilitySize() {
+        for size in [DynamicTypeSize.accessibility1, .accessibility2, .accessibility3,
+                     .accessibility4, .accessibility5] {
+            #expect(YourHouseRail.layout(for: size) == .wrapped)
+        }
+    }
+
+    @Test("below an accessibility text size the rail stays a rail")
+    func theRailStaysARailBelowThat() {
+        for size in [DynamicTypeSize.xSmall, .small, .medium, .large, .xLarge,
+                     .xxLarge, .xxxLarge] {
+            #expect(YourHouseRail.layout(for: size) == .rail)
+        }
     }
 
     @Test("the light act is first")

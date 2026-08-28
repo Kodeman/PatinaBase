@@ -4,10 +4,11 @@
 //
 //  YOUR HOUSE — the persistent object of Direction B (B §2, M1 block 4).
 //
-//  A rail of the client's rooms: the rooms a designer owns on their project,
-//  read from `project_rooms` and drawn as cards the client cannot edit, beside
-//  the rooms the client typed or scanned, and `Add a room` last. An
-//  activeProject client's house is never an empty state.
+//  A rail of the client's rooms: the rooms the person typed, scanned or had
+//  mirrored to them first — it is her house — then the rooms a designer owns
+//  on their project, read from `project_rooms` and drawn as cards the client
+//  cannot edit, and `Add a room` last. An activeProject client's house is
+//  never an empty state.
 //
 //  Where there is no room at all the block is the two-act `Start with a room`,
 //  and the LIGHT act is first: typing the dimensions before scanning, because
@@ -42,13 +43,18 @@ struct HouseRoomCard: Identifiable, Equatable {
         return false
     }
 
-    /// Project rooms first — they are the work in flight — then the rooms the
-    /// person made.
+    /// The person's own rooms first — typed, scanned or mirrored, newest first
+    /// — then the designer's project rooms (W4 ruling 1). With two project
+    /// rooms on a 402 pt screen the older order put the room she made herself
+    /// at x = 524, off the right-hand edge, with nothing to say it was there.
     static func cards(
         projectRooms: [RemoteProjectRoom],
         localRooms: [RoomModel]
     ) -> [HouseRoomCard] {
-        projectRooms.map(card(for:)) + localRooms.map(card(for:))
+        localRooms
+            .sorted { $0.createdAt > $1.createdAt }
+            .map(card(for:))
+            + projectRooms.map(card(for:))
     }
 
     static func card(for room: RemoteProjectRoom) -> HouseRoomCard {
@@ -136,6 +142,23 @@ enum StartWithARoomAct: String, CaseIterable, Identifiable {
 
 // MARK: - Views
 
+/// A room card's width: a share of the viewport on the rail so the next card
+/// peeks, the full column width once the rail has wrapped.
+private struct HouseCardWidth: ViewModifier {
+    let wide: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if wide {
+            content.frame(maxWidth: .infinity, alignment: .topLeading)
+        } else {
+            content.containerRelativeFrame(.horizontal, alignment: .topLeading) { length, _ in
+                YourHouseRail.cardWidth(inContainerOfWidth: length)
+            }
+        }
+    }
+}
+
 struct YourHouseRail: View {
     let cards: [HouseRoomCard]
     var onCard: (HouseRoomCard) -> Void = { _ in }
@@ -143,28 +166,76 @@ struct YourHouseRail: View {
     /// Today — and every rail tap reported itself as the typed one.
     var onAddRoom: (StartWithARoomAct) -> Void = { _ in }
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isChoosingAct = false
+
+    /// How the rail lays itself out. A value, so the wrap is decidable — and
+    /// testable — without a rendered view.
+    enum Layout: Equatable {
+        /// A horizontal strip whose next card peeks.
+        case rail
+        /// A vertical column of full-width cards, as `ProfileView.roomList`
+        /// already draws at an accessibility text size.
+        case wrapped
+    }
+
+    /// The next card has to be visible at rest, or the strip reads as
+    /// everything there is (W4 ruling 1). 0.72 of the viewport with a 16 pt
+    /// gutter leaves a real slice of card 2 on every phone width; the clamp
+    /// keeps the card readable on a small screen and stops it swelling to the
+    /// full width of an iPad column, where a peek would vanish.
+    static let widthFraction: CGFloat = 0.72
+    static let minimumCardWidth: CGFloat = 200
+    static let maximumCardWidth: CGFloat = 280
+    static let gutter: CGFloat = PatinaSpacing.md
+
+    static func layout(for dynamicTypeSize: DynamicTypeSize) -> Layout {
+        dynamicTypeSize.isAccessibilitySize ? .wrapped : .rail
+    }
+
+    static func cardWidth(inContainerOfWidth width: CGFloat) -> CGFloat {
+        min(maximumCardWidth, max(minimumCardWidth, width * widthFraction))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             MonoLabel(text: "YOUR HOUSE")
                 .padding(.horizontal, PatinaSpacing.mdLarge)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: PatinaSpacing.xsm) {
-                    ForEach(cards) { card in
-                        roomCard(card)
-                    }
-                    addRoomCard
-                }
-                .padding(.horizontal, PatinaSpacing.mdLarge)
-                .padding(.top, PatinaSpacing.sm)
-            }
+            content
         }
         .accessibilityIdentifier("DailyRoomView.HouseRail")
     }
 
-    private func roomCard(_ card: HouseRoomCard) -> some View {
+    @ViewBuilder
+    private var content: some View {
+        switch Self.layout(for: dynamicTypeSize) {
+        case .wrapped:
+            LazyVStack(spacing: Self.gutter) {
+                ForEach(cards) { card in
+                    roomCard(card, wide: true)
+                }
+                addRoomCard(wide: true)
+            }
+            .padding(.horizontal, PatinaSpacing.mdLarge)
+            .padding(.top, PatinaSpacing.sm)
+        case .rail:
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Self.gutter) {
+                    ForEach(cards) { card in
+                        roomCard(card, wide: false)
+                    }
+                    addRoomCard(wide: false)
+                }
+                .scrollTargetLayout()
+                .padding(.horizontal, PatinaSpacing.mdLarge)
+                .padding(.top, PatinaSpacing.sm)
+            }
+            .scrollTargetBehavior(.viewAligned)
+        }
+    }
+
+    private func roomCard(_ card: HouseRoomCard, wide: Bool) -> some View {
         Button {
             onCard(card)
         } label: {
@@ -195,7 +266,7 @@ struct YourHouseRail: View {
             // at an accessibility text size the room's name and its figures are
             // taller than 150pt, and a hard height reported 150 to the column
             // while the card drew past it into the block below.
-            .frame(width: 240, alignment: .topLeading)
+            .modifier(HouseCardWidth(wide: wide))
             .frame(minHeight: 150, alignment: .topLeading)
             .background(PatinaColors.Background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
@@ -209,12 +280,14 @@ struct YourHouseRail: View {
         .accessibilityHint(card.isReadOnly ? "Opens this project room." : "Opens this room.")
     }
 
-    private var addRoomCard: some View {
+    private func addRoomCard(wide: Bool) -> some View {
         Button { isChoosingAct = true } label: {
             Text("Add a room")
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.interactive)
-                .frame(width: 128, height: 150)
+                .padding(PatinaSpacing.md)
+                .frame(width: wide ? nil : 128)
+                .frame(maxWidth: wide ? .infinity : nil, minHeight: 150)
                 .background(
                     RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous)
                         .strokeBorder(PatinaColors.pearl, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
