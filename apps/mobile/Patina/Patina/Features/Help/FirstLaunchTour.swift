@@ -75,13 +75,30 @@ import SwiftUI
 /// Stable identifiers for each tour-step anchor. Used by the orchestrator to
 /// gate which anchor view should display the popover for the current step.
 public enum FirstLaunchTourAnchor: String, CaseIterable, Sendable {
-    /// Home / Daily Room greeting header (step 1).
+    /// Today's greeting header (step 1).
     case homeGreeting = "home-greeting"
-    /// The "+ Add" save affordance on the topmost daily product card (step 2).
-    /// The Daily Room ships no heart control — this anchor names the button
-    /// that actually exists.
+    /// The record card on Today (step 2, B-8 + steward §7·E).
+    ///
+    /// The record is the block step 1 has just named, it mounts on both roots,
+    /// and it lives inside the tour's own subtree — `FirstLaunchTour` owns the
+    /// model and publishes it down from `DailyRoomView`, so an anchor on
+    /// another tab could never receive the popover.
+    case todayRecord = "today-record"
+    /// The "+ Add" save affordance on a daily product card.
+    ///
+    /// Retired from `defaultSteps` in W3: W2 removed `DailyProductCard`, so
+    /// from that wave on this anchor mounted in no production view and the
+    /// step it carried was dropped every launch — the shipped tour ran two
+    /// steps while declaring three (`research/2x-panel-{u1,u2,d2,h1}.json`).
+    /// The case survives because the raw value is a stable public identifier
+    /// and the file's own preview still mounts it.
     case addToRoom = "add-to-room"
-    /// Profile monogram / avatar entry point (step 3).
+    /// The Studio door in Today's header (step 3).
+    ///
+    /// The raw value predates two moves of the control it names — a monogram,
+    /// then W2's labelled `Studio` pill — and is deliberately NOT renamed with
+    /// them: it is pinned by `FirstLaunchTourTests` and keys the Sanity
+    /// document behind step 3.
     case profileMonogram = "profile-monogram"
 }
 
@@ -222,31 +239,51 @@ public final class FirstLaunchTourModel {
     /// task brief and surfaced in PostHog.
     public static let defaultTourKey: String = "ios-first-launch-tour"
 
-    /// Canonical default step list. Aligned with the Sanity content authored
-    /// in Sprint 3 G9.
+    /// Canonical default step list — rewritten in W3 (B-8).
+    ///
+    /// Two of the three sentences this list shipped with had stopped being
+    /// true. Step 1 named the **Daily Room**, a name B-7(c) retires in favour
+    /// of the word already on the screen; step 3 named a **profile** reached
+    /// from a monogram that no longer exists. Step 2 was worse than untrue —
+    /// its anchor mounted in no production view after W2 retired
+    /// `DailyProductCard`, so the tour silently ran two steps while declaring
+    /// three. All three are rewritten here, and step 2 is re-anchored onto the
+    /// record — the block step 1 has just named, and the one thing on Today
+    /// that mounts at every tier on both roots.
+    ///
+    /// The rewrite is NOT branched on `house-first`. Every sentence above is
+    /// wrong on the flag-off root too: the name it retires, the anchor that is
+    /// dead, and the control step 3 points at are the same on both. Branching
+    /// would buy two step lists and two mount sites in exchange for leaving
+    /// first-launch users on one root being told about a screen that no longer
+    /// has that name.
+    ///
+    /// The surface keys do NOT move with the copy — they key Sanity documents,
+    /// and renaming them would orphan three of them. Only the bodies change;
+    /// the new bodies are in `waves/w3/n3-sanity-copy.md`.
     public static let defaultSteps: [FirstLaunchTourStep] = [
         FirstLaunchTourStep(
             surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step1Home,
             anchor: .homeGreeting,
             fallback: (
                 heading: "Welcome to Patina",
-                body: "This is your Daily Room — picks and stories chosen for your space."
+                body: "This is Today — what moved in your house, and what is waiting on you."
             )
         ),
         FirstLaunchTourStep(
             surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step2Saved,
-            anchor: .addToRoom,
+            anchor: .todayRecord,
             fallback: (
-                heading: "Save what you love",
-                body: "Add pieces to a room with + Add — they follow you everywhere."
+                heading: "What needs you",
+                body: "Anything waiting on you lands here, dated. Tap a line to go straight to it."
             )
         ),
         FirstLaunchTourStep(
             surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step3Profile,
             anchor: .profileMonogram,
             fallback: (
-                heading: "Your profile",
-                body: "Rooms, saved pieces, and settings live here."
+                heading: "Your Studio",
+                body: "Your studio — projects, proposals, invoices and files"
             )
         ),
     ]

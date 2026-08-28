@@ -209,6 +209,11 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     )
                     .padding(.horizontal, PatinaSpacing.mdLarge)
                     .padding(.top, PatinaSpacing.md)
+                    // First-launch tour step 2 (B-8). The record is the block
+                    // step 1 has just named; when it does not draw — a guest
+                    // with nothing true to say — the tour drops the step and
+                    // renumbers rather than pointing at nothing.
+                    .firstLaunchTourAnchor(.todayRecord)
                 }
 
                 if blocks.contains(.nextMove) {
