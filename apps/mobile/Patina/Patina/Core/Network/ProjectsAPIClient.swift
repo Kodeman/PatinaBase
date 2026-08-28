@@ -27,6 +27,62 @@ public struct RemoteProject: Codable, Sendable, Identifiable {
     public let target_end_date: String?
     public let client_visibility_tier: String?
     public let updated_at: String?
+    /// Embedded `profiles!projects_designer_id_fkey` — the designer the
+    /// Record's rows and the designer seat name. Nil where the project has no
+    /// designer, or on any decode that predates the embed.
+    public let designer: RemoteDesignerRef?
+
+    public var designerDisplayName: String {
+        designer?.displayName ?? "your designer"
+    }
+
+    public var designerStudioName: String? {
+        designer?.studioName
+    }
+
+    /// Explicit, with `designer` defaulted, so adding the embed did not force
+    /// an edit on every existing construction site.
+    public init( // swiftlint:disable:this function_parameter_count
+        id: String, name: String, status: String?, client_id: String?,
+        designer_id: String?, studio_id: String?, total_amount_cents: Int?,
+        budget_cents: Int?, design_fee_cents: Int?, current_phase: String?,
+        start_date: String?, target_end_date: String?,
+        client_visibility_tier: String?, updated_at: String?,
+        designer: RemoteDesignerRef? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.status = status
+        self.client_id = client_id
+        self.designer_id = designer_id
+        self.studio_id = studio_id
+        self.total_amount_cents = total_amount_cents
+        self.budget_cents = budget_cents
+        self.design_fee_cents = design_fee_cents
+        self.current_phase = current_phase
+        self.start_date = start_date
+        self.target_end_date = target_end_date
+        self.client_visibility_tier = client_visibility_tier
+        self.updated_at = updated_at
+        self.designer = designer
+    }
+}
+
+/// A room a designer owns, on a project the client can see. Read-only here:
+/// the client did not type it, and the home draws it as a card they cannot
+/// edit (B §2, M1 block 4). `budget_cents` is NOT NULL with a 0 default and
+/// `committed_cents` is nullable, so "no figures" is a real state the card has
+/// to draw without inventing one (00066:220-237).
+public struct RemoteProjectRoom: Codable, Sendable, Identifiable {
+    public let id: String
+    public let project_id: String
+    public let name: String
+    public let room_type: String?
+    public let dimensions: String?
+    public let floor_area_sqft: Double?
+    public let budget_cents: Int?
+    public let committed_cents: Int?
+    public let sort_order: Int?
 }
 
 public struct RemoteProjectPhase: Codable, Sendable, Identifiable {
@@ -109,19 +165,55 @@ public actor ProjectsAPIClient {
     // MARK: - Projects
 
     /// All projects the current user can see via RLS (designer or client).
+    /// `*` plus the designer, so the Record can say who acted without a second
+    /// round-trip. `projects.designer_id` really does reference
+    /// `public.profiles` (`projects_designer_id_fkey`), so the embed resolves;
+    /// naming the constraint keeps it unambiguous.
+    static let projectSelect =
+        "*,designer:profiles!projects_designer_id_fkey(" + RemoteDesignerRef.selectColumns + ")"
+
     public func listProjects() async throws -> [RemoteProject] {
-        try await get(path: "projects", queryItems: [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "updated_at.desc"),
-        ])
+        try await projects(matching: [URLQueryItem(name: "order", value: "updated_at.desc")])
     }
 
     public func fetchProject(id: String) async throws -> RemoteProject? {
-        let rows: [RemoteProject] = try await get(path: "projects", queryItems: [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "id", value: "eq.\(id)"),
+        try await projects(matching: [URLQueryItem(name: "id", value: "eq.\(id)")]).first
+    }
+
+    /// One read, twice if it has to be: with the designer embed, then — only
+    /// on a 400, which is PostgREST refusing the relationship (a renamed
+    /// constraint, a lagging schema cache) — with the bare `select=*` this
+    /// query sent before. Losing the designer's name costs a caption; losing
+    /// this list costs the Studio hub, the badge counts and the engagement
+    /// tier together.
+    private func projects(matching filters: [URLQueryItem]) async throws -> [RemoteProject] {
+        do {
+            return try await get(path: "projects", queryItems:
+                [URLQueryItem(name: "select", value: Self.projectSelect)] + filters)
+        } catch RoomsAPIError.http(let status, let body) where status == 400 {
+            PatinaLog.sync.error(
+                "[Projects] designer embed refused (400): \(body). Retrying without it."
+            )
+            return try await get(path: "projects", queryItems:
+                [URLQueryItem(name: "select", value: "*")] + filters)
+        }
+    }
+
+    /// The client's project rooms. The client-scoped SELECT policy on
+    /// `project_rooms` has existed since `00066:249-253` and filters correctly
+    /// in both directions (`waves/w2/steward.md` §5) — what was missing was any
+    /// fetch path in the app at all, which is this one.
+    public func listProjectRooms(projectIds: [String]) async throws -> [RemoteProjectRoom] {
+        guard !projectIds.isEmpty else { return [] }
+        return try await get(path: "project_rooms", queryItems: [
+            URLQueryItem(
+                name: "select",
+                value: "id,project_id,name,room_type,dimensions,floor_area_sqft,"
+                    + "budget_cents,committed_cents,sort_order"
+            ),
+            URLQueryItem(name: "project_id", value: "in.(\(projectIds.joined(separator: ",")))"),
+            URLQueryItem(name: "order", value: "sort_order.asc,name.asc"),
         ])
-        return rows.first
     }
 
     public func listPhases(projectId: String) async throws -> [RemoteProjectPhase] {

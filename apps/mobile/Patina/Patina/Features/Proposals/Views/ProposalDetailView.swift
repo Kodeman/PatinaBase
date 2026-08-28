@@ -36,7 +36,6 @@ struct ProposalDetailView: View {
         // U18: standard pushed-screen chrome — the header above carries
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
-        .moneyScreenTopBand()
         .task { await viewModel.load(proposalId: proposalId) }
         .sheet(isPresented: $viewModel.showSignSheet) {
             ProposalSignSheet(
@@ -76,11 +75,21 @@ struct ProposalDetailView: View {
         .padding(.horizontal, 24)
     }
 
+    /// `checkmark.seal.fill` claims a signature; `viewModel.isSigned` (true
+    /// for every `status == "accepted"` proposal, signed or not) is too
+    /// broad a gate for the icon alone. accepted-but-unsigned shows the
+    /// plain circle instead (rulings-fable.md #6). Exposed for pinning
+    /// (`ProposalDetailStatusIconTests.swift`) — the text this pairs with,
+    /// `ProposalStatusDisplay.detailStatusLine`, already gets this right.
+    static func statusIcon(for proposal: RemoteProposal, justSigned: Bool) -> String {
+        (proposal.hasSignatureRecord || justSigned) ? "checkmark.seal.fill" : "checkmark.circle"
+    }
+
     @ViewBuilder
     private func statusRow(_ proposal: RemoteProposal) -> some View {
         if viewModel.isSigned {
             HStack(spacing: 6) {
-                Image(systemName: "checkmark.seal.fill")
+                Image(systemName: Self.statusIcon(for: proposal, justSigned: viewModel.didSign))
                     .foregroundStyle(PatinaColors.sage)
                 // SP-04: "Signed" only where a signature record exists.
                 Text(ProposalStatusDisplay.detailStatusLine(

@@ -1,10 +1,19 @@
 // Supabase Edge Function: delete-account
 //
-// SP-20. Deletes the CALLER's account: their auth user, and with it every row
-// that cascades from profiles.id (00013:12) — rooms, saved_items,
-// notification_log, device_push_tokens, style profiles, companion history, the
-// roster row. The designer's proposals, projects, invoices and decisions
-// survive with the person detached (purge_client_account, migration 00536).
+// SP-20. Closes the CALLER's account. purge_client_account (00538) replaces
+// the PII on their profiles row with a tombstone and deletes what they owned —
+// rooms, room scans, saved items, the threads they started, notification_log,
+// device_push_tokens, style profiles, companion history. The auth user is then
+// DETACHED with a SOFT admin delete: GoTrue obfuscates the email and phone,
+// empties the metadata and the identity, nulls the password and drops every
+// session, so the login is destroyed and the address is freed for a new
+// account.
+//
+// Soft, not hard, and the whole design turns on it: profiles.id cascades from
+// auth.users (00013:12), so a hard delete would take the tombstone — and the
+// designer's proposals, projects, invoices, decisions and roster row all name
+// it. They survive, still pointing at a profile that carries nothing of the
+// person (W1b ruling 2).
 //
 // A DESIGNER calling this is refused before anything is written (review B-D3):
 // verify_jwt admits any Strata token, a designer-portal session included, and
@@ -80,8 +89,8 @@ const gateway: DeleteAccountGateway = {
     return { ok: true, purgeId: typeof data === "string" ? data : undefined };
   },
 
-  async deleteAuthUser(userId) {
-    const { error } = await admin().auth.admin.deleteUser(userId);
+  async deleteAuthUser(userId, soft) {
+    const { error } = await admin().auth.admin.deleteUser(userId, soft);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   },

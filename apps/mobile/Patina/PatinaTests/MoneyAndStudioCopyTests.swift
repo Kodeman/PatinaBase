@@ -244,7 +244,9 @@ struct MoneyAndStudioCopyTests {
         for file in Self.moneyScreenSources {
             let source = try String(contentsOf: Self.sourceURL(file), encoding: .utf8)
             let name = (file as NSString).lastPathComponent
-            #expect(source.contains("moneyScreenTopBand()"), "\(name) misses the status-bar band")
+            // W1b ruling 1: the band is folded into PatinaScreenChrome, so a
+            // pushed money screen gets it from `.patinaScreen(…)`.
+            #expect(source.contains(".patinaScreen("), "\(name) misses the status-bar band")
             #expect(source.contains("MoneyScreenMetrics.bottomClearance"),
                     "\(name) hard-codes its Hearth clearance")
             #expect(!source.contains(".padding(.bottom, 120)"), "\(name) still hard-codes 120")
@@ -265,15 +267,18 @@ struct MoneyAndStudioCopyTests {
         for file in sheets {
             let source = try String(contentsOf: Self.sourceURL(file), encoding: .utf8)
             let name = (file as NSString).lastPathComponent
-            #expect(source.contains("moneyScreenTopBand()"), "\(name) misses the status-bar band")
+            // A sheet must not grow a coordinator back chevron, so it reads the
+            // shared reservation directly rather than through `.patinaScreen`.
+            #expect(source.contains(".patinaTopBand()"), "\(name) misses the status-bar band")
         }
         // The consent sheet lives at the bottom of the decision detail file, so
-        // that file carries the band twice — once for the screen, once for the
-        // sheet.
+        // that file carries the band twice — once from `.patinaScreen(…)` for
+        // the screen, once explicitly for the sheet.
         let decision = try String(
             contentsOf: Self.sourceURL("Patina/Features/Decisions/Views/DecisionDetailView.swift"),
             encoding: .utf8
         )
-        #expect(decision.components(separatedBy: "moneyScreenTopBand()").count - 1 == 2)
+        #expect(decision.components(separatedBy: ".patinaTopBand()").count - 1 == 1)
+        #expect(decision.components(separatedBy: ".patinaScreen(").count - 1 == 1)
     }
 }

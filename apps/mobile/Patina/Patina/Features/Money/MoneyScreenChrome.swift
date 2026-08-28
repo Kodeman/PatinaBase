@@ -7,9 +7,9 @@
 //  1. The status bar draws over content. Every money screen is a ScrollView
 //     with a hidden navigation bar, so scrolled content passes over "9:41" —
 //     the walk caught the clock overprinting "Awaiting payment" and
-//     "INV-2026-0142" (`research/05-rewalk.md` §2b(iii)). `moneyScreenTopBand`
-//     reserves the status-bar region with an opaque band the content passes
-//     BEHIND, instead of over.
+//     "INV-2026-0142" (`research/05-rewalk.md` §2b(iii)). The band that
+//     reserves the status-bar region is now `.patinaTopBand()`, applied by
+//     `.patinaScreen(…)` — see the note at the foot of this file.
 //
 //  2. Content settles inside the Companion Hearth. Each screen carried its own
 //     hard-coded bottom padding (120 here, 140 there) with no relationship to
@@ -33,20 +33,7 @@ enum MoneyScreenMetrics {
     static let bottomClearance: CGFloat = CompanionHearthMetrics.dockHeight + 8
 }
 
-extension View {
-
-    /// Reserves the top safe area on a scroll container so scrolled content
-    /// cannot be read through the status bar.
-    func moneyScreenTopBand() -> some View {
-        safeAreaInset(edge: .top, spacing: 0) {
-            Color.clear
-                .frame(height: 0)
-                .background {
-                    PatinaColors.Background.primary
-                        .ignoresSafeArea(edges: .top)
-                }
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
-    }
-}
+// The status-bar band that lived here is now `.patinaTopBand()` in
+// `Design/Components/PatinaScreenChrome.swift`, which `.patinaScreen(…)`
+// applies for every pushed screen (W1b ruling 1: one top-band pattern, one
+// owner). Only the Hearth clearance is a money-screen fact, so only it stayed.

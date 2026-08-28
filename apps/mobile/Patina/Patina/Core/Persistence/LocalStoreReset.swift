@@ -43,6 +43,16 @@ enum LocalStoreReset {
         // Remove on-disk scan bundles (USDZ / HEIC / meshes) so wiped
         // RoomScanPackage rows don't leave orphaned files for the next account.
         deleteScanBundles()
+
+        // The Record's two artefacts live in the App Group container, outside
+        // SwiftData and outside this app's own domain, so nothing above
+        // touches them. Left behind, the next account's Today paints the
+        // previous account's NEEDS YOU rows — its invoice figure, its
+        // designer's name — for the whole window between the cold-launch
+        // snapshot paint and the rebuild.
+        RecordSnapshotStore.shared.remove()
+        LastSeenStore.shared.clear()
+        RecordOwnerStamp.shared.clear()
     }
 
     /// `Application Support/Scans/` — the root `ScanBundleWriter` writes each

@@ -19,6 +19,29 @@
 import SwiftUI
 
 extension View {
+
+    /// Reserves the status-bar region on a scroll container so scrolled
+    /// content passes BEHIND the clock rather than over it.
+    ///
+    /// One pattern, one owner (W1b ruling 1). This began life as a modifier of
+    /// its own beside the money screens; every pushed screen has the same
+    /// hidden-navigation-bar ScrollView and the same problem, so
+    /// `.patinaScreen(…)` applies it for the nine pushed destinations and the
+    /// three money **sheets** — which must not grow a coordinator back
+    /// chevron — call this directly.
+    func patinaTopBand() -> some View {
+        safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear
+                .frame(height: 0)
+                .background {
+                    PatinaColors.Background.primary
+                        .ignoresSafeArea(edges: .top)
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+
     /// Standard pushed-destination chrome: hides the system navigation bar
     /// and pins a `BackChevronButton` top-leading, matching the slot every
     /// consolidated Group-A screen already used. `.interactivePopGestureEnabled()`
@@ -37,6 +60,7 @@ private struct PatinaScreenChrome: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .patinaTopBand()
             .toolbar(.hidden, for: .navigationBar)
             .overlay(alignment: .topLeading) {
                 HStack(spacing: 12) {

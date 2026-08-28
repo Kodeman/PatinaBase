@@ -44,6 +44,11 @@ struct Product: Identifiable, Hashable, Codable {
     let photoVerifiedAt: Date?
     let sourceURL: String?
     let shippingFlatCents: Int?
+    /// `products.deleted_at` — set when the catalogue withdraws a piece. The
+    /// Record's "no longer available" row is the only reader; the
+    /// recommendation RPC never returns a withdrawn row, so this arrives only
+    /// on the by-id fetch, whose `select=*` already carries it.
+    let deletedAt: Date?
 
     // MARK: - CodingKeys (maps snake_case DB columns to camelCase Swift)
 
@@ -65,6 +70,7 @@ struct Product: Identifiable, Hashable, Codable {
         case photoVerifiedAt = "photo_verified_at"
         case sourceURL = "source_url"
         case shippingFlatCents = "shipping_flat_cents"
+        case deletedAt = "deleted_at"
     }
 
     // MARK: - Decodable (with defaults for optional fields)
@@ -109,6 +115,9 @@ struct Product: Identifiable, Hashable, Codable {
         )
         sourceURL = Product.nonEmpty(try container.decodeIfPresent(String.self, forKey: .sourceURL))
         shippingFlatCents = try container.decodeIfPresent(Int.self, forKey: .shippingFlatCents)
+        deletedAt = Product.timestamp(
+            try container.decodeIfPresent(String.self, forKey: .deletedAt)
+        )
     }
 
     private static func nonEmpty(_ value: String?) -> String? {
@@ -138,7 +147,9 @@ struct Product: Identifiable, Hashable, Codable {
          brand: String? = nil, productDescription: String? = nil,
          publishedAt: Date? = nil, finish: String? = nil,
          patinaManaged: Bool? = nil, photoVerifiedAt: Date? = nil,
-         sourceURL: String? = nil, shippingFlatCents: Int? = nil) {
+         sourceURL: String? = nil, shippingFlatCents: Int? = nil,
+         deletedAt: Date? = nil) {
+        self.deletedAt = deletedAt
         self.dimensions = dimensions
         self.leadTimeWeeks = leadTimeWeeks
         self.brand = brand

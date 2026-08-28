@@ -4,13 +4,14 @@
 //
 //  ViewModel powering The Daily Room — editorial story + room-contextual feed.
 //
+// swiftlint:disable file_length
 
 import SwiftUI
 import SwiftData
 
 @MainActor
 @Observable
-final class DailyRoomViewModel {
+final class DailyRoomViewModel { // swiftlint:disable:this type_body_length
 
     /// Provided by the view so the VM can read/write real rooms.
     var modelContext: ModelContext?
@@ -31,6 +32,34 @@ final class DailyRoomViewModel {
     // MARK: - State
 
     var todayStory: DailyStory?
+    /// The row behind `todayStory`. The Record is built over the row, not the
+    /// UI model, because it needs the real `published_at`.
+    var todayStoryRow: RemoteEditorialStory?
+
+    /// The story's own publish date, for the card's chip. The raw row is
+    /// already retained for the record's MOVED row, so no model change is
+    /// needed to print the date the mock draws.
+    var todayStoryPublishedAt: Date? {
+        todayStoryRow?.publishedAt.flatMap(ISO8601DateParsing.dateOrDay(from:))
+    }
+
+    /// The Record — what moved on the house while the person was away, and
+    /// what is waiting on them. Painted from the snapshot first, then rebuilt.
+    var record: HouseRecord = .empty
+    /// The saved pieces, retained: the record composes its withdrawn and
+    /// repriced rows over them.
+    var savedItems: [TableItemModel] = []
+
+    /// The rows NEW THIS WEEK may draw — already filtered to the seven-day
+    /// window and already emptied when the supply floor is not met, so the
+    /// view has no way to pad it.
+    var newThisWeek: [Product] = []
+
+    /// The designer's rooms on the client's projects — read-only cards on the
+    /// house rail. Empty for anyone with no project, and after a failed read:
+    /// the rail then draws the rooms the person made, and nothing invented.
+    var projectRooms: [RemoteProjectRoom] = []
+
     var rooms: [RoomSummary] = []
     /// The real SwiftData rows behind `rooms`, retained so Today can show one
     /// active room with its actual image, timestamps, and saved-item history.
@@ -135,6 +164,9 @@ final class DailyRoomViewModel {
 
     func load() {
         todayStory = nil
+        // The last record, instantly, before a single fetch is in flight —
+        // a cold launch must not open on a blank card (M1's "States" row).
+        paintRecordSnapshot()
         refreshTodaysStory()
         if let ctx = modelContext {
             let preference = StylePreferenceStore(context: ctx).mostRecent()
@@ -209,6 +241,7 @@ final class DailyRoomViewModel {
                 self.todayStory = remote.map {
                     DailyStory(from: $0, isUnread: reads.isUnread(storyId: $0.id))
                 }
+                self.todayStoryRow = remote
                 self.storyLoadFailed = false
             } catch {
                 #if DEBUG
@@ -282,6 +315,174 @@ final class DailyRoomViewModel {
             insight: nil,
             pairing: nil
         )
+    }
+
+    // MARK: - The Record
+
+    /// What we already knew, painted before anything is fetched. A guest has
+    /// no house on file, so nothing of a previous session is put on screen —
+    /// and neither does a record belonging to a DIFFERENT account, which the
+    /// App Group container would otherwise hand straight to the next person to
+    /// sign in on this device (`RecordIdentity`).
+    func paintRecordSnapshot() {
+        guard AuthService.shared.isAuthenticated else {
+            record = .empty
+            return
+        }
+        guard RecordIdentity.admits(session: AuthService.shared.currentUserId) else {
+            record = .empty
+            return
+        }
+        if let snapshot = RecordSnapshotStore.shared.load() {
+            record = snapshot
+        }
+    }
+
+    /// Rebuild the record for this open: snapshot first, then the build, then
+    /// the save, and only then the visit stamp (`RecordRefresh` owns that
+    /// order; r1-notes §3).
+    ///
+    /// Call it AFTER `BadgeCountService.refresh()` and
+    /// `DesignRequestStatusService.refresh()` — the builder is pure and reads
+    /// whatever those two are holding.
+    func refreshRecord() async {
+        guard AuthService.shared.isAuthenticated else {
+            record = .empty
+            return
+        }
+        // The story is one of the record's MOVED rows, so wait for the fetch
+        // that is already in flight rather than building without it and
+        // showing the row one open late.
+        await storyTask?.value
+        savedItems = fetchSavedItems()
+        let products = await fetchSavedPieceProducts(for: savedItems)
+        let saved = savedItems
+        let story = todayStoryRow
+
+        RecordRefresh.run(
+            sessionUserId: AuthService.shared.currentUserId,
+            build: { previous, lastSeenAt in
+                HouseRecordBuilder.build(
+                    from: BadgeCountService.shared,
+                    saved: saved,
+                    products: products,
+                    story: story,
+                    liveLead: DesignRequestStatusService.shared.liveLead,
+                    lastSeen: lastSeenAt,
+                    now: Date(),
+                    previous: previous
+                )
+            },
+            paint: { [weak self] painted in self?.record = painted }
+        )
+    }
+
+    /// The catalogue's genuinely new rows. A guest sees this block too, so the
+    /// read is not gated on a session; a failure simply leaves the block dark.
+    func refreshNewThisWeek() async {
+        do {
+            let response = try await ProductAPIClient.shared.fetchRecommendations(limit: 24)
+            newThisWeek = NewThisWeek.rows(from: response.items)
+        } catch {
+            #if DEBUG
+            PatinaLog.ui.error("[DailyRoomVM] new-this-week fetch failed: \(error)")
+            #endif
+            newThisWeek = []
+        }
+    }
+
+    /// The client's project rooms. RLS has allowed this read since 00066; the
+    /// app simply never made it (`waves/w2/steward.md` §5).
+    func refreshProjectRooms() async {
+        guard AuthService.shared.isAuthenticated else {
+            projectRooms = []
+            return
+        }
+        let ids = BadgeCountService.shared.projects.map(\.id)
+        guard !ids.isEmpty else {
+            projectRooms = []
+            return
+        }
+        do {
+            projectRooms = try await ProjectsAPIClient.shared.listProjectRooms(projectIds: ids)
+        } catch {
+            #if DEBUG
+            PatinaLog.ui.error("[DailyRoomVM] project rooms failed: \(error)")
+            #endif
+            // Keep only what still belongs to a project THIS account has. A
+            // flaky read must not empty a real house, and it must not leave
+            // another account's — or an ended project's — rooms on the rail.
+            projectRooms = projectRooms.filter { ids.contains($0.project_id) }
+        }
+    }
+
+    /// Every room the house holds — the designer's and the person's. The house
+    /// rail draws when this is non-zero, which is why an activeProject client
+    /// whose rooms all live on the project never sees the empty state.
+    var houseRoomCards: [HouseRoomCard] {
+        HouseRoomCard.cards(projectRooms: projectRooms, localRooms: roomModels)
+    }
+
+    private func fetchSavedItems() -> [TableItemModel] {
+        guard let ctx = modelContext else { return [] }
+        let descriptor = FetchDescriptor<TableItemModel>(
+            sortBy: [SortDescriptor(\.savedAt, order: .reverse)]
+        )
+        return (try? ctx.fetch(descriptor)) ?? []
+    }
+
+    /// The saved pieces' catalogue rows, **withdrawn ones included** — the
+    /// only read that can feed the record's "no longer available" row, because
+    /// `get_recommendations` filters a withdrawn product out by construction
+    /// (r1-notes §1). A failure here costs the two discovering rows and
+    /// nothing else: they draw nothing rather than a guess (C5).
+    private func fetchSavedPieceProducts(for saved: [TableItemModel]) async -> [Product] {
+        let ids = Array(Set(saved.compactMap(\.productId)))
+        guard !ids.isEmpty else { return [] }
+        // Chunked: every id goes into one `id=in.(…)` query string, and a few
+        // hundred saved pieces would push the URL past what PostgREST and the
+        // edge in front of it will accept — costing both discovering rows.
+        var products: [Product] = []
+        for chunk in stride(from: 0, to: ids.count, by: Self.productIdsPerRead) {
+            let slice = Array(ids[chunk..<min(chunk + Self.productIdsPerRead, ids.count)])
+            do {
+                products += try await ProductAPIClient.shared.fetchProducts(ids: slice)
+            } catch {
+                #if DEBUG
+                PatinaLog.ui.error("[DailyRoomVM] saved-piece products failed: \(error)")
+                #endif
+                return []
+            }
+        }
+        return products
+    }
+
+    /// Ids per `id=in.(…)` read. A uuid plus its separator is ~37 characters,
+    /// so 100 keeps the query string well inside every hop's limit.
+    private static let productIdsPerRead = 100
+
+    /// True while the Message tap is opening (or finding) the thread.
+    var isOpeningDesignerThread: Bool = false
+
+    /// SP-13's thread creation, from the seat: the project thread where a
+    /// project exists, the direct thread where it does not. Returns the thread
+    /// id, or nil when there is nothing to open — the caller navigates only on
+    /// a real id, so a failure leaves the person where they were.
+    func openDesignerThread(_ seat: DesignerSeat) async -> String? {
+        isOpeningDesignerThread = true
+        defer { isOpeningDesignerThread = false }
+        do {
+            if let projectId = seat.projectId {
+                return try await MessagingAPIClient.shared.createThread(projectId: projectId)
+            }
+            if let designerId = seat.designerId {
+                return try await MessagingAPIClient.shared.createDirectThread(counterpart: designerId)
+            }
+            return nil
+        } catch {
+            PatinaLog.ui.error("[DailyRoomVM] opening the designer thread failed: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     // MARK: - Intent

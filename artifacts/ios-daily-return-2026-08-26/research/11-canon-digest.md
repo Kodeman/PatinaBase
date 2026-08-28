@@ -243,6 +243,37 @@ were never delivered, and (for the R32 backlog) Kody has already sequenced them.
 | Field Settings (T1) real dials | Template screen, not yet built out — Field-scoped, out of this app's review | Later item 08 |
 | Companion mock-fallback removal (behind real auth) | Named backlog, not yet done | Later item 07 |
 
+### July home rail retired — ruling Q4, 2026-08-27
+
+C2's marketplace-first July home rail is superseded by Direction B (The Record) — R1 (rulings-2026-08-27.md).
+Retired outright in W2 R3 after proving zero production call sites (constructor-call grep, `Symbol(`,
+excluding each file's own definition — `waves/w2/r3-tasks.md` §0). `build-plan-critique.md` M1b's
+"zero call sites is false for most of the Q4 list" is **stale against this base** (main `e9da02569`):
+every "still referenced" citation it named (`DailyProductCard ← DailyRoomViewModel.swift,
+ProductCard.swift, DailyProductDetailView.swift`; `StudioHubSection ← DailyRoomStateBlocks.swift,
+MarketplaceLinksSection.swift`; `ContinueScanCard ← DesignRequestResumeBanner.swift`) turned out to be
+doc comments, not code — re-verified with constructor-call syntax, not bare-name matching.
+
+**Deleted** (`apps/mobile/Patina/Patina/Features/Home/Views/` unless noted):
+`DailyRoomStateBlocks.swift` (held `HomeStudioBlock` — the dead composition root that assembled
+`StudioHubSection`+`MarketplaceLinksSection`+`WorkWithDesignerCTA` — and `HomeFilteredFeedEmpty`, both
+zero-caller), `StudioHubSection.swift`, `MarketplaceLinksSection.swift`, `WorkWithDesignerCTA.swift`,
+`RoomChipRail.swift`, `RoomContextBar.swift`, `DailyFeedEmptyModule.swift`, `DailyProductCard.swift`,
+`DailyProductDetailView.swift`, `ContinueScanCard.swift`, and
+`Features/DesignServices/DesignRequestStatusCard.swift`.
+
+**Re-homed, not deleted:** `DailyRoomStateBlocks.swift` held a third struct the plan didn't name —
+`HomeStoryRetryRow` (U29's story-load-failure retry) — live, called from `DailyRoomView.swift:196`.
+Extracted verbatim into its own new file, `Features/Home/Views/HomeStoryRetryRow.swift`; the struct's
+signature is unchanged, so the live call site in R2's file needed no edit.
+
+**Not touched:** `AddToRoomSheet.swift` / `AddedToRoomToast.swift` (live, used by
+`ProductDetailViewModel`, excluded from the Q4 set per `waves/w2/steward.md` §7).
+
+Gate: `ios-gate.sh build` + the full `PatinaTests` tier (812/812 green after this pass and the two
+carry-over fixes it landed alongside — the AR quick-action retirement and the proposal seal-glyph fix,
+`waves/w2/r3-tasks.md` Tasks 2–3).
+
 ---
 
 ## 6. Canon guard C1–C16 — corrected and extended

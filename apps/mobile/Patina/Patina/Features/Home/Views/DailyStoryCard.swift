@@ -7,8 +7,23 @@ import SwiftUI
 
 struct DailyStoryCard: View {
     let story: DailyStory
-    var namespace: Namespace.ID? = nil
+    var namespace: Namespace.ID?
     var isExpanded: Bool = false
+    /// Card weight follows content (B, synthesis §5): the story keeps the hero
+    /// footprint on a quiet day and drops to a row when the Record carried the
+    /// screen. `HomeComposition.storyWeight` decides which.
+    var height: CGFloat = 180
+    /// When it was published. M1 block 5 draws the date beside the read time
+    /// ("AUG 25 · 4 MIN"): a story is a dated thing, and on a screen built
+    /// around what is new the reader is owed which day this one is.
+    var publishedAt: Date?
+
+    /// "AUG 25 · 4 MIN", or the read time alone where no publish date came
+    /// back — never an invented one.
+    private var datedReadTimeLabel: String {
+        guard let publishedAt else { return story.readTimeLabel }
+        return "\(HouseRecordDates.short(publishedAt)) · \(story.readTimeLabel)"
+    }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -60,8 +75,8 @@ struct DailyStoryCard: View {
             .padding(.horizontal, PatinaSpacing.md)
             .padding(.bottom, PatinaSpacing.md)
 
-            // Read time pill
-            Text(story.readTimeLabel)
+            // Date and read time
+            Text(datedReadTimeLabel)
                 .font(PatinaTypography.monoSmall)
                 .tracking(0.3)
                 .textCase(.uppercase)
@@ -86,7 +101,7 @@ struct DailyStoryCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
         }
-        .frame(height: 180)
+        .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: PatinaRadius.xl, style: .continuous))
         .padding(.top, PatinaSpacing.md)
         .padding(.horizontal, PatinaSpacing.mdLarge)
