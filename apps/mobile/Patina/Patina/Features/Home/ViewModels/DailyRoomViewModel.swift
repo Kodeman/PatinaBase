@@ -172,6 +172,23 @@ final class DailyRoomViewModel { // swiftlint:disable:this type_body_length
             let preference = StylePreferenceStore(context: ctx).mostRecent()
             hasStyleProfile = preference != nil
             tastePortrait = preference.flatMap { TastePortrait(preference: $0) }
+        } else {
+            hasStyleProfile = false
+            tastePortrait = nil
+        }
+
+        reloadRooms()
+    }
+
+    /// Re-read the rooms, and everything the screen derives from them.
+    ///
+    /// The house rail draws off `roomModels`, which is a snapshot — so a room
+    /// the sync coordinator mirrors mid-session sat in SwiftData and off the
+    /// rail until the next foreground. Today calls this when
+    /// `RoomSyncCoordinator.revision` moves; `load()` calls it too, so the
+    /// cold path is unchanged.
+    func reloadRooms() {
+        if let ctx = modelContext {
             let store = RoomStore(context: ctx)
             let realRooms = store.allRooms()
             // R31: never seed mock rooms — a brand-new user has 0 rooms and
@@ -188,8 +205,6 @@ final class DailyRoomViewModel { // swiftlint:disable:this type_body_length
             rooms = []
             roomModels = []
             remoteIdByLocal = [:]
-            hasStyleProfile = false
-            tastePortrait = nil
         }
 
         let candidates = roomModels.map {

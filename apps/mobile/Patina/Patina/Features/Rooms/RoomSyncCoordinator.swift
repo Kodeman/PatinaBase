@@ -57,6 +57,9 @@ public enum RoomMerge {
         /// Local rooms whose server row is newer — take the server's values.
         public var takeServer: [UUID] = []
         /// Local rooms edited since the server last saw them — leave them.
+        /// This mirror is read-only: nothing here pushes, so a locally-newer
+        /// room stays newer here and older there until whatever wrote it
+        /// syncs. Owed, and named so rather than left to be discovered.
         public var keepLocal: [UUID] = []
         /// Rooms that never synced. Never merged into an account (SP-06).
         public var untouched: [UUID] = []
@@ -82,8 +85,15 @@ public enum RoomMerge {
                 plan.insert.append(row.id)
                 continue
             }
+            // A device clock against a Postgres clock: a phone running behind
+            // loses a genuinely newer local edit. Named rather than defended
+            // against — the alternative is a server-side revision counter.
             let serverStamp = ISO8601DateParsing.dateOrDay(from: row.updated_at)
-            if let serverStamp, mirror.updatedAt > serverStamp {
+            // At an equal stamp the mirror already IS the server's row — a
+            // mirror carries the stamp it was written from — so there is
+            // nothing to take, and re-taking it would report a change to
+            // every screen watching for one on every visit.
+            if let serverStamp, mirror.updatedAt >= serverStamp {
                 plan.keepLocal.append(mirror.id)
             } else {
                 plan.takeServer.append(mirror.id)
@@ -95,6 +105,7 @@ public enum RoomMerge {
 }
 
 @MainActor
+@Observable
 public final class RoomSyncCoordinator {
 
     public static let shared = RoomSyncCoordinator()
@@ -105,11 +116,34 @@ public final class RoomSyncCoordinator {
     /// one request between them.
     public static let minimumInterval: TimeInterval = 30
 
-    private var lastOwner: String?
-    private var lastRunAt: Date?
+    /// Bumped once per reconcile that actually changed the store.
+    ///
+    /// Spaces reads its rooms through `@Query` and repaints for free; Today's
+    /// house rail reads a snapshot taken in `DailyRoomViewModel.load()`, so
+    /// without a signal the room this coordinator has just mirrored sat in
+    /// SwiftData and off the rail until the app was backgrounded — which is
+    /// exactly the returning client's first minute in the app.
+    public private(set) var revision: Int = 0
+
+    private(set) var lastOwner: String?
+    private(set) var lastRunAt: Date?
     private var inFlight = false
 
     public init() {}
+
+    /// Seeded, for the tests that need a coordinator with a history.
+    init(lastOwner: String?, lastRunAt: Date?) {
+        self.lastOwner = lastOwner
+        self.lastRunAt = lastRunAt
+    }
+
+    /// Forget that this store was ever reconciled. Called wherever the local
+    /// store is wiped: the rows the debounce was protecting are gone, so the
+    /// next screen to appear must ask again rather than wait out the window.
+    public func forget() {
+        lastOwner = nil
+        lastRunAt = nil
+    }
 
     /// Pure, so the debounce is a fact rather than a hope. A change of owner
     /// always refetches: the store has just been claimed or wiped, and the
@@ -126,6 +160,11 @@ public final class RoomSyncCoordinator {
         return now.timeIntervalSince(lastRunAt) >= minimumInterval
     }
 
+    /// The same decision against this coordinator's own history.
+    func isDue(owner: String, now: Date) -> Bool {
+        Self.isDue(owner: owner, lastOwner: lastOwner, lastRunAt: lastRunAt, now: now)
+    }
+
     /// Reconcile the account's rooms into the local store. Signed out — a
     /// guest — this does nothing at all: there is no account to merge into,
     /// and the rooms on this phone are the guest's own (SP-06).
@@ -134,7 +173,11 @@ public final class RoomSyncCoordinator {
         api: RoomListRemote = RoomsAPIClient.shared,
         now: Date = Date()
     ) async {
+        // Claimed before the first `await`, or two screens appearing in the
+        // same tick both pass the guard and both fetch (fix-review m-1).
         guard !inFlight else { return }
+        inFlight = true
+        defer { inFlight = false }
 
         await AuthService.shared.waitForAuthReady()
         guard AuthService.shared.isAuthenticated,
@@ -142,9 +185,6 @@ public final class RoomSyncCoordinator {
         guard Self.isDue(owner: owner, lastOwner: lastOwner, lastRunAt: lastRunAt, now: now) else {
             return
         }
-
-        inFlight = true
-        defer { inFlight = false }
 
         let rows: [RemoteRoom]
         do {
@@ -175,7 +215,8 @@ public final class RoomSyncCoordinator {
     /// for — the filter on the query and this check are two independent
     /// answers to the same question (SP-06: an account's rooms are the
     /// account's, never another user's).
-    func apply(_ rows: [RemoteRoom], in store: RoomStore, owner: String) {
+    @discardableResult
+    func apply(_ rows: [RemoteRoom], in store: RoomStore, owner: String) -> Bool {
         let rows = rows.filter { $0.user_id.lowercased() == owner.lowercased() }
         let local = store.allRooms()
         let plan = RoomMerge.plan(
@@ -187,9 +228,12 @@ public final class RoomSyncCoordinator {
 
         let rowById = Dictionary(rows.map { ($0.id.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
 
+        var changed = false
+
         for remoteId in plan.insert {
             guard let row = rowById[remoteId.lowercased()] else { continue }
             store.insertMirrored(row)
+            changed = true
         }
 
         for localId in plan.takeServer {
@@ -197,6 +241,10 @@ public final class RoomSyncCoordinator {
                   let remoteId = room.remoteId,
                   let row = rowById[remoteId.lowercased()] else { continue }
             store.applyRemote(row, to: room)
+            changed = true
         }
+
+        if changed { revision += 1 }
+        return changed
     }
 }

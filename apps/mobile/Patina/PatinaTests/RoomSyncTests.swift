@@ -171,6 +171,28 @@ struct RoomSyncTests {
         #expect(store.allRooms().count == 1)
     }
 
+    // MARK: - The debounce
+
+    @Test("the same owner is not re-fetched inside the window")
+    func theSameOwnerIsNotRefetchedWithinTheWindow() {
+        let due = RoomSyncCoordinator.isDue(
+            owner: "u1", lastOwner: "u1",
+            lastRunAt: Self.moment(8, 28, hour: 9),
+            now: Self.moment(8, 28, hour: 9).addingTimeInterval(5)
+        )
+        #expect(due == false)
+    }
+
+    @Test("past the window the same owner asks again")
+    func pastTheWindowTheSameOwnerAsksAgain() {
+        let due = RoomSyncCoordinator.isDue(
+            owner: "u1", lastOwner: "u1",
+            lastRunAt: Self.moment(8, 28, hour: 9),
+            now: Self.moment(8, 28, hour: 9).addingTimeInterval(60)
+        )
+        #expect(due == true)
+    }
+
     // MARK: - The owner boundary (SP-06)
 
     @Test("the request asks for the account's own rooms and no one else's")
@@ -187,15 +209,20 @@ struct RoomSyncTests {
     @Test("a row belonging to another account is never applied to this one")
     func aForeignRowIsRejectedByTheMerge() throws {
         let store = try makeStore()
+        let foreign = remote(
+            id: "d0000000-0000-4000-8000-000000000009",
+            name: "A Client's Living Room"
+        )
         // `rooms` lets a designer read every room of every client on her
         // roster, so a row reaching this device is not proof it is this
         // account's. The merge decides, not the response.
-        RoomSyncCoordinator().apply(
-            [remote(id: "d0000000-0000-4000-8000-000000000009", name: "A Client's Living Room")],
+        let changed = RoomSyncCoordinator().apply(
+            [foreign],
             in: store,
             owner: "f0000000-0000-0000-0000-00000000000f"
         )
 
+        #expect(changed == false)
         #expect(store.allRooms().isEmpty)
     }
 
@@ -221,26 +248,58 @@ struct RoomSyncTests {
         #expect(store.allRooms().first?.name == "Guest Bedroom")
     }
 
-    // MARK: - The debounce
+    // MARK: - The rail repaints (fix-review B-1)
 
-    @Test("the same owner is not re-fetched inside the window")
-    func theSameOwnerIsNotRefetchedWithinTheWindow() {
-        let due = RoomSyncCoordinator.isDue(
-            owner: "u1", lastOwner: "u1",
-            lastRunAt: Self.moment(8, 28, hour: 9),
-            now: Self.moment(8, 28, hour: 9).addingTimeInterval(5)
-        )
-        #expect(due == false)
+    @Test("a reconcile that changes nothing does not ask the screens to repaint")
+    func anUnchangedReconcileDoesNotBumpTheRevision() throws {
+        let store = try makeStore()
+        let coordinator = RoomSyncCoordinator()
+        coordinator.apply([remote()], in: store, owner: Self.owner)
+        #expect(coordinator.revision == 1)
+
+        coordinator.apply([remote()], in: store, owner: Self.owner)
+        #expect(coordinator.revision == 1)
     }
 
-    @Test("past the window the same owner asks again")
-    func pastTheWindowTheSameOwnerAsksAgain() {
-        let due = RoomSyncCoordinator.isDue(
-            owner: "u1", lastOwner: "u1",
-            lastRunAt: Self.moment(8, 28, hour: 9),
-            now: Self.moment(8, 28, hour: 9).addingTimeInterval(60)
-        )
-        #expect(due == true)
+    @Test("a room mirrored in this session reaches Today's house rail")
+    func aMirroredRoomReachesTheRail() throws {
+        let schema = Schema([RoomModel.self, SavedItem.self, TableItemModel.self, StylePreferenceModel.self])
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [config])
+        let context = ModelContext(container)
+
+        let viewModel = DailyRoomViewModel()
+        viewModel.modelContext = context
+        viewModel.reloadRooms()
+        #expect(viewModel.houseRoomCards.contains { $0.name == "Guest Bedroom" } == false)
+
+        let coordinator = RoomSyncCoordinator()
+        let changed = coordinator.apply([remote()], in: RoomStore(context: context), owner: Self.owner)
+        #expect(changed)
+        #expect(coordinator.revision == 1)
+
+        // What the rail does when the revision moves.
+        viewModel.reloadRooms()
+        #expect(viewModel.houseRoomCards.contains { $0.name == "Guest Bedroom" })
+    }
+
+    @Test("Today watches the revision and re-reads its rooms")
+    func todayRepaintsOnTheRevision() throws {
+        let source = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
+        #expect(source.contains("onChange(of: roomSync.revision)"))
+        #expect(source.contains("viewModel.reloadRooms()"))
+    }
+
+    // MARK: - The debounce, continued
+
+    @Test("forgetting the store makes the next appearance ask again")
+    func aWipedStoreIsDueImmediately() {
+        let now = Self.moment(8, 28, hour: 9)
+        let coordinator = RoomSyncCoordinator(lastOwner: "u1", lastRunAt: now)
+        #expect(coordinator.isDue(owner: "u1", now: now.addingTimeInterval(1)) == false)
+
+        coordinator.forget()
+        #expect(coordinator.isDue(owner: "u1", now: now.addingTimeInterval(1)))
     }
 
     @Test("a different owner always re-fetches — the store was just claimed or wiped")

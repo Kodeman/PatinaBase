@@ -32,6 +32,11 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
     /// SP-08 / Q7: the ask arrives here, once, the first time something
     /// money-shaped is actually waiting for this client.
     @State private var isPushPrimerPresented = false
+    /// Spaces reads its rooms through `@Query` and repaints for free; this
+    /// screen holds a snapshot, so it watches the coordinator instead. Every
+    /// reconcile call site — the auth listener's included — reaches the rail
+    /// through this one signal.
+    @State private var roomSync = RoomSyncCoordinator.shared
     @Namespace private var cardNamespace
 
     private var requestStatus: DesignRequestStatusService {
@@ -131,6 +136,14 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
             resumableScan = candidates.max(by: { $0.createdAt < $1.createdAt })
         }
         .onChange(of: viewModel.selectedRoomID) { _, _ in
+            syncCompanionContext()
+        }
+        .onChange(of: roomSync.revision) { _, _ in
+            // The hydrate has just put a room in the store. Without this the
+            // rail keeps drawing the snapshot it took before the request went
+            // out, and the account's own room appears only after a
+            // background/foreground cycle.
+            viewModel.reloadRooms()
             syncCompanionContext()
         }
         .onChange(of: AuthService.shared.isAuthenticated) { _, isAuthenticated in
