@@ -213,6 +213,17 @@ the "· due Sep 1" vs "· Sep 1" state wording (one word).
 Acceptance: T1–T14 re-walked with the bar (`-PatinaFlags house-first`); Studio one tap at every
 tier; dark + XXL; flag off restores the W2 root byte-for-byte.
 
+### W3 — INTEGRATED, fix round in flight (2026-08-28; `waves/w3/`; 1074 tests; 22 commits on
+`daily-return/integration`)
+The bar renders behind `house-first` with canonical VoiceOver labels; flag-off is byte-for-byte W2.
+`navigate(to:)` sites were 122, not 105 (drift since the direction was written). Rulings on the open
+items: `waves/w3/rulings-fable.md` — the tour hoisted above the stacks and anchored on the bar,
+`AppRoute.studio` minted with the profile/settings door on the Studio tab, footers sized to the bar,
+the B-8 rewrite on both roots with step 2 on the Record card, auto-start gated to the Today tab.
+**OWED (Kody):** publish the three Sanity tour bodies (`waves/w3/n3-sanity-copy.md`) BEFORE
+enabling `house-first` for anyone — Sanity is the authority and still serves "Daily Room". Backlog:
+M9's `Rugs` chip and the other N2-named gaps.
+
 ### W4 — The house on Today (B §9 W3 remainder; base = main after W3)
 Rooms with real numbers (`rooms.budget_cents` local-first + mirror; `committed_cents` where a
 project owns the room), saved-row date/room/note, the two 14-day decays removed, project timeline

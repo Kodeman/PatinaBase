@@ -811,3 +811,156 @@ Method notes (both non-obvious, both real, neither an app defect):
 
 Simulator left booted, light appearance, Dynamic Type medium, signed in as `client@patina.dev`, on
 the Daily Room.
+
+---
+
+## w3-n1
+
+Lane N1 (root + routing), 2026-08-27. Build `4a92058b5` on `daily-return/w3-n1`, signed simulator
+`.app` from `.build/dd` (no `CODE_SIGNING_ALLOWED=NO`). Simulator **`dr-w3-n1`**
+`3D350836-BAF9-443A-8598-588D8D4AEBF6` (iPhone 17 Pro · iOS 26.5 · 402×874 pt, shots 1206×2622 @3×) —
+**not** the walker's review device. Every launch carries `-DeploymentTarget local`; the flag-on rows
+add `-PatinaFlags house-first`. Taps via `mcp__blitz-iphone__device_action` with the explicit UDID.
+
+| Shot | Launch | What it shows |
+|---|---|---|
+| `w3-n1-01-guest-today-flagon.png` | flag **on**, guest | The bar draws: `Today` `Spaces` `Pieces` `Studio` + the Strata mark in the trailing slot, over the guest Today (record, `Start with a room`, story, `Sign in to keep this on every device.`). `Today` is the active label after one tap from Pieces |
+| `w3-n1-02-guest-spaces-flagon.png` | flag on, guest | One tap on `Spaces` → `Your Spaces` (empty state). ⚠ `YourSpacesView` still draws its own back chevron at a tab root — N2's wrapper item |
+| `w3-n1-03-guest-pieces-flagon.png` | flag on, guest | One tap on `Pieces` → `Browse pieces` |
+| `w3-n1-04-guest-studio-flagon.png` | flag on, guest | One tap on `Studio` → `Your Studio` (the canonical title) over `StudioHubView`'s guest state. AX tree on this screen: four `AXTabButton`s labelled `Today` / `Your Spaces` / `Browse pieces` / `Your Studio` plus `Companion`, with `AXValue: 1` on the selected one only — B-7's VoiceOver contract, verified in the tree rather than assumed |
+| `w3-n1-05-client-today-flagon.png` | flag on, `client@patina.dev` | W2's Record under the bar, unchanged: NEEDS YOU (invoice `$4,250.00 · DUE SEP 2`, proposal `BY SEP 10`, decision `BY SEP 1`) / MOVED (message `AUG 27`, story `AUG 26`), designer seat, house rail |
+| `w3-n1-06-record-row-pushes-on-today.png` | flag on, client | **The in-tab push rule.** Tapping the invoice row on Today pushes `INV-2026-0142` onto the **Today** stack — `Today` is still the active tab, so Back returns to Today rather than stranding the person in Studio |
+| `w3-n1-07-money-footer-under-bar.png` | flag on, client | Same screen scrolled: `Pay $4,250.00` clears the bar, and ⚠ `MoneyScreenChrome`'s 148 pt dock clearance is now ~150 pt of dead space under it (steward §7·C, unowned file, not edited) |
+| `w3-n1-08-deeplink-piece-switches-to-pieces-tab.png` | flag on, client | **Deep link → tab.** `xcrun simctl openurl … patina://piece/a0000000-…-004` fired while the app sat on **Today** switched to **Pieces** and pushed the piece — `openExternal` reading `RouteTabTable`, on the simulator. `https://client.patina.cloud/invoices/…` opened Safari instead: the AASA association is not installed on this simulator, which is a device claim this program does not make (`build-plan.md` "Global constraints"), so the Studio landing is pinned by `HouseFirstRootTests` rather than shot |
+| `w3-n1-09-client-today-flagoff.png` | flag **off**, client | The W2 root, unchanged: **no bar**, the floating Companion dock, the Studio pill in the header, the Record, the designer seat, the house rail |
+
+**Flag-off equivalence — how it is actually proven.** A screenshot diff against `w2-r2-03` reports
+13.8% of pixels differing, and none of it is this lane: that shot predates W2's own one-`See all`
+footer fix, and the seed's relative dates and the time-of-day greeting both moved between runs. The
+proof that holds is the diff, not the pixels — `git diff 83b8c3340 HEAD -- ContentView.swift` is
+**+19 lines and zero deletions inside the old body**: the whole W2 root moved into
+`legacyMainContent` character for character, `companionHearthReservation` and `CompanionOverlay()`
+included. Across the other three touched files the only removed lines are two signatures that gained
+a defaulted `houseFirst: Bool = false`, `public init()` becoming a convenience initialiser, one
+`navigate(to: route)` becoming `openExternal(route)` (identical on the off root), and a statement
+reorder in `PatinaApp.init()`.
+
+---
+
+## w3-n2
+
+Lane N2 (Pieces + Saved), 2026-08-27. Branch `daily-return/w3-n2` (cut from N1's tip `b101f5009`),
+shots taken at `f74f52ff4`. Signed simulator `.app` from `.build/dd` (ad-hoc, no
+`CODE_SIGNING_ALLOWED=NO`). Simulator **`dr-w3-n2`** `4839354A-D6ED-4544-BC8D-079108E479CE`
+(iPhone 17 Pro · iOS 26.5 · 402×874 pt, raw shots 1206×2622 @3×) — created fresh for this lane; the
+W2 clones are gone and the review device `973D1724-…` stays the walker's. Every launch carries
+`-DeploymentTarget local`; flag-on rows add `-PatinaFlags house-first`. Taps via
+`mcp__blitz-iphone__device_action` with the explicit UDID.
+
+⚠ **A capture trap worth recording.** `mcp__blitz-iphone__get_screenshot` returns a **light-rendered**
+image whatever the simulator's appearance — shot 09 was taken twice, once through the MCP tool
+(light) and once with `xcrun simctl io … screenshot` (correctly dark) on the same unchanged screen.
+Only the `simctl` capture is evidence for a dark-mode claim. Shots 01–08 were taken with the
+simulator in light mode, so nothing is misreported by them; the dark row is the `simctl` one.
+
+| Shot | Launch | What it shows |
+|---|---|---|
+| `w3-n2-01-pieces-tab-saved-row-flagon.png` | flag **on**, guest | The Pieces tab root: `Browse pieces` · `10 pieces chosen for your space` · **the `Saved` row** · chips · the grid, under the bar with `Pieces` active. AX tree: `Pieces.SavedDoorRow` labelled **`Saved, nothing yet`** with hint *"Opens your saved pieces, in boards and as a list."* — its own label, distinct from the tab's `Browse pieces` (B-7 b). **No back chevron** in the tree (n1-notes §1b closed). Four `AXTabButton`s labelled `Today` / `Your Spaces` / `Browse pieces` / `Your Studio` |
+| `w3-n2-02-lighting-chip-server-filtered-flagon.png` | flag on, guest | One tap on `Lighting` → `1 piece chosen for your space`, one card. **Server-side, proven in the database, not inferred from the screen:** `match_events` row 72 `source='ios'`, `context->>'category' = 'lighting'`, `jsonb_array_length(results) = 1`, against rows 70/71 from the same session with `category` NULL and 10 results. Kong logged `POST /rest/v1/rpc/get_recommendations HTTP/1.1" 200` at the same second. `p_category` — "the parameter nobody sends" — is now sent and honoured |
+| `w3-n2-03-saved-boards-allitems-on-pieces-tab.png` | flag on, guest | The `Saved` row pushes the canonical Saved surface: title `Saved`, **`Boards` / `All items`** intact, `New board`, the empty `No saved items yet` state. The bar still shows `Pieces` active — `.table` is filed under Pieces and is not a tab root, so the push stays on that stack. The pushed screen **does** draw `chevron.left` / `Back`, which is the same gate working in the other direction |
+| `w3-n2-04-saved-row-counts-one-piece.png` | flag on, guest | One save from the grid → the row reads **`Saved, 1 piece`** live (singular). The count is `savedProductIds` — local rows merged with the account's `saved_items` — not a fabricated figure |
+| `w3-n2-05-spaces-tab-root-no-chevron.png` | flag on, guest | The Spaces tab root, **no back chevron**. ⚠ At zero rooms `YourSpacesView` draws its `emptyState`, which carries no header, so the canonical name is not on glass here — see `n2-notes.md` §2 |
+| `w3-n2-06-studio-tab-root-your-studio-title.png` | flag on, guest | The Studio tab root: large title **`Your Studio`** over `StudioHubView`'s guest state, one tap from anywhere. The ScrollView + title moved out of N1's shim into `StudioTabRoot` |
+| `w3-n2-07-flagoff-today-no-tabbar.png` | flag **off**, guest | W2's root, unchanged: date · `Good night.` · bell · the labelled `Studio` pill · NEXT STEP · `Start with a room` · the story. **No bar** |
+| `w3-n2-08-flagoff-browse-no-saved-row-chevron-back.png` | flag off, guest | The browse grid reached through the Companion's `Your recommendations` row: `chevron.left`/`Back` present, **no `Pieces.SavedDoorRow` in the tree**, chips at **y = 179.33** — the exact slot the Saved row occupies on the flag-on root — and no bar. The flag-off root renders as W2 left it. The Companion rows still resolve: `Saved, 1 saved piece` → `.table`, `Your recommendations` → `.emergence` |
+| `w3-n2-09-pieces-saved-row-dark-xxl-flagon.png` | flag on, guest, **dark + accessibility-XXL**, `simctl io` capture | The `Saved` row survives XXL: `Saved` (Playfair 18) left, `1 PIECE` mono right-aligned, chevron — no clipping, no collision, meta stays on one line. Chips scroll with the SP-02 trailing fade. ⚠ **Two defects visible and neither is N2's:** the bar's four labels collide at XXL (`TodaySpac…PiecesStudio`, no inter-item spacing) — `PatinaTabBar`, N1's file; and the Companion `.minimal` orb still floats over the bar and the grid — N3's, per n1-notes §2a |
+
+## w3-n3
+
+Lane N3, Companion + tour. Simulator `dr-w3-n3` `2B7C2D64-2367-427E-B511-826E824E70CD`
+(iPhone 17 Pro / iOS 26.5, created fresh — every existing device was booted and
+`simctl clone` refuses a booted source). Signed `.app` from
+`.codex/worktrees/agent-dr-w3-n3/.build/dd`, `codesign -dv` → `Identifier=cloud.patina.app`,
+no `CODE_SIGNING_ALLOWED=NO`. Tier `client@patina.dev` (activeProject) throughout; every launch
+carries `-DeploymentTarget local`. Shots 01–10 light, 11 dark + accessibility-XXL.
+
+| Shot | Launch | What it shows |
+|---|---|---|
+| `w3-n3-01-today-flagon-mark-in-bar-no-orb.png` | flag **on** | Today with the record, under the bar — and **no floating dock anywhere on the screen**. The Strata mark sits in the bar's trailing slot; the `NEXT STEPS` / `5 THINGS NEED YOUR EYE` caption that printed across the bar's label row in every one of N1's flag-on shots (`w3-n1-05`, `-10`, `-11`, `-12`) is gone. AX tree: a 54 × 49 `AXTabButton` labelled **`Companion`**, hint *"Opens quick actions for this screen."* — M1 §6's fifth VoiceOver name |
+| `w3-n3-03-companion-panel-from-bar-flagon.png` | flag on | One tap on the mark and the panel is up. This is the tap N1 could not ship: `toggleCompanion()` had no observer, so it presented nothing while taking all four stacks out of the VoiceOver tree (`n1-notes.md` §2a, §4d). The panel's bottom edge clears the bar — `CompanionOverlay` is a sibling of the four stacks, not a child of the bar's `safeAreaInset`, so it is lifted by `PatinaTabBar<EmptyView>.itemHeight` |
+| `w3-n3-04-companion-six-rows-flagon.png` | flag on | The coachmark dismissed: **exactly six rows** — `Message your designer` · `Your studio` · `Your recommendations` · `Saved` · `Add your first space` · `Your profile` — under `Where to begin? / 5 things need your eye.` W1b's composition, unmoved (C8) |
+| `w3-n3-05-companion-collapsed-back-to-bar-flagon.png` | flag on | ✕ collapses it and Today's whole content returns to the AX tree (`DailyRoomView.HouseRecord` ×5, `DailyRoomView.StudioButton`, `DailyRoomView.DesignerSeat` all readable again) — `accessibilityHidden(isCompanionExpanded)` releases, which is the half that was broken |
+| `w3-n3-06-tour-step1-of-3-today-flagon.png` | flag on, tour state cleared | **`Step 1 of 3`.** The shipped tour has run **two** steps since W2 (`research/2x-panel-{u1,u2,d2,h1}.json`); step 2's anchor now mounts, so the denominator is the authored one again. ⚠ The body is Sanity's **stale** copy — see the finding below |
+| `w3-n3-07-tour-step2-record-flagon.png` | flag on | **`Step 2 of 3`**, the popover arrow on the record card. The step that never rendered on any shipped build now does. ⚠ Sanity copy again |
+| `w3-n3-08-tour-step3-studio-flagon.png` | flag on | **`Step 3 of 3`**, arrow on the header's `Studio 5` control, `Done`. ⚠ Sanity copy again |
+| `w3-n3-09-today-flagoff-orb-and-hearth.png` | flag **off** | W2's root, untouched: **no bar**, the floating orb back over the room rail with its `5 THINGS NEED YOUR EYE` caption, the Hearth reservation still under the scroll. The orb-over-content defect W2's walk logged as a FAIL is still exactly there — which is what "the flag-off root is unchanged" has to mean |
+| `w3-n3-10-companion-panel-flagoff-unchanged.png` | flag off | The same six rows, the same title, sitting ~49 pt lower than shot 03 — the bar lift is flag-on only |
+| `w3-n3-11-today-dark-xxl-flagon-no-orb.png` | flag on, **dark + accessibility-XXL** | **Closes `w3-n2-09`'s N3 half.** N2 caught the `.minimal` orb still floating over the bar and the grid at this exact setting; at XXL in dark there is now no orb and no caption over the bar, and the mark is legible in the trailing slot. ⚠ N2's **other** finding stands and is not N3's: the bar's four labels still collide (`TodaySpac…PiecesStudio`, no inter-item spacing) — `PatinaTabBar.swift`, N1's file |
+
+**One finding this walk produced that no test could.** All three tour steps render **Sanity's copy,
+not the app's** — `FirstLaunchTourPopoverCard.resolvedBody` is `loaded?.body ?? step.fallback?.body`,
+so the CMS wins and the three documents still hold the sentences B-8 retires, including *"This is
+your Daily Room — picks and stories chosen for your space."* The rewrite is correct in the binary and
+green in `FirstLaunchTourTests`, and **invisible to a user until the three Sanity documents are
+updated**. Bodies for Kody: `waves/w3/n3-sanity-copy.md`. This is a release gate on B-8, not a code
+defect.
+
+**Also worth recording:** the tour would not auto-start at all on first attempt — `profiles.help_state`
+for `client@patina.dev` carried `{"ios-first-launch-tour": {"launched": true, "abandoned": true,
+"abandonedAt": "2026-08-28T01:59:17Z"}}` from an earlier lane's walk, and that state is
+**cross-device authoritative** via `SupabaseHelpStateAdapter`. Any later lane or walker who needs to
+see the tour must clear it in the database first, not just reinstall the app.
+
+## w3 walk
+
+Walker, acceptance pass on the review device **`973D1724-90BF-4A0A-B02D-481D561547B3`** (iPhone 17
+Pro / iOS 26.5, 402×874 pt). Integration tip `daily-return/integration` @ `ccf1031f7` (docs), last
+code commit `d0879b10a` — `.app` installed from
+`/Users/kody/Library/Developer/Xcode/DerivedData/Patina-fqrqjvpfaowactdbiglvkpeuvzpz/Build/Products/Debug-iphonesimulator/Patina.app`,
+`codesign -dv` confirms `Identifier=cloud.patina.app`, `Signature=adhoc` (signed, not
+`CODE_SIGNING_ALLOWED=NO`). Every launch `-DeploymentTarget local`; flag-on rows add `-PatinaFlags
+house-first`. Taps via `mcp__blitz-iphone__device_action` with the explicit UDID; dark-mode shots
+taken only after confirming with `xcrun simctl io … screenshot` that the render was genuinely dark —
+see the trap below.
+
+⚠ **A second capture trap, worse than N2's.** `simctl ui appearance dark` sets the OS trait, but this
+app persists its own `patina.appearance` override (`AppearanceSetting`, `@AppStorage` key
+`patina.appearance`) independent of the OS setting — `PatinaApp.swift` applies
+`.preferredColorScheme` from that stored value, defaulting to `.system` but **stuck on `Light` in
+this install from an earlier lane's walk**, so `w3-05`/`w3-06`'s first captures (both
+`mcp__blitz-iphone__get_screenshot` **and** a direct `simctl io screenshot`) were genuinely
+light-rendered even with the OS in dark — not a tool artifact this time, a leftover in-app setting.
+Fixed with `xcrun simctl spawn … defaults write cloud.patina.app patina.appearance -string dark` +
+relaunch; confirmed dark on both capture paths before shooting. Reset to `system` after.
+
+| Shot | Launch / account | What it shows |
+|---|---|---|
+| `w3-01-flagon-today-client.png` | flag on, `client@patina.dev` | Today under the bar, session already signed in from a prior lane. Push-primer dismissed first |
+| `w3-02-flagon-studio-oneTap-client.png` | flag on, client | One tap on **Studio** → `Your Studio`, `StudioHubView`: Awaiting you (Decisions/Invoice/Proposal) · In progress · Conversation |
+| `w3-03-flagon-pieces-client.png` | flag on, client | `Browse pieces`, `Saved` row (`nothing yet`), `All/Seating/Tables` chips, one card size (SP-02) |
+| `w3-04-flagon-companion-from-bar.png` | flag on, client, on the pushed Saved screen | Bar's Companion slot opens the panel over a dimmed screen; 5 rows in this context (≤6) |
+| `w3-05-flagon-today-dark-xxl.png` (+ `w3-05b-bar-zoom.png`) | flag on, client, **genuinely dark + accessibility-XXL** | Today: bar reads `Today  Spaces  Pieces  Studio`, gutters, no truncation/ellipsis (`116ba49b1` verified on glass, not just integration's shot) |
+| `w3-06-flagon-pieces-dark-xxl.png` (+ `w3-06b-bar-zoom.png`) | flag on, client, dark + XXL | Pieces: same bar check, dark background confirmed genuine on the second attempt |
+| `w3-07-flagon-studio-dark-xxl.png` | flag on, client, dark + XXL | Studio: dark, readable at XXL |
+| `w3-08-flagoff-today-client.png` | flag **off**, client | W2 root: no bar, NEEDS YOU/MOVED card, Leah seat, Your House rail, dock hint at bottom |
+| `w3-09-flagon-today-james.png` | flag on, `james.okafor@example.com` (matched/lead tier) | "Nothing needs you right now" / "Leah Hartwell picked up your request" (SP-07's matched branch) · "See your design request" · Leah seat · "Start with a room" |
+| `w3-10-flagon-studio-oneTap-james.png` | flag on, james | One tap → `Your Studio`, lead-tier empty rows ("Nothing needs a decision", "No active projects yet") |
+| `w3-11-flagon-guest-freshtour-step1.png` | flag on, **guest**, fresh session (no prior guest state survives a relaunch) | First-launch tour popover, **`Step 1 of 2`**, body **"This is your Daily Room — picks and stories chosen for your space."` — the retired pre-B-8 sentence, on the flag-on root |
+| `w3-12-flagon-studio-oneTap-guest.png` | flag on, guest | One tap → `Your Studio`, truthful empty ("Your Studio begins with a project… Open settings") — guest/discovering draws nothing fabricated |
+| `w3-13-flagoff-today-client-final.png` | flag off, client (final/leave state) | Same NEEDS YOU/MOVED/seat/house-rail structure as `w2-02-today-activeproject-dark.png`, only the dated rows differ (later data) — structural byte-for-byte held |
+| `w3-14-flagon-companion-six-rows-today-client.png` | flag on, client, on Today | Companion panel, **exactly six rows**: Message your designer · Your studio · Your recommendations · Saved · Add your first space · Your profile |
+| `w3-15-flagon-spaces-empty-client.png` | flag on, client | Spaces tab root at zero rooms: `Your Spaces`, **no back chevron** (`8fde85564` verified) |
+
+**One finding beyond what integration.md already named.** `w3-11`'s `Step 1 of 2` is not just the
+already-documented Sanity-content override (which explains the *body* text on either list, since
+`step1Home`'s surface key is shared by both `FirstLaunchTourModel.defaultSteps` and
+`.preHouseFirstSteps`) — it is also evidence the **denominator itself reads 2, not 3**, on a
+confirmed flag-on root (the bar was on screen). Read against
+`Features/Help/FirstLaunchTour.swift`: `defaultSteps` has 3 entries (`.homeGreeting`, `.todayRecord`,
+`.profileMonogram`); guest/discovering's Record card **draws nothing when empty** (W2's synthesis
+graft, reconfirmed live — the guest Today in this walk has no NEEDS YOU/record block at all). If the
+tour's step count is computed from anchors that actually mount, `.todayRecord` never mounts for a
+guest with an empty Record, which would explain 2-of-3 without needing the flag-off list at all. Not
+independently verified against the runtime filtering code — flagged for whoever roots out the B-8
+copy fix, since it changes the fix from "update three Sanity documents" to "also decide what a
+guest's tour looks like when step 2 has nothing to point at."
