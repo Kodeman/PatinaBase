@@ -455,6 +455,11 @@ public final class DesignRequestStatusService {
         guard AuthService.shared.isAuthenticated else {
             requests = []
             hasLoaded = false
+            // A dismissal collapses the card for this reader's session. When
+            // the session ends the collapse ends with it — otherwise "session"
+            // quietly means the process, and signing back in returns a card
+            // still hidden.
+            sessionDismissedLeadIds = []
             return
         }
 

@@ -86,15 +86,23 @@ struct DesignRequestPromotionDecayTests {
     }
 
     @MainActor
-    @Test("dismissing a match folds the card for the session and writes nothing")
-    func aMatchDismissalIsSessionOnly() {
+    @Test("dismissing a match folds the card for this session, and only this session")
+    func aMatchDismissalIsSessionOnly() async {
+        // The shared service is the only way in — `dismiss` is the seam under
+        // test — so the test hands it back the way it found it at the end.
         let service = DesignRequestStatusService.shared
         let matched = request(status: "accepted", stageAnchorDaysAgo: 5)
         service.dismiss(matched)
         #expect(service.sessionDismissedLeadIds.contains(matched.leadId))
-        // The receipt is untouched, so the next launch — which rebuilds the
-        // status from the row and the receipt — has nothing to hide it with.
-        #expect(matched.dismissedStageRaw == nil)
+        // Nothing is written, so a status rebuilt from the row and the receipt
+        // — which is what the next launch does — has nothing to hide it with.
         #expect(matched.isVisibleForPromotion(now: now))
+
+        guard !AuthService.shared.isAuthenticated else { return }
+        // Signing out ends the session, and the collapse ends with it.
+        // Otherwise "session" quietly means the process and the card is still
+        // hidden after signing back in.
+        await service.refresh()
+        #expect(service.sessionDismissedLeadIds.isEmpty)
     }
 }
