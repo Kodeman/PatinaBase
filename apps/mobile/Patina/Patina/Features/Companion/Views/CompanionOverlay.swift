@@ -40,9 +40,31 @@ public struct CompanionOverlay: View {
     /// expand, incremented per tap, reported on close (replacing the old
     /// hardcoded `interactionCount: 0`).
     @State private var panelInteractionCount: Int = 0
-    /// Drives the contextual help-panel sheet attached to the Companion
-    /// surface. Toggled by the `?` button in the expanded panel header.
-    @State private var isHelpPanelPresented: Bool = false
+    /// One presentation for both of this surface's sheets.
+    ///
+    /// The help panel and the SP-06 claim used to sit on the chain as two
+    /// separate `.sheet(isPresented:)` modifiers — the shape M-2 collapsed on
+    /// `ProductDetailView` and H1 collapsed on `RoomProjectView`, and the third
+    /// and last instance in the app (fix2-review MAJ-1). Two sheets on one
+    /// chain race: whichever loses is silently never presented. That is merely
+    /// annoying for the help panel and load-bearing for the claim — if the
+    /// claim sheet does not present, `LocalStoreClaim.isAsking` stays true
+    /// forever, `keep()`/`startFresh()` are never called, and
+    /// `AuthService.settleLocalStore`'s `guard !claimPending` suppresses the
+    /// account's hydrate for the whole sign-in.
+    enum Presented: Identifiable {
+        case help
+        case localStoreClaim
+
+        var id: String {
+            switch self {
+            case .help: return "help"
+            case .localStoreClaim: return "localStoreClaim"
+            }
+        }
+    }
+
+    @State private var presented: Presented?
 
     /// Full-screen touch shield, alive for as long as the panel occupies the
     /// screen — including both animations, and inserted/removed WITHOUT a
@@ -325,7 +347,7 @@ public struct CompanionOverlay: View {
                     collapseToButton()
                     Task {
                         try? await Task.sleep(for: .seconds(0.3))
-                        isHelpPanelPresented = true
+                        presented = .help
                     }
                 },
                 onDismiss: { collapseToButton() },
@@ -514,24 +536,50 @@ public struct CompanionOverlay: View {
                 }
             }
         }
-        // Contextual help panel — surfaces every Sanity article whose
-        // surfaceKey is `ios-app/companion` or a child of it. Reachable from
-        // the `?` button in the expanded panel header.
-        .helpPanel(
-            isPresented: $isHelpPanelPresented,
-            surfaceKey: SurfaceKeys.IOSApp.Companion.root
-        )
-        // SP-06: the first-sign-in claim. Hosted here because the Companion is
+        // The SP-06 claim is raised by `LocalStoreClaim`, not by a tap, so the
+        // one driver has to follow it. Hosted on the Companion because it is
         // the one surface always mounted in the `.main` phase, which is exactly
         // where the app lands the moment the claim decision is due.
-        .sheet(isPresented: Binding(
-            get: { localStoreClaim.isAsking },
-            set: { if !$0 { localStoreClaim.keep() } }
-        )) {
-            LocalStoreClaimSheet(
-                onKeep: { localStoreClaim.keep() },
-                onStartFresh: { localStoreClaim.startFresh() }
-            )
+        .onChange(of: localStoreClaim.isAsking) { _, isAsking in
+            if isAsking {
+                presented = .localStoreClaim
+            } else if presented == .localStoreClaim {
+                presented = nil
+            }
+        }
+        // One sheet for both presentations (see `Presented`).
+        .sheet(item: $presented) { which in
+            switch which {
+            case .help:
+                // Contextual help panel — surfaces every Sanity article whose
+                // surfaceKey is `ios-app/companion` or a child of it. Reachable
+                // from the `?` button in the expanded panel header.
+                HelpPanelSheet(
+                    surfaceKey: SurfaceKeys.IOSApp.Companion.root,
+                    isPresented: Binding(
+                        get: { presented == .help },
+                        set: { if !$0 { presented = nil } }
+                    )
+                )
+            case .localStoreClaim:
+                LocalStoreClaimSheet(
+                    onKeep: {
+                        presented = nil
+                        localStoreClaim.keep()
+                    },
+                    onStartFresh: {
+                        presented = nil
+                        localStoreClaim.startFresh()
+                    }
+                )
+                // A swipe-down is an answer too, and it must be the same
+                // answer the sheet's own "Keep them" gives — otherwise
+                // `isAsking` stays true, nothing hydrates, and the person is
+                // never asked again either.
+                .onDisappear {
+                    if localStoreClaim.isAsking { localStoreClaim.keep() }
+                }
+            }
         }
     }
 
