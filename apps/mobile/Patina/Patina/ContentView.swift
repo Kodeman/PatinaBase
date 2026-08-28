@@ -245,7 +245,8 @@ struct ContentView: View {
             workCoreDestination(for: route)
 
         case .threadList, .threadDetail, .proposalList, .proposalDetail,
-             .invoiceList, .invoiceDetail, .budget, .documentList:
+             .invoiceList, .invoiceDetail, .budget, .documentList,
+             .orderList, .orderDetail:
             workDocumentsDestination(for: route)
         }
     }
@@ -401,6 +402,12 @@ struct ContentView: View {
 
         case .documentList:
             DocumentListView()
+
+        case .orderList:
+            OrderedListView()
+
+        case .orderDetail(let orderId):
+            OrderDetailView(orderId: orderId)
 
         default:
             EmptyView() // unreachable — dispatched only for the cases above

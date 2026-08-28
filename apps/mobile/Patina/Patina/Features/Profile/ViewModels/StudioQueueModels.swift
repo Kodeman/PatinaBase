@@ -141,4 +141,9 @@ struct StudioQueueInput {
     let notifications: [RemoteNotification]
     let currentUserId: String?
     let now: Date
+    /// W5 / Q6: the client's orders over both rails, already merged by
+    /// `ClientOrderBuilder`. Last and defaulted so the nine existing call sites
+    /// keep compiling — a Studio built before the orders land simply carries no
+    /// Ordered row, which is the same thing as having none.
+    var orders: [ClientOrder] = []
 }

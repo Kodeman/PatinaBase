@@ -234,6 +234,10 @@ public struct CompanionContext: Equatable {
             return "Billed to date"
         case .documentList:
             return "Your documents"
+        case .orderList:
+            return "Your orders"
+        case .orderDetail:
+            return "Following an order"
         }
     }
 
@@ -285,6 +289,8 @@ public struct CompanionContext: Equatable {
             return "chart.pie"
         case .documentList:
             return "folder"
+        case .orderList, .orderDetail:
+            return "shippingbox"
         }
     }
 }
