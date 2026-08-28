@@ -211,7 +211,9 @@ the "· due Sep 1" vs "· Sep 1" state wording (one word).
   phases and `handleIntent` unchanged; NEXT STEPS decay re-checked; tour rewritten (B-8) with
   `FirstLaunchTourTests` updated.
 Acceptance: T1–T14 re-walked with the bar (`-PatinaFlags house-first`); Studio one tap at every
-tier; dark + XXL; flag off restores the W2 root byte-for-byte.
+tier; dark + XXL; flag off restores the W2 **root** byte-for-byte — amended W3-fix (R4): the
+first-launch tour is the one exception, since B-8's rewrite applies on both roots, so flag-off
+keeps the W2 surfaces with the rewritten two-step tour over them.
 
 ### W3 — INTEGRATED, fix round in flight (2026-08-28; `waves/w3/`; 1074 tests; 22 commits on
 `daily-return/integration`)

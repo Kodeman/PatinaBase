@@ -329,6 +329,17 @@ written. Corrections and additions below.
   m" upload line are all implemented and code-read at tip; they are unverifiable in Simulator because
   `RoomCaptureService.isSupported` is false there (no RoomPlan). A sim-only walk cannot re-flag these
   as bugs — it can only note they remain unverified and need a device pass (already tracked, §5).
+- **C23 — A push never changes tabs; only a deep link, a push notification, or a tab tap does.**
+  The route→tab table (`Features/Navigation/RouteTabTable.swift`, inventoried case by case in
+  `waves/w3/steward.md` §1) is read by `AppCoordinator.openExternal(_:)` alone — the four outside
+  doors. An in-app tap goes through `TabNavigationModel.push(_:)`, which stays on the tab already on
+  screen, so Back returns the person where they were and a room's own "browse pieces for this room"
+  never strands the room behind a tab switch. That is why `roomEmergence` and `roomSavedItems` are
+  filed under **Spaces** rather than the brief's literal Pieces/Saved: they are reached from inside a
+  room, and the tab entry only decides where a *link* to them would land (W3-fix R7, upholding the
+  steward's rule; pinned by `TabNavigationModelTests.aRoomsBrowseNeverLeavesSpaces` and
+  `.theBellPushesOntoTodayRatherThanJumpingToStudio`). A tab-root route is the one exception — it
+  selects its tab and pops to root, because the bar already carries that door.
 - **C22 — The alignment deck's own pre-ruling findings are a separate, not-fully-tracked layer.**
   The July alignment deck's "Evidence" section (§03, 2026-07-09 fresh sim walk) surfaced defects that
   are distinct from both R27–R33 and U01–U46 — e.g. "Dark-mode companion scrim bleeds… appears on
