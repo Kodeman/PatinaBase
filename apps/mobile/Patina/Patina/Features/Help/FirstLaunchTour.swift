@@ -674,6 +674,10 @@ public struct FirstLaunchTour<Content: View>: View {
 
     public var body: some View {
         content()
+            // Names the root the anchors measure themselves against, so each
+            // one can place its card on the side of itself that has room
+            // (`FirstLaunchTourPopoverPlacement`).
+            .coordinateSpace(.named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace))
             // `.environment(\.firstLaunchTourModel, …)` is the load-bearing
             // injection — the anchor modifier reads via `@Environment` so
             // previews of anchored views render outside a tour host without
@@ -741,14 +745,34 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
     let anchor: FirstLaunchTourAnchor
     @Environment(\.firstLaunchTourModel) private var model: FirstLaunchTourModel?
 
+    /// Where this anchor sits inside the tour's root, refreshed whenever the
+    /// layout moves it. Drives `arrowEdge` — see
+    /// `FirstLaunchTourPopoverPlacement` for why the edge cannot be a constant.
+    @State private var geometry = FirstLaunchTourPopoverPlacement.AnchorGeometry.unmeasured
+
     func body(content: Content) -> some View {
         content
+            .onGeometryChange(for: FirstLaunchTourPopoverPlacement.AnchorGeometry.self) { proxy in
+                FirstLaunchTourPopoverPlacement.AnchorGeometry(
+                    midY: proxy.frame(
+                        in: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
+                    ).midY,
+                    containerHeight: proxy.bounds(
+                        of: .named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace)
+                    )?.height ?? 0
+                )
+            } action: { measured in
+                geometry = measured
+            }
             // Track this anchor's presence so the orchestrator can skip a step
             // whose anchor never mounts (e.g. `.addToRoom` for a zero-room
             // user) instead of stalling on an invisible popover.
             .onAppear { model?.registerAnchor(anchor) }
             .onDisappear { model?.unregisterAnchor(anchor) }
-            .popover(isPresented: isShownBinding, arrowEdge: .top) {
+            .popover(
+                isPresented: isShownBinding,
+                arrowEdge: FirstLaunchTourPopoverPlacement.arrowEdge(for: geometry)
+            ) {
                 popoverContent
                     .presentationCompactAdaptation(.popover)
             }

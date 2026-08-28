@@ -80,4 +80,48 @@ struct StudioDoorTests {
         let account = try SourcePin.read("Patina/Features/Account/AccountView.swift")
         #expect(account.contains("AccountView.DeleteAccountButton"))
     }
+
+    /// The card must not cover the tab it points at. `.popover`'s `arrowEdge`
+    /// names the anchor edge the arrow leaves from, so `.top` hangs the card
+    /// BELOW the anchor — with the anchor on the bottom bar there is no room
+    /// below, and UIKit repositioned the card over the bar, caretless, hiding
+    /// `Spaces`, `Pieces` and `Studio` (`shots/w3-fix-03.png`). The edge
+    /// follows the anchor's measured position instead.
+    @Test
+    func theTourCardSitsAboveAnAnchorOnTheBarAndBelowOneInTheHeader() {
+        // `dr-w3-int` geometry: the bar row closes the tour's root, the
+        // greeting opens it.
+        let onTheBar = FirstLaunchTourPopoverPlacement.AnchorGeometry(
+            midY: 726.5, containerHeight: 751
+        )
+        let inTheHeader = FirstLaunchTourPopoverPlacement.AnchorGeometry(
+            midY: 44, containerHeight: 751
+        )
+
+        #expect(FirstLaunchTourPopoverPlacement.arrowEdge(for: onTheBar) == .bottom)
+        #expect(FirstLaunchTourPopoverPlacement.arrowEdge(for: inTheHeader) == .top)
+
+        // Nothing measured — an anchored view previewed outside a tour host.
+        // The historical placement stands rather than a guess.
+        #expect(FirstLaunchTourPopoverPlacement.arrowEdge(for: .unmeasured) == .top)
+    }
+
+    /// …and the modifier asks for that decision rather than naming an edge, so
+    /// the same anchor placed on the header (flag-off root) and on the bar
+    /// (flag-on) is right on both without a call-site flag.
+    @Test
+    func theAnchorModifierDoesNotHardCodeItsArrowEdge() throws {
+        let tour = try SourcePin.read("Patina/Features/Help/FirstLaunchTour.swift")
+        let code = SourceScan.code(in: tour)
+
+        #expect(!code.contains("arrowEdge: .top"))
+        #expect(!code.contains("arrowEdge: .bottom"))
+        #expect(code.contains("arrowEdge: FirstLaunchTourPopoverPlacement.arrowEdge(for: geometry)"))
+        // The host names the root the anchors measure themselves against.
+        #expect(
+            code.contains(
+                ".coordinateSpace(.named(FirstLaunchTourPopoverPlacement.rootCoordinateSpace))"
+            )
+        )
+    }
 }
