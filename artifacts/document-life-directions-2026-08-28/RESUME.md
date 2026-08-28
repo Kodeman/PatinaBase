@@ -145,6 +145,8 @@ on hover."* The interview that followed produced the direction actually shipped.
 - Depth stays one token, `--elevation-sheet`, at three sites (the Q04 amendment, not canon);
   motion stays the portal's own vocabulary, the roster settling once per load.
 
+**Ruling (comment on the mockup):** THE STUDIO block on the desk keeps its deployed typography — untouched by any direction.
+
 **Published:**
 - Mockup — **https://claude.ai/code/artifact/bf781dba-3938-464d-849d-5787bbd79cd7** —
   `v2-a-with-b-colour`, one self-contained file, built and reviewed in `mock/final/`.

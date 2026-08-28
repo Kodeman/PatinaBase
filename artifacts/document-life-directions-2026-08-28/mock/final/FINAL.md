@@ -117,6 +117,8 @@ wash sweeping the row.
 
 **Added** — the hover wash, described in §1 and measured in §2.
 
+**Ruling (Kody, 2026-08-28):** THE STUDIO contents block on the desk keeps its deployed typography exactly — *"the currently deployed studio at the bottom of the desk looks great, dont change the typography."* No direction restyles it.
+
 ## 2. Token table
 
 Contrast is WCAG 2.2, computed by `research/contrast-check.mjs` over `mock/final/tokens.css` (the
@@ -538,6 +540,7 @@ Routes, components, acts, copy and information architecture — read off
 - **THE STUDIO** and its three columns — ROOMS (Library / People / The Scans), LEDGERS (Orders /
   Accounts / Hours / The Post), BEGIN (Open a project / Draft a design agreement / Draw an invoice ·
   new / Add a maker / Open the Drafting Room), with their sub-lines and their SHEET / ↗ tags;
+- **THE STUDIO contents block on the desk keeps today's deployed typography exactly** — Kody, 2026-08-28: *"the currently deployed studio at the bottom of the desk looks great, dont change the typography."* The mockup mirrors the deployed register (Playfair names, mono sub-lines, dotted leaders, glyphs); no direction restyles it.
 - the drawer, **with today's icons back** (R19/R20): the desk drawer is **Patina** with *no*
   breadcrumb, the document drawer reads **DOCUMENT** (not VANDERSTEEN); the centre carries a book, two
   people, scan corners, a ledger and a magnifier beside **Library / People / The Scans / Ledgers ↑ /
