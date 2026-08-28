@@ -168,8 +168,16 @@ final class CollectionsViewModel {
 
     /// R26: remove a saved item from the local store (the source the
     /// "All Items" tab reads). Backs the row's context-menu Remove action.
+    ///
+    /// Through `SavedRemoval` so the room's own copy and the account's mirror
+    /// go with the row. Deleting the `TableItemModel` alone left the room the
+    /// piece was added to still counting it (fix2-review MAJ-2).
     func removeSavedItem(_ item: TableItemModel, context: ModelContext) {
-        context.delete(item)
+        if let productId = item.productId {
+            SavedRemoval.remove(productId: productId, context: context)
+        } else {
+            context.delete(item)
+        }
         savedItems.removeAll { $0.id == item.id }
         HapticManager.shared.impact(.light)
     }
