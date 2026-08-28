@@ -129,6 +129,24 @@ struct OrderResolutionTests {
         #expect(OrderDetailAction.contact(text: "Patina Concierge, 9–5 CT").id == "contact")
     }
 
+    // MARK: - w5 integration: the seam this file's resolution was built for
+
+    /// M5c prints `See your order`. C1 built the control and passed `nil`,
+    /// because the destination lived on C2's branch; integration is where the
+    /// two halves meet. Pinned at the source because a SwiftUI closure has no
+    /// other reachable surface — if this ever goes back to `nil` the CTA stops
+    /// drawing and nothing else in the suite would notice.
+    @Test("Order placed hands its direct-order id to the order route")
+    func orderPlacedReachesTheOrderDetail() throws {
+        let source = try SourcePin.read(
+            "Patina/Features/ProductDetail/Views/ProductDetailView.swift"
+        )
+        let handover = try #require(source.range(of: "onSeeOrder: { directOrderId in"))
+        let route = try #require(source.range(of: ".orderDetail(orderId: directOrderId)"))
+        #expect(handover.upperBound < route.lowerBound)
+        #expect(source.contains("onSeeOrder: nil") == false)
+    }
+
     // MARK: - Old Dominion
 
     @Test("every carrier key in the map is reachable from a real carrier name")

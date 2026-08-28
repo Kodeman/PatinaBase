@@ -226,14 +226,17 @@ struct ProductDetailView: View {
                     contactLine: terms.contact.map { "Questions or damage: \($0)" },
                     soldBy: displayProduct.map(OrderSheetContent.soldBy) ?? "",
                     taxShippingEnabled: terms.taxShippingEnabled,
-                    // The order route and the id it takes belong to the order
-                    // lane (steward map §6: "if an order route is needed, C2
-                    // asks"), and its token is not a bare `direct_orders` uuid
-                    // — a settled order re-keys onto the fulfillment row. This
-                    // lane hands over the direct-order id and draws no control
-                    // until a destination exists, because a control that goes
-                    // nowhere is worse than no control.
-                    onSeeOrder: nil,
+                    // C1 handed the direct-order id over and drew no control
+                    // until a destination existed; W5's integration is where it
+                    // does. `OrdersService.resolve` takes a bare
+                    // `direct_orders` uuid as well as a prefixed token, and
+                    // matches it against `directOrderId` too — so the CTA still
+                    // lands after the settle re-keys the order onto the
+                    // fulfillment row under a different uuid.
+                    onSeeOrder: { directOrderId in
+                        presented = nil
+                        coordinator.navigate(to: .orderDetail(orderId: directOrderId))
+                    },
                     onBackToToday: {
                         presented = nil
                         coordinator.navigate(to: .heroFrame)
@@ -273,7 +276,6 @@ struct ProductDetailView: View {
             presented = .askAboutPiece(reason: reason)
         }
     }
-
 
     /// Recomputed when the screen appears and when the piece is put in a room
     /// — the two moments the answer can change.
