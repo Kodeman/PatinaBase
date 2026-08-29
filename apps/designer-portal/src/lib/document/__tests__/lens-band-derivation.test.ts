@@ -2,11 +2,17 @@ import type { RedLetterRow } from '@/components/document/red-letter-zone';
 import {
   deriveLensBand,
   rankStanding,
+  shortSubject,
   shortenAct,
-  truncateLine,
   type LensBandInput,
   type LensSpreadKind,
 } from '../lens-band-derivation';
+import {
+  LENS_LINE2_GAP_PX,
+  LENS_LINE2_MEASURE_PX,
+  LENS_LINE2_PX_PER_CHAR,
+  LENS_MONO_PX_PER_CHAR,
+} from '../lens-constants';
 import type { TicketRow } from '../ticket-derivation';
 
 /**
@@ -73,6 +79,7 @@ const input = (over: Partial<LensBandInput> = {}): LensBandInput => ({
   ticket: [],
   needs: [],
   guide: null,
+  tier: 'full',
   household: 'Vandersteen residence',
   stageWord: 'Procurement & Orders',
   stageIndex: { position: 4, of: 6 },
@@ -241,6 +248,9 @@ describe('deriveLensBand · line 2 (L-1)', () => {
         kind: 'none',
         sentence: '',
         act: null,
+        form: 'long',
+        long: { sentence: '', act: null },
+        short: null,
         standingCount: 0,
       });
       expect(model.standing).toEqual([]);
@@ -329,61 +339,253 @@ describe('rankStanding · every exception, worst first (OD-8)', () => {
   });
 });
 
-describe('truncateLine · the order, and what never shortens', () => {
-  const ORDER = [
-    { from: 'SEND A REMINDER', to: 'REMINDER' },
-    { from: ' approval', to: '' },
-  ];
-
-  it('stops at the first form that fits — the act shortens, the subject stays', () => {
-    expect(
-      truncateLine('Primary bedroom approval SEND A REMINDER', 34, ORDER),
-    ).toBe('Primary bedroom approval REMINDER');
-  });
-
-  it('walks on to the subject only when the act alone will not do it', () => {
-    expect(
-      truncateLine('Primary bedroom approval SEND A REMINDER', 30, ORDER),
-    ).toBe('Primary bedroom REMINDER');
-  });
-
-  it('refuses a step that would take a number, a day count or a room date', () => {
-    expect(
-      truncateLine('1 damaged, carrier window closes Aug 26', 10, [
-        { from: '1 damaged', to: '' },
-        { from: 'Aug 26', to: '' },
-      ]),
-    ).toBe('1 damaged, carrier window closes Aug 26');
-  });
-
-  it('returns the line untouched when it already fits', () => {
-    expect(truncateLine('Close the book', 110, [])).toBe('Close the book');
-  });
-
-  it('hands the full line back when no step brings it inside — the ellipsis is last', () => {
-    expect(truncateLine('a very long sentence indeed', 4, [])).toBe(
-      'a very long sentence indeed',
+describe('rankStanding · deadline distance, not kind (W3-R1)', () => {
+  it('puts a window closing tomorrow above a decision due weeks out', () => {
+    // The falsifier the old four-tier sort could not pass: `decision-due`
+    // outranked `damage` on kind alone, so a task due in three weeks stood
+    // above a claim window that shuts tomorrow.
+    const ranked = rankStanding(
+      [],
+      [
+        need('task', 'task_due', 'Kickoff walkthrough due in 21 days', 'Open it'),
+        need('claim', 'damage_claim', 'Carrier window closes in 1 day', 'File it'),
+      ],
     );
+    expect(ranked.map((item) => item.key)).toEqual(['need:claim', 'need:task']);
+    expect(ranked.map((item) => item.sense)).toEqual(['ahead', 'ahead']);
+    expect(ranked.map((item) => item.distance)).toEqual([1, 21]);
   });
 
-  it("shortens an act to the word a reader cannot reconstruct", () => {
-    expect(shortenAct('SEND A REMINDER')).toBe('REMINDER');
-    expect(shortenAct('Chase Sturdy Oak')).toBe('Oak');
+  it('puts everything past its day above everything ahead of it', () => {
+    const ranked = rankStanding(
+      [],
+      [
+        need('claim', 'damage_claim', 'Carrier window closes in 1 day', 'File it'),
+        need('inv', 'overdue_invoice', 'Invoice overdue 2 days', 'Send a reminder'),
+      ],
+    );
+    expect(ranked.map((item) => item.key)).toEqual(['need:inv', 'need:claim']);
+    expect(ranked.map((item) => item.sense)).toEqual(['past', 'ahead']);
+  });
+
+  it('files a silence last, however many days it has been counting', () => {
+    const ranked = rankStanding(
+      [],
+      [
+        need('po', 'po_unacknowledged', 'PO-2026-0418 unanswered, 14 days', 'Follow up'),
+        need('claim', 'damage_claim', 'Carrier window closes in 9 days', 'File it'),
+      ],
+    );
+    expect(ranked.map((item) => item.key)).toEqual(['need:claim', 'need:po']);
+    expect(ranked.map((item) => item.sense)).toEqual(['ahead', 'none']);
+  });
+
+  it('breaks an equal distance on the desk’s tie-break, and nothing else', () => {
+    const ranked = rankStanding(
+      [],
+      [
+        need('pulse', 'pulse_due', 'Pulse due', null),
+        need('claim', 'damage_claim', 'Carrier window open', 'File it'),
+      ],
+    );
+    // Both are silences; `damage_claim` is rank 1 to `pulse_due`'s 3.
+    expect(ranked.map((item) => item.key)).toEqual(['need:claim', 'need:pulse']);
+  });
+});
+
+describe('the short form and the act’s verb (D-B24, C-07)', () => {
+  it('keeps the act’s FIRST word — the verb, never a particle or a surname', () => {
+    expect(shortenAct('FOLLOW UP')).toBe('FOLLOW');
+    expect(shortenAct('Chase Sturdy Oak')).toBe('Chase');
+    expect(shortenAct('SEND A REMINDER')).toBe('SEND');
+    expect(shortenAct('FILE THE CLAIM')).toBe('FILE');
     expect(shortenAct('SEND')).toBe('SEND');
   });
 
-  it('shortens the act before the sentence when line 2 overruns', () => {
-    const long = `${'x'.repeat(100)} tail`;
+  it('takes the head noun of the object, capped at twelve characters', () => {
+    expect(
+      shortSubject('Primary bedroom approval, with the client since Aug 13'),
+    ).toBe('BEDROOM');
+    expect(
+      shortSubject('Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22'),
+    ).toBe('INV-2026-114');
+    expect(shortSubject('FDL-0912 has an open damage claim')).toBe('FDL-0912');
+    expect(shortSubject('2 decisions overdue — oldest due Aug 23')).toBe(
+      'DECISIONS',
+    );
+    expect(shortSubject('$17,500 owed you')).toBe('$17,500');
+  });
+
+  it('prints `<STATE> <DAYS>D · <SUBJECT>` — and drops the day count where there is none', () => {
+    const withDays = rankStanding([], [VANDERSTEEN_NEEDS[0]])[0];
+    expect(withDays.short).toEqual({
+      state: 'OVERDUE',
+      days: 6,
+      subject: 'BEDROOM',
+    });
+    const silence = rankStanding(
+      [],
+      [need('po', 'po_unacknowledged', 'PO-0912 sent — no acknowledgment', 'Follow up')],
+    )[0];
+    expect(silence.short.days).toBeNull();
     const model = deriveLensBand(
       input({
-        guide: {
-          text: long,
-          act: { label: 'SEND A REMINDER', onAct: jest.fn() },
-        },
+        needs: [
+          need('po', 'po_unacknowledged', 'PO-0912 sent — no acknowledgment', 'Follow up'),
+        ],
+        tier: 'mobile',
       }),
     );
-    expect(model.line2.act?.label).toBe('REMINDER');
-    expect(model.line2.sentence).toBe(long);
+    expect(model.line2.short?.sentence).toBe('NO ACK · PO-0912');
+  });
+
+  it('prints the long form when it fits and the short one when it does not', () => {
+    const needs = [VANDERSTEEN_NEEDS[0], VANDERSTEEN_NEEDS[1]];
+    expect(deriveLensBand(input({ needs, tier: 'full' })).line2.form).toBe('long');
+    const narrow = deriveLensBand(input({ needs, tier: 'mobile' })).line2;
+    expect(narrow.form).toBe('short');
+    expect(narrow.sentence).toBe('OVERDUE 6D · BEDROOM');
+    expect(narrow.act?.label).toBe('Send');
+    // The long form is still carried — the band prints one, the model holds both.
+    expect(narrow.long.sentence).toBe(VANDERSTEEN_NEEDS[0].text);
+    expect(narrow.long.act?.label).toBe('Send a reminder');
+  });
+});
+
+describe('the seeded paper fits its measure at both ends (D-B24 twin)', () => {
+  /** The eight exceptions the `…d5` seed actually raises, as `w3-r2-discharge.md`
+   *  measured them in the band's own type. */
+  const SEEDED: RedLetterRow[] = [
+    need(
+      'invoice',
+      'overdue_invoice',
+      'Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22 — send a reminder',
+      'Send reminder',
+    ),
+    need('decisions', 'overdue_decision', '2 decisions overdue — oldest due Aug 23', 'Chase the approval'),
+    need('inspect', 'awaiting_inspection', '1 piece delivered — awaiting inspection', 'Inspect the delivery'),
+    need('claim', 'damage_claim', 'FDL-0912 has an open damage claim', 'File the claim'),
+    need('po', 'po_unsent', 'PO-2026-0418 drafted — not yet sent', 'Send the purchase order'),
+  ];
+  const SEEDED_TICKET: TicketRow[] = [
+    ticketRow('money', {
+      rank: 'money-at-risk',
+      phrase: '$17,500 owed you',
+      standingSince: '2026-08-22',
+    }),
+    ticketRow('pieces', { rank: 'piece-stuck', phrase: '1 damaged', standingSince: null }),
+    ticketRow('spec', { rank: 'piece-stuck', phrase: '2 unspecified', standingSince: null }),
+  ];
+
+  const ranked = rankStanding(SEEDED_TICKET, SEEDED);
+  const doorPx =
+    `+${ranked.length - 1} MORE`.length * LENS_MONO_PX_PER_CHAR +
+    LENS_LINE2_GAP_PX;
+  const width = (sentence: string, act: string | null) =>
+    sentence.length * LENS_LINE2_PX_PER_CHAR +
+    doorPx +
+    (act ? act.length * LENS_MONO_PX_PER_CHAR + LENS_LINE2_GAP_PX : 0);
+
+  it.each(ranked.map((item) => [item.key, item] as const))(
+    'fits %s’s SHORT form inside the 327px mobile measure, act and door and all',
+    (_key, item) => {
+      const short =
+        item.short.days == null
+          ? `${item.short.state} · ${item.short.subject}`
+          : `${item.short.state} ${item.short.days}D · ${item.short.subject}`;
+      const act = item.act ? shortenAct(item.act.label) : null;
+      expect(width(short, act)).toBeLessThanOrEqual(
+        LENS_LINE2_MEASURE_PX.mobile,
+      );
+    },
+  );
+
+  it.each(ranked.map((item) => [item.key, item] as const))(
+    'fits %s’s LONG form inside the 900px full measure',
+    (_key, item) => {
+      expect(width(item.sentence, item.act?.label ?? null)).toBeLessThanOrEqual(
+        LENS_LINE2_MEASURE_PX.full,
+      );
+    },
+  );
+
+  it('leads with the most overdue thing, and names it with its act', () => {
+    const model = deriveLensBand(
+      input({ needs: SEEDED, ticket: SEEDED_TICKET, tier: 'full' }),
+    );
+    expect(model.line2.sentence).toBe(SEEDED[0].text);
+    expect(model.line2.act?.label).toBe('Send reminder');
+  });
+});
+
+describe('line 1 drops the money while line 2 names it (D-B26)', () => {
+  it('yields the money half to line 2 on the …d5 shape', () => {
+    const model = deriveLensBand(
+      input({
+        needs: [
+          need(
+            'invoice',
+            'overdue_invoice',
+            'Invoice INV-2026-114 · $17,500 overdue — oldest due Aug 22',
+            'Send reminder',
+          ),
+        ],
+      }),
+    );
+    expect(model.standing[0].namesMoney).toBe(true);
+    expect(model.line1.rightFlush).toBe('INSTALL SEP 15');
+    expect(model.line1.moneyOnly).toBeNull();
+  });
+
+  it('keeps the money on line 1 when line 2 is naming something else', () => {
+    const model = deriveLensBand(input({ needs: [VANDERSTEEN_NEEDS[0]] }));
+    expect(model.standing[0].namesMoney).toBe(false);
+    expect(model.line1.rightFlush).toBe('INSTALL SEP 15 · $17,500 OUT');
+    expect(model.line1.moneyOnly).toBe('$17,500 OUT');
+  });
+
+  it('yields it for the ticket’s own money row too', () => {
+    const model = deriveLensBand(
+      input({
+        ticket: [
+          ticketRow('money', {
+            rank: 'money-at-risk',
+            phrase: '$17,500 owed you',
+            standingSince: '2026-08-22',
+          }),
+        ],
+      }),
+    );
+    expect(model.line1.rightFlush).toBe('INSTALL SEP 15');
+  });
+});
+
+describe('deriveLensBand · the open inputs (W3-R2)', () => {
+  const INPUT_ITEM = {
+    key: 'signature',
+    eyebrow: 'SIGNATURE',
+    sentence: 'Client signature · Client · blocks Project activation',
+    act: null,
+  };
+
+  it('counts the inputs in the door and carries them for the sheet', () => {
+    const model = deriveLensBand(
+      input({ needs: VANDERSTEEN_NEEDS, inputs: [INPUT_ITEM] }),
+    );
+    expect(model.line2.standingCount).toBe(5);
+    expect(model.inputs).toEqual([INPUT_ITEM]);
+  });
+
+  it('carries them on a paper where nothing else stands', () => {
+    const model = deriveLensBand(
+      input({
+        inputs: [INPUT_ITEM],
+        guide: { text: 'Sent Aug 23 — not yet opened', act: null },
+      }),
+    );
+    expect(model.line2.kind).toBe('guide');
+    expect(model.line2.standingCount).toBe(1);
+    expect(model.inputs).toHaveLength(1);
   });
 });
 
