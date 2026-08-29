@@ -48,6 +48,10 @@ export interface DocSpineProps {
   /** The stop whose own region head is in frame — its value yields, its name
    *  stays (RF-02). W3 wires the observer; until then nothing is in frame. */
   headInFrame?: DocumentIndexKey | null;
+  /** L-6 — the letterhead is in frame. The head then yields its stage phrase
+   *  only; the household and the count stay printed and turn `--text-muted`
+   *  (RF-02). The arc never yields. */
+  letterheadInFrame?: boolean;
   /** C-4 · the reading stop and the jump that reaches it. ONE
    *  `useDocumentRunningIndex` call stands on this document and it stands on
    *  the page (W1 lifted it there for the margin rail and the mobile bar);
@@ -76,6 +80,7 @@ export function DocSpine({
   segments = [],
   doors = [],
   headInFrame = null,
+  letterheadInFrame = false,
   activeKey = null,
   onJumpRegion,
   onToggleRoom,
@@ -127,7 +132,13 @@ export function DocSpine({
           className="doc-rule-mid mb-3 min-h-[126px] shrink-0 pb-3 min-[1440px]:min-h-[117px]"
         >
           {household && (
-            <p className="truncate text-[13px] leading-tight text-[var(--text-primary)]">
+            <p
+              className={`truncate text-[13px] leading-tight transition-colors motion-reduce:transition-none ${
+                letterheadInFrame
+                  ? 'text-[var(--text-muted)]'
+                  : 'text-[var(--text-primary)]'
+              }`}
+            >
               {household}
             </p>
           )}
@@ -214,8 +225,20 @@ export function DocSpine({
               {/* Truncate the subject, never the number: the stage name loses
                 its tail before `4 OF 6` gives up a character. At 1180–1439
                 the 112px measure wraps it at spaces rather than clipping it
-                against the rail's own overflow-x-hidden. */}
-              <span className="block break-words">{stagePhrase.top}</span>
+                against the rail's own overflow-x-hidden.
+
+                L-6 — while the letterhead is in frame the phrase yields to the
+                letterhead's own arc, which is printing the same fact 60px
+                away. It yields in place: the head's height is reserved, so
+                nothing below it moves. */}
+              <span
+                data-letterhead-in-frame={letterheadInFrame ? 'true' : undefined}
+                className={`block break-words transition-opacity duration-200 motion-reduce:transition-none ${
+                  letterheadInFrame ? 'opacity-0' : 'opacity-100'
+                }`}
+              >
+                {stagePhrase.top}
+              </span>
               {stagePhrase.bottom && (
                 <span className="block break-words">{stagePhrase.bottom}</span>
               )}

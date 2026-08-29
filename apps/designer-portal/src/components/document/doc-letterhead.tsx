@@ -11,6 +11,12 @@
  *
  * Wave 1 (D-6): the in-hand room row left for the rail's head, and the vitals
  * print only fields that carry a value.
+ *
+ * Wave 3 (R127): the letterhead takes the instruments' ledger. At ≥1180 it
+ * stands in its own column beside the title block; below that the grid
+ * collapses to one column and the ledger falls under the vitals, where the row
+ * mounted before. One mount either way — the instruments register the mobile
+ * bar's primary act, and two of them would register it twice.
  */
 
 import type { ReactNode } from 'react';
@@ -26,6 +32,7 @@ export function DocLetterhead({
   client,
   projectId = null,
   needsSetup = null,
+  instruments = null,
 }: {
   title: string;
   vitals: string;
@@ -40,26 +47,35 @@ export function DocLetterhead({
   /** W1: the open setup needs, each with its own remedy. Empty, null and
    *  undefined all render nothing — the chip never announces a zero. */
   needsSetup?: NeedsSetupEntry[] | null;
+  /** W3: the letterhead instruments' ledger — its own column at ≥1180. */
+  instruments?: ReactNode;
 }) {
   return (
-    <header id="document-project-status" tabIndex={-1} className="doc-rule-mid mb-4 pb-5 pt-3.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
+    <header id="document-project-status" tabIndex={-1} className="doc-rule-mid mb-4 pb-4 pt-3.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
       <div className="mb-2.5">
         <StrataMark state="active" size="lg" fill={fill} label={fill ? 'Document progress' : undefined} />
       </div>
-      {projectId ? (
-        <LetterheadTitle projectId={projectId} serverTitle={title} />
-      ) : (
-        <h1 className="font-heading text-[40px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)]">
-          {title}
-        </h1>
-      )}
-      {client}
-      {projectId ? (
-        <LetterheadVitals projectId={projectId} />
-      ) : (
-        vitals && <p className="mt-1 text-[11px] text-[var(--text-muted)]">{vitals}</p>
-      )}
-      <NeedsSetupChip count={needsSetup?.length ?? 0} entries={needsSetup ?? []} />
+      <div className="grid grid-cols-1 items-start gap-x-6 gap-y-2 min-[1180px]:grid-cols-[1fr_auto]">
+        <div className="min-w-0">
+          {projectId ? (
+            <LetterheadTitle projectId={projectId} serverTitle={title} />
+          ) : (
+            <h1 className="font-heading text-[40px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)]">
+              {title}
+            </h1>
+          )}
+          {client}
+          {projectId ? (
+            <LetterheadVitals projectId={projectId} />
+          ) : (
+            vitals && <p className="mt-1 text-[11px] text-[var(--text-muted)]">{vitals}</p>
+          )}
+          <NeedsSetupChip count={needsSetup?.length ?? 0} entries={needsSetup ?? []} />
+        </div>
+        {instruments && (
+          <div className="min-w-0 min-[1180px]:justify-self-end">{instruments}</div>
+        )}
+      </div>
     </header>
   );
 }

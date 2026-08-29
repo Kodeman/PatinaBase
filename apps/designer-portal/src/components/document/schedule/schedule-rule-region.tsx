@@ -178,8 +178,8 @@ function ScheduleRuleRegionBody({
 
   if (folded) {
     return (
-      <section aria-label="Schedule frame" className="mb-4">
-        <RegionRule />
+      <section aria-label="Schedule frame" className="mt-[var(--doc-region-gap)]">
+        <RegionRule weight="mid" />
         <FoldSeam
           headingId={HEADING_ID}
           bodyId={BODY_ID}
@@ -196,7 +196,7 @@ function ScheduleRuleRegionBody({
   }
 
   return (
-    <section aria-label="Schedule frame" className="mb-4">
+    <section aria-label="Schedule frame" className="mt-[var(--doc-region-gap)]">
       <RegionRule />
       <RegionHead
         headingId={HEADING_ID}

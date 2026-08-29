@@ -39,7 +39,9 @@ jest.mock('../schedule/add-to-project-sheet', () => ({
 }));
 
 jest.mock('@/hooks/use-document-rooms', () => ({
-  useDocumentRooms: () => ({ data: [] }),
+  useDocumentRooms: () => ({
+    data: [{ id: 'room-1', name: 'Primary bedroom', budget_cents: null }],
+  }),
   useAddDocumentRoom: () => ({ mutate: jest.fn() }),
 }));
 
@@ -220,6 +222,34 @@ describe('FF&E region rule', () => {
     const rule = document.querySelector('[data-rule-weight]');
     expect(rule).toHaveAttribute('data-rule-weight', 'strong');
     expect(rule).toHaveClass('doc-rule-strong');
+  });
+
+  it('carries the region-gap token on the region root, and no other mt-*/mb-*', () => {
+    mockItems = [{ ...baseFurnishing }];
+    const { container } = renderSection();
+    const root = container.querySelector('[data-index-region="ffe"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
+  });
+
+  it('leaves the rule itself with no top margin — the region root owns the gap', () => {
+    mockItems = [{ ...baseFurnishing }];
+    renderSection();
+    const rule = document.querySelector('[data-rule-weight]');
+    expect(rule).toHaveClass('mt-0');
+  });
+
+  it('gives a room head half the region gap (12px), not the full token', () => {
+    mockItems = [{ ...baseFurnishing }];
+    const { container } = renderSection();
+    const roomHead = container.querySelector('#doc-room-room-1');
+    expect(roomHead).not.toBeNull();
+    expect(roomHead).toHaveClass('mt-[12px]');
+    expect(roomHead!.className).not.toMatch(/\bmt-4\b/);
   });
 });
 

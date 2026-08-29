@@ -211,3 +211,19 @@ describe('ScheduleSpine ongoing add-a-phase line', () => {
     expect(screen.queryByTestId('ghost-add-line')).not.toBeInTheDocument();
   });
 });
+
+describe('ScheduleSpine region gap (W3-L4)', () => {
+  it('carries the region-gap token as its own top margin, and no other mt-/mb-', () => {
+    const { container } = render(
+      <ScheduleSpine projectId="project-1" clientUserId={null} clientName="Winky Loft" />,
+    );
+
+    const root = container.querySelector('[data-index-region="schedule"]');
+    expect(root).not.toBeNull();
+    expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+    expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+    expect(root!.className).not.toMatch(/\bmb-/);
+  });
+});

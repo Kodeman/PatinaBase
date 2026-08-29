@@ -1,11 +1,30 @@
 'use client';
 
 import { DocumentAction } from './document-action';
-import { useMobilePrimaryAction } from './mobile/mobile-shell';
 import type { DocumentGuideModel } from '@/lib/document/document-guide';
+import type { LensGuideLine } from '@/lib/document/lens-band-derivation';
 import { documentEvents } from '@/lib/analytics/document-events';
 import React, { useEffect, useRef } from 'react';
-import { MOBILE_ACTION_PRIORITY } from './mobile/lifecycle-mobile-action';
+
+/**
+ * The guide's line, for the lens band (C-6).
+ *
+ * The headline and its act, unchanged — the band's line 2 is the one printing
+ * of that act at every width (OD-11 / DL-05), which is why this component no
+ * longer registers it with `useMobilePrimaryAction`. `onActivate` is the same
+ * handler the on-paper act uses, and it already resolves an href destination.
+ */
+export function deriveGuideModel(
+  model: DocumentGuideModel,
+  onActivate: () => void,
+): LensGuideLine {
+  return {
+    text: model.headline,
+    act: model.action
+      ? { label: model.action.label, onAct: onActivate }
+      : null,
+  };
+}
 
 export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel; onActivate: () => void }) {
   const href = model.action?.destination.kind === 'href' ? model.action.destination.href : null;
@@ -49,19 +68,6 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
       input_count: inputCount,
     });
   };
-  useMobilePrimaryAction(
-    model.action
-      ? {
-          actionKey: model.action.key,
-          surfaceKey: 'open-document',
-          regionKey: 'next-up',
-          label: model.action.label,
-          target: href ? { kind: 'href', href } : { kind: 'press', onPress: onActivate },
-          onSelected: recordSelection,
-        }
-      : null,
-    { priority: MOBILE_ACTION_PRIORITY.guide },
-  );
   useEffect(() => {
     documentEvents.guideShown({
       stage: model.stage,

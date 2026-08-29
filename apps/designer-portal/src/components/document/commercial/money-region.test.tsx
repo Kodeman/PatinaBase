@@ -339,7 +339,22 @@ describe('MoneyRegion', () => {
     );
   });
 
-  it('folds a sparse project by default, stating the seam summary', () => {
+  it('arrives OPEN on a sparse project — the default quiets a stop, it never folds it', () => {
+    // R127 OD-10 (W3-L5). This case read "folds a sparse project by default,
+    // stating the seam summary". `money` is a STOP key, so a derived default
+    // is DENSITY now, not a fold: a sparse project arrives open and quiet,
+    // with its head on the paper instead of a seam.
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(document.querySelector('[data-fold-seam]')).toBeNull();
+    expect(document.querySelector('[data-region-head]')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+  });
+
+  it('states the seam summary on a sparse project she folded herself', () => {
+    // The seam's own claim — its summary line — kept whole under the one cause
+    // a stop can still have (OD-10).
+    window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
     render(<MoneyRegion projectId="project-1" />);
 
     expect(
@@ -375,7 +390,13 @@ describe('MoneyRegion', () => {
     expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
   });
 
-  it('still folds when every milestone is planned but none is receivable', () => {
+  it('still refuses to fold itself when every milestone is planned but none is receivable', () => {
+    // The data still says "nothing is chasing her here" — the derived default
+    // that used to fold this region. After OD-10 that answer quiets the stop
+    // rather than folding it (the `quiet` half becomes visible in W4, and is
+    // proved at the hook in `region/__tests__/use-region-fold.test.tsx`), so
+    // what this case can hold is the half that is visible now: the region does
+    // not fold ITSELF on this data, and it still folds when she says so.
     mockAccount = {
       data: {
         committedCents: 0,
@@ -393,6 +414,13 @@ describe('MoneyRegion', () => {
       isError: false,
     };
 
+    const { unmount } = render(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Money' })).toBeVisible();
+
+    unmount();
+    window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
     render(<MoneyRegion projectId="project-1" />);
 
     expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
@@ -412,6 +440,8 @@ describe('MoneyRegion', () => {
   });
 
   it('opens on the seam and round-trips back through it', () => {
+    // The fold she made herself is the only seam a stop can wear (OD-10).
+    window.localStorage.setItem('patina:doc-fold:project-1:money', '1');
     render(<MoneyRegion projectId="project-1" />);
 
     fireEvent.click(screen.getByRole('button', { name: /unfold/i }));

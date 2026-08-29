@@ -562,8 +562,8 @@ export function ProjectApprovalDocument({
         ? 'no approvals authored'
         : `${approvals.length} approval${approvals.length === 1 ? '' : 's'} authored`;
     return (
-      <div data-index-region="approvals">
-        <RegionRule />
+      <div data-index-region="approvals" className="mt-[var(--doc-region-gap)]">
+        <RegionRule weight="mid" />
         <FoldSeam
           headingId="project-approvals-title"
           bodyId={APPROVALS_BODY_ID}
@@ -585,7 +585,7 @@ export function ProjectApprovalDocument({
       aria-labelledby="project-approvals-title"
       data-index-region="approvals"
       data-project-approval-document
-      className="mt-6 min-w-0 border-y border-[var(--border-subtle)] py-6"
+      className="mt-[var(--doc-region-gap)] min-w-0 border-y border-[var(--border-subtle)]"
     >
       <RegionRule />
       <RegionHead

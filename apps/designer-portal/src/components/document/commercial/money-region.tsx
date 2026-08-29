@@ -40,12 +40,11 @@ import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { ProjectAuthorityBandForProject } from './project-authority-band';
 import { ProjectCommerceSection } from './project-commerce-section';
 
-/** The ticket's Money row is this region's index: it unfolds the region and
- *  scrolls to it. The ticket rides the top of the paper as a sticky seam, so
- *  a landing at `block: 'start'` would put the money under the map that sent
- *  the reader here. The seam publishes its own height while it is pinned;
- *  nothing pinned reads 0. */
-const SEAM_CLEARANCE = { scrollMarginTop: 'var(--doc-seam-height, 0px)' };
+/** The band's Money row is this region's index: it unfolds the region and
+ *  scrolls to it. The band rides the top of the paper, so a landing at
+ *  `block: 'start'` would put the money under the map that sent the reader
+ *  here. The band's height is declared, so the clearance is a constant. */
+const SEAM_CLEARANCE = { scrollMarginTop: 'var(--doc-landing-clear)' };
 
 const HEADING_ID = 'money-region-heading';
 const BODY_ID = 'money-region-body';
@@ -227,10 +226,10 @@ export function MoneyRegion({
       <section
         aria-label="Money"
         data-index-region="money"
-        className="mb-5"
+        className="mt-[var(--doc-region-gap)]"
         style={SEAM_CLEARANCE}
       >
-        <RegionRule />
+        <RegionRule weight="mid" />
         <FoldSeam
           headingId={HEADING_ID}
           bodyId={BODY_ID}
@@ -248,7 +247,7 @@ export function MoneyRegion({
     <section
       aria-label="Money"
       data-index-region="money"
-      className="mb-5"
+      className="mt-[var(--doc-region-gap)]"
       style={SEAM_CLEARANCE}
     >
       <RegionRule />

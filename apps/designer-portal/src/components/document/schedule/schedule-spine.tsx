@@ -704,6 +704,8 @@ export function ScheduleSpine({
   // so it reads the fold through a ref kept current after every render.
   const scheduleFoldRef = useRef<RegionFold>({
     folded: false,
+    density: 'full',
+    cause: null,
     toggle: () => {},
     setFolded: () => {},
   });
@@ -1057,7 +1059,7 @@ export function ScheduleSpine({
       data-index-region="schedule"
       tabIndex={-1}
       aria-label="Project schedule"
-      className="mt-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+      className="mt-[var(--doc-region-gap)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
     >
       {/* The region's rule opens it whether folded or open — a printed device,
           not a divider with meaning (region-rule.tsx). */}

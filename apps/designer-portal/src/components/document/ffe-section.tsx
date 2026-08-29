@@ -651,7 +651,7 @@ function RoomHeading({
   return (
     <div
       id={roomId ? `doc-room-${roomId}` : undefined}
-      className="mt-4 scroll-mt-16"
+      className="mt-[12px] scroll-mt-16"
     >
       {pressable ? (
         <button
@@ -1241,7 +1241,7 @@ function FFESectionBody({
       // install and care spreads pass mode="install", so gating it on
       // `groupByRoom` left their index row pointing at nothing.
       data-index-region="ffe"
-      className="scroll-mt-16"
+      className="mt-[var(--doc-region-gap)] scroll-mt-16"
     >
       {mode === 'install' || selecting ? (
         <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
@@ -1321,7 +1321,7 @@ function FFESectionBody({
         </div>
       ) : (
         <>
-          <RegionRule className="mt-5" weight="strong" />
+          <RegionRule className="mt-0" weight="strong" />
           {ffeFold.folded ? (
             <FoldSeam
               headingId={ffeHeadingId}

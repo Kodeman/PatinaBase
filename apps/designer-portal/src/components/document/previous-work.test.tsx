@@ -70,6 +70,21 @@ describe('PreviousWork', () => {
       const root = container.querySelector('[data-index-region="record"]');
       expect(root).not.toBeNull();
       expect(root).toHaveAttribute('aria-label', 'The record');
+      // W3-L4 — one region-spacing token, owned by the root, no mb-*.
+      expect(root).toHaveClass('mt-[var(--doc-region-gap)]');
+      expect(
+      root!.className.split(/\s+/).filter((cls) => /^mt-/.test(cls)),
+    ).toEqual(['mt-[var(--doc-region-gap)]']);
+      expect(root!.className).not.toMatch(/\bmb-/);
+    });
+
+    it('does not trip the RegionHead no-acts dev guard at count 0 — a ratified state, not an oversight', () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      render(<PreviousWork count={0}>{null}</PreviousWork>);
+
+      expect(errorSpy).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
     });
 
     it('prints the empty status line and is not a press target at count 0', () => {
